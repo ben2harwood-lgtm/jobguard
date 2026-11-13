@@ -11,7 +11,7 @@ RETURNS app.scope_progress LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -35,7 +35,7 @@ RETURNS app.job_party_binding LANGUAGE plpgsql SECURITY DEFINER SET search_path=
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor()
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -68,7 +68,7 @@ CREATE OR REPLACE FUNCTION app.require_current_job_parties(p_tenant uuid,p_job u
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -89,7 +89,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE tenant uuid; lifecycle text;
@@ -242,7 +242,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -286,7 +286,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -364,7 +364,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -390,7 +390,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -416,7 +416,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -504,7 +504,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -536,7 +536,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -568,7 +568,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -595,7 +595,7 @@ CREATE OR REPLACE FUNCTION app.reveal_shadow_signals(p_tenant uuid,p_job uuid) R
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -623,7 +623,7 @@ CREATE OR REPLACE FUNCTION app.read_final_account_lock_verification(p_tenant uui
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -647,7 +647,7 @@ CREATE OR REPLACE FUNCTION app.prepare_final_review_extra(p_tenant uuid,p_job uu
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor()
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -669,7 +669,7 @@ CREATE OR REPLACE FUNCTION app.accept_final_check_terms(p_tenant uuid,p_actor uu
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor()
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -700,7 +700,7 @@ CREATE OR REPLACE FUNCTION app.record_final_account_disposition(p_tenant uuid,p_
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor()
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -736,7 +736,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -775,7 +775,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -815,7 +815,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   -- A genuinely missing row falls through to the routine's own NOT_FOUND; another actor's row is refused here.
   OR EXISTS(SELECT 1 FROM app.extra_origin WHERE tenant_id=app.current_tenant() AND job_id=p_job AND variation_id=p_variation AND raising_membership_id IS DISTINCT FROM app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -893,7 +893,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -933,7 +933,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -986,7 +986,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1056,7 +1056,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1090,7 +1090,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1124,7 +1124,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1173,7 +1173,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1196,12 +1196,12 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   -- LP6D_DELEGATED (checker r10): LP-6c's customer binding hides its actor from current_actor();
   -- only that delegated approver, scoped to this job and ClientDecideExtra (<=1 minute), may proceed.
   IF app.current_actor() IS NOT NULL THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
-  ELSIF p_actor IS DISTINCT FROM app.lp6_delegated_actor(nullif(current_setting('app.tenant_id',true),'')::uuid,'ClientDecideExtra',p_job) THEN
+  ELSIF NOT app.lp6d_is_delegated_actor(p_actor,'ClientDecideExtra',p_job) THEN
    RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
   END IF;
  END IF;
@@ -1213,7 +1213,9 @@ BEGIN
  SELECT c.kind INTO v_closure FROM app.extra_client_link_closure c WHERE(c.tenant_id,c.link_id)=(v_tenant,v_link.id);
  IF v_closure='decided' THEN RAISE EXCEPTION 'LINK_REPLAYED' USING ERRCODE='23514'; END IF;
  IF v_closure IS NOT NULL THEN RAISE EXCEPTION 'LINK_REVOKED' USING ERRCODE='23514'; END IF;
- IF NOT app.xc_link_current(v_link.id) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
+ -- LP6D_ISSUER (checker r10): the link's issuer is a third party with no request of its own, so its
+ -- current send authority is read through the private issuer chain (never through the customer's binding).
+ IF NOT app.lp6d_xc_link_current(v_link.id) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;
  IF clock_timestamp()>=v_link.expires_at THEN RAISE EXCEPTION 'LINK_EXPIRED' USING ERRCODE='23514'; END IF;
  IF p_email IS NULL OR lower(p_email)<>lower(v_link.recipient) THEN RAISE EXCEPTION 'EMAIL_MISMATCH' USING ERRCODE='23514'; END IF;
  SELECT w.* INTO v_wo FROM app.work_order w WHERE w.tenant_id=v_tenant AND w.job_id=p_job;
@@ -1259,9 +1261,14 @@ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
-  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  -- LP6D_DELEGATED (checker r10): LP-6c's customer binding hides its actor from current_actor();
+  -- only that delegated approver, scoped to this job and ClientDecideExtra (<=1 minute), may proceed.
+  IF app.current_actor() IS NOT NULL THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  ELSIF NOT app.lp6d_is_delegated_actor(p_actor,'ClientDecideExtra',p_job) THEN
+   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  END IF;
  END IF;
 DECLARE v_tenant uuid; v_wo app.work_order; v_client uuid; v_grant uuid;
 BEGIN
@@ -1291,7 +1298,7 @@ CREATE OR REPLACE FUNCTION app.read_job_sources(t uuid,j uuid,digest text,source
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
   OR coalesce((CASE WHEN digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(digest::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) END),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
@@ -1327,7 +1334,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1384,7 +1391,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1424,7 +1431,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1591,7 +1598,7 @@ CREATE OR REPLACE FUNCTION app.lp_finish(p_session uuid,p_command uuid,p_result 
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1613,7 +1620,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1637,7 +1644,7 @@ CREATE OR REPLACE FUNCTION app.lp_sources(p_session uuid,p_job uuid) RETURNS jso
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1667,7 +1674,7 @@ CREATE OR REPLACE FUNCTION app.lp_observation_prompt(p_session uuid,p_job uuid,p
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1687,7 +1694,7 @@ CREATE OR REPLACE FUNCTION app.ch4_read_work_facts(t uuid,j uuid,digest text) RE
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
  -- LP6D_CH4_MEMBERSHIP: as in the body, a UUID digest is the trusted server membership ID.
   -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
@@ -1723,7 +1730,7 @@ CREATE OR REPLACE FUNCTION app.ch4_command_work_facts(t uuid,j uuid,digest text)
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1745,7 +1752,7 @@ CREATE OR REPLACE FUNCTION app.ch4_work_state_command(t uuid,j uuid,digest text,
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1895,7 +1902,7 @@ CREATE OR REPLACE FUNCTION app.ch4_record_work_state(t uuid,j uuid,digest text,i
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1912,7 +1919,7 @@ CREATE OR REPLACE FUNCTION app.ch4_link_post_lock_job(t uuid,j uuid,digest text,
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1928,7 +1935,7 @@ CREATE OR REPLACE FUNCTION app.read_final_check_reveal(t uuid,j uuid,d text) RET
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -1984,7 +1991,7 @@ CREATE OR REPLACE FUNCTION app.record_final_check_disposition(t uuid,j uuid,d te
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
   OR coalesce((CASE WHEN d ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(d::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) END),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
@@ -2043,7 +2050,7 @@ CREATE OR REPLACE FUNCTION app.read_final_check_disputes(t uuid,j uuid,d text) R
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -2061,7 +2068,7 @@ CREATE OR REPLACE FUNCTION app.confirm_final_check_catch(t uuid,j uuid,d text,p 
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
   OR coalesce((CASE WHEN d ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(d::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) END),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
@@ -2116,7 +2123,7 @@ CREATE OR REPLACE FUNCTION app.request_final_check_run(t uuid,j uuid,d text) RET
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -2137,7 +2144,7 @@ CREATE OR REPLACE FUNCTION app.sv7a_require_watchdog_live_lock(t uuid,j uuid,dig
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -2155,7 +2162,7 @@ CREATE OR REPLACE FUNCTION app.sv7a_intake_job_source(t uuid,j uuid,digest text,
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -2258,7 +2265,7 @@ CREATE OR REPLACE FUNCTION app.read_evidence_pack_v3(t uuid,c uuid,d text) RETUR
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -2278,7 +2285,7 @@ CREATE OR REPLACE FUNCTION app.request_evidence_pack_v3(t uuid,c uuid,d text,q j
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (CASE WHEN d ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(d::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) END) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -2318,7 +2325,7 @@ CREATE OR REPLACE FUNCTION app.create_practice_sandbox_job(p_tenant uuid,p_job u
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor()
   OR p_tenant IS DISTINCT FROM app.current_tenant()
   -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
@@ -2347,7 +2354,7 @@ CREATE OR REPLACE FUNCTION app.decision_check_command(p_digest text,p_command js
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
   OR coalesce((CASE WHEN p_digest ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(p_digest::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(p_digest,app.current_tenant())) END),app.current_actor()) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -2458,7 +2465,7 @@ CREATE OR REPLACE FUNCTION app.contractor_admin_command(actor uuid, payload json
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -2593,7 +2600,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -2612,7 +2619,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -2673,7 +2680,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -2696,7 +2703,7 @@ CREATE OR REPLACE FUNCTION app.record_repository_command(p_command uuid) RETURNS
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   -- A genuinely missing row falls through to the routine's own NOT_FOUND; another actor's row is refused here.
   OR EXISTS(SELECT 1 FROM app.command_receipt WHERE tenant_id=app.current_tenant() AND command_id=p_command AND actor_membership_id IS DISTINCT FROM app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -2748,7 +2755,7 @@ CREATE OR REPLACE FUNCTION app.lp5b_prepare_projection(p_command uuid) RETURNS v
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   -- A genuinely missing row falls through to the routine's own NOT_FOUND; another actor's row is refused here.
   OR EXISTS(SELECT 1 FROM app.command_receipt WHERE tenant_id=app.current_tenant() AND command_id=p_command AND actor_membership_id IS DISTINCT FROM app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -2823,9 +2830,14 @@ CREATE OR REPLACE FUNCTION app.lp5b_contractor_permission(p_type text,p_actor uu
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
-  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  -- LP6D_DELEGATED (checker r10): LP-6c's customer binding hides its actor from current_actor();
+  -- only that delegated approver, scoped to this job and ClientDecideExtra (<=1 minute), may proceed.
+  IF app.current_actor() IS NOT NULL OR p_type IS DISTINCT FROM 'ClientDecideExtra' THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  ELSIF NOT app.lp6d_is_delegated_actor(p_actor,'ClientDecideExtra',p_job) THEN
+   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+  END IF;
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  v jsonb:=(CASE WHEN (p_input ? 'content') THEN (p_input->'content') ELSE p_input END);
@@ -2929,7 +2941,7 @@ CREATE OR REPLACE FUNCTION app.practice_worker_switch_on(p_session uuid,p_comman
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -2989,7 +3001,7 @@ CREATE OR REPLACE FUNCTION app.practice_worker_switch_off(p_session uuid,p_comma
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -3031,7 +3043,7 @@ CREATE OR REPLACE FUNCTION app.practice_worker_switch_state(p_session uuid) RETU
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -3071,7 +3083,7 @@ BEGIN
  BEGIN PERFORM app.current_actor(); lp6d_bound:=true;
  EXCEPTION WHEN insufficient_privilege THEN lp6d_bound:=false; END;
  IF NOT lp6d_bound THEN NULL;
- ELSIF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ ELSIF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(s) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -3100,7 +3112,7 @@ CREATE OR REPLACE FUNCTION app.northside_register(p_owner uuid,p_settings jsonb)
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_owner IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -3137,7 +3149,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE v_tenant uuid; q app.extra_approval_request; v_n integer; v_step jsonb; v_started timestamptz; v_roles text[]; v_id uuid;
@@ -3173,7 +3185,7 @@ LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -3211,7 +3223,7 @@ LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE tenant uuid; member_role text; permission text; named_required boolean; chosen uuid;
@@ -3285,7 +3297,7 @@ LANGUAGE plpgsql VOLATILE SECURITY INVOKER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE tenant uuid; origin_row app.extra_origin; authority record;
@@ -3313,12 +3325,12 @@ CREATE OR REPLACE FUNCTION app.xa_begin(p_job uuid, p_command uuid, p_types text
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   -- LP6D_DELEGATED (checker r10): LP-6c's customer binding hides its actor from current_actor();
   -- only that delegated approver, scoped to this job and ClientDecideExtra (<=1 minute), may proceed.
   IF app.current_actor() IS NOT NULL THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
-  ELSIF p_actor IS DISTINCT FROM app.lp6_delegated_actor(nullif(current_setting('app.tenant_id',true),'')::uuid,'ClientDecideExtra',p_job) THEN
+  ELSIF NOT app.lp6d_is_delegated_actor(p_actor,'ClientDecideExtra',p_job) THEN
    RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
   END IF;
  END IF;
@@ -3349,12 +3361,12 @@ LANGUAGE plpgsql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   -- LP6D_DELEGATED (checker r10): LP-6c's customer binding hides its actor from current_actor();
   -- only that delegated approver, scoped to this job and ClientDecideExtra (<=1 minute), may proceed.
   IF app.current_actor() IS NOT NULL THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
-  ELSIF p_actor IS DISTINCT FROM app.lp6_delegated_actor(nullif(current_setting('app.tenant_id',true),'')::uuid,'ClientDecideExtra',p_job) THEN
+  ELSIF NOT app.lp6d_is_delegated_actor(p_actor,'ClientDecideExtra',p_job) THEN
    RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
   END IF;
  END IF;
@@ -3381,7 +3393,7 @@ CREATE OR REPLACE FUNCTION app.evidence_pack_v3_owner(t uuid,c uuid,d text) RETU
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (CASE WHEN d ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$' THEN (SELECT membership_id FROM app.contractor_session(d::uuid)) ELSE (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) END) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3413,7 +3425,7 @@ CREATE OR REPLACE FUNCTION app.ch4_require_command_owner(t uuid,j uuid,digest te
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
  -- LP6D_CH4_MEMBERSHIP: as in the body, a UUID digest is the trusted server membership ID.
   -- LP6D_DIGEST: a digest that authenticates must be the bound actor; an unauthenticated one keeps the body's own refusal.
@@ -3455,7 +3467,7 @@ CREATE OR REPLACE FUNCTION app.demo_request_source_hold(t uuid,j uuid,d text) RE
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app,infrastructure AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3481,7 +3493,7 @@ CREATE OR REPLACE FUNCTION app.demo_source_hold_state(t uuid,j uuid,d text) RETU
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app,infrastructure AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3503,7 +3515,7 @@ CREATE OR REPLACE FUNCTION app.demo_issue_customer_link(t uuid,j uuid,c uuid,ses
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(session_digest,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3557,7 +3569,7 @@ CREATE OR REPLACE FUNCTION app.demo_shadow_review_inputs(t uuid,j uuid,d text) R
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3604,7 +3616,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog STABLE AS $$BEGIN
  -- A BOUND caller (review) must be the digest's own actor; the unbound skip keeps the body's
  -- own practice-session scope authorization, exactly as before LP-6d.
  IF NOT app.lp6d_request_bound() THEN NULL;
- ELSIF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ ELSIF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3696,7 +3708,7 @@ CREATE OR REPLACE FUNCTION app.ch6_record_integrity_review(t uuid,j uuid,digest 
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3789,7 +3801,7 @@ LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog AS $$BEGIN
  -- Reached by Ben's read-only "commercial-integrity-read" skip (see ch6_integrity_sources): a bound
  -- caller must be the digest's own actor; the unbound skip keeps the original scope authorization.
  IF NOT app.lp6d_request_bound() THEN NULL;
- ELSIF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ ELSIF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3819,7 +3831,7 @@ LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog STABLE AS $$BEGIN
  -- Reached by Ben's read-only "commercial-integrity-read" skip (see ch6_integrity_sources): a bound
  -- caller must be the digest's own actor; the unbound skip keeps the original scope authorization.
  IF NOT app.lp6d_request_bound() THEN NULL;
- ELSIF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ ELSIF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(d,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3906,7 +3918,7 @@ LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog STABLE AS $$BEGIN
  -- Reached by Ben's read-only "commercial-integrity-read" skip (see ch6_integrity_sources): a bound
  -- caller must be the digest's own actor; the unbound skip keeps the original scope authorization.
  IF NOT app.lp6d_request_bound() THEN NULL;
- ELSIF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ ELSIF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   OR (SELECT membership_id FROM app.authenticate_practice_session(digest,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -3997,7 +4009,7 @@ CREATE OR REPLACE FUNCTION app.ch5_import_actor(t uuid,digest text) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -4016,7 +4028,7 @@ CREATE OR REPLACE FUNCTION app.ch5_history_actor(t uuid,j uuid,d text) RETURNS u
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -4041,7 +4053,7 @@ CREATE OR REPLACE FUNCTION app.ch5_write_history(t uuid,j uuid,d text,cmd uuid,e
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -4077,7 +4089,7 @@ CREATE OR REPLACE FUNCTION app.ch5_imported_catch(t uuid,j uuid,d text,b uuid,ei
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -4105,7 +4117,7 @@ CREATE OR REPLACE FUNCTION app.import_late_source(t uuid,j uuid,digest text,inpu
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -4171,7 +4183,7 @@ CREATE OR REPLACE FUNCTION app.accounting_export(t uuid,digest text,operation te
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -4314,7 +4326,7 @@ CREATE OR REPLACE FUNCTION app.mon8_retained_baseline_actor(p_session uuid) RETU
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) checked_session WHERE checked_session.tenant_id=app.current_tenant() AND checked_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -4335,7 +4347,7 @@ CREATE OR REPLACE FUNCTION app.sync_snapshot_generation(u uuid,r bigint,s bigint
 RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR NOT EXISTS(SELECT 1 FROM app.membership bound_member WHERE bound_member.tenant_id=app.current_tenant()
    AND bound_member.id=app.current_actor() AND bound_member.identity_user_id=u) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -4560,7 +4572,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE claim app.command_lifecycle_claim; input jsonb;
 BEGIN
  IF app.current_actor() IS NULL OR t IS DISTINCT FROM app.current_tenant() OR actor IS DISTINCT FROM app.current_actor()
-  OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+  OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
  SELECT * INTO claim FROM app.command_lifecycle_claim WHERE tenant_id=t AND command_id=cid;
@@ -4588,7 +4600,7 @@ DECLARE message app.recovery_message; approved app.recovery_message_approval;
 BEGIN
  -- LP6D_BOUND
  IF app.current_actor() IS NULL OR p_actor IS DISTINCT FROM app.current_actor() OR p_tenant IS DISTINCT FROM app.current_tenant()
-  OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+  OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
  SELECT * INTO message FROM app.recovery_message WHERE tenant_id=p_tenant AND id=p_message;
@@ -4620,7 +4632,7 @@ BEGIN
  -- LP6D_BOUND (checker r9a): as lp6d_lock_action_authorization; the GUC alone is not a tenant proof.
  IF NOT app.lp6d_maintenance_login() THEN
   PERFORM app.current_actor();
-  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
    OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
    RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
   END IF;
@@ -4645,7 +4657,7 @@ BEGIN
  -- must be bound to this very tenant; only the exact maintenance login uses the GUC tenant.
  IF NOT app.lp6d_maintenance_login() THEN
   PERFORM app.current_actor();
-  IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
    OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
    RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
   END IF;
@@ -4775,7 +4787,7 @@ RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -4869,7 +4881,7 @@ CREATE OR REPLACE FUNCTION app.mon9_session(digest text,actor uuid) RETURNS uuid
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -4895,7 +4907,7 @@ RETURNS app.managed_recovery_election LANGUAGE plpgsql SECURITY DEFINER SET sear
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -4965,7 +4977,7 @@ RETURNS app.managed_recovery_election LANGUAGE plpgsql SECURITY DEFINER SET sear
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -4987,7 +4999,7 @@ CREATE OR REPLACE FUNCTION app.ent3_supervisor_query(p_job uuid,p_actor uuid,p_b
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -5062,7 +5074,7 @@ CREATE OR REPLACE FUNCTION app.ent3_work_status(p_job uuid,p_actor uuid,p_extra 
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -5116,7 +5128,7 @@ CREATE OR REPLACE FUNCTION app.ent3_proceed_comparison(p_job uuid,p_actor uuid,p
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -5148,7 +5160,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR (c->>'actorMembershipId')::uuid IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -5207,7 +5219,7 @@ CREATE OR REPLACE FUNCTION app.billability_snapshot(t uuid,j uuid,c uuid,w uuid,
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR actor IS DISTINCT FROM app.current_actor()
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -5252,7 +5264,7 @@ CREATE OR REPLACE FUNCTION app.recovery_billability(j uuid,digest text,p jsonb,d
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a record; authority jsonb;
@@ -5370,7 +5382,7 @@ CREATE OR REPLACE FUNCTION app.read_money_trail_availability(p_job uuid,p_sessio
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 BEGIN
@@ -5391,7 +5403,7 @@ CREATE OR REPLACE FUNCTION app.financial_reconciliation_queue(p_session uuid,p_j
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid; a uuid; u uuid; k text; cid uuid; r app.financial_reconciliation_run;
@@ -5646,7 +5658,7 @@ CREATE OR REPLACE FUNCTION app.ent3_extra_work_status(p_job uuid,p_extra uuid) R
  LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 BEGIN
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
  RETURN (SELECT x.work_status FROM app.site_extra_work_status x
@@ -5659,7 +5671,7 @@ CREATE OR REPLACE FUNCTION app.advance_final_account_draft(p_tenant uuid,p_draft
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -5672,7 +5684,7 @@ CREATE OR REPLACE FUNCTION app.invalidate_stale_final_account_authorizations(p_t
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -5685,7 +5697,7 @@ CREATE OR REPLACE FUNCTION app.approve_synthetic_landing(p jsonb)RETURNS uuid LA
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;c app.recovery_case_current;r app.synthetic_recovery_receipt;e app.evidence_object;a app.recovery_approval;l uuid:=(p->>'allocationId')::uuid;d uuid:=(p->>'derivationId')::uuid;j uuid:=(p->>'journalId')::uuid;gross bigint:=(p->>'grossPence')::bigint;eligible bigint:=(p->>'eligibleNetPence')::bigint;landed bigint;reversed bigint;cap bigint;fee bigint;credit bigint;liability bigint;prior bigint;delta bigint;
@@ -5729,7 +5741,7 @@ CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing(p_tenant uuid,p_reversa
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -5762,7 +5774,7 @@ CREATE OR REPLACE FUNCTION app.configure_recovery_demo(p_job uuid,p_command uuid
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid;c uuid:=gen_random_uuid();r uuid:=gen_random_uuid();e uuid:=gen_random_uuid();u uuid:=gen_random_uuid();ea uuid:=gen_random_uuid();la uuid:=gen_random_uuid();
@@ -5798,7 +5810,7 @@ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE
@@ -5853,7 +5865,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor()
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -5929,7 +5941,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor()
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -6006,7 +6018,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR p_actor IS DISTINCT FROM app.current_actor()
   OR p_tenant IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
@@ -6071,7 +6083,7 @@ CREATE OR REPLACE FUNCTION app.pf1b_review_supplier_credit(t uuid,j uuid,input j
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -6182,7 +6194,7 @@ CREATE OR REPLACE FUNCTION app.final_check_builder(t uuid,j uuid,d text,locking 
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
   OR t IS DISTINCT FROM app.current_tenant()
   -- LP6D_DIGEST: since 0732 the body delegates to the private final_check_read_authority; a digest that
   -- authenticates must be the bound actor, an unauthenticated one keeps that body's own refusal.
@@ -6203,7 +6215,7 @@ CREATE OR REPLACE FUNCTION app.read_success_fee_v3(p_job uuid,p_session text) RE
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid; actor record;
@@ -6250,7 +6262,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app SET timezone='U
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; actor record;
@@ -6334,7 +6346,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; billing jsonb; jobs jsonb:='[]'; j record; snapshot jsonb;
@@ -6356,7 +6368,7 @@ CREATE OR REPLACE FUNCTION app.lock_success_fee_sources() RETURNS void
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 BEGIN
@@ -6375,7 +6387,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
- IF app.current_actor() IS NULL OR nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM app.current_tenant()::text THEN
+ IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid; assignment app.commercial_track_assignment; status app.contractor_agreement_status_revision;
@@ -6770,9 +6782,20 @@ DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; actor uu
  RETURN identity.sso_required_append(t,c,actor,'admin',(p->>'required')::boolean,p->>'reason',(p->>'expectedRevision')::integer);
 END $$;
 
--- Checker r10: guarded customer-path routines (migration-owned) read LP-6c's delegated actor,
--- exactly as begin_command/lp5_bind_effect do. EXECUTE only; no write grant.
-GRANT EXECUTE ON FUNCTION app.lp6_delegated_actor(uuid,text,uuid) TO jobguard_migration;
+-- Checker r10: guarded customer-path routines (migration-owned) bind through LP-6c's delegated
+-- actor. LP-6c keeps app.lp6_delegated_actor away from jobguard_migration, so the comparison runs
+-- in a command-writer-owned definer that answers only whether the named actor IS the delegated
+-- actor for this request's tenant, command and job. It never returns the actor. EXECUTE only.
+CREATE FUNCTION app.lp6d_is_delegated_actor(p_actor uuid,p_command_type text,p_job uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+ SELECT p_actor IS NOT NULL AND p_actor IS NOT DISTINCT FROM
+  app.lp6_delegated_actor(nullif(current_setting('app.tenant_id',true),'')::uuid,p_command_type,p_job)
+$$;
+GRANT CREATE ON SCHEMA app TO jobguard_command_writer;
+ALTER FUNCTION app.lp6d_is_delegated_actor(uuid,text,uuid) OWNER TO jobguard_command_writer;
+REVOKE CREATE ON SCHEMA app FROM jobguard_command_writer;
+REVOKE ALL ON FUNCTION app.lp6d_is_delegated_actor(uuid,text,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.lp6d_is_delegated_actor(uuid,text,uuid) TO jobguard_migration;
 
 -- Private unguarded copies ONLY for the issuer-authority check, a step with no possible request
 -- actor: it asks whether the link's ISSUER (a third party) still holds send authority, from the
@@ -7168,7 +7191,7 @@ ALTER FUNCTION app.lp6d_customer_message_source(uuid,uuid,text,text,jsonb) OWNER
 REVOKE ALL ON FUNCTION app.lp6d_customer_message_source(uuid,uuid,text,text,jsonb) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
 DO $$ DECLARE r record; BEGIN
  FOR r IN SELECT rolname FROM pg_roles WHERE rolcanlogin AND NOT rolsuper LOOP
-  EXECUTE format('REVOKE ALL ON FUNCTION app.lp6d_customer_watchdog_live(uuid), app.lp6d_customer_message_source(uuid,uuid,text,text,jsonb), app.lp6d_require_revoke_claim(uuid,uuid,uuid,uuid,uuid,uuid,integer) FROM %I',r.rolname);
+  EXECUTE format('REVOKE ALL ON FUNCTION app.lp6d_customer_watchdog_live(uuid), app.lp6d_customer_message_source(uuid,uuid,text,text,jsonb), app.lp6d_require_revoke_claim(uuid,uuid,uuid,uuid,uuid,uuid,integer), app.lp6d_is_delegated_actor(uuid,text,uuid) FROM %I',r.rolname);
  END LOOP;
 END $$;
 

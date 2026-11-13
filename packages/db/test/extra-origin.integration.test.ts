@@ -269,24 +269,27 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[S9] scanner and seven pinned bridges stay byte-identical", async () => {
   const hashes = {
+   // LP-6d repair 10 (13 Nov 2026): re-pinned only the seven files this branch changed. Contractor principals now carry
+   // their bound request context in a module-private WeakMap set by the one session constructor, read through
+   // requireContractorRequestContext; party/work-order/SoR/scheduling repositories take AuthenticatedMembership. RED review required.
    // renewed caller review 28 Oct (jg-checks, ch9-p2 review)
    // renewed caller review 4 Nov 2026 (Ben: 'Yes, update S9')
    // Renewed caller source review 6 Nov 2026, later-safety-108 repair 4: v1 ownership now requires the succeeded import receipt.
    // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
    "packages/db/src/practice-session.ts": "49c6c2dadcaa0412208dbce6585c0e30a283b4d4c3b98b50179eec3bad054729",
-   "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
-   "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
+   "packages/db/src/contractor-repository.ts": "44df1edd68c6a9e79ef83c2faf82459b425a0c501e7a641eff8c1d39cf7a34a0",
+   "packages/db/src/contractor-party-repository.ts": "2dc9f501f431e890b4cb5d7971e4f0a0fa213fc7cb5069ed739008ab18466090",
    // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
    // ~/.local/share/full-steam/coordinator/prechecks/batch-41.md: importCsvInTransaction makes no new context;
    // ConnectorPromotionRepository.promote uses context and principal from the same persisted session.
-   "packages/db/src/work-order-repository.ts": "51e64ceaa39564c8d1b083fbb6b24048143455dfe76080ff63309ce7d808dfb6",
-   "packages/db/src/sor-repository.ts": "b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f",
-   "packages/db/src/job-scheduling-repository.ts": "7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57",
-   "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
+   "packages/db/src/work-order-repository.ts": "406ec23ac5d01d7cdcb5e0649047357f729fc6fdf1aeb919f0e491deac0ab87b",
+   "packages/db/src/sor-repository.ts": "9575742c1eee30b8bbd89db80bf892b504e439a238d1038cdc868fddc4c35207",
+   "packages/db/src/job-scheduling-repository.ts": "dcc7884fc3ff5bb3c878834a81824e4270e0775de666c61f9ccb031c9430c4de",
+   "packages/db/src/work-order-fixtures.ts": "bfcdf0a9d57691b3af4672313069e333e1399be598c46fd5f7500289a833089a",
    // Ben 6 Nov router-chat "yes": exactly the emergency-notice and retention-timer constructor sites.
    // Hold: break-glass identity design goes to Ben before real data.
    // Scanner bytes change only for the renewed caller review citation above.
-   "apps/api/src/auth/context-boundary.test.ts": "b9b8b46c72fd0d572ec338cd8ee37f6e0886eca728c8ea06eb2f3a1f284bb926"
+   "apps/api/src/auth/context-boundary.test.ts": "5a7b56809adf578e0836adf86ba815b1a8fc4f042866578b0d12e847081a3469"
   };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });

@@ -40,13 +40,19 @@ it("keeps every predecessor body and permission rule behind an early binding che
         .replaceAll("app.ch4_require_command_owner(t,j,digest)", "app.sv7a_require_source_owner(t,j,digest,source)")
         .replace("WHEN source='customer_message' AND txt='Please fit an outside tap.' THEN 'job-source:request-tap.v1' END;", "WHEN source='customer_message' AND txt='Please fit an outside tap.' THEN 'job-source:request-tap.v1' WHEN source='customer_message' AND txt='There are exposed live wires beside the new socket.' THEN 'customer-message:exposed-wires.synthetic.v1' END;");
     }
+    // Checker r10: xa_client_decide reads the third-party issuer's authority through the private issuer chain.
+    if (routine.name === "app.xa_client_decide") {
+      previous = previous.replace(" IF NOT app.xc_link_current(v_link.id) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;",
+        " -- LP6D_ISSUER (checker r10): the link's issuer is a third party with no request of its own, so its\n -- current send authority is read through the private issuer chain (never through the customer's binding).\n IF NOT app.lp6d_xc_link_current(v_link.id) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;");
+    }
     // This additional comparison precedes hidden billability source reads.
     const changed = body(sql, routine)
       .replace(/ IF a\.membership_id IS DISTINCT FROM app\.current_actor\(\) OR a\.tenant_id IS DISTINCT FROM app\.current_tenant\(\) THEN\n  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';\n END IF;\n/u, "")
       .replace(/ -- LP6D_DERIVED_ACTOR[^\n]*\n(?: --[^\n]*\n)? IF (?:(?:a|actor|principal)\.(?:membership_id|member_id) IS NOT NULL AND )?(?:a|actor|principal)\.(?:membership_id|member_id) IS DISTINCT FROM app\.current_actor\(\) THEN\n  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';\n END IF;\n/gu, "");
     expect(changed, routine.name).toContain(previous);
     expect(changed.indexOf("PERFORM app.current_actor()"), routine.name).toBeLessThan(changed.indexOf(previous));
-    expect(changed).toContain("IS DISTINCT FROM app.current_tenant()::text");
+    // The stamped tenant may be any accepted UUID spelling (ENT-4b [S4]); the guard compares it case-insensitively.
+    expect(changed).toContain("lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text");
     if (routine.actor) expect(changed).toContain(`${routine.actor} IS DISTINCT FROM app.current_actor()`);
     if (routine.tenant) expect(changed).toContain(`${routine.tenant} IS DISTINCT FROM app.current_tenant()`);
   }
@@ -88,8 +94,10 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   expect(pathCompleteness(inventory, repoFileExists)).toEqual([]);
   expect(inventory.entries.some(e => e.key === "acl|col|app.action_authorization.revoked_at|jobguard_runtime|UPDATE|-")).toBe(false);
   expect(inventory.entries.some(e => e.key.startsWith("acl|col|app.action_authorization.") && e.key.includes("|jobguard_runtime|UPDATE|"))).toBe(false);
-  // r8: the revocation routine, revoke-claim helper and seven runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each), plus migration EXECUTE on LP-6c's delegated actor accessor.
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(21);
+  // r8: the revocation routine, revoke-claim helper and seven runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each),
+  // plus (r10) the command-writer-owned delegated-actor match check (owner + migration EXECUTE). LP-6c's accessor gains no grant.
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(22);
+  expect(inventory.entries.some(e => e.key.startsWith("acl|routine|function:app.lp6_delegated_actor(") && e.key.includes("|jobguard_migration|"))).toBe(false);
 });
 
 it("leaves the final-lock owner helper exclusively to LP-6c", () => {
@@ -251,10 +259,17 @@ it("pins each private unguarded copy to its guarded original minus only the LP-6
 });
 
 it("accepts the LP-6c delegated customer only for its own job and ClientDecideExtra scope (checker r10)", () => {
-  for (const name of ["app.xa_covers", "app.xa_begin", "app.xa_client_decide"]) {
+  for (const name of ["app.xa_covers", "app.xa_begin", "app.xa_client_decide", "app.xa_client_view_authority", "app.lp5b_contractor_permission"]) {
     const b = definitions(sql).filter(m => m[1] === name).at(-1)![3]!;
-    expect(b, name).toContain("ELSIF p_actor IS DISTINCT FROM app.lp6_delegated_actor(nullif(current_setting('app.tenant_id',true),'')::uuid,'ClientDecideExtra',p_job) THEN");
+    expect(b, name).toContain("ELSIF NOT app.lp6d_is_delegated_actor(p_actor,'ClientDecideExtra',p_job) THEN");
     expect(b.indexOf("LP6D_DELEGATED"), name).toBeLessThan(b.indexOf("\nDECLARE"));
   }
+  // The LP-5b permission check admits the delegated customer only for ClientDecideExtra.
+  expect(definitions(sql).filter(m => m[1] === "app.lp5b_contractor_permission").at(-1)![3]!).toContain("IF app.current_actor() IS NOT NULL OR p_type IS DISTINCT FROM 'ClientDecideExtra' THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED'");
   expect(sql).not.toMatch(/FUNCTION app\.lp6d_xa_(begin|client_decide)\(/u);
+  // LP-6c keeps the delegated actor reader away from jobguard_migration: only a yes/no match runs, as the command writer.
+  expect(sql).not.toMatch(/GRANT EXECUTE ON FUNCTION app\.lp6_delegated_actor\([^)]*\) TO jobguard_migration/u);
+  expect(definitions(sql).filter(m => m[1] === "app.lp6d_is_delegated_actor").at(-1)![3]!).toContain("p_actor IS NOT NULL AND p_actor IS NOT DISTINCT FROM");
+  expect(sql).toContain("ALTER FUNCTION app.lp6d_is_delegated_actor(uuid,text,uuid) OWNER TO jobguard_command_writer;");
+  expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_is_delegated_actor(uuid,text,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;");
 });

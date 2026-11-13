@@ -10,8 +10,13 @@ const replacements = new Map(functions(readFileSync(new URL(sealingMigration, di
 const main = new Map<string, { file: string; sql: string }>();
 const final = new Map<string, string>();
 const recreatedWriters: { name: string; file: string; sql: string }[] = [];
+// LP-6d (0980) only prefixes a request-binding guard to these writers; its own test below pins that the
+// predecessor body survives verbatim, so the latest-main comparisons keep reading the predecessor.
+const lp6dMigration = "0980_lp6d_remaining_routines.sql";
+const lp6dGuarded: { name: string; sql: string; predecessor: string | undefined }[] = [];
 for (const file of readdirSync(directory).filter(f => /^\d{4}.*\.sql$/.test(f)).sort()) {
   for (const fn of functions(readFileSync(new URL(file, directory), "utf8"))) {
+    if (file === lp6dMigration) { lp6dGuarded.push({ ...fn, predecessor: final.get(fn.name) }); if (file > sealingMigration && replacements.has(fn.name)) recreatedWriters.push({ ...fn, file }); continue; }
     final.set(fn.name, fn.sql);
     if (file !== sealingMigration && !(file === "0660_baseline_ancestry_audit_trust.sql" && fn.name === "app.decision_check_command") && !(file === "0698_final_check_post_invoice_rerun.sql" && fn.name === "app.guard_final_check_manifest")) main.set(fn.name, { file, sql: fn.sql });
     if (file > sealingMigration && replacements.has(fn.name)) recreatedWriters.push({ ...fn, file });
@@ -82,6 +87,17 @@ describe("LP-4 catch-up preserves latest main routine behaviour", () => {
       expect(rows[0].staticCalls, name).toContain("app.lp4_seal_audit");
       expect(rows[0].staticCalls, name).not.toContain("app.lock_audit_head");
       expect(rows[0].staticWrites, name).not.toContain("app.audit_event");
+    }
+  });
+  it("LP-6d keeps every LP-4 writer's predecessor body verbatim behind its binding guard", () => {
+    const body = (sql: string) => /\bAS\s+(\$\w*\$)([\s\S]*?)\1/i.exec(sql)![2]!;
+    const writers = lp6dGuarded.filter(fn => fn.name in lp4WriterSources);
+    expect(writers.map(fn => fn.name).sort()).toEqual(["app.decision_check_command", "app.enterprise_baseline_import"]);
+    for (const { name, sql, predecessor } of writers) {
+      expect(predecessor, name).toBeDefined();
+      expect(body(sql), name).toContain(body(predecessor!).trim());
+      expect(body(sql).indexOf("LP6D_BOUND"), name).toBeGreaterThan(-1);
+      expect(sql, name).not.toMatch(directWrite);
     }
   });
   it("every re-created LP-4 audit writer keeps its sealer call", () => {

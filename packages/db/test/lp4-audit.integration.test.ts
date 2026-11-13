@@ -54,7 +54,12 @@ describe("LP-4 actual runtime audit boundary (PostgreSQL)", () => {
       // of the predecessor LP-0 digest (the body changed only in 0660).
       const successor = readFileSync(new URL("../migrations/0660_baseline_ancestry_audit_trust.sql", import.meta.url), "utf8");
       const body = successor.split("FUNCTION app.decision_check_command(")[1]!.split("AS $$")[1]!.split("$$;")[0];
-      expect(rows[0].source).toBe(body);
+      // LP-6d (0980) installs the request-binding guard ahead of the unchanged 0660 body.
+      const guarded = readFileSync(new URL("../migrations/0980_lp6d_remaining_routines.sql", import.meta.url), "utf8")
+        .split("FUNCTION app.decision_check_command(").at(-1)!.split("AS $$")[1]!.split("$$;")[0]!;
+      expect(rows[0].source).toBe(guarded);
+      expect(guarded).toContain("LP6D_BOUND");
+      expect(guarded).toContain(body!.trim());
       expect(body).toContain("rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'");
       expect(body).toContain("rv.semantic_key='import:'||next_job.id::text AND rv.result->>'jobId'=next_job.id::text AND rv.result->>'sourceJobId'=source.id::text");
       expect(rows[0]).toMatchObject({ owner: expected[0].owner, security: expected[0].securityDefiner,
