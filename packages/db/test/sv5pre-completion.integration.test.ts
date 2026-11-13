@@ -1,3 +1,4 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { withTenant } from "../src/tenant-context.js";
 import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -346,6 +347,8 @@ describe("SV5PRE authoritative completion", () => {
   const db = await f.runtime.connect();
   await db.query("BEGIN");
   await db.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
+  // LP-6d: the upload is the locking owner's own bound request.
+  await bindTestClient(f.admin, db, a.tenantId, LOCK_OWNER);
   const id = randomUUID();
   try { await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3::uuid,$3::text,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')", [a.tenantId, a.jobId, id]); }
   catch (error) { await db.query("ROLLBACK"); db.release(); throw error; }

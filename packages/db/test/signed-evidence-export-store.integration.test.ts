@@ -84,7 +84,8 @@ it("refuses another owner's approved request on creation and replay, and binds t
   await expect(store.persist(testTenantContext(f.tenantId), { ...f.actor, identityUserId: other.identityUserId }, f.request))
     .rejects.toMatchObject({ code: "SIGNED_EXPORT_FORBIDDEN" });
   // Matching the request to the attacker still cannot borrow the victim's approval.
-  await expect(store.persist(testTenantContext(f.tenantId), other, { ...f.request, actorMembershipId: other.membershipId }))
+  // LP-6d: the other owner acts in its own bound request; the routine (not the binding) refuses the borrowed authorization.
+  await expect(store.persist(testTenantContext(f.tenantId, { membershipId: other.membershipId }), other, { ...f.request, actorMembershipId: other.membershipId }))
     .rejects.toThrow("SIGNED_EXPORT_AUTHORIZATION_INVALID");
   expect(await count(f.tenantId)).toBe(0);
   expect((await admin.query("SELECT id FROM app.signed_evidence_export WHERE tenant_id=$1", [f.tenantId])).rows).toEqual([]);
@@ -127,7 +128,7 @@ it("rotation retains old bytes and independent verification material across a ne
   const f = await provision(); await approve(f); await store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, f.request);
   f.signer.rotate("v2", "2026-10-29T08:00:00.000Z", "2027-01-01T00:00:00.000Z");
   const next = storeFixture(f.tenantId, f.jobId, f.caseId, f.signer); next.request.actorMembershipId = f.request.actorMembershipId; next.actor = f.actor;
-  await register(next); await approve(next); await new SignedEvidenceExportStore(runtime).persist(testTenantContext(f.tenantId), next.actor, next.request);
+  await register(next); await approve(next); await new SignedEvidenceExportStore(runtime).persist(testTenantContext(f.tenantId, { membershipId: next.actor.membershipId }), next.actor, next.request);
   const rows = (await admin.query("SELECT bundle_text FROM app.signed_evidence_export WHERE tenant_id=$1", [f.tenantId])).rows;
   const keys = (await admin.query("SELECT record FROM app.evidence_export_signer_key WHERE tenant_id=$1", [f.tenantId])).rows.map(r => r.record);
   expect(rows).toHaveLength(2); expect(keys).toHaveLength(2);
@@ -159,7 +160,8 @@ it("direct insertion cannot substitute an unrelated audit event", async () => {
     id: eventId, version: "audit.v1", actorRef: `membership:${f.request.actorMembershipId}`,
     eventType: "fixture.recorded", subjectType: "audit-export", subjectRef: p.exportId, payload: {},
   }]));
-  await expect(withTenant(runtime, testTenantContext(f.tenantId), db => db.$client.query(`INSERT INTO app.signed_evidence_export(
+  // LP-6d: the direct insert is the exporting member's own bound request, so the audit rule (not the binding) refuses.
+  await expect(withTenant(runtime, testTenantContext(f.tenantId, { membershipId: f.request.actorMembershipId }), db => db.$client.query(`INSERT INTO app.signed_evidence_export(
     tenant_id,id,job_id,case_id,actor_membership_id,authorization_id,recipient,signer_id,key_version,signer_fingerprint,bundle_text,bundle_hash,audit_event_id)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, [f.tenantId,p.exportId,f.jobId,f.caseId,
     f.request.actorMembershipId,f.request.authorizationId,f.request.recipient,p.signerId,p.keyVersion,p.signerFingerprint,

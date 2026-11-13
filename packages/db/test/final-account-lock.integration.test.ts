@@ -11,7 +11,7 @@ import { migrate } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { approvePricedVariation, VariationRepository } from "../src/variation-repository.js";
-import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext, bindTestClient } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 export const LOCK_OWNER = "40000000-0000-4000-8000-000000000004";
@@ -36,9 +36,10 @@ export async function createLockFixture(install = true): Promise<LockFixture> {
  return { postgres, directory, port, credential, admin, runtime: pools[0]!, shadow: pools[1]!, owner: pools[2]! };
 }
 export async function closeLockFixture(f: LockFixture) { await closeTestPools(f.runtime, f.shadow, f.owner, f.admin); await f.postgres.stop(); await rm(f.directory, { recursive: true, force: true }); }
-export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>): Promise<T> {
+// LP-6d: `as` binds a raw fixture call to that member's own request (its persisted fixture credential).
+export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>, as?: { owner: Pool; membershipId: string }): Promise<T> {
  const db = await pool.connect();
- try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
+ try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); if (as) await bindTestClient(as.owner, db, tenantId, as.membershipId); const result = await work(db); await db.query("COMMIT"); return result; }
  catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
 type CaptureAccount = { tenantId: string; jobId: string; context: ReturnType<typeof testTenantContext> };
