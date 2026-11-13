@@ -92,7 +92,6 @@ for (const mode of ["Play the whole thing", "Show me"] as const) {
     await expect(page.getByTestId("value-recorded-gross")).toHaveText("£1,230.00");
     await control(page, "Read the report again").click();
     await page.getByRole("button", { name: "Return to the saved job", exact: true }).click();
-    await page.goto("/practice-company");
     await oneJob(page, id);
     expect(captures).toBe(1); expect(commercial).toEqual(before);
     expect(await read(page, `/api/jobs/${id}/customer-invoices`)).toEqual(invoices);
