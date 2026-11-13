@@ -18,6 +18,10 @@ test("DW2/DW4/DW9: persisted completion survives reload, Jobs and a second brows
   await expect(panel.getByTestId("lock-bound-invoices").getByRole("alert")).toHaveText("Complete the final account first");
   await expect(panel.getByTestId("lock-bound-invoices").getByRole("alert")).toHaveAttribute("data-error-code", "FINAL_ACCOUNT_LOCK_REQUIRED");
   await expect(panel.getByRole("button", { name: "Issue final invoice", exact: true })).toBeDisabled();
+  const terms = await page.request.post(`/api/jobs/${fixture.jobId}/final-account/terms`, { data: {
+    version: "final-check-terms.accept.v1", commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1",
+  } });
+  expect(terms.status()).toBe(200);
   const missing = await page.request.post(path, { data });
   expect(missing.ok()).toBe(false);
   expect((await missing.json()).code).toBe("SCOPE_DISPOSITION_MISSING");

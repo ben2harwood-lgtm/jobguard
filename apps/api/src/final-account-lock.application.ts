@@ -17,7 +17,7 @@ export class FinalAccountLockApplication {
  constructor(private readonly pool:Pool,sessionId?:string){this.access=new PracticeAccess(pool,sessionId);this.repo=new FinalAccountLockRepository(pool);this.accounts=new FinalAccountCommandService(pool);this.variations=new VariationRepository(pool);this.invoices=new PracticeInvoiceRepository(pool);}
  async get(jobId:string){
   const auth=await this.access.job(jobId);
-  const [view,account]=await Promise.all([this.repo.read(auth.context,jobId),this.accounts.read(auth.context,jobId)]);
+  const [view,account]=await Promise.all([new FinalAccountLockRepository(practiceMaterialPool(this.pool,auth.digest)).read(auth.context,jobId),this.accounts.read(auth.context,jobId)]);
   let invoiceGuard:"FINAL_ACCOUNT_LOCK_REQUIRED"|"FINAL_CHECK_NOT_COMPLETE"|"FINAL_CHECK_FAILED"|null=null;
   try{assertFinalAccountInvoiceGuard("final",view.lock?{id:view.lock.id,tenantId:auth.context.tenantId,jobId,serverTimestamp:view.lock.lockedAt}:null,view.check);}
   catch(error){if(!(error instanceof FinalAccountLockError) || !["FINAL_ACCOUNT_LOCK_REQUIRED","FINAL_CHECK_NOT_COMPLETE","FINAL_CHECK_FAILED"].includes(error.code))throw error;invoiceGuard=error.code as "FINAL_ACCOUNT_LOCK_REQUIRED"|"FINAL_CHECK_NOT_COMPLETE"|"FINAL_CHECK_FAILED";}
@@ -27,10 +27,10 @@ export class FinalAccountLockApplication {
   const auth=await this.access.job(jobId),c=input(finalAccountLockCommandV1,raw);
   const {version:_version,...command}=c;
   // The immutable receipt result is returned directly: replay is byte-identical even if checking advances.
-  return this.repo.lock(auth.context,{...command,jobId,actorMembershipId:DEMO_MEMBERSHIP_ID});
+  return new FinalAccountLockRepository(practiceMaterialPool(this.pool,auth.digest)).lock(auth.context,{...command,jobId,actorMembershipId:DEMO_MEMBERSHIP_ID});
  }
  async disposition(jobId:string,raw:unknown){const auth=await this.access.job(jobId),{version:_version,...c}=input(finalAccountDispositionCommandV1,raw);return this.repo.disposition(auth.context,{...c,jobId,actorMembershipId:DEMO_MEMBERSHIP_ID});}
- async acceptTerms(jobId:string,raw:unknown){const auth=await this.access.job(jobId),{version:_version,...c}=input(finalCheckTermsAcceptanceCommandV1,raw);return this.repo.acceptTerms(auth.context,{...c,actorMembershipId:DEMO_MEMBERSHIP_ID});}
+ async acceptTerms(jobId:string,raw:unknown){const auth=await this.access.job(jobId),{version:_version,...c}=input(finalCheckTermsAcceptanceCommandV1,raw);return new FinalAccountLockRepository(practiceMaterialPool(this.pool,auth.digest)).acceptTerms(auth.context,{...c,actorMembershipId:DEMO_MEMBERSHIP_ID});}
  async reviewExtra(jobId:string,raw:unknown){
   const auth=await this.access.job(jobId),c=input(finalReviewExtraCommandV1,raw);
   return this.variations.addFinalReviewExtra(auth.context,{version:"final-review-extra.v1",proposal:{version:"variation-proposal.v1",id:c.commandId,jobId,scopeItemId:c.scopeItemId,existingScopeItemId:null,lineageParentScopeItemId:null,captureKind:"text",captureText:c.captureText,description:c.description,suggestion:null},actorMembershipId:DEMO_MEMBERSHIP_ID,deviceId:null,deviceCapturedAt:null,
