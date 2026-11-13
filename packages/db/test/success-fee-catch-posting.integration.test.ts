@@ -128,7 +128,7 @@ it.each(["unsettled","allocation_limit","locked_bill"] as const)("writer indepen
    await db.query("UPDATE app.final_account_line SET final_account_revision_id=$1 WHERE tenant_id=$2 AND job_id=$3 AND id=$4",[x.lock.finalAccountRevisionId,x.context.tenantId,x.jobId,x.line]);
    await db.query("ALTER TABLE app.final_account_line ENABLE TRIGGER USER");
   }
-  await db.query("SET LOCAL ROLE jobguard_runtime");await db.query("SELECT app.write_success_fee_v3($1,$2,$3::jsonb,NULL)",[x.jobId,x.auth.digest,p]);
+  await db.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[x.auth.digest]);await db.query("SET LOCAL ROLE jobguard_runtime");await db.query("SELECT app.write_success_fee_v3($1,$2,$3::jsonb,NULL)",[x.jobId,x.auth.digest,p]);
  })).rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
  expect(await counts(x)).toEqual(before);
 });
@@ -207,7 +207,7 @@ it("no case allocations fails in SQL before saving a review with null allocation
   await db.query("ALTER TABLE app.stored_receipt_case_allocation ENABLE TRIGGER USER");
   expect((await db.query("SELECT count(*)::int n,jsonb_agg(id) allocation_ids FROM app.stored_receipt_case_allocation WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:0,allocation_ids:null}]);
   expect((await db.query("SELECT count(*)::int n FROM app.stored_receipt_case_binding WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:1}]);
-  await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[x.auth.digest]);await db.query("SET LOCAL ROLE jobguard_runtime");
   return db.query("SELECT app.write_success_fee_v3($1,$2,$3::jsonb,NULL)",[x.jobId,x.auth.digest,x.command]);
  })).rejects.toMatchObject({code:"40001",message:"SUCCESS_FEE_SOURCE_CHANGED"});
  expect(await feeEffects(x)).toEqual(before);

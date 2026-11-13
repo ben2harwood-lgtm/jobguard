@@ -90,7 +90,7 @@ describe("SV-7A source storage/read authority",()=>{
   ])await rolledBack(f.admin,async db=>{
    await db.query("SELECT set_config('app.tenant_id',$1,true)",[auth.context.tenantId]);
    await db.query(mutation,[mutation.includes('control_plane')?other.digest:auth.membershipId]);
-   await db.query("SET LOCAL ROLE jobguard_runtime");
+   await db.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[other.digest]);await db.query("SET LOCAL ROLE jobguard_runtime");
    await expect(db.query("SELECT app.read_job_sources($1,$2,$3,'diary')",[auth.context.tenantId,targetJobId,other.digest])).rejects.toMatchObject({message:"JOB_SOURCE_FORBIDDEN",code:"42501"});
   });
  });

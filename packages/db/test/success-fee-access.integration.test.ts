@@ -74,7 +74,7 @@ it("SF-14/15 wrong track, mode and policy are refused (rolled-back administrativ
   try{await db.query("BEGIN");
    // Execute each statement separately; node-postgres extended protocol rejects batches with parameters.
    for(const statement of defect.split(';').map(s=>s.trim()))await db.query(statement,statement.includes('$1')?[a.p.jobId]:[]);
-   await db.query("SET LOCAL ROLE jobguard_runtime");await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.p.tenantId]);
+   await db.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[a.auth.digest]);await db.query("SET LOCAL ROLE jobguard_runtime");await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.p.tenantId]);
    await expect(db.query("SELECT app.read_success_fee_v3($1,$2)",[a.p.jobId,a.auth.digest])).rejects.toMatchObject({code:'42501'});
   }finally{await db.query("ROLLBACK");db.release();}
  }

@@ -206,7 +206,7 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
       expect(weakened).not.toBe(original);
       await client.query(weakened);
       await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]);
-      await client.query("SET LOCAL ROLE jobguard_runtime");
+      await client.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[auth.digest]);await client.query("SET LOCAL ROLE jobguard_runtime");
       if (removed === "receipt") {
         await expect(client.query("SELECT app.ch4_read_work_facts($1,$2,$3)",
           [auth.context.tenantId, v1Job, auth.digest])).rejects.toThrow("WORK_STATE_FORBIDDEN");

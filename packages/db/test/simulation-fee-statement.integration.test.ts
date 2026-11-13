@@ -220,7 +220,7 @@ it("the statement writer refuses a settled movement reverted to pending with its
    (SELECT count(*)::int FROM app.platform_fee_statement_command WHERE tenant_id=$1) commands,
    (SELECT count(*)::int FROM app.decision WHERE tenant_id=$1) decisions`,[x.context.tenantId])).rows;
   const before=await counts();
-  await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[x.auth.digest]);await db.query("SET LOCAL ROLE jobguard_runtime");
   await db.query("SAVEPOINT pending_movement");
   await expect(db.query("SELECT app.write_platform_fee_statement($1,$2,$3::jsonb)",[x.jobId,x.auth.digest,issue()]))
    .rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");

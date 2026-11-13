@@ -28,7 +28,7 @@ it.each(["builder_capture","disclosed_before_lock"] as const)("PostgreSQL exclud
    await db.query("ALTER TABLE app.shadow_commercial_signal DISABLE TRIGGER USER");
    await db.query("UPDATE app.shadow_commercial_signal SET disclosed_before_lock=true WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[x.context.tenantId,x.jobId,x.signal]);
   }
-  await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[x.auth.digest]);await db.query("SET LOCAL ROLE jobguard_runtime");
   await db.query("SELECT app.write_success_fee_v3($1,$2,$3,NULL)",[x.jobId,x.auth.digest,x.command]);
  })).rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
  expect(await journals(x)).toEqual([]);
