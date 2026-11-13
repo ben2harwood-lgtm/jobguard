@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-guide-visible-button-names": {
+      "branches": [
+        "codex/sandbox/demo-guide-visible-button-names"
+      ],
+      "note": "DEMO-S: use visible start-button copy as accessible names; labels and directly affected tests only.",
+      "allow": [
+        "apps/web/app/demo-s/core-1000/journey.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "apps/web/e2e/DEMO-J1-core-1000.spec.ts",
+        "apps/web/e2e/DEMO-J3-integrity.spec.ts",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "apps/web/e2e/DEMO-S-chooser.spec.ts"
+      ]
+    }
+  }
+}

@@ -106,7 +106,7 @@ export function ShadowJourney() {
    <li><p>The £3,200 of extras you logged plus £400 added at review total £3,600, with £0 recovery fee. Open the evidence pack and value report to check the records behind each figure.</p></li>
   </ol>
   <p><a href="/classic">Open Jobs and start the safe practice demo</a></p>
-  <button disabled={busy} onClick={() => void start()} aria-label="Create or recover the J3 capture">Create or resume the £30,000 practice job</button>
+  <button disabled={busy} onClick={() => void start()}>Create or resume the £30,000 practice job</button>
   <form onSubmit={event => void load(event)}><label>Saved job reference<input value={jobId} disabled={busy} onChange={event => { setJobId(event.target.value); setReport(null); }}/></label>
    <button disabled={busy} type="submit" aria-label="Load saved J3 evidence">Load this job’s saved results</button></form>
   {jobId && z.string().uuid().safeParse(jobId).success && <p><a href={`/jobs/${jobId}`} aria-label="Continue this job through its real controls">Open this job to follow the steps</a> · <a href={`/jobs/${jobId}#final-account-title`}>Final account and lock</a> · <a href={`/jobs/${jobId}/shadow-journey`}>Return to the £30,000 practice guide</a></p>}

@@ -23,10 +23,10 @@ it("has nine guided steps, source-only £30,000 input and no saved success befor
  const html = renderToStaticMarkup(<ShadowJourney />);
  for (const text of ["£3,200", "£400", "£500", "£300", "£34,400", "£41,280", "£800 recovered", "£80", "£720", "£3,600", "£0", "only saved customer responses count as approval", "customer portal"]) expect(html).toContain(text);
  expect(html.match(/<li>/gu)).toHaveLength(9);
- // Accessible names stay compatible with existing e2e selectors; visible words must be plain English.
+ // The start button uses its visible plain-English copy as its accessible name.
  const visible = html.replace(/<[^>]*>/gu, " ");
  expect(visible).not.toMatch(/landing allocations|SV-6 assessment|target Q|J3 capture|\bRED\b|verdict|observations|0 of 2/i);
- expect(html).toContain('aria-label="Create or recover the J3 capture"');
+ expect(html).toContain('<button>Create or resume the £30,000 practice job</button>');
  expect(html).toContain('aria-label="Load saved J3 evidence"');
  expect(html).not.toContain("Saved job evidence"); expect(html).not.toContain("You finished");
 });
