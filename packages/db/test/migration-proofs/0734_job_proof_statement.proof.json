@@ -1,5 +1,5 @@
 {
-  "migration": "0735_job_proof_statement.sql",
+  "migration": "0734_job_proof_statement.sql",
   "lp0": [
     {
       "section": "authorityPaths",
@@ -16,7 +16,7 @@
           "LP-12": "Check narrow grants, immutable bindings and receipt/audit custody."
         },
         "sources": [
-          "packages/db/migrations/0735_job_proof_statement.sql",
+          "packages/db/migrations/0734_job_proof_statement.sql",
           "packages/db/src/job-proof-statement.ts"
         ],
         "tests": [
@@ -43,7 +43,7 @@
           "LP-12": "Check narrow grants, immutable bindings and receipt/audit custody."
         },
         "sources": [
-          "packages/db/migrations/0735_job_proof_statement.sql",
+          "packages/db/migrations/0734_job_proof_statement.sql",
           "packages/db/src/job-proof-statement.ts"
         ],
         "tests": [

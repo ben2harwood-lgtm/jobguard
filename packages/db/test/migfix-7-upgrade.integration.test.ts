@@ -83,7 +83,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       const now = replayCatalog.find(r => r.nspname===row.nspname && r.relname===row.relname)!;
       expect({ ...now, relacl: row.relacl, policies: row.policies }).toEqual(row);
     } else if (row.nspname==='app' && row.relname==='synthetic_evidence_original') {
-      // 0735 adds only its flag-gated, tenant-scoped job_proof_source_read owner policy,
+      // 0734 adds only its flag-gated, tenant-scoped job_proof_source_read owner policy,
       // pinned by its proof via expected.policies above; every predecessor policy remains.
       const now = replayCatalog.find(r => r.nspname===row.nspname && r.relname===row.relname)!;
       expect({ ...now, policies: row.policies }).toEqual(row);

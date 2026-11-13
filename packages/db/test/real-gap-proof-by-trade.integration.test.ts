@@ -237,7 +237,7 @@ it("No requires verified completion photo; absent statement preserves legacy has
  const { ProofCommandService }=await import("../src/proof-repository.js");
  const { JobWorkStateRepository }=await import("../src/job-work-state-repository.js");
  const { migrate }=await import("../src/migrate.js");
- const c=await startBeforeMigration("0735_job_proof_statement.sql","jobguard_synthetic_demo");
+ const c=await startBeforeMigration("0734_job_proof_statement.sql","jobguard_synthetic_demo");
  try {
   const f=c as unknown as import("./job-work-state-fixtures.js").WorkFixture;
   const a=await preparedTrialFixture(f,{withTrial:false}),locked=await preparedTrialFixture(f,{withTrial:false});
@@ -302,9 +302,9 @@ describe("schema presence and command serialization", () => {
    await expect(read(job)).rejects.toThrow("PROOF_SCHEMA_INCONSISTENT");
    await expect(answer(job,false)).rejects.toThrow("PROOF_SCHEMA_INCONSISTENT");
   } finally { await h.admin.query("ALTER FUNCTION app.proof_requirement_missing_fixture(uuid,uuid) RENAME TO job_proof_requirement"); }
-  await h.admin.query("UPDATE public.jobguard_schema_migration SET migration_name='0943_missing_record_fixture.sql' WHERE migration_name='0735_job_proof_statement.sql'");
+  await h.admin.query("UPDATE public.jobguard_schema_migration SET migration_name='0943_missing_record_fixture.sql' WHERE migration_name='0734_job_proof_statement.sql'");
   try { expect(await read(job)).toMatchObject({statement:null,requiredEvidenceType:"electrical_certificate"}); }
-  finally { await h.admin.query("UPDATE public.jobguard_schema_migration SET migration_name='0735_job_proof_statement.sql' WHERE migration_name='0943_missing_record_fixture.sql'"); }
+  finally { await h.admin.query("UPDATE public.jobguard_schema_migration SET migration_name='0734_job_proof_statement.sql' WHERE migration_name='0943_missing_record_fixture.sql'"); }
   expect(await read(job)).toMatchObject({statement:null,requiredEvidenceType:"electrical_certificate"});
  });
  it("answer-first serialization lets the later upload use only that saved requirement", async () => {
