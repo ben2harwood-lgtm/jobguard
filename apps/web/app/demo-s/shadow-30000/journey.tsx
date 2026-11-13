@@ -108,7 +108,7 @@ export function ShadowJourney() {
   <p><a href="/classic">Open Jobs and start the safe practice demo</a></p>
   <button disabled={busy} onClick={() => void start()} aria-label="Create or recover the J3 capture">Create or resume the £30,000 practice job</button>
   <form onSubmit={event => void load(event)}><label>Saved job reference<input value={jobId} disabled={busy} onChange={event => { setJobId(event.target.value); setReport(null); }}/></label>
-   <button disabled={busy} type="submit" aria-label="Load saved J3 evidence">Load this job’s saved results</button></form>
+   <button disabled={busy} type="submit">Load this job’s saved results</button></form>
   {jobId && z.string().uuid().safeParse(jobId).success && <p><a href={`/jobs/${jobId}`} aria-label="Continue this job through its real controls">Open this job to follow the steps</a> · <a href={`/jobs/${jobId}#final-account-title`}>Final account and lock</a> · <a href={`/jobs/${jobId}/shadow-journey`}>Return to the £30,000 practice guide</a></p>}
   {error && <p role="alert">{error}</p>}
   {report && <ShadowSavedReport report={report} />}

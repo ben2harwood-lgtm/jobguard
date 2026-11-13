@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-shadow-saved-results-name": {
+      "branches": [
+        "codex/sandbox/demo-shadow-saved-results-name"
+      ],
+      "note": "DEMO-S: use the visible saved-results button text as its accessible name; no behavior changes or migrations.",
+      "allow": [
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "apps/web/e2e/DEMO-A1-rest.spec.ts",
+        "apps/web/e2e/DEMO-J3-integrity.spec.ts",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts"
+      ]
+    }
+  }
+}
