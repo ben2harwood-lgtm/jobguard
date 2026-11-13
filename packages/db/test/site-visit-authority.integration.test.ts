@@ -1,3 +1,5 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
+import { RequestBindingRefusedError } from "../src/request-binding-error.js";
 // Written before the routines. Real PostgreSQL (embedded) through merged cluster().
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -20,22 +22,39 @@ describe("ENT-3b visit authority: the rule, cell by cell", () => {
  it("[B1] it runs in a READ ONLY transaction and always returns exactly one row (NULLs, absent, empty and non-uuid tenant setting, another tenant's member)", async () => {
   const foreign = await fixture(c);
   const client = await c.runtime.connect();
+  // Router ruling r14 / class (a): with no bound request (NULL, absent, empty or non-uuid tenant setting, or a
+  // caller naming another tenant's member) the raw call is refused by the binding check; nothing is read.
+  const refused = { code: "42501", message: "REQUEST_BINDING_REFUSED" };
+  const probe = async (args: unknown[]) => {
+   await client.query("SAVEPOINT probe");
+   try { return (await client.query("SELECT * FROM app.ent3b_visit_authority($1,$2)", args)).rows; }
+   finally { await client.query("ROLLBACK TO SAVEPOINT probe"); }
+  };
   try {
    await client.query("BEGIN READ ONLY");
-   expect((await client.query("SELECT * FROM app.ent3b_visit_authority(NULL,NULL)")).rows).toEqual([{ decision: "forbidden", reason_code: "member_inactive" }]);
+   await expect(probe([null, null])).rejects.toMatchObject(refused);
    for (const setting of [null, "", "not-a-uuid"]) {
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [setting]);
-    expect((await client.query("SELECT * FROM app.ent3b_visit_authority($1,$2)", [f.members.operative.member.membershipId, f.jobId])).rows).toEqual([{ decision: "forbidden", reason_code: "member_inactive" }]);
+    await expect(probe([f.members.operative.member.membershipId, f.jobId])).rejects.toMatchObject(refused);
    }
    await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]);
-   for (const args of [[null, null], [null, f.jobId], [foreign.p.membershipId, f.jobId], [f.members.operative.member.membershipId, null], [f.members.operative.member.membershipId, randomUUID()]]) {
-    const rows = (await client.query("SELECT * FROM app.ent3b_visit_authority($1,$2)", args)).rows;
-    expect(rows).toHaveLength(1);
-    const inactive = args[0] === null || args[0] === foreign.p.membershipId;
-    expect(rows[0]).toEqual(inactive ? { decision: "forbidden", reason_code: "member_inactive" } : expectedRefusal);
-   }
+   for (const args of [[null, null], [null, f.jobId], [foreign.p.membershipId, f.jobId]]) await expect(probe(args)).rejects.toMatchObject(refused);
    await client.query("ROLLBACK");
-  } finally { client.release(); }
+   // The real operative, bound as itself (binding writes, so it precedes READ ONLY), still gets exactly one row
+   // for an absent or unknown job.
+   await client.query("BEGIN");
+   await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]);
+   await bindTestClient(c.admin, client, f.p.tenantId, f.members.operative.member.membershipId);
+   await client.query("SET TRANSACTION READ ONLY");
+   for (const args of [[f.members.operative.member.membershipId, null], [f.members.operative.member.membershipId, randomUUID()]]) {
+    const rows = await probe(args);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual(expectedRefusal);
+   }
+   // A bound caller naming another tenant's member is refused, never answered for that member.
+   await expect(probe([foreign.p.membershipId, f.jobId])).rejects.toMatchObject(refused);
+   await client.query("ROLLBACK");
+  } finally { await client.query("ROLLBACK").catch(() => undefined); client.release(); }
  });
  it("[B4] every job refusal is one decision: random id, another tenant's job, a small-builder job, a named operative taken off the team, a revoked grant, a cancelled order", async () => {
   const own = await visitFixture(c), foreign = await fixture(c);
@@ -56,7 +75,9 @@ describe("ENT-3b visit authority: the rule, cell by cell", () => {
   const own = await visitFixture(c);
   const extra = await invite(c, own, "supervisor", { kind: "team", id: own.demo.teamId });
   await command(c, own, { kind: "membership.revoke", membershipId: extra.member.membershipId });
-  for (const job of [own.jobId, randomUUID()]) expect(await authority(c, own, extra.member.membershipId, job)).toEqual([{ decision: "forbidden", reason_code: "member_inactive" }]);
+  // Router ruling r14 / class (a): a revoked membership can no longer bind its own request, so the raw read is
+  // refused by the binding check whatever the job, and nothing is read.
+  for (const job of [own.jobId, randomUUID()]) await expect(authority(c, own, extra.member.membershipId, job)).rejects.toBeInstanceOf(RequestBindingRefusedError);
  });
 });
 
