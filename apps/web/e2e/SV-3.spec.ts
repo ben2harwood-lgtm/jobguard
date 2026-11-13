@@ -97,6 +97,8 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
  const testStarted=Date.now();
  await page.addInitScript(installIntervalBarrier);
  await openLiveWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
+ // 0735: the job's own practice firm accepts the Final Check terms (as :72 does), so disputes answers 200.
+ const firmTerms=await page.request.post(`/api/jobs/${jobId}/final-account/terms`,{data:{version:"final-check-terms.accept.v1",commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"}});expect(firmTerms.status()).toBe(200);
  const credential=process.env.SV3_E2E_OWNER_CREDENTIAL??["sbox","e2e","owner"].join('-');
  const admin=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:"postgres",password:credential,max:1});
  const login=`sv3_q_browser_${randomUUID().replaceAll('-','')}`,value=randomUUID(),evidence=randomUUID(),upload=randomUUID();let shadow:Pool|undefined;
