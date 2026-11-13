@@ -53,11 +53,20 @@ it("puts the job title, continue card and customer/site before scope and practic
  expect(positions.every(position => position >= 0)).toBe(true);
  expect(positions).toEqual([...positions].sort((a,b) => a-b));
 });
-it.each(["draft", "quoting", "live"] as const)("starts the %s job page with the fixed Scope link, ahead of panels that load later", status => {
+it.each(["draft", "quoting", "live"] as const)("keeps the %s Scope link ahead of the journey, after any pre-live proof", status => {
  const html = renderToStaticMarkup(workspace(status));
- const first = html.match(/<(?:a|button|input|select|textarea)\b[^>]*>/u)?.[0];
+ const nav = html.indexOf('<nav class="workspace-stages"');
+ expect(nav).toBeGreaterThanOrEqual(0);
+ const first = html.slice(nav).match(/<(?:a|button|input|select|textarea)\b[^>]*>/u)?.[0];
  expect(first).toBe('<a href="#scope">');
+ if (status === "live") expect(html).not.toContain('id="work-proof"');
+ else expect(html.indexOf('id="work-proof"')).toBeLessThan(nav);
  expect(html.indexOf('aria-label="Saved job sections"')).toBeLessThan(html.indexOf('data-testid="uiwire15-journey"'));
+});
+it.each(["draft", "quoting", "accepted", "live", "invoiced", "paid"] as const)("renders one proof stage in the %s editor view", status => {
+ const html = renderToStaticMarkup(workspace(status, "#quote"));
+ expect(html.match(/id="work-proof"/gu)).toHaveLength(1);
+ expect(html.match(/>Attach generated practice image<\/button>/gu)).toHaveLength(1);
 });
 it("keeps the data-testid set rendered by the live job before reordering", () => {
  const html = renderToStaticMarkup(workspace("live", "#quote"));
