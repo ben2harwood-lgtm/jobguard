@@ -212,7 +212,19 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  expect(proofStatement.lp0.filter((entry:{section:string;after:unknown})=>entry.section==='triggers'&&typeof entry.after==='string'&&entry.after.startsWith('app.watchdog_command_identity|')).map((entry:{after:string})=>entry.after)).toEqual([
   'app.watchdog_command_identity|proof_statement_identity_complete|app.require_completed_job_proof_statement|AFTER INSERT|O',
  ]);
- const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
+ // 0735 adds only the nullable per-firm practice_session_digest column and its practice-session foreign key.
+ const isTerms=(r:Relation)=>r.nspname==='app'&&r.relname==='final_check_terms_acceptance';
+ const termsKey='final_check_terms_acceptance_practice_session_digest_fkey';
+ expect((await h.admin.query(`SELECT a.attname name,format_type(a.atttypid,a.atttypmod) type,a.attnotnull not_null,a.atthasdef has_default
+  FROM pg_attribute a WHERE a.attrelid='app.final_check_terms_acceptance'::regclass AND a.attname='practice_session_digest'`)).rows).toEqual([
+  {name:'practice_session_digest',type:'character(64)',not_null:false,has_default:false},
+ ]);
+ expect((after.relations.find(isTerms)!.constraints as Con[]).filter(c=>c.name===termsKey)).toEqual([
+  {name:termsKey,definition:'FOREIGN KEY (practice_session_digest) REFERENCES control_plane.practice_session(token_digest)'},
+ ]);
+ const normalizedTerms=(r:Relation)=>({...r,columns:(r.columns as {attname:string}[]).filter(c=>c.attname!=='practice_session_digest'),
+  constraints:(r.constraints as Con[]).filter(c=>c.name!==termsKey)});
+ const afterRelations=after.relations.map((r:Relation)=>isTerms(r)?normalizedTerms(r):isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
   :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isBinding(r)?{...r,columns:bindingBefore.columns,constraints:bindingBefore.constraints}:isManifest(r)?normalizedManifest
   :isOriginal(r)?{...r,columns:(r.columns as Col[]).map(c=>c.attname==='scope_item_id'?{...c,attnotnull:true}:c)}
   :isReceipt(r)?{...r,constraints:receiptConstraints.filter(c=>c.name!=='proof_statement_receipt_complete')}
