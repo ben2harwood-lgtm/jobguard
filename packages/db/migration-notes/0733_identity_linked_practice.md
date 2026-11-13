@@ -135,7 +135,7 @@ The referenced coordinator precheck file was absent from this checkout; diagnosi
 used the supplied failure report and inspected source/callers/tests.
 
 LATER / SIMPLICITY (initial inspection):
-`packages/db/migrations/0733_identity_linked_practice.sql`, legacy routine patch
+`packages/db/migrations/0734_identity_linked_practice.sql`, legacy routine patch
 loop: replace the three body overlays with explicit latest routine definitions
 in a separate focused change. This would make guard placement reviewable without
 depending on string positions. Deferred optional work to keep this repair focused;

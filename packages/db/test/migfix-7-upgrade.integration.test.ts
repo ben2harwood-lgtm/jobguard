@@ -101,14 +101,14 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
-    // 0733 recreates these exact bodies; never pin their pre-linked predecessors.
-    ["app.issue_practice_session(digest text)", "0733_identity_linked_practice.sql"],
-    ["app.start_blank_practice_company(digest text, previous_digest text)", "0733_identity_linked_practice.sql"],
-    ["app.start_blank_practice_company_v2(new_token text, previous_token text)", "0733_identity_linked_practice.sql"],
-    ["app.seed_saved_v1_sample()", "0733_identity_linked_practice.sql"],
-    ["app.authenticate_practice_session(digest text, requested_tenant uuid)", "0733_identity_linked_practice.sql"],
-    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0733_identity_linked_practice.sql"],
-    ["app.is_blank_practice_company(digest text)", "0733_identity_linked_practice.sql"],
+    // 0734 recreates these exact bodies; never pin their pre-linked predecessors.
+    ["app.issue_practice_session(digest text)", "0734_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company(digest text, previous_digest text)", "0734_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company_v2(new_token text, previous_token text)", "0734_identity_linked_practice.sql"],
+    ["app.seed_saved_v1_sample()", "0734_identity_linked_practice.sql"],
+    ["app.authenticate_practice_session(digest text, requested_tenant uuid)", "0734_identity_linked_practice.sql"],
+    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0734_identity_linked_practice.sql"],
+    ["app.is_blank_practice_company(digest text)", "0734_identity_linked_practice.sql"],
     ["app.company_final_check_request_run(j uuid)", "0732_final_check_typed_recovery.sql"],
     ["app.company_final_check_reveal(j uuid)", "0732_final_check_typed_recovery.sql"],
     ["app.cb_delivery(p_session uuid, p_job uuid, p_command uuid, p_payload jsonb)", "0727_billing_export_delivery_once.sql"],

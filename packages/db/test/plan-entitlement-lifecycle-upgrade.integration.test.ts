@@ -218,13 +218,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const ent5Bodies = new Map<string, string>();
   const ent5Replacements = [
     // Linked-practice successors retain metadata and replace these seven bodies.
-    ["app.issue_practice_session(digest text)", "0733_identity_linked_practice.sql"],
-    ["app.start_blank_practice_company(digest text,previous_digest text)", "0733_identity_linked_practice.sql"],
-    ["app.start_blank_practice_company_v2(new_token text,previous_token text)", "0733_identity_linked_practice.sql"],
-    ["app.seed_saved_v1_sample()", "0733_identity_linked_practice.sql"],
-    ["app.authenticate_practice_session(digest text,requested_tenant uuid)", "0733_identity_linked_practice.sql"],
-    ["app.lp6_session_authority(p_kind text,p_credential text,p_tenant uuid)", "0733_identity_linked_practice.sql"],
-    ["app.is_blank_practice_company(digest text)", "0733_identity_linked_practice.sql"],
+    ["app.issue_practice_session(digest text)", "0734_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company(digest text,previous_digest text)", "0734_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company_v2(new_token text,previous_token text)", "0734_identity_linked_practice.sql"],
+    ["app.seed_saved_v1_sample()", "0734_identity_linked_practice.sql"],
+    ["app.authenticate_practice_session(digest text,requested_tenant uuid)", "0734_identity_linked_practice.sql"],
+    ["app.lp6_session_authority(p_kind text,p_credential text,p_tenant uuid)", "0734_identity_linked_practice.sql"],
+    ["app.is_blank_practice_company(digest text)", "0734_identity_linked_practice.sql"],
     ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
     ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0635_extra_same_step.sql"],
     ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0728_extra_reject_null_step.sql"],

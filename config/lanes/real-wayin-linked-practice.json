@@ -2,7 +2,9 @@
   "version": 2,
   "lanes": {
     "real-wayin-linked-practice": {
-      "branches": ["codex/sandbox/real-wayin-linked-practice"],
+      "branches": [
+        "codex/sandbox/real-wayin-linked-practice"
+      ],
       "allow": [
         "packages/db/src/practice-session.ts",
         "packages/db/migrations/0942_identity_linked_practice.sql",
@@ -10,15 +12,18 @@
         "packages/db/migration-notes/0942_identity_linked_practice.md",
         "packages/db/src/blank-practice-company.ts",
         "packages/db/src/blank-practice-company.test.ts",
-        "packages/db/migrations/0733_identity_linked_practice.sql",
-        "packages/db/test/migration-proofs/0733_identity_linked_practice.proof.json",
-        "packages/db/migration-notes/0733_identity_linked_practice.md",
+        "packages/db/migrations/0734_identity_linked_practice.sql",
+        "packages/db/test/migration-proofs/0734_identity_linked_practice.proof.json",
+        "packages/db/migration-notes/0734_identity_linked_practice.md",
         "packages/db/test/real-wayin-linked-practice.integration.test.ts",
         "packages/db/test/real-wayin-linked-practice-races.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
-        "packages/db/test/extra-proceed-upgrade.integration.test.ts"
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
+        "packages/db/migrations/0733_identity_linked_practice.sql",
+        "packages/db/test/migration-proofs/0733_identity_linked_practice.proof.json",
+        "packages/db/test/extra-origin.integration.test.ts"
       ]
     }
   }
