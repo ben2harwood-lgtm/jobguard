@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 import { beforeAll,afterAll,it,expect } from "vitest";
 import { randomUUID } from "node:crypto";
 import { CommercialIntegrityV3Repository } from "../src/commercial-integrity-v3-repository.js";
@@ -82,7 +83,7 @@ it("CH-6 review holds only its source rows while writes in another tenant and jo
  await f.admin.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Fictional other company')",[foreignJob,foreignTenant]);
  const holder=await f.runtime.connect(),writer=await f.admin.connect();
  try{
-  await holder.query("BEGIN");await holder.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  await holder.query("BEGIN");await holder.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]); await bindOwnSession(holder, f.auth.digest);
   await holder.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[tenant,job,f.auth.digest,JSON.stringify(review),JSON.stringify(snapshot)]);
   // Keep the successful review transaction open: its locks really are still held.
   await writer.query("BEGIN");await writer.query("SET LOCAL lock_timeout='500ms'");
@@ -130,7 +131,7 @@ it("CH-6 review completes while another tenant holds a conflicting job write",as
   await writer.query("BEGIN");
   await writer.query("UPDATE app.job SET title='Fictional uncommitted write' WHERE tenant_id=$1 AND id=$2",[foreignTenant,foreignJob]);
   await reviewer.query("BEGIN");
-  await reviewer.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  await reviewer.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]); await bindOwnSession(reviewer, f.auth.digest);
   // A historical table-wide SHARE lock conflicts with the foreign writer's
   // ROW EXCLUSIVE lock. The current tenant/job row locks must complete instead.
   await reviewer.query("SET LOCAL lock_timeout='500ms'");
