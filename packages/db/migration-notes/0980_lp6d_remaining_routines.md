@@ -870,3 +870,7 @@ Repair 18-19 (decision 39 per ruling; PRODUCT CHANGE, flagged: practice_worker_s
 switch's recorded owner end it, or replay that end, through an owner-bound request). Whole db at
 be421f81 (run.sh WHOLE, 2 workers): 63 failed | 867 passed (930); 124 failed | 8158 passed | 16 skipped | 19 todo (8317) (r17 at 58ff4bc2: 63 files / 125 tests). NOT READY.
 Fail list and log: ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r19-be421f81-whole-*.
+
+Repair 20 ([PW4] API mapping, flagged; [PW16], sync-snapshot, watchdog per rulings). Whole db at
+8f4a30af (run.sh WHOLE, 2 workers): 60 failed | 870 passed (930); 118 failed | 8164 passed | 16 skipped | 19 todo (8317) (r19 at be421f81: 63 files / 124 tests). NOT READY.
+Fail list and log: ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r20-8f4a30af-whole-*.
