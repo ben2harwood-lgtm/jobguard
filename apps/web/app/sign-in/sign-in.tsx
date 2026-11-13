@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-type Session={principal:{id:string};memberships:{id:string;tenantId:string;role:string;name:string}[]};
+type Session={csrfToken:string;principal:{id:string};memberships:{id:string;tenantId:string;role:string;name:string}[]};
 // What an accepted invitation did to this browser's sign-in: nobody was signed in ("new"), the business was added to the
 // account that was already signed in ("added"), or verification signed this browser in as a different account ("switched").
 type Accepted="new"|"added"|"switched";
@@ -13,7 +13,7 @@ export function IdentitySignIn() {
   async function submit(event:FormEvent,verify:boolean) {
     event.preventDefault();setBusy(true);setError("");
     try {
-      const response=await fetch(`/api/auth/${verify?"verify":"request"}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({version:verify?"identity-verify.v1":"identity-request.v1",email,purpose,...(invitationId?{invitationId}:{}),...(verify?{code}:{})})});
+      const response=await fetch(`/api/auth/${verify?"verify":"request"}`,{method:"POST",headers:{"content-type":"application/json",...(session?{"x-csrf-token":session.csrfToken}:{})},body:JSON.stringify({version:verify?"identity-verify.v1":"identity-request.v1",email,purpose,...(invitationId?{invitationId}:{}),...(verify?{code}:{})})});
       const body=await response.json() as {code?:string;fixtureCode?:string};
       if(!response.ok)throw new Error(body.code??"IDENTITY_UNAVAILABLE");
       if(verify){const current=await fetch("/api/auth/session",{cache:"no-store"});if(!current.ok)throw new Error("IDENTITY_UNAVAILABLE");const next=await current.json() as Session;setSession(next);setCode("");setFixtureCode("");setRequested(false);if(purpose==="invitation"){setAccepted(!session?"new":session.principal.id===next.principal.id?"added":"switched");history.replaceState(null,"","/sign-in");}}
@@ -21,11 +21,20 @@ export function IdentitySignIn() {
     }catch(e){const reason=(e as Error).message;setError(reason==="INVALID_CODE"?"That code is invalid or expired. Request another code.":reason==="RATE_LIMITED"?"Please wait before requesting another code.":reason==="IDENTITY_ROUTE_BLOCKED"?"Use a supplied fictional .invalid address. Real identity email is blocked pending D04.":"Identity storage is unavailable. Your sign-in has not completed.");}
     finally{setBusy(false);}
   }
+  async function signout() {
+    setBusy(true);setError("");
+    try {
+      const response=await fetch("/api/auth/signout",{method:"POST",headers:{"x-csrf-token":session!.csrfToken}});
+      if(!response.ok)throw new Error("Sign out failed");
+      setSession(null);setAccepted(null);setInvitationLink(false);setInvitationId("");setPurpose("signin");setRequested(false);setCode("");setFixtureCode("");
+    }catch{setError("Sign out could not complete. Try again.");}
+    finally{setBusy(false);}
+  }
   return <main style={{maxWidth:480,margin:"32px auto",padding:20,boxSizing:"border-box",overflowWrap:"anywhere"}}>
     <h1>Sign in to JobGuard</h1><p>Use the supplied fictional address. Do not enter real names or email addresses.</p>
     {error&&<p role="alert" ref={errorRef} tabIndex={-1}>{error}</p>}
     {checking?<p role="status">Checking your persisted session…</p>:<>
-      {session&&<section aria-label="Verified account"><h2>You're signed in.</h2>{session.memberships.map(m=><article key={m.id}><h3>{m.name}</h3><p>{m.role === "read_only" ? "Read only" : m.role.charAt(0).toUpperCase()+m.role.slice(1)}</p></article>)}<details><summary>Technical details</summary><p>Identity: <span data-testid="identity-id">{session.principal.id}</span></p>{session.memberships.map(m=><div key={m.id}><p data-testid="identity-tenant">{m.tenantId}</p><p>Membership: {m.id}</p></div>)}</details>{accepted==="new"&&<p role="status">Invitation accepted. Your memberships above are current.</p>}{accepted==="added"&&<p role="status">Invitation accepted. The invited business is now one of this account's memberships above.</p>}{accepted==="switched"&&<p role="status">Invitation accepted. This browser is now signed in as the invited address, which is a different account from the one you were using. The memberships above belong to that account; sign in with your previous address to return to the other one.</p>}<p>This is a practice version: made-up jobs only, nothing is sent or charged.</p><p><a href="/classic">Open my jobs</a></p><p><a href="/plans">See plans and prices</a></p></section>}
+      {session&&<section aria-label="Verified account"><h2>You're signed in.</h2>{session.memberships.map(m=><article key={m.id}><h3>{m.name}</h3><p>{m.role === "read_only" ? "Read only" : m.role.charAt(0).toUpperCase()+m.role.slice(1)}</p></article>)}<details><summary>Technical details</summary><p>Identity: <span data-testid="identity-id">{session.principal.id}</span></p>{session.memberships.map(m=><div key={m.id}><p data-testid="identity-tenant">{m.tenantId}</p><p>Membership: {m.id}</p></div>)}</details>{accepted==="new"&&<p role="status">Invitation accepted. Your memberships above are current.</p>}{accepted==="added"&&<p role="status">Invitation accepted. The invited business is now one of this account's memberships above.</p>}{accepted==="switched"&&<p role="status">Invitation accepted. This browser is now signed in as the invited address, which is a different account from the one you were using. The memberships above belong to that account; sign in with your previous address to return to the other one.</p>}<p>This is a practice version: made-up jobs only, nothing is sent or charged.</p><p><a href="/classic">Open my jobs</a></p><p><a href="/plans">See plans and prices</a></p><button type="button" disabled={busy} onClick={()=>void signout()}>Sign out</button></section>}
       {(!session||(invitationLink&&!accepted))&&<section aria-label={session?"Accept an invitation":"Sign in"}>
       {session&&<><h2>Accept an invitation</h2><p>You are signed in. Verifying signs this browser in as the address the invitation was sent to. If that is the address you are signed in with, the invited business is added to this account. If it is a different address, this browser switches to that other account and signs this one out here.</p><p>Enter the address the invitation was sent to and the code sent to it.</p></>}
       <form onSubmit={e=>void submit(e,false)}>
