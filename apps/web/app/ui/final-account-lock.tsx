@@ -1,5 +1,5 @@
 "use client";
-import { jobPageFetch as fetch } from "./job-page-fetch";
+import { JOB_SAVED_EVENT, jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { finalAccountResponseV1, type FinalAccountResponse } from "@jobguard/api/final-account-contracts";
@@ -8,6 +8,9 @@ import {
   FINAL_CHECK_RUNNING_TEXT, FINAL_CHECK_TERMS_STATEMENTS, FINAL_CHECK_TERMS_VERSION, parsePoundsToPence,
 } from "@jobguard/core";
 import { CustomerInvoices, invoiceGuardMessages } from "./customer-invoices";
+
+import { INVOICE_CHANGED_EVENT } from "./customer-payment-status";
+import { FINAL_CHECK_CHANGED_EVENT } from "./final-check-reveal-view";
 
 const uuid = z.string().uuid();
 const viewV1 = z.object({
@@ -29,7 +32,8 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
   const [busy, setBusy] = useState(false), [description, setDescription] = useState(""), [amount, setAmount] = useState("");
   const errorTarget = useRef<HTMLParagraphElement | null>(null);
   useEffect(() => { if (error) errorTarget.current?.focus(); }, [error]);
-  const writing = useRef(false), active = useRef<AbortController | null>(null);
+  const writing = useRef(false), active = useRef<AbortController | null>(null), lifetime = useRef(0), currentJob = useRef(jobId);
+  currentJob.current = jobId;
   const load = useCallback(async () => {
     active.current?.abort(); const controller = new AbortController(); active.current = controller;
     try {
@@ -38,18 +42,29 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
       const next = viewV1.parse(await response.json());
       if (next.jobId !== jobId) throw new Error("WRONG_JOB_RESPONSE");
       if (!controller.signal.aborted) { setView(next); setError(""); }
-    } catch (failure) { if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "DATABASE_UNAVAILABLE"); }
+    } catch (failure) { if (!controller.signal.aborted) { setView(null); setError(failure instanceof Error ? failure.message : "DATABASE_UNAVAILABLE"); } }
   }, [jobId]);
-  useEffect(() => { void load(); return () => active.current?.abort(); }, [load, account.id]);
+  useEffect(() => {
+    setView(null); setError(""); writing.current = false; setBusy(false); setDescription(""); setAmount("");
+    const changed = (event: Event) => { if ((event as CustomEvent<{jobId?: string}>).detail?.jobId === jobId) void load(); };
+    window.addEventListener(FINAL_CHECK_CHANGED_EVENT, changed); window.addEventListener(JOB_SAVED_EVENT, changed); window.addEventListener(INVOICE_CHANGED_EVENT, changed);
+    const focus = () => { void load(); };
+    const visible = () => { if (document.visibilityState === "visible") void load(); };
+    window.addEventListener("focus", focus); document.addEventListener("visibilitychange", visible);
+    void load();
+    return () => { lifetime.current++; window.removeEventListener("focus", focus); document.removeEventListener("visibilitychange", visible); active.current?.abort(); window.removeEventListener(FINAL_CHECK_CHANGED_EVENT, changed); window.removeEventListener(JOB_SAVED_EVENT, changed); window.removeEventListener(INVOICE_CHANGED_EVENT, changed); };
+  }, [load, account.id, jobId]);
   async function command(route: string, body: unknown, after?: () => void) {
     if (writing.current) return;
+    const generation = lifetime.current;
     writing.current = true; setBusy(true); setError("");
     try {
       const response = await fetch(`/api/jobs/${jobId}/final-account/${route}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      if (currentJob.current !== jobId || lifetime.current !== generation) return;
       if (!response.ok) { const failure = await response.json(); throw new Error(String(failure.code)); }
       after?.(); await load();
-    } catch (failure) { setError(failure instanceof Error ? failure.message : "DATABASE_UNAVAILABLE"); }
-    finally { writing.current = false; setBusy(false); }
+    } catch (failure) { if (currentJob.current === jobId && lifetime.current === generation) setError(failure instanceof Error ? failure.message : "DATABASE_UNAVAILABLE"); }
+    finally { if (currentJob.current === jobId && lifetime.current === generation) { writing.current = false; setBusy(false); } }
   }
   async function addReviewExtra() {
     let price: number | null = null;
@@ -65,7 +80,7 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
   const allDisposed = baseline.every(line => view?.dispositions.some(item => item.scopeItemId === line.scopeItemId));
   return <section data-testid="final-account-lock" aria-label="Final-account completion" aria-busy={busy}>
     {!view && !error ? <p aria-live="polite">Loading final account…</p> : null}
-    {view ? <>
+    {view?.jobId === jobId ? <>
       <p data-testid="lock-state" role="status">{view.lock ? "Final account completed" : "Final account review"}</p>
       {!view.lock ? <>
         <p>{FINAL_ACCOUNT_REVIEW_PROMPT}</p>
@@ -91,8 +106,8 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
           <button className="primary" style={targetSize} disabled={!allDisposed || !view.termsAccepted || account.issueBlocked}
             onClick={() => void command("lock", { version: "final-account.lock.v1", commandId: crypto.randomUUID(), finalAccountRevisionId: account.id, expectedRevision: account.revision, declarationVersion: FINAL_ACCOUNT_DECLARATION_VERSION })}>Complete final account</button>
         </fieldset>
-      </> : <p data-testid="final-check-state" role="status">{FINAL_CHECK_RUNNING_TEXT}</p>}
-      <CustomerInvoices jobId={jobId} finalAccount={account} lockGuard={{ code: view.invoiceGuard, kind: "final", ...(view.lock ? {lockedRevision:{id:view.lock.finalAccountRevisionId,sourceHash:view.lock.sourceHash,issueBlocked:false}} : {}) }} />
+      </> : <p data-testid="final-check-state" role="status">{view.checkStatus === "pending" ? FINAL_CHECK_RUNNING_TEXT : view.checkStatus === "failed" ? "JobGuard's final check could not finish. Try again in the final check panel." : view.checkStatus === "completed" ? "JobGuard's final check is complete." : "The saved final check status is unavailable."}</p>}
+      <CustomerInvoices jobId={jobId} finalAccount={view.account ?? { ...account, issueBlocked: true }} lockGuard={{ code: view.invoiceGuard, kind: "final", ...(view.lock ? {lockedRevision:{id:view.lock.finalAccountRevisionId,sourceHash:view.lock.sourceHash,issueBlocked:false}} : {}) }} />
     </> : null}
     {error ? <p ref={errorTarget} tabIndex={-1} data-testid="final-account-lock-error" role="alert" data-error-code={error}>{Object.hasOwn(invoiceGuardMessages, error) ? invoiceGuardMessages[error as keyof typeof invoiceGuardMessages] : error}</p> : null}
   </section>;
