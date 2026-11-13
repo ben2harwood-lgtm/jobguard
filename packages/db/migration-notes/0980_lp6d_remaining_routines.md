@@ -791,3 +791,27 @@ recovery-messages (raw held-open runtime clients), commands (an unbound direct p
 with REQUEST_BINDING_REFUSED before AUTHORIZATION_INVALID) and meter-source-command-races. Their
 fixtures need their own bound contexts. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r9-73a64c04-whole-*.
+
+Repair 10 (origin/main f856626a merged; Final Check routines rebased on 0732):
+- Customer path (checker r10): migration-owned guards admit LP-6c's delegated customer only
+  for its own job and ClientDecideExtra. LP-6c pins that `jobguard_migration` cannot execute
+  `app.lp6_delegated_actor`, so the comparison runs in `app.lp6d_is_delegated_actor`, owned by
+  `jobguard_command_writer`, which answers yes/no and never returns the actor (EXECUTE to
+  `jobguard_migration` only). Used by xa_covers, xa_begin, xa_client_decide,
+  xa_client_view_authority and lp5b_contractor_permission. The lp6d_xa_* customer copies are
+  gone. Private copies remain only for the third-party issuer's authority (lp6d_xa_covers,
+  lp6d_xc_send_authority, lp6d_xc_link_current: revoked from PUBLIC/runtime/identity, drift
+  pinned); they move to LP-10.
+- Guards compare the stamped tenant case-insensitively (ENT-4b [S4]: an UPPER-CASE spelling
+  of the same tenant must commit).
+- Contractor principals keep their bound request context in a module-private WeakMap set by
+  the one session constructor (`requireContractorRequestContext`).
+
+Repair 10 whole db at d1261d8f (run.sh WHOLE, 2 workers): 115 failed | 815 passed files;
+260 failed | 8008 passed tests (after merging main, at 32de733f: 130 files / 367 tests).
+NOT READY. Fixed after that run: j3-landing-allocation, shadow-catalog (proof digests) and
+site-extra-authority (A14 now allows the UPPER-CASE spelling, as main does). Still open: the
+LP-6c customer queue/view path stays unbound by design but reaches the guarded
+ent3_extra_work_status through xc_timing (needs a ruling), lp6c customer messages, the
+extra-approval-chain journey, and raw runtime fixtures in about 100 files. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r10-d1261d8f-whole-*.

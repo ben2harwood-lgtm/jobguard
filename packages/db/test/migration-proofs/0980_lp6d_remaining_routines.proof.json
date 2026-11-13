@@ -120,7 +120,7 @@
         "otherExecute": [
           "jobguard_binding_owner"
         ],
-        "definitionSha256": null,
+        "definitionSha256": "31845dd320e328c75cec5f035c1da26fdc707e72cb4143c5683e91a409bb16a8",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -145,7 +145,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "a6df4377c64645a2507d3552ec3e3d91a4df2f8f0aee3582b3ade179bd4ec4f6",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_practice_session_live"
@@ -166,7 +166,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "697093615b6931bcbd061e923c2ced8a21de866b86f2640084a320d63976a9b8",
         "staticWrites": [
           "app.action_authorization"
         ],
@@ -207,7 +207,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "b2729555399f4ec41341b659bca633c6ac5207ea13fe210b7ecfeb784a8e6dad",
+        "definitionSha256": "f5bcb6a9a9a8e3b03b857f47e4e2a10e7eb43d979828d06edd234d59c08c37da",
         "staticWrites": [
           "app.scope_progress"
         ],
@@ -251,7 +251,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "1fa4fce355678ba48c455b19e4a8341ea8aa9bf74266ab449e51529785d5b47d",
+        "definitionSha256": "c25b127880cf8ad6159272de80480850be6f73ef1f6810025d2c69fadf1ec107",
         "staticWrites": [
           "app.job",
           "app.job_party_binding",
@@ -292,7 +292,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "7a3b2711ff3530a521c138ebcb8d3a4beaf9dd52c79a033760a1c735f8a83955",
+        "definitionSha256": "f46eb007f0f4ddacf53ffb5b64f1982dcf9820951d49ca9b1e62dbf644db7b33",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -328,7 +328,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "425700378cf9ab2646d4ee748cf46d56ee29a944321b31a74a8f815b28a26578",
+        "definitionSha256": "48eb79095bb745b4cf779fde9af0a19c417328ec15a8f373569711fe360dfced",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -369,7 +369,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "dbba80b9f5d1b1dc0033c66e050f9cdacba8f560dcc2c1619cbbb9cadd6c1093",
+        "definitionSha256": "175b01c33d5c60c57e8f41b5cb4b19426a6230bf289031c35de3252676942c45",
         "staticWrites": [
           "app.command_receipt",
           "app.contractor_client_customer"
@@ -421,7 +421,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "adc3b7d3d06795134ef3089ea4f0405dd49b10b00a0f6747e77fb1624f998eaa",
+        "definitionSha256": "2ecb988113bc9e31f93baf2de405a1ae61152fb1f58775923aec9aad30c8d067",
         "staticWrites": [
           "app.command_receipt",
           "app.contractor_party_binding",
@@ -470,7 +470,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "50ff69a6a7c7130c91a12cb8c9b249ab737e29c1fb9cb39ae99eead06183c6bb",
+        "definitionSha256": "8f2fd87ecf8637bfa89698c2cedf7a00c63dd76d9366a400f0d086cc6dddc8fa",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_job_allowed",
@@ -514,7 +514,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "3a5e4602c034f3dc7e47046a9a6278abd78972d7642ae0ba796f12f220c69822",
         "staticWrites": [
           "app.job",
           "app.job_commercial_track",
@@ -571,7 +571,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "b1a26d91f44b9f1184c0cdf140edbe52140cad5bafe3a2632144fc292ce970ce",
         "staticWrites": [
           "app.job",
           "app.job_assignment",
@@ -625,7 +625,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "72212751b16660eea98067d50f45bdb239ee67788f628989f8fc468c0fbbe595",
+        "definitionSha256": "73387c153731da30d2fa749006204c9e5c0265f3bfca742cede3830f64192682",
         "staticWrites": [
           "app.import_batch",
           "app.import_row_receipt"
@@ -672,7 +672,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "2dc4e58ae908650dcebd987568ac9b8ffadb3bf395bf504b93328a1a15de72c0",
+        "definitionSha256": "ba4f1cb7b9f7d1865a4b9ba0c54e04045b5f6439ff5420081af0c31e91aec8f3",
         "staticWrites": [
           "app.schedule_of_rates",
           "app.sor_item",
@@ -717,7 +717,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "781fccb31c1def82e30f240ed1aa16a1dd51811584d1f0149011b422bbfe86ee",
+        "definitionSha256": "f1d2f7e57c632d25e2c7db868e60f030949595f380a9c4b88496ccf61c1f4f30",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -758,7 +758,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "b86c588e320c14ecd56edcd11eb81899098b3e3a14110aa316134a141663309e",
         "staticWrites": [],
         "staticCalls": [
           "app.append_shadow_audit",
@@ -798,7 +798,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "c1da3fb3f45284cee084e505d2eeb8db94102c3a68dacae6f5b704e7a5b081a3",
+        "definitionSha256": "fa031997da902c8fb6005dd838ba7a17589dadb1c737862c3d4c8fbfb5626b73",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -837,7 +837,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "715b18d49fcd46da4a4ae32581c6a352e89a89b2b7272867c99dbbf37a9a64eb",
+        "definitionSha256": "38684249d8761cff17f51c588391fde41d6b9a91c60f0f36188c88a46fb7c6c0",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -881,7 +881,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "1499ebcb89926c26c0f9cbc6456b724d3acb5a1f3eae6c7050f6e7cdcde2e4aa",
+        "definitionSha256": "536976edee6b1cf599be46e77df5ef4f56350a2b755f131b79e518b4d579c72e",
         "staticWrites": [
           "app.command_receipt",
           "app.final_check_terms_acceptance"
@@ -930,7 +930,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "1a5449621ef70032ef918ad152d763b55c020cec7b9716ea942cc88daa48f59e",
+        "definitionSha256": "d60527425c4a597e0600b405fa8875eb075b2f14ceec0446d003925ddad92d06",
         "staticWrites": [
           "app.command_receipt",
           "app.final_account_scope_disposition"
@@ -977,7 +977,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "f0d6622e33243012061febd16f185870459f7d1f0b285ab7b3c781c1b6200a86",
         "staticWrites": [
           "app.site_visit"
         ],
@@ -1024,7 +1024,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "13d862c37dcaddde8194008035e92687cc389f3da17c23f08c0d949d1bbb23a6",
         "staticWrites": [
           "app.closeout_answer",
           "app.site_visit"
@@ -1072,7 +1072,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "a555f9c1711e07c6081d11547735484fc7ca3f0689e048ae5345241ea8111da3",
+        "definitionSha256": "6942fbefba7c0ba502513264a0d724a156bc65e6ae4f74aa5468e928650f4bc9",
         "staticWrites": [
           "app.extra_pricing_basis",
           "app.extra_sor_revision"
@@ -1122,7 +1122,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "ea3c929d0cbc200d167be885894c05b4a4d1900e14e1708b8de6886a68163f59",
         "staticWrites": [
           "app.extra_approval_revision_binding"
         ],
@@ -1175,7 +1175,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "6b3813b698386b6a0f59ec2e223ec2b12418fbc7048bbc9f3cb6f9e53ce500eb",
         "staticWrites": [
           "app.extra_approval_revision_binding",
           "app.variation_revision"
@@ -1231,7 +1231,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "4955d839375a5286d4928cd6dc06299ce5f0cab30f6f77fbbaab7d02a0e7bf3d",
         "staticWrites": [
           "app.extra_approval_outcome",
           "app.extra_approval_step_fact"
@@ -1286,7 +1286,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "2f827ab60e16ab2bd091f8a028316d2d41b374982173b12b68731fe9e0d071d5",
         "staticWrites": [
           "app.extra_approval_outcome"
         ],
@@ -1340,7 +1340,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "676b52ed7c3d145eb028116a44753856986dcc3af5ee0ff7d1e615df51b1b26b",
         "staticWrites": [
           "app.extra_approval_outcome",
           "app.extra_duplicate_link"
@@ -1392,7 +1392,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "8ec2552d1bbf604c63bef41f852b25eede604e0d88c7841b0088b19794622bda",
         "staticWrites": [
           "app.extra_client_link",
           "app.extra_client_link_closure"
@@ -1439,7 +1439,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "7113c8d9a1b81db70169cf934f17b4d85d26fb39098354789ed23a5a9349ca09",
         "staticWrites": [
           "app.extra_client_link_closure"
         ],
@@ -1490,7 +1490,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "21a1ac701d63dc81a46a2bd1d089d15fd81ef9e84460bd9cf26acfbaacbec826",
+        "definitionSha256": "9cbba0a143260027edc3ba200f682fcdcb50084612b0cf6a031773e6ed4103cc",
         "staticWrites": [
           "app.extra_approval_outcome",
           "app.extra_approval_step_fact",
@@ -1502,10 +1502,10 @@
           "app.current_tenant",
           "app.lp5_bind_effect",
           "app.lp6d_is_delegated_actor",
+          "app.lp6d_xc_link_current",
           "app.xa_begin",
           "app.xa_event",
-          "app.xa_latest_kind",
-          "app.xc_link_current"
+          "app.xa_latest_kind"
         ]
       }
     },
@@ -1540,12 +1540,13 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "9e58102ebf99b059e211ec244e88410930e2cad25a51085b80f4d6e2ab391841",
+        "definitionSha256": "09d163eb0d484d9dc2aff033ee1f8a77da04f7d8ac0e91edf456b2f9fe5fd4a8",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_member_active",
           "app.current_actor",
           "app.current_tenant",
+          "app.lp6d_is_delegated_actor",
           "app.xc_link_current"
         ]
       }
@@ -1580,7 +1581,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "61142844797fd3b8edfc3e65e8474a43d9e9d6f97b9065dcdf29c2767b3468e7",
+        "definitionSha256": "64c91b1aae6bc16b35f44460e779566d38b033ef1e02bda70baefede5b669dd7",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -1624,7 +1625,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "3f9c89d400cb1eeef57146d6b9c6cfb166e2ce14ab49e929abf47af148af0be2",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_job_team",
@@ -1668,7 +1669,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "24346bb0e3e4d113fb5f4c8d634eba04397fa0470778fb9cced0bdb4bac94f04",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_session",
@@ -1724,7 +1725,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "9c98578715db500cb8ec44f84edbb17f4a316070d5a43ddb42181f994a093c98",
         "staticWrites": [
           "app.command_receipt",
           "app.contractor_job_finish",
@@ -1780,7 +1781,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "42a2a239146486a7ab88a53fd918809cddbb10b729143468cb70d6fb4f458193",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_session",
@@ -1821,7 +1822,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "8a4e643752b51dcc4186e85e2f9e9081f9dcb37e88d5a47f48e1dde6e180766c",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_member_active",
@@ -1863,7 +1864,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "33e619c4f3c53dbf329eb22ef9c0757c2dba169f07abb347e4113722de0b71f2",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_session",
@@ -1903,7 +1904,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "761578fe1bdd224462878db929512d6c08e8f89ab1468c9a4717534181bd05e7",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_session",
@@ -1944,7 +1945,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "05991ba0658f1b7fdba9e6cc55452d8fc513f5eafdd61514fe7b3ed82a82c2df",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -1984,7 +1985,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "9489b218915fa3e869c6848266db907f4e727c06c9c23bd0e749917bca9a18c3",
         "staticWrites": [],
         "staticCalls": [
           "app.ch4_require_command_owner",
@@ -2034,7 +2035,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "e0626094a57b81ef8d463b1b73ba78e70579dfdcc9c2988fab2a579d14693adc",
         "staticWrites": [
           "app.command_receipt",
           "app.job_link",
@@ -2084,7 +2085,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "d39c3d961a97ce2dddf3f8241a51375617d7283299d3db82fbaab0630d5e0c4e",
         "staticWrites": [],
         "staticCalls": [
           "app.ch4_work_state_command",
@@ -2123,7 +2124,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "5e106614a4105664973660689ded4b65c25cc7c965b3aa40f48f5a7b35f756a2",
         "staticWrites": [],
         "staticCalls": [
           "app.ch4_work_state_command",
@@ -2164,7 +2165,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "81e6f454f5013afa3ad682a9bb92926f62adcb20eb52eff8d4664f5ce293cd48",
+        "definitionSha256": "65c6d32b32aae8ca4425f092a611d8b70961f42fa2bef2588f4989341627ec88",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -2214,7 +2215,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "81597add20821192e8060a970b97c5eec52714a29a1d98359043e97fa1133d79",
         "staticWrites": [
           "app.command_receipt",
           "app.final_check_disposition_binding",
@@ -2263,7 +2264,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "fa50c58ce193d22047be3b643d8b2cf852d896b8b516057ad814a314e69cb552",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -2302,7 +2303,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "c29600a223d0f89cc5062db76135db85474e5cce0074677f1bcf646ced20bbad",
         "staticWrites": [
           "app.command_receipt",
           "app.extra_origin",
@@ -2355,7 +2356,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "84c77c2d25126cca07deecce89ffb884519cd42da26463b47154985449bde239",
+        "definitionSha256": "b8dd1cc677a38843f3ef3cb2a465deba412bf6c8aca4f5440c39676ff30e07da",
         "staticWrites": [],
         "staticCalls": [
           "app.admit_final_check_cycle",
@@ -2396,7 +2397,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "9494e6e133bdf81c25e55237fb48417a24ddbc0cd5f4ddc1ca4bbd86c0aa0e9f",
         "staticWrites": [],
         "staticCalls": [
           "app.ch4_require_command_owner",
@@ -2438,7 +2439,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "c9d493671e60ca1b2ae35c43f4918239c4356e707dde0dee0c14bcb122ee151b",
         "staticWrites": [
           "app.customer_message_source",
           "app.evidence_object",
@@ -2496,7 +2497,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "b435c81834ed1ba81cfc6287343e1bcfcfc891a3929ef8d667a8c407bdd8a4ac",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -2536,14 +2537,14 @@
         "identity": "function:app.request_evidence_pack_v3(uuid,uuid,text,jsonb)",
         "owner": "jobguard_migration",
         "securityDefiner": true,
-        "searchPath": "search_path=pg_catalog, app",
+        "searchPath": "search_path=pg_catalog, app, infrastructure",
         "returnsTrigger": false,
         "extension": null,
         "reachable": true,
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "4f732356c41da7c00083125e3fc61656ca2e6f48691f68d52e6c448676a76159",
         "staticWrites": [
           "app.command_receipt",
           "app.evidence_pack_v3_request",
@@ -2595,7 +2596,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "64a35a7bb87be8b223a96289f8a420c5a816fa18161051c3bbafe63928d0fe2c",
         "staticWrites": [
           "app.job",
           "app.lp_job_insert_permit"
@@ -2646,7 +2647,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "00eb6129f10e7cda243bed163fac6c2025e75b153af4ce3656282078f6ffcd0b",
         "staticWrites": [
           "app.command_receipt",
           "app.decision",
@@ -2711,7 +2712,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "54108c3bd16cf7401185d48e5968bb49590984c2d7be805fe63b2fe85c2380b8",
+        "definitionSha256": "13367fb8346e3cac17b81114dc8b19e08c0162f97cb182b0383fa6cf556aedbe",
         "staticWrites": [
           "app.approval_rule_version",
           "app.client_contract",
@@ -2770,7 +2771,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "5bd12a06259abffad4e0eaa9560368cf5ee5a500f998b24b009202733efce343",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_session",
@@ -2816,7 +2817,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "5241b95f939b013a91252006127f9d1e76787c64acc522e3dcedea12b005324e",
+        "definitionSha256": "3ab5df09ce909590148c5b55557eb916fca2717eeb14fec105647bda894fe9e8",
         "staticWrites": [
           "app.enterprise_baseline_batch",
           "app.enterprise_baseline_team"
@@ -2862,7 +2863,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "d1cdbe73e50c2b923b3a8521144abd055bd7ff593f90695a2bb0b51567b83290",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_allowed",
@@ -2907,7 +2908,7 @@
         "otherExecute": [
           "jobguard_migration"
         ],
-        "definitionSha256": null,
+        "definitionSha256": "b3ac2a365087cb6ba6bf4dacca0a8dd4fb85f51f905a0bf55aaf1ad694886185",
         "staticWrites": [
           "app.repository_operational_record"
         ],
@@ -2947,7 +2948,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "cadf2f1062ac913602f5808c54ce4d843677146eb17ad5b454e302c498af3b7d",
         "staticWrites": [
           "app.command_lifecycle_claim"
         ],
@@ -2985,13 +2986,13 @@
         "searchPath": "search_path=pg_catalog, pg_temp",
         "returnsTrigger": false,
         "extension": null,
-        "reachable": false,
+        "reachable": true,
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [
           "jobguard_command_writer"
         ],
-        "definitionSha256": null,
+        "definitionSha256": "0805b3829d8f85153aa25cca6ed5515fc97464f665af2865a608294f3ed97586",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_allowed",
@@ -3001,6 +3002,7 @@
           "app.current_actor",
           "app.current_tenant",
           "app.ent3b_visit_authority",
+          "app.lp6d_is_delegated_actor",
           "app.xa_client_view_authority",
           "app.xa_covers",
           "app.xc_send_authority"
@@ -3041,7 +3043,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "618a966f71461cfb6ff78922cce354efe062d3986ca4f41f87b0c8b93741a33b",
+        "definitionSha256": "08ff9db168e8a01376e7eb5f942c2c30885519e1357778387b3145e552f4860e",
         "staticWrites": [
           "control_plane.practice_company_marker",
           "control_plane.practice_worker_switch"
@@ -3088,7 +3090,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "991d35ab57dfa008e13e59da3e5fbe608c30cecd829b0d28a7f6bf8e18bbab19",
+        "definitionSha256": "8c34b6831c52cf1b24cf0226915b9147e1c78c17da8ce2066c16c53a66f854d8",
         "staticWrites": [
           "control_plane.practice_worker_switch"
         ],
@@ -3131,7 +3133,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "d695b5bc89fc2e7e6d68425697cb325e9ce7d5363dc0b36adc6d558c136eaec2",
+        "definitionSha256": "686877444936e86491d09b37cd1d353016c0af0a05061de4625bbddf6465fea9",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_practice_session_live",
@@ -3174,7 +3176,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "c95cd5ada3a0233331a4f88733ee5282cdd847961ad3c8b241553cde60755a05",
+        "definitionSha256": "4e18af48ae00d4f203a7625a7b88303659f08a1af0dbedf109315420ade1ff28",
         "staticWrites": [
           "control_plane.contractor_practice_session"
         ],
@@ -3220,7 +3222,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "c321b5b6a6251f24eeffbcdadb99e69989e7a3fbcb27e64f03be2de13714bfa9",
+        "definitionSha256": "e8369daf4e9cbf5412f672f6f88673224627af5f38c447ffcf1ec94f4cebf852",
         "staticWrites": [
           "app.northside_run"
         ],
@@ -3262,7 +3264,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "54877c27923676a7889bef17e4f5eeee8c5f123cec4ee61983746b7745b7dd69",
+        "definitionSha256": "4449197dfe0e5c57259a24df1756d756e9b3fc1d5fc9f2feb500ded5471206bf",
         "staticWrites": [
           "app.extra_escalation_fact"
         ],
@@ -3305,7 +3307,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "7b29685950b67d1aa5ecf9e7e35b374525b871d79d45fed362183e3abce7d4ed",
+        "definitionSha256": "ec969c2657d7cf28dd1b4ad4d27dd703861d2f3dc49247e6d395393204603de6",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_job_assigned",
@@ -3349,7 +3351,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "bf97a74135abf8bd03467f11bb7056e5bac78a2b5e3ce2a477cd4ba218ff1336",
+        "definitionSha256": "92ea63f7e6022099f87b88508a44179bdbee9c1a9640b92db2b30e55d940b2f3",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_job_allowed",
@@ -3392,7 +3394,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "008d9b7961db8037805671052e3c801926f29b4602ce1417eefd76172420b846",
+        "definitionSha256": "70299b14d5aa1de7d66ee71f145f645e41ca586f5542ebb84654a69029eb6e1b",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -3429,7 +3431,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "037588ac0148de9a6862cfceb329de04e1686711cfd2d15363237e6d52966928",
+        "definitionSha256": "03684faa2a49ff014f81d9e72124308fe5c0eaea73849b9d6de416316276ff79",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -3472,7 +3474,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "a91aceb260302bcccd470c0bb0594a0664ebeffb3c47f56b4b038c423c5807e9",
+        "definitionSha256": "38f4f76c4122d0671310edab7520f94a81bc3312ea0ca3c3124873066b7d930d",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_job_team",
@@ -3514,7 +3516,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "62416d5ff7f749fa96d32105c603176be6a1f0e6b956139f1ae89c1e31a86a7b",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -3554,7 +3556,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "ec552a3110eddb73a821f68b9b5f2617d5668132df776a972ecaf53a16b8b61c",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -3596,7 +3598,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "1231ada614700b12c72ba3ab4026f8ac878045055bb23304770526824f9591fb",
         "staticWrites": [
           "infrastructure.demo_source_hold_request"
         ],
@@ -3638,7 +3640,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "f7924f7408f0e2089b88bcd7cf37503f90e80af7cff5584c3540c142c981fe87",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -3686,7 +3688,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "2f1c0fbdefd7bbae19a659bff17cc30e4a977054fd73ebb36162fcea2229096c",
         "staticWrites": [
           "app.action_authorization",
           "app.action_outbox",
@@ -3735,7 +3737,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "0a36eaeeac62adf8601d4fd66a0514e605560bf49e0b8dddcda31dd817db8b68",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -3779,7 +3781,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "24d09a5da12f95e0855b667b0726e897f03a3f0ac1b0e24a5ccb3aba3c08befa",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -3830,7 +3832,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "a6d67c9d4d979ded7ae1e3bcb8a9ddfe0b090090d50a96b0d7ac783c0d6b68cf",
         "staticWrites": [
           "app.command_receipt"
         ],
@@ -3876,7 +3878,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "395fde6d294d6606df22c4f77795ca97988dd5ceedf528993c3e6bf7e24937c7",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -3918,7 +3920,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "a66c775191f21fdb79bd2ecc364b63179763b7aa1d45f29cb5b64a75c9306842",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -3962,7 +3964,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "94d17578e685f22c79824ccc7588152234e5a536aa7fdaba35062e13353b11e9",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -4004,7 +4006,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "90d8bfef61e9770fa2b214cb11a010380f5defdff05021e8e2ff82e8b4df0526",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -4044,7 +4046,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "8b0af3bc8024f4cfb9553eb119e9fbc7b99ab42e1fa3cd3ea1fd32bab92cc6bb",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -4086,7 +4088,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "e0b4de65057b2e5097c15e444aa2c27237832fede0f2f1dbff6052a4ddc654cf",
         "staticWrites": [
           "app.import_pre_adoption_evidence"
         ],
@@ -4127,7 +4129,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "764e6c12939927294277961ef025971ea0836b0758909dc661d079f22128c1bf",
         "staticWrites": [],
         "staticCalls": [
           "app.ch5_history_actor",
@@ -4176,7 +4178,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "6b4b57cc49320eb2d227a078493351e097f7429395eef3a7a13dcae3d33e79a4",
         "staticWrites": [
           "app.evidence_object",
           "app.evidence_upload",
@@ -4233,7 +4235,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "2b2593f85a08bcae4195cd427be3fd5ba2f7ae15db78e2438e9322f38d842740",
         "staticWrites": [
           "app.accounting_export_attempt",
           "app.accounting_export_decision",
@@ -4281,7 +4283,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "583110fa2ca52616de9f25be0ffde93d755871d22bfb9159e27e7503a7d150f8",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_member_active",
@@ -4323,7 +4325,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "e193b10473b5e0bcddf934346405d96302267e2842eaec04d681bee5346644d3",
         "staticWrites": [
           "app.sync_snapshot_checkpoint"
         ],
@@ -4452,7 +4454,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "b8dcd592d2164ba4f080c91b3fe6913cecf239c29810dcf7a772fd77697ae0ab",
         "staticWrites": [],
         "staticCalls": [
           "app.bind_request",
@@ -4494,7 +4496,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "9da2dc63f0e5fe5af7c912e364128eaa85efe2f47b8933c87352a44f59b3b95c",
         "staticWrites": [
           "app.managed_recovery_election"
         ],
@@ -4535,14 +4537,12 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
-        "staticWrites": [
-          "app.managed_recovery_election"
-        ],
+        "definitionSha256": "f7b246355fe4014c664499fd17417debe17534de49302b4082d20687e5060dcd",
+        "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
           "app.current_tenant",
-          "app.lp4_seal_audit"
+          "app.mon9_session"
         ]
       }
     },
@@ -4582,7 +4582,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "84fb158759897efb3932413b4f6c1b5dce2e7addb6b7407834a3944977748424",
         "staticWrites": [
           "app.site_supervisor_query"
         ],
@@ -4631,7 +4631,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "586876c88690c63575041dcb73244ef4d2d947094439423d74c987295d9945bf",
         "staticWrites": [
           "app.site_extra_work_status"
         ],
@@ -4676,7 +4676,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "54521894ab96e8197e132e8e0ae6b8e4aca9d922a8d984941bcf821897382a11",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -4717,7 +4717,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "451b2be0b9f0f992e0d0e83dd680e3f25b90071fb14fef7cf94fe0f52f6582de",
         "staticWrites": [
           "app.worm_command"
         ],
@@ -4757,7 +4757,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "200e45dbfa647467b2ee83a30503527f9af42004cd7cbece15caf0867a3b4c6d",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -4801,7 +4801,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "4bd05c2e84d4bcb6bc4551934eedf62686c181892446db9df70d6097e8625bdd",
         "staticWrites": [
           "app.recovery_billability_command"
         ],
@@ -4845,7 +4845,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "f544387f11258598b354ea37118857ff1bf8b3d21f989e5bc81c14c50cf826a4",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -4892,7 +4892,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "5948a04409103de53f788cbc992290dd4dd591036319cd6c5dec0b73811518eb",
         "staticWrites": [
           "app.financial_reconciliation_adjustment",
           "app.financial_reconciliation_approval",
@@ -4937,7 +4937,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "17176d3bb6b86d7f81b5ce1f7a2990780bb61bc85f0e71aca06b4295213649ff",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -4975,7 +4975,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "9eb7829c6d04fdf22c5870f24e44a766891da50a142e96c8d9c0f4090e4f24a0",
+        "definitionSha256": "5552cab7f7782ccaa8d20b82e75a3f0fdd901b9e77db8b7c43962cd7bbedbaf7",
         "staticWrites": [
           "app.final_account_draft"
         ],
@@ -5015,7 +5015,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "5a5df9d2a2e516887aef9880a5f177f97815c8193badb087a83dd9c063fb09bf",
+        "definitionSha256": "9495f0e7a2b48d233c43afcf4bc80c22b3c9a5e47de3bd12947607b207f2a03e",
         "staticWrites": [
           "app.action_authorization"
         ],
@@ -5059,7 +5059,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "f6a3743bf8670db0c49e612030108eeaf2e034d8b24e129d509a551ee4de8a98",
         "staticWrites": [
           "app.landing_allocation",
           "app.recovery_fee_derivation",
@@ -5107,7 +5107,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "7b5e46b7e91a809c85f3255b84cc176e8a06304aa78c94efdfd17457f7914f6b",
         "staticWrites": [
           "app.landing_reversal",
           "app.recovery_fee_derivation",
@@ -5156,7 +5156,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "2e7486448de780af17ce049c0e3931ad9674941b6a229cb934aa708cbad70989",
         "staticWrites": [
           "app.evidence_object",
           "app.evidence_upload",
@@ -5201,7 +5201,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "32485ee9a9e9733200a3646c1bfd3727a784acd9e80db2013996435e916c958d",
         "staticWrites": [
           "app.fee_illustration_source"
         ],
@@ -5248,7 +5248,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "442cd910607375c6aa2eba3cad81abb78f9e9b0e54d4d9d576d0bfbaed5d1172",
         "staticWrites": [
           "app.action_authorization",
           "app.command_receipt",
@@ -5300,7 +5300,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "6dd4e615c0015a84bba9498327fae0ca8d8c5d4ec76c2053a246ed1773e9a2d7",
+        "definitionSha256": "c7738f4268d0323ed810aedd00d595ac6ae6e327e4f888bea4b4a79b310ed588",
         "staticWrites": [
           "app.action_authorization",
           "app.command_receipt",
@@ -5351,7 +5351,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "e18d2fbbfbdb2a5ba3d55441276254ba7389ead8f53aab20c3e5068a5f0e3ca7",
+        "definitionSha256": "e005ebddfae9137b2e47a037199f115eec0405f70bec3d8fe8219e337b03fc73",
         "staticWrites": [
           "app.action_authorization",
           "app.command_receipt",
@@ -5403,7 +5403,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "e80462df87e0e5a269c2cfaf7dddc7deeeb9983421a31850cbdcb91d2e8b53ae",
         "staticWrites": [
           "app.practice_supplier_credit_case_binding",
           "app.practice_supplier_credit_review_payment",
@@ -5449,7 +5449,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "8a5eca2d5d1988e4a0ba2b14e1e65c25a4f8d12e9ef4451f1a2a84794cc17d1b",
+        "definitionSha256": "8c08348295377374a34de89893cca6f38223f602745da26707181edbc599a064",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -5489,7 +5489,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "6034fab9b0da4d6c930dfae8cc767e093f02a0ed38c299244cfa37a6778a4c17",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -5532,7 +5532,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "c31efef615dfbaedee70a443a55d00f83806f95236504510b06fd7a18cb3d4fe",
+        "definitionSha256": "fb5164d3e1d27dab345f8661fe53f862caf099940dfcba94a6aa62d2ca1b8b93",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -5576,7 +5576,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "20eae0c3b0dc45d0a8a7e78f501cd79b351b6dc2e2c3039b9f2d3112cabbea8d",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -5614,7 +5614,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "a5ada32ae66ae0d0e72d20ac7f1675eacf499daaa581326b5cf12557fbfd4b20",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -5650,7 +5650,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "5563f82d82cb892a000a55d4b3c05ce57d0e52bc1557e00571c8f217d4d30375",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -5672,9 +5672,9 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
-        "staticCalls": [],
-        "staticWrites": []
+        "definitionSha256": "a5212e0bf462f97993970733c5c10fb3261c7534c69f4ab70d3a9254975cd6d8",
+        "staticWrites": [],
+        "staticCalls": []
       }
     },
     {
@@ -5764,7 +5764,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "92b17638112fad81d1b324af851a306c1b256613d6e7acf5a59c9d81d34046dc",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_member_active",
@@ -5960,7 +5960,7 @@
         "otherExecute": [
           "jobguard_identity"
         ],
-        "definitionSha256": null,
+        "definitionSha256": "c097100e7ce76bd92a9f5b423467987e80406ecbeebdb15e287ef5bf1ff1a7a8",
         "staticWrites": [
           "app.extra_client_command_session"
         ],
@@ -6014,7 +6014,7 @@
         "otherExecute": [
           "jobguard_identity"
         ],
-        "definitionSha256": null,
+        "definitionSha256": "7c90fbdfbd2d120fe1104e14ec61ca1757121b1255ea5172a0f983ec857d0225",
         "staticWrites": [],
         "staticCalls": [
           "app.append_final_check_audit",
@@ -6040,7 +6040,7 @@
         "otherExecute": [
           "jobguard_migration"
         ],
-        "definitionSha256": null,
+        "definitionSha256": "1e4b18863345d252a178e86bf07e2140e51c82179bf8ff3e35ce35abe075ec5a",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -6222,7 +6222,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "391130d160e01d6921a31b07e9c8953cc4b7c439d7d0f53c1a6125582916bc3b",
         "staticWrites": [
           "app.customer_message_source",
           "app.evidence_object",
@@ -6261,7 +6261,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "e985508a95d3fd937aef458bdba7085fbb34925b23ece9d662f5d643fb7a96be",
         "staticWrites": [],
         "staticCalls": []
       }
@@ -6300,7 +6300,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "394f89a0c2ce717ff8c55b4ea1bc72f6065da04c4fbda6c5daabde03f6375f0f",
         "staticWrites": [
           "app.recovery_timeline_run"
         ],
@@ -6389,7 +6389,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "42ecebffd25db2ec7aac0e5426370cf87ab784cb1519decfbb731d6c8b418892",
         "staticWrites": [],
         "staticCalls": [
           "app.lp6d_lock_action_authorization"
@@ -6505,7 +6505,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "ed72dad4c2e9000380c1d59ccd6539426a88fa027541bf8209043d5f4899c3fe",
         "staticWrites": [],
         "staticCalls": [
           "app.ch4_require_open",
@@ -6550,7 +6550,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "cfb37e1ef00bd2b0a42160a654661f42522d3c3a718f2a9130270d5ac6aaadac",
+        "definitionSha256": "1cddb27934a574fa7ea14a6648c1d7285098d33f0899fc169ff8ac89f615cfcf",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -6634,7 +6634,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "c42688fd5ee279ec8af75b46be73d16ea9592c0937ddd9e4689ba88f460ad045",
+        "definitionSha256": "24c630f7076486decae1b08afaf408d89b4671cd3bfc874369dc65066f307f9e",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -6694,7 +6694,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "51534db87872d23f6bf360c313a4d9f4a44f8baf8328b1937de2271acee092b4",
         "staticWrites": [],
         "staticCalls": [
           "app.lp6d_maintenance_login",
@@ -6783,7 +6783,7 @@
           "jobguard_binding_owner",
           "jobguard_identity"
         ],
-        "definitionSha256": null,
+        "definitionSha256": "aca7c9bc1485ac0fdcfeb7c674209deded06d05dfb843fb5773986d97d66df68",
         "staticWrites": [
           "app.extra_client_session"
         ],
@@ -6993,7 +6993,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "41911f8ccca4b9ad5c8bdb7ec331f1f46383803d021ebf0080929c6b2c02fd2f",
         "staticWrites": [
           "app.action_outbox"
         ],

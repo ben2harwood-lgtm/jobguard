@@ -55,7 +55,8 @@ describe("ENT-3a authority", () => {
    for (const setting of [null, "", "not-a-uuid", f.p.tenantId.toUpperCase(), f.p.tenantId]) {
     await client.query("SAVEPOINT tenant_setting");
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [setting]);
-    if (setting !== f.p.tenantId) {
+    // Main: the UPPER-CASE spelling of the same tenant is allowed (ENT-4b [S4]); LP-6d compares it case-insensitively.
+    if (setting !== f.p.tenantId && setting !== f.p.tenantId.toUpperCase()) {
      // LP-6d rejects a tenant setting that disagrees with the protected binding.
      await expect(client.query("SELECT * FROM app.ent3a_extra_authority($1,$2,$3)", [f.members.supervisor.member.membershipId, "LogSiteExtra", f.jobId])).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
      await client.query("ROLLBACK TO SAVEPOINT tenant_setting");
