@@ -849,3 +849,8 @@ to VISIT_FORBIDDEN, flagged). Whole db at 5a8608f8 (run.sh WHOLE, 2 workers): 74
 passed files; 151 failed | 8130 passed tests (r13 at b2db76f4: 78 / 161). No newly failing file.
 NOT READY. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r14-5a8608f8-whole-*.
+
+Repair 15 (test-only tail; each actor binds its own session; raw forged-tenant reveal is class (a)).
+Whole db at 6672ecc8 (run.sh WHOLE, 2 workers): 66 failed | 864 passed files; 136 failed | 8145
+passed tests (r14 at 5a8608f8: 74 / 151). No newly failing file. NOT READY. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r15-6672ecc8-whole-*.
