@@ -76,7 +76,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       for (const policy of row.policies ?? []) expect(current.policies).toContainEqual(policy);
       expect(current.policies.some((policy: { polname: string }) => policy.polname === (row.relname.startsWith("extra_") ? "lp6_client_binding_read" : "lp6_customer_binding_read"))).toBe(true);
     } else if (row.nspname === "app" && row.relname === "final_check_terms_acceptance") {
-      // 0736 adds exactly one restrictive per-firm read policy; its metadata is in the 0736 proof above.
+      // 0735 adds exactly one restrictive per-firm read policy; its metadata is in the 0735 proof above.
       const current = replayCatalog.find(r => r.nspname === row.nspname && r.relname === row.relname)!;
       expect({ ...current, policies: row.policies }).toEqual(row);
       expect(current.policies).toHaveLength((row.policies?.length ?? 0) + 1);
@@ -107,8 +107,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect(authorityChanges).toHaveLength(3); expect(attributionChanges).toHaveLength(1);
   const practiceOwner = await readFile(new URL("../migrations/0667_final_check_practice_owner_check.sql", import.meta.url), "utf8");
   const lockAnchor = "BEGIN\n PERFORM app.final_lock_require_owner(p_tenant,p_actor);", lockGuard = "\n" + practiceOwner.split("$guard$")[1]!;
-  // 0736's full lock_final_account body (pinned exactly below) keeps 0667's guard verbatim in the
-  // INSTALLED source, right after the first owner check and 0736's own scope refusal.
+  // 0735's full lock_final_account body (pinned exactly below) keeps 0667's guard verbatim in the
+  // INSTALLED source, right after the first owner check and 0735's own scope refusal.
   const installedLock = replayRoutines.filter(r => r.nspname === "app" && r.proname === "lock_final_account");
   expect(installedLock).toHaveLength(1);
   const lockSource = installedLock[0]!.definition.split("$function$")[1] as string;
@@ -119,7 +119,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const patches = new Map([
     ["app.xa_issue_link(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_link uuid, p_approver uuid, p_recipient text, p_token_hash text, p_expires_at timestamp with time zone, p_authorization uuid, p_outbox uuid)", authorityChanges.slice(0, 2)],
     ["app.northside_capture_action()", attributionChanges],
-    // 0667's practice-owner guard is retained inside 0736's full latest lock_final_account body (pinned below).
+    // 0667's practice-owner guard is retained inside 0735's full latest lock_final_account body (pinned below).
   ]);
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
@@ -227,18 +227,18 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.ch4_read_work_facts(t uuid, j uuid, digest text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.read_job_sources(t uuid, j uuid, digest text, source text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.ch4_require_command_owner(t uuid, j uuid, digest text)", "0690_import_ancestry_record_anchor.sql"],
-    ["app.final_check_builder(t uuid, j uuid, d text, locking boolean)", "0736_per_firm_final_check_terms.sql"],
-    ["app.evidence_pack_v3_owner(t uuid, c uuid, d text)", "0736_per_firm_final_check_terms.sql"],
+    ["app.final_check_builder(t uuid, j uuid, d text, locking boolean)", "0735_per_firm_final_check_terms.sql"],
+    ["app.evidence_pack_v3_owner(t uuid, c uuid, d text)", "0735_per_firm_final_check_terms.sql"],
     ["app.adopt_invoiced_job_v3(t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.apply_recovery_timeline_signal(p_tenant uuid, p_signal jsonb)", "0690_import_ancestry_record_anchor.sql"],
     ["app.final_check_practice_owns_job(t uuid, j uuid, d text)", "0701_final_check_owner_v1_adoption_edge.sql"],
-    // 0736 re-creates these with their full latest bodies, checking the job's own firm acceptance.
-    ["app.lock_final_account(p_tenant uuid, p_job uuid, p_actor uuid, p_command uuid, p_revision uuid, p_expected integer, p_declaration text)", "0736_per_firm_final_check_terms.sql"],
-    ["app.final_check_require_worker(p_tenant uuid, p_job uuid)", "0736_per_firm_final_check_terms.sql"],
-    ["app.final_check_worker(t uuid, j uuid)", "0736_per_firm_final_check_terms.sql"],
-    ["app.surface_shadow_signal_early(p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb)", "0736_per_firm_final_check_terms.sql"],
-    ["app.accept_final_check_terms(p_tenant uuid, p_actor uuid, p_command uuid, p_version text)", "0736_per_firm_final_check_terms.sql"],
-    ["app.guard_final_lock_disclosure_terms()", "0736_per_firm_final_check_terms.sql"],
+    // 0735 re-creates these with their full latest bodies, checking the job's own firm acceptance.
+    ["app.lock_final_account(p_tenant uuid, p_job uuid, p_actor uuid, p_command uuid, p_revision uuid, p_expected integer, p_declaration text)", "0735_per_firm_final_check_terms.sql"],
+    ["app.final_check_require_worker(p_tenant uuid, p_job uuid)", "0735_per_firm_final_check_terms.sql"],
+    ["app.final_check_worker(t uuid, j uuid)", "0735_per_firm_final_check_terms.sql"],
+    ["app.surface_shadow_signal_early(p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb)", "0735_per_firm_final_check_terms.sql"],
+    ["app.accept_final_check_terms(p_tenant uuid, p_actor uuid, p_command uuid, p_version text)", "0735_per_firm_final_check_terms.sql"],
+    ["app.guard_final_lock_disclosure_terms()", "0735_per_firm_final_check_terms.sql"],
   ] as readonly (readonly [string, string, number?])[]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {

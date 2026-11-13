@@ -113,9 +113,9 @@ export async function publishEmptyCompletion(f: Pick<LockFixture,'shadow'|'admin
  return publishFixtureCompletion(f.shadow,f.admin,a.tenantId,a.jobId);
 }
 /** A fixture established before 0147 remains historical; it deliberately uses the old issue path. */
-/** Tests only: 0736 lets nobody accept for a never-imported, firm-less job in the shared practice
- * tenant. Such fixture jobs use privileged unattributed acceptance, the pre-0736 history shape.
- * Returns false (and writes nothing) when the job has a firm or 0736 is not installed. */
+/** Tests only: 0735 lets nobody accept for a never-imported, firm-less job in the shared practice
+ * tenant. Such fixture jobs use privileged unattributed acceptance, the pre-0735 history shape.
+ * Returns false (and writes nothing) when the job has a firm or 0735 is not installed. */
 export async function unattributedTermsHistory(admin: Pool, tenantId: string, jobId: string, actorMembershipId: string) {
  if(tenantId!=="11111111-1111-4111-8111-111111111111")return false;
  if(!(await admin.query("SELECT to_regprocedure('app.final_check_job_scope(uuid,uuid)') IS NOT NULL installed")).rows[0].installed)return false;
@@ -133,7 +133,7 @@ export async function prepareInvoicePrerequisites(admin: Pool, runtime: Pool, te
  // Establish the synthetic small-builder premise explicitly; never rewrite an existing track.
  await asFixtureTenant(admin,tenantId,db=>db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) SELECT tenant_id,id,'small_builder','synthetic_demo','legacy_synthetic_live_fixture' FROM app.job WHERE tenant_id=$1 AND id=$2 AND status IN ('live','invoiced','paid') ON CONFLICT(tenant_id,job_id) DO NOTHING",[tenantId,jobId]));
  const own=(await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[tenantId,jobId])).rows[0].practice_session_digest;
- // 0736: an imported child without its own digest acts through the firm that owns its ancestry.
+ // 0735: an imported child without its own digest acts through the firm that owns its ancestry.
  const digest=own ?? ((await admin.query("SELECT to_regprocedure('app.final_check_job_scope(uuid,uuid)') IS NOT NULL installed")).rows[0].installed
   ? (await asFixtureTenant(admin,tenantId,db=>db.query("SELECT app.final_check_job_scope($1,$2) digest",[tenantId,jobId]))).rows[0].digest : null);
  const member=(await admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2",[tenantId,actorMembershipId])).rows[0];

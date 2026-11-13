@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { loadMigrationProofs } from "./migration-proof-loader.js";
 
 const read = (name: string) => readFileSync(new URL(`../migrations/${name}.sql`, import.meta.url), "utf8");
-const migration = "0736_per_firm_final_check_terms";
+const migration = "0735_per_firm_final_check_terms";
 const sql = read(migration);
 const tenantTerms = "NOT EXISTS(SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=t AND terms_version='synthetic_final_check_terms.v1')";
 const firmTerms = "NOT app.final_check_job_terms(t,j,'synthetic_final_check_terms.v1')";
@@ -25,7 +25,7 @@ it("chains builder proof metadata from 0732 to the new delegated per-firm defini
   expect(current?.after).toEqual({ ...prior?.after, staticCalls: ["app.final_check_job_terms", "app.final_check_read_authority"] });
 });
 
-it("retains the exact installed-definition lock guard and uses 0736 for both latest-body pins", () => {
+it("retains the exact installed-definition lock guard and uses 0735 for both latest-body pins", () => {
   for (const file of ["plan-entitlement-lifecycle-upgrade.integration.test.ts", "migfix-7-upgrade.integration.test.ts"]) {
     const pins = readFileSync(new URL(file, import.meta.url), "utf8");
     expect(pins).not.toMatch(/^(?:<<<<<<<|=======|>>>>>>>)/mu);

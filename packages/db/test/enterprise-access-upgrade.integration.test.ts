@@ -212,7 +212,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  expect(proofStatement.lp0.filter((entry:{section:string;after:unknown})=>entry.section==='triggers'&&typeof entry.after==='string'&&entry.after.startsWith('app.watchdog_command_identity|')).map((entry:{after:string})=>entry.after)).toEqual([
   'app.watchdog_command_identity|proof_statement_identity_complete|app.require_completed_job_proof_statement|AFTER INSERT|O',
  ]);
- // 0736 adds only the nullable per-firm practice_session_digest column and its practice-session foreign key.
+ // 0735 adds only the nullable per-firm practice_session_digest column and its practice-session foreign key.
  const isTerms=(r:Relation)=>r.nspname==='app'&&r.relname==='final_check_terms_acceptance';
  const termsKey='final_check_terms_acceptance_practice_session_digest_fkey';
  expect((await h.admin.query(`SELECT a.attname name,format_type(a.atttypid,a.atttypmod) type,a.attnotnull not_null,a.atthasdef has_default

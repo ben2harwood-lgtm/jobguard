@@ -28,7 +28,7 @@ async function visible(f: Awaited<ReturnType<typeof firm>>, digest = f.auth.dige
 }
 beforeAll(async () => {
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
- c = await startBeforeMigration("0736_per_firm_final_check_terms.sql");
+ c = await startBeforeMigration("0735_per_firm_final_check_terms.sql");
  await seedHomeOwner(c);
 },240_000);
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
@@ -44,7 +44,7 @@ it("accepting Final Check practice wording in firm A does not accept it in firm 
  expect(baseB,"base defect: tenant-only acceptance leaks into firm B").toBe(true);
  const historical=(await c.admin.query("SELECT row_to_json(a) value FROM app.final_check_terms_acceptance a ORDER BY id")).rows;
  const locks=(await c.admin.query("SELECT row_to_json(l) value FROM app.final_account_lock l ORDER BY id")).rows;
- await c.admin.query(await readFile(new URL("../migrations/0736_per_firm_final_check_terms.sql",import.meta.url),"utf8"));
+ await c.admin.query(await readFile(new URL("../migrations/0735_per_firm_final_check_terms.sql",import.meta.url),"utf8"));
  expect((await c.admin.query("SELECT to_jsonb(a)-'practice_session_digest' value FROM app.final_check_terms_acceptance a ORDER BY id")).rows).toEqual(historical);
  expect((await c.admin.query("SELECT row_to_json(l) value FROM app.final_account_lock l ORDER BY id")).rows).toEqual(locks);
  // Unattributed history grants no practice firm new authority.
