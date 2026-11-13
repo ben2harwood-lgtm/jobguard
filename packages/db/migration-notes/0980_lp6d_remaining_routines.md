@@ -842,3 +842,10 @@ maps a mid-command REQUEST_BINDING_REFUSED to NOT_FOUND). Whole db at b2db76f4 (
 80 / 167). Only newly listed file: recovery-terms-timing (the known environmental timing case).
 NOT READY. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r13-b2db76f4-whole-*.
+
+Repair 14 (router rulings r14: revoked/expired/inactive credentials are class (a) for raw SQL only;
+repository/API-visible codes are preserved; SiteVisitRepository's read path maps a binding refusal
+to VISIT_FORBIDDEN, flagged). Whole db at 5a8608f8 (run.sh WHOLE, 2 workers): 74 failed | 856
+passed files; 151 failed | 8130 passed tests (r13 at b2db76f4: 78 / 161). No newly failing file.
+NOT READY. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r14-5a8608f8-whole-*.
