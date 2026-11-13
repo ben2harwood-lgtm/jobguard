@@ -71,7 +71,8 @@
         "packages/db/test/stored-receipt-case-fixture.ts",
         "packages/db/test/sv5pre-fixtures.ts",
         "packages/db/migrations/0736_per_firm_final_check_terms.sql",
-        "packages/db/test/migration-proofs/0736_per_firm_final_check_terms.proof.json"
+        "packages/db/test/migration-proofs/0736_per_firm_final_check_terms.proof.json",
+        "apps/web/e2e/MON-5-customer-journey.spec.ts"
       ]
     }
   }
