@@ -33,10 +33,13 @@ function validate(raw: unknown) {
     expect(claim.classification).toBe(claim.id === "terms" ? "proposed" : ["billing", "statements", "prompts"].includes(claim.id) ? "held" : "source_inspected");
   }
   // Reject unsupported wording before spawning Git processes for source evidence.
+  // Read each ancestry once instead of walking the same history for every source.
+  const headAncestors = new Set(git("rev-list", "HEAD").trim().split("\n"));
+  const mainAncestors = new Set(git("rev-list", "origin/main").trim().split("\n"));
   for (const claim of parsed.claims) {
     for (const evidence of claim.evidence) {
-      git("merge-base", "--is-ancestor", evidence.commit, "HEAD");
-      git("merge-base", "--is-ancestor", evidence.commit, "origin/main");
+      expect(headAncestors.has(evidence.commit)).toBe(true);
+      expect(mainAncestors.has(evidence.commit)).toBe(true);
       expect(git("show", `${evidence.commit}:${evidence.path}`)).toContain(evidence.needle);
     }
   }

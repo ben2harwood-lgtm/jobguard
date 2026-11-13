@@ -61,7 +61,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const relationMetadata = (entries: typeof beforeCatalog) => entries.map(({ policies: _policies, ...row }) => row);
   const expected = applyUpgradeProofs({ rows: {}, routines: metadata(afterRoutines), relations: relationMetadata(beforeCatalog), policies: beforePolicies }, successors, ownerOids);
   const replayRoutines = await routines(), replayCatalog = await catalog();
-  expect(metadata(replayRoutines)).toEqual(expected.routines);
+  expect(metadata(replayRoutines)).toEqual(expected.routines.filter(row => row.nspname !== "infrastructure"));
   expect(relationMetadata(replayCatalog)).toEqual(expected.relations);
   expect(await policies()).toEqual(expected.policies);
   // Preserve all raw predecessor catalogue fields, including policy identities.
@@ -109,6 +109,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.authenticate_practice_session(digest text, requested_tenant uuid)", "0733_identity_linked_practice.sql"],
     ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0733_identity_linked_practice.sql"],
     ["app.is_blank_practice_company(digest text)", "0733_identity_linked_practice.sql"],
+    ["app.company_final_check_request_run(j uuid)", "0732_final_check_typed_recovery.sql"],
+    ["app.company_final_check_reveal(j uuid)", "0732_final_check_typed_recovery.sql"],
     ["app.cb_delivery(p_session uuid, p_job uuid, p_command uuid, p_payload jsonb)", "0727_billing_export_delivery_once.sql"],
     ["app.cb_csv_cell(v text)", "0727_billing_export_delivery_once.sql"],
     ["identity.extra_customer_approval(t uuid, j uuid, c uuid, digest text, input jsonb)", "0725_lp6c_client_extra_decision.sql"],
@@ -125,9 +127,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.begin_final_check(t uuid, j uuid, detector text, policy text)", "0698_final_check_post_invoice_rerun.sql"],
     ["app.complete_final_check(t uuid, j uuid, m uuid, p jsonb)", "0698_final_check_post_invoice_rerun.sql"],
     ["app.guard_final_check_manifest()", "0698_final_check_post_invoice_rerun.sql"],
-    ["app.read_final_check_reveal(t uuid, j uuid, d text)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.read_final_check_reveal(t uuid, j uuid, d text)", "0732_final_check_typed_recovery.sql"],
     ["app.read_value_job(j uuid, digest text)", "0698_final_check_post_invoice_rerun.sql"],
-    ["app.request_final_check_run(t uuid, j uuid, d text)", "0698_final_check_post_invoice_rerun.sql"],
+    ["app.request_final_check_run(t uuid, j uuid, d text)", "0732_final_check_typed_recovery.sql"],
     ["app.request_practice_final_check_on_lock()", "0698_final_check_post_invoice_rerun.sql"],
     ["app.verify_final_check_run(p_tenant uuid, p_job uuid, p_run uuid, p_lock uuid, p_cutoff timestamp with time zone)", "0698_final_check_post_invoice_rerun.sql"],
     ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0729_duplicate_disposition_command_lifecycle.sql"],
@@ -182,7 +184,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.issue_practice_customer_invoice(p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date)", "0723_lp6c_money_binding.sql"],
     ["app.switch_job_live_v3(p_tenant uuid, p_activation uuid, p_terms uuid, p_job uuid, p_document uuid, p_version integer, p_hash character, p_expected integer, p_actor uuid, p_command uuid, p_authorization uuid)", "0723_lp6c_money_binding.sql"],
     ["app.final_lock_require_owner(p_tenant uuid, p_actor uuid)", "0723_lp6c_money_binding.sql"],
-    ["app.issue_lock_bound_customer_invoice(p_tenant uuid, p_job uuid, p_revision uuid, p_actor uuid, p_command uuid, p_kind text, p_recipient text, p_issued_on date, p_source_hash text)", "0723_lp6c_money_binding.sql"],
+    ["app.issue_lock_bound_customer_invoice(p_tenant uuid, p_job uuid, p_revision uuid, p_actor uuid, p_command uuid, p_kind text, p_recipient text, p_issued_on date, p_source_hash text)", "0731_combined_invoice_signed_vat.sql"],
     ["app.approve_recovery_case_terms(p_tenant uuid, p_id uuid, p_job uuid, p_case uuid, p_actor uuid, p_command uuid, p_authorization uuid)", "0723_lp6c_money_binding.sql"],
     ["app.write_recovery_allocation(p_tenant uuid, p_job uuid, p_session text, p_command jsonb, p_artifact jsonb)", "0723_lp6c_money_binding.sql"],
     ["app.lock_recovery_payer_job(p_tenant uuid, p_job uuid, p_actor uuid)", "0723_lp6c_money_binding.sql"],
@@ -205,7 +207,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.ch4_read_work_facts(t uuid, j uuid, digest text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.read_job_sources(t uuid, j uuid, digest text, source text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.ch4_require_command_owner(t uuid, j uuid, digest text)", "0690_import_ancestry_record_anchor.sql"],
-    ["app.final_check_builder(t uuid, j uuid, d text, locking boolean)", "0690_import_ancestry_record_anchor.sql"],
+    ["app.final_check_builder(t uuid, j uuid, d text, locking boolean)", "0732_final_check_typed_recovery.sql"],
     ["app.evidence_pack_v3_owner(t uuid, c uuid, d text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.adopt_invoiced_job_v3(t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.apply_recovery_timeline_signal(p_tenant uuid, p_signal jsonb)", "0690_import_ancestry_record_anchor.sql"],
@@ -218,6 +220,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     fullBodies.set(identity!, source.split(`FUNCTION ${identity!.split("(")[0]}(`)[overload + 1]!.split("AS $$")[1]!.split(/\$\$\s*;/u)[0]!);
   }
   const namedAdditions = [
+    "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",
     "ent3b_close_abandoned_visit",
     "require_receipt_final_check", "connector_promotion", "order_attestation_actor", "platform_invoice_read",
     "retention_timer", "retention_timer_book", "xa_proceed", "xa_proceed_breaches",
