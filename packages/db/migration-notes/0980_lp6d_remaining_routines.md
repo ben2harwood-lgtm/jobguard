@@ -822,3 +822,8 @@ app.lp6d_escalate_overdue_worker, both moving to LP-10). Whole db at 42549b17 (r
 2 workers): 94 failed | 836 passed files; 213 failed | 8067 passed tests (r10 at d1261d8f:
 115 / 260). No newly failing file. NOT READY. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r11-42549b17-whole-*.
+
+Repair 12 (raw-fixture tail; each actor binds its own session; no product change). Whole db at
+6e629b62 (run.sh WHOLE, 2 workers): Test Files  87 failed | 843 passed (930); 191 failed | 8089 passed tests (r11 at 42549b17:
+94 files / 213 tests). No newly failing file. NOT READY. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r12-6e629b62-whole-*.
