@@ -177,8 +177,15 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     const timeout = window.setTimeout(() => controller.abort(), step.timeoutMs ?? 12_000);
     if (playing && viewerPacing()) viewerPlayback.add(controller.signal);
     try {
-      const target = visibleTarget(step.target);
+      let target = visibleTarget(step.target);
+      // Autoplay can enter the next step before its saved screen has mounted.
+      // Keep the same deadline and cancellation boundary while it becomes visible.
+      while (!target && !controller.signal.aborted) {
+        await new Promise(resolve => window.setTimeout(resolve, 100));
+        target = visibleTarget(step.target);
+      }
       if (!target) throw new Error("This step's control is unavailable. Stop the tour or return when the screen is ready.");
+      if (controller.signal.aborted) return;
       if (!step.isDone()) {
         const delay = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 650;
         await new Promise<void>(resolve => {
