@@ -2,7 +2,7 @@ import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { evaluateExtraApprovalRequirement } from "@jobguard/core";
-import { ExtraApprovalRepository, ActionExecutor, withTenant, sha256Hex, canonicalJson, type VerifiedTenantContext } from "../src/index.js";
+import { verifiedTenantContextForQueuedJob, ExtraApprovalRepository, ActionExecutor, withTenant, sha256Hex, canonicalJson, type VerifiedTenantContext } from "../src/index.js";
 import { chainWorld, cluster, chain, command, reviseRules, submitted, approveInput, newToken, emailOf, newJob, raiseOn, sleep, demoRules, type Cluster, type ChainWorld } from "./extra-approval-chain-fixtures.js";
 
 let c: Cluster, w: ChainWorld, ctx: VerifiedTenantContext, repo: ExtraApprovalRepository;
@@ -299,10 +299,10 @@ it("E5B-10 a later rule version leaves an existing snapshot unchanged (runs last
 it("E5B-11 escalation fires once, only listed alternates gain authority, original approvers keep it", async () => {
   const wait = 61_000 - (Date.now() - tSlow); if (wait > 0) await sleep(wait + 500);
   expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, surveyor()), surveyor(), approveInput(slow, 0)))).toBe("PERMISSION_DENIED"); // before any escalation
-  const first = (await repo.escalateOverdue(ctx)).filter(x => x.request_id === slow.requestId);
+  const first = (await repo.escalateOverdue(verifiedTenantContextForQueuedJob(ctx.tenantId))).filter(x => x.request_id === slow.requestId);
   expect(first).toHaveLength(1); expect(first[0]!.eligible_roles).toEqual(["commercial_manager", "surveyor"]);
   const restarted = new ExtraApprovalRepository(c.runtime); // a restarted worker
-  expect((await restarted.escalateOverdue(ctx)).filter(x => x.request_id === slow.requestId)).toEqual([]);
+  expect((await restarted.escalateOverdue(verifiedTenantContextForQueuedJob(ctx.tenantId))).filter(x => x.request_id === slow.requestId)).toEqual([]);
   expect(await sql("SELECT 1 FROM app.extra_escalation_fact WHERE request_id=$1", [slow.requestId])).toHaveLength(1);
   const q = (await repo.queue(await testActorContext(c.admin, ctx, surveyor()), surveyor().membershipId)).filter(x => x.request_id === slow.requestId);
   expect(q).toHaveLength(1); expect(q[0]).toMatchObject({ lane: "mandatory", escalated: true, overdue: true });

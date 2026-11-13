@@ -100,7 +100,7 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   expect(inventory.entries.some(e => e.key.startsWith("acl|col|app.action_authorization.") && e.key.includes("|jobguard_runtime|UPDATE|"))).toBe(false);
   // r8: the revocation routine, revoke-claim helper and seven runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each),
   // plus (r10) the command-writer-owned delegated-actor match check (owner + migration EXECUTE). LP-6c's accessor gains no grant.
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(26); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each)
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(28); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each) and the escalation worker (owner + runtime EXECUTE)
   expect(inventory.entries.some(e => e.key.startsWith("acl|routine|function:app.lp6_delegated_actor(") && e.key.includes("|jobguard_migration|"))).toBe(false);
 });
 
@@ -240,6 +240,27 @@ it("keeps lifecycle storage private while checking revocation with its existing 
   expect(revoke).not.toContain("FROM app.command_lifecycle_claim");
   expect(sql).toContain("ALTER FUNCTION app.lp6d_require_revoke_claim(uuid,uuid,uuid,uuid,uuid,uuid,integer) OWNER TO jobguard_command_writer");
   expect(sql).not.toMatch(/GRANT .* ON (?:TABLE )?app\.command_lifecycle_claim/u);
+});
+
+it("pins the actor-less escalation copy to app.xa_escalate minus only its binding prefix (router ruling r11)", () => {
+  const bodyOf = (name: string) => definitions(sql).filter(m => m[1] === name).at(-1)![3]!;
+  const guarded = bodyOf("app.xa_escalate").replace("\n#variable_conflict use_column\n", "");
+  const prefix = /^\s*BEGIN\n -- LP6D_BOUND[^\n]*\n PERFORM app\.current_actor\(\);\n.*?\n END IF;\n/su.exec(guarded);
+  expect(prefix).not.toBeNull();
+  const original = guarded.slice(prefix![0].length).replace(/;\nEND\n$/u, "").trim();
+  expect(bodyOf("app.lp6d_xa_escalate").replace("\n#variable_conflict use_column\n", "").trim()).toBe(original);
+  // The guarded original keeps its binding check; no skip.
+  expect(bodyOf("app.xa_escalate")).toContain("IF app.current_actor() IS NULL OR");
+  expect(bodyOf("app.xa_escalate")).not.toContain("lp6d_request_bound");
+  // Private: revoked from PUBLIC/runtime/identity/infrastructure, reachable only from the worker definer.
+  expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_xa_escalate() FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;");
+  expect(sql).not.toMatch(/GRANT [^;]*app\.lp6d_xa_escalate\(\)/u);
+  expect(sql.match(/app\.lp6d_xa_escalate\(\)/gu)!.length).toBe(5); // create, owner, revoke, login revoke, and the one worker call
+  const worker = bodyOf("app.lp6d_escalate_overdue_worker");
+  expect(worker).toContain("IF app.lp6d_request_bound() THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED'");
+  expect(worker).toContain("RETURN QUERY SELECT * FROM app.lp6d_xa_escalate();");
+  expect(sql).toMatch(/Both move to the LP-10 worker binding when that lands/u);
+  expect(read("../src/extra-approval-chain-repository.ts")).toContain("SELECT * FROM app.lp6d_escalate_overdue_worker()");
 });
 
 it("pins each private unguarded copy to its guarded original minus only the LP-6d binding prefix", () => {

@@ -1,3 +1,5 @@
+import type { VerifiedTenantContext } from "../src/tenant-context.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 // CI PostgreSQL only. All jobs, sessions, cash and evidence are fictional.
 import { evaluateBillabilityPolicy } from "@jobguard/core";
 import { createHash, randomUUID } from "node:crypto";
@@ -36,13 +38,17 @@ async function ownerSession(x: Fixture, samePerson = false) {
     }
   });
   await f.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')", [randomUUID(), user, digest, randomUUID()]);
-  return { digest, member };
+  // LP-6d: the owner signs in as itself, so its real session can bind its own request.
+  await f.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [`${user}@fictional.invalid`, user]);
+  await f.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", [user, x.context.tenantId, member]);
+  // Its requests carry its own bound context (the route derives both from the same session).
+  return { digest, member, context: await testBoundTenantContext(f.admin, x.context.tenantId, member, digest) };
 }
 const approval = (p: Awaited<ReturnType<typeof ready>>["command"]) => {
   const { claimedEligiblePrincipalPence: _principal, reasons: _reasons, ...base } = p;
   return { ...base, action: "approve", commandId: randomUUID(), reviewCommandId: p.commandId };
 };
-const send = (x: Fixture, command: unknown, digest = x.auth.digest) => repo().command(x.context, x.jobId, digest, command);
+const send = (x: Fixture, command: unknown, digest = x.auth.digest, context: VerifiedTenantContext = x.context) => repo().command(context, x.jobId, digest, command);
 
 it("stored-fact derivation rejects caller allocationState, disclosedBeforeLock, builderCaptured and lockId", async () => {
   const { x, command } = await ready();
@@ -58,15 +64,15 @@ it("UNIQUE(tenant, command_id) replays the first review and approval; different 
   const [first, replay] = await Promise.all([send(x, command), send(x, command)]);
   expect(replay).toEqual(first);
   await expect(send(x, { ...command, reasons: "Different reason" })).rejects.toThrow("BILLABILITY_REPLAY_CONFLICT");
-  const p = approval(command), approved = await send(x, p, reviewer.digest);
-  expect(await send(x, p, reviewer.digest)).toEqual(approved);
-  await expect(send(x, { ...p, reviewCommandId: randomUUID() }, reviewer.digest)).rejects.toThrow("BILLABILITY_REPLAY_CONFLICT");
+  const p = approval(command), approved = await send(x, p, reviewer.digest, reviewer.context);
+  expect(await send(x, p, reviewer.digest, reviewer.context)).toEqual(approved);
+  await expect(send(x, { ...p, reviewCommandId: randomUUID() }, reviewer.digest, reviewer.context)).rejects.toThrow("BILLABILITY_REPLAY_CONFLICT");
   expect(approved).toMatchObject({ productionEnabled: false, approvedBy: { membershipId: reviewer.member } });
   expect((await f.admin.query("SELECT count(*)::int n FROM app.recovery_billability_command WHERE tenant_id=$1 AND job_id=$2", [x.context.tenantId, x.jobId])).rows[0].n).toBe(2);
 });
 it("approver = requester refused in database, including a different session for the same membership", async () => {
   const { x, command } = await ready(); await send(x, command); const same = await ownerSession(x, true);
-  await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]),{practiceDigest:same.digest})).rejects.toThrow("BILLABILITY_FORBIDDEN");
+  await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]),{realDigest:same.digest})).rejects.toThrow("BILLABILITY_FORBIDDEN");
 });
 it("the same person with two owner memberships cannot approve their own review in the database", async () => {
   const { x, command } = await ready(); await send(x, command);
@@ -76,11 +82,14 @@ it("the same person with two owner memberships cannot approve their own review i
     await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [secondMembership, x.context.tenantId, account, x.actor.identityUserId]);
   });
   // The session person matches two active owners: never choose either arbitrarily.
-  await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]),{practiceDigest:same.digest})).rejects.toThrow("BILLABILITY_FORBIDDEN");
+  await expect(finalCheckTenant(f.runtime, x.context.tenantId, db => db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]),{realDigest:same.digest})).rejects.toThrow("BILLABILITY_FORBIDDEN");
   // With only the second membership active, resolution is unambiguous but the
   // stored requester person must still forbid approval. The transaction rolls back.
   await expect(finalCheckTenant(f.admin, x.context.tenantId, async db => {
     await db.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [x.context.tenantId, x.actor.membershipId]);
+    // LP-6d: the person's real session now resolves to the remaining membership and binds that request.
+    await db.query("UPDATE identity.membership_locator SET membership_id=$3 WHERE user_id=$1 AND tenant_id=$2", [x.actor.identityUserId, x.context.tenantId, secondMembership]);
+    await db.query("SELECT app.bind_request('real',$1,$2)", [same.digest, x.context.tenantId]);
     await db.query("SELECT app.recovery_billability($1,$2,$3::jsonb)", [x.jobId, same.digest, approval(command)]);
   })).rejects.toThrow("BILLABILITY_FORBIDDEN");
   // Even bypassing the command routine cannot persist same-person approval
@@ -110,7 +119,7 @@ it.each(["refund", "evidence", "membership"] as const)("%s after review prevents
   if (kind === "refund") await x.invoices.reverseReceipt(x.context, { jobId: x.jobId, invoiceId: x.invoiceId, paymentId: x.paymentId, actorMembershipId: x.actor.membershipId, commandId: randomUUID(), reason: "Fictional refund" });
   else if (kind === "evidence") await finalCheckTenant(f.admin, x.context.tenantId, db => db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), x.context.tenantId, x.evidence, x.actor.membershipId]));
   else await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [x.context.tenantId, reviewer.member]);
-  await expect(send(x, approval(command), reviewer.digest)).rejects.toThrow();
+  await expect(send(x, approval(command), reviewer.digest, reviewer.context)).rejects.toThrow();
   expect(await send(x, command)).toEqual(first);
 });
 it("reversal before allocation cannot create qualifying cash", async () => {
@@ -177,7 +186,7 @@ it("stored pre-lock disclosure overrides the review request and remains non-bill
     expect(snapshot.disclosedBeforeLock).toBe(true);
     expect(evaluateBillabilityPolicy(snapshot).classification).toBe("non_billable");
     throw new Error("ROLLBACK_DISCLOSURE_ATTACK");
-  })).rejects.toThrow("ROLLBACK_DISCLOSURE_ATTACK");
+  }, { practiceDigest: x.auth.digest })).rejects.toThrow("ROLLBACK_DISCLOSURE_ATTACK");
 });
 
 it("one case/work/line accepts one approval across competing reviews and commands", async () => {
@@ -185,12 +194,12 @@ it("one case/work/line accepts one approval across competing reviews and command
   const second = { ...command, commandId: randomUUID() };
   await send(x, command); await send(x, second);
   const approvals = [approval(command), approval(second)];
-  const results = await Promise.allSettled(approvals.map(p => send(x, p, reviewer.digest)));
+  const results = await Promise.allSettled(approvals.map(p => send(x, p, reviewer.digest, reviewer.context)));
   expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
   expect((results.find(r => r.status === "rejected") as PromiseRejectedResult).reason).toMatchObject({ message: "BILLABILITY_LINE_ALREADY_APPROVED" });
   const winner = results.findIndex(r => r.status === "fulfilled");
-  expect(await send(x, approvals[winner], reviewer.digest)).toEqual((results[winner] as PromiseFulfilledResult<unknown>).value);
-  await expect(send(x, { ...approvals[winner], commandId: randomUUID() }, reviewer.digest)).rejects.toThrow("BILLABILITY_LINE_ALREADY_APPROVED");
+  expect(await send(x, approvals[winner], reviewer.digest, reviewer.context)).toEqual((results[winner] as PromiseFulfilledResult<unknown>).value);
+  await expect(send(x, { ...approvals[winner], commandId: randomUUID() }, reviewer.digest, reviewer.context)).rejects.toThrow("BILLABILITY_LINE_ALREADY_APPROVED");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.recovery_billability_command WHERE tenant_id=$1 AND job_id=$2 AND action='approve'", [x.context.tenantId,x.jobId])).rows[0].n).toBe(1);
 });
 
@@ -198,15 +207,15 @@ it("repository refuses a second line approval, preserves exact replay and refuse
   const { x, command } = await ready(), reviewer = await ownerSession(x), otherOwner = await ownerSession(x);
   const secondReview = { ...command, commandId: randomUUID() };
   await send(x, command); await send(x, secondReview);
-  const firstCommand = approval(command), first = await send(x, firstCommand, reviewer.digest);
-  await expect(send(x, approval(secondReview), otherOwner.digest)).rejects.toThrow("BILLABILITY_LINE_ALREADY_APPROVED");
-  expect(await send(x, firstCommand, reviewer.digest)).toEqual(first);
+  const firstCommand = approval(command), first = await send(x, firstCommand, reviewer.digest, reviewer.context);
+  await expect(send(x, approval(secondReview), otherOwner.digest, otherOwner.context)).rejects.toThrow("BILLABILITY_LINE_ALREADY_APPROVED");
+  expect(await send(x, firstCommand, reviewer.digest, reviewer.context)).toEqual(first);
   const wrongTenantId = randomUUID(), tenantIds = [x.context.tenantId, wrongTenantId];
   const commandCounts = "SELECT tenant_id, count(*)::int n FROM app.recovery_billability_command WHERE tenant_id=ANY($1::uuid[]) GROUP BY tenant_id ORDER BY tenant_id";
   const beforeWrongTenant = (await f.admin.query(commandCounts, [tenantIds])).rows;
   await expect(repo().command(testTenantContext(wrongTenantId), x.jobId, reviewer.digest, firstCommand)).rejects.toThrow(/^BILLABILITY_FORBIDDEN$/);
   expect((await f.admin.query(commandCounts, [tenantIds])).rows).toEqual(beforeWrongTenant);
-  await expect(send(x, { ...approval(secondReview), actorMembershipId: reviewer.member }, otherOwner.digest)).rejects.toThrow("INVALID_BILLABILITY_INPUT");
+  await expect(send(x, { ...approval(secondReview), actorMembershipId: reviewer.member }, otherOwner.digest, otherOwner.context)).rejects.toThrow("INVALID_BILLABILITY_INPUT");
   await expect(send(x, approval(secondReview), x.auth.digest)).rejects.toThrow("BILLABILITY_FORBIDDEN");
   expect((await f.admin.query("SELECT count(*)::int n FROM app.recovery_billability_command WHERE tenant_id=$1 AND job_id=$2 AND action='approve'", [x.context.tenantId, x.jobId])).rows[0].n).toBe(1);
 });

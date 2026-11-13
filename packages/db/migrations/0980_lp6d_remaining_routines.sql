@@ -3179,6 +3179,57 @@ END;
 END
 $$;
 
+-- Router ruling r11 (xa_escalate): the overdue-escalation sweep is a worker step with no possible
+-- request actor. Its private pinned copy below is the guarded app.xa_escalate body minus only the
+-- binding prefix (drift-pinned in lp6d-routines.test.ts). It is revoked from PUBLIC, runtime,
+-- identity and infrastructure and reachable only from the worker definer that follows.
+-- Both move to the LP-10 worker binding when that lands. app.xa_escalate keeps its binding check.
+CREATE FUNCTION app.lp6d_xa_escalate() RETURNS TABLE(request_id uuid, job_id uuid, variation_id uuid, step_index integer, eligible_roles text[])
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+#variable_conflict use_column
+DECLARE v_tenant uuid; q app.extra_approval_request; v_n integer; v_step jsonb; v_started timestamptz; v_roles text[]; v_id uuid;
+BEGIN
+ IF pg_catalog.current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN v_tenant:=nullif(pg_catalog.current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN v_tenant:=NULL; END;
+ IF v_tenant IS NULL THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ FOR q IN SELECT r.* FROM app.extra_approval_request r WHERE r.tenant_id=v_tenant AND r.net_pence IS NOT NULL
+   AND r.request_revision=(SELECT max(x.request_revision) FROM app.extra_approval_request x WHERE x.tenant_id=r.tenant_id AND x.variation_id=r.variation_id)
+   AND NOT EXISTS(SELECT 1 FROM app.extra_approval_outcome o WHERE(o.tenant_id,o.request_id)=(r.tenant_id,r.id)) ORDER BY r.server_recorded_at,r.id LOOP
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_tenant::text||':'||q.job_id::text,417));
+  IF EXISTS(SELECT 1 FROM app.extra_approval_outcome o WHERE(o.tenant_id,o.request_id)=(q.tenant_id,q.id)) THEN CONTINUE; END IF;
+  IF q.request_revision<>(SELECT max(r.request_revision) FROM app.extra_approval_request r WHERE r.tenant_id=q.tenant_id AND r.variation_id=q.variation_id) THEN CONTINUE; END IF;
+  SELECT count(*),max(f.server_recorded_at) INTO v_n,v_started FROM app.extra_approval_step_fact f WHERE(f.tenant_id,f.request_id)=(q.tenant_id,q.id);
+  v_started:=coalesce(v_started,q.server_recorded_at); v_step:=q.requirement->'steps'->v_n;
+  CONTINUE WHEN v_step IS NULL OR v_step->>'kind'<>'human' OR v_step->>'role'='client_approver';
+  CONTINUE WHEN clock_timestamp()<app.xa_wait_deadline(v_started,v_step);
+  v_roles:=array_remove(ARRAY[v_step->>'escalationRole']||ARRAY(SELECT jsonb_array_elements_text(v_step->'alternateRoles')),NULL);
+  CONTINUE WHEN cardinality(v_roles)=0;
+  INSERT INTO app.extra_escalation_fact(tenant_id,id,job_id,variation_id,request_id,step_index,eligible_roles) VALUES(q.tenant_id,pg_catalog.gen_random_uuid(),q.job_id,q.variation_id,q.id,v_n,v_roles)
+  ON CONFLICT(tenant_id,request_id,step_index) DO NOTHING RETURNING id INTO v_id;
+  IF v_id IS NOT NULL THEN request_id:=q.id; job_id:=q.job_id; variation_id:=q.variation_id; step_index:=v_n; eligible_roles:=v_roles; RETURN NEXT; END IF;
+  v_id:=NULL;
+ END LOOP;
+END
+$$;
+ALTER FUNCTION app.lp6d_xa_escalate() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_xa_escalate() FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+-- The worker definer (ExtraApprovalRepository.escalateOverdue, queued per tenant): it refuses any
+-- bound request, so a request handler cannot use the sweep; the copy keeps every tenant/mode check.
+CREATE FUNCTION app.lp6d_escalate_overdue_worker() RETURNS TABLE(request_id uuid, job_id uuid, variation_id uuid, step_index integer, eligible_roles text[])
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF app.lp6d_request_bound() THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
+ RETURN QUERY SELECT * FROM app.lp6d_xa_escalate();
+END $$;
+ALTER FUNCTION app.lp6d_escalate_overdue_worker() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_escalate_overdue_worker() FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.lp6d_escalate_overdue_worker() TO jobguard_runtime;
+DO $$ DECLARE login record; BEGIN
+ FOR login IN SELECT rolname FROM pg_roles WHERE rolcanlogin AND NOT rolsuper LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION app.lp6d_xa_escalate() FROM %I',login.rolname);
+ END LOOP;
+END $$;
+
 -- Latest body: packages/db/migrations/0139_site_visit_closeout.sql
 CREATE OR REPLACE FUNCTION app.ent3b_visit_authority(p_actor uuid, p_job uuid)
 RETURNS TABLE(decision text, reason_code text)

@@ -82,6 +82,8 @@ it.each(["cap","locked_revision"] as const)("the read resolver refuses corrupted
   }
   // A disposable admin corruption is read through the actual runtime login;
   // the expected failure rolls back both corruption and session authorization.
+  // LP-6d: the read runs inside the practice owner's own bound request.
+  await db.query("SELECT app.bind_request('practice',$1,$2)",[x.auth.digest,x.context.tenantId]);
   await db.query(`SET LOCAL SESSION AUTHORIZATION "${login}"`);
   await db.query("SELECT app.read_value_job($1,$2)",[x.jobId,x.auth.digest]);
  })).rejects.toThrow(kind==="cap"?"RECEIPT_LINE_CAPACITY_EXCEEDED":"STORED_RECEIPT_LINE_BINDING_REQUIRED");

@@ -6243,6 +6243,22 @@
       }
     },
     {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp6d_escalate_overdue_worker()|jobguard_migration",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp6d_escalate_overdue_worker()|jobguard_runtime|EXECUTE|-",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
       "section": "routines",
       "before": null,
       "after": {
@@ -7128,6 +7144,51 @@
           "identity.extra_customer_use"
         ]
       }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6d_escalate_overdue_worker()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "6c28fc2f5f7db4cc73e38a25a2c672a91d2aa38c3a9c0aa654bb5d45a0f4d8fa",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6d_request_bound",
+          "app.lp6d_xa_escalate"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6d_xa_escalate()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "0e6beea04b2fbae21506ecdbe889c314dd935bda09f4db205d132016c0315b54",
+        "staticWrites": [
+          "app.extra_escalation_fact"
+        ],
+        "staticCalls": [
+          "app.xa_wait_deadline"
+        ]
+      }
     }
   ],
   "upgrade": [
@@ -7470,6 +7531,36 @@
         "args": "p_command_type text, p_job uuid",
         "proowner": "jobguard_command_writer",
         "proacl": "{jobguard_command_writer=X/jobguard_command_writer,jobguard_migration=X/jobguard_command_writer}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_escalate_overdue_worker",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_xa_escalate",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog"
