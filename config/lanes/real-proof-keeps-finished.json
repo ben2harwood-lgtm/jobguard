@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-proof-keeps-finished": {
+      "branches": [
+        "codex/sandbox/real-proof-keeps-finished"
+      ],
+      "note": "REAL-PROOF-KEEPS-FINISHED, RED: retain stage-proof history without cancelling finished; NOPR build, real PostgreSQL/browser and independent review pending.",
+      "allow": [
+        "apps/web/e2e/real-proof-keeps-finished.spec.ts",
+        "packages/db/migration-notes/0946_proof_keeps_finished.md",
+        "packages/db/migrations/0946_proof_keeps_finished.sql",
+        "packages/db/test/meter-work-admission.integration.test.ts",
+        "packages/db/test/migration-proofs/0946_proof_keeps_finished.proof.json",
+        "packages/db/test/real-proof-keeps-finished.integration.test.ts"
+      ]
+    }
+  }
+}
