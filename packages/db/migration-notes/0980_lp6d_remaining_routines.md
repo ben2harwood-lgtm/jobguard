@@ -815,3 +815,10 @@ LP-6c customer queue/view path stays unbound by design but reaches the guarded
 ent3_extra_work_status through xc_timing (needs a ruling), lp6c customer messages, the
 extra-approval-chain journey, and raw runtime fixtures in about 100 files. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r10-d1261d8f-whole-*.
+
+Repair 11 (checker r11 ruling: ClientViewExtra read binding; router ruling: actor-less
+escalation through the pinned private copy app.lp6d_xa_escalate behind the worker definer
+app.lp6d_escalate_overdue_worker, both moving to LP-10). Whole db at 42549b17 (run.sh WHOLE,
+2 workers): 94 failed | 836 passed files; 213 failed | 8067 passed tests (r10 at d1261d8f:
+115 / 260). No newly failing file. NOT READY. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r11-42549b17-whole-*.
