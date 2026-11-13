@@ -69,3 +69,41 @@ it("PRE-Q4-05 r2 lock-bound issue carries only the authenticated session digest 
  expect(sql.findIndex(statement=>statement.startsWith(practiceOwnedJobsSql()))).toBeLessThan(sql.findIndex(statement=>statement.includes("app.practice_material_digest")));
  expect(sql.findIndex(statement=>statement.includes("app.practice_material_digest"))).toBeLessThan(sql.findIndex(statement=>statement.includes("app.issue_lock_bound_customer_invoice")));
 });
+
+it.each(["get","acceptTerms","lock"] as const)("%s installs the verified practice digest before its repository SQL",async method=>{
+ const {createHash}=await import("node:crypto");
+ const {FinalAccountCommandService}=await import("@jobguard/db");
+ vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
+ vi.spyOn(FinalAccountCommandService.prototype,"read").mockResolvedValue(null);
+ const expected=createHash("sha256").update(session).digest("hex");
+ let installed:string|undefined;
+ const business: string[]=[];
+ const query=vi.fn(async(sql:string,values?:unknown[])=>{
+  if(sql==="SELECT app.current_actor() actor, app.current_tenant() tenant")return {rows:[{actor:DEMO_MEMBERSHIP_ID,tenant:DEMO_TENANT_ID}]};
+  if(sql.includes("authenticate_practice_session"))return {rows:[{tenant_id:DEMO_TENANT_ID,membership_id:DEMO_MEMBERSHIP_ID,identity_user_id:DEMO_IDENTITY_USER_ID}]};
+  if(sql.startsWith(practiceOwnedJobsSql()))return {rows:[{id:job}]};
+  if(sql.includes("set_config('app.practice_material_digest'"))installed=String(values?.[0]);
+  if(sql.includes("FROM app.final_check_terms_acceptance")||sql.includes("app.accept_final_check_terms(")||sql.includes("FROM app.lock_final_account(")){
+   expect(installed).toBe(expected); business.push(sql);
+   if(method==="get")return {rows:[{lock:null,captures:[],dispositions:[],terms_accepted:false,check:null}]};
+   if(method==="acceptTerms")return {rows:[{result:{acceptanceId:commandId,termsVersion:"synthetic_final_check_terms.v1"}}]};
+   throw new Error("SCOPED_LOCK_REACHED");
+  }
+  return {rows:[]};
+ });
+ const pool={query,connect:vi.fn(async()=>({query,release:vi.fn()}))} as unknown as Pool;
+ const app=new FinalAccountLockApplication(pool,session);
+ if(method==="get")await app.get(job);
+ else if(method==="acceptTerms")await app.acceptTerms(job,{version:"final-check-terms.accept.v1",commandId,termsVersion:"synthetic_final_check_terms.v1"});
+ else await expect(app.lock(job,{version:"final-account.lock.v1",commandId,finalAccountRevisionId:revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"})).rejects.toThrow("SCOPED_LOCK_REACHED");
+ expect(business).toHaveLength(1);
+ expect(query.mock.calls.findIndex(([sql])=>sql.startsWith(practiceOwnedJobsSql()))).toBeLessThan(query.mock.calls.findIndex(([sql])=>sql.includes("app.practice_material_digest")));
+});
+
+it.each(["acceptTerms","lock"] as const)("%s rejects supplied practice authority before business writes",async method=>{
+ const f=fixture(),accept=vi.spyOn(FinalAccountLockRepository.prototype,"acceptTerms"),lock=vi.spyOn(FinalAccountLockRepository.prototype,"lock");
+ const valid=method==="acceptTerms"?{version:"final-check-terms.accept.v1",commandId,termsVersion:"synthetic_final_check_terms.v1"}:{version:"final-account.lock.v1",commandId,finalAccountRevisionId:revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"};
+ for(const forged of [{practiceSessionDigest:"a".repeat(64)},{sessionId:session},{tenantId:DEMO_TENANT_ID},{membershipId:DEMO_MEMBERSHIP_ID}])
+  await expect(f.app[method](job,{...valid,...forged})).rejects.toMatchObject({code:"INVALID_FINAL_ACCOUNT_LOCK_INPUT"});
+ expect(accept).not.toHaveBeenCalled();expect(lock).not.toHaveBeenCalled();
+});
