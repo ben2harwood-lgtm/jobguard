@@ -179,9 +179,9 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   columns:(newManifest.columns as {attname:string}[]).filter(c=>!attemptColumns.includes(c.attname)),
   constraints:[...(newManifest.constraints as Con[]).filter(c=>!attemptNames.has(c.name)),oldLockKey].sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0),
  };
- // 0943 adds only its named receipt guards; pin both triggers to its proof and
+ // 0735 adds only its named receipt guards; pin both triggers to its proof and
  // remove only the deferred trigger's exact constraint from the predecessor comparison.
- const proofStatement=JSON.parse(await readFile(new URL('./migration-proofs/0943_job_proof_statement.proof.json',import.meta.url),'utf8'));
+ const proofStatement=JSON.parse(await readFile(new URL('./migration-proofs/0735_job_proof_statement.proof.json',import.meta.url),'utf8'));
  expect(proofStatement.lp0.filter((entry:{section:string;after:unknown})=>entry.section==='triggers'&&typeof entry.after==='string'&&entry.after.startsWith('app.command_receipt|')).map((entry:{after:string})=>entry.after)).toEqual([
   'app.command_receipt|proof_statement_receipt_guard|app.guard_job_proof_receipt|BEFORE INSERT/DELETE/UPDATE|O',
   'app.command_receipt|proof_statement_receipt_complete|app.require_completed_job_proof_statement|AFTER INSERT/UPDATE|O',
@@ -199,7 +199,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  expect(receiptConstraints.filter(c=>c.name==='proof_statement_receipt_complete')).toEqual([
   {name:'proof_statement_receipt_complete',definition:'TRIGGER DEFERRABLE INITIALLY DEFERRED'},
  ]);
- // 0943 also admits only 'proof.statement' to the watchdog identity namespace and adds
+ // 0735 also admits only 'proof.statement' to the watchdog identity namespace and adds
  // its deferred identity guard there; pin both, then compare everything else unchanged.
  const isIdentity=(r:Relation)=>r.nspname==='app'&&r.relname==='watchdog_command_identity',identityCheck='watchdog_command_identity_command_type_check';
  const priorIdentityCheck=(catalogue.relations.find(isIdentity)!.constraints as Con[]).find(c=>c.name===identityCheck)!;

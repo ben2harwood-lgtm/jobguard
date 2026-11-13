@@ -50,7 +50,7 @@ async function prepared() {
 }
 
 // The first proof serialization lock a transaction requests: the job-proof
-// advisory lock (0943), or the upload row lock where that lock is absent.
+// advisory lock (0735), or the upload row lock where that lock is absent.
 const firstProofLock = (sql: string) => sql.includes("'job-proof:'") || sql.includes("FOR UPDATE OF u");
 
 async function expectBlocked(waiter: number, holder: number) {

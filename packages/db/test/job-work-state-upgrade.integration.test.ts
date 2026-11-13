@@ -85,7 +85,7 @@ describe("CH-4 own-migration upgrade",()=>{
     name:`app.${table}.customer_stage_source`,permissive:"PERMISSIVE",roles:["jobguard_migration"],cmd:"SELECT",
     qual:"((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",with_check:null,
    }));
-  // 0943 adds the same shape of flag-gated owner read for the proof guards.
+  // 0735 adds the same shape of flag-gated owner read for the proof guards.
   if(oldPolicyTables.has("app.synthetic_evidence_original"))customerStagePolicies.push({
    name:"app.synthetic_evidence_original.job_proof_source_read",permissive:"PERMISSIVE",roles:["jobguard_migration"],cmd:"SELECT",
    qual:"((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.job_proof_source_read'::text, true) = 'on'::text))",with_check:null,
