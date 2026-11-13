@@ -61,7 +61,7 @@ beforeAll(async () => {
   // Retain the predecessor data-preservation assertion, with only the explicit redaction effects.
   for (const table of Object.keys(beforeUpgrade)) {
     const rows = beforeUpgrade[table] as Record<string,unknown>[];
-    if (table === "app.customer_portal_grant") expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,revoked_at:expect.any(String)} : row));
+    if (table === "app.customer_portal_grant") expect(after[table]).toEqual(rows.map(row => ({...row,quote_document_id:null,quote_document_version:null,quote_document_hash:null,...(row.tenant_id===w.tenant ? {revoked_at:expect.any(String)} : {})})));
     else if (table === "app.action_outbox") expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,immutable_content:redactedContent,content_hash:redactedHash,status:"cancelled",updated_at:expect.any(String)} : row));
     else if (table === "app.command_type_registry") expect(after[table]).toEqual((await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(currentCommandRegistryRows)])).rows[0].data);
     else if (table === "app.audit_event") {
