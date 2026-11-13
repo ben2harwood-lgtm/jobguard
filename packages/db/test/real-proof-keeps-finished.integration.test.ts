@@ -15,7 +15,13 @@ describe("REAL-PROOF-KEEPS-FINISHED", () => {
  beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createWorkFixture(); }, 240_000);
  afterAll(async () => { await closeWorkFixture(f); vi.unstubAllEnvs(); });
  async function prepared(electrical = false) {
-  const p = await seedWorkPractice(f), a = await practiceWorkJob(f, p);
+  const p = await seedWorkPractice(f), scope = randomUUID();
+  // Test-only: the fixture's live practice job has no scope item; seed one confirmed, in-progress item.
+  await workTenant(f.admin, p.auth.context.tenantId, async db => {
+   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scope, p.auth.context.tenantId, p.jobId]);
+   await db.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')", [p.auth.context.tenantId, p.jobId, scope]);
+  });
+  const a = await practiceWorkJob(f, p);
   const proof = new ProofApplication(f.runtime, p.sessionId), work = new JobWorkStateRepository(f.runtime);
   await proof.command(p.jobId, { version: "practice-proof-command.v1", action: "answer_statement", commandId: randomUUID(), includesElectricalWork: electrical });
   const before = await work.read(p.auth.context, p.jobId, p.auth.digest);

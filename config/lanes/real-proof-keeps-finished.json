@@ -12,6 +12,9 @@
         "packages/db/migrations/0946_proof_keeps_finished.sql",
         "packages/db/test/meter-work-admission.integration.test.ts",
         "packages/db/test/migration-proofs/0946_proof_keeps_finished.proof.json",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
         "packages/db/test/real-proof-keeps-finished.integration.test.ts"
       ]
     }

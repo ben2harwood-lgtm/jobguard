@@ -5,14 +5,12 @@ DO $patch$
 DECLARE original text; changed text;
 BEGIN
  original:=pg_get_functiondef('app.ch4_capture_site_source()'::regprocedure);
- changed:=replace(original,
-  'actor uuid; marker app.job_work_state_event; seq bigint; prior_context text:=current_setting(''app.tenant_id'',true);',
+ changed:=replace(original,'actor uuid; marker app.job_work_state_event; seq bigint; prior_context text:=current_setting(''app.tenant_id'',true);',
   'actor uuid; marker app.job_work_state_event; seq bigint; prior_context text:=current_setting(''app.tenant_id'',true);
  stage_proof boolean:=false; proof_stage text; prior_stage_read text:=current_setting(''app.customer_stage_read'',true);');
  IF changed=original THEN RAISE EXCEPTION 'unexpected capture declaration'; END IF;
  original:=changed;
- changed:=replace(original,
-  'IF marker.kind=''finished_on_site'' AND (r.received_at>marker.fact_at OR (r.received_at=marker.fact_at AND r.id>marker.id)) THEN',
+ changed:=replace(original,'IF marker.kind=''finished_on_site'' AND (r.received_at>marker.fact_at OR (r.received_at=marker.fact_at AND r.id>marker.id)) THEN',
   'IF r.source_kind IN(''photo'',''stage_completion'') THEN
   IF r.source_kind=''photo'' THEN
    evidence:=NEW;

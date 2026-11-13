@@ -55,7 +55,7 @@ ITEM: Replace shelves`);
  await diary.getByLabel("Written on site").check();
  const saved = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/api/jobs/${jobId}/diary`));
  await diary.getByRole("button", { name: "Save note", exact: true }).click();
- const response = await saved; expect(response.ok(), await response.text()).toBe(true);
+ const response = await saved; expect(response.ok(), `diary save HTTP ${response.status()}`).toBe(true);
  await page.reload();
  await expect(page.getByTestId("work-state")).toHaveText("Work under way");
  const restarted = await (await page.request.get(`/api/jobs/${jobId}/work-state`)).json();
