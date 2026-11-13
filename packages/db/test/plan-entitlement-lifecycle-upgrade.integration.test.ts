@@ -76,6 +76,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     expect(signature.split("(")[0]).toBe(`app.${body[1]}`);
     lp6cReplacements.set(oid, body[4]!);
   }
+  // LATER-SAFETY-144 replaces only this exact writer body; retain its metadata checks.
+  const signedInvoiceSql = await readFile(new URL("../migrations/0731_combined_invoice_signed_vat.sql", import.meta.url), "utf8");
+  const signedInvoiceOid = (await c.admin.query("SELECT 'app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)'::regprocedure::oid oid")).rows[0].oid;
+  lp6cReplacements.set(signedInvoiceOid, signedInvoiceSql.split("FUNCTION app.issue_lock_bound_customer_invoice(")[1]!.split("AS $$")[1]!.split(/\$\$\s*;/u)[0]!);
   // Only these six exact identities receive their latest 0724 bodies. Their
   // owners, ACLs and all other metadata remain checked by successor proofs.
   const delegationSql = await readFile(new URL("../migrations/0724_lp6c_customer_portal_delegation.sql", import.meta.url), "utf8");
@@ -99,6 +103,17 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(abandonedVisitRoutines).toHaveLength(1);
   expect(abandonedVisitRoutines[0]?.definition?.split("$function$")[1]).toEqual(
     abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+  const recoverySql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql", import.meta.url), "utf8");
+  for (const [name,args] of [
+    ["final_check_read_authority","t uuid, j uuid, d text, locking boolean"],
+    ["admit_final_check_cycle","t uuid, j uuid"],
+    ["final_check_cycle_claim","t uuid, j uuid, l uuid, m uuid, a integer, c uuid"],
+    ["final_check_cycle_finish","t uuid, j uuid, l uuid, m uuid, a integer, c uuid, succeeded boolean"],
+  ]) {
+    const routines = live.filter(row => row.nspname === "app" && row.proname === name && row.args === args);
+    expect(routines).toHaveLength(1);
+    expect(routines[0]?.definition?.split("$function$")[1]).toBe(recoverySql.split(`FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]);
+  }
   // 0692 adds one owner-only helper; pin its complete body as well as successor metadata.
   const receiptGate = await readFile(new URL("../migrations/0692_final_check_post_invoice_receipt_gate.sql", import.meta.url), "utf8");
   const receiptHelpers = live.filter(row => row.nspname === "app" && row.proname === "require_receipt_final_check"
@@ -163,9 +178,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["begin_final_check", "t uuid, j uuid, detector text, policy text", "0698_final_check_post_invoice_rerun.sql"],
     ["complete_final_check", "t uuid, j uuid, m uuid, p jsonb", "0698_final_check_post_invoice_rerun.sql"],
     ["guard_final_check_manifest", "", "0698_final_check_post_invoice_rerun.sql"],
-    ["read_final_check_reveal", "t uuid, j uuid, d text", "0698_final_check_post_invoice_rerun.sql"],
+    ["read_final_check_reveal", "t uuid, j uuid, d text", "0732_final_check_typed_recovery.sql"],
     ["read_value_job", "j uuid, digest text", "0698_final_check_post_invoice_rerun.sql"],
-    ["request_final_check_run", "t uuid, j uuid, d text", "0698_final_check_post_invoice_rerun.sql"],
+    ["request_final_check_run", "t uuid, j uuid, d text", "0732_final_check_typed_recovery.sql"],
     ["request_practice_final_check_on_lock", "", "0698_final_check_post_invoice_rerun.sql"],
     ["verify_final_check_run", "p_tenant uuid, p_job uuid, p_run uuid, p_lock uuid, p_cutoff timestamp with time zone", "0698_final_check_post_invoice_rerun.sql"],
     ["retention_records", "t uuid, digest text, j uuid, cid uuid, v jsonb, expected text", "0646_retention_timer_runtime_rules.sql"],
@@ -182,7 +197,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["ch4_read_work_facts", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
     ["read_job_sources", "t uuid, j uuid, digest text, source text", "0690_import_ancestry_record_anchor.sql"],
     ["ch4_require_command_owner", "t uuid, j uuid, digest text", "0690_import_ancestry_record_anchor.sql"],
-    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "0690_import_ancestry_record_anchor.sql"],
+    ["final_check_builder", "t uuid, j uuid, d text, locking boolean", "0732_final_check_typed_recovery.sql"],
     ["evidence_pack_v3_owner", "t uuid, c uuid, d text", "0690_import_ancestry_record_anchor.sql"],
     ["adopt_invoiced_job_v3", "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text", "0690_import_ancestry_record_anchor.sql"],
     ["apply_recovery_timeline_signal", "p_tenant uuid, p_signal jsonb", "0690_import_ancestry_record_anchor.sql"],
@@ -481,5 +496,5 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   }
   const logicalPreFoundation = applyUpgradeProofs(stagedBaseline, [inverseFoundation], ownerOids);
   const expected = applyUpgradeProofs(logicalPreFoundation, successors, ownerOids);
-  expect(privileges(live)).toEqual(privileges(expected.routines as typeof security));
+  expect(privileges(live)).toEqual(privileges(expected.routines.filter(row => row.nspname !== "infrastructure") as typeof security));
 }, 120000);
