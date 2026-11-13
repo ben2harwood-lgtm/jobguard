@@ -7359,6 +7359,31 @@
           "search_path=pg_catalog"
         ]
       }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "lp6_delegated_actor",
+        "args": "p_tenant uuid, p_command_type text, p_job uuid",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "lp6_delegated_actor",
+        "args": "p_tenant uuid, p_command_type text, p_job uuid",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
     }
   ],
   "tenancy": []

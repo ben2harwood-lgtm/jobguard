@@ -3,7 +3,7 @@ import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { statementLines, exactPence, sumExactPence } from "@jobguard/core";
-import { ContractorRepository, EnterpriseFeeRepository, ExtraRepository, ExtraApprovalRepository, WorkOrderRepository, demoFile, demoRow, withTenant } from "../src/index.js";
+import { ContractorRepository, requireContractorRequestContext, EnterpriseFeeRepository, ExtraRepository, ExtraApprovalRepository, WorkOrderRepository, demoFile, demoRow, withTenant } from "../src/index.js";
 import { cluster, code, world, type World } from "./contractor-billing-fixtures.js";
 import { approveInput, newJob, raiseOn } from "./extra-approval-chain-fixtures.js";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
@@ -26,7 +26,7 @@ async function agreement(w: World, rate = 10, effectiveFrom = "2000-01-01T00:00:
 async function setup(net = 15000) {
   // LP-6d: as in the statements route, the fee request is bound to the finance session's own context, not the owner's.
   const base = await world(c, net), session = await new ContractorRepository(c.runtime).resolveSession(base.session);
-  const w = { ...base, ctx: session.context! }, repo = new EnterpriseFeeRepository(c.runtime), id = await agreement(w);
+  const w = { ...base, ctx: requireContractorRequestContext(session) }, repo = new EnterpriseFeeRepository(c.runtime), id = await agreement(w);
   const p = (await c.admin.query("SELECT to_char(clock_timestamp() AT TIME ZONE 'Europe/London','YYYY-MM') p")).rows[0].p as string;
   return { w, repo, id, p };
 }

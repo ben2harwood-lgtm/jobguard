@@ -10,7 +10,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { contractorRoles, customerTypes, referenceApprovalRulesV1, jobPartiesCommandResultV1, type ContractorPartyImport } from "@jobguard/core";
-import { ContractorRepository, ContractorPartyRepository, assertContractorPartiesRequired, JobRepository, JobPartiesRepository, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type TenantTransaction } from "../src/index.js";
+import { ContractorRepository, ContractorPartyRepository, assertContractorPartiesRequired, JobRepository, JobPartiesRepository, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, requireContractorRequestContext, withTenant, type AuthenticatedMembership, type TenantTransaction } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, parties: ContractorPartyRepository;
 const tables = ["contractor_client_customer", "contractor_party_binding", "contractor_resident_contact"];
@@ -254,11 +254,9 @@ const effects = (f: Fixture) => withTenant(runtime, ctx(f.p), async db => (await
   [f.job, f.input.commandId, [f.customer.revisionId]])).rows[0]);
 async function invite(f: Fixture, role: string): Promise<AuthenticatedMembership> {
   const id = randomUUID(); await command(f.p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope: { kind: "tenant", id: f.p.tenantId }, clientId: null, contractId: null });
-  const row = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [id]))).rows[0];
-  const actor = { ...f.p, membershipId: id, identityUserId: row.identity_user_id };
-  const context = await testBoundTenantContext(admin, actor.tenantId, id);
-  Object.assign(actor, { context });
-  sessions.set(actor, context);
+  // LP-6d: the invited member acts through its own persisted contractor practice session.
+  const actor = await memberSessionPrincipal(admin, runtime, f.p.tenantId, id);
+  sessions.set(actor, requireContractorRequestContext(actor));
   return actor;
 }
 async function reviseCustomer(f: Fixture, type: string, name = "Fictional Client") {

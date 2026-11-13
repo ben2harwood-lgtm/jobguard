@@ -9,13 +9,14 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contractorPermissions, contractorPermits, contractorRoles, type ContractorGrant, type ContractorPermission } from "@jobguard/core";
 import {
-  ContractorPartyRepository, ContractorRepository, JobSchedulingRepository, MIGRATION_URLS, WorkOrderRepository, demoFile, demoRow, migrate, prepareWorkOrderDemo, verifiedTenantContextFromMembership, withTenant,
+  ContractorPartyRepository, ContractorRepository, JobSchedulingRepository, MIGRATION_URLS, WorkOrderRepository, demoFile, demoRow, migrate, prepareWorkOrderDemo, requireContractorRequestContext, withTenant,
   type AuthenticatedMembership, type WorkOrderDemo,
 } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, parties: ContractorPartyRepository, orders: WorkOrderRepository, scheduling: JobSchedulingRepository;
-const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
+const ctx = (p: AuthenticatedMembership) => requireContractorRequestContext(p);
 const view = (p: AuthenticatedMembership) => contractors.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
 const command = async (p: AuthenticatedMembership, fields: Record<string, unknown>) => contractors.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view(p)).revision, ...fields });
 async function member(p: AuthenticatedMembership, role: string, scope: { kind: string; id: string }, clientId: string | null = null) {

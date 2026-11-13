@@ -4,7 +4,7 @@ import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { resolveExtraDuplicateCandidates } from "../src/extra-duplicate-candidates.js";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { ContractorRepository, ExtraApprovalRepository, ExtraRepository, readExtraDuplicateCandidates, withTenant } from "../src/index.js";
+import { ContractorRepository, requireContractorRequestContext, ExtraApprovalRepository, ExtraRepository, readExtraDuplicateCandidates, withTenant } from "../src/index.js";
 import { cluster, world, code, type World } from "./contractor-billing-fixtures.js";
 import { direct, invite } from "./site-extra-fixtures.js";
 import { approveInput } from "./extra-approval-chain-fixtures.js";
@@ -44,7 +44,7 @@ it("two operatives remain separate and priced; linking and unlinking agree with 
  expect(await code(approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, { ...mark, canonicalId: w.s.extraId }))).toBe("COMMAND_CONFLICT");
  expect((await agreement(w)).groups).toEqual([]);
  // LP-6d: the billing read is bound to the finance session's own context, as the billing route binds it.
- const financeCtx = (await new ContractorRepository(c.runtime).resolveSession(w.session)).context!;
+ const financeCtx = requireContractorRequestContext(await new ContractorRepository(c.runtime).resolveSession(w.session));
  const candidates = await withTenant(c.runtime, financeCtx, async db => (await db.$client.query("SELECT app.cb_candidates($1,$2,$3) lines", [w.session, w.s.jobId, w.contract])).rows[0]!.lines as Array<{ extraId: string }>);
  expect(candidates.filter(x => x.extraId === b)).toHaveLength(1);
  expect(candidates.some(x => x.extraId === a)).toBe(false);
@@ -239,7 +239,7 @@ it("ENT-3 reversal never promotes a duplicate-dismissed pending approval to appr
 },120000);
 
 // LP-6d: contractor_session binds its own credential, so a session command runs in that session's own request, as the route does.
-const ctxOf = async (session: string) => (await new ContractorRepository(c.runtime).resolveSession(session)).context!;
+const ctxOf = async (session: string) => requireContractorRequestContext(await new ContractorRepository(c.runtime).resolveSession(session));
 const resolveAs = async (_w: World, session: string, job: string, raw: unknown) =>
  resolveExtraDuplicateCandidates(c.runtime, await ctxOf(session).catch(() => _w.ctx), session, job, raw);
 async function sessionFor(w: World, actor = w.w.members.supervisor.member) {
@@ -351,7 +351,8 @@ it("refuses disposition/reason mismatches without changing receipts, facts, audi
  const before = await facts(w), history = await commercial(w);
  for (const [kind, reasonCode] of [["not_duplicates", "review_changed"], ["reopen", "different_work"], ["reopen", "different_location"]]) {
   const input = disposition(group, { disposition: kind, reasonCode });
-  await expect(withTenant(c.runtime, w.ctx, db => db.$client.query(
+  // LP-6d: the direct SQL call runs in the session's own bound request, so the writer (not the binding) refuses.
+  await expect(withTenant(c.runtime, await ctxOf(session), db => db.$client.query(
    "SELECT app.extra_duplicate_resolve($1,$2,$3::jsonb)", [session, w.s.jobId, JSON.stringify(input)]
   ))).rejects.toMatchObject({ code: "23514", message: "INVALID_COMMAND" });
   expect(await facts(w)).toEqual(before); expect(await commercial(w)).toEqual(history);

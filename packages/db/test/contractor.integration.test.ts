@@ -8,7 +8,8 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contractorPermissions, contractorRoles, contractorPermissionMatrix, contractorPermits, referenceApprovalRulesV1, type ContractorCommand, type ContractorGrant, type ContractorRole } from "@jobguard/core";
-import { ContractorRepository, ContractorPartyRepository, JobSchedulingRepository, SorRepository, WorkOrderRepository, MIGRATION_URLS, migrate, withTenant, appendAuditBatch, addBranchClient, demoFile, demoRow, prepareWorkOrderDemo, type WorkOrderDemo, type AuthenticatedMembership, verifiedTenantContextFromMembership } from "../src/index.js";
+import { ContractorRepository, ContractorPartyRepository, JobSchedulingRepository, SorRepository, WorkOrderRepository, MIGRATION_URLS, migrate, withTenant, appendAuditBatch, addBranchClient, demoFile, demoRow, prepareWorkOrderDemo, type WorkOrderDemo, type AuthenticatedMembership, verifiedTenantContextFromMembership, requireContractorRequestContext } from "../src/index.js";
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 let postgres:EmbeddedPostgres, admin:Pool,runtime:Pool,dir:string,repo:ContractorRepository;
 const tables=['commercial_track_assignment','org_unit','team','client_organisation','client_contract','approval_rule_version','client_contract_version','contractor_member','role_grant','role_grant_revocation','contractor_membership_revocation','team_membership'];
@@ -38,12 +39,12 @@ async function command(p:AuthenticatedMembership,fields:Record<string,unknown>){
 async function fixtureMember(p:AuthenticatedMembership,role:string,kind:string,scopeId:string,clientId:string|null=null,contractId:string|null=null){
  const id=randomUUID();await command(p,{kind:'member.invite',id,role,email:`${id}@fictional.invalid`,scope:{kind,id:scopeId},clientId,contractId});
  const row=(await admin.query<{identity_user_id:string}>('SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2',[p.tenantId,id])).rows[0]!;
- return ownContext({...p,membershipId:id,identityUserId:row.identity_user_id} as AuthenticatedMembership);
+ void row; return memberSessionPrincipal(admin,runtime,p.tenantId,id);
 }
 // LP-6d: direct database pins run inside the actor's own bound request, so the database constraint (not the binding) decides.
-const boundOf=(m:AuthenticatedMembership)=>(m as unknown as {context:ReturnType<typeof verifiedTenantContextFromMembership>}).context;
+const boundOf=(m:AuthenticatedMembership)=>requireContractorRequestContext(m);
 // LP-6d: an invited fixture member acts through its own persisted credential, never the owner's bound context.
-async function ownContext(m:AuthenticatedMembership){return {...m,context:await testBoundTenantContext(admin,m.tenantId,m.membershipId)} as AuthenticatedMembership;}
+async function ownContext(m:AuthenticatedMembership){return memberSessionPrincipal(admin,runtime,m.tenantId,m.membershipId);}
 describe('ENT-1 PostgreSQL guarantees',()=>{
  it('generates one audited organisation for racing practice creation',async()=>{
   const session=randomUUID();const [a,b]=await Promise.all([repo.startPractice(session),repo.startPractice(session)]);expect(a).toEqual(b);
