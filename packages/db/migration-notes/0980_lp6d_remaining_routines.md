@@ -854,3 +854,10 @@ Repair 15 (test-only tail; each actor binds its own session; raw forged-tenant r
 Whole db at 6672ecc8 (run.sh WHOLE, 2 workers): 66 failed | 864 passed files; 136 failed | 8145
 passed tests (r14 at 5a8608f8: 74 / 151). No newly failing file. NOT READY. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r15-6672ecc8-whole-*.
+
+Repair 16 (practice-worker-switch-proof per rulings; FLAGGED: mapRequestBindingRefusal and
+PracticeWorkerSwitchRepository.switchOn translate a routine-raised REQUEST_BINDING_REFUSED to the
+repository's usual code). Whole db at 5f743a26 (run.sh WHOLE, 2 workers): 64 failed | 866 passed
+files; 127 failed | 8154 passed tests (r15 at 6672ecc8: 66 / 136). Only newly listed file:
+recovery-terms-timing (the known environmental timing case). NOT READY. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r16-5f743a26-whole-*.
