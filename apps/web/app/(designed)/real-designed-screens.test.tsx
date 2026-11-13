@@ -40,7 +40,7 @@ vi.mock("./designed-ui", async original => {
     useAttention: () => ({ items: actual.attentionJobs(state.jobs, state.decisions, state.facts), complete: state.decisions !== null && state.facts !== null && state.jobs.every(job => state.facts?.[job.id]?.checksAvailable), loading: state.facts === null && state.decisions === null, failed: state.facts !== null && (state.decisions === null || state.jobs.some(job => !state.facts?.[job.id]?.checksAvailable)) }) };
 });
 import { StateScreen, shortDate, quoteLine, agreedLine, attentionJobs, projectBillCheck, readJobFacts, unavailableFacts, jobValueV1, catchLabel, type JobFacts, type Decisions, type Workspace } from "./designed-ui";
-import { JobsList, Overview, MoneyTab } from "./jobs-screens";
+import { JobsList, Overview, MoneyTab, useJobDetail } from "./jobs-screens";
 import { Today } from "./home-screens";
 vi.stubGlobal("React", React);
 const job: JobSummary = { id: "10000000-0000-4000-8000-000000000001", tenantId: "20000000-0000-4000-8000-000000000001", title: "Practice extension", status: "draft", customerLabel: "Customer", siteLabel: "Site", updatedLabel: "", document: { kind: "none", reference: null, delivery: "not_sent" }, customerPayment: "unknown", pilotNoCharge: true };
@@ -145,6 +145,40 @@ it("rejects a substituted lock job or workspace and never uses signal or reveal 
   expect(attentionJobs([job], emptyDecisions, { [job.id]: facts })).toEqual([]);
 });
 function response(body: unknown, status = 200) { return { ok: status === 200, status, json: async () => body } as Response; }
+it.each(["focus", "job-saved", "job-lifecycle-changed", "jobguard:invoice-changed"])("keeps Work mounted during a %s refresh and clears it on denied access", async event => {
+ const events = new EventTarget(); vi.stubGlobal("window", events);
+ const fetch = vi.fn(async (url: string) => response(url.includes("?tenantId=")
+  ? { version: 1, tenantId: job.tenantId, jobs: [job] }
+  : { version: 1, environment: "synthetic_demo", job: detailJob }));
+ vi.stubGlobal("fetch", fetch); hooks.active = true;
+ const render = (id = job.id, tenantId = job.tenantId) => {
+  hooks.render(); const result = useJobDetail(id, tenantId); hooks.flush(); return result;
+ };
+ expect(render().detail).toBeNull();
+ await vi.waitFor(() => expect(render().detail?.job.id).toBe(job.id));
+ const saved = render().detail;
+ let release!: (value: Response) => void;
+ fetch.mockImplementation(() => new Promise<Response>(resolve => { release = resolve; }));
+ events.dispatchEvent(event === "focus" ? new Event(event) : new CustomEvent(event, { detail: { jobId: job.id } }));
+ expect(render().detail).toBe(saved);
+ // A second render observes state updates queued by the refresh effect.
+ expect(render().detail).toBe(saved);
+ release(response({}, 403));
+ await vi.waitFor(() => expect(render()).toMatchObject({ detail: null, failed: "forbidden" }));
+});
+it("hides the previous job immediately when the job or tenant changes", async () => {
+ vi.stubGlobal("window", new EventTarget());
+ vi.stubGlobal("fetch", vi.fn(async (url: string) => response(url.includes("?tenantId=")
+  ? { version: 1, tenantId: job.tenantId, jobs: [job] }
+  : { version: 1, environment: "synthetic_demo", job: detailJob })));
+ hooks.active = true;
+ const render = (id = job.id, tenant = job.tenantId) => {
+  hooks.render(); const result = useJobDetail(id, tenant); hooks.flush(); return result;
+ };
+ render(); await vi.waitFor(() => expect(render().detail?.job.id).toBe(job.id));
+ expect(render("10000000-0000-4000-8000-000000000002").detail).toBeNull();
+ expect(render(job.id, "20000000-0000-4000-8000-000000000002").detail).toBeNull();
+});
 const invoice = { id: job.id, number: "P-1", issuedOn: "2026-11-10", recipient: "fictional@example.invalid", pdfSha256: "a".repeat(64), finalAccountRevisionId: job.id, sourceHash: "a".repeat(64), netPence: 90000, taxPence: 18000, totalPence: 108000, balancePence: 0, customerCreditPence: 0, paidPence: 108000, creditedPence: 0, delivery: "simulated_delivery" };
 function reads(overrides: Record<string, Response> = {}) {
   return vi.fn(async (url: string) => {

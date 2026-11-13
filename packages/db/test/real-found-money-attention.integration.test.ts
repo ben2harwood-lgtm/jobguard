@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { startBlankPracticeCompany, authenticatePracticeSession, prepareActivationFixtureV3, PracticeActivationRepository, FinalAccountLockRepository, FinalCheckRepository, JobSourceRepository, FinalCheckCompletionRepository, practiceFinalCheckPorts } from "../src/index.js";
+import { startBlankPracticeCompany, authenticatePracticeSession, prepareActivationFixtureV3, PracticeActivationRepository, FinalAccountLockRepository, FinalCheckRepository, JobSourceRepository, FinalCheckCompletionRepository, practiceFinalCheckPorts, EvidenceService } from "../src/index.js";
+import { MemoryStorage } from "./site-extra-evidence-fixtures.js";
 import { ValueApplication } from "../../../apps/api/src/value/value.application.js";
 import { VariationApplication } from "../../../apps/api/src/variation/variation.application.js";
 import { FinalAccountLockApplication } from "../../../apps/api/src/final-account-lock.application.js";
@@ -25,10 +26,18 @@ async function setup(extraNote?: string) {
  await new PracticeActivationRepository(f.runtime).start(auth.context, jobId, { commandId: randomUUID(), scenario: "no_charge" });
  const value = new ValueApplication(f.runtime, session), variations = new VariationApplication(f.runtime, session);
  const accounts = new FinalAccountApplication(f.runtime, session), invoices = new CustomerInvoiceApplication(f.runtime, session);
- const proof = new ProofApplication(f.runtime, session), scope = (await proof.get(jobId)).scopeItemId;
+ const proof = new ProofApplication(f.runtime, session), requirement = await proof.get(jobId), scope = requirement.scopeItemId;
  const selected = await proof.command(jobId, { version: "practice-proof-command.v1", commandId: randomUUID(), action: "select_generated", scopeItemId: scope, fixture: "completion-photo" });
  const upload = selected.upload!;
- const verified = await proof.command(jobId, { version: "practice-proof-command.v1", commandId: randomUUID(), action: "finalize", uploadId: upload.id, objectVersionId: upload.objectVersionId });
+ // The generated image supplies synthetic bytes; its evidence kind comes from
+ // the job's proof requirement, not from the image fixture's name.
+ const storage = new MemoryStorage();
+ const original = (await f.admin.query<{ object_key: string; bytes: Buffer; content_type: string }>(
+  "SELECT object_key,bytes,content_type FROM app.synthetic_evidence_original WHERE tenant_id=$1 AND job_id=$2 AND upload_id=$3 AND object_version_id=$4",
+  [auth.context.tenantId, jobId, upload.id, upload.objectVersionId])).rows[0]!;
+ storage.put(original.object_key, upload.objectVersionId, original.bytes, original.content_type);
+ await new EvidenceService(f.runtime, storage).finalize(auth.context, { commandId: randomUUID(), uploadId: upload.id, objectVersionId: upload.objectVersionId, evidenceType: requirement.requiredEvidenceType });
+ const verified = await proof.get(jobId);
  await proof.command(jobId, { version: "practice-proof-command.v1", commandId: randomUUID(), action: "complete", scopeItemId: scope, evidenceId: verified.upload!.evidenceId });
  await new JobSourceRepository(f.runtime).intake(auth.context, jobId, auth.digest, "diary", { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: false, text: "Painted the kitchen ceiling as an extra, customer asked for it. Estimated extra: £150" });
  if (extraNote) await new JobSourceRepository(f.runtime).intake(auth.context, jobId, auth.digest, "diary", { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: false, text: extraNote });

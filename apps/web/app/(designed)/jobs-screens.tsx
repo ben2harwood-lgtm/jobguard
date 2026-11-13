@@ -61,14 +61,17 @@ const partiesV1 = z.object({ current: z.object({
 type Detail = { job: JobWorkspaceResponse["job"]; summary: JobSummary | null; value: JobValue | null; checks: number | null; photo: string; facts?: JobFacts | undefined; attentionReasons?: string[]; attentionComplete?: boolean; attentionFailed?: boolean; attentionLinks?: AttentionLink[] };
 export type JobTab = "overview" | "work" | "money" | "records";
 
-function useJobDetail(jobId: string, tenantId: string) {
+export function useJobDetail(jobId: string, tenantId: string) {
   const [detail, setDetail] = useState<Detail | null>(null), [failed, setFailed] = useState<"forbidden" | "unavailable" | null>(null);
   const [refresh, setRefresh] = useState(0);
   useEffect(() => onJobRefresh([jobId], () => setRefresh(n => n + 1)), [jobId]);
   useEffect(() => {
     let current = true;
     const controller = new AbortController();
-    setDetail(null); setFailed(null);
+    // Keep Work mounted while its commands refresh this same job. Clearing it
+    // resets the proof, final-account and invoice panels between command steps.
+    // The returned identity guard still hides a different job or tenant immediately.
+    setFailed(null);
     const id = encodeURIComponent(jobId);
     (async () => {
       const response = await fetch(`/api/jobs/${id}`, { cache: "no-store", signal: controller.signal });
