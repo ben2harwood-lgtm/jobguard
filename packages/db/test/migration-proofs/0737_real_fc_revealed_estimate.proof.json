@@ -1,0 +1,48 @@
+{
+  "migration": "0737_real_fc_revealed_estimate.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.read_final_check_reveal(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "ae4fcf69bcbd955fce9e535241c0a94f3f9bfb9a1b731b64e066b0894dfa8940",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_check_builder",
+          "app.final_check_read_authority",
+          "app.require_authoritative_final_check"
+        ]
+      },
+      "after": {
+        "identity": "function:app.read_final_check_reveal(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "4adecd9482b1b9bf3dda02c4270d24284dd2a40fe4d7a4a196e64cbf4842fa67",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_check_builder",
+          "app.final_check_read_authority",
+          "app.require_authoritative_final_check"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

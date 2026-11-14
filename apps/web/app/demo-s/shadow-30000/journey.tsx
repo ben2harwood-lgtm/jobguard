@@ -36,7 +36,7 @@ export function ShadowSavedReport({ report }: { report: ShadowReport }) {
   {report.assessments && <section><h3>Saved fee calculations</h3><p>The latest saved calculation for each missed extra and bill item. These examples have not been approved and do not charge a fee. Undoing a payment requires a new calculation.</p>
    <ul>{report.assessments.map(({ assessment: a, illustrationAsAssessed: illustration }) => <li key={a.assessmentId}>Revision {a.revision} · {a.assessmentOutcome} · example calculation: recovered {illustration.display.recovered ?? "See the linked record for the exact amount"}, proposed fee {illustration.display.fee}, yours {illustration.display.yoursBeforeVatAndTax ?? "See the linked record for the exact amount"} before VAT and tax
     <a href={`/api/jobs/${report.jobId}/success-fee-attribution`}> View the records behind this calculation {a.assessmentId}</a></li>)}</ul></section>}
-  <p>Supporting evidence packs: {report.status === "complete" ? "an approved pack proves each extra's source chain" : "not all approved yet"}.</p>
+  <p>Supporting evidence packs: {report.status === "complete" ? "approved packs are saved with records linked to each extra" : "not all approved yet"}.</p>
   <p>Job value report: {report.value.status}{report.value.status === "incomplete" ? "; supporting records are not ready yet" : "; figures and supporting records saved"}.</p>
   <p><a href={`/api/jobs/${report.jobId}/shadow-demo`}>View the saved records behind this report</a></p>
  </section>;

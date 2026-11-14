@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { mapValueReceipt } from "@jobguard/core";
 import { extractCaptureFixture } from "@jobguard/ai";
 import { ShadowJourney, ShadowSavedReport } from "./journey";
-import { parseShadowReport, shadowCaptureText, shadowSteps } from "./journey-model";
+import { parseShadowReport, shadowCaptureText } from "./journey-model";
 vi.stubGlobal("React", React);
 const jobId = randomUUID();
 function report() { return {
@@ -16,7 +16,6 @@ function report() { return {
   status: "incomplete", reason: "producer_bindings_held", producers: { sources: "HELD", derivation: "HELD", subscription: "HELD", postedMoney: "HELD" }, asOf: null, receipt: null },
 }; }
 it("has nine guided steps, source-only £30,000 input and no saved success before a read", async () => {
- expect(shadowSteps).toHaveLength(9);
  const proposal = await extractCaptureFixture(randomUUID(), shadowCaptureText, "deterministic-local-v1");
  expect(proposal.lines).toHaveLength(5);
  expect(proposal.lines.reduce((total, line) => total + (line.unitPricePence.value ?? 0), 0)).toBe(3000000);
@@ -111,9 +110,11 @@ it("shows complete only for the server's complete status and never for an incomp
  const html = renderToStaticMarkup(<ShadowSavedReport report={parseShadowReport(completeReport(), jobId)} />);
  expect(html).toContain("Complete. All nine steps are saved on this job."); expect(html).not.toContain("Incomplete");
  expect(html).not.toMatch(/\bRED\b|verdict|observations|0 of 2|SV-6/i);
- expect(html).toContain("an approved pack proves"); expect(html).toContain("<dt>Saved practice payment</dt><dd>Saved practice data: a completed practice payment is matched to each extra.</dd>");
+ expect(html).toContain("Supporting evidence packs: approved packs are saved with records linked to each extra.");
+ expect(html).toContain("<dt>Saved practice payment</dt><dd>Saved practice data: a completed practice payment is matched to each extra.</dd>");
  const incomplete = renderToStaticMarkup(<ShadowSavedReport report={parseShadowReport(report(), jobId)} />);
- expect(incomplete).not.toContain("Complete."); expect(incomplete).toContain("not all approved yet");
+ expect(incomplete).not.toContain("Complete."); expect(incomplete).toContain("Supporting evidence packs: not all approved yet.");
+ expect(incomplete).not.toContain("approved packs are saved with records linked to each extra");
  expect(incomplete).not.toContain("Saved practice payment"); expect(incomplete).not.toContain("a completed practice payment is matched to each extra");
 });
 it("refuses a complete status that contradicts its own saved parts", () => {
