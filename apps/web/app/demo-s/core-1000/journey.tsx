@@ -64,7 +64,7 @@ export function Core1000Journey({ requestedJobId, chooserHref }: { requestedJobI
     </> : <section className="workspace-page">
       {checking ? <p role="status">Checking practice session…</p> : tenantId ?
         <WalkIt tenantId={tenantId} initialText={core1000Source} reviewHref={core1000Link} close={() => location.assign(chooserHref ?? "/demo-s")} /> :
-        <button disabled={busy} onClick={() => void start()} aria-label="Start core-1000 practice session">Start the £1,000 practice job</button>}
+        <button disabled={busy} onClick={() => void start()}>Start the £1,000 practice job</button>}
       {error && <p role="alert">{error}</p>}
     </section>}
   </>;
