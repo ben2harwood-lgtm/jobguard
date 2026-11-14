@@ -13,6 +13,7 @@
         "apps/web/app/api/jobs/route.test.ts",
         "apps/web/app/api/jobs/route.ts",
         "apps/web/e2e/real-overview-paid-status.spec.ts",
+        "apps/web/e2e/WALK-3.spec.ts",
         "packages/db/src/guarded-practice-invoice-repository.ts",
         "packages/db/src/practice-invoice-repository.test.ts",
         "packages/db/src/practice-invoice-repository.ts",
