@@ -152,7 +152,13 @@
         "packages/db/test/shadow-demo-guide.integration.test.ts",
         "packages/db/test/shadow-persistence.integration.test.ts",
         "packages/db/test/site-extra-evidence-routines.integration.test.ts",
-        "packages/db/test/site-extra-priced-evidence.integration.test.ts"
+        "packages/db/test/site-extra-priced-evidence.integration.test.ts",
+        "packages/db/test/audit-api-file-supplier-document.integration.test.ts",
+        "packages/db/test/audit-checkpoint-handoff.integration.test.ts",
+        "packages/db/test/connector-billing-status-promotion.integration.test.ts",
+        "packages/db/test/financial-reconciliation-adjustments.integration.test.ts",
+        "packages/db/test/financial-reconciliation-queue.integration.test.ts",
+        "packages/db/test/migfix-6-fixture.ts"
       ]
     }
   }

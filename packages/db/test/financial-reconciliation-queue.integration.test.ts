@@ -70,7 +70,8 @@ it("refuses self-approval including a second session for the same identity; a di
  await expect(a.repo.approve(a.w.ctx,a.w.session,approve)).rejects.toThrow("RECONCILIATION_SELF_APPROVAL");
  const alias = randomUUID();
  await c.admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) SELECT $1,tenant_id,membership_id,identity_user_id,$2,r.t,r.t+interval '7 days' FROM control_plane.contractor_practice_session,(SELECT clock_timestamp() t) r WHERE session_id=$3",[alias,digestOf(alias),a.w.session]);
- await expect(a.repo.approve(a.w.ctx,alias,approve)).rejects.toThrow("RECONCILIATION_SELF_APPROVAL");
+ // LP-6d: the second session of the same identity calls as its own bound request.
+ await expect(a.repo.approve(await ctxFor(alias),alias,approve)).rejects.toThrow("RECONCILIATION_SELF_APPROVAL");
  const second = await secondSession(a.w);
  await expect(a.repo.approve(await ctxFor(second),second,{...approve,contentHash:'0'.repeat(64)})).rejects.toThrow("RECONCILIATION_CONFLICT");
  const accepted = await a.repo.approve(await ctxFor(second),second,approve);
@@ -84,7 +85,8 @@ it("refuses stale runs, locked invoice revision substitution and new discrepanci
  await expect(a.repo.propose(a.w.ctx,a.w.session,{version:"financial-reconciliation-propose.v1",runId:run.runId,adjustment})).rejects.toThrow("RECONCILIATION_CONFLICT");
  const proposal=await a.repo.propose(a.w.ctx,a.w.session,{version:"financial-reconciliation-propose.v1",runId:run.runId,adjustment:{...adjustment,invoiceRevision:a.revision}});
  await a.run();
- await expect(a.repo.approve(a.w.ctx,await secondSession(a.w),{version:"financial-reconciliation-approve.v1",commandId:randomUUID(),jobId:a.scope.jobId,adjustmentId:proposal.adjustmentId,contentHash:proposal.contentHash})).rejects.toThrow("RECONCILIATION_CONFLICT");
+ const approver=await secondSession(a.w); // LP-6d: the other finance identity approves in its own bound request.
+ await expect(a.repo.approve(await ctxFor(approver),approver,{version:"financial-reconciliation-approve.v1",commandId:randomUUID(),jobId:a.scope.jobId,adjustmentId:proposal.adjustmentId,contentHash:proposal.contentHash})).rejects.toThrow("RECONCILIATION_CONFLICT");
 });
 it("denies direct writes, enforces append-only even for owner, and leaks no cross-tenant run", async () => {
  const a=await setup(),run=await a.run(),b=await setup();
