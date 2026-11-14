@@ -62,3 +62,20 @@ it("cancels a viewer pointer pause without clicking the control", async () => {
     expect(button.click).not.toHaveBeenCalled(); expect(vi.getTimerCount()).toBe(0);
   } finally { vi.useRealTimers(); }
 });
+
+it("opens nested closed ancestors before testing visibility and clicking an exact enabled action", async () => {
+  const outer = {open:false, parentElement:null};
+  const inner = {open:false, parentElement:{closest:()=>outer}};
+  const button = {textContent:"Save",disabled:false,parentElement:{closest:()=>inner},closest:()=>null,getClientRects:()=>inner.open&&outer.open?[{}]:[],setAttribute:vi.fn(),click:vi.fn(),scrollIntoView:vi.fn()};
+  vi.stubGlobal("document",{querySelectorAll:()=>[],getElementById:()=>({querySelectorAll:()=>[{...button,textContent:"Save another"},button]})});
+  const controller=new AbortController();setTimeout(()=>controller.abort(),300);
+  await click("Save",controller.signal);
+  expect(inner.open).toBe(true);expect(outer.open).toBe(true);expect(button.click).toHaveBeenCalledOnce();
+});
+it.each(["disabled", "fieldset", "cancelled"])("does not disclose or click a %s action",async reason=>{
+ const details={open:false,parentElement:null};
+ const button={textContent:"Save",disabled:reason==="disabled",parentElement:{closest:()=>details},closest:()=>reason==="fieldset"?{}:null,getClientRects:()=>[{}],click:vi.fn()};
+ vi.stubGlobal("document",{getElementById:()=>({querySelectorAll:()=>[button]})});
+ const controller=new AbortController();if(reason==="cancelled")controller.abort();else setTimeout(()=>controller.abort(),10);
+ await expect(click("Save",controller.signal)).rejects.toThrow();expect(button.click).not.toHaveBeenCalled();expect(details.open).toBe(false);
+});

@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-quote-firm-sequence-screen": {
+      "branches": [
+        "codex/sandbox/real-quote-firm-sequence-screen"
+      ],
+      "allow": [
+        "apps/web/app/practice-company/walkthrough/screen-actions.test.ts",
+        "apps/web/app/practice-company/walkthrough/screen-actions.ts",
+        "apps/web/app/ui/quote-editor-reference.test.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/e2e/real-quote-firm-sequence-screen.spec.ts"
+      ]
+    }
+  }
+}
