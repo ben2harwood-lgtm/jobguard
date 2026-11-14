@@ -897,3 +897,14 @@ file: recovery-terms-timing (known environmental timing case). NOT READY. Named 
 owner expiry while waiting; worm-command executor/operator cases; LP-10 (worker tenant setting trusted
 from the queue for the private worker copies). Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r22-dcfa2025-whole-*.
+
+Repair 23 (PRODUCT CHANGES, flagged: two pinned private copies app.lp6d_read_final_check_reveal_unbound +
+app.lp6d_final_check_builder_unbound for the read-only integrity skip (Router ruling); repository mappings
+that keep main codes in readiness-store, import pre-adoption / job-import-v3 and the contractor retained
+read; one test expectation for the SSO feature copy). Whole db at 582a916e (run.sh WHOLE, 2 workers):
+19 failed | 911 passed files; 26 failed | 8258 passed tests (r22: 50 / 79). server-entitlements then
+went from 3 to 1 failing test at 5167ae99. NOT READY. Named holds: [PW27]; L082 owner expiry while
+waiting; worm-command executor/operator cases and the worm hold-screen concurrent replay; LP-10;
+contractor-session-context [D3] (revoked member's session context); the server-entitlements operative
+invitation; recovery-follow-up-upgrade (repository revoke on a pre-0980 schema). Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r23-582a916e-whole-*.
