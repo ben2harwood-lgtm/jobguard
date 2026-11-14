@@ -173,7 +173,8 @@
         "packages/db/test/managed-recovery-guard-upgrade.integration.test.ts",
         "packages/db/test/enterprise-access-upgrade.integration.test.ts",
         "packages/db/test/enterprise-dashboard-plan.integration.test.ts",
-        "packages/db/test/enterprise-dashboard.authority-race.integration.test.ts"
+        "packages/db/test/enterprise-dashboard.authority-race.integration.test.ts",
+        "packages/db/test/legacy-repository-command-fixture.ts"
       ]
     }
   }
