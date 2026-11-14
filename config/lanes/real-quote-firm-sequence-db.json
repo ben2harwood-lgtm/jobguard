@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-quote-firm-sequence-db": {
+      "branches": [
+        "codex/sandbox/real-quote-firm-sequence-db"
+      ],
+      "note": "RED dormant authorized quote firm allocator; test-only fixture and upgrade snapshot repairs; no repository activation.",
+      "allow": [
+        "packages/db/migrations/0738_quote_firm_sequence.sql",
+        "packages/db/test/migration-proofs/0738_quote_firm_sequence.proof.json",
+        "packages/db/migration-notes/0738_quote_firm_sequence.md",
+        "packages/db/test/real-quote-firm-sequence-db.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
+        "packages/db/migrations/0941_quote_firm_sequence.sql",
+        "packages/db/test/migration-proofs/0941_quote_firm_sequence.proof.json",
+        "packages/db/migration-notes/0941_quote_firm_sequence.md"
+      ]
+    }
+  }
+}
