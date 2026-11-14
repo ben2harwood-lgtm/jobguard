@@ -920,3 +920,12 @@ sign-in role_grant trigger reaches the guarded mon8_feature_decision unbound), r
 (ruling's form does not fit: revokes run at 0111/0115); environmental lp6a pg_dump, recovery-terms-timing,
 recovery-messages single case. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r24-0fb26fcb-whole-*.
+
+Repair 25 (tests only: historical revoke adapter for recovery-follow-up-upgrade per ruling). Whole db at 705222a2
+(run.sh WHOLE, 2 workers): 11 failed | 919 passed files; 19 failed | 8281 passed tests (r24: 13 / 20).
+READY-FOR-FULL-CHECK: every remaining failure is a named hold or environmental - [PW27]; L082 owner
+expiry (invoice-later, -upgrade); worm-command executor/operator + worm-hold-screen concurrent replay;
+LP-10; [D3] + [PH11]; [PH13] (LATER: reads wait behind an open revoke, fail-safe); server-entitlements
+operative invitation; [G4] "regression: SSO sign-in" (scim-deactivation-access); environmental lp6a pg_dump
+and the recovery-messages single case. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r25-705222a2-whole-*.
