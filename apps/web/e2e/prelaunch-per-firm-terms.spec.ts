@@ -16,6 +16,7 @@ async function ownJob(page: Page) {
  await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
  await expect(page.getByTestId("party-site")).toHaveText("14 Fictional Street, London, SW1A 1AA");
  await expect(page.getByRole("form", { name: "Customer and site details" }).getByText(/^Saved at /u)).toBeVisible();
+ await expect(page.getByRole("form", { name: "Customer and site details" }).locator("fieldset")).toBeEnabled();
  await click(page,"Accept Paint walls");
  await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
  await click(page,"Confirm scope"); await click(page,"Price the work");
