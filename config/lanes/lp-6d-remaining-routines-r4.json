@@ -143,7 +143,14 @@
         "packages/db/test/watchdog-fixtures.ts",
         "packages/db/test/watchdog.integration.test.ts",
         "packages/db/test/work-order-import.integration.test.ts",
-        "packages/db/test/worm-command.integration.test.ts"
+        "packages/db/test/worm-command.integration.test.ts",
+        "apps/api/src/readiness-store.ts",
+        "packages/db/test/decisions-later.integration.test.ts",
+        "packages/db/test/quote.integration.test.ts",
+        "packages/db/test/readiness-store.integration.test.ts",
+        "packages/db/test/shadow-demo-guide-outside.integration.test.ts",
+        "packages/db/test/shadow-demo-guide.integration.test.ts",
+        "packages/db/test/shadow-persistence.integration.test.ts"
       ]
     }
   }

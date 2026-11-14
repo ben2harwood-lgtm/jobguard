@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { FinalCheckRepository } from "../src/final-check-repository.js";
 import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, finalCheckTenant, FINAL_CHECK_ACTOR, type FinalCheckFixture, type FinalCheckJob } from "./final-check-fixture.js";
+import { bindTestClient } from "./tenant-context-test-utils.js";
 
 let f: FinalCheckFixture;
 beforeAll(async () => { f = await createFinalCheckFixture(); }, 60000);
@@ -89,6 +90,8 @@ it.each([
  try {
   await db.query(`BEGIN ISOLATION LEVEL ${isolation}`);
   await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+  // LP-6d: the caller is the fixture owner's own bound request (bound inside the pinned snapshot).
+  await bindTestClient(f.admin,db,a.tenantId,FINAL_CHECK_ACTOR);
   expect((await db.query('SELECT state FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2',[a.tenantId,id])).rows).toEqual([{state:initial}]);
   expect((await db.query('SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows[0].n).toBe(0);
   await a.lock();
