@@ -277,6 +277,22 @@ it("reads the abandoned visit's operative through a pinned third-party copy; the
     " -- LP6D_THIRD_PARTY (repair 12): the visit's operative is a third party with no request of its own; its\n -- current visit authority is read through the private copy, never through the caller's binding.\n IF EXISTS(SELECT 1 FROM app.lp6d_visit_authority_of(visit_row.membership_id,p_job)"));
 });
 
+it("evidence-pack workers read the stored session's ownership through a pinned private copy (repair 21)", () => {
+  const bodyOf = (name: string) => definitions(sql).filter(m => m[1] === name).at(-1)![3]!;
+  const guarded = bodyOf("app.evidence_pack_v3_owner");
+  const prefix = /^\s*BEGIN\n -- LP6D_BOUND[^\n]*\n(?: --[^\n]*\n)* PERFORM app\.current_actor\(\);\n.*?\n END IF;\n/su.exec(guarded)!;
+  expect(bodyOf("app.lp6d_evidence_pack_v3_owner").trim()).toBe(guarded.slice(prefix[0].length).replace(/;\nEND\n$/u, "").trim());
+  expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_evidence_pack_v3_owner(uuid,uuid,text) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_shadow;");
+  expect(sql).not.toMatch(/GRANT [^;]*app\.lp6d_evidence_pack_v3_owner\(/u);
+  for (const [name, file] of [["app.prepare_evidence_pack_v3", "0306_evidence_pack_v3.sql"], ["app.complete_evidence_pack_v3_check", "0306_evidence_pack_v3.sql"], ["app.finish_evidence_pack_v3", "0375_evidence_pack_v3_activation.sql"]]) {
+    const latest = definitions(read(`../migrations/${file}`)).filter(m => m[1] === name).at(-1)![3]!;
+    expect(bodyOf(name), name).toBe(latest.replaceAll("app.evidence_pack_v3_owner(", "app.lp6d_evidence_pack_v3_owner("));
+  }
+  // Only those three worker routines call the copy.
+  expect(definitions(sql).filter(m => m[3]!.includes("app.lp6d_evidence_pack_v3_owner(")).map(m => m[1]).sort())
+    .toEqual(["app.complete_evidence_pack_v3_check", "app.finish_evidence_pack_v3", "app.prepare_evidence_pack_v3"]);
+});
+
 it("pins each private unguarded copy to its guarded original minus only the LP-6d binding prefix", () => {
   const bodyOf = (name: string) => definitions(sql).filter(m => m[1] === name).at(-1)![3]!;
   // The guarded original is "BEGIN\n <LP6D_BOUND prefix> END IF;\n<original body>;\nEND\n".
