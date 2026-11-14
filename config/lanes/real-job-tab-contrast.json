@@ -3,11 +3,12 @@
   "lanes": {
     "real-job-tab-contrast": {
       "branches": ["codex/sandbox/real-job-tab-contrast"],
-      "note": "REAL-JOB-TAB-CONTRAST: inactive job-tab contrast and PR #760 CI repair for saved-party and Final Check snapshot races.",
+      "note": "REAL-JOB-TAB-CONTRAST: inactive job-tab contrast and PR #760 CI repair for saved-party, Final Check snapshot and prepared-tour remount races.",
       "allow": [
         "apps/web/app/(designed)/design.css",
         "apps/web/e2e/prelaunch-per-firm-terms.spec.ts",
-        "apps/web/e2e/real-own-job-to-paid.spec.ts"
+        "apps/web/e2e/real-own-job-to-paid.spec.ts",
+        "apps/web/e2e/real-gap-proof-by-trade.spec.ts"
       ]
     }
   }

@@ -193,7 +193,17 @@ test("prepared unanswered example retains the certificate walkthrough and resume
  const tour=page.getByRole("region",{name:"Guided walkthrough"});
  for(let step=1;step<=4;step++) {
   await expect(tour).toContainText(`Step ${step} of 9`,{timeout:60_000});
-  if(step===3) await page.getByRole("button",{name:"Use the prepared example job",exact:true}).click();
+  if(step===3) {
+   await page.getByRole("button",{name:"Use the prepared example job",exact:true}).click();
+   // Preparing replaces the workspace and remounts the tour. Wait for that
+   // saved job before Show me can start an action on the outgoing tour.
+   await expect(page.getByRole("heading",{name:"Prepared example · simulated customer",exact:true})).toBeVisible();
+   const example=new URL(page.url()).searchParams.get("walkExample");
+   expect(example).toBeTruthy();
+   await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id",example!);
+   await expect(page.locator("#walk-screen .review-line").first()).toBeVisible();
+   await expect(tour).toContainText("This part uses a prepared example job");
+  }
   await tour.getByRole("button",{name:"Show me",exact:true}).click();
  }
  await expect(tour).toContainText("Step 5 of 9");
