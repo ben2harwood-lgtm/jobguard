@@ -10,7 +10,20 @@
         "apps/api/src/quote/quote.application.test.ts",
         "packages/db/test/real-journey-practice-send.integration.test.ts",
         "packages/db/src/quote-delivery-repository.ts",
-        "apps/web/e2e/real-journey-next-to-paid-send.spec.ts"
+        "apps/web/e2e/real-journey-next-to-paid-send.spec.ts",
+        "apps/web/e2e/real-journey-next-state.spec.ts",
+        "apps/web/e2e/real-journey-money-status.spec.ts",
+        "apps/web/e2e/real-journey-receipt-balance-now.spec.ts",
+        "apps/web/e2e/real-own-job-to-paid.spec.ts",
+        "apps/web/e2e/real-gap-proof-by-trade.spec.ts",
+        "apps/web/e2e/real-proof-keeps-finished.spec.ts",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/e2e/helpers/capture-journey.ts",
+        "apps/web/e2e/helpers/customer-invoice-journey.ts",
+        "apps/web/e2e/WALK-stress.spec.ts",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }
