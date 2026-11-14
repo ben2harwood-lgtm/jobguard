@@ -126,9 +126,15 @@ it("[PW16] product invitation and SSO connection administration cannot attach a 
  await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 day')", [randomUUID(), f.p.identityUserId, digest, randomUUID()]);
  for (const action of ["invitation", "connection"] as const) await rolledBack(c.admin, async db => {
   await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); await db.query("SET LOCAL ROLE jobguard_identity");
-  if (action === "invitation") await expect(db.query("SELECT identity.invite_member($1,$2,$3,'operative')", [digest, f.p.tenantId, `${randomUUID()}@fictional.invalid`])).rejects.toMatchObject({ message: "PRACTICE_COMPANY_SIGN_IN_FORBIDDEN" });
+  // Raw direct SQL, class (a): a sign-in session of a marked practice company can no longer bind (LP-6d binds the
+  // inviter first), so the binding check refuses before the marker trigger; nothing is written (rolled back, and
+  // no invitation row exists after).
+  if (action === "invitation") {
+   await expect(db.query("SELECT identity.invite_member($1,$2,$3,'operative')", [digest, f.p.tenantId, `${randomUUID()}@fictional.invalid`])).rejects.toMatchObject({ message: "REQUEST_BINDING_REFUSED", code: "42501" });
+  }
   else await expect(db.query("SELECT identity.sso_admin_command($1,$2::jsonb)", [digest, JSON.stringify({ version: "sso-admin.v1", requested_tenant_id: f.p.tenantId, action: "connection.create", id: connection, metadata: { version: "sso-metadata.v1", protocol: "saml2", provider: "in-process-test-idp", id: connection, tenantId: f.p.tenantId } })])).rejects.toMatchObject({ message: "PRACTICE_COMPANY_SIGN_IN_FORBIDDEN" });
  });
+ expect((await c.admin.query("SELECT count(*)::int n FROM identity.invitation WHERE tenant_id=$1", [f.p.tenantId])).rows[0].n).toBe(0);
 });
 it("[PW4] a marked company's second owner-written session cannot acquire its marker", async () => {
  const f = await company(c), second = randomUUID(), { digestOf } = await import("./practice-worker-switch-fixtures.js");

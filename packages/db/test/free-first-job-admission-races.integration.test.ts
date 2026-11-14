@@ -23,7 +23,7 @@ describe("MON3 B ATOMIC-01 REPLAY-01 races/rollback",()=>{
    await db.query("CREATE FUNCTION pg_temp.mon3pb_audit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'MON3_AUDIT_CONTROL'; END $$");
    await db.query("CREATE TRIGGER mon3pb_audit_failure BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION pg_temp.mon3pb_audit_failure()");
    await db.query("SELECT app.mon3_request_card($1,$2,$3,$4::jsonb)",[a.tenantId,a.digest,randomUUID(),JSON.stringify({version:'trial-card-request.v1'})]);
-  }, { membershipId: a.actorId })).rejects.toThrow('MON3_AUDIT_CONTROL');
+  }, { membershipId: a.actorId, bindRequest: false })).rejects.toThrow('MON3_AUDIT_CONTROL'); // LP-6d: as the sibling rollback control above
   expect(await ownCounts(f,a)).toEqual(before);
  });
 

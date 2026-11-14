@@ -26,8 +26,9 @@ async function seedFixture() {
   const description = "Fictional additional clearance", note = "Fictional resident shown generated image";
   const extra = await new SiteExtraRepository(c.runtime).logSiteExtra(operativeContext, operative, { commandId: randomUUID(), jobId, description, note, photoEvidenceId: image.id,
     shownContentSha256: siteExtraContentSha256V1({ jobId, description, note, photoSha256: image.sha256 }) });
-  await switches.switchOff(session.context, session.p, session.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
-  await switches.switchOn(session.context, session.p, session.session,
+  // LP-6d: switching back (and on again) binds the live session's own request, as the switch fixtures do.
+  await switches.switchOff(await contractorSessionContext(c.runtime, session.session), session.p, session.session, { version: "practice-worker-switch-off.v1", commandId: randomUUID() });
+  await switches.switchOn(await contractorSessionContext(c.runtime, session.session), session.p, session.session,
     { version: "practice-worker-switch-on.v1", commandId: randomUUID(), workerId: seed.financeMembershipId });
   const context = await contractorSessionContext(c.runtime, session.session);
   return { session, context, extra };

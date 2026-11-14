@@ -220,7 +220,7 @@ it.each(["expiry", "revocation"] as const)("rechecks %s after a real authorizati
     const pid = (await client.query("SELECT pg_backend_pid() pid")).rows[0].pid as number;
     return { release: () => client.release(), query: (sql: string, values?: unknown[]) => {
       const result = client.query(sql, values);
-      if (sql.includes("FOR SHARE OF a")) signal(pid);
+      if (sql.includes("lp6d_lock_action_authorization")) signal(pid); // LP-6d: the authorization share lock is taken here
       return result;
     } };
   } } as unknown as Pool;

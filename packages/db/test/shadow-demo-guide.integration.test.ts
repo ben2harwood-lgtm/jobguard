@@ -130,7 +130,9 @@ describe("0518 demo-only guide helpers", () => {
   expect(await issue(a, a.customer, b.digest, l.digest, l.path)).toEqual(forbidden);
   expect(await grants(a)).toBe(0);
   const made = hash(randomUUID());
-  expect(await read("demo_source_hold_state", open, made)).toEqual(forbidden);
+  // Raw, class (a): a made-up session binds no request, so the binding check refuses first; nothing is written.
+  expect(await read("demo_source_hold_state", open, made)).toEqual({ refused: "REQUEST_BINDING_REFUSED" });
+  expect(await holds(open)).toBe(0);
  }, 600000);
  it("the link is refused before lock and before a found extra is confirmed", async () => {
   const early = await seedFinalCheckJob(f), customer = await guide.customerOf(early), e = link(early, customer);

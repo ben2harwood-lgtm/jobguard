@@ -101,8 +101,11 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const abandonedVisitRoutines = live.filter(row => row.nspname === "app" && row.proname === "ent3b_close_abandoned_visit"
     && row.args === "p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_reason text");
   expect(abandonedVisitRoutines).toHaveLength(1);
+  // LP-6d repair 12 (0740): the only change reads the visit operative's (third-party) authority through the private copy.
   expect(abandonedVisitRoutines[0]?.definition?.split("$function$")[1]).toEqual(
-    abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+    abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]!
+      .replace(" IF EXISTS(SELECT 1 FROM app.ent3b_visit_authority(visit_row.membership_id,p_job)",
+        " -- LP6D_THIRD_PARTY (repair 12): the visit's operative is a third party with no request of its own; its\n -- current visit authority is read through the private copy, never through the caller's binding.\n IF EXISTS(SELECT 1 FROM app.lp6d_visit_authority_of(visit_row.membership_id,p_job)"));
   const recoverySql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql", import.meta.url), "utf8");
   for (const [name,args] of [
     ["final_check_read_authority","t uuid, j uuid, d text, locking boolean"],
@@ -269,8 +272,21 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["lp_require_audit|", "lp_require_audit"],
     ["lp_receipt_immutable|", "lp_receipt_immutable"],
   ].map(([identity, name]) => [identity, finishSql.split(`CREATE OR REPLACE FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
+  // LP-6d (0740) re-creates only the routines it names; each body must be exactly a 0740 body for that name.
+  // Owners, ACLs and other metadata stay checked by the 0740 migration proof.
+  const lp6dBodies = new Map<string, string[]>();
+  for (const m of (await readFile(new URL("../migrations/0740_lp6d_remaining_routines.sql", import.meta.url), "utf8"))
+    .matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)) {
+    lp6dBodies.set(m[1]!, [...(lp6dBodies.get(m[1]!) ?? []), m[4]!]);
+  }
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    if (prior.definition !== null && current?.source !== prior.source && lp6dBodies.get(`${prior.nspname}.${prior.proname}`)?.includes(current?.source)) {
+      // The header may change only in LANGUAGE (contractor_session's checked bridge moves from sql to plpgsql).
+      const header = (definition: string) => definition.replace(/^ LANGUAGE \w+$/mu, " LANGUAGE <checked>");
+      expect(header(current!.definition)).toEqual(header(prior.definition.replace(prior.source, () => current!.source)));
+      continue;
+    }
     // 0733 changes these exact bodies; retain every routine's security metadata.
     const customerLinkRoutines = [
       "app.customer_portal_current(g app.customer_portal_grant)",

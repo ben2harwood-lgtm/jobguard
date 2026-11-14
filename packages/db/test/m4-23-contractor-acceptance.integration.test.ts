@@ -5,7 +5,7 @@ import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { applyContractorMandateReference, exactPence, parseExactPence, sumExactPence, refuseEnterpriseFeeExecution } from "@jobguard/core";
-import { ContractorBillingRepository, EnterpriseFeeRepository, ExtraRepository, ExtraApprovalRepository } from "../src/index.js";
+import { ContractorBillingRepository, EnterpriseFeeRepository, ExtraRepository, ExtraApprovalRepository, verifiedTenantContextFromMembership } from "../src/index.js";
 import { ContractorBillingDelivery } from "../src/contractor-billing-delivery.js";
 import type { OutboundAdapter } from "../src/outbox.js";
 import { cluster, chainWorld, newJob, submitted, approveInput } from "./extra-approval-chain-fixtures.js";
@@ -33,7 +33,9 @@ async function setup() {
     VALUES($1,$2,'fictional-m4-23',1,10,'on_payment','enterprise_site_capture_policy_v1','2000-01-01T00:00:00Z',false,$3,'synthetic_demo','operations:fictional')`,
   [w.p.tenantId, agreementVersionId, "c".repeat(64)]);
   const period = (await c.admin.query("SELECT to_char(clock_timestamp() AT TIME ZONE 'Europe/London','YYYY-MM') p")).rows[0].p as string;
-  return { w, ctx, session, agreementVersionId, period, billing: new ContractorBillingRepository(c.runtime), fees: new EnterpriseFeeRepository(c.runtime) };
+  // LP-6d: the finance session's billing commands run in that session's own bound request, as the route does.
+  const sessionCtx = verifiedTenantContextFromMembership(w.members.finance.member, { kind: "contractor_practice", credential: session });
+  return { w, ctx: sessionCtx, session, agreementVersionId, period, billing: new ContractorBillingRepository(c.runtime), fees: new EnterpriseFeeRepository(c.runtime) };
 }
 type Sandbox = Awaited<ReturnType<typeof setup>>;
 function authorizeReference(t: Sandbox, statement: { id: string; contentHash: string; totalDeltaPence: number }) {

@@ -41,14 +41,23 @@ it("[PW8] [PW17] immutable switch history, exact environment and window CHECKs",
 });
 it("[PW10] end without its audit event fails at commit and keeps the current worker", async () => {
  const f = await company(c); await start(c, f);
- await expect(ownerTx(c, f.p.tenantId, db => db.$client.query("SELECT app.practice_worker_switch_off($1,$2)", [f.session, randomUUID()]))).rejects.toMatchObject({ message: "SWITCH_AUDIT_REQUIRED" });
+ // LP-6d: the end is the owner's own contractor practice request, so the commit-time audit rule (not the binding) refuses.
+ await expect(ownerTx(c, f.p.tenantId, async db => {
+  await db.$client.query("RESET ROLE"); await db.$client.query("SELECT app.bind_request('contractor_practice',$1,$2)", [f.session, f.p.tenantId]);
+  await db.$client.query("SET LOCAL ROLE jobguard_migration");
+  return db.$client.query("SELECT app.practice_worker_switch_off($1,$2)", [f.session, randomUUID()]);
+ })).rejects.toMatchObject({ message: "SWITCH_AUDIT_REQUIRED" });
  expect((await lookup(c, f)).membershipId).toBe(f.members.operative);
 });
 it("[PW18] another database refuses callable routines and direct inserts before other checks", async () => {
  await c.admin.query("CREATE DATABASE pws_other_database"); const db = new Pool({ ...c.config, database: "pws_other_database" });
  try {
   await migrate(db);
-  for (const sql of ["SELECT app.practice_worker_switch_on(NULL,NULL,NULL)", "SELECT app.practice_worker_switch_off(NULL,NULL)", "SELECT app.practice_worker_switch_state(NULL)", "INSERT INTO control_plane.practice_company_marker DEFAULT VALUES", "INSERT INTO control_plane.practice_worker_switch DEFAULT VALUES"]) await expect(db.query(sql)).rejects.toMatchObject({ message: "MODE_FORBIDDEN" });
+  for (const sql of ["SELECT app.practice_worker_switch_on(NULL,NULL,NULL)", "SELECT app.practice_worker_switch_off(NULL,NULL)", "SELECT app.practice_worker_switch_state(NULL)", "INSERT INTO control_plane.practice_company_marker DEFAULT VALUES", "INSERT INTO control_plane.practice_worker_switch DEFAULT VALUES"]) {
+   // Raw direct SQL, class (a): the callable routines bind no request (NULL credentials) and are refused by the
+   // LP-6d binding check first; direct inserts still meet the database-mode refusal. Nothing is written.
+   await expect(db.query(sql)).rejects.toMatchObject({ message: sql.startsWith("SELECT app.") ? "REQUEST_BINDING_REFUSED" : "MODE_FORBIDDEN" });
+  }
   expect((await db.query("SELECT * FROM app.contractor_session($1)", [randomUUID()])).rows).toEqual([]);
  } finally { await db.end(); }
 });
@@ -97,7 +106,9 @@ it("[PW20] authority settings cannot select another company or target", async ()
  const f = await company(c), foreign = await company(c);
  for (const setting of [null, "", "invalid", foreign.p.tenantId]) await rolledBack(c.admin, async db => {
   if (setting !== null) await db.query("SELECT set_config('app.tenant_id',$1,true)", [setting]); await db.query("SET LOCAL ROLE jobguard_runtime");
-  for (const target of [f.members.operative, foreign.members.operative, randomUUID()]) await savepoint(db, () => db.query("SELECT app.practice_worker_switch_on($1,$2,$3)", [f.session, randomUUID(), target]), "28000");
+  // Raw direct SQL, class (a): a missing, empty, malformed or foreign tenant setting binds no request, so the
+  // LP-6d binding check refuses first (42501, same refusal class); nothing is switched.
+  for (const target of [f.members.operative, foreign.members.operative, randomUUID()]) await savepoint(db, () => db.query("SELECT app.practice_worker_switch_on($1,$2,$3)", [f.session, randomUUID(), target]), "42501");
  });
 });
 it("[PW13] [PW17] direct owner writes cannot select a foreign, office or owner target", async () => {
@@ -121,7 +132,9 @@ it("[PW17] missing decision answers fail closed with the caller refusal", async 
  const f = await company(c);
  await rolledBack(c.admin, async db => {
   await db.query(`CREATE OR REPLACE FUNCTION app.practice_worker_switch_decision(p_session_ref uuid,p_worker uuid) RETURNS TABLE(decision text,reason_code text,company uuid,owner_member uuid,owner_user uuid,worker_user uuid) LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog AS $$ SELECT NULL::text,NULL::text,NULL::uuid,NULL::uuid,NULL::uuid,NULL::uuid WHERE false $$`);
-  await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]);
+  // LP-6d: the owner's own contractor practice request, so the missing decision (not the binding) refuses.
+  await db.query("SELECT app.bind_request('contractor_practice',$1,$2)", [f.session, f.p.tenantId]); await db.query("SET LOCAL ROLE jobguard_runtime");
   await expect(db.query("SELECT app.practice_worker_switch_on($1,$2,$3)", [f.session, randomUUID(), f.members.operative])).rejects.toMatchObject({ message: "SWITCH_FORBIDDEN", code: "42501" });
  });
 });
@@ -149,6 +162,8 @@ it("[PW4] a session whose identity does not match its owner is refused uniformly
  await rolledBack(c.admin, async db => {
   await db.query("SET LOCAL session_replication_role=replica"); await db.query("UPDATE control_plane.contractor_practice_session SET identity_user_id=$2 WHERE session_id=$1", [f.sessionRef, randomUUID()]);
   await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); await db.query("SET LOCAL ROLE jobguard_runtime");
-  for (const target of [f.members.operative, f.members.supervisor, randomUUID()]) { await db.query("SAVEPOINT identity_refusal"); await expect(db.query("SELECT app.practice_worker_switch_on($1,$2,$3)", [f.session, randomUUID(), target])).rejects.toMatchObject({ message: "SWITCH_FORBIDDEN" }); await db.query("ROLLBACK TO SAVEPOINT identity_refusal"); }
+  for (const target of [f.members.operative, f.members.supervisor, randomUUID()]) { await db.query("SAVEPOINT identity_refusal"); await expect(db.query("SELECT app.practice_worker_switch_on($1,$2,$3)", [f.session, randomUUID(), target])).rejects.toMatchObject({ message: "REQUEST_BINDING_REFUSED" }); await db.query("ROLLBACK TO SAVEPOINT identity_refusal"); }
+  // Raw direct SQL, class (a): a session whose identity no longer matches its owner cannot bind, so every target
+  // gets the same binding refusal (uniform, nothing switched).
  });
 });

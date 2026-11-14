@@ -29,7 +29,10 @@ describe("M4-1-S HOLD regressions", () => {
   expect(current.rows).toEqual([{state:"prevented",claim_pence:"32000",revision:x.revision}]);
   const base = await admin.query("SELECT state,claim_pence,revision FROM app.recovery_case WHERE id=$1",[x.id]);
   expect(base.rows).toEqual([{state:"identified",claim_pence:"250000",revision:0}]);
-  await expect(withTenant(runtime,ctx,db => db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[{version:"recovery.landing.approve.v1",policyVersion:"reference_fee_policy_v1",jobId:job,caseId:x.id,expectedCaseRevision:0}]))).rejects.toThrow("eligible current synthetic case required");
+  const landing = {version:"recovery.landing.approve.v1",policyVersion:"reference_fee_policy_v1",jobId:job,caseId:x.id,expectedCaseRevision:0};
+  // LP-6d: an unbound request is refused before any lookup; the owner's bound request still reaches the stale-case refusal.
+  await expect(withTenant(runtime,ctx,db => db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[landing]))).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
+  await expect(withTenant(runtime,testTenantContext(tenant,{membershipId:owner.membershipId}),db => db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[landing]))).rejects.toThrow("eligible current synthetic case required");
   expect((await withTenant(runtime,testTenantContext(other),db => db.$client.query("SELECT * FROM app.recovery_case_current WHERE id=$1",[x.id]))).rows).toEqual([]);
   // The projection is a read-only contract: it is not an auto-updatable view (PostgreSQL 55000) and
   // the runtime role holds no write privilege on it at all.

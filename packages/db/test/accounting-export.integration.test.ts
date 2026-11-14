@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { cluster, type Cluster } from "./extra-fixtures.js";
@@ -161,10 +162,10 @@ it("SQL rejects caller matches and ignores inbox observations for another tenant
   [f.a.tenantId, unrelatedAttempt, source.sourceId]);
  await c.admin.query("INSERT INTO app.accounting_export_inbox(tenant_id,id,attempt_id,matches) VALUES($1,$2,$3,'[]')",
   [f.a.tenantId, randomUUID(), unrelatedAttempt]);
- await expect(workTenant(c.runtime, f.a.tenantId, db => db.query(
+ await expect(workTenant(c.runtime, f.a.tenantId, async db => { await bindOwnSession(db, f.a.digest); return db.query(
   "SELECT app.accounting_export($1,$2,'reconcile',$3,$4::jsonb)",
   [f.a.tenantId, f.a.digest, source.sourceId, JSON.stringify({ version: 1, attemptId, matches: [] })]
- ), { membershipId: f.a.actorId, bindRequest: false })).rejects.toThrow("EXPORT_INVALID_INPUT");
+ ); }, { membershipId: f.a.actorId, bindRequest: false })).rejects.toThrow("EXPORT_INVALID_INPUT");
  await expect(f.call("reconcile", { version: 1, attemptId })).rejects.toThrow("EXPORT_OBSERVATION_REQUIRED");
  expect(await f.call("read")).toMatchObject({ status: "outcome_unknown", attempts: 1 });
  await expect(f.call("claim", { version: 1, attemptId: randomUUID() })).rejects.toThrow("EXPORT_RECONCILE_REQUIRED");

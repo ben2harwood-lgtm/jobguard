@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { z } from "zod";
 import { ContractorError, PracticeWorkerSwitchError, practiceWorkerSwitchOnV1, practiceWorkerSwitchOffV1, practiceWorkerSwitchStateV1, practiceWorkerSwitchFailureV1, practiceWorkerSwitchHttpStatus } from "@jobguard/core";
-import { ContractorRepository, PracticeWorkerSwitchRepository, contractorSessionContext, type VerifiedTenantContext } from "@jobguard/db";
+import { ContractorRepository, PracticeWorkerSwitchRepository, contractorSessionContext, isRequestBindingRefusal, type VerifiedTenantContext } from "@jobguard/db";
 import { workOrderPrincipalV1 } from "./work-order.contracts.js";
 export function assertPracticeWorkerSwitchMode() {
  if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new PracticeWorkerSwitchError("MODE_FORBIDDEN");
@@ -9,6 +9,9 @@ export function assertPracticeWorkerSwitchMode() {
 function translated(error: unknown) {
  if (error instanceof PracticeWorkerSwitchError) return error;
  if (error instanceof ContractorError && (error.code === "UNAUTHENTICATED" || error.code === "MODE_FORBIDDEN")) return new PracticeWorkerSwitchError(error.code);
+ // LP-6d repair 20 (flagged): a live session whose base membership can no longer be bound (for example a revoked
+ // owner) is refused by contractor_session; the caller keeps main's visible SWITCH_FORBIDDEN, never a 503.
+ if (isRequestBindingRefusal(error)) return new PracticeWorkerSwitchError("SWITCH_FORBIDDEN");
  return new PracticeWorkerSwitchError("SWITCH_UNAVAILABLE");
 }
 export class PracticeWorkerSwitchApplication {

@@ -130,7 +130,7 @@ describe("ActionExecutor retry exhaustion", () => {
     expect(capture.deliver).toHaveBeenCalledOnce();
     // Ordinary sends work before the client schema exists; no SQL submitted to
     // PostgreSQL may reference those later objects, even in an unused branch.
-    expect(query.mock.calls.some(([sql]) => /extra_client_link|xc_send_authority/u.test(sql))).toBe(false);
+    expect(query.mock.calls.some(([sql]) => /extra_client_link|xc_send_authority|lp6d_outbox_issuer_authority/u.test(sql))).toBe(false);
     expect(telemetry.emit.mock.calls.map(([name]) => name)).toEqual([
       "outbox.queue_age", "outbox.failure", "outbox.retry",
     ]);
@@ -162,7 +162,8 @@ it.each([true, false, undefined, "unavailable"] as const)("ENT-5 checks client s
   const execute = new ActionExecutor(pool,new Map([[adapter.name,adapter]]),{emit:vi.fn()}).execute(context,id);
   if (authority === "unavailable") await expect(execute).rejects.toThrow("authority unavailable");
   else await execute;
-  expect(query).toHaveBeenCalledWith(expect.stringContaining("app.xc_send_authority($3,k.variation_id)"), [context.tenantId,id,row.authorization_actor]);
+  // LP-6d: the worker asks the private issuer chain; the issuer comes from the outbox authorization itself.
+  expect(query).toHaveBeenCalledWith(expect.stringContaining("app.lp6d_outbox_issuer_authority($2)"), [context.tenantId,id]);
   expect(deliver).not.toHaveBeenCalled();
   expect(query.mock.calls.some(([sql])=>sql.startsWith("INSERT INTO app.action_attempt"))).toBe(false);
   expect(query.mock.calls.some(([sql])=>sql.startsWith("SELECT app.mon8_feature_decision"))).toBe(authority === true);

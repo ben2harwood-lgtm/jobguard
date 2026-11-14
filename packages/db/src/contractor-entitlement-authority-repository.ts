@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { ContractorError, evaluateContractorEntitlement, contractorEntitlementAuthorityV1, parsePlanEntitlement, type ContractorEntitlementAuthority } from "@jobguard/core";
 import { contractorSessionContext } from "./contractor-session-context.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { isRequestBindingRefusal } from "./request-binding-error.js";
 /** Server-only callback: consume the projection inside this transaction, never cache it as authority. */
 export class ContractorEntitlementAuthorityRepository {
  constructor(private readonly pool: Pool) {}
@@ -24,6 +25,8 @@ export class ContractorEntitlementAuthorityRepository {
   } catch (error) {
    const message = (error as { message?: string }).message;
    if (message === "FORBIDDEN" || message === "MODE_FORBIDDEN") throw new ContractorError(message);
+   // LP-6d: a membership revoked mid-request now refuses at binding; keep the main FORBIDDEN code.
+   if (isRequestBindingRefusal(error)) throw new ContractorError("FORBIDDEN");
    throw error;
   }
  }

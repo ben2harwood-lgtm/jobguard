@@ -23,7 +23,7 @@ it("immutable query: replay, conflict, tenant/assignment/cancellation refusal, s
   }
   await expect(repo.recordSupervisorQuery(await testActorContext(c.admin, f.ctx, actor), actor, order.jobId, { ...body, amount: 100 })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
   // Even a direct runtime call cannot smuggle an amount around the Zod boundary.
-  await expect(withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.ent3_supervisor_query($1,$2,$3::jsonb)", [order.jobId, actor.membershipId, JSON.stringify({ ...body, amount: 100 })]))).rejects.toMatchObject({ message: "INVALID_COMMAND" });
+  await expect(withTenant(c.runtime, await testActorContext(c.admin, f.ctx, actor), db => db.$client.query("SELECT app.ent3_supervisor_query($1,$2,$3::jsonb)", [order.jobId, actor.membershipId, JSON.stringify({ ...body, amount: 100 })]))).rejects.toMatchObject({ message: "INVALID_COMMAND" });
   const [first, second] = await Promise.all([repo.recordSupervisorQuery(await testActorContext(c.admin, f.ctx, actor), actor, order.jobId, body), repo.recordSupervisorQuery(await testActorContext(c.admin, f.ctx, actor), actor, order.jobId, body)]);
   expect(first).toEqual(second);
   expect(first).toMatchObject({ jobId: order.jobId, orderRevisionId: order.revisionId, orderLineScopeItemId: line.scopeItemId, quantity: "1", operativeMembershipId: actor.membershipId });

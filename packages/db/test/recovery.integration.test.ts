@@ -1,5 +1,5 @@
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -167,6 +167,8 @@ describe("structural recovery fee guard",()=>{
      SELECT gen_random_uuid(),tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,28200,'reference_fee_policy_v1',illustrative FROM app.cap_snapshot WHERE tenant_id=$1 AND job_id=$2`,[w.tenant,w.job]);
     await db.query("SET LOCAL session_replication_role=origin");
     expect((await db.query("SELECT fee_policy_version FROM app.cap_snapshot WHERE tenant_id=$1 AND job_id=$2 ORDER BY fee_policy_version",[w.tenant,w.job])).rows).toEqual([{fee_policy_version:"fixture_other_policy"},{fee_policy_version:"reference_fee_policy_v1"}]);
+    // LP-6d: the direct reversal needs a bound request; bind the second tenant owner's persisted fixture credential.
+    await db.query("SELECT app.bind_request('real',$1,$2)",[createHash("sha256").update(`lp6-test:${w.tenant}:${w.reviewer.membershipId}`).digest("hex"),w.tenant]);
     await db.query("SET LOCAL ROLE jobguard_runtime");
     const id = randomUUID();
     await db.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,$6,$7)",[w.tenant,randomUUID(),id,randomUUID(),approved.allocationId,100000,"Fictional policy cap"]);

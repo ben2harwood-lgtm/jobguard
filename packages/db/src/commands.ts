@@ -129,12 +129,14 @@ export class UserCommandDispatcher {
 /** The only boundary allowed to invoke a commercial adapter. It always rechecks the exact immutable grant. */
 export async function executeAuthorizedCommercialAction<T>(database: TenantTransaction, authorizationId: string, requested: ExactAction, invoke: () => Promise<T>): Promise<T> {
   uuid.parse(authorizationId); const action=actionSchema.parse(requested);
+  // LP-6d: runtime has no UPDATE on action_authorization, so the exclusive row lock is taken by a
+  // migration-owned definer first; the checked read below then sees the row as it stands after the wait.
+  await database.$client.query("SELECT app.lp6d_lock_action_authorization(nullif(current_setting('app.tenant_id',true),'')::uuid,$1,true)",[authorizationId]);
   const row=(await database.$client.query<Record<string,unknown>>(`SELECT a.* FROM app.action_authorization a
     JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id
     JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id
     WHERE a.id=$1 AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp() AND r.resolution='approved'
-      AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
-    FOR UPDATE OF a`,[authorizationId])).rows[0];
+      AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())`,[authorizationId])).rows[0];
   const matches=row && row.action_type===action.actionType && row.recipient===action.recipient && row.content_hash===action.contentHash &&
     Number(row.aggregate_revision)===action.aggregateRevision && (row.amount_pence===null?action.amountPence===null:Number(row.amount_pence)===action.amountPence) &&
     row.currency===action.currency && row.policy_version===action.policyVersion &&

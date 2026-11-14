@@ -1,3 +1,5 @@
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { lp5ReadTables, lp5bReadTables } from "./lp5-command-catalog.js";
 import { randomUUID } from "node:crypto";
@@ -11,13 +13,14 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contractorRoles } from "@jobguard/core";
-import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, handoffAuditExportCheckpoint, verifyAuditChain, verifySignedAuditExport, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type AuditCheckpoint, type AuditEvent } from "../src/index.js";
+import { AuditExportRepository, ContractorRepository, requireContractorRequestContext, requireContractorRefusalContext, RequestBindingRefusedError, exportAuditCheckpoints, handoffAuditExportCheckpoint, verifyAuditChain, verifySignedAuditExport, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type VerifiedTenantContext, type AuditCheckpoint, type AuditEvent } from "../src/index.js";
 import { AuditExportApplication, auditExportHttpFailure } from "../../../apps/api/src/audit-export/audit-export.application.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import * as upgradeProof from "./upgrade-proof-utils.js";
 import { compare, type Subject } from "./audit-export-privilege-comparator.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractor: ContractorRepository, repo: AuditExportRepository;
-const context = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
+// LP-6d: guarded routines need a bound request, so each fixture principal carries its own persisted credential context.
+const context = (p: AuthenticatedMembership) => { try { return requireContractorRequestContext(p); } catch { return verifiedTenantContextFromMembership(p); } };
 const actor = (p: AuthenticatedMembership) => ({ membershipId: p.membershipId, identityUserId: p.identityUserId });
 let priorSecurityCatalog: unknown;
 let upgrade: {
@@ -203,7 +206,7 @@ async function invite(p: AuthenticatedMembership, role: string, scopeKind = "ten
   const id = randomUUID(), view = await contractor.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
   await contractor.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id, expectedRevision: view.revision, kind: "member.invite", role, email: `${id}@fictional.invalid`, scope: { kind: scopeKind, id: scopeId }, clientId: role === "client_approver" ? scopeId : null, contractId: null });
   const row = (await admin.query<{ identity_user_id: string }>("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [p.tenantId, id])).rows[0]!;
-  return { ...p, membershipId: id, identityUserId: row.identity_user_id } as AuthenticatedMembership;
+  void row; return await memberSessionPrincipal(admin, runtime, p.tenantId, id);
 }
 describe("ENT-10b PostgreSQL audit exports", () => {
   it("leaves every existing table, policy, routine privilege and runtime role attribute unchanged on upgrade", async () => {
@@ -383,6 +386,22 @@ describe("ENT-10b PostgreSQL audit exports", () => {
       .toEqual([{ tenant_id: p.tenantId, actor_ref: `membership:${p.membershipId}`, action }]);
     expect((await admin.query("SELECT id FROM app.audit_export WHERE tenant_id=$1", [p.tenantId])).rows).toEqual([]);
     expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [other.p.tenantId])).rows[0]!.n).toBe(otherCount);
+  });
+
+  it("keeps the revoked session's principal refusal-only: repository query and command refuse it", async () => {
+    const { p, session } = await setup();
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [p.tenantId, p.membershipId]);
+    const contractors = new ContractorRepository(runtime), refused = (await contractors.refusedSessionPrincipal(session))!;
+    expect(refused).toMatchObject({ tenantId: p.tenantId, membershipId: p.membershipId });
+    // Only the refusal-audit boundary may read its context; every request path refuses it before any SQL.
+    expect(requireContractorRefusalContext(refused).tenantId).toBe(p.tenantId);
+    expect(() => requireContractorRequestContext(refused)).toThrow(RequestBindingRefusedError);
+    await expect(contractors.query(refused, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" })).rejects.toBeInstanceOf(RequestBindingRefusedError);
+    await expect(contractors.command(refused, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: 0, kind: "member.invite", role: "read_only", email: "refused@fictional.invalid", scope: { kind: "tenant", id: p.tenantId }, clientId: null, contractId: null })).rejects.toThrow();
+    // A live principal never yields a refusal context.
+    const live = await setup();
+    const livePrincipal = await contractors.resolveSession(live.session);
+    expect(() => requireContractorRefusalContext(livePrincipal)).toThrow(RequestBindingRefusedError);
   });
 
   it("serializes distinct concurrent export commands on two connections into consistent verifiable snapshots", async () => {

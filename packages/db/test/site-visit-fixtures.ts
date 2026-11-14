@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // Shared set-up for the ENT-3b database files. Builds on merged cluster()/fixture() and ENT-3a's site-extra-fixtures.ts (imported, never edited).
 import { randomUUID } from "node:crypto";
 import { WorkOrderRepository, demoFile, demoRow, withTenant, type AuthenticatedMembership } from "../src/index.js";
@@ -41,7 +42,10 @@ export async function extraOrder(c: Cluster, f: VisitFixture, n: number, assigne
 export const secondJob = (c: Cluster, f: VisitFixture, overrides: Record<string, unknown> = {}) => extraOrder(c, f, 2, [f.demo.operativeMembershipId, f.named.member.membershipId], overrides);
 /** The runtime role inside the tenant, exactly as a request would call it. */
 export async function authority(c: Cluster, f: VisitFixture, member: string | null, job: string | null = f.jobId) {
- return withTenant(c.runtime, f.ctx, async db => (await db.$client.query("SELECT * FROM app.ent3b_visit_authority($1,$2)", [member, job])).rows);
+ // LP-6d: the decision is read in the named member's own bound request (ent3b_visit_authority is actor-bound).
+ const own = member && (await c.admin.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, member])).rowCount
+  ? await testActorContext(c.admin, f.ctx, { tenantId: f.p.tenantId, membershipId: member }) : f.ctx;
+ return withTenant(c.runtime, own, async db => (await db.$client.query("SELECT * FROM app.ent3b_visit_authority($1,$2)", [member, job])).rows);
 }
 export const expectedRefusal = { decision: "not_found", reason_code: "job_out_of_scope" };
 /** Everything a refused command must leave alone, read as the cluster's superuser. Visit rows are compared as canonical text. */

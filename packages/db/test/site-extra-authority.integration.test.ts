@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ExtraRepository, SiteExtraRepository, MIGRATION_URLS, migrate, withTenant, sha256Hex } from "../src/index.js";
-import { cluster, siteFixture, roles, decision, invite, command, direct, cancel, smallJob, type SiteFixture } from "./site-extra-fixtures.js";
+import { cluster, siteFixture, roles, decision, invite, command, direct, cancel, smallJob, counts, type SiteFixture } from "./site-extra-fixtures.js";
+import { snapshotRows } from "./upgrade-proof-utils.js";
 import { fixture, type Cluster } from "./extra-fixtures.js";
 let c: Cluster, f: SiteFixture;
 beforeAll(async () => { c = await cluster(); f = await siteFixture(c); }, 60_000);
@@ -39,33 +40,57 @@ describe("ENT-3a authority", () => {
  });
  it("[A14] is total and read-only for NULLs, absent, empty, malformed and foreign tenant membership", async () => {
   const foreign = await fixture(c);
+  const context = await testActorContext(c.admin, f.ctx, f.members.supervisor.member);
+  const before = await snapshotRows(c.admin);
   const client = await c.runtime.connect();
   try {
    await client.query("BEGIN READ ONLY");
+   // LP-6d refuses unbound authority probes before evaluating NULLs or looking up rows.
+   await expect(client.query("SELECT * FROM app.ent3a_extra_authority(NULL,NULL,NULL)")).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+   await client.query("ROLLBACK");
+  } finally { client.release(); }
+  await withTenant(c.runtime, context, async db => {
+   const client = db.$client;
    expect((await client.query("SELECT * FROM app.ent3a_extra_authority(NULL,NULL,NULL)")).rows).toEqual([{ decision: "forbidden", reason_code: "member_inactive", raising_grant: null }]);
-   for (const setting of [null, "", "not-a-uuid", f.p.tenantId.toUpperCase()]) {
+   for (const setting of [null, "", "not-a-uuid", f.p.tenantId.toUpperCase(), f.p.tenantId]) {
+    await client.query("SAVEPOINT tenant_setting");
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [setting]);
+    // Main: the UPPER-CASE spelling of the same tenant is allowed (ENT-4b [S4]); LP-6d compares it case-insensitively.
+    if (setting !== f.p.tenantId && setting !== f.p.tenantId.toUpperCase()) {
+     // LP-6d rejects a tenant setting that disagrees with the protected binding.
+     await expect(client.query("SELECT * FROM app.ent3a_extra_authority($1,$2,$3)", [f.members.supervisor.member.membershipId, "LogSiteExtra", f.jobId])).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+     await client.query("ROLLBACK TO SAVEPOINT tenant_setting");
+     await client.query("RELEASE SAVEPOINT tenant_setting");
+     continue;
+    }
     const rows = (await client.query("SELECT * FROM app.ent3a_extra_authority($1,$2,$3)", [f.members.supervisor.member.membershipId, "LogSiteExtra", f.jobId])).rows;
-    expect(rows).toHaveLength(1); expect(rows[0]!.decision).toBe(setting === f.p.tenantId.toUpperCase() ? "allowed" : "forbidden");
-    if (setting !== f.p.tenantId.toUpperCase()) expect(rows[0]).toEqual({ decision: "forbidden", reason_code: "member_inactive", raising_grant: null });
+    expect(rows).toHaveLength(1); expect(rows[0]!.decision).toBe("allowed");
+    await client.query("RELEASE SAVEPOINT tenant_setting");
    }
    for (const args of [[null, null, null], [foreign.p.membershipId, "LogSiteExtra", f.jobId], [f.members.supervisor.member.membershipId, null, null], [f.members.supervisor.member.membershipId, "LogSiteExtra", null]]) {
     const rows = (await client.query("SELECT * FROM app.ent3a_extra_authority($1,$2,$3)", args)).rows;
     const inactive = args[0] === null || args[0] === foreign.p.membershipId;
     expect(rows).toEqual([{ decision: inactive || args[1] === null ? "forbidden" : "not_found", reason_code: inactive ? "member_inactive" : args[1] === null ? "command_type_not_permitted" : "job_out_of_scope", raising_grant: null }]);
    }
-   await client.query("ROLLBACK");
-  } finally { client.release(); }
+  });
+  expect(await snapshotRows(c.admin)).toEqual(before);
  });
  it("[A14] guard fails closed for absent, empty, malformed tenant settings and missing stored origins", async () => {
+  const before = await counts(c, f);
   const client = await c.runtime.connect();
   try {
    for (const setting of [null, "", "not-a-uuid", f.p.tenantId]) {
     await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [setting]);
-    await expect(client.query("SELECT app.ent3a_require_extra_authority($1,$2)", [f.jobId, randomUUID()])).rejects.toMatchObject({ code: "P0002", message: "NOT_FOUND" });
+    // LP-6d refuses an unbound caller before any lookup, hiding row existence.
+    await expect(client.query("SELECT app.ent3a_require_extra_authority($1,$2)", [f.jobId, randomUUID()])).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
     await client.query("ROLLBACK");
    }
   } finally { client.release(); }
+  expect(await counts(c, f)).toEqual(before); // No origin, variation, receipt or raised event was created.
+  // A genuinely bound caller still reaches the missing-origin business refusal.
+  await expect(withTenant(c.runtime, await testActorContext(c.admin, f.ctx, f.members.supervisor.member), db =>
+   db.$client.query("SELECT app.ent3a_require_extra_authority($1,$2)", [f.jobId, randomUUID()]))).rejects.toMatchObject({ code: "P0002", message: "NOT_FOUND" });
+  expect(await counts(c, f)).toEqual(before);
  });
  for (const scope of ["tenant", "team", "branch", "region"] as const) it(`[A16] ${scope} covering lookup agrees with the merged trigger`, async () => {
   const own = await siteFixture(c);

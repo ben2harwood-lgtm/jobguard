@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { migrate, MIGRATION_URLS, withTenant } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { DurableReadinessStore } from "../../../apps/api/src/readiness-store.js";
 import { DarkReadinessScheduler, type ScheduledPlan, type ReadinessProposal } from "../../../apps/api/src/readiness-scheduler.js";
@@ -125,10 +125,13 @@ it("rolls plan writes back when audit fails and binds all plan/proposal identiti
 
 it("refuses wrong identity, read-only, expired and revoked actors even on a confirmed replay",async()=>{
  const before=(await admin.query("SELECT count(*) n FROM app.scheduled_readiness_plan")).rows;
- await expect(store().confirm(plan,{...actor,identityUserId:randomUUID()})).rejects.toThrow("READINESS_FORBIDDEN");
+ // LP-6d: the actor's own signed-in request, on a session of its own, so revoking the membership here never
+ // revokes the shared fixture session the later tests use.
+ const own=await testBoundTenantContext(admin,tenantId,actor.membershipId,"ab".repeat(32));
+ await expect(store(own).confirm(plan,{...actor,identityUserId:randomUUID()})).rejects.toThrow("READINESS_FORBIDDEN");
  for(const change of ["role='read_only'", "expires_at=clock_timestamp()-interval '1 minute'", "revoked_at=clock_timestamp()"]){
   await admin.query(`UPDATE app.membership SET ${change} WHERE tenant_id=$1 AND id=$2`,[tenantId,actor.membershipId]);
-  await expect(store().confirm(plan)).rejects.toThrow("READINESS_FORBIDDEN");
+  await expect(store(own).confirm(plan)).rejects.toThrow("READINESS_FORBIDDEN");
   await admin.query("UPDATE app.membership SET role='owner',expires_at=NULL,revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[tenantId,actor.membershipId]);
  }
  expect((await admin.query("SELECT count(*) n FROM app.scheduled_readiness_plan")).rows).toEqual(before);

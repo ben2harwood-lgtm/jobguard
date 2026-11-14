@@ -1,3 +1,4 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
@@ -19,7 +20,9 @@ describe("LP-2 actor-less practice route database restriction", () => {
       await client.query("SELECT set_config('app.deployment_mode','synthetic_demo',true)");
       await client.query("SELECT set_config('app.import_command','enabled',true)");
       return client.query(sql, sql.includes('$1') ? [actor.tenant, randomUUID()] : []);
-    })).rejects.toMatchObject({ code: "42501", message: "MODE_FORBIDDEN" });
+      // Router ruling (a), LP-6d: forged practice settings bind no request, so the binding check refuses first
+      // (same 42501 shape, no existence disclosed) and nothing is written.
+    })).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
     expect(await jobDoorCounts(db.owner, actor.tenant)).toEqual(before);
   });
 });
@@ -43,7 +46,11 @@ describe("LP-2 trusted practice compatibility", () => {
           VALUES($1,$2,$3,$4,$5,1880000,'GBP',28200,'reference_fee_policy_v1',true)`,
         [randomUUID(), f.tenantId, f.jobId, activation, f.quoteId]);
       });
-      await transaction(practice.runtime, f.tenantId, async client => {
+      // LP-6d: each runtime call is the fixture member's own bound request, so the trusted-database rules decide.
+      const asMember = <T>(work: (client: import("pg").PoolClient) => Promise<T>) => transaction(practice.runtime, f.tenantId, async client => {
+        await bindTestClient(practice.owner, client, f.tenantId, f.memberId); return work(client);
+      });
+      await asMember(async client => {
         await client.query("SELECT app.configure_recovery_demo($1,$2,'eligible')", [f.jobId, randomUUID()]);
       });
       const selected = (await practice.owner.query("SELECT * FROM app.recovery_demo_selection WHERE tenant_id=$1 AND job_id=$2", [f.tenantId, f.jobId])).rows[0]!;
@@ -53,16 +60,16 @@ describe("LP-2 trusted practice compatibility", () => {
         landingApprovalId: selected.landing_approval_id, expectedCaseRevision: 0, allocationId: allocation, derivationId: derivation,
         journalId: randomUUID(), grossPence: 18000, eligibleNetPence: 15000 };
       const before = await jobDoorCounts(practice.owner, f.tenantId);
-      await expect(transaction(practice.runtime, f.tenantId, c => c.query("SELECT app.approve_synthetic_landing($1::jsonb)",
+      await expect(asMember(c => c.query("SELECT app.approve_synthetic_landing($1::jsonb)",
         [JSON.stringify({ ...payload, evidenceId: randomUUID() })]))).rejects.toBeDefined();
       expect(await jobDoorCounts(practice.owner, f.tenantId)).toEqual(before);
-      await transaction(practice.runtime, f.tenantId, async client => {
+      await asMember(async client => {
         expect((await client.query("SELECT app.approve_synthetic_landing($1::jsonb) id", [JSON.stringify(payload)])).rows).toEqual([{ id: derivation }]);
         await client.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,1000,'Fictional reversal')",
           [f.tenantId, randomUUID(), randomUUID(), randomUUID(), allocation]);
       });
       // The trusted database does not authorize another company's fee illustration (0192).
-      await expect(transaction(practice.runtime, f.tenantId, client =>
+      await expect(asMember(client =>
         client.query("SELECT app.create_fee_illustration_source($1,$2)", [f.jobId, randomUUID()])
       )).rejects.toMatchObject({ code: "42501", message: "FEE_ILLUSTRATION_FORBIDDEN" });
       expect((await practice.owner.query("SELECT eligible_net_pence FROM app.landing_allocation WHERE tenant_id=$1 AND id=$2", [f.tenantId, allocation])).rows)

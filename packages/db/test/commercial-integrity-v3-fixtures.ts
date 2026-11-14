@@ -42,8 +42,9 @@ export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF
  return {admin,runtime,repo,auth,other,logs,login,runtimeConfig:{host:"127.0.0.1",port,user:login,password,database:"jobguard_synthetic_demo"},async close(){if(previous===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous;await closeTestPools(runtime,admin);await pg.stop();await rm(dir,{recursive:true,force:true});}};
 }
 export type IntegrityFixture=Awaited<ReturnType<typeof createIntegrityFixture>>;
-export async function transaction<T>(pool:Pool,work:(db:PoolClient)=>Promise<T>) {
- const db=await pool.connect();try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);const result=await work(db);await db.query("COMMIT");return result;}catch(error){await db.query("ROLLBACK");throw error;}finally{db.release();}
+/** `practiceDigest` binds this raw transaction to that practice session's own request (LP-6d). */
+export async function transaction<T>(pool:Pool,work:(db:PoolClient)=>Promise<T>,practiceDigest?:string) {
+ const db=await pool.connect();try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);if(practiceDigest)await db.query("SELECT app.bind_request('practice',$1,$2)",[practiceDigest,tenant]);const result=await work(db);await db.query("COMMIT");return result;}catch(error){await db.query("ROLLBACK");throw error;}finally{db.release();}
 }
 export async function seedIntegrityJob(f:IntegrityFixture,invoice=true) {
  const job=randomUUID(),quote=randomUUID(),draft=randomUUID(),revision=randomUUID();

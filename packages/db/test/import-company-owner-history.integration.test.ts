@@ -1,4 +1,4 @@
-import { testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, bindOwnSession } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -45,6 +45,8 @@ it("LATER-SAFETY-118 company history follows current owners across sign-in, with
     await scratch.query(sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION"), sql.lastIndexOf("COMMIT;")).replace(companyBranch, "i.session_digest=d"));
     await scratch.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
     await scratch.query("SET LOCAL ROLE jobguard_runtime");
+    // LP-6d: the raw call is the named session's own bound request; the body's company branch still refuses.
+    await bindOwnSession(scratch, digest);
     await expect(scratch.query("SELECT app.ch5_write_history($1,$2,$3,$4,$5,$6)", [a.tenantId, jobId, digest, command.commandId, evidenceId, randomUUID()])).rejects.toThrow("FORBIDDEN");
   } finally { await scratch.query("ROLLBACK"); scratch.release(); }
 

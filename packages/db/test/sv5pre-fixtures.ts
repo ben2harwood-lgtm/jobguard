@@ -1,3 +1,4 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
@@ -32,9 +33,10 @@ export async function createLockFixture(install = true): Promise<LockFixture> {
  return { postgres, directory, port, credential, admin, runtime: pools[0]!, shadow: pools[1]!, owner: pools[2]! };
 }
 export async function closeLockFixture(f: LockFixture) { await closeTestPools(f.runtime, f.shadow, f.owner, f.admin); await f.postgres.stop();  }
-export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>): Promise<T> {
+/** `as` binds this raw transaction to one fixture member's own request (LP-6d), as main's tests do. */
+export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>, as?: { owner: Pool; membershipId: string }): Promise<T> {
  const db = await pool.connect();
- try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
+ try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); if (as) await bindTestClient(as.owner, db, tenantId, as.membershipId); const result = await work(db); await db.query("COMMIT"); return result; }
  catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
 export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 3360000) {
@@ -192,6 +194,9 @@ export async function issueHistoricalInvoice(admin: Pool, tenantId: string, inpu
  const db = await admin.connect();
  try {
   await db.query('BEGIN'); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+  // LP-6d: the historical body reaches guarded helpers, so the issuing owner's persisted fixture credential is bound.
+  await testBoundTenantContext(admin, tenantId, input.actorMembershipId);
+  await db.query("SELECT app.bind_request('real',$1,$2)", [createHash('sha256').update(`lp6-test:${tenantId}:${input.actorMembershipId}`).digest('hex'), tenantId]);
   await db.query('SELECT * FROM app.historical_issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)', [tenantId, input.jobId, input.finalAccountRevisionId, input.actorMembershipId, input.commandId ?? randomUUID(), input.recipient ?? 'allocation@example.invalid', input.issuedOn ?? '2026-10-12']);
   await db.query('COMMIT');
  } catch (error) { await db.query('ROLLBACK'); throw error; } finally { db.release(); }

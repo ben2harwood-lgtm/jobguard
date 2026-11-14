@@ -66,9 +66,9 @@ const count = async (tenant: string) => (await admin.query("SELECT count(*)::int
 
 it("persists exact bytes and public key, concurrent replay audits once, conflicting replay fails", async () => {
   const f = await provision(); await approve(f);
-  const results = await Promise.all([store.persist(testTenantContext(f.tenantId), f.actor, f.request), store.persist(testTenantContext(f.tenantId), f.actor, f.request)]);
+  const results = await Promise.all([store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, f.request), store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, f.request)]);
   expect(results.map(r => r.reused).sort()).toEqual([false, true]); expect(await count(f.tenantId)).toBe(1);
-  await expect(store.persist(testTenantContext(f.tenantId), f.actor, { ...f.request, recipient: "other@example.invalid" })).rejects.toMatchObject({ code: "SIGNED_EXPORT_CONFLICT" });
+  await expect(store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, { ...f.request, recipient: "other@example.invalid" })).rejects.toMatchObject({ code: "SIGNED_EXPORT_CONFLICT" });
   const row = (await admin.query("SELECT bundle_text,recipient,actor_membership_id FROM app.signed_evidence_export WHERE tenant_id=$1", [f.tenantId])).rows[0];
   expect(JSON.parse(row.bundle_text)).toEqual(f.bundle); expect(row.recipient).toBe(f.request.recipient); expect(row.actor_membership_id).toBe(f.actor.membershipId);
 });
@@ -84,15 +84,16 @@ it("refuses another owner's approved request on creation and replay, and binds t
   await expect(store.persist(testTenantContext(f.tenantId), { ...f.actor, identityUserId: other.identityUserId }, f.request))
     .rejects.toMatchObject({ code: "SIGNED_EXPORT_FORBIDDEN" });
   // Matching the request to the attacker still cannot borrow the victim's approval.
-  await expect(store.persist(testTenantContext(f.tenantId), other, { ...f.request, actorMembershipId: other.membershipId }))
+  // LP-6d: the other owner acts in its own bound request; the routine (not the binding) refuses the borrowed authorization.
+  await expect(store.persist(testTenantContext(f.tenantId, { membershipId: other.membershipId }), other, { ...f.request, actorMembershipId: other.membershipId }))
     .rejects.toThrow("SIGNED_EXPORT_AUTHORIZATION_INVALID");
   expect(await count(f.tenantId)).toBe(0);
   expect((await admin.query("SELECT id FROM app.signed_evidence_export WHERE tenant_id=$1", [f.tenantId])).rows).toEqual([]);
-  await expect(store.persist(testTenantContext(f.tenantId), f.actor, f.request)).resolves.toMatchObject({ reused: false });
+  await expect(store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, f.request)).resolves.toMatchObject({ reused: false });
   await expect(store.persist(testTenantContext(f.tenantId), other, f.request)).rejects.toMatchObject({ code: "SIGNED_EXPORT_FORBIDDEN" });
   await expect(store.persist(testTenantContext(f.tenantId), { ...f.actor, identityUserId: other.identityUserId }, f.request))
     .rejects.toMatchObject({ code: "SIGNED_EXPORT_FORBIDDEN" });
-  await expect(store.persist(testTenantContext(f.tenantId), f.actor, f.request)).resolves.toMatchObject({ reused: true });
+  await expect(store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, f.request)).resolves.toMatchObject({ reused: true });
   expect(await count(f.tenantId)).toBe(1);
 });
 it.each(["missing approval", "wrong recipient", "wrong bytes", "revoked", "expired", "rejected", "revoked member"])("refuses %s and rolls back audit and export", async attack => {
@@ -106,7 +107,7 @@ it.each(["missing approval", "wrong recipient", "wrong bytes", "revoked", "expir
     try { await admin.query(attack === "expired" ? "UPDATE app.action_authorization SET expires_at='2026-01-01' WHERE tenant_id=$1" : "UPDATE app.decision_resolution SET resolution='rejected' WHERE tenant_id=$1", [f.tenantId]); }
     finally { await admin.query("SET session_replication_role=origin"); }
   }
-  await expect(store.persist(testTenantContext(f.tenantId), f.actor, f.request)).rejects.toThrow();
+  await expect(store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, f.request)).rejects.toThrow();
   expect(await count(f.tenantId)).toBe(0);
   expect((await admin.query("SELECT id FROM app.signed_evidence_export WHERE tenant_id=$1", [f.tenantId])).rows).toEqual([]);
 });
@@ -115,19 +116,19 @@ it("refuses a foreign tenant, missing/altered/out-of-scope files and unknown key
   await expect(store.persist(testTenantContext(randomUUID()), f.actor, f.request)).rejects.toMatchObject({ code: "SIGNED_EXPORT_FORBIDDEN" });
   const pack = JSON.parse(f.bundle.evidenceText);
   for (const evidenceText of ["", JSON.stringify({ ...pack, sources: [] }), f.bundle.evidenceText.replace("Fictional builder", "Altered builder")])
-    await expect(store.persist(testTenantContext(f.tenantId), f.actor, { ...f.request, bundle: { ...f.bundle, evidenceText } })).rejects.toThrow();
-  await expect(store.persist(testTenantContext(f.tenantId), f.actor, { ...f.request, bundle: { ...f.bundle, payload: { ...f.bundle.payload, caseId: randomUUID() } } })).rejects.toThrow();
+    await expect(store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, { ...f.request, bundle: { ...f.bundle, evidenceText } })).rejects.toThrow();
+  await expect(store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, { ...f.request, bundle: { ...f.bundle, payload: { ...f.bundle.payload, caseId: randomUUID() } } })).rejects.toThrow();
   const other = storeFixture(f.tenantId, f.jobId, f.caseId);
   await expect(retainEvidenceExportKey(admin, testTenantContext(f.tenantId), other.signer.verificationKeys()[0])).rejects.toMatchObject({ code: "SIGNED_EXPORT_CONFLICT" });
   other.request.actorMembershipId = f.actor.membershipId;
-  await expect(store.persist(testTenantContext(f.tenantId), f.actor, other.request)).rejects.toMatchObject({ code: "SIGNED_EXPORT_INVALID" });
+  await expect(store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, other.request)).rejects.toMatchObject({ code: "SIGNED_EXPORT_INVALID" });
   expect(await count(f.tenantId)).toBe(0);
 });
 it("rotation retains old bytes and independent verification material across a new store instance", async () => {
-  const f = await provision(); await approve(f); await store.persist(testTenantContext(f.tenantId), f.actor, f.request);
+  const f = await provision(); await approve(f); await store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, f.request);
   f.signer.rotate("v2", "2026-10-29T08:00:00.000Z", "2027-01-01T00:00:00.000Z");
   const next = storeFixture(f.tenantId, f.jobId, f.caseId, f.signer); next.request.actorMembershipId = f.request.actorMembershipId; next.actor = f.actor;
-  await register(next); await approve(next); await new SignedEvidenceExportStore(runtime).persist(testTenantContext(f.tenantId), next.actor, next.request);
+  await register(next); await approve(next); await new SignedEvidenceExportStore(runtime).persist(testTenantContext(f.tenantId, { membershipId: next.actor.membershipId }), next.actor, next.request);
   const rows = (await admin.query("SELECT bundle_text FROM app.signed_evidence_export WHERE tenant_id=$1", [f.tenantId])).rows;
   const keys = (await admin.query("SELECT record FROM app.evidence_export_signer_key WHERE tenant_id=$1", [f.tenantId])).rows.map(r => r.record);
   expect(rows).toHaveLength(2); expect(keys).toHaveLength(2);
@@ -138,7 +139,7 @@ it("rotation retains old bytes and independent verification material across a ne
   }).signerTrusted).toBe(true); }
 });
 it("actual catalogs and RLS deny foreign reads, key writes, updates, deletes and truncation", async () => {
-  const f = await provision(); await approve(f); await store.persist(testTenantContext(f.tenantId), f.actor, f.request);
+  const f = await provision(); await approve(f); await store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, f.request);
   const rows = (await admin.query(`SELECT relname,relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class
     WHERE oid IN ('app.evidence_export_signer_key'::regclass,'app.signed_evidence_export'::regclass) ORDER BY relname`)).rows;
   expect(rows).toEqual(["evidence_export_signer_key", "signed_evidence_export"].map(relname => ({ relname, relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration" })));
@@ -159,7 +160,8 @@ it("direct insertion cannot substitute an unrelated audit event", async () => {
     id: eventId, version: "audit.v1", actorRef: `membership:${f.request.actorMembershipId}`,
     eventType: "fixture.recorded", subjectType: "audit-export", subjectRef: p.exportId, payload: {},
   }]));
-  await expect(withTenant(runtime, testTenantContext(f.tenantId), db => db.$client.query(`INSERT INTO app.signed_evidence_export(
+  // LP-6d: the direct insert is the exporting member's own bound request, so the audit rule (not the binding) refuses.
+  await expect(withTenant(runtime, testTenantContext(f.tenantId, { membershipId: f.request.actorMembershipId }), db => db.$client.query(`INSERT INTO app.signed_evidence_export(
     tenant_id,id,job_id,case_id,actor_membership_id,authorization_id,recipient,signer_id,key_version,signer_fingerprint,bundle_text,bundle_hash,audit_event_id)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, [f.tenantId,p.exportId,f.jobId,f.caseId,
     f.request.actorMembershipId,f.request.authorizationId,f.request.recipient,p.signerId,p.keyVersion,p.signerFingerprint,
@@ -171,6 +173,6 @@ it("a valid signature cannot create a cross-job case reference", async () => {
   const f = await provision(), other = storeFixture(f.tenantId, randomUUID(), f.caseId, f.signer);
   other.request.actorMembershipId = f.request.actorMembershipId;
   await approve(other);
-  await expect(store.persist(testTenantContext(f.tenantId), f.actor, other.request)).rejects.toMatchObject({ code: "23503" });
+  await expect(store.persist(testTenantContext(f.tenantId, { membershipId: f.actor.membershipId }), f.actor, other.request)).rejects.toMatchObject({ code: "23503" });
   expect(await count(f.tenantId)).toBe(0);
 });

@@ -563,3 +563,21 @@ The body-preservation regression checks the latest predecessor definitions; perm
 The `lp6c-customer-delegation` proof group lists exact private grants and owner records. Both new helpers are binding-owner owned. Their sole direct EXECUTE grantees are `jobguard_migration` for `lp6_bind_customer_portal` and `jobguard_command_writer` for `lp6_delegated_actor`, as approved by the coordinator on 9 November. The binding owner can SELECT the two portal tables under exact tenant read policies and invoke the existing portal validator to re-resolve the session with its existing revocation locks. No role or person-facing capability is added. The reader is denied to migration and the binder to command-writer; PUBLIC, runtime, identity, infrastructure, shadow and login roles gain neither helper. The existing command routine ownership stays unchanged.
 
 The proof, MIGFIX-7, plan-entitlement and LP0-17 checks retain exact metadata, latest bodies and authority-path coverage. See `packages/db/migration-notes/0724_lp6c_customer_portal_delegation.md` for current test evidence. Final validation passes: all 892 database files (7,574 tests; 19 existing TODOs), 4,317 API tests, 2,320 web tests and all 14 requested/adjacent Chromium cases at both widths. The database/API/web red list against main is empty. The migration note names the separate ClientDecideExtra customer-link hold affecting ENT-11a/11b; overall CI is not declared green. Exact-head independent RED review remains a separate pre-merge gate.
+
+
+### LP-6d remaining routine binding (0740 placeholder)
+
+The LP-6d delta guards the latest remaining routine bodies on LP-6c c2ec9e98,
+retaining membership, exact approval and business checks after request binding.
+Repository adapters carry persisted session contexts; sessionless contractor
+principals are refused before business SQL. Pre-binding SSO completion and admin
+paths use a private SSO-only feature helper. Customer messages retain LP-6c's
+approved scoped binder and command boundary through private source/live helpers;
+ordinary ports explicitly refuse a delegated NULL actor. Client-approval reads
+retain their exact private projection. Recovery-message revocation uses a narrow
+command-owner assertion rather than granting lifecycle-table access to migration.
+All private ports deny person-facing roles; the claim assertion grants EXECUTE
+only to migration. The JSON baseline, scanners, pins and earlier migrations are
+unchanged. Proof fragments declare the precise owners, ACLs and static call paths.
+This is source construction and local unit validation; PostgreSQL/catalogue,
+browser and independent security evidence remain outstanding. It is not closure.

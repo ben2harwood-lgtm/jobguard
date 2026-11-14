@@ -58,7 +58,10 @@ describe("TESTS-DASHBOARD-AUTHORITY-1 stored authority and tenant gate", () => {
       expect(first.commits).toBe(1);
       const afterRevocation = await storedRows(c, w.p.tenantId);
       expect(await bounded(dashboard, "waiting dashboard refused")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
-      expect(second.sourceQueries).toBe(1);
+      // LP-6d: the request's binding is rechecked once the gate is granted. A revoked membership can no longer be
+      // bound, so it is refused before its own source query runs (it reads nothing); a revoked grant still binds and
+      // the repository's own recheck refuses it as before. The repository code is NOT_FOUND either way.
+      expect(second.sourceQueries).toBe(kind === "membership.revoke" ? 0 : 1);
       await refuses(w);
       expect(await storedRows(c, w.p.tenantId)).toEqual(afterRevocation);
     } finally {

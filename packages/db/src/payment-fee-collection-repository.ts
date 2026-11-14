@@ -46,6 +46,10 @@ export class PaymentFeeCollectionRepository {
     if (state !== "approved") return refuse();
     // Lock the exact authorization against concurrent revocation until the local
     // reservation/dispatch transition is complete. No business lock follows audit.
+    // LP-6d: runtime has no UPDATE on action_authorization; a migration-owned definer takes the
+    // share lock first and the exact read below re-reads the row after any wait.
+    await db.query(`SELECT app.lp6d_lock_action_authorization(c.tenant_id,c.authorization_id,false) FROM app.payment_fee_command c
+      WHERE c.tenant_id=$1 AND c.job_id=$2 AND c.statement_id=$3 AND c.payload->>'action'='approve'`, [tenantId, jobId, statementId]);
     const a = (await db.query<{ id: string; actor_membership_id: string; decision_id: string; expires_at: Date; revoked_at: Date | null }>(`
       SELECT a.id,a.actor_membership_id,a.decision_id,a.expires_at,a.revoked_at
       FROM app.payment_fee_command c JOIN app.action_authorization a
@@ -57,8 +61,7 @@ export class PaymentFeeCollectionRepository {
         AND a.action_type='payment_fee.collect' AND a.recipient='platform:jobguard'
         AND a.content_hash=$6 AND a.aggregate_revision=1 AND a.policy_version='reference_fee_policy_v3'
         AND a.amount_pence=$7 AND a.currency='GBP' AND a.authorization_kind='exact'
-        AND d.subject_type='payment_fee_statement' AND d.subject_ref=$3::text AND d.action_type='payment_fee.collect'
-      FOR SHARE OF a`, [tenantId, jobId, statementId, saved.decision_id, actor, s.statementHash, s.feePence])).rows[0];
+        AND d.subject_type='payment_fee_statement' AND d.subject_ref=$3::text AND d.action_type='payment_fee.collect'`, [tenantId, jobId, statementId, saved.decision_id, actor, s.statementHash, s.feePence])).rows[0];
     if (!a) return refuse();
     if (a.revoked_at !== null) return refuse("AUTHORITY_REVOKED");
     try {

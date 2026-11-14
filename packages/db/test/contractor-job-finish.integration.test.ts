@@ -1,7 +1,7 @@
 // Real PostgreSQL only; CI executes this file. All records are fictional synthetic fixtures.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { appendAuditBatch, EnterpriseLivePromptRepository, withTenant } from "../src/index.js";
+import { appendAuditBatch, ContractorRepository, EnterpriseLivePromptRepository, requireContractorRequestContext, withTenant } from "../src/index.js";
 import { cluster, promptFixture, ownerTx, materialsInput, listInput, type PromptFixture } from "./enterprise-live-prompt-fixtures.js";
 import { ownerVisit } from "./site-visit-fixtures.js";
 vi.setConfig({ testTimeout: 90000, hookTimeout: 120000 });
@@ -109,7 +109,9 @@ describe("ENT-8a owner contractor job finish", () => {
   const f = await promptFixture(c);
   for (const field of ["tenantId", "actorId", "finishedAt", "checkRan"]) {
    const raw = input(f, { [field]: randomUUID() });
-   await expect(withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.lp_command($1,$2::jsonb)", [f.sessions.owner!,JSON.stringify(raw)]))).rejects.toMatchObject({ message: "INVALID_PROMPT_COMMAND" });
+   // LP-6d: the raw command is the owner session's own bound request.
+   const own = requireContractorRequestContext(await new ContractorRepository(c.runtime).resolveSession(f.sessions.owner!));
+   await expect(withTenant(c.runtime, own, db => db.$client.query("SELECT app.lp_command($1,$2::jsonb)", [f.sessions.owner!,JSON.stringify(raw)]))).rejects.toMatchObject({ message: "INVALID_PROMPT_COMMAND" });
    expect((await c.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.p.tenantId,raw.commandId])).rows[0]!.n).toBe(0);
   }
  });

@@ -1,3 +1,4 @@
+import { contractorSessionContext } from "../src/index.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 // ENT-8a: caller-supplied completion events remain invalid; only the owner finish command creates completion.
 // NOT RUN locally: PostgreSQL execution belongs to CI.
@@ -35,7 +36,7 @@ describe('caller completion event rejection',()=>{
  * An ordered stored identity deliberately disagrees with the recognized PNG locator. */
 async function pendingCompletion(f: PromptFixture, storedIdentity: string) {
  const photo = await completionPhoto(c, f, ['new gutters']);
- const bytes = await withTenant(c.runtime, f.ctx, db => readStoredCompletionPhoto(db, f.sessions.named!, {jobId: f.jobId, ...photo}));
+ const bytes = await withTenant(c.runtime, await contractorSessionContext(c.runtime, f.sessions.named!), db => readStoredCompletionPhoto(db, f.sessions.named!, {jobId: f.jobId, ...photo}));
  const agreement = randomUUID(), hash = 'c'.repeat(64);
  await ownerTx(c, f.p.tenantId, async db => {
   await db.$client.query(`INSERT INTO app.enterprise_agreement_version
@@ -103,7 +104,8 @@ describe('end-check stored rule (a) recheck', () => {
  it('does not let an unfinished owner finish authorize another job projection', async () => {
   const f = await promptFixture(c), agreementVersionId = await pendingCompletion(f, 'CLEAR-GUTTER');
   const before = await finishSnapshot(f);
-  await expect(withTenant(c.runtime, f.ctx, async db => {
+  // LP-6d: raw calls run in the owner session's own bound request.
+  await expect(withTenant(c.runtime, await contractorSessionContext(c.runtime, f.sessions.owner!), async db => {
    await db.$client.query('SELECT app.lp_command($1,$2::jsonb)', [f.sessions.owner!, JSON.stringify({version: 'end-check.v1',commandId: randomUUID(),jobId: f.jobId,agreementVersionId})]);
    await db.$client.query('SELECT app.lp_sources($1,$2)', [f.sessions.owner!,f.otherJob]);
   })).rejects.toMatchObject({message: 'EXTRA_FORBIDDEN'});
@@ -112,7 +114,7 @@ describe('end-check stored rule (a) recheck', () => {
  it('creates a checked rule (a) prompt and closes owner projection access before replay', async () => {
   const f = await promptFixture(c), agreementVersionId = await pendingCompletion(f, 'CLEAR-GUTTER');
   const cmd = {version: 'end-check.v1',commandId: randomUUID(),jobId: f.jobId,agreementVersionId};
-  const ownerSources = () => withTenant(c.runtime, f.ctx, db => db.$client.query('SELECT app.lp_sources($1,$2)', [f.sessions.owner!,f.jobId]));
+  const ownerSources = async () => withTenant(c.runtime, await contractorSessionContext(c.runtime, f.sessions.owner!), db => db.$client.query('SELECT app.lp_sources($1,$2)', [f.sessions.owner!,f.jobId]));
   await expect(ownerSources()).rejects.toMatchObject({message: 'EXTRA_FORBIDDEN'});
   const result = await repo.endCheck(f.sessions.owner!, cmd);
   expect(result).toMatchObject({checkRan: true,promptsRaised: 1});

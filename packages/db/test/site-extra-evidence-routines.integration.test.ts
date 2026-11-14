@@ -1,4 +1,5 @@
-import { testActorContext } from "./tenant-context-test-utils.js";
+import { testActorContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { createHash as lp6dHash } from "node:crypto";
 // ENT-3d routines: parity, totality, the writer's own refusals, the guard, the catalogue and the upgrade proof (rule 9).
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -15,17 +16,25 @@ afterAll(async () => { await c?.close(); });
 const where = (x: SiteFixture) => ({ ctx: x.ctx, jobId: x.jobId });
 /** Call a routine as the runtime login inside one tenant transaction (the tenant setting is a parameter so it can be absent, empty or malformed). */
 const UNSET = Symbol("unset");
-async function call(sql: string, args: unknown[], setting: string | null | typeof UNSET = f.p.tenantId, readOnly = false) {
+async function call(sql: string, args: unknown[], setting: string | null | typeof UNSET = f.p.tenantId, readOnly = false, actor?: unknown) {
+ // LP-6d: a named actor that is an active member of the stamped company calls as its own bound request. Anyone
+ // else (no or a malformed setting, a foreign company, a null or revoked actor) binds nothing.
+ const member = typeof actor === "string" && typeof setting === "string" && /^[0-9a-f-]{36}$/u.test(setting)
+  ? (await c.admin.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())", [setting, actor])).rows[0] : undefined;
+ const credential = member ? lp6dHash("sha256").update(`lp6-test:${setting as string}:${actor as string}`).digest("hex") : undefined;
+ if (credential) await testBoundTenantContext(c.admin, setting as string, actor as string, credential);
  const client = await c.runtime.connect();
  try {
-  await client.query(readOnly ? "BEGIN READ ONLY" : "BEGIN");
+  await client.query("BEGIN");
   if (setting !== UNSET) await client.query("SELECT set_config('app.tenant_id',$1,true)", [setting]);
+  if (credential) await client.query("SELECT app.bind_request('real',$1,$2)", [credential, setting]);
+  if (readOnly) await client.query("SET TRANSACTION READ ONLY");
   const rows = (await client.query(sql, args)).rows; await client.query("COMMIT"); return rows;
  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 const record = (x: SiteFixture, over: Partial<Record<"actor" | "job" | "command" | "confirmation" | "description" | "note" | "photo" | "shown", unknown>> = {}, setting: string | null | typeof UNSET = x.p.tenantId) => {
  const a = { actor: x.members.supervisor.member.membershipId, job: x.jobId, command: randomUUID(), confirmation: randomUUID(), description, note, photo: null, shown: shownFor(x, null), ...over };
- return call("SELECT outcome,reason_code,content_sha256,document_sha256 FROM app.ent3d_record_resident_confirmation($1,$2,$3,$4,$5,$6,$7,$8)", [a.actor, a.job, a.command, a.confirmation, a.description, a.note, a.photo, a.shown], setting);
+ return call("SELECT outcome,reason_code,content_sha256,document_sha256 FROM app.ent3d_record_resident_confirmation($1,$2,$3,$4,$5,$6,$7,$8)", [a.actor, a.job, a.command, a.confirmation, a.description, a.note, a.photo, a.shown], setting, false, a.actor);
 };
 const refusedWith = (reason: string) => [{ outcome: "refused", reason_code: reason, content_sha256: null, document_sha256: null }];
 
@@ -66,7 +75,9 @@ describe("ENT-3d routines", () => {
   expect(await record(x, { job: randomUUID() })).toEqual(refusedWith("not_permitted"));
   expect(await record(x, { job: await smallJob(c, x) })).toEqual(refusedWith("not_permitted"));
   const foreign = await siteFixture(c); expect(await record(x, { job: foreign.jobId })).toEqual(refusedWith("not_permitted"));
-  expect(await record(x, {}, foreign.p.tenantId)).toEqual(refusedWith("not_permitted"));
+  // Raw, class (a): a request naming a company its actor is not bound to binds nothing, so the binding check
+  // refuses first; unchanged() below proves no writes.
+  await expect(record(x, {}, foreign.p.tenantId)).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
   for (const setting of [null, "", "not-a-uuid", UNSET]) expect(await record(x, {}, setting), String(setting)).toEqual(refusedWith("not_permitted"));
   for (const key of ["actor", "job", "command", "confirmation", "description", "note", "shown"] as const) expect(await record(x, { [key]: null }), key).toEqual(refusedWith("not_permitted"));
   expect(await record(x, { photo: randomUUID(), shown: shownFor(x, sha("x")) })).toEqual(refusedWith("photo_not_accepted"));
@@ -77,7 +88,9 @@ describe("ENT-3d routines", () => {
   const revoked = await siteFixture(c); await command(c, revoked, { kind: "grant.revoke", grantId: revoked.members.supervisor.grant });
   expect(await record(revoked)).toEqual(refusedWith("not_permitted"));
   const gone = await siteFixture(c); await command(c, gone, { kind: "membership.revoke", membershipId: gone.members.supervisor.member.membershipId });
-  expect(await record(gone)).toEqual(refusedWith("not_permitted"));
+  // Raw, class (a): the revoked membership leaves no active credential, so no request binds and the binding check refuses first;
+  // the count below proves nothing was written.
+  await expect(record(gone)).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
   const cancelled = await siteFixture(c); await cancel(c, cancelled);
   expect(await record(cancelled)).toEqual(refusedWith("not_permitted"));
   for (const y of [revoked, gone, cancelled]) expect((await c.admin.query("SELECT count(*)::int n FROM app.evidence_object WHERE tenant_id=$1 AND evidence_type='resident_confirmation'", [y.p.tenantId])).rows[0]!.n).toBe(0);

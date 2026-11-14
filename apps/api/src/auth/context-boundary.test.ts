@@ -74,17 +74,15 @@ const SYNTHETIC_ROOTS = ["apps/api/src/", "packages/db/src/"];
 /** The complete, explicit set of retained synthetic-sandbox files that may build a context from the fixed DEMO identity. */
 const APPROVED_SYNTHETIC_FILES = [
   "packages/db/src/demo-runtime.ts",
-  "packages/db/src/fee-illustration-repository.ts",
+  // LP-6d: fee-illustration-repository.ts no longer constructs (it takes the caller's session context), so it leaves the list.
   "packages/db/src/recovery-demo-repository.ts",
 ];
 /** Reviewed persisted practice-session bridges only; this list grants no pilot/production authority. */
 const APPROVED_PRACTICE_FILES = [
+  // LP-6d repair 10: contractor-party, work-order, sor and job-scheduling repositories no longer construct
+  // (they take the session context from contractor-repository.requireContractorRequestContext), so they leave the list.
   "packages/db/src/practice-session.ts",
   "packages/db/src/contractor-repository.ts",
-  "packages/db/src/contractor-party-repository.ts",
-  "packages/db/src/work-order-repository.ts",
-  "packages/db/src/sor-repository.ts",
-  "packages/db/src/job-scheduling-repository.ts",
   "packages/db/src/work-order-fixtures.ts",
   "packages/db/src/contractor-session-context.ts",
 ];
@@ -95,16 +93,18 @@ const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   // Renewed caller source review 6 Nov 2026, later-safety-108 repair 4: v1 ownership now requires the succeeded import receipt.
   // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
   "packages/db/src/practice-session.ts": "49c6c2dadcaa0412208dbce6585c0e30a283b4d4c3b98b50179eec3bad054729",
-  "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
-  "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
+  // LP-6d repair 10 re-pin (checker accepted on source: prechecks/lp-6d-r10-403be3a6-s9-and-oracle.md): the contractor request context
+  // is created once, by sessionPrincipal(), for a persisted contractor practice session, and kept in a
+  // module-private WeakMap; requireContractorRequestContext returns it. One constructor call (was 2).
+  // Repair 11: refusal-only principals keep their context in a separate map, read only by requireContractorRefusalContext.
+  "packages/db/src/contractor-repository.ts": "51d371939722dd3f0763f3c0b4861bf10848fee41564e7af99b31ff773a9ff5f",
   // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
   // ~/.local/share/full-steam/coordinator/prechecks/batch-41.md: importCsvInTransaction makes no new context;
   // its one new caller, ConnectorPromotionRepository.promote, takes context and principal from the same
   // persisted session. The tenant lock and import permission check stay.
-  "packages/db/src/work-order-repository.ts": "51e64ceaa39564c8d1b083fbb6b24048143455dfe76080ff63309ce7d808dfb6",
-  "packages/db/src/sor-repository.ts": "b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f",
-  "packages/db/src/job-scheduling-repository.ts": "7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57",
-  "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
+  // LP-6d repair 10 re-pin (checker accepted on source: prechecks/lp-6d-r10-403be3a6-s9-and-oracle.md): principal type only (the
+  // context-bearing alias is gone); the three DEMO fixture constructors are unchanged.
+  "packages/db/src/work-order-fixtures.ts": "bfcdf0a9d57691b3af4672313069e333e1399be598c46fd5f7500289a833089a",
   "packages/db/src/contractor-session-context.ts": "6fc5382c5b912992d715ded455a79f115884eba53f25ee55f9a1050878f4605c",
 };
 const reviewedPracticeSource = (file: SourceFile) => REVIEWED_PRACTICE_SOURCES[file.path] === createHash("sha256").update(file.text).digest("hex");
@@ -680,7 +680,7 @@ export function boundaryViolations(files: SourceFile[]): string[] {
       }
     } else if (APPROVED_PRACTICE_FILES.includes(file.path)) {
       // Exact reviewed source identities and call shapes; a name on the list alone never authorizes another minting path.
-      const EXPECTED_PRACTICE_CALLS: Readonly<Record<string, number>> = { "packages/db/src/practice-session.ts": 1, "packages/db/src/contractor-repository.ts": 2, "packages/db/src/contractor-party-repository.ts": 3, "packages/db/src/work-order-repository.ts": 4, "packages/db/src/sor-repository.ts": 2, "packages/db/src/job-scheduling-repository.ts": 2, "packages/db/src/work-order-fixtures.ts": 3, "packages/db/src/contractor-session-context.ts": 1 };
+      const EXPECTED_PRACTICE_CALLS: Readonly<Record<string, number>> = { "packages/db/src/practice-session.ts": 1, "packages/db/src/contractor-repository.ts": 1, "packages/db/src/work-order-fixtures.ts": 3, "packages/db/src/contractor-session-context.ts": 1 };
       const expectedCalls = EXPECTED_PRACTICE_CALLS[file.path] ?? -1;
       if (!reviewedPracticeSource(file) || membershipCalls.length !== expectedCalls || queuedCalls.length || casts.length || declarations.length) problems.push(`${file.path} practice constructors must match the exact reviewed authenticated practice-session source; changed code needs renewed caller review and grants no pilot/production authority`);
     } else if (file.path === REHEARSAL) {
@@ -761,7 +761,7 @@ async function applicationSource(repositoryRoot: string = repository): Promise<S
 
 // An approved retained synthetic file that still constructs after SBOX-SESSION-1: shape tests run at this path so each negative case still fails for ITS OWN
 // reason and not merely because a made-up path is not on the approved list (that rule has its own tests further down).
-const APPROVED_SYNTHETIC = "packages/db/src/fee-illustration-repository.ts";
+const APPROVED_SYNTHETIC = "packages/db/src/recovery-demo-repository.ts";
 const validSynthetic = `import { DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, verifiedTenantContextFromMembership } from "@jobguard/db";
 const context = () => verifiedTenantContextFromMembership({ identityUserId: "d1500000-0000-4000-8000-000000000001", membershipId: DEMO_MEMBERSHIP_ID, tenantId: DEMO_TENANT_ID } as any);`;
 

@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -8,13 +9,14 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contractorPermissions, contractorPermits, contractorRoles, type ContractorGrant, type ContractorPermission } from "@jobguard/core";
 import {
-  ContractorPartyRepository, ContractorRepository, JobSchedulingRepository, MIGRATION_URLS, WorkOrderRepository, demoFile, demoRow, migrate, prepareWorkOrderDemo, verifiedTenantContextFromMembership, withTenant,
+  ContractorPartyRepository, ContractorRepository, JobSchedulingRepository, MIGRATION_URLS, WorkOrderRepository, demoFile, demoRow, migrate, prepareWorkOrderDemo, requireContractorRequestContext, withTenant,
   type AuthenticatedMembership, type WorkOrderDemo,
 } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, parties: ContractorPartyRepository, orders: WorkOrderRepository, scheduling: JobSchedulingRepository;
-const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
+const ctx = (p: AuthenticatedMembership) => requireContractorRequestContext(p);
 const view = (p: AuthenticatedMembership) => contractors.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
 const command = async (p: AuthenticatedMembership, fields: Record<string, unknown>) => contractors.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view(p)).revision, ...fields });
 async function member(p: AuthenticatedMembership, role: string, scope: { kind: string; id: string }, clientId: string | null = null) {
@@ -24,7 +26,8 @@ async function member(p: AuthenticatedMembership, role: string, scope: { kind: s
 }
 async function asMember(p: AuthenticatedMembership, membershipId: string) {
   const row = (await admin.query<{ identity_user_id: string }>("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [p.tenantId, membershipId])).rows[0]!;
-  return { ...p, membershipId, identityUserId: row.identity_user_id } as AuthenticatedMembership;
+  // LP-6d: the member acts through its own persisted credential, never the owner's bound context.
+  return await memberSessionPrincipal(admin, runtime, p.tenantId, membershipId) as AuthenticatedMembership;
 }
 const importOf = (p: AuthenticatedMembership, csv: string, name = "scheduling.csv") => orders.importCsv(p, { commandId: randomUUID(), name, kind: "csv", csv });
 const canary = { name: "Fictional Resident Canary", phone: "00000999888", email: "scheduling-canary@resident-canary.invalid" };

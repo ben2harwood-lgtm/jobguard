@@ -1,6 +1,7 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { withTenant } from "../src/tenant-context.js";
 import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createLockFixture, closeLockFixture, seedAccount, prepareLock, asFixtureTenant, publishFixtureCompletion, LOCK_OWNER, LOCK_HASH } from "./sv5pre-fixtures.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
@@ -9,6 +10,8 @@ import { FinalCheckCompletionRepository } from "../src/shadow-detection-reposito
 describe("SV5PRE authoritative completion", () => {
  let f: Awaited<ReturnType<typeof createLockFixture>>;
  beforeAll(async () => { f = await createLockFixture(); }, 60000);
+ // LP-6d: raw runtime evidence writes are the lock owner's own bound request. 
+ const asOwner = <T>(tenantId: string, work: Parameters<typeof asFixtureTenant<T>>[2]) => asFixtureTenant(f.runtime, tenantId, work, { owner: f.admin, membershipId: LOCK_OWNER });
  afterAll(async () => { if (f) await closeLockFixture(f); });
  // Canonical PostgreSQL JSON text preserves timestamps and bytes; every snapshot is tenant-scoped.
  async function rows(tenantId: string, relation: string) {
@@ -87,7 +90,7 @@ describe("SV5PRE authoritative completion", () => {
  });
  it("C238 a mid-scan photo blocks the lock even after expiry, then its verified original is retained",async()=>{
   const a=await seedAccount(f.admin),repo=await prepareLock(f,a),uploadId=randomUUID(),evidenceId=randomUUID();
-  await asFixtureTenant(f.runtime,a.tenantId,async db=>{
+  await asOwner(a.tenantId,async db=>{
    await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`mid-scan/${uploadId}`]);
    await db.query("UPDATE app.evidence_upload SET state='quarantined' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]);
   });
@@ -95,14 +98,14 @@ describe("SV5PRE authoritative completion", () => {
   await asFixtureTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]));
   await expect(repo.lock(a.context,a.input)).rejects.toMatchObject({code:"FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"});
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(0);
-  await asFixtureTenant(f.runtime,a.tenantId,async db=>{
+  await asOwner(a.tenantId,async db=>{
    await db.query("UPDATE app.evidence_upload SET state='verified',server_verified_at=clock_timestamp(),object_version_id='scan.v1' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]);
    await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) SELECT tenant_id,job_id,$3,id,scope_item_id,'original','site_photo',object_key,object_version_id,expected_sha256,1,expected_content_type,retention_class,server_received_at,server_verified_at FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId,evidenceId]);
   });
   await repo.lock(a.context,a.input);
   // Test the database boundary as runtime, before the manifest could silently lose this original.
   for(const state of ["rejected","quarantined","expired"]) {
-   await expect(asFixtureTenant(f.runtime,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state=$3,rejection_code='SYNTHETIC',server_verified_at=NULL WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId,state]))).rejects.toThrow(state==="quarantined" ? "POST_LOCK_WORK_REQUIRES_LINKED_JOB" : "FINAL_CHECK_VERIFIED_SOURCE_LOCKED");
+   await expect(asOwner(a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state=$3,rejection_code='SYNTHETIC',server_verified_at=NULL WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId,state]))).rejects.toThrow(state==="quarantined" ? "POST_LOCK_WORK_REQUIRES_LINKED_JOB" : "FINAL_CHECK_VERIFIED_SOURCE_LOCKED");
   }
   expect((await f.admin.query("SELECT state FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId])).rows).toEqual([{state:"verified"}]);
   await publishFixtureCompletion(f.shadow,f.admin,a.tenantId,a.jobId);
@@ -110,7 +113,7 @@ describe("SV5PRE authoritative completion", () => {
  });
  it.each(["rejected","quarantined","expired"])("C238 the database guard refuses verified -> %s after lock independently of the photo guard",async state=>{
   const x=await sourceFixture();await finalize(x);
-  await expect(asFixtureTenant(f.runtime,x.a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state=$3,rejection_code='SYNTHETIC',server_verified_at=NULL WHERE tenant_id=$1 AND id=$2",[x.a.tenantId,x.uploadId,state]))).rejects.toThrow("FINAL_CHECK_VERIFIED_SOURCE_LOCKED");
+  await expect(asOwner(x.a.tenantId,db=>db.query("UPDATE app.evidence_upload SET state=$3,rejection_code='SYNTHETIC',server_verified_at=NULL WHERE tenant_id=$1 AND id=$2",[x.a.tenantId,x.uploadId,state]))).rejects.toThrow("FINAL_CHECK_VERIFIED_SOURCE_LOCKED");
   expect((await f.admin.query("SELECT state FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[x.a.tenantId,x.uploadId])).rows).toEqual([{state:"verified"}]);
  });
  it("C238 another tenant's in-flight upload cannot affect this tenant's lock or busy code",async()=>{
@@ -305,6 +308,8 @@ describe("SV5PRE authoritative completion", () => {
     await db.query("BEGIN");
     await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
     await db.query("SET LOCAL lock_timeout='10s'");
+    // LP-6d: a direct call needs a bound request; bind the lock owner's persisted fixture credential.
+    await db.query("SELECT app.bind_request('real',$1,$2)",[createHash("sha256").update(`lp6-test:${a.tenantId}:${LOCK_OWNER}`).digest("hex"),a.tenantId]);
     await db.query("SELECT app.require_watchdog_live($1)",[a.jobId]);
    }
    // Both already hold the merged live guard's SHARE lock. An UPDATE upgrade cannot succeed here.
@@ -342,6 +347,8 @@ describe("SV5PRE authoritative completion", () => {
   const db = await f.runtime.connect();
   await db.query("BEGIN");
   await db.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
+  // LP-6d: the upload is the locking owner's own bound request.
+  await bindTestClient(f.admin, db, a.tenantId, LOCK_OWNER);
   const id = randomUUID();
   try { await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3::uuid,$3::text,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')", [a.tenantId, a.jobId, id]); }
   catch (error) { await db.query("ROLLBACK"); db.release(); throw error; }

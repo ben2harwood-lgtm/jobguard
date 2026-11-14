@@ -1,3 +1,4 @@
+import { ContractorRepository, requireContractorRequestContext } from "../src/index.js";
 // CI only: real PostgreSQL, runtime privileges and persisted contractor finance sessions.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -26,6 +27,8 @@ async function setup() {
  const run = (input = command()) => repo.run(w.ctx, w.session, input);
  return { w, repo, scope, invoiceId, revision, payment, snapshot, command, run };
 }
+// LP-6d: each finance session acts in its own bound request (the route derives context and session together).
+const ctxFor = async (session: string) => requireContractorRequestContext(await new ContractorRepository(c.runtime).resolveSession(session));
 async function secondSession(w: World) {
  // Existing fixture's real second identity. Provision finance through the existing
  // owner-only fixture boundary; never a caller-supplied approver flag.
@@ -62,11 +65,11 @@ it("persists waiting state; serializes duplicate proposals and approvals, with e
  const second=await secondSession(a.w);
  const approve={version:"financial-reconciliation-approve.v1",commandId:randomUUID(),jobId:a.scope.jobId,adjustmentId:one.adjustmentId,contentHash:one.contentHash};
  await expect(a.repo.approve(a.w.ctx,a.w.session,approve)).rejects.toThrow("RECONCILIATION_SELF_APPROVAL");
- await expect(a.repo.approve(a.w.ctx,second,{...approve,contentHash:'0'.repeat(64)})).rejects.toThrow("RECONCILIATION_CONFLICT");
- expect((await reopened.readAdjustments(a.w.ctx,second,a.scope.jobId,run.runId))![0]!.approvalId).toBeNull();
- const [first,replay]=await Promise.all([a.repo.approve(a.w.ctx,second,approve),a.repo.approve(a.w.ctx,second,approve)]);
+ await expect(a.repo.approve(await ctxFor(second),second,{...approve,contentHash:'0'.repeat(64)})).rejects.toThrow("RECONCILIATION_CONFLICT");
+ expect((await reopened.readAdjustments(await ctxFor(second),second,a.scope.jobId,run.runId))![0]!.approvalId).toBeNull();
+ const [first,replay]=await Promise.all([a.repo.approve(await ctxFor(second),second,approve),a.repo.approve(await ctxFor(second),second,approve)]);
  expect(replay).toEqual(first);
- expect((await reopened.readAdjustments(a.w.ctx,second,a.scope.jobId,run.runId))![0]).toMatchObject({approvalId:first.approvalId,contentHash:one.contentHash});
+ expect((await reopened.readAdjustments(await ctxFor(second),second,a.scope.jobId,run.runId))![0]).toMatchObject({approvalId:first.approvalId,contentHash:one.contentHash});
  await expect(a.repo.propose(a.w.ctx,a.w.session,{...input,adjustment:{...input.adjustment,fact:{...input.adjustment.fact,id:randomUUID()}}})).rejects.toThrow("RECONCILIATION_CONFLICT");
  expect(await unchanged(a.scope.tenantId,a.scope.jobId)).toEqual(before);
  expect((await c.admin.query("SELECT count(*)::int n FROM app.financial_reconciliation_adjustment WHERE tenant_id=$1",[a.scope.tenantId])).rows[0].n).toBe(1);
@@ -78,13 +81,15 @@ it("refuses stale report hash and approval after a newer run, preserving the que
  expect(await a.repo.readAdjustments(a.w.ctx,a.w.session,a.scope.jobId,run.runId)).toEqual([]);
  expect(await unchanged(a.scope.tenantId,a.scope.jobId)).toEqual(before);
  const p=await a.repo.propose(a.w.ctx,a.w.session,input);await a.run();
- await expect(a.repo.approve(a.w.ctx,await secondSession(a.w),{version:"financial-reconciliation-approve.v1",commandId:randomUUID(),jobId:a.scope.jobId,adjustmentId:p.adjustmentId,contentHash:p.contentHash})).rejects.toThrow("RECONCILIATION_CONFLICT");
+ const approver=await secondSession(a.w); // LP-6d: the other finance identity approves in its own bound request.
+ await expect(a.repo.approve(await ctxFor(approver),approver,{version:"financial-reconciliation-approve.v1",commandId:randomUUID(),jobId:a.scope.jobId,adjustmentId:p.adjustmentId,contentHash:p.contentHash})).rejects.toThrow("RECONCILIATION_CONFLICT");
 });
 it("concurrent distinct approvals create only one approval and never modify financial books",async()=>{
  const a=await setup(),run=await a.run(),p=await a.repo.propose(a.w.ctx,a.w.session,proposalInput(a,run)),session=await secondSession(a.w);
  const input=()=>({version:"financial-reconciliation-approve.v1",commandId:randomUUID(),jobId:a.scope.jobId,adjustmentId:p.adjustmentId,contentHash:p.contentHash});
  const before=await unchanged(a.scope.tenantId,a.scope.jobId);
- const results=await Promise.allSettled([a.repo.approve(a.w.ctx,session,input()),a.repo.approve(a.w.ctx,session,input())]);
+ const approver=await ctxFor(session); // LP-6d: both racing approvals are the approver's own bound requests.
+ const results=await Promise.allSettled([a.repo.approve(approver,session,input()),a.repo.approve(approver,session,input())]);
  expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);expect(results.filter(r=>r.status==='rejected')).toHaveLength(1);
  expect(await unchanged(a.scope.tenantId,a.scope.jobId)).toEqual(before);
 });
@@ -100,5 +105,6 @@ it("reads fail closed for foreign and unknown runs, non-finance, revoked and exp
  await expect(a.repo.readAdjustments(a.w.ctx,a.w.session,a.scope.jobId,run.runId)).rejects.toThrow();
  const member=(await invite(c,b.w.w,"supervisor",{kind:"tenant",id:b.scope.tenantId})).member,s=randomUUID();
  await c.admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) VALUES($1,$2,$3,$4,$5,clock_timestamp(),clock_timestamp()+interval '1 day')",[s,b.scope.tenantId,member.membershipId,member.identityUserId,digestOf(s)]);
- await expect(b.repo.readAdjustments(b.w.ctx,s,b.scope.jobId,run.runId)).rejects.toThrow("EXTRA_FORBIDDEN");
+ // LP-6d: the non-finance member reads in its own bound request and is refused by the read itself.
+ await expect(b.repo.readAdjustments(await ctxFor(s),s,b.scope.jobId,run.runId)).rejects.toThrow("EXTRA_FORBIDDEN");
 });

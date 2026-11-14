@@ -69,3 +69,27 @@ export async function testActorContext(owner: Pool, context: ReturnType<typeof t
   const installed = (await owner.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed;
   return installed ? testBoundTenantContext(owner, context.tenantId, actor.membershipId) : context;
 }
+
+/** Bind one fixture actor's real persisted credential into a caller-managed transaction
+ * (a raw client that already ran BEGIN), exactly as withTenant binds it. */
+export async function bindTestClient(owner: Pool, client: { query: Pool["query"] }, tenantId: string, membershipId: string) {
+  const credential = createHash("sha256").update(`lp6-test:${tenantId}:${membershipId}`).digest("hex");
+  await testBoundTenantContext(owner, tenantId, membershipId, credential);
+  await client.query("SELECT app.bind_request('real',$1,$2)", [credential, tenantId]);
+}
+
+/**
+ * LP-6d: a raw fixture call binds the very session it names (practice owner or real signed-in session),
+ * inside the caller's transaction, before the guarded routine. A malformed or foreign session stays
+ * unbound (savepoint), so refusal tests still exercise their refusal.
+ */
+export async function bindOwnSession(client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }, digest: unknown) {
+  for (const kind of ["practice", "real"]) {
+    await client.query("SAVEPOINT lp6d_own_session");
+    try {
+      await client.query("SELECT app.bind_request($1,$2,nullif(current_setting('app.tenant_id',true),'')::uuid)", [kind, digest]);
+      await client.query("RELEASE SAVEPOINT lp6d_own_session");
+      return;
+    } catch { await client.query("ROLLBACK TO SAVEPOINT lp6d_own_session"); }
+  }
+}

@@ -1,3 +1,4 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
 import {createHash,randomUUID} from "node:crypto";
@@ -31,7 +32,9 @@ export async function createFinalCheckFixture(install=true):Promise<FinalCheckFi
  return {postgres,admin,runtime:new Pool({...config,database:"jobguard_synthetic_demo",user:runtimeLogin}),shadow:new Pool({...config,database:"jobguard_synthetic_demo",user:shadowLogin}),directory,logs};
 }
 export async function closeFinalCheckFixture(f:FinalCheckFixture|undefined){if(!f)return;await closeTestDatabase(f.postgres,f.directory,f.runtime,f.shadow,f.admin);}
-export async function finalCheckTenant<T>(pool:Pool,tenantId:string,work:(client:PoolClient)=>Promise<T>):Promise<T>{const db=await pool.connect();try{await db.query('BEGIN');await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);const result=await work(db);await db.query('COMMIT');return result;}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}}
+/** `as` binds this raw transaction to one fixture member's own request (LP-6d), as main's tests do. */
+// LP-6d: a raw fixture call binds its own actor: a member's persisted fixture credential, or the practice owner's session digest.
+export async function finalCheckTenant<T>(pool:Pool,tenantId:string,work:(client:PoolClient)=>Promise<T>,as?:{owner:Pool;membershipId:string}|{practiceDigest:string}|{realDigest:string}):Promise<T>{const db=await pool.connect();try{await db.query('BEGIN');await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);if(as&&'practiceDigest' in as)await db.query("SELECT app.bind_request('practice',$1,$2)",[as.practiceDigest,tenantId]);else if(as&&'realDigest' in as)await db.query("SELECT app.bind_request('real',$1,$2)",[as.realDigest,tenantId]);else if(as)await bindTestClient(as.owner,db,tenantId,as.membershipId);const result=await work(db);await db.query('COMMIT');return result;}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}}
 export async function seedFinalCheckJob(f:FinalCheckFixture){
  const tenantId=FINAL_CHECK_TENANT,jobId=randomUUID(),scopeItemId=randomUUID(),baselineId=randomUUID(),draftId=randomUUID(),revisionId=randomUUID(),lineId=randomUUID(),accountId=randomUUID(),sessionId=randomUUID(),digest=createHash('sha256').update(sessionId).digest('hex'),hash="a".repeat(64);
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[tenantId]);

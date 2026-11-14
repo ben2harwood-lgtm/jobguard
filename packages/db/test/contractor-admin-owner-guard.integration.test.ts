@@ -1,3 +1,5 @@
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { PoolClient } from "pg";
@@ -41,7 +43,10 @@ describe("contractor admin owner and grant boundaries (real PostgreSQL)", () => 
   const raw = await command({ kind: "member.invite", role, scope: { kind: "tenant", id: f.p.tenantId }, clientId: null, contractId: null, email: "fictional@guard.invalid" });
   await repo.command(f.p, raw);
   const row = (await c.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, raw.id])).rows[0]!;
-  return { ...f.p, membershipId: raw.id, identityUserId: row.identity_user_id } as AuthenticatedMembership;
+  // LP-6d: the member acts through its own persisted credential, so refusals come from the owner guard, not the binding.
+  // The direct-call pins bind the same member through its persisted fixture credential.
+  await testBoundTenantContext(c.admin, f.p.tenantId, raw.id as string);
+  return await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, raw.id as string) as AuthenticatedMembership;
  }
  async function refused(actor: AuthenticatedMembership, raw: Record<string, unknown>) {
   const before = await writes();
@@ -51,6 +56,8 @@ describe("contractor admin owner and grant boundaries (real PostgreSQL)", () => 
  }
  async function direct(db: PoolClient, actor: AuthenticatedMembership, raw: Record<string, unknown>) {
   await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]);
+  // LP-6d: the direct call runs inside the actor's own bound request (its persisted fixture credential).
+  await db.query("SELECT app.bind_request('real',$1,$2)", [sha256Hex(`lp6-test:${f.p.tenantId}:${actor.membershipId}`), f.p.tenantId]);
   await db.query("SET LOCAL ROLE jobguard_runtime");
   return db.query("SELECT app.contractor_admin_command($1,$2::jsonb,$3)", [actor.membershipId, JSON.stringify(raw), sha256Hex(canonicalJson(raw))]);
  }
