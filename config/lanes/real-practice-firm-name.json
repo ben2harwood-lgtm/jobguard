@@ -14,6 +14,7 @@
         "packages/db/src/firm-profile-repository.ts",
         "packages/db/src/quote-delivery-repository.ts",
         "packages/db/test/migration-proofs/0949_practice_firm_name.proof.json",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/practice-firm-name.integration.test.ts"
       ]
     }

@@ -239,6 +239,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.surface_shadow_signal_early(p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb)", "0735_per_firm_final_check_terms.sql"],
     ["app.accept_final_check_terms(p_tenant uuid, p_actor uuid, p_command uuid, p_version text)", "0735_per_firm_final_check_terms.sql"],
     ["app.guard_final_lock_disclosure_terms()", "0735_per_firm_final_check_terms.sql"],
+    ["app.current_firm_profile_key()", "0949_practice_firm_name.sql"],
+    ["app.job_saved_firm_name(j uuid)", "0949_practice_firm_name.sql"],
   ] as readonly (readonly [string, string, number?])[]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {

@@ -1,5 +1,6 @@
 BEGIN;
 -- Forward-only; no rows, issued documents, approvals or existing ACLs are changed.
+-- Latest body: 0949 for app.current_firm_profile_key and app.job_saved_firm_name.
 CREATE OR REPLACE FUNCTION app.current_firm_profile_key() RETURNS text
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE b jsonb; scopes text[]; d text;

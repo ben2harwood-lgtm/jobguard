@@ -56,7 +56,7 @@ it("blank practice owner saves a name for only its own quote and acceptance", as
  // Include a populated pre-existing company profile in upgrade preservation.
  const otherTenant = randomUUID();
  await c.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[otherTenant]);
- await c.admin.query("INSERT INTO app.firm_profile(tenant_id,company_key,trading_name) VALUES($1,$1::text,'Fictional Existing Firm')",[otherTenant]);
+ await c.admin.query("INSERT INTO app.firm_profile(tenant_id,company_key,trading_name) VALUES($1::uuid,$1::text,'Fictional Existing Firm')",[otherTenant]);
  const before = await preserved(), sql = await readFile(new URL(`../migrations/${own}`, import.meta.url), "utf8");
  await c.admin.query(sql); expect(await preserved()).toEqual(before);
  expect(await repo.read(a.auth.context)).toMatchObject({ isPractice: true, canSave: true, profile: null });
