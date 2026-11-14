@@ -150,7 +150,9 @@
         "packages/db/test/readiness-store.integration.test.ts",
         "packages/db/test/shadow-demo-guide-outside.integration.test.ts",
         "packages/db/test/shadow-demo-guide.integration.test.ts",
-        "packages/db/test/shadow-persistence.integration.test.ts"
+        "packages/db/test/shadow-persistence.integration.test.ts",
+        "packages/db/test/site-extra-evidence-routines.integration.test.ts",
+        "packages/db/test/site-extra-priced-evidence.integration.test.ts"
       ]
     }
   }

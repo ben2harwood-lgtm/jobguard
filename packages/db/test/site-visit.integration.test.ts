@@ -1,4 +1,5 @@
 import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
 // Written before the repository. Real PostgreSQL (embedded) through merged cluster(); the runtime role is the application login.
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -67,8 +68,8 @@ describe("ENT-3b success paths", () => {
   const receipts = (await c.admin.query("SELECT command_type,status FROM app.command_receipt WHERE tenant_id=$1 AND command_type IN('StartSiteVisit','CompleteSiteVisit') ORDER BY command_type", [f.p.tenantId])).rows;
   expect(receipts).toEqual([{ command_type: "CompleteSiteVisit", status: "succeeded" }, { command_type: "StartSiteVisit", status: "succeeded" }]);
   await chain(c, f);
-  // LP-6d: the scheduling read runs in the supervisor's own bound request.
-  const supervisor = { ...f.members.supervisor.member, context: await testActorContext(c.admin, f.ctx, f.members.supervisor.member) };
+  // LP-6d: the scheduling read runs in the supervisor's own signed-in session.
+  const supervisor = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.members.supervisor.member.membershipId);
   const shown = (await new JobSchedulingRepository(c.runtime).siteVisits(supervisor, f.jobId)).visits.find(v => v.id === started.visitId);
   expect(shown).toMatchObject({ membershipId: a.member.membershipId, startedAt: expect.any(String), completedAt: expect.any(String) });
   expect(Date.parse(shown!.completedAt!)).toBeGreaterThanOrEqual(Date.parse(shown!.startedAt));
