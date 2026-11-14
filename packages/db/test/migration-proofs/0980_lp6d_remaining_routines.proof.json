@@ -859,13 +859,14 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "9e089d878f3292e83b1139f0a1884aba355a63d0de6051a7b808fa82f4731989",
+        "definitionSha256": null,
         "staticWrites": [
           "app.command_receipt",
           "app.final_check_terms_acceptance"
         ],
         "staticCalls": [
           "app.append_final_lock_audit",
+          "app.final_check_request_scope",
           "app.final_lock_hash",
           "app.final_lock_require_owner"
         ]
@@ -881,7 +882,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "536976edee6b1cf599be46e77df5ef4f56350a2b755f131b79e518b4d579c72e",
+        "definitionSha256": "d5b3cf53f23ab83327d22b0635c171ab839c265c805532fbd23e85c98048f346",
         "staticWrites": [
           "app.command_receipt",
           "app.final_check_terms_acceptance"
@@ -890,6 +891,7 @@
           "app.append_final_lock_audit",
           "app.current_actor",
           "app.current_tenant",
+          "app.final_check_request_scope",
           "app.final_lock_hash",
           "app.final_lock_require_owner"
         ]
@@ -2146,7 +2148,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "ae4fcf69bcbd955fce9e535241c0a94f3f9bfb9a1b731b64e066b0894dfa8940",
+        "definitionSha256": "4adecd9482b1b9bf3dda02c4270d24284dd2a40fe4d7a4a196e64cbf4842fa67",
         "staticWrites": [],
         "staticCalls": [
           "app.final_check_builder",
@@ -2165,7 +2167,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "65c6d32b32aae8ca4425f092a611d8b70961f42fa2bef2588f4989341627ec88",
+        "definitionSha256": "842ddf67b6555257b3fd2164948e1ef93a767e5535e93f0ba6718a4796cef7d2",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -3502,7 +3504,8 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
-          "app.authenticate_practice_session"
+          "app.authenticate_practice_session",
+          "app.final_check_job_terms"
         ]
       },
       "after": {
@@ -3516,13 +3519,14 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "62416d5ff7f749fa96d32105c603176be6a1f0e6b956139f1ae89c1e31a86a7b",
+        "definitionSha256": "c16cc07e233d7de2b2e05711e9b6748e86b8da4c471a8c9ffd438fa8f5c26d93",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
           "app.contractor_session",
           "app.current_actor",
-          "app.current_tenant"
+          "app.current_tenant",
+          "app.final_check_job_terms"
         ]
       }
     },
@@ -3688,7 +3692,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "2f1c0fbdefd7bbae19a659bff17cc30e4a977054fd73ebb36162fcea2229096c",
+        "definitionSha256": "296f120f3109e956817ca3d8cfe7d617846f719388e78a153fa8a7f5990f4ec5",
         "staticWrites": [
           "app.action_authorization",
           "app.action_outbox",
@@ -5437,6 +5441,7 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
+          "app.final_check_job_terms",
           "app.final_check_read_authority"
         ]
       },
@@ -5451,12 +5456,13 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "8c08348295377374a34de89893cca6f38223f602745da26707181edbc599a064",
+        "definitionSha256": "861cf148188bebfbdbb744b87e0620636c76b6dcf5828bcee71a7a9b7c9e7d35",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
           "app.current_actor",
           "app.current_tenant",
+          "app.final_check_job_terms",
           "app.final_check_read_authority"
         ]
       }
@@ -7434,10 +7440,11 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "5136ebc9b7612e7ff8804e3babc372562910983fa30eebc4d93a76b320e2ef51",
+        "definitionSha256": "e8f621b8c1f05b26088d4ff60b630deb4c0195d0472d12996897f6652b028bd3",
         "staticWrites": [],
         "staticCalls": [
-          "app.authenticate_practice_session"
+          "app.authenticate_practice_session",
+          "app.final_check_job_terms"
         ]
       }
     },
@@ -7455,7 +7462,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "70f3673d1d6653b8049bc48acfe71cdb9ca247be32948ecc8c4374431446b64e",
+        "definitionSha256": "f5439e05daedb076873054158ccf98b0c5a3e1216f3a192b383430e7610fe0f8",
         "staticWrites": [],
         "staticCalls": [
           "app.final_check_read_authority",
@@ -7478,9 +7485,10 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "db6b29b03f044f2e38ccc1819d225081201b99c3b0463e62d2906d6236759112",
+        "definitionSha256": "e19a952cd3e7e6ed0856f3bbce8516f95c7f1b1598f323d125d67f7fa5a5bcb9",
         "staticWrites": [],
         "staticCalls": [
+          "app.final_check_job_terms",
           "app.final_check_read_authority"
         ]
       }

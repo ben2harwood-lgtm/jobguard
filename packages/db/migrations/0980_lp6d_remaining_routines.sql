@@ -663,7 +663,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0132_final_account_lock.sql
+-- Latest body: packages/db/migrations/0735_per_firm_final_check_terms.sql
 CREATE OR REPLACE FUNCTION app.accept_final_check_terms(p_tenant uuid,p_actor uuid,p_command uuid,p_version text) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
@@ -675,20 +675,24 @@ BEGIN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE request_digest text; prior app.command_receipt; event_id uuid:=gen_random_uuid(); row_id uuid:=gen_random_uuid(); result jsonb;
+ scope text:=app.final_check_request_scope(p_tenant);
 BEGIN
  PERFORM app.final_lock_require_owner(p_tenant,p_actor);
+ IF p_tenant='11111111-1111-4111-8111-111111111111'::uuid AND scope IS NULL THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
  IF p_command IS NULL OR p_version IS DISTINCT FROM 'synthetic_final_check_terms.v1' THEN RAISE EXCEPTION 'INVALID_FINAL_ACCOUNT_LOCK_INPUT'; END IF;
- -- Tenant acceptance serializes independently, before the audit head; it never reads a signal.
  PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant::text||':final-check-terms',130));
- request_digest:=app.final_lock_hash(jsonb_build_object('command','AcceptFinalCheckTerms','actor',p_actor,'version',p_version));
+ -- Company request hashes retain their existing bytes; practice hashes bind scope.
+ request_digest:=app.final_lock_hash(jsonb_build_object('command','AcceptFinalCheckTerms','actor',p_actor,'version',p_version)
+  ||CASE WHEN scope IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('practiceSessionDigest',scope) END);
  SELECT * INTO prior FROM app.command_receipt WHERE tenant_id=p_tenant AND command_id=p_command;
  IF FOUND THEN IF prior.command_type<>'AcceptFinalCheckTerms' OR prior.request_hash<>request_digest THEN RAISE EXCEPTION 'IDEMPOTENCY_PAYLOAD_CONFLICT' USING ERRCODE='23505'; END IF; RETURN prior.result; END IF;
  result:=jsonb_build_object('acceptanceId',row_id,'termsVersion',p_version);
  INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
  VALUES(p_tenant,p_command,'AcceptFinalCheckTerms',p_command::text,request_digest,'succeeded',result,p_actor,clock_timestamp());
- INSERT INTO app.final_check_terms_acceptance(tenant_id,id,terms_version,accepting_membership_id,accepted_at,command_id,audit_event_id)
- VALUES(p_tenant,row_id,p_version,p_actor,clock_timestamp(),p_command,event_id);
- PERFORM app.append_final_lock_audit(event_id,p_actor,p_tenant,'final_check.terms_accepted',jsonb_build_object('acceptanceId',row_id,'commandId',p_command));
+ INSERT INTO app.final_check_terms_acceptance(tenant_id,id,terms_version,accepting_membership_id,accepted_at,command_id,audit_event_id,practice_session_digest)
+ VALUES(p_tenant,row_id,p_version,p_actor,clock_timestamp(),p_command,event_id,scope);
+ PERFORM app.append_final_lock_audit(event_id,p_actor,p_tenant,'final_check.terms_accepted',jsonb_build_object('acceptanceId',row_id,'commandId',p_command)
+  ||CASE WHEN scope IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('practiceSessionDigest',scope) END);
  RETURN result;
 END;
 END
@@ -1931,7 +1935,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0732_final_check_typed_recovery.sql
+-- Latest body: packages/db/migrations/0737_real_fc_revealed_estimate.sql
 CREATE OR REPLACE FUNCTION app.read_final_check_reveal(t uuid,j uuid,d text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
@@ -1973,7 +1977,38 @@ BEGIN
  IF EXISTS(SELECT 1 FROM app.final_check_processing_source s WHERE s.tenant_id=t AND s.job_id=j AND s.manifest_id=b.manifest_id AND EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=s.evidence_id)) THEN
   RETURN jsonb_build_object('state','failed','lockId',l.id,'items','[]'::jsonb,'postLockItems',post_items);
  END IF;
- SELECT coalesce(jsonb_agg(jsonb_build_object('signalId',p.signal_id,'signalRevision',p.signal_revision,'description',p.description,'estimatedValuePence',(SELECT CASE WHEN count(DISTINCT v.estimated_value_pence)=1 AND bool_and(v.estimated_value_pence BETWEEN 0 AND 1000000000000) THEN min(v.estimated_value_pence) ELSE NULL END FROM app.shadow_commercial_signal v JOIN app.shadow_commercial_signal primary_signal ON primary_signal.tenant_id=v.tenant_id AND primary_signal.job_id=v.job_id AND primary_signal.work_id=v.work_id WHERE primary_signal.tenant_id=t AND primary_signal.job_id=j AND primary_signal.id=p.signal_id AND EXISTS(SELECT 1 FROM app.shadow_signal_evidence ve JOIN app.final_check_processing_source ps ON(ps.tenant_id,ps.job_id,ps.evidence_id,ps.manifest_id)=(ve.tenant_id,ve.job_id,ve.evidence_id,b.manifest_id) WHERE ve.tenant_id=t AND ve.job_id=j AND ve.signal_id=v.id AND ve.source_received_at<=l.locked_at)),'evidence',p.evidence,'comparisons',p.comparisons,
+ SELECT coalesce(jsonb_agg(jsonb_build_object('signalId',p.signal_id,'signalRevision',p.signal_revision,'description',p.description,'estimatedValuePence',(SELECT CASE
+    WHEN count(*)=count(v.estimated_value_pence)
+     AND count(DISTINCT v.estimated_value_pence)=1
+     AND bool_and(v.estimated_value_pence BETWEEN 0 AND 1000000000000)
+    THEN min(v.estimated_value_pence) ELSE NULL END
+   FROM app.shadow_commercial_signal primary_signal
+   JOIN app.shadow_commercial_signal v ON(v.tenant_id,v.job_id,v.work_id)=(primary_signal.tenant_id,primary_signal.job_id,primary_signal.work_id)
+   JOIN app.shadow_signal_classification vc ON(vc.tenant_id,vc.job_id,vc.run_id,vc.signal_id)=(p.tenant_id,p.job_id,p.run_id,v.id)
+   WHERE primary_signal.tenant_id=t AND primary_signal.job_id=j AND primary_signal.id=p.signal_id
+    AND EXISTS(SELECT 1 FROM app.shadow_signal_evidence ve
+     JOIN app.final_check_processing_source ps ON(ps.tenant_id,ps.job_id,ps.evidence_id,ps.object_version_id,ps.sha256,ps.source_received_at,ps.manifest_id)
+      =(ve.tenant_id,ve.job_id,ve.evidence_id,ve.object_version_id,ve.sha256,ve.source_received_at,b.manifest_id)
+     JOIN app.evidence_object eo ON(eo.tenant_id,eo.job_id,eo.id,eo.object_version_id,eo.sha256,eo.server_received_at)
+      =(ve.tenant_id,ve.job_id,ve.evidence_id,ve.object_version_id,ve.sha256,ve.source_received_at)
+     WHERE ve.tenant_id=t AND ve.job_id=j AND ve.signal_id=v.id AND ve.source_received_at<=l.locked_at
+      AND eo.server_verified_at IS NOT NULL
+      AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=ve.evidence_id))),
+  'variationId',(SELECT v.id FROM app.variation v
+   JOIN app.extra_origin o ON(o.tenant_id,o.job_id,o.variation_id)=(v.tenant_id,v.job_id,v.id)
+   JOIN app.command_receipt cr ON(cr.tenant_id,cr.command_id)=(o.tenant_id,o.command_id)
+   WHERE db.answer='confirmed_extra' AND s.disposition='confirmed_extra'
+    AND (s.tenant_id,s.job_id,s.run_id,s.signal_id)=(p.tenant_id,p.job_id,p.run_id,p.signal_id)
+    AND db.lock_id=l.id AND db.expected_signal_revision=p.signal_revision
+    AND v.tenant_id=t AND v.job_id=j AND v.id=db.command_id AND v.origin='jobguard_catch'
+    AND o.kind='jobguard_catch' AND o.job_track='small_builder' AND o.provenance='command'
+    AND o.source_signal_id=p.signal_id AND o.command_id=db.command_id
+    AND cr.command_type='ConfirmJobGuardCatch' AND cr.status='succeeded'
+    AND cr.actor_membership_id=db.actor_membership_id AND cr.request_hash=db.request_hash
+    AND cr.semantic_key='extra-origin:'||j::text||':'||v.id::text
+    AND cr.result->>'variationId'=v.id::text AND cr.result->>'dispositionId'=db.disposition_id::text
+    AND cr.result->>'signalId'=p.signal_id::text AND cr.result->>'runId'=p.run_id::text
+    AND cr.result->>'lockId'=l.id::text AND cr.result->>'disposition'='confirmed_extra'),'evidence',p.evidence,'comparisons',p.comparisons,
   'baselineHash',p.baseline_hash,'captureRegisterHash',p.capture_register_hash,'lineSetHash',p.line_set_hash,'evidenceSetHash',p.evidence_set_hash,'disposition',s.disposition,'answer',db.answer,'dispositionId',db.disposition_id) ORDER BY p.signal_id),'[]') INTO items
  FROM app.final_check_reveal_proof p JOIN app.shadow_signal_classification c ON(c.tenant_id,c.job_id,c.run_id,c.signal_id)=(p.tenant_id,p.job_id,p.run_id,p.signal_id)
  LEFT JOIN app.final_check_disposition_binding db ON(db.tenant_id,db.job_id,db.run_id,db.signal_id)=(p.tenant_id,p.job_id,p.run_id,p.signal_id)
@@ -3541,9 +3576,12 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0690_import_ancestry_record_anchor.sql
-CREATE OR REPLACE FUNCTION app.evidence_pack_v3_owner(t uuid,c uuid,d text) RETURNS uuid
- LANGUAGE plpgsql SET search_path=pg_catalog,app AS $$
+-- Latest body: packages/db/migrations/0735_per_firm_final_check_terms.sql
+CREATE OR REPLACE FUNCTION app.evidence_pack_v3_owner(t uuid, c uuid, d text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog', 'app'
+AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
@@ -3567,7 +3605,7 @@ BEGIN
       AND rv.semantic_key='import:'||child.id::text AND rv.result->>'jobId'=child.id::text AND rv.result->>'sourceJobId'=source.id::text))
  ) SELECT EXISTS(SELECT 1 FROM owned_jobs WHERE id=j) INTO owned;
  IF NOT owned OR NOT EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=j AND environment='synthetic_demo' AND job_track='small_builder')
- OR NOT EXISTS(SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=t AND terms_version='synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
+ OR NOT app.final_check_job_terms(t,j,'synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
  RETURN j;
 END;
 END
@@ -3596,7 +3634,7 @@ BEGIN
       AND rv.semantic_key='import:'||child.id::text AND rv.result->>'jobId'=child.id::text AND rv.result->>'sourceJobId'=source.id::text))
  ) SELECT EXISTS(SELECT 1 FROM owned_jobs WHERE id=j) INTO owned;
  IF NOT owned OR NOT EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=j AND environment='synthetic_demo' AND job_track='small_builder')
- OR NOT EXISTS(SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=t AND terms_version='synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
+ OR NOT app.final_check_job_terms(t,j,'synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
  RETURN j;
 END
 $$;
@@ -3786,9 +3824,10 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0650_demo_customer_link_reference.sql
+-- Latest body: packages/db/migrations/0733_real_customer_link_own_quote.sql
 CREATE OR REPLACE FUNCTION app.demo_issue_customer_link(t uuid,j uuid,c uuid,session_digest text,link_digest text,content text) RETURNS uuid
- LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
@@ -3796,29 +3835,68 @@ CREATE OR REPLACE FUNCTION app.demo_issue_customer_link(t uuid,j uuid,c uuid,ses
   OR (SELECT membership_id FROM app.authenticate_practice_session(session_digest,app.current_tenant())) IS DISTINCT FROM app.current_actor() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
-DECLARE actor record; m app.membership; b app.job_party_binding; recipient text; g uuid:=gen_random_uuid(); o uuid:=gen_random_uuid(); d uuid:=gen_random_uuid(); r uuid:=gen_random_uuid(); a uuid:=gen_random_uuid(); ts timestamptz; hash text;
+DECLARE actor record; m app.membership; b app.job_party_binding; recipient text; g uuid:=gen_random_uuid(); o uuid:=gen_random_uuid(); d uuid:=gen_random_uuid(); r uuid:=gen_random_uuid(); a uuid:=gen_random_uuid(); ts timestamptz; hash text; own_quote boolean; document_id uuid; doc app.quote_document_version;
 BEGIN
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'SYNTHETIC_MODE_REQUIRED' USING ERRCODE='42501'; END IF;
- SELECT * INTO actor FROM app.final_check_builder(t,j,session_digest);
- -- Narrow: only the practice tenant, only after lock, only while a found extra exists for the customer to review.
- IF t<>'11111111-1111-4111-8111-111111111111'::uuid THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
- IF NOT EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j)
-  OR NOT EXISTS(SELECT 1 FROM app.extra_origin WHERE tenant_id=t AND job_id=j AND kind='jobguard_catch') THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ own_quote:=NOT EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j);
+ IF own_quote THEN
+  SELECT membership_id AS member_id,identity_user_id AS user_id INTO actor FROM app.authenticate_practice_session(session_digest,t);
+  IF actor.member_id IS NULL OR app.current_tenant() IS DISTINCT FROM t OR app.current_actor() IS DISTINCT FROM actor.member_id
+   THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ ELSE
+  SELECT * INTO actor FROM app.final_check_builder(t,j,session_digest);
+  -- Preserve the prepared post-lock issuer and its restrictions.
+  IF t<>'11111111-1111-4111-8111-111111111111'::uuid OR NOT EXISTS(
+   SELECT 1 FROM app.extra_origin WHERE tenant_id=t AND job_id=j AND kind='jobguard_catch')
+   THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text,387));
  SELECT * INTO m FROM app.membership WHERE tenant_id=t AND id=actor.member_id AND role='owner' AND revoked_at IS NULL AND(expires_at IS NULL OR expires_at>clock_timestamp()) FOR SHARE;
  IF m.id IS NULL THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
  PERFORM 1 FROM app.job WHERE tenant_id=t AND id=j FOR SHARE;
+ -- Recheck authenticated owner/session and immutable creator after lock waits.
+ IF own_quote THEN
+  PERFORM 1 FROM app.quote_draft WHERE tenant_id=t AND job_id=j FOR SHARE;
+  PERFORM 1 FROM control_plane.practice_session WHERE token_digest=session_digest FOR SHARE;
+  IF NOT EXISTS(SELECT 1 FROM app.authenticate_practice_session(session_digest,t) s
+    WHERE s.membership_id=m.id AND s.identity_user_id=m.identity_user_id)
+   OR app.current_actor() IS DISTINCT FROM m.id OR app.current_tenant() IS DISTINCT FROM t
+   OR NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=j AND practice_session_digest=session_digest
+    AND provenance='system_generated_quote' AND status='quoting')
+   OR EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=t AND job_id=j)
+   THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ END IF;
  SELECT bnd.* INTO b FROM app.job_party_current pc JOIN app.job_party_binding bnd ON(bnd.tenant_id,bnd.job_id,bnd.id)=(pc.tenant_id,pc.job_id,pc.binding_id)
  WHERE pc.tenant_id=t AND pc.job_id=j AND bnd.customer_id=c FOR SHARE OF pc;
+ IF own_quote AND (app.current_tenant() IS DISTINCT FROM t OR app.current_actor() IS DISTINCT FROM m.id)
+  THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
  SELECT lower(payload->>'email') INTO recipient FROM app.customer_revision WHERE tenant_id=t AND id=b.customer_revision_id;
  IF b.id IS NULL OR recipient IS NULL OR recipient !~ '^[^@[:space:]]+@[^@[:space:]]+\.invalid$' OR link_digest IS NULL OR link_digest !~ '^[a-f0-9]{64}$'
   OR content IS NULL OR length(content)>4096 THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ IF own_quote THEN
+  IF content IS NULL OR content !~ ('^customer-quote-signin-reference\.v1:'||t::text||'/'||j::text||'/'||c::text||'/[a-f0-9-]{36}/[A-Za-z0-9_-]{43}$')
+   THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+  document_id:=split_part(content,'/',4)::uuid;
+  -- Persist the same independent delivery reference used to derive the transient bearer.
+  content:='customer-signin-reference.v1:'||t::text||'/'||j::text||'/'||c::text||'/'||split_part(content,'/',5);
+  SELECT q.* INTO doc FROM app.quote_document_version q
+   JOIN app.quote_draft draft ON(draft.tenant_id,draft.job_id,draft.current_revision_id)=(q.tenant_id,q.job_id,q.quote_revision_id)
+   WHERE q.tenant_id=t AND q.job_id=j AND q.id=document_id
+    AND q.snapshot->'jobParties'->>'bindingId'=b.id::text
+    AND q.snapshot->'jobParties'->>'customerRevisionId'=b.customer_revision_id::text
+    AND lower(q.snapshot->'customer'->>'email')=recipient
+    AND EXISTS(SELECT 1 FROM app.quote_send s WHERE s.tenant_id=t AND s.job_id=j AND s.document_id=q.id AND s.content_hash=q.content_hash)
+    AND NOT EXISTS(SELECT 1 FROM app.quote_document_version newer WHERE newer.tenant_id=t AND newer.job_id=j AND newer.document_version>q.document_version)
+    AND NOT EXISTS(SELECT 1 FROM app.acceptance_event e WHERE e.tenant_id=t AND e.job_id=j AND e.document_id=q.id AND e.kind='superseded');
+  IF doc.id IS NULL THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ ELSE
  -- Preserve exact legacy path validation for existing synthetic callers, but never persist a credential.
  IF content ~ ('^/customer/sign-in#'||t::text||'/'||j::text||'/'||c::text||'/[A-Za-z0-9_-]{43}$') THEN
   content:='customer-signin-redacted.v1:'||encode(sha256(convert_to(content,'UTF8')),'hex');
  ELSE
   -- Same non-credential reference boundary as 0533's identity.customer_portal_issue.
   IF content !~ ('^customer-signin-reference\.v1:'||t::text||'/'||j::text||'/'||c::text||'/[A-Za-z0-9_-]{43}$') THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ END IF;
  END IF;
  ts:=clock_timestamp();
  IF EXISTS(SELECT 1 FROM app.customer_portal_grant WHERE tenant_id=t AND job_id=j AND issued_at>ts-interval '1 minute') THEN RAISE EXCEPTION 'CUSTOMER_LINK_RATE_LIMITED' USING ERRCODE='P0001'; END IF;
@@ -3831,8 +3909,8 @@ BEGIN
  VALUES(a,t,d,r,m.id,'customer_portal.signin.send',recipient,hash,b.revision,'customer-signin.synthetic.v1',ts+interval '10 minutes');
  INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,recipient,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at)
  VALUES(o,t,a,'fake_email','customer-signin:'||g::text,'customer_portal.signin.send',recipient,hash,content,b.revision,'customer-signin.synthetic.v1',ts+interval '10 minutes');
- INSERT INTO app.customer_portal_grant(tenant_id,id,company_id,job_id,customer_id,party_binding_id,customer_revision_id,token_digest,issuer_membership_id,outbox_id,issued_at,expires_at)
- VALUES(t,g,m.account_id,j,c,b.id,b.customer_revision_id,link_digest,m.id,o,ts,ts+interval '10 minutes');
+ INSERT INTO app.customer_portal_grant(tenant_id,id,company_id,job_id,customer_id,party_binding_id,customer_revision_id,token_digest,issuer_membership_id,outbox_id,issued_at,expires_at,quote_document_id,quote_document_version,quote_document_hash)
+ VALUES(t,g,m.account_id,j,c,b.id,b.customer_revision_id,link_digest,m.id,o,ts,ts+interval '10 minutes',document_id,doc.document_version,doc.content_hash);
  IF NOT app.customer_portal_current((SELECT x FROM app.customer_portal_grant x WHERE tenant_id=t AND id=g)) THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
  PERFORM app.customer_portal_audit(t,g,'issued');
  RETURN g;
@@ -6469,7 +6547,7 @@ END;
 END
 $$;
 
--- Latest body: packages/db/migrations/0732_final_check_typed_recovery.sql
+-- Latest body: packages/db/migrations/0735_per_firm_final_check_terms.sql
 CREATE OR REPLACE FUNCTION app.final_check_builder(t uuid,j uuid,d text,locking boolean DEFAULT false)
  RETURNS TABLE(member_id uuid,user_id uuid) LANGUAGE plpgsql SET search_path=pg_catalog,app AS $$
 BEGIN
@@ -6484,7 +6562,7 @@ BEGIN
  END IF;
 BEGIN
  RETURN QUERY SELECT * FROM app.final_check_read_authority(t,j,d,locking);
- IF NOT EXISTS(SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=t AND terms_version='synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF NOT app.final_check_job_terms(t,j,'synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
 END;
 END
 $$;
@@ -6503,7 +6581,7 @@ CREATE FUNCTION app.lp6d_final_check_builder_unbound(t uuid,j uuid,d text,lockin
  RETURNS TABLE(member_id uuid,user_id uuid) LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
 BEGIN
  RETURN QUERY SELECT * FROM app.final_check_read_authority(t,j,d,locking);
- IF NOT EXISTS(SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=t AND terms_version='synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF NOT app.final_check_job_terms(t,j,'synthetic_final_check_terms.v1') THEN RAISE EXCEPTION 'FINAL_CHECK_FORBIDDEN' USING ERRCODE='42501'; END IF;
 END
 $$;
 ALTER FUNCTION app.lp6d_final_check_builder_unbound(uuid,uuid,text,boolean) OWNER TO jobguard_migration;
@@ -6547,7 +6625,38 @@ BEGIN
  IF EXISTS(SELECT 1 FROM app.final_check_processing_source s WHERE s.tenant_id=t AND s.job_id=j AND s.manifest_id=b.manifest_id AND EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=s.evidence_id)) THEN
   RETURN jsonb_build_object('state','failed','lockId',l.id,'items','[]'::jsonb,'postLockItems',post_items);
  END IF;
- SELECT coalesce(jsonb_agg(jsonb_build_object('signalId',p.signal_id,'signalRevision',p.signal_revision,'description',p.description,'estimatedValuePence',(SELECT CASE WHEN count(DISTINCT v.estimated_value_pence)=1 AND bool_and(v.estimated_value_pence BETWEEN 0 AND 1000000000000) THEN min(v.estimated_value_pence) ELSE NULL END FROM app.shadow_commercial_signal v JOIN app.shadow_commercial_signal primary_signal ON primary_signal.tenant_id=v.tenant_id AND primary_signal.job_id=v.job_id AND primary_signal.work_id=v.work_id WHERE primary_signal.tenant_id=t AND primary_signal.job_id=j AND primary_signal.id=p.signal_id AND EXISTS(SELECT 1 FROM app.shadow_signal_evidence ve JOIN app.final_check_processing_source ps ON(ps.tenant_id,ps.job_id,ps.evidence_id,ps.manifest_id)=(ve.tenant_id,ve.job_id,ve.evidence_id,b.manifest_id) WHERE ve.tenant_id=t AND ve.job_id=j AND ve.signal_id=v.id AND ve.source_received_at<=l.locked_at)),'evidence',p.evidence,'comparisons',p.comparisons,
+ SELECT coalesce(jsonb_agg(jsonb_build_object('signalId',p.signal_id,'signalRevision',p.signal_revision,'description',p.description,'estimatedValuePence',(SELECT CASE
+    WHEN count(*)=count(v.estimated_value_pence)
+     AND count(DISTINCT v.estimated_value_pence)=1
+     AND bool_and(v.estimated_value_pence BETWEEN 0 AND 1000000000000)
+    THEN min(v.estimated_value_pence) ELSE NULL END
+   FROM app.shadow_commercial_signal primary_signal
+   JOIN app.shadow_commercial_signal v ON(v.tenant_id,v.job_id,v.work_id)=(primary_signal.tenant_id,primary_signal.job_id,primary_signal.work_id)
+   JOIN app.shadow_signal_classification vc ON(vc.tenant_id,vc.job_id,vc.run_id,vc.signal_id)=(p.tenant_id,p.job_id,p.run_id,v.id)
+   WHERE primary_signal.tenant_id=t AND primary_signal.job_id=j AND primary_signal.id=p.signal_id
+    AND EXISTS(SELECT 1 FROM app.shadow_signal_evidence ve
+     JOIN app.final_check_processing_source ps ON(ps.tenant_id,ps.job_id,ps.evidence_id,ps.object_version_id,ps.sha256,ps.source_received_at,ps.manifest_id)
+      =(ve.tenant_id,ve.job_id,ve.evidence_id,ve.object_version_id,ve.sha256,ve.source_received_at,b.manifest_id)
+     JOIN app.evidence_object eo ON(eo.tenant_id,eo.job_id,eo.id,eo.object_version_id,eo.sha256,eo.server_received_at)
+      =(ve.tenant_id,ve.job_id,ve.evidence_id,ve.object_version_id,ve.sha256,ve.source_received_at)
+     WHERE ve.tenant_id=t AND ve.job_id=j AND ve.signal_id=v.id AND ve.source_received_at<=l.locked_at
+      AND eo.server_verified_at IS NOT NULL
+      AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=ve.evidence_id))),
+  'variationId',(SELECT v.id FROM app.variation v
+   JOIN app.extra_origin o ON(o.tenant_id,o.job_id,o.variation_id)=(v.tenant_id,v.job_id,v.id)
+   JOIN app.command_receipt cr ON(cr.tenant_id,cr.command_id)=(o.tenant_id,o.command_id)
+   WHERE db.answer='confirmed_extra' AND s.disposition='confirmed_extra'
+    AND (s.tenant_id,s.job_id,s.run_id,s.signal_id)=(p.tenant_id,p.job_id,p.run_id,p.signal_id)
+    AND db.lock_id=l.id AND db.expected_signal_revision=p.signal_revision
+    AND v.tenant_id=t AND v.job_id=j AND v.id=db.command_id AND v.origin='jobguard_catch'
+    AND o.kind='jobguard_catch' AND o.job_track='small_builder' AND o.provenance='command'
+    AND o.source_signal_id=p.signal_id AND o.command_id=db.command_id
+    AND cr.command_type='ConfirmJobGuardCatch' AND cr.status='succeeded'
+    AND cr.actor_membership_id=db.actor_membership_id AND cr.request_hash=db.request_hash
+    AND cr.semantic_key='extra-origin:'||j::text||':'||v.id::text
+    AND cr.result->>'variationId'=v.id::text AND cr.result->>'dispositionId'=db.disposition_id::text
+    AND cr.result->>'signalId'=p.signal_id::text AND cr.result->>'runId'=p.run_id::text
+    AND cr.result->>'lockId'=l.id::text AND cr.result->>'disposition'='confirmed_extra'),'evidence',p.evidence,'comparisons',p.comparisons,
   'baselineHash',p.baseline_hash,'captureRegisterHash',p.capture_register_hash,'lineSetHash',p.line_set_hash,'evidenceSetHash',p.evidence_set_hash,'disposition',s.disposition,'answer',db.answer,'dispositionId',db.disposition_id) ORDER BY p.signal_id),'[]') INTO items
  FROM app.final_check_reveal_proof p JOIN app.shadow_signal_classification c ON(c.tenant_id,c.job_id,c.run_id,c.signal_id)=(p.tenant_id,p.job_id,p.run_id,p.signal_id)
  LEFT JOIN app.final_check_disposition_binding db ON(db.tenant_id,db.job_id,db.run_id,db.signal_id)=(p.tenant_id,p.job_id,p.run_id,p.signal_id)

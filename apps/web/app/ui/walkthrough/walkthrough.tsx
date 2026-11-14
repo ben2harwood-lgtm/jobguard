@@ -135,21 +135,41 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     card.current?.focus({ preventScroll: true });
     let highlighted: HTMLElement | null = null;
     let hadHighlight = false;
-    function update() {
+    let settling: { top: number; height: number; equal: number; moved: boolean } | null = null;
+    function update(poll = false) {
       const root = visibleTarget(step!.target);
       const target = step!.spotlightTarget?.() ?? (root?.matches("button, input, textarea, select, a[href]") ? root : root?.querySelector<HTMLElement>("textarea, input, select, button, a[href]") ?? root);
       if (highlighted !== target) {
+        settling = null;
         highlighted?.classList.remove(styles.target!);
         highlighted = target;
         highlighted?.classList.add(styles.target!);
         if (highlighted) {
           const recentInput = lastInput.current !== null && performance.now() - lastInput.current < 1_000;
           const manualInput = !running.current && !currentPlaying.current && (recentInput || pointers.current.size > 0 || touches.current.size > 0);
-          if (card.current && (!hadHighlight || !manualInput)) clearPhoneDock(highlighted, card.current);
+          if (card.current && (!hadHighlight || !manualInput)) {
+            clearPhoneDock(highlighted, card.current);
+            const rect = highlighted.getBoundingClientRect();
+            settling = { top: rect.top + (window.scrollY ?? 0), height: rect.height, equal: 0, moved: false };
+          }
           hadHighlight = true;
         }
       }
       if (target) {
+        if (settling && poll) {
+          const recentInput = lastInput.current !== null && performance.now() - lastInput.current < 1_000;
+          const manualInput = !running.current && !currentPlaying.current && (recentInput || pointers.current.size > 0 || touches.current.size > 0);
+          const rect = target.getBoundingClientRect(), top = rect.top + (window.scrollY ?? 0);
+          // Only settle a newly highlighted control. Document coordinates ignore
+          // viewer scrolling; fresh manual input permanently cancels this retry.
+          if (manualInput) settling = null;
+          else if (top !== settling.top || rect.height !== settling.height) {
+            settling = { top, height: rect.height, equal: 0, moved: true };
+          } else if (++settling.equal === 2) {
+            const moved = settling.moved; settling = null;
+            if (moved && card.current) clearPhoneDock(target, card.current);
+          }
+        }
         const rect = target.getBoundingClientRect();
         setBox({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
         setDone(step!.isDone());
@@ -158,9 +178,10 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     const target = visibleTarget(step.target);
     target?.scrollIntoView({ block: "center", behavior: "instant" });
     update();
-    const interval = window.setInterval(update, 200);
-    window.addEventListener("resize", update); window.addEventListener("scroll", update, true);
-    return () => { clearInterval(interval); highlighted?.classList.remove(styles.target!); window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); };
+    const interval = window.setInterval(() => update(true), 200);
+    const track = () => update();
+    window.addEventListener("resize", track); window.addEventListener("scroll", track, true);
+    return () => { clearInterval(interval); highlighted?.classList.remove(styles.target!); window.removeEventListener("resize", track); window.removeEventListener("scroll", track, true); };
   }, [step, finished]);
   function advance() {
     if (!step || !visibleTarget(step.target) || !step.isDone()) return;
@@ -177,8 +198,15 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     const timeout = window.setTimeout(() => controller.abort(), step.timeoutMs ?? 12_000);
     if (playing && viewerPacing()) viewerPlayback.add(controller.signal);
     try {
-      const target = visibleTarget(step.target);
+      let target = visibleTarget(step.target);
+      // Autoplay can enter the next step before its saved screen has mounted.
+      // Keep the same deadline and cancellation boundary while it becomes visible.
+      while (!target && !controller.signal.aborted) {
+        await new Promise(resolve => window.setTimeout(resolve, 100));
+        target = visibleTarget(step.target);
+      }
       if (!target) throw new Error("This step's control is unavailable. Stop the tour or return when the screen is ready.");
+      if (controller.signal.aborted) return;
       if (!step.isDone()) {
         const delay = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 650;
         await new Promise<void>(resolve => {

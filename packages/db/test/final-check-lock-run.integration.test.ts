@@ -1,10 +1,12 @@
+import { practiceMaterialPool } from "../src/practice-session.js";
 // RED SV-5: real restricted pools and routines; CI only in the builder sandbox.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { FinalCheckRepository } from "../src/final-check-repository.js";
 import { FinalCheckCompletionRepository, practiceFinalCheckPorts } from "../src/shadow-detection-repository.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { unattributedTermsHistory } from "./sv5pre-fixtures.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, insertFinalCheckEvidence, finalCheckTenant, FINAL_CHECK_ACTOR, type FinalCheckFixture } from "./final-check-fixture.js";
 import { FinalCheckWorker } from "../../../apps/api/src/final-check.worker.js";
 import { executeFinalCheckTask } from "../../../apps/api/src/final-check-task-executor.js";
@@ -17,7 +19,7 @@ function runner(){
  return {repo,ports:{read:repo.manifest.bind(repo),execute:worker.execute.bind(worker),publish:completion.publish.bind(completion)}};
 }
 it("lock and exact command replay create one durable request; request-role access stays denied",async()=>{
- const a=await seedFinalCheckJob(f),commandId=randomUUID(),locks=new FinalAccountLockRepository(f.runtime);
+ const a=await seedFinalCheckJob(f),commandId=randomUUID(),locks=new FinalAccountLockRepository(practiceMaterialPool(f.runtime,a.digest));
  const command={jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId,finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1" as const};
  expect((await f.admin.query("SELECT 1 FROM infrastructure.final_check_request WHERE job_id=$1",[a.jobId])).rowCount).toBe(0);
  await locks.lock(a.context,command);await locks.lock(a.context,command);
@@ -59,7 +61,11 @@ it("a job without a practice session does not auto-request work",async()=>{
   await db.query("UPDATE app.job SET practice_session_digest=NULL,practice_scenario=NULL WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId]);
  });
  expect((await f.admin.query("SELECT practice_session_digest,practice_scenario FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])).rows).toEqual([{practice_session_digest:null,practice_scenario:null}]);
- await a.lock();expect((await f.admin.query("SELECT 1 FROM infrastructure.final_check_request WHERE job_id=$1",[a.jobId])).rowCount).toBe(0);
+ // 0735: a firm-less job is unattributed; only an unscoped member using unattributed
+ // (pre-0735) acceptance history can lock it. The privileged fixture writes that history.
+ expect(await unattributedTermsHistory(f.admin,a.tenantId,a.jobId,FINAL_CHECK_ACTOR)).toBe(true);
+ await new FinalAccountLockRepository(f.runtime).lock(await testBoundTenantContext(f.admin,a.tenantId,FINAL_CHECK_ACTOR),{jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:"final_account_declaration.v1"});
+ expect((await f.admin.query("SELECT 1 FROM infrastructure.final_check_request WHERE job_id=$1",[a.jobId])).rowCount).toBe(0);
 });
 
 it("0381 upgrades without changing existing locks or privileges and migrate replays safely",async()=>{

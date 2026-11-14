@@ -6,6 +6,11 @@ import { migrate, MIGRATION_URLS } from '../src/migrate.js';
 import { predecessorCatalogue } from './contractor-entitlement-fixtures.js';
 type Relation = { nspname:string; relname:string; relacl:unknown; [key:string]:unknown };
 function expectRelationsUnchanged(before:Relation[],after:Relation[],laterAcl:Set<string>) {
+ // 0733 adds only these quote bindings; retain every other predecessor attribute.
+ after=after.map(row=>row.nspname==='app'&&row.relname==='customer_portal_grant'?{...row,
+  columns:(row.columns as {attname:string}[]).filter(c=>!['quote_document_id','quote_document_version','quote_document_hash'].includes(c.attname)),
+  constraints:(row.constraints as {name:string}[]).filter(c=>!['customer_portal_grant_quote_complete','customer_portal_grant_quote_document_fk'].includes(c.name)),
+ }:row);
  for(const row of before){
   if(!laterAcl.has(`${row.nspname}.${row.relname}`)){expect(after).toContainEqual(row);continue;}
   // A later GRANT/REVOKE may also be column-level (0980 REVOKE UPDATE(revoked_at) ON app.action_authorization),
@@ -123,6 +128,8 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  for(const name of ['app.xa_issue_link','app.lp5b_contractor_permission','app.northside_capture_action'])later.add(name);
  // 0667 inserts the practice-owner guard into lock_final_account by text replacement; migfix-7 and plan-entitlement pin the body.
  later.add('app.lock_final_account');
+ // 0736 patches only the practice-proof cancellation body; migfix-7 and plan-entitlement pin both exact replacements.
+ later.add('app.ch4_capture_site_source');
  // A later GRANT/REVOKE on a predecessor table may change its ACL only; that migration's proof and LP-0 pin it.
  const laterAcl=new Set<string>();
  for(const url of MIGRATION_URLS.slice(boundary+1))
@@ -180,9 +187,56 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   columns:(newManifest.columns as {attname:string}[]).filter(c=>!attemptColumns.includes(c.attname)),
   constraints:[...(newManifest.constraints as Con[]).filter(c=>!attemptNames.has(c.name)),oldLockKey].sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0),
  };
- const afterRelations=after.relations.map((r:Relation)=>isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
+ // 0734 adds only its named receipt guards; pin both triggers to its proof and
+ // remove only the deferred trigger's exact constraint from the predecessor comparison.
+ const proofStatement=JSON.parse(await readFile(new URL('./migration-proofs/0734_job_proof_statement.proof.json',import.meta.url),'utf8'));
+ expect(proofStatement.lp0.filter((entry:{section:string;after:unknown})=>entry.section==='triggers'&&typeof entry.after==='string'&&entry.after.startsWith('app.command_receipt|')).map((entry:{after:string})=>entry.after)).toEqual([
+  'app.command_receipt|proof_statement_receipt_guard|app.guard_job_proof_receipt|BEFORE INSERT/DELETE/UPDATE|O',
+  'app.command_receipt|proof_statement_receipt_complete|app.require_completed_job_proof_statement|AFTER INSERT/UPDATE|O',
+ ]);
+ expect((await h.admin.query(`SELECT t.tgname name,n.nspname||'.'||p.proname routine,t.tgtype type,
+  t.tgenabled enabled,t.tgdeferrable deferrable,t.tginitdeferred deferred
+  FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid JOIN pg_namespace n ON n.oid=p.pronamespace
+  WHERE t.tgrelid='app.command_receipt'::regclass AND t.tgname=ANY($1) ORDER BY t.tgname`,
+  [['proof_statement_receipt_guard','proof_statement_receipt_complete']])).rows).toEqual([
+  {name:'proof_statement_receipt_complete',routine:'app.require_completed_job_proof_statement',type:21,enabled:'O',deferrable:true,deferred:true},
+  {name:'proof_statement_receipt_guard',routine:'app.guard_job_proof_receipt',type:31,enabled:'O',deferrable:false,deferred:false},
+ ]);
+ const isReceipt=(r:Relation)=>r.nspname==='app'&&r.relname==='command_receipt';
+ const receiptConstraints=after.relations.find(isReceipt)!.constraints as Con[];
+ expect(receiptConstraints.filter(c=>c.name==='proof_statement_receipt_complete')).toEqual([
+  {name:'proof_statement_receipt_complete',definition:'TRIGGER DEFERRABLE INITIALLY DEFERRED'},
+ ]);
+ // 0734 also admits only 'proof.statement' to the watchdog identity namespace and adds
+ // its deferred identity guard there; pin both, then compare everything else unchanged.
+ const isIdentity=(r:Relation)=>r.nspname==='app'&&r.relname==='watchdog_command_identity',identityCheck='watchdog_command_identity_command_type_check';
+ const priorIdentityCheck=(catalogue.relations.find(isIdentity)!.constraints as Con[]).find(c=>c.name===identityCheck)!;
+ const identityConstraints=after.relations.find(isIdentity)!.constraints as Con[];
+ expect(priorIdentityCheck.definition.startsWith('CHECK (')&&priorIdentityCheck.definition.endsWith(')')).toBe(true);
+ expect(identityConstraints.find(c=>c.name===identityCheck)!.definition).toBe(`CHECK ((${priorIdentityCheck.definition.slice(7,-1)} OR (command_type = 'proof.statement'::text)))`);
+ expect(identityConstraints.filter(c=>c.name==='proof_statement_identity_complete')).toEqual([
+  {name:'proof_statement_identity_complete',definition:'TRIGGER DEFERRABLE INITIALLY DEFERRED'},
+ ]);
+ expect(proofStatement.lp0.filter((entry:{section:string;after:unknown})=>entry.section==='triggers'&&typeof entry.after==='string'&&entry.after.startsWith('app.watchdog_command_identity|')).map((entry:{after:string})=>entry.after)).toEqual([
+  'app.watchdog_command_identity|proof_statement_identity_complete|app.require_completed_job_proof_statement|AFTER INSERT|O',
+ ]);
+ // 0735 adds only the nullable per-firm practice_session_digest column and its practice-session foreign key.
+ const isTerms=(r:Relation)=>r.nspname==='app'&&r.relname==='final_check_terms_acceptance';
+ const termsKey='final_check_terms_acceptance_practice_session_digest_fkey';
+ expect((await h.admin.query(`SELECT a.attname name,format_type(a.atttypid,a.atttypmod) type,a.attnotnull not_null,a.atthasdef has_default
+  FROM pg_attribute a WHERE a.attrelid='app.final_check_terms_acceptance'::regclass AND a.attname='practice_session_digest'`)).rows).toEqual([
+  {name:'practice_session_digest',type:'character(64)',not_null:false,has_default:false},
+ ]);
+ expect((after.relations.find(isTerms)!.constraints as Con[]).filter(c=>c.name===termsKey)).toEqual([
+  {name:termsKey,definition:'FOREIGN KEY (practice_session_digest) REFERENCES control_plane.practice_session(token_digest)'},
+ ]);
+ const normalizedTerms=(r:Relation)=>({...r,columns:(r.columns as {attname:string}[]).filter(c=>c.attname!=='practice_session_digest'),
+  constraints:(r.constraints as Con[]).filter(c=>c.name!==termsKey)});
+ const afterRelations=after.relations.map((r:Relation)=>isTerms(r)?normalizedTerms(r):isLanding(r)?{...r,constraints:(r.constraints as Con[]).filter(c=>c.name!==added)}
   :isJob(r)?{...r,constraints:(r.constraints as Con[]).map(c=>c.name===shape?priorShape:c)}:isBinding(r)?{...r,columns:bindingBefore.columns,constraints:bindingBefore.constraints}:isManifest(r)?normalizedManifest
-  :isOriginal(r)?{...r,columns:(r.columns as Col[]).map(c=>c.attname==='scope_item_id'?{...c,attnotnull:true}:c)}:r).map(withoutKinds);
+  :isOriginal(r)?{...r,columns:(r.columns as Col[]).map(c=>c.attname==='scope_item_id'?{...c,attnotnull:true}:c)}
+  :isReceipt(r)?{...r,constraints:receiptConstraints.filter(c=>c.name!=='proof_statement_receipt_complete')}
+  :isIdentity(r)?{...r,constraints:identityConstraints.filter(c=>c.name!=='proof_statement_identity_complete').map(c=>c.name===identityCheck?priorIdentityCheck:c)}:r).map(withoutKinds);
  expectRelationsUnchanged(catalogue.relations.map(withoutKinds),afterRelations,laterAcl);
  // 0672 lets its migration-owned pack writer read the sealed request binding; only that ACL entry is added.
  const bindingReaders=new Set(['app.current_actor','app.current_tenant']);

@@ -107,7 +107,7 @@
   {
     "name": "app.accept_final_check_terms",
     "arguments": "p_tenant uuid,p_actor uuid,p_command uuid,p_version text",
-    "source": "packages/db/migrations/0132_final_account_lock.sql",
+    "source": "packages/db/migrations/0735_per_firm_final_check_terms.sql",
     "actor": "p_actor",
     "tenant": "p_tenant"
   },
@@ -297,7 +297,7 @@
   {
     "name": "app.read_final_check_reveal",
     "arguments": "t uuid,j uuid,d text",
-    "source": "packages/db/migrations/0732_final_check_typed_recovery.sql",
+    "source": "packages/db/migrations/0737_real_fc_revealed_estimate.sql",
     "actor": null,
     "tenant": "t"
   },
@@ -501,7 +501,7 @@
   {
     "name": "app.evidence_pack_v3_owner",
     "arguments": "t uuid,c uuid,d text",
-    "source": "packages/db/migrations/0690_import_ancestry_record_anchor.sql",
+    "source": "packages/db/migrations/0735_per_firm_final_check_terms.sql",
     "actor": null,
     "tenant": "t"
   },
@@ -529,7 +529,7 @@
   {
     "name": "app.demo_issue_customer_link",
     "arguments": "t uuid,j uuid,c uuid,session_digest text,link_digest text,content text",
-    "source": "packages/db/migrations/0650_demo_customer_link_reference.sql",
+    "source": "packages/db/migrations/0733_real_customer_link_own_quote.sql",
     "actor": null,
     "tenant": "t"
   },
@@ -781,7 +781,7 @@
   {
     "name": "app.final_check_builder",
     "arguments": "t uuid,j uuid,d text,locking boolean DEFAULT false",
-    "source": "packages/db/migrations/0732_final_check_typed_recovery.sql",
+    "source": "packages/db/migrations/0735_per_firm_final_check_terms.sql",
     "actor": null,
     "tenant": "t"
   },

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
-import { issuePracticeSession, authenticatePracticeSession } from "../src/practice-session.js";
+import { issuePracticeSession, authenticatePracticeSession, practiceMaterialPool } from "../src/practice-session.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { CommercialIntegrityV3Repository } from "../src/commercial-integrity-v3-repository.js";
 import { canonicalCommercialIntegritySnapshot } from "../../core/src/commercial-integrity-v3.js";
@@ -100,7 +100,8 @@ export async function addIntegrityPayment(f:IntegrityFixture,job:string) {
 export async function addIntegrityLock(f:IntegrityFixture,x:Awaited<ReturnType<typeof seedIntegrityJob>>) {
  const {withTenant}=await import("../src/tenant-context.js"),{appendAuditBatch}=await import("../src/audit.js");
  const id=randomUUID(),command=randomUUID(),event=randomUUID();
- await withTenant(f.admin,f.auth.context,async db=>{
+ const scoped=(await f.admin.query("SELECT to_regprocedure('app.final_check_request_scope(uuid)') IS NOT NULL installed")).rows[0].installed;
+ await withTenant(scoped?practiceMaterialPool(f.admin,f.auth.digest):f.admin,f.auth.context,async db=>{
   await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
    VALUES($1,$2,'synthetic.ch6.lock-fixture',$1::uuid::text,repeat('a',64),'succeeded','{}',$3,clock_timestamp())`,[command,tenant,member]);
   await db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[tenant,member,randomUUID(),"synthetic_final_check_terms.v1"]);

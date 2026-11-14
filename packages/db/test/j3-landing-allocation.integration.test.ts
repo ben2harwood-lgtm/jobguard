@@ -73,7 +73,7 @@ async function combinedReceiptFixture(f:FinalCheckFixture,lateCatch=false){
   await price(id,"Fictional builder capture",amount);
  }
  let drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId});
- await locks.acceptTerms(context,{actorMembershipId:actor.membershipId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
+ await locks.acceptTerms(auth.context,{actorMembershipId:actor.membershipId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),scopeItemId:scope,disposition:"done"});
  // A value read is identical with no hidden signals and with held signals.
  const readBeforeLock=()=>finalCheckTenant(f.runtime,DEMO_TENANT_ID,async db=>{await bindPractice(db,auth.digest,DEMO_TENANT_ID);return (await db.query("SELECT app.read_value_job($1,$2) result",[jobId,auth.digest])).rows[0].result;});
@@ -85,7 +85,7 @@ async function combinedReceiptFixture(f:FinalCheckFixture,lateCatch=false){
   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[DEMO_TENANT_ID,jobId,signalId,evidence,e.object_version_id,e.sha256,e.received]);
  });
  expect(await readBeforeLock()).toBeNull();
- const lock=await locks.lock(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
+ const lock=await locks.lock(auth.context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
  const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(verifiedTenantContextForQueuedJob(context.tenantId),jobId);
  for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(verifiedTenantContextForQueuedJob(context.tenantId),jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:s.evidenceId===evidence?signals:[]});}
  const classifications:FinalCheckClassification[]=signals.map(signalId=>({signalId,expectedRevision:0,outcome:"reveal",references:[],comparisons:{baselineItemIds:[scope],captureIds:manifest.comparisons.captures.map(c=>(c as {id:string}).id),lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}}));
@@ -103,14 +103,14 @@ async function combinedReceiptFixture(f:FinalCheckFixture,lateCatch=false){
  for(const index of lateCatch?[0]:[0,1])await confirmCatch(index);
  drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
  const issue={jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind:"final" as const,recipient:"practice-customer@example.invalid",issuedOn:"2026-10-28"};
- let invoice=await locks.issueInvoice(context,issue);
+ let invoice=await locks.issueInvoice(auth.context,issue);
  const combinedInvoice=invoice;
  expect(invoice).toMatchObject(lateCatch?{netPence:3410000,totalPence:4092000}:{netPence:3440000,totalPence:4128000});
- expect(await locks.issueInvoice(context,issue)).toEqual(invoice);
+ expect(await locks.issueInvoice(auth.context,issue)).toEqual(invoice);
  if(lateCatch){
   await confirmCatch(1);
   drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
-  invoice=await locks.issueInvoice(context,{...issue,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind:"supplementary"});
+  invoice=await locks.issueInvoice(auth.context,{...issue,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind:"supplementary"});
   expect(invoice).toMatchObject({netPence:32000,totalPence:38400});
  }
  const invoices=new PracticeInvoiceRepository(scoped);
