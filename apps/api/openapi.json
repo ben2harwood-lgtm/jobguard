@@ -6129,6 +6129,21 @@
         ]
       }
     },
+    "/auth/signout": {
+      "post": {
+        "operationId": "IdentityController_signout",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Non-enumerating sign-out acknowledgement"
+          }
+        },
+        "summary": "Revoke this builder session and clear its cookie",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
     "/auth/session": {
       "get": {
         "operationId": "IdentityController_session",

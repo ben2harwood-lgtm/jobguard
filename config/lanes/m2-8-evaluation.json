@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-8-evaluation": {
+      "branches": [
+        "codex/sandbox/m2-8-evaluation"
+      ],
+      "note": "M2-8 evaluation only; no matching behaviour changes or migration.",
+      "allow": [
+        "packages/core/src/supplier-match-failure-clusters.ts",
+        "packages/core/src/supplier-match-failure-clusters.test.ts",
+        "docs/evaluations/m2-8-matching-enhancement-v1.md",
+        "packages/core/src/test-fixtures/made-up-only-supplier-match-inputs.ts",
+        "packages/core/src/test-fixtures/made-up-only-supplier-match-inputs.test.ts"
+      ]
+    }
+  }
+}

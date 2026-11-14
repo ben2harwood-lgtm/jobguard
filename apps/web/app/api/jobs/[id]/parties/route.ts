@@ -15,7 +15,7 @@ async function handle(request: NextRequest, context: { params: Promise<{ id: str
     const denied = practiceFailure(error); if (denied) return denied;
     const code = error instanceof JobPartiesError ? error.code : error instanceof SyntaxError ? "INVALID_PARTIES" : "DATABASE_UNAVAILABLE";
     const status = code === "FORBIDDEN" ? 403 : code === "NOT_FOUND" ? 404 : code === "INVALID_PARTIES" ? 400 : code === "DATABASE_UNAVAILABLE" ? 503 : 409;
-    return NextResponse.json({ code, recoverable: status === 503 }, { status });
+    return NextResponse.json({ code, recoverable: status === 503, ...(error instanceof JobPartiesError && error.fields.length ? { fields: error.fields } : {}) }, { status });
   }
 }
 export const GET = (request: NextRequest, context: { params: Promise<{ id: string }> }) => handle(request, context, false);

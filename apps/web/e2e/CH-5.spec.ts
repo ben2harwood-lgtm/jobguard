@@ -28,6 +28,10 @@ test("CH-5 previews, attests and reloads an invoiced v3 import without a count o
   const stored = await page.request.get(`/api/jobs/${importedId}/parties/import-v3`);
   expect(stored.ok()).toBe(true);
   const { result } = await stored.json();
+  const terms = await page.request.post(`/api/jobs/${importedId}/final-account/terms`, { data: {
+    version: "final-check-terms.accept.v1", commandId: crypto.randomUUID(), termsVersion: "synthetic_final_check_terms.v1",
+  } });
+  expect(terms.status()).toBe(200);
   const forgedLock = await page.request.post(`/api/jobs/${importedId}/final-account/lock`, { data: {
     version: "final-account.lock.v1", commandId: crypto.randomUUID(), finalAccountRevisionId: result.baselineId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1",
   } });

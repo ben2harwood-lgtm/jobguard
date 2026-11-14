@@ -4,10 +4,14 @@
 // implementation, 19 Oct 2026). Screens read only the app's existing routes and show only facts
 // those routes return; anything else says it is not recorded yet. Existing working tools are
 // hosted inside <Legacy>, which keeps the app's own styles (see tools/scope-reference-css.mjs).
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { jobsResponseV1, sessionResponseV1, type JobSummary, type SessionView } from "../lib/contracts";
+import { jobWorkspaceResponseV1 } from "@jobguard/api/workspace-contracts";
+import { jobValueResponseV1, catchAttentionV1 } from "@jobguard/api/value-contracts";
+import { practiceInvoiceResponseV1 } from "@jobguard/api/customer-invoice-contracts";
+import { deriveJobPaymentState, type JobPaymentState } from "../lib/invoice-payment-state";
 import { jobStatusLabels } from "../ui/workspace-lifecycle";
 
 const RAIL_ICONS: Record<string, string> = {
@@ -61,7 +65,7 @@ export const known = (value: string) => value && value !== UNKNOWN ? value : "";
 const initials = (name: string) => name.split(/\s+/u).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "JG";
 export function money(pence: number | null | undefined) { return pence === null || pence === undefined ? "Not recorded yet" : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 export function shortDate(iso: string) { const date = new Date(iso); return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }); }
-/** These reads expose quote state, but no stored accepted total. */
+/** Lifecycle wording is separate from the saved acceptance amount below. */
 export function quoteAccepted(status: JobSummary["status"]) {
   return ["accepted", "live", "invoiced", "paid"].includes(status);
 }
@@ -88,8 +92,8 @@ export function statusTag(status: JobSummary["status"]) {
 export function needsChecking(job: JobSummary) { return job.document.delivery === "queued" || job.document.delivery === "outcome_unknown" || job.customerPayment === "due"; }
 export const siteOrTitle = (job: JobSummary) => known(job.siteLabel) || job.title;
 
-export async function readJson(url: string) {
-  const response = await fetch(url, { cache: "no-store" });
+export async function readJson(url: string, signal?: AbortSignal) {
+  const response = await fetch(url, { cache: "no-store", ...(signal ? { signal } : {}) });
   if (response.status === 401) throw new Error("UNAUTHENTICATED");
   if (response.status === 403 || response.status === 404) throw new Error("FORBIDDEN");
   if (!response.ok) throw new Error("UNAVAILABLE");
@@ -97,6 +101,9 @@ export async function readJson(url: string) {
 }
 
 export const jobValueV1 = z.object({
+  version: z.literal("job-value.v1"), environment: z.literal("synthetic_demo"), jobId: z.guid(),
+  foundAfterLock: jobValueResponseV1.shape.foundAfterLock,
+  catchAttention: z.array(catchAttentionV1).default([]),
   approvedExtras: z.object({ pence: z.number().int().nullable() }), invoicedGross: z.object({ pence: z.number().int().nullable() }),
   recordedGross: z.object({ pence: z.number().int().nullable() }), outstandingGross: z.object({ pence: z.number().int().nullable() }),
   pendingExtras: z.array(z.unknown()),
@@ -141,18 +148,172 @@ export function useWorkspace(): [Load, () => void] {
 }
 
 export function useJobs(tenantId: string) {
-  const [jobs, setJobs] = useState<JobSummary[] | null>(null), [failed, setFailed] = useState(false);
+  const [saved, setSaved] = useState<{ tenantId: string; jobs: JobSummary[] | null; failed: boolean } | null>(null);
   useEffect(() => {
-    if (!tenantId) return;
-    let current = true;
-    readJson(`/api/jobs?tenantId=${encodeURIComponent(tenantId)}`).then(raw => {
-      const parsed = jobsResponseV1.parse(raw);
-      if (parsed.tenantId !== tenantId) throw new Error("INVALID_RESPONSE");
-      if (current) setJobs(parsed.jobs);
-    }).catch(() => { if (current) setFailed(true); });
-    return () => { current = false; };
+    let current = true, generation = 0;
+    let controller: AbortController | undefined;
+    let ids: string[] = [];
+    const load = () => {
+      const run = ++generation;
+      controller?.abort(); controller = new AbortController();
+      setSaved(null);
+      void readJson(`/api/jobs?tenantId=${encodeURIComponent(tenantId)}`, controller.signal).then(raw => {
+        const parsed = jobsResponseV1.parse(raw);
+        if (parsed.tenantId !== tenantId || parsed.jobs.some(job => job.tenantId !== tenantId)) throw new Error("WRONG_WORKSPACE_RESPONSE");
+        if (current && run === generation) { ids = parsed.jobs.map(job => job.id); setSaved({ tenantId, jobs: parsed.jobs, failed: false }); }
+      }).catch(() => { if (current && run === generation) setSaved({ tenantId, jobs: null, failed: true }); });
+    };
+    load();
+    const changed = (event: Event) => {
+      const detail = (event as CustomEvent<string | { jobId?: string }>).detail;
+      const id = typeof detail === "string" ? detail : detail?.jobId;
+      if (id && ids.includes(id)) load();
+    };
+    window.addEventListener("focus", load);
+    for (const event of JOB_EVENTS) window.addEventListener(event, changed);
+    return () => { current = false; controller?.abort(); window.removeEventListener("focus", load); for (const event of JOB_EVENTS) window.removeEventListener(event, changed); };
   }, [tenantId]);
-  return { jobs, failed };
+  return saved?.tenantId === tenantId ? saved : { jobs: null, failed: false };
+}
+
+const penceV1 = z.number().int().safe().min(0).max(1_000_000_000_000);
+const acceptanceReadV1 = z.object({ version: z.literal(1), environment: z.literal("synthetic_demo"), jobId: z.guid(),
+  activeAcceptance: z.object({ totalPence: penceV1 }).nullable(),
+});
+const lockReadV1 = z.object({ version: z.literal("final-account-lock.view.v1"), jobId: z.guid(),
+  lock: z.object({ id: z.guid(), tenantId: z.guid(), jobId: z.guid() }).nullable(),
+  checkStatus: z.enum(["pending", "failed", "completed"]).nullable(),
+  invoiceGuard: z.enum(["FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED"]).nullable(),
+});
+export type JobFacts = { agreed: number | null | undefined; payment: JobPaymentState | null; value: JobValue | null;
+  blocker: string | null; checksAvailable: boolean };
+export const unavailableFacts: JobFacts = { agreed: undefined, payment: null, value: null, blocker: null, checksAvailable: false };
+export const agreedLine = (facts?: JobFacts) => facts?.agreed === undefined ? "Agreed total unavailable" : facts.agreed === null ? "Nothing currently agreed" : `Agreed ${money(facts.agreed)}`;
+
+/** Only builder-visible lock metadata is read here. No reveal items or hidden signals. */
+export function projectBillCheck(raw: unknown, jobId: string, tenantId: string) {
+  const view = lockReadV1.parse(raw);
+  if (view.jobId !== jobId || (view.lock && (view.lock.jobId !== jobId || view.lock.tenantId !== tenantId))) throw new Error("WRONG_JOB_RESPONSE");
+  if (!view.lock) return null;
+  if (view.checkStatus === "failed" || view.invoiceGuard === "FINAL_CHECK_FAILED") return "Final Check failed — this bill stays locked. Open Work to review the Final Check.";
+  if (view.checkStatus !== "completed" || view.invoiceGuard) return "Waiting for the Final Check — this bill stays locked. No invoice can be issued yet.";
+  return null;
+}
+export async function readJobFacts(jobId: string, tenantId: string, signal?: AbortSignal): Promise<JobFacts> {
+  const path = `/api/jobs/${encodeURIComponent(jobId)}`;
+  // Establish workspace membership before reading private facts; UUIDs alone are not authority.
+  const { job } = jobWorkspaceResponseV1.parse(await readJson(path, signal));
+  if (job.id !== jobId || job.tenantId !== tenantId) throw new Error("WRONG_JOB_RESPONSE");
+  signal?.throwIfAborted();
+  let revoked = false;
+  async function optional<T>(read: () => Promise<T>): Promise<T | undefined> {
+    try { return await read(); } catch (error) {
+      if (error instanceof Error && ["UNAUTHENTICATED", "FORBIDDEN"].includes(error.message)) revoked = true;
+      return undefined;
+    }
+  }
+  async function readBound(suffix: string) {
+    const raw = await readJson(`${path}${suffix}`, signal);
+    const identity = z.object({ jobId: z.guid(), tenantId: z.guid().optional() }).parse(raw);
+    if (identity.jobId !== jobId || (identity.tenantId !== undefined && identity.tenantId !== tenantId)) throw new Error("WRONG_JOB_RESPONSE");
+    return raw;
+  }
+  const [acceptance, payment, value, blocker] = await Promise.all([
+    optional(async () => acceptanceReadV1.parse(await readBound("/quotes/acceptance")).activeAcceptance),
+    optional(async () => deriveJobPaymentState(practiceInvoiceResponseV1.parse(await readBound("/customer-invoices")).invoices)),
+    optional(async () => {
+      const value = jobValueV1.parse(await readBound("/value"));
+      for (const row of [...value.foundAfterLock, ...value.catchAttention]) {
+        const suffix = `#variation-${row.id}`;
+        if (row.href !== `/jobs/${jobId}${suffix}` && row.href !== `/jobs/${jobId}/work${suffix}`) throw new Error("WRONG_CATCH_RESPONSE");
+      }
+      return value;
+    }),
+    optional(async () => projectBillCheck(await readBound("/final-account/lock"), jobId, tenantId)),
+  ]);
+  signal?.throwIfAborted();
+  if (revoked) return unavailableFacts;
+  return { agreed: acceptance === undefined ? undefined : acceptance?.totalPence ?? null, payment: payment ?? null,
+    value: value ?? null, blocker: blocker ?? null, checksAvailable: blocker !== undefined && acceptance !== undefined && payment !== undefined && value !== undefined };
+}
+const JOB_EVENTS = ["job-lifecycle-changed", "job-saved", "jobguard:invoice-changed"];
+export function onJobRefresh(jobIds: readonly string[], refresh: () => void) {
+  const changed = (event: Event) => {
+    const detail: unknown = (event as CustomEvent<unknown>).detail;
+    const jobId = typeof detail === "string" ? detail : detail && typeof detail === "object" && "jobId" in detail ? detail.jobId : undefined;
+    if (typeof jobId === "string" && jobIds.includes(jobId)) refresh();
+  };
+  window.addEventListener("focus", refresh);
+  for (const name of JOB_EVENTS) window.addEventListener(name, changed);
+  return () => { window.removeEventListener("focus", refresh); for (const name of JOB_EVENTS) window.removeEventListener(name, changed); };
+}
+/** Identity is part of the render key as well as the effect: old-company data is never rendered for one frame. */
+export function useJobFacts(tenantId: string, jobIds: readonly string[]) {
+  const ids = JSON.stringify(jobIds);
+  const key = `${tenantId}:${ids}`;
+  const [saved, setSaved] = useState<{ key: string; facts: Record<string, JobFacts> } | null>(null);
+  useEffect(() => {
+    let current = true, generation = 0;
+    let controller: AbortController | undefined;
+    const requested = JSON.parse(ids) as string[];
+    const load = () => {
+      const run = ++generation;
+      controller?.abort(); controller = new AbortController();
+      const signal = controller.signal;
+      setSaved(null);
+      void Promise.all(requested.map(async id => [id, await readJobFacts(id, tenantId, signal).catch(() => unavailableFacts)] as const))
+        .then(entries => { if (current && run === generation) setSaved({ key, facts: Object.fromEntries(entries) }); });
+    };
+    load(); const cleanup = onJobRefresh(requested, load);
+    return () => { current = false; controller?.abort(); cleanup(); };
+  }, [key, ids, tenantId]);
+  return saved?.key === key ? saved.facts : null;
+}
+export type AttentionLink = { label: string; href: string };
+export type AttentionJob = { id: string; title: string; reasons: string[]; href: string; links: AttentionLink[] };
+export function catchLabel(row: JobValue["catchAttention"][number]) {
+  if (row.status === "needs_price") return `Needs a price: ${row.description}`;
+  if (row.status === "needs_approval") return `${money(row.pence)} net proposed price awaiting approval: ${row.description}`;
+  return `${money(row.pence)} net approved extra not yet invoiced: ${row.description}`;
+}
+export function attentionJobs(jobs: readonly JobSummary[], decisions: Decisions | null, facts: Record<string, JobFacts> | null): AttentionJob[] {
+  return jobs.flatMap(job => {
+    const links: AttentionLink[] = (facts?.[job.id]?.value?.catchAttention ?? []).map(row => ({ label: catchLabel(row), href: `/jobs/${job.id}/work#variation-${row.id}` }));
+    for (const item of decisions?.decisions ?? []) {
+      if (item.jobId === job.id && item.resolution === "open") links.push({ label: `${item.title}: ${item.detail}`, href: `/jobs/${job.id}/work#final-account-title` });
+    }
+    const blocker = facts?.[job.id]?.blocker;
+    if (blocker) links.push({ label: blocker, href: `/jobs/${job.id}/work#final-account-title` });
+    return links.length ? [{ id: job.id, title: job.title, reasons: links.map(link => link.label), links, href: links[0]!.href }] : [];
+  });
+}
+export function useAttention(workspace: Workspace, jobs: JobSummary[] | null, facts: Record<string, JobFacts> | null, refreshKey = 0, jobsFailed = false) {
+  const [saved, setSaved] = useState<{ key: string; decisions: Decisions | null } | null>(null);
+  const ids = JSON.stringify((jobs ?? []).map(job => job.id));
+  const key = `${workspace.tenantId}:${ids}:${refreshKey}`;
+  useEffect(() => {
+    let current = true, generation = 0;
+    let controller: AbortController | undefined;
+    const load = () => {
+      const run = ++generation;
+      controller?.abort(); controller = new AbortController();
+      setSaved(null);
+      void readJson(`/api/decisions?tenantId=${encodeURIComponent(workspace.tenantId)}`, controller.signal).then(raw => {
+        const identity = z.object({ tenantId: z.guid().optional() }).parse(raw);
+        if (identity.tenantId !== undefined && identity.tenantId !== workspace.tenantId) throw new Error("WRONG_WORKSPACE_RESPONSE");
+        return decisionsV1.parse(raw);
+      }).catch(() => null)
+        .then(decisions => { if (current && run === generation) setSaved({ key, decisions }); });
+    };
+    load(); const cleanup = onJobRefresh(JSON.parse(ids) as string[], load);
+    return () => { current = false; controller?.abort(); cleanup(); };
+  }, [workspace.tenantId, ids, refreshKey, key]);
+  const decisions = saved?.key === key ? saved.decisions : null;
+  const items = attentionJobs(jobs ?? [], decisions, facts);
+  const complete = jobs !== null && decisions !== null && facts !== null && jobs.every(job => facts[job.id]?.checksAvailable);
+  const loading = !jobsFailed && (jobs === null || facts === null || saved?.key !== key);
+  const failed = jobsFailed || (saved?.key === key && saved.decisions === null) || (facts !== null && (jobs ?? []).some(job => !facts[job.id]?.checksAvailable));
+  return { items, complete, loading, failed };
 }
 
 const ROUTES: Record<string, string> = { today: "/today", jobs: "/jobs", check: "/check", money: "/money", more: "/more" };
@@ -230,5 +391,5 @@ export function StateScreen({ load, retry, title, active = "jobs" }: { load: Loa
 export function Screen({ title, active, children }: { title: string; active: string; children: (workspace: Workspace) => ReactNode }) {
   const [load, retry] = useWorkspace();
   if (load.state !== "ready") return <StateScreen load={load} retry={retry} title={title} active={active}/>;
-  return <>{children(load.workspace)}</>;
+  return <Fragment key={load.workspace.tenantId}>{children(load.workspace)}</Fragment>;
 }

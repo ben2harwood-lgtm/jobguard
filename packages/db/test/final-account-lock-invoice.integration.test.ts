@@ -1,3 +1,7 @@
+import { readFile } from "node:fs/promises";
+import { proofSchema } from "./migration-proof-loader.js";
+import { MIGRATION_URLS, migrate } from "../src/migrate.js";
+import { allocateSignedInvoiceTax, candidateM1TaxPolicy, money } from "@jobguard/core";
 import { withTenant } from "../src/tenant-context.js";
 import { publishEmptyCompletion, createHistoricalInvoice } from "./sv5pre-fixtures.js";
 import { randomUUID } from "node:crypto";
@@ -20,6 +24,115 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
  beforeAll(async()=>{historical=await createHistoricalInvoice()},60000);
  afterAll(async()=>{if(historical)await historical.close()});
  const direct=(a:Account,input:ReturnType<typeof invoiceInput>)=>withTenant(f.runtime,a.context,db=>db.$client.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,$6,$7,$8::date,$9)",[a.tenantId,input.jobId,input.finalAccountRevisionId,input.actorMembershipId,input.commandId,input.invoiceKind,input.recipient,input.issuedOn,input.expectedSourceHash]));
+
+ // Synthetic owner fixture edits precede the immutable lock. Runtime authority
+ // and production writers are exercised unchanged by every issue below.
+ async function signedAccount(nets:number[]){
+  const a=await seedAccount(f.admin,randomUUID(),nets.reduce((sum,n)=>sum+n,0));
+  await asFixtureTenant(f.admin,a.tenantId,async db=>{
+   await db.query("SET LOCAL session_replication_role='replica'");
+   await db.query("UPDATE app.final_account_line SET net_pence=$1 WHERE tenant_id=$2 AND id=$3",[nets[0],a.tenantId,a.lineId]);
+   for(const [index,net]of nets.entries())if(index>0){
+    const source=randomUUID();
+    await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
+     SELECT $1,tenant_id,job_id,final_account_revision_id,'baseline',$2,scope_item_id,$2,'Fictional signed line',$3,$4 FROM app.final_account_line WHERE tenant_id=$5 AND id=$6`,[randomUUID(),source,net,index+1,a.tenantId,a.lineId]);
+   }
+  });
+  const repo=await prepareLock(f,a);await repo.lock(a.context,a.input);await appendCheck(f,a,'completed');
+  return {a,repo};
+ }
+ async function descendant(a:Account,added:number[]=[]){
+  const revision=randomUUID(),hash='c'.repeat(64);
+  await asFixtureTenant(f.admin,a.tenantId,async db=>{
+   await db.query("SET LOCAL session_replication_role='replica'");
+   const delta=added.reduce((sum,n)=>sum+n,0);
+   await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
+    SELECT $1,tenant_id,job_id,final_account_draft_id,2,id,$2,baseline_quote_version_id,currency,tax_policy_version,net_pence+$3,(net_pence+$3+2)/5,net_pence+$3+(net_pence+$3+2)/5,false,findings FROM app.final_account_revision WHERE tenant_id=$4 AND id=$5`,[revision,hash,delta,a.tenantId,a.revisionId]);
+   await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
+    SELECT gen_random_uuid(),tenant_id,job_id,$1,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal FROM app.final_account_line WHERE tenant_id=$2 AND final_account_revision_id=$3`,[revision,a.tenantId,a.revisionId]);
+   for(const [index,net]of added.entries()){
+    const source=randomUUID();
+    // Product variation lines always carry their approval (final-account-repository.ts);
+    // omission variations are negative (core variation.ts), so signed nets are reachable.
+    await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
+     VALUES($1,$2,$3,$4,'variation',$5,$6,$5,$9,'Fictional supplementary line',$7,$8)`,[randomUUID(),a.tenantId,a.jobId,revision,source,a.scopeItemId,net,index+2,randomUUID()]);
+   }
+   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=2 WHERE tenant_id=$2 AND id=$3",[revision,a.tenantId,a.draftId]);
+  });return {revision,hash};
+ }
+ async function stored(a:Account,id:string){
+  return (await f.admin.query(`SELECT l.final_account_line_id id,l.net_pence,l.tax_pence,l.gross_pence FROM app.final_account_invoiced_line l
+   JOIN app.final_account_line source ON(source.tenant_id,source.id)=(l.tenant_id,l.final_account_line_id) WHERE l.tenant_id=$1 AND l.invoice_id=$2 ORDER BY source.ordinal`,[a.tenantId,id])).rows;
+ }
+ it("combined invoice preserves credit VAT sign and exact totals",async()=>{
+  const {a,repo}=await signedAccount([1000,-500]),next=await descendant(a);
+  const input={...invoiceInput(a),finalAccountRevisionId:next.revision,expectedSourceHash:next.hash};
+  const first=await repo.issueInvoice(a.context,input);
+  expect(first).toMatchObject({netPence:500,taxPence:100,totalPence:600,sourceHash:next.hash});
+  const lines=await stored(a,first.invoiceId);
+  expect(lines.map(l=>[l.net_pence,l.tax_pence,l.gross_pence])).toEqual([["1000","200","1200"],["-500","-100","-600"]]);
+  expect((await f.admin.query(`SELECT i.net_pence,i.tax_pence,i.total_pence,b.revision_id,b.lock_id FROM app.customer_invoice i
+   JOIN app.final_account_invoice_binding b ON(b.tenant_id,b.job_id,b.invoice_id)=(i.tenant_id,i.job_id,i.id) WHERE i.tenant_id=$1 AND i.id=$2`,[a.tenantId,first.invoiceId])).rows).toEqual([{net_pence:'500',tax_pence:'100',total_pence:'600',revision_id:next.revision,lock_id:first.lockId}]);
+  expect((await lockRow(f,a.tenantId,a.jobId)).final_account_revision_id).toBe(a.revisionId);
+  expect(await repo.issueInvoice(a.context,input)).toEqual(first);
+  expect((await direct(a,input)).rows[0].issue_lock_bound_customer_invoice).toEqual(first);
+  expect(await stored(a,first.invoiceId)).toEqual(lines);
+  const pdf=(await f.admin.query("SELECT convert_from(pdf_bytes,'UTF8') pdf FROM app.customer_invoice WHERE tenant_id=$1 AND id=$2",[a.tenantId,first.invoiceId])).rows[0].pdf;
+  expect(pdf).toContain('Net GBP: -5.00');expect(pdf).toContain('Total GBP: 6.00');
+  await expect(direct(a,{...input,expectedSourceHash:LOCK_HASH})).rejects.toThrow('IDEMPOTENCY_PAYLOAD_CONFLICT');
+  await expect(repo.issueInvoice(a.context,{...input,commandId:randomUUID(),expectedSourceHash:LOCK_HASH})).rejects.toThrow('STALE_REVISION');
+  await expect(direct(a,{...input,jobId:randomUUID()})).rejects.toThrow('FORBIDDEN');
+  const foreign=await seedAccount(f.admin);
+  await expect(direct(foreign,input)).rejects.toThrow();
+ });
+ it.each([[1000,-500],[7,-1,-1,-1,-1],[4,4,-5,0],[1001,502],[1000,-1000],[0,0]])("SQL and independent verification agree for signed final and supplementary lines %j",async(...nets)=>{
+  for(const kind of ['final','supplementary']as const){
+   const {a,repo}=await signedAccount(kind==='final'?nets:[10]);
+   let input=invoiceInput(a,kind);
+   if(kind==='supplementary'){
+    await repo.issueInvoice(a.context,invoiceInput(a));const next=await descendant(a,nets);
+    input={...input,finalAccountRevisionId:next.revision,expectedSourceHash:next.hash};
+   }
+   const first=(await direct(a,input)).rows[0].issue_lock_bound_customer_invoice;
+   expect(await repo.issueInvoice(a.context,input)).toEqual(first);
+   const lines=await stored(a,first.invoiceId),tax=candidateM1TaxPolicy.calculateGroup(money(nets.reduce((sum,n)=>sum+n,0)),"standard_rate_20");
+   const split=allocateSignedInvoiceTax(tax,lines.map(l=>({id:l.id,net:money(Number(l.net_pence))})));
+   expect(lines.map(l=>Number(l.net_pence))).toEqual(nets);
+   expect(lines.map(l=>Number(l.tax_pence))).toEqual(lines.map(l=>split.get(l.id)!.pence));
+   expect(lines.reduce((sum,l)=>sum+Number(l.tax_pence),0)).toBe(first.taxPence);
+   for(const line of lines)expect(Number(line.gross_pence)).toBe(Number(line.net_pence)+Number(line.tax_pence));
+   await expect(direct(a,{...input,recipient:'changed@example.invalid'})).rejects.toThrow('IDEMPOTENCY_PAYLOAD_CONFLICT');
+   await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[a.tenantId,LOCK_OWNER]);
+   await expect(direct(a,input)).rejects.toThrow('FORBIDDEN');
+   await expect(repo.issueInvoice(a.context,input)).rejects.toMatchObject({code:'FORBIDDEN'});
+  }
+ });
+ it("upgrade preserves actual routine owner/ACL and immutable historical invoice replay",async()=>{
+  const forward=MIGRATION_URLS.find(u=>u.pathname.endsWith('_combined_invoice_signed_vat.sql'))!;
+  const predecessor=await readFile(new URL('../migrations/0723_lp6c_money_binding.sql',import.meta.url),'utf8');
+  const start=predecessor.indexOf('CREATE OR REPLACE FUNCTION app.issue_lock_bound_customer_invoice');
+  const oldRoutine=predecessor.slice(start,predecessor.indexOf('END $$;',start)+7);
+  const catalog=async()=>(await f.admin.query(`SELECT pg_get_userbyid(proowner) owner,proacl::text,prosecdef,proconfig,has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime_execute,EXISTS(SELECT 1 FROM aclexplode(coalesce(proacl,acldefault('f',proowner))) acl WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE') public_execute FROM pg_proc WHERE oid='app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)'::regprocedure`)).rows;
+  const before=await catalog();expect(before[0]).toMatchObject({owner:'jobguard_migration',prosecdef:true,proconfig:['search_path=pg_catalog, app'],runtime_execute:true,public_execute:false});let a:Account|undefined,input:ReturnType<typeof invoiceInput>|undefined,first:any,history:any,historyLines:any;
+  try{
+   await f.admin.query(oldRoutine);
+   ({a}=await signedAccount([1000,-500]));input=invoiceInput(a);
+   await expect(new FinalAccountLockRepository(f.runtime).issueInvoice(a.context,input)).rejects.toThrow('INVOICE_AMOUNT_INVALID');
+   expect((await f.admin.query('SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1',[a.tenantId])).rows[0].n).toBe(0);
+   first=(await direct(a,input)).rows[0].issue_lock_bound_customer_invoice;
+   // The installed predecessor actually persists the defect; no source-text proxy.
+   expect((await stored(a,first.invoiceId)).map(l=>l.tax_pence)).toEqual(['67','33']);
+   expect((await stored(a,first.invoiceId)).map(l=>l.tax_pence)).not.toEqual(['200','-100']);
+   historyLines=await stored(a,first.invoiceId);
+   history=(await f.admin.query("SELECT row_to_json(i) invoice FROM app.customer_invoice i WHERE tenant_id=$1 AND id=$2",[a.tenantId,first.invoiceId])).rows;
+  }finally{await f.admin.query(await readFile(forward,'utf8'))}
+  expect(await catalog()).toEqual(before);
+  expect((await f.admin.query("SELECT row_to_json(i) invoice FROM app.customer_invoice i WHERE tenant_id=$1 AND id=$2",[a!.tenantId,first.invoiceId])).rows).toEqual(history);
+  expect((await direct(a!,input!)).rows[0].issue_lock_bound_customer_invoice).toEqual(first);
+  expect(await new FinalAccountLockRepository(f.runtime).issueInvoice(a!.context,input!)).toEqual(first);
+  expect(await stored(a!,first.invoiceId)).toEqual(historyLines);
+  await migrate(f.admin);expect(await catalog()).toEqual(before);
+ });
  it("missing lock, no completion, pending and failed are typed repository/routine refusals with no invoice effects",async()=>{
   const a=await seedAccount(f.admin),repo=new FinalAccountLockRepository(f.runtime);
   for(const kind of ['final','supplementary']as const){const input=invoiceInput(a,kind);await expect(repo.issueInvoice(a.context,input)).rejects.toMatchObject({code:'FINAL_ACCOUNT_LOCK_REQUIRED'});await expect(direct(a,input)).rejects.toThrow('FINAL_ACCOUNT_LOCK_REQUIRED');}
@@ -152,4 +265,20 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
   }finally{if(prior===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=prior;}
  });
 
+});
+
+describe("LATER-SAFETY-144 source preservation",()=>{
+ it("changes only the installed combined writer allocation and leaves half-up rounding intact",async()=>{
+  const before=await readFile(new URL('../migrations/0723_lp6c_money_binding.sql',import.meta.url),'utf8');
+  const after=await readFile(MIGRATION_URLS.find(u=>u.pathname.endsWith('_combined_invoice_signed_vat.sql'))!,'utf8');
+  const body=(sql:string)=>{const start=sql.indexOf('CREATE OR REPLACE FUNCTION app.issue_lock_bound_customer_invoice');return sql.slice(start,sql.indexOf('END $$;',start)+7)};
+  const withoutAllocation=(sql:string)=>body(sql).replace(/ -- (?:Largest-remainder display allocation|Mixed-sign lines)[\s\S]*? FROM ranked LOOP/,' ALLOCATION');
+  expect(withoutAllocation(after)).toBe(withoutAllocation(before));
+  expect(body(after)).toContain('tax:=(net+2)/5; gross:=net+tax;');
+  const proof=proofSchema.parse(JSON.parse(await readFile(new URL('./migration-proofs/'+MIGRATION_URLS.find(u=>u.pathname.endsWith('_combined_invoice_signed_vat.sql'))!.pathname.split('/').at(-1)!.replace('.sql','.proof.json'),import.meta.url),'utf8')));
+  const predecessor=JSON.parse(await readFile(new URL('./migration-proofs/0723_lp6c_money_binding.proof.json',import.meta.url),'utf8'));
+  const previous=predecessor.lp0.find((change:any)=>change.section==='routines' && change.after?.identity==='function:app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)');
+  expect(proof.lp0).toEqual([{section:'routines',before:previous.after,after:previous.after}]);
+  expect(proof.upgrade).toEqual([]);expect(proof.tenancy).toEqual([]);
+ });
 });
