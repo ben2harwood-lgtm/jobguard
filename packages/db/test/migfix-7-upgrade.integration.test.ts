@@ -250,6 +250,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     }
     fullBodies.set(identity!, source.split(`FUNCTION ${identity!.split("(")[0]}(`)[overload + 1]!.split("AS $$")[1]!.split(/\$\$\s*;/u)[0]!);
   }
+  // Saved-estimate successor: retain recovery's predecessor entry above.
+  const savedEstimateSql = await readFile(new URL("../migrations/0737_real_fc_revealed_estimate.sql", import.meta.url), "utf8");
+  fullBodies.set("app.read_final_check_reveal(t uuid, j uuid, d text)", savedEstimateSql.split("AS $$")[1]!.split("$$;")[0]!);
   const namedAdditions = [
     "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",
     "ent3b_close_abandoned_visit",
