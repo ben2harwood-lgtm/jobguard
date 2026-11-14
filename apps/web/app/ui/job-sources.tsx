@@ -50,17 +50,18 @@ function useSource<T>(jobId: string, kind: Kind, parse: (raw: unknown) => T) {
  return { view, busy, error, load, save, pending };
 }
 
-export function JobDiary({ jobId }: { jobId: string }) {
+export function JobDiary({ jobId, extrasHref }: { jobId: string; extrasHref?: string }) {
  const { view, busy, error, save, pending } = useSource<DiaryRead>(jobId, "diary", raw => diaryReadV1.parse(raw));
  const [onSite, setOnSite] = useState(false);
  const [text, setText] = useState(""), [mode, setMode] = useState<"typed" | "dictated_text">("typed");
+ const extrasLabel = "Log an extra", extrasIndex = view?.notice.indexOf(extrasLabel) ?? -1;
  const submit = async (retry: boolean) => {
   const command = retry && pending.current ? pending.current : diaryInputV1.parse({ version: "job-diary-input.v1", commandId: crypto.randomUUID(), entryMode: mode, onSite, text });
   if (await save(command)) { setText(""); setOnSite(false); }
  };
  return <section id="job-diary" className={styles.panel} aria-labelledby="job-diary-title" aria-busy={busy} data-testid="job-diary">
   <h2 id="job-diary-title">Job diary</h2>
-  {view && <p data-testid="diary-notice">{view.notice}</p>}
+  {view && <p data-testid="diary-notice">{extrasHref && extrasIndex >= 0 ? <>{view.notice.slice(0, extrasIndex)}<a href={extrasHref}>{extrasLabel}</a>{view.notice.slice(extrasIndex + extrasLabel.length)}</> : view.notice}</p>}
   {error && <p role="alert">{error}</p>}
   <div className={styles.field}><label htmlFor="diary-text">Note</label><textarea id="diary-text" value={text} maxLength={8000} disabled={busy} onChange={e => setText(e.target.value)}/></div>
   <div className={styles.actions}>

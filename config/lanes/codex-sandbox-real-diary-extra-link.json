@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-diary-extra-link": {
+      "branches": [
+        "codex/sandbox/real-diary-extra-link"
+      ],
+      "allow": [
+        "apps/web/app/ui/job-sources.tsx",
+        "apps/web/app/ui/job-sources.test.tsx",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/app/(designed)/jobs/[id]/records/page.tsx",
+        "apps/web/e2e/real-diary-extra-link.spec.ts",
+        "config/lanes/codex-sandbox-real-diary-extra-link.json"
+      ]
+    }
+  }
+}
