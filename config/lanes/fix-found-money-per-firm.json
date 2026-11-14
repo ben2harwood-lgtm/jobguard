@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "fix-found-money-per-firm": {
+      "branches": [
+        "codex/sandbox/fix-found-money-per-firm"
+      ],
+      "note": "Main-red fix after #747 + #746: found-money's DB test accepts and locks through the job's own practice firm (practiceMaterialPool), as 0735 per-firm terms requires. Test only.",
+      "allow": [
+        "packages/db/test/real-found-money-attention.integration.test.ts"
+      ]
+    }
+  }
+}
