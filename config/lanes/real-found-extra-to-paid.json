@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-found-extra-to-paid": {
+      "branches": [
+        "codex/sandbox/real-found-extra-to-paid"
+      ],
+      "allow": [
+        "apps/web/app/ui/customer-invoices.test.tsx",
+        "apps/web/app/ui/customer-invoices.tsx",
+        "apps/web/app/ui/final-check-reveal-view.test.ts",
+        "apps/web/app/ui/final-check-reveal-view.ts",
+        "apps/web/app/ui/job-final-account.test.tsx",
+        "apps/web/app/ui/job-final-account.tsx",
+        "apps/web/app/ui/job-variations.tsx",
+        "apps/web/app/ui/real-found-extra-to-paid.test.tsx",
+        "apps/web/e2e/real-found-extra-to-paid.spec.ts"
+      ],
+      "note": "RED; BUILD_PLAN \u00a710.2; practice-only found extra pricing, approval, explicit descendant rebuild and supplementary payment. No backend or extraction changes."
+    }
+  }
+}
