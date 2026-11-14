@@ -66,7 +66,7 @@
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/extra-approval-chain-repository.ts",
     "line": 94,
-    "fingerprint": "a2152ab0e4c54d80c5b08e6884e852d11613f2fdece5ab6140a8c790d0e9a5ff",
-    "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results."
+    "fingerprint": "fe14f29bc57a8616ba1826abe5bc2a03856c88ffea7c8f8a67fbc459846f0732",
+    "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results. (LP-6d r11, 14 Nov 2026: escalateOverdue now calls app.lp6d_escalate_overdue_worker(); helper unchanged)"
   }
 ]
