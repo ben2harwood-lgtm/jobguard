@@ -99,9 +99,15 @@ ITEM: Replace shelves`);
     const checkPanel = page.getByTestId("final-check-reveal");
     await expect(checkPanel).toHaveAttribute("aria-busy", "false");
     const readCheck = async () => {
+      // Poll the snapshot loaded by the screen. A second API read can observe
+      // worker completion after the screen has already loaded a pending result.
+      const loaded = page.waitForResponse(response => response.url().endsWith(`/api/jobs/${jobId}/final-check`) && response.request().method() === "GET");
       await click("Load the saved final check");
+      const response = await loaded;
+      expect(response.ok()).toBe(true);
+      const saved = await response.json();
       await expect(checkPanel).toHaveAttribute("aria-busy", "false");
-      return (await (await page.request.get(`/api/jobs/${jobId}/final-check`)).json()).state as string;
+      return saved.state as string;
     };
     const initialCheckState = await readCheck();
     expect(initialCheckState, "Failed source processing must stop this journey; see source-diagnostics").not.toBe("failed");
