@@ -3,17 +3,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { IdentitySignIn } from "./sign-in";
 
-const state = vi.hoisted(() => ({ values: [] as unknown[] }));
+const state = vi.hoisted(() => ({ values: [] as unknown[], effects: [] as Array<() => unknown>, writes: [] as unknown[] }));
 vi.mock("react", async original => ({
   ...await original<typeof import("react")>(),
-  useState: () => [state.values.shift(), vi.fn()],
-  useEffect: () => undefined,
+  useState: (initial: unknown) => [state.values.length ? state.values.shift() : initial, (value: unknown) => state.writes.push(value)],
+  useEffect: (effect: () => unknown) => state.effects.push(effect),
 }));
-beforeEach(() => vi.stubGlobal("React", React));
+beforeEach(() => { vi.stubGlobal("React", React); state.effects = []; state.writes = []; });
 afterEach(() => vi.unstubAllGlobals());
 
-function render(session: unknown = null, fixtureCode = "", accepted: string | null = null) {
-  state.values = ["builder@practice.invalid", "signup", "", "", fixtureCode, !!fixtureCode, false, "", session, false, false, accepted];
+function render(session: unknown = null, fixtureCode = "", accepted: string | null = null, busy = false) {
+  state.values = ["builder@practice.invalid", "signup", "", "", fixtureCode, !!fixtureCode, busy, "", session, false, false, accepted];
   return renderToStaticMarkup(<IdentitySignIn />);
 }
 const session = {
@@ -61,4 +61,50 @@ it.each([
   ["switched", "Invitation accepted. This browser is now signed in as the invited address, which is a different account from the one you were using. The memberships above belong to that account; sign in with your previous address to return to the other one."],
 ])("preserves the exact %s invitation status", (accepted, sentence) => {
   expect(render(session, "", accepted)).toContain(`<p role="status">${sentence.replaceAll("'", "&#x27;")}</p>`);
+});
+
+const owner = { ...session, memberships: [session.memberships[0]] };
+it("offers the existing firm screen only to a verified single owner", () => {
+  const html = render(owner);
+  expect(html).toContain("Name your practice business");
+  expect(html).toContain("Use made-up business details only.");
+  expect(html).toContain("Trading name");
+  // The existing screen keeps fields disabled until its own authorized profile read completes.
+  expect(html).toContain("<fieldset disabled");
+  expect(html.indexOf("Trading name")).toBeLessThan(html.indexOf("Open my jobs"));
+});
+
+it.each([
+  ["unsigned", null],
+  ["non-owner", { ...owner, memberships: [{ ...session.memberships[0], role: "foreman" }] }],
+  ["multiple memberships", session],
+  ["no memberships", { ...owner, memberships: [] }],
+])("does not offer an owner profile form for %s", (_name, current) => {
+  const html = render(current);
+  expect(html).not.toContain("Trading name");
+  expect(html).not.toContain("Save firm details");
+});
+
+it("unmounts the profile while sign-out or account verification is busy", () => {
+  const html = render(owner, "", null, true);
+  expect(html).not.toContain("Trading name");
+  expect(html).toContain("Sign out");
+});
+
+it.each([401, 503, "network"])("rechecks on focus and clears the stale session after %s", async status => {
+  const window = new EventTarget(), document = Object.assign(new EventTarget(), { visibilityState: "visible" });
+  vi.stubGlobal("window", window); vi.stubGlobal("document", document);
+  vi.stubGlobal("fetch", status === "network" ? vi.fn().mockRejectedValue(new Error("unavailable")) : vi.fn().mockResolvedValue({ ok: false, status }));
+  render(owner);
+  const cleanup = state.effects[2]!() as () => void;
+  window.dispatchEvent(new Event("focus"));
+  expect(state.writes).toContain(true); // Checking hides the profile before the network returns.
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(fetch).toHaveBeenCalledWith("/api/auth/session", { cache: "no-store" });
+  expect(state.writes).toContain(null);
+  expect(state.writes.at(-1)).toBe(false);
+  cleanup();
+  const writes = state.writes.length;
+  window.dispatchEvent(new Event("focus"));
+  expect(state.writes).toHaveLength(writes);
 });
