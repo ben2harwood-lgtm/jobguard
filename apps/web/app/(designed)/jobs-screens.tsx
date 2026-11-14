@@ -13,6 +13,12 @@ import { Card, Empty, Head, Icon, Legacy, Note, PHOTOS, Screen, Shell, Tag, agre
 
 const LIST_SUBTITLE = "One place to manage the job, spot problems early and know what comes next.";
 
+function jobPhoto(jobId: string): string {
+  let hash = 0;
+  for (let index = 0; index < jobId.length; index++) hash = (Math.imul(hash, 31) + jobId.charCodeAt(index)) >>> 0;
+  return PHOTOS[hash % PHOTOS.length]!;
+}
+
 export function DesignedJobs() {
   return <Screen title="Your jobs." active="jobs">{workspace => <JobsList workspace={workspace}/>}</Screen>;
 }
@@ -33,8 +39,8 @@ export function JobsList({ workspace }: { workspace: Workspace }) {
         {failed ? <Empty title="Your jobs did not load" text="Nothing changed. Refresh the page to try again."/>
           : jobs === null ? <Empty title="Loading your jobs…" text="This takes a moment."/>
           : visible.length === 0 ? <Empty title={jobs.length ? "No matching jobs" : "No jobs yet"} text={jobs.length ? "Try a shorter search or clear the search box." : "Start a new job to see it here."}>{!jobs.length && <button type="button" className="btn primary" onClick={() => router.push("/jobs/new")}>Start a new job</button>}</Empty>
-          : visible.map((job, index) => <article className="job-row" key={job.id}>
-            <img className="job-photo" src={PHOTOS[index % PHOTOS.length]} alt="Illustrative building"/>
+          : visible.map(job => <article className="job-row" key={job.id}>
+            <img className="job-photo" src={jobPhoto(job.id)} alt="Illustrative building"/>
             <div className="job-name"><strong>{job.title}</strong><small>{[known(job.siteLabel) || "Site details needed", known(job.customerLabel) || "Customer details needed", job.updatedLabel].filter(Boolean).join(" · ")}</small><p>{quoteLine(job)} · {agreedLine(facts?.[job.id])} · {facts?.[job.id]?.payment?.paymentStatus ?? "Payment status unavailable"} · recorded by you, not bank-confirmed</p></div>
             <div className="job-side"><strong>{jobStatusLabels[job.status]}</strong>{attention.items.some(item => item.id === job.id) ? <Tag tone="amber">1 to check</Tag> : statusTag(job.status)}<button type="button" className="btn small" onClick={() => router.push(`/jobs/${job.id}/overview`)}>Open job →</button></div>
           </article>)}
@@ -79,8 +85,7 @@ export function useJobDetail(jobId: string, tenantId: string) {
       const { job } = jobWorkspaceResponseV1.parse(await response.json());
       if (job.id !== jobId || job.tenantId !== tenantId) throw new Error("WRONG_JOB_RESPONSE");
       const list = await readJson(`/api/jobs?tenantId=${encodeURIComponent(tenantId)}`, controller.signal).then(raw => { const list = jobsResponseV1.parse(raw); if (list.tenantId !== tenantId || list.jobs.some(item => item.tenantId !== tenantId)) throw new Error("WRONG_WORKSPACE_RESPONSE"); return list.jobs; });
-      const index = Math.max(0, list.findIndex(item => item.id === job.id));
-      if (current) setDetail({ job, summary: list.find(item => item.id === job.id) ?? null, value: null, checks: null, photo: PHOTOS[index % PHOTOS.length]! });
+      if (current) setDetail({ job, summary: list.find(item => item.id === job.id) ?? null, value: null, checks: null, photo: jobPhoto(job.id) });
     })().catch(() => { if (current) { setDetail(null); setFailed("unavailable"); } });
     return () => { current = false; controller.abort(); };
   }, [tenantId, jobId, refresh]);
@@ -148,7 +153,7 @@ export function Overview({ detail, site }: { detail: Detail; site: string }) {
     {detail.attentionFailed && <p role="status">Some job checks could not be loaded</p>}
     {!detail.attentionComplete && !detail.attentionFailed && <p role="status">Loading job checks…</p>}
     <div className="job-spot">
-      <Card title="The job at a glance"><div className="photo-card"><img src={photo} alt="Illustrative photograph of a property"/><div className="photo-copy"><div className="kicker">AGREED WORK</div><h3>{job.title}</h3><p style={{ fontSize: 12, lineHeight: 1.8 }}>{job.scopeIdentityIds.length ? `${job.scopeIdentityIds.length} confirmed ${job.scopeIdentityIds.length === 1 ? "item" : "items"} of work.` : "The agreed work has not been confirmed yet."}</p><div className="job-caption"><Tag tone="blue">{quoteLine(summary ?? { status: job.status, document: { kind: "unknown", reference: null, delivery: "unknown" } })}</Tag></div><button type="button" className="btn small" onClick={() => open("work")}>Open the work plan →</button></div></div></Card>
+      <Card title="The job at a glance"><div className="photo-card"><img src={photo} alt="Illustrative photograph of a property"/><div className="photo-copy"><p className="photo-disclosure">Illustrative photograph of a property</p><div className="kicker">AGREED WORK</div><h3>{job.title}</h3><p style={{ fontSize: 12, lineHeight: 1.8 }}>{job.scopeIdentityIds.length ? `${job.scopeIdentityIds.length} confirmed ${job.scopeIdentityIds.length === 1 ? "item" : "items"} of work.` : "The agreed work has not been confirmed yet."}</p><div className="job-caption"><Tag tone="blue">{quoteLine(summary ?? { status: job.status, document: { kind: "unknown", reference: null, delivery: "unknown" } })}</Tag></div><button type="button" className="btn small" onClick={() => open("work")}>Open the work plan →</button></div></div></Card>
       <Card title="Next action"><div className="card-body"><div className="kicker">JOBGUARD SUGGESTS</div><h3 style={{ fontSize: 17, margin: "8px 0" }}>{action.title}</h3><p>{action.body}</p><div style={{ marginTop: 20 }}><button type="button" className="btn primary wide" onClick={() => catchAction ? router.push(`/jobs/${job.id}/work#variation-${catchAction.id}`) : detail.facts?.blocker ? router.push(`/jobs/${job.id}/work#final-account-title`) : open(action.tab)}>{action.label} →</button></div></div></Card>
     </div>
     <div className="two-col">
@@ -177,7 +182,7 @@ export function Overview({ detail, site }: { detail: Detail; site: string }) {
 
 function WorkTab({ children }: { children?: ReactNode }) {
   return <>
-    <Head kicker="WORK / ONE CONNECTED JOB" title="Keep the work ready." text="The quote, materials, proof and extras belong to this job. A change here updates what JobGuard flags."/>
+    <div className="work-heading"><Head kicker="WORK / ONE CONNECTED JOB" title="Keep the work ready." text="The quote, materials, proof and extras belong to this job. A change here updates what JobGuard flags."/></div>
     <Legacy label="Job workspace" cards>{children}</Legacy>
   </>;
 }

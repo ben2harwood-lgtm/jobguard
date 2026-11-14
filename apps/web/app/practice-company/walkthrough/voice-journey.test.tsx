@@ -6,17 +6,21 @@ import * as screenActions from "./screen-actions";
 import { requestedWorkspaceSection } from "../../ui/workspace-lifecycle";
 import { visibleTarget } from "../../ui/walkthrough/walkthrough";
 import { missedWorkDiary, missedWorkSaved, saveMissedWork, priceFoundExtra, addOnSiteEvidence, evidenceDone, approvedExtraDone, finalCheckDone, restoreProgress, stageWords, ownJobAction, stages, VoiceJourney } from "./voice-journey";
-const memo = vi.hoisted(() => ({ steps: [] as import("../../ui/walkthrough/walkthrough").WalkthroughStep[], states: null as unknown[] | null, cursor: 0, setState: vi.fn() }));
+const memo = vi.hoisted(() => ({ prepare: null as (() => void) | null, steps: [] as import("../../ui/walkthrough/walkthrough").WalkthroughStep[], states: null as unknown[] | null, cursor: 0, setState: vi.fn() }));
 vi.mock("react", async original => {
   const actual = await original<typeof React>();
-  return { ...actual, useState: (initial: unknown) => memo.states && memo.cursor < memo.states.length ? [memo.states[memo.cursor++], memo.setState] : actual.useState(initial), useMemo: (factory: () => unknown) => {
+  return { ...actual, createElement: (...args: Parameters<typeof React.createElement>) => {
+    const props = args[1] as { id?: string; onClick?: () => void } | null;
+    if (props?.id === "walk-prepare") memo.prepare = props.onClick ?? null;
+    return actual.createElement(...args);
+  }, useState: (initial: unknown) => memo.states && memo.cursor < memo.states.length ? [memo.states[memo.cursor++], memo.setState] : actual.useState(initial), useMemo: (factory: () => unknown) => {
     const result = factory();
     if (Array.isArray(result) && result[0]?.id === "walk-1") memo.steps = result;
     return result;
   } };
 });
 vi.mock("../../demo-s/journey-launch", () => ({ recoverCapture: vi.fn().mockResolvedValue("00000000-0000-4000-8000-000000000002") }));
-vi.mock("../../ui/workspace-shell", () => ({ WorkspaceShell: ({ jobId }: { jobId: string }) => <section data-workspace-job={jobId} /> }));
+vi.mock("../../ui/workspace-shell", () => ({ WorkspaceShell: ({ jobId, initialPricing }: { jobId: string; initialPricing?: boolean }) => <section data-workspace-job={jobId} data-initial-pricing={initialPricing} /> }));
 vi.mock("../../ui/job-value", () => ({ ValuePage: ({ jobId }: { jobId: string }) => <section data-value-job={jobId} /> }));
 vi.stubGlobal("React", React);
 describe("WALK-3 honest journey boundaries", () => {
@@ -28,7 +32,8 @@ describe("WALK-3 honest journey boundaries", () => {
     }
     expect(stages[2]![1]).toContain("invitation is still to build");
     expect(stages[3]![1]).toContain("not an authenticated customer response");
-    expect(stages[5]![1]).toContain("builder's practice attestation");
+    expect(stages[5]![1]).toContain("the builder records approval of the exact practice revision");
+    expect(stages[5]![1]).toContain("this practice job cannot receive approval from the customer");
     expect(stages[4]![1]).toContain("forget to add it to the bill");
     expect(stages[6]![1]).toContain("JobGuard checks your records against the bill");
     expect(stages[7]![1]).toContain("awaiting customer approval");
@@ -210,6 +215,82 @@ describe("step 5 saved evidence", () => {
   });
 });
 
+describe("step 3 prepared workspace loading", () => {
+  it("keeps Show me alive when requested during manual example preparation", async () => {
+    vi.useFakeTimers();
+    let resolveCapture!: (id: string) => void;
+    vi.mocked(recoverCapture).mockImplementationOnce(() => new Promise(resolve => { resolveCapture = resolve; }));
+    let mounted = false, delivered = false;
+    const root = { querySelector: (selector: string) => {
+      if (selector.includes("workspace-job-id")) return mounted ? { getAttribute: () => preparedId } : null;
+      if (selector === ".review-line") return {};
+      if (selector === ".quote-editor") return { getAttribute: () => "true" };
+      return { textContent: selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "Not queued" : selector.includes("quote-revision") ? "1" : "Fictional customer" };
+    } };
+    vi.stubGlobal("document", { getElementById: () => root });
+    vi.stubGlobal("sessionStorage", { getItem: () => jobId, setItem: vi.fn() });
+    vi.stubGlobal("location", { href: "https://example.test/practice-company/walkthrough?walkJob=" + jobId });
+    vi.stubGlobal("history", { replaceState: vi.fn() });
+    const review = vi.spyOn(screenActions, "reviewAndPrice").mockResolvedValue();
+    const click = vi.spyOn(screenActions, "click").mockImplementation(async name => { if (name === "Continue fake worker") delivered = true; });
+    memo.states = [jobId, capture(), 0, 2, true, false, "", false, true, "", false, false, ""]; memo.cursor = 0;
+    try {
+      renderToStaticMarkup(<VoiceJourney />);
+      memo.setState.mockClear();
+      expect(memo.prepare).toBeTypeOf("function"); memo.prepare!();
+      // The new tour is mounted before the capture response, never after Show me starts.
+      expect(memo.setState).toHaveBeenCalledWith(jobId);
+      const action = memo.steps[2]!.autoAction({} as HTMLElement, new AbortController().signal);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(review).not.toHaveBeenCalled(); expect(click).not.toHaveBeenCalled();
+      mounted = true; resolveCapture(preparedId);
+      await vi.advanceTimersByTimeAsync(100); await action;
+      expect(review).toHaveBeenCalledOnce();
+      expect(memo.steps[2]!.isDone()).toBe(true);
+      // Only setPrepared receives the saved job ID; no late tour key replaces the running action.
+      expect(memo.setState.mock.calls.filter(([value]) => value === preparedId)).toHaveLength(1);
+    } finally { review.mockRestore(); click.mockRestore(); vi.useRealTimers(); }
+  });
+
+  it.each([null, jobId])("waits for the prepared job before choosing controls, previous workspace: %s", async previousJob => {
+    vi.useFakeTimers();
+    let mountedJob = previousJob, revision = 0, delivered = false;
+    const root = {
+      querySelector: vi.fn((selector: string) => {
+        if (selector.includes("workspace-job-id")) return mountedJob ? { getAttribute: () => mountedJob } : null;
+        if (selector.includes("quote-delivery")) return { textContent: delivered ? "Simulated delivery — nothing sent" : "Not queued" };
+        if (selector === ".review-line") return mountedJob ? {} : null;
+        if (selector === ".quote-editor") return mountedJob ? { getAttribute: () => "true" } : null;
+        if (selector.includes("quote-revision")) return { textContent: String(revision) };
+        if (selector.includes("party-customer")) return { textContent: "Fictional customer" };
+        return null;
+      }),
+    };
+    vi.stubGlobal("document", { getElementById: () => root });
+    const review = vi.spyOn(screenActions, "reviewAndPrice").mockImplementation(async () => {
+      expect(mountedJob).toBe(preparedId); revision = 1;
+    });
+    const click = vi.spyOn(screenActions, "click").mockImplementation(async name => {
+      expect(mountedJob).toBe(preparedId);
+      if (name === "Continue fake worker") delivered = true;
+    });
+    memo.states = [jobId, capture(), 0, 2, true, false, preparedId, false, true, "", false, false]; memo.cursor = 0;
+    try {
+      renderToStaticMarkup(<VoiceJourney />);
+      const action = memo.steps[2]!.autoAction({} as HTMLElement, new AbortController().signal);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(review).not.toHaveBeenCalled(); expect(click).not.toHaveBeenCalled();
+      expect(root.querySelector).not.toHaveBeenCalledWith(".review-line");
+      expect(root.querySelector).not.toHaveBeenCalledWith(".quote-editor");
+      mountedJob = preparedId;
+      await vi.advanceTimersByTimeAsync(100); await action;
+      expect(review).toHaveBeenCalledOnce();
+      expect(click.mock.calls.map(call => call[0])).toEqual(["Preview immutable quote", "Simulate sending this quote", "Continue fake worker"]);
+      expect(memo.steps[2]!.isDone()).toBe(true);
+    } finally { review.mockRestore(); click.mockRestore(); vi.useRealTimers(); }
+  });
+});
+
 describe("step 7 saved final check", () => {
   it.each([true, false])("waits for the saved read before requesting a run, already completed: %s", async completed => {
     let busy = false, status = "Running JobGuard's final check";
@@ -337,6 +418,7 @@ it.each([false, true])("renders the real workspace and report with the own job s
   try {
     const html = renderToStaticMarkup(<VoiceJourney />);
     expect(html).toContain(`${report ? "data-value-job" : "data-workspace-job"}="${jobId}"`);
+    if (!report) expect(html).toContain('data-initial-pricing="true"');
     expect(html).not.toContain("This part uses a prepared example job");
     expect(html).not.toContain("prepared job's figures");
     expect(html).toContain("Use the prepared example job");
@@ -437,7 +519,7 @@ it("prepares and sends the example in one default Show me action", async () => {
     expect(price).toHaveBeenCalledTimes(1);
     expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview immutable quote", "Simulate sending this quote", "Continue fake worker"]);
     // The default handoff keeps the running walkthrough mounted; an explicit
-    // example choice or refused own control still restarts it at sending.
+    // example choice or refused own control restarts it before loading.
     expect(memo.setState.mock.calls.filter(([value]) => value === preparedId)).toHaveLength(1);
     expect(memo.steps[2]!.isDone()).toBe(true);
   } finally { price.mockRestore(); click.mockRestore(); }
@@ -476,7 +558,7 @@ it.each([0, 1])("default step 3 waits for the prepared editor and saves only an 
   try {
     renderToStaticMarkup(<VoiceJourney />);
     expect(memo.steps[1]!.isDone()).toBe(true);
-    expect(location.hash).toBe("#quote");
+    expect(location.hash).toBe("");
     action = Promise.resolve(memo.steps[2]!.autoAction({} as HTMLElement, controller.signal));
     // Attach the rejection handler before checking the asynchronous handoff.
     const result = action.then(() => null, reason => reason);
