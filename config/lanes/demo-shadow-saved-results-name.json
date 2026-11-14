@@ -11,7 +11,8 @@
         "apps/web/app/demo-s/shadow-30000/journey.tsx",
         "apps/web/e2e/DEMO-A1-rest.spec.ts",
         "apps/web/e2e/DEMO-J3-integrity.spec.ts",
-        "apps/web/e2e/DEMO-J3-shadow.spec.ts"
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "apps/web/e2e/prelaunch-per-firm-terms.spec.ts"
       ]
     }
   }
