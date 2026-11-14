@@ -4,7 +4,7 @@
     "demo-core-practice-send-guide": {
       "branches": ["codex/sandbox/demo-core-practice-send-guide"],
       "note": "DEMO-S: name the existing quote practice-send controls in Core £1,000 guide step 3; wording only, no behavior or safety-text changes.",
-      "allow": ["apps/web/app/demo-s/core-1000/journey.tsx"]
+      "allow": ["apps/web/app/demo-s/core-1000/journey.tsx", "apps/web/e2e/real-gap-proof-by-trade.spec.ts"]
     }
   }
 }
