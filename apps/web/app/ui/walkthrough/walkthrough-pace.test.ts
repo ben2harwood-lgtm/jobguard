@@ -125,7 +125,7 @@ describe("390px dock geometry", () => {
 
 // Execute the component's real autoplay effect without a browser or a DOM renderer.
 describe("completed autoplay results", () => {
-  function playback({ reduced = false, done = true, visible = true, reject = false, webdriver = false, nextTarget = false, presentation = false } = {}) {
+  function playback({ reduced = false, done = true, visible = true, reject = false, webdriver = false, nextTarget = false, presentation = false, captureDelay = 0, savedPresentation = false } = {}) {
     vi.useFakeTimers(); vi.stubGlobal("React", React);
     vi.stubGlobal("navigator", { webdriver });
     vi.stubGlobal("matchMedia", () => ({ matches: reduced }));
@@ -138,7 +138,10 @@ describe("completed autoplay results", () => {
       if (reject) throw new Error("Rejected action");
       if (presentation) {
         await present!("Read", "sample words");
+        signal.throwIfAborted();
+        if (captureDelay) await new Promise(resolve => setTimeout(resolve, captureDelay));
         signal.throwIfAborted(); done = true;
+        if (savedPresentation) await present!("Saved", "review the draft");
       }
     });
     renderToStaticMarkup(React.createElement(Walkthrough, {
@@ -147,6 +150,28 @@ describe("completed autoplay results", () => {
     hooks.effects[3]!();
     return { autoAction, controller: hooks.refs[1]!.current as AbortController, reveal: () => { visible = true; } };
   }
+  it("autoplay Next waits for capture then advances without another hold", async () => {
+    playback({ done: false, presentation: true, captureDelay: 200, savedPresentation: true });
+    await vi.advanceTimersByTimeAsync(650);
+    (hooks.refs[3]!.current as () => void)();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(199);
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(hooks.setters[6]).toHaveBeenCalledWith(true);
+    expect(hooks.setters[9]!.mock.calls.filter(([value]) => value === true)).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("Stop after Next still prevents advancement while capture is pending", async () => {
+    const { controller } = playback({ done: false, presentation: true, captureDelay: 200, savedPresentation: true });
+    await vi.advanceTimersByTimeAsync(650);
+    (hooks.refs[3]!.current as () => void)();
+    await vi.advanceTimersByTimeAsync(100);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it("sample presentation holds outside the business deadline and Next cannot complete capture", async () => {
     const { controller } = playback({ done: false, presentation: true });
     await vi.advanceTimersByTimeAsync(650);

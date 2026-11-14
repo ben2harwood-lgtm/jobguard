@@ -176,13 +176,18 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     lastInput.current = null;
     running.current = true; setBusy(true); setError("");
     const controller = new AbortController(); action.current = controller;
+    let continueStep = false;
     let remaining = step.timeoutMs ?? 12_000, started = performance.now();
     let timeout = window.setTimeout(() => controller.abort(), remaining);
     const present = async (title: string, words: string) => {
-      if (navigator.webdriver || controller.signal.aborted) return;
+      if (navigator.webdriver || controller.signal.aborted || continueStep) return;
       clearTimeout(timeout); remaining -= performance.now() - started;
       setHolding(true);
-      await readingPause(readingTime(title, words), matchMedia("(prefers-reduced-motion: reduce)").matches, controller.signal, next => { skip.current = next; });
+      await readingPause(readingTime(title, words), matchMedia("(prefers-reduced-motion: reduce)").matches, controller.signal, next => { skip.current = () => {
+        // Autoplay Next releases this step, including later presentation holds.
+        // Completion still waits for the saved result below.
+        continueStep = playing; next();
+      }; });
       skip.current = null; setHolding(false);
       controller.signal.throwIfAborted();
       started = performance.now(); timeout = window.setTimeout(() => controller.abort(), Math.max(0, remaining));
@@ -213,7 +218,7 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
       while (!controller.signal.aborted && !step.isDone()) await new Promise(resolve => window.setTimeout(resolve, 100));
       if (!controller.signal.aborted && visibleTarget(step.target)) {
         clearTimeout(timeout);
-        if (viewerPlayback.has(controller.signal)) {
+        if (viewerPlayback.has(controller.signal) && !continueStep) {
           setHolding(true);
           await readingPause(readingTime(step.title, step.words), false, controller.signal, next => { skip.current = next; });
           skip.current = null; setHolding(false);
