@@ -1,3 +1,4 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -21,12 +22,17 @@ async function fixture() {
       [randomUUID(), actor.tenant, job, randomUUID(), "a".repeat(64), actor.member]);
     }
   });
+  members.set(actor.tenant, actor.member);
   return { ...actor, jobA, jobB, command: randomUUID() };
 }
 
+// LP-6d: each selection is the tenant's fixture member's own bound request (its persisted fixture credential).
+const members = new Map<string, string>();
 function select(tenant: string, job: string, command: string, scenario = "manual_receipt") {
-  return transaction(db.runtime, tenant, async client =>
-    (await client.query("SELECT app.configure_recovery_demo($1,$2,$3) id", [job, command, scenario])).rows[0]!.id);
+  return transaction(db.runtime, tenant, async client => {
+    await bindTestClient(db.owner, client, tenant, members.get(tenant)!);
+    return (await client.query("SELECT app.configure_recovery_demo($1,$2,$3) id", [job, command, scenario])).rows[0]!.id;
+  });
 }
 
 async function selections(tenant: string) {
@@ -85,7 +91,11 @@ describe("LATER-SAFETY-122 recovery demo command replay", () => {
       await client.query("ROLLBACK");
       const restored = (await client.query("SELECT pg_get_functiondef('app.configure_recovery_demo(uuid,uuid,varchar)'::regprocedure) definition")).rows[0]!.definition;
       expect(restored).toBe(definition);
-      expect(restored.split("$function$")[1]).toBe(fixedMigration.split("AS $$")[1]!.split("$$;")[0]);
+      // LP-6d (0980) installs its binding guard ahead of the unchanged 0670 body.
+      const guarded = (await readFile(new URL("../migrations/0980_lp6d_remaining_routines.sql", import.meta.url), "utf8"))
+        .split("FUNCTION app.configure_recovery_demo(").at(-1)!.split("AS $$")[1]!.split("$$;")[0]!;
+      expect(restored.split("$function$")[1]).toBe(guarded);
+      expect(guarded).toContain(fixedMigration.split("AS $$")[1]!.split("$$;")[0]!.trim());
     } finally {
       await client.query("ROLLBACK");
       client.release();

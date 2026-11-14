@@ -1,3 +1,4 @@
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { contractorRoles, type ContractorScope, type ContractorRole } from "@jobguard/core";
@@ -16,8 +17,8 @@ async function command(actor: AuthenticatedMembership, fields: Record<string, un
 }
 async function invite(role: ContractorRole, s: ContractorScope, clientId: string | null = null) {
  const raw = await command(f.p, { kind: "member.invite", role, scope: s, clientId, contractId: null, email: "member@fictional.invalid" }); await repo.command(f.p, raw);
- const row = (await c.admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, raw.id])).rows[0];
- return { tenantId: f.p.tenantId, membershipId: raw.id, identityUserId: row.identity_user_id } as AuthenticatedMembership;
+ // LP-6d: the invited member acts through its own persisted contractor practice session.
+ return await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, raw.id as string);
 }
 const grant = (actor: AuthenticatedMembership, target: AuthenticatedMembership, s: ContractorScope, role: ContractorRole, expected?: number) => command(actor, { kind: "grant.create", role, scope: s, membershipId: target.membershipId, contractId: null }, expected);
 async function failure(work: Promise<unknown>, code: string) { let caught: unknown; try { await work; } catch (error) { caught = error; } expect(caught).toMatchObject({ code }); return errorShape(caught); }
