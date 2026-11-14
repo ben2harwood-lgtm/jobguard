@@ -198,7 +198,15 @@ test("prepared unanswered example retains the certificate walkthrough and resume
  const tour=page.getByRole("region",{name:"Guided walkthrough"});
  for(let step=1;step<=4;step++) {
   await expect(tour).toContainText(`Step ${step} of 9`,{timeout:60_000});
-  if(step===3) await page.getByRole("button",{name:"Use the prepared example job",exact:true}).click();
+  if(step===3) {
+   await page.getByRole("button",{name:"Use the prepared example job",exact:true}).click();
+   // Preparing replaces both the job screen and the tour. Do not start Show me
+   // on the old tour, whose action is cancelled when that replacement mounts.
+   await expect(page.getByRole("heading",{name:"Prepared example · simulated customer",exact:true})).toBeVisible();
+   const preparedJobId=new URL(page.url()).searchParams.get("walkExample");
+   expect(preparedJobId).not.toBeNull();
+   await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id",preparedJobId!);
+  }
   await tour.getByRole("button",{name:"Show me",exact:true}).click();
  }
  await expect(tour).toContainText("Step 5 of 9");

@@ -13,7 +13,11 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 900 
   await click("＋ Start a new job");
   await page.getByLabel("Work details").fill("JOB: Fictional blue room\nITEM: Paint walls | £200.00");
   await click("Make my draft"); await click("Check and edit my draft");
-  await click("Save customer and site"); await click("Accept Paint walls");
+  await click("Save customer and site");
+  // Finish the party save before confirmation also advances this job revision.
+  await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+  await expect(page.getByRole("form", { name: "Customer and site details" }).locator("fieldset")).toBeEnabled();
+  await click("Accept Paint walls");
   await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
   await click("Confirm scope"); await click("Price the work");
   await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
