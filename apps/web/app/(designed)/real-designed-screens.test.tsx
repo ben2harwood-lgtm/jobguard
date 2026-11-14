@@ -87,6 +87,14 @@ it("offers the blank practice firm first and keeps example sign-in as the second
 });
 
 const detailJob = { ...job, revision: 4, updatedAt: "2026-11-09T12:00:00Z", scopeIdentityIds: [] };
+it.each([{ scopeIdentityIds: [] }, { scopeIdentityIds: ["30000000-0000-4000-8000-000000000001"] }])("visibly discloses the Overview illustration beside saved job facts (%j)", ({ scopeIdentityIds }) => {
+  const html = renderToStaticMarkup(<Overview site="Site" detail={{ job: { ...detailJob, scopeIdentityIds }, summary: job, value: null, checks: 0, photo: "/design/assets/reference-job-martin.jpg" }}/>);
+  expect(html).toContain('<p class="photo-disclosure">Illustrative photograph of a property</p>');
+  expect(html.indexOf('class="photo-disclosure"')).toBeLessThan(html.indexOf("AGREED WORK"));
+  expect(html).toContain(`<h3>${job.title}</h3>`);
+  expect(html).toContain(scopeIdentityIds.length ? "1 confirmed item of work." : "The agreed work has not been confirmed yet.");
+  expect(html).toContain('src="/design/assets/reference-job-martin.jpg"');
+});
 const emptyDecisions: Decisions = { decisions: [], counts: { mandatory: 0, advisory: 0, pending: 0 } };
 const facts: JobFacts = { agreed: 108000, payment: { state: "not_invoiced", label: "Work under way", paymentStatus: "No invoice issued", invoiceCount: 0 }, value: null, blocker: null, checksAvailable: true };
 beforeEach(() => { state.jobs = []; state.facts = null; state.decisions = null; hooks.active = false; });
