@@ -26,7 +26,7 @@ it("has nine guided steps, source-only £30,000 input and no saved success befor
  const visible = html.replace(/<[^>]*>/gu, " ");
  expect(visible).not.toMatch(/landing allocations|SV-6 assessment|target Q|J3 capture|\bRED\b|verdict|observations|0 of 2/i);
  expect(html).toContain('<button>Create or resume the £30,000 practice job</button>');
- expect(html).toContain('aria-label="Load saved J3 evidence"');
+ expect(html).toContain('<button type="submit">Load this job’s saved results</button>');
  expect(html).not.toContain("Saved job evidence"); expect(html).not.toContain("You finished");
 });
 it("reports every capture state fee-free without implying customer approval or verified payment", () => {
