@@ -419,6 +419,6 @@ export function VoiceJourney() {
         }
         setCapture(result); }} />}
     </div>
-    {tenantId && tour && <Walkthrough key={tourVersion || "own"} steps={steps} initialIndex={resumeIndex} onClose={() => setTour(false)} />}
+    {tenantId && tour && <Walkthrough key={tourVersion || "own"} steps={steps} initialIndex={resumeIndex} onClose={index => { setResumeIndex(index); setTour(false); }} />}
   </>;
 }

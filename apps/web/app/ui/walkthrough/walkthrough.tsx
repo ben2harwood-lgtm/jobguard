@@ -70,7 +70,7 @@ export function clearPhoneDock(target: HTMLElement, dock: HTMLElement) {
   else if (overlap > 0 && rect.height < bar.top - 12) window.scrollBy({ top: overlap, behavior: "instant" });
 }
 
-export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: readonly WalkthroughStep[]; onClose: () => void; initialIndex?: number }) {
+export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: readonly WalkthroughStep[]; onClose: (index: number) => void; initialIndex?: number }) {
   const [index, setIndex] = useState(initialIndex), [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false), [done, setDone] = useState(false), [error, setError] = useState("");
   const [box, setBox] = useState<Box | null>(null), [finished, setFinished] = useState(false), [waiting, setWaiting] = useState(false);
@@ -83,7 +83,11 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
   const pointers = useRef(new Set<number>()), touches = useRef(new Set<number>());
   currentPlaying.current = playing;
   const step = steps[index];
-  const stop = () => { action.current?.abort(); setPlaying(false); setHolding(false); };
+  const cancel = () => {
+    action.current?.abort(); action.current = null;
+    skip.current = null; running.current = false;
+  };
+  const stop = () => { cancel(); setBusy(false); setPlaying(false); setHolding(false); };
   const stopKey = (event: React.KeyboardEvent) => { if (event.key === " " || event.key === "Enter") stop(); };
   // Restore focus, page spacing and target styling on exit, including navigation/unmount.
   useEffect(() => {
@@ -124,7 +128,7 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
       document.removeEventListener("touchcancel", touch, true);
       document.removeEventListener("keydown", key, true);
       window.removeEventListener("blur", blur); blur();
-      observer?.disconnect(); action.current?.abort(); document.body.style.paddingBottom = padding; if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+      observer?.disconnect(); cancel(); document.body.style.paddingBottom = padding; if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
     };
   }, []);
   useEffect(() => {
@@ -209,8 +213,8 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
         // Completion still waits for the saved result below.
         continueStep = playing; next();
       }; });
-      skip.current = null; setHolding(false);
       controller.signal.throwIfAborted();
+      skip.current = null; setHolding(false);
       started = performance.now(); timeout = window.setTimeout(() => controller.abort(), Math.max(0, remaining));
     };
     if (playing && viewerPacing()) viewerPlayback.add(controller.signal);
@@ -242,22 +246,26 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
         if (viewerPlayback.has(controller.signal) && !continueStep) {
           setHolding(true);
           await readingPause(readingTime(step.title, step.words), false, controller.signal, next => { skip.current = next; });
-          skip.current = null; setHolding(false);
+          if (action.current === controller) { skip.current = null; setHolding(false); }
         }
         if (!controller.signal.aborted) advance();
       }
       else throw new Error("Stopped. This step has not been confirmed; check the screen before continuing.");
-    } catch (failure) { setPlaying(false); setError(failure instanceof Error ? failure.message : "The step could not complete."); }
-    finally { viewerPlayback.delete(controller.signal); clearTimeout(timeout); running.current = false; setBusy(false); }
+    } catch (failure) {
+      if (action.current === controller) { setPlaying(false); setError(failure instanceof Error ? failure.message : "The step could not complete."); }
+    } finally {
+      viewerPlayback.delete(controller.signal); clearTimeout(timeout);
+      if (action.current === controller) { skip.current = null; running.current = false; setBusy(false); setHolding(false); }
+    }
   }
   useEffect(() => { if (waiting && done && !busy) advance(); }, [waiting, done, busy]);
   useEffect(() => { if (playing && !busy && !finished) void show(); }, [playing, busy, index, finished]); // one action at a time
   useEffect(() => {
     function escape(event: KeyboardEvent) {
       if (event.target instanceof Element && event.target.closest('dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]') || document.querySelector("dialog:modal")) return;
-      if (event.key === "Escape" && !event.defaultPrevented) { action.current?.abort(); setPlaying(false); onClose(); } }
+      if (event.key === "Escape" && !event.defaultPrevented) { stop(); onClose(index); } }
     window.addEventListener("keydown", escape); return () => window.removeEventListener("keydown", escape);
-  }, [onClose]);
+  }, [onClose, index]);
   if (!step) return null;
   return <>
     {box && !finished && <><div aria-hidden="true" className={styles.spotlight} style={box} />
@@ -287,9 +295,9 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
       </div>}
       {finished && <div className={styles.controls}>
         <button onClick={() => { stop(); location.assign("/jobs/new"); }}>Start my own job</button>
-        <button onClick={() => { stop(); onClose(); document.getElementById("walk-report")?.click(); }}>Read the report again</button>
+        <button onClick={() => { stop(); onClose(index); document.getElementById("walk-report")?.click(); }}>Read the report again</button>
       </div>}
-      <button className={styles.close} onPointerDown={stop} onKeyDown={stopKey} onClick={() => { stop(); onClose(); }}>Close walkthrough</button>
+      <button className={styles.close} onPointerDown={stop} onKeyDown={stopKey} onClick={() => { stop(); onClose(index); }}>Close walkthrough</button>
     </section>
   </>;
 }

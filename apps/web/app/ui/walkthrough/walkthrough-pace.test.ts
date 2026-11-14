@@ -329,13 +329,14 @@ describe("recent human input and spotlight replacements", () => {
     const autoAction = vi.fn(() => { complete = true; });
     const steps = [0, 1, 2].map(index => ({ id: `step-${index}`, target: "#root", title: "Read", words: "the saved result", isDone: () => complete, autoAction }));
     let tree: React.ReactNode;
+    const onClose = vi.fn();
     const states: unknown[] = [initialIndex, false, false, false, "", { left: 0, top: 0, width: 1, height: 1 }, false, false, false, false];
     function render() {
       refIndex = 0; hooks.effects.length = 0; hooks.setters.length = 0; hooks.states = states;
-      tree = Walkthrough({ steps, onClose: () => {}, initialIndex });
+      tree = Walkthrough({ steps, onClose, initialIndex });
     }
-    function button(label: string): { onClick: () => void } {
-      function find(node: React.ReactNode): { onClick: () => void } | undefined {
+    function button(label: string): { onClick: () => void; disabled?: boolean } {
+      function find(node: React.ReactNode): { onClick: () => void; disabled?: boolean } | undefined {
         for (const child of React.Children.toArray(node)) {
           if (!React.isValidElement<{ children?: React.ReactNode; onClick: () => void }>(child)) continue;
           if (child.type === "button" && child.props.children === label) return child.props;
@@ -354,7 +355,7 @@ describe("recent human input and spotlight replacements", () => {
       documentHandlers.get(name)?.({ type: name, isTrusted: trusted, pointerId: 1, changedTouches: [{ identifier: 1 }], ...detail });
     }
     return {
-      states, refs, add, remove, removeWindow, windowHandlers, scrollBy, button, render, input, replace,
+      states, refs, add, remove, removeWindow, windowHandlers, scrollBy, button, render, input, replace, onClose,
       poll: () => poll(), time: (value: number) => { now = value; },
       target: () => target!, clear: () => { target = null; poll(); },
       enter(index: number) {
@@ -510,6 +511,44 @@ describe("recent human input and spotlight replacements", () => {
       f.states[1] = false; f.render(); f.input("keydown"); f.replace();
       expect(f.scrollBy).toHaveBeenCalledTimes(4);
     } finally { (f.refs[1]!.current as AbortController | null)?.abort(); f.cleanup(); }
+  });
+  it("Stop then Close settles reading and reopens idle at the current step with Play enabled", async () => {
+    const f = fixture(1);
+    let resumeIndex = 0;
+    try {
+      f.states[1] = true; f.render(); hooks.effects[3]!();
+      await vi.advanceTimersByTimeAsync(650);
+      expect(hooks.setters[9]).toHaveBeenCalledWith(true);
+      const controller = f.refs[1]!.current as AbortController;
+      f.states[2] = true; f.states[9] = true; f.render();
+      f.button("Stop playback").onClick();
+      expect(controller.signal.aborted).toBe(true);
+      expect(f.refs[2]!.current).toBe(false);
+      expect(f.refs[3]!.current).toBeNull();
+      expect(hooks.setters[2]).toHaveBeenCalledWith(false);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(vi.getTimerCount()).toBe(0);
+      f.button("Close walkthrough").onClick();
+      expect(f.onClose).toHaveBeenCalledExactlyOnceWith(1);
+      resumeIndex = f.onClose.mock.calls[0]![0] as number;
+    } finally { f.cleanup(); }
+    const reopened = fixture(resumeIndex);
+    try {
+      expect(reopened.states[0]).toBe(1);
+      expect(reopened.refs[1]!.current).toBeNull();
+      expect(reopened.refs[2]!.current).toBe(false);
+      expect(reopened.button("Play the whole thing").disabled).toBe(false);
+      reopened.states[1] = true; reopened.render(); hooks.effects[3]!();
+      await vi.advanceTimersByTimeAsync(650);
+      const controller = reopened.refs[1]!.current as AbortController;
+      // Navigation/unmount also cancels a fresh reading hold.
+      reopened.cleanup();
+      expect(controller.signal.aborted).toBe(true);
+      expect(reopened.refs[2]!.current).toBe(false);
+      expect(reopened.refs[3]!.current).toBeNull();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { reopened.cleanup(); }
   });
   it("registers and removes every native capture listener and the blur listener", () => {
     const f = fixture(); f.cleanup();
