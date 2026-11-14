@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { ContractorRepository, WorkOrderRepository, AuditExportRepository, withTenant } from "../src/index.js";
+import { ContractorRepository, WorkOrderRepository, AuditExportRepository, requireContractorRequestContext, withTenant } from "../src/index.js";
 import { serverEntitlement } from "../src/plan-entitlement-service.js";
 import { cluster, startSession, status, unchanged, type Cluster } from "./contractor-entitlement-fixtures.js";
 import { currentCommand } from "./contractor-practice-session-fixtures.js";
@@ -82,7 +82,9 @@ it("MON-8 real installed guards reference the one service; no public or infrastr
   for (const name of names) {
     const [schema, routine] = name.split(".");
     const rows = (await c.admin.query("SELECT pg_get_functiondef(p.oid) definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=$1 AND p.proname=$2", [schema, routine])).rows;
-    expect(rows).toHaveLength(1); expect(rows[0].definition).toContain("app.mon8_require_feature");
+    // LP-6d (repair 8, accepted): the identity SSO/OIDC routines reach the one service through its private
+    // fixed-feature copy app.mon8_sso_feature_decision (pinned and permission-checked in lp6d-routines).
+    expect(rows).toHaveLength(1); expect(rows[0].definition).toContain(schema === "identity" ? "app.mon8_sso_feature_decision" : "app.mon8_require_feature");
   }
   expect((await c.admin.query(`SELECT has_function_privilege('jobguard_infrastructure','app.mon8_feature_decision(uuid,text,text)','EXECUTE') allowed,
     EXISTS(SELECT 1 FROM pg_proc p, LATERAL aclexplode(p.proacl) a WHERE p.oid='app.mon8_feature_decision(uuid,text,text)'::regprocedure AND a.grantee=0 AND a.privilege_type='EXECUTE') public`)).rows[0]).toEqual({ allowed: false, public: false });
@@ -123,9 +125,10 @@ it("MON-8 track reassignment refuses legacy contractor writers while retaining r
     (tenant_id,id,agreement_ref,rate_numerator,rate_denominator,basis,policy_version,effective_from,end_of_job_check,content_hash,environment,operations_actor_ref)
     VALUES($1,$2,'fictional-agreement',1,10,'on_payment','enterprise_site_capture_policy_v1','2000-01-01',false,$3,'synthetic_demo','operations:fictional')`,
     [f.p.tenantId, agreement, "c".repeat(64)]));
-  const derivation = (await ownerTx(c, f.p.tenantId, db => db.$client.query("SELECT app.ef_derive($1,$2,$3,'2026-10') result", [finance.session, deriveCommand, agreement]))).rows[0].result.derivationId;
-  const statement = (await ownerTx(c, f.p.tenantId, db => db.$client.query("SELECT app.ef_prepare_statement($1,$2,'2026-10') result", [finance.session, prepareCommand]))).rows[0].result.statementId;
-  const readFees = () => withTenant(c.runtime, finance.context, db => db.$client.query("SELECT app.ef_read($1,$2) derivation,app.ef_read_statement($1,$3) statement", [finance.session, derivation, statement]));
+  // LP-6d: the finance session derives and prepares in its own bound request.
+  const derivation = (await withTenant(c.runtime, requireContractorRequestContext(finance.p), db => db.$client.query("SELECT app.ef_derive($1,$2,$3,'2026-10') result", [finance.session, deriveCommand, agreement]))).rows[0].result.derivationId;
+  const statement = (await withTenant(c.runtime, requireContractorRequestContext(finance.p), db => db.$client.query("SELECT app.ef_prepare_statement($1,$2,'2026-10') result", [finance.session, prepareCommand]))).rows[0].result.statementId;
+  const readFees = () => withTenant(c.runtime, requireContractorRequestContext(finance.p), db => db.$client.query("SELECT app.ef_read($1,$2) derivation,app.ef_read_statement($1,$3) statement", [finance.session, derivation, statement]));
   const feesBefore = (await readFees()).rows;
   await track(c, f);
   expect((await readFees()).rows).toEqual(feesBefore);
@@ -153,7 +156,9 @@ it("MON-8 track reassignment refuses legacy contractor writers while retaining r
     for (const [sql, args] of calls) {
       // Use the owner only for private helper coverage; each routine must refuse
       // on entitlement, before malformed/missing business input can hide a bypass.
-      await expect(ownerTx(c, f.p.tenantId, db => db.$client.query(sql, args)), sql).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN" });
+      // LP-6d: each call is the named member's own bound request (finance, supervisor, else the owner).
+      const session = args.includes(finance.session) ? finance.session : args.includes(supervisor.session) || args.includes(supervisor.p.membershipId) ? supervisor.session : f.session;
+      await expect(ownerTx(c, f.p.tenantId, async db => { await db.$client.query("SELECT app.bind_request('contractor_practice',$1,$2)", [session, f.p.tenantId]); return db.$client.query(sql, args); }), sql).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN" });
     }
   });
   expect(await new ContractorRepository(c.runtime).query(f.p, query)).toEqual(before);
