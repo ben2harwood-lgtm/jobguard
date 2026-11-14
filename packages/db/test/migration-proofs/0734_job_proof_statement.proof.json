@@ -1,0 +1,920 @@
+{
+  "migration": "0734_job_proof_statement.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-real-gap-proof-by-trade",
+        "title": "Explicit practice proof statements",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Check owner-only practice authority and preserved unanswered behavior.",
+          "LP-12": "Check narrow grants, immutable bindings and receipt/audit custody."
+        },
+        "sources": [
+          "packages/db/migrations/0734_job_proof_statement.sql",
+          "packages/db/src/job-proof-statement.ts"
+        ],
+        "tests": [
+          "packages/db/test/real-gap-proof-by-trade.integration.test.ts"
+        ],
+        "gaps": [
+          "Source-derived expectations; real PostgreSQL catalogue comparison and exact-head independent RED review pending."
+        ],
+        "description": "Protected explicit answers change only the practice proof requirement; existing unanswered jobs retain their source bytes and hashes."
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-real-gap-proof-by-trade",
+        "title": "Explicit practice proof statements",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Check owner-only practice authority and preserved unanswered behavior.",
+          "LP-12": "Check narrow grants, immutable bindings and receipt/audit custody."
+        },
+        "sources": [
+          "packages/db/migrations/0734_job_proof_statement.sql",
+          "packages/db/src/job-proof-statement.ts"
+        ],
+        "tests": [
+          "packages/db/test/real-gap-proof-by-trade.integration.test.ts"
+        ],
+        "gaps": [
+          "Source-derived expectations; real PostgreSQL catalogue comparison and exact-head independent RED review pending."
+        ],
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Practice-only repair; exact-head CI and independent RED review remain required."
+        },
+        "downstream": "Protected explicit answers change only the practice proof requirement.",
+        "path": "ap-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.job_proof_session_digest()|jobguard_binding_owner",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.job_proof_session_digest()|jobguard_migration|EXECUTE|-",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.job_proof_session_digest()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request",
+          "app.lp6_session_authority"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.job_proof_practice_bound()|jobguard_binding_owner",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.job_proof_practice_bound()|jobguard_migration|EXECUTE|-",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.job_proof_practice_bound()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.job_proof_authority(uuid,boolean)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.bound_context_reader",
+          "app.job_proof_session_digest"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.read_job_proof_statement(uuid,uuid)|jobguard_migration",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.read_job_proof_statement(uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.read_job_proof_statement(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.job_proof_authority"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.job_proof_requirement(uuid,uuid)|jobguard_migration",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.job_proof_requirement(uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.job_proof_requirement(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.job_proof_authority",
+          "app.job_proof_practice_bound",
+          "app.read_job_proof_statement"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.answer_job_proof_statement(uuid,jsonb)|jobguard_migration",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.answer_job_proof_statement(uuid,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.answer_job_proof_statement(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.command_receipt",
+          "app.job_proof_statement",
+          "app.watchdog_command_identity"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.final_lock_hash",
+          "app.job_proof_authority",
+          "app.lp4_seal_audit",
+          "app.read_job_proof_statement",
+          "app.require_watchdog_live",
+          "app.validate_job_proof_receipt"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.bind_final_account_proof_statement()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.final_account_proof_statement"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.guard_job_proof_source()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.guard_final_lock_proof_statement()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_lock_canonical"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.guard_job_proof_receipt()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.validate_job_proof_receipt(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_lock_hash"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.require_completed_job_proof_statement()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.validate_job_proof_receipt"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.retire_replaced_job_proof_findings(uuid,uuid)|jobguard_migration",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.retire_replaced_job_proof_findings(uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.retire_replaced_job_proof_findings(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_actor",
+          "app.job_proof_authority",
+          "app.lp4_seal_audit"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.retired_job_proof_findings(uuid)|jobguard_migration",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.retired_job_proof_findings(uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-real-gap-proof-by-trade"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.retired_job_proof_findings(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.job_proof_authority"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.synthetic_evidence_original|job_proof_source_read|PERMISSIVE|SELECT|jobguard_migration|33ffa1233cb73808"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job_proof_statement|tenant_owner|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.job_proof_statement|immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.final_account_proof_statement|tenant_owner|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.final_account_proof_statement|immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.final_account_revision|bind_proof_statement|app.bind_final_account_proof_statement|AFTER INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.evidence_upload|A00_job_proof_authority|app.guard_job_proof_source|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.stage_completion|A00_job_proof_authority|app.guard_job_proof_source|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.evidence_invalidation|A00_job_proof_authority|app.guard_job_proof_source|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.final_account_lock|A00_proof_statement|app.guard_final_lock_proof_statement|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.command_receipt|proof_statement_receipt_guard|app.guard_job_proof_receipt|BEFORE INSERT/DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.watchdog_command_identity|proof_statement_identity_complete|app.require_completed_job_proof_statement|AFTER INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.command_receipt|proof_statement_receipt_complete|app.require_completed_job_proof_statement|AFTER INSERT/UPDATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "job_proof_session_digest",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "job_proof_practice_bound",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "job_proof_authority",
+        "args": "j uuid, locking boolean",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "read_job_proof_statement",
+        "args": "j uuid, r uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp",
+          "TimeZone=UTC"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "job_proof_requirement",
+        "args": "j uuid, r uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "answer_job_proof_statement",
+        "args": "j uuid, c jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp",
+          "TimeZone=UTC"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "bind_final_account_proof_statement",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "guard_job_proof_source",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "guard_final_lock_proof_statement",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "guard_job_proof_receipt",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "validate_job_proof_receipt",
+        "args": "t uuid, cid uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp",
+          "TimeZone=UTC"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "require_completed_job_proof_statement",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "retire_replaced_job_proof_findings",
+        "args": "j uuid, c uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "retired_job_proof_findings",
+        "args": "j uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "synthetic_evidence_original",
+        "policyname": "job_proof_source_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.job_proof_source_read'::text, true) = 'on'::text))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job_proof_statement",
+        "policyname": "tenant_owner",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "job_proof_statement",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "job_proof_statement_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "job_proof_statement_tenant_id_job_id_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "job_proof_statement_tenant_id_job_id_revision_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.job_proof_statement",
+        "data": []
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "final_account_proof_statement",
+        "policyname": "tenant_owner",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "final_account_proof_statement",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "final_account_proof_statement_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.final_account_proof_statement",
+        "data": []
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "job_proof_statement",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "final_account_proof_statement",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

@@ -10,9 +10,9 @@ it("SV5-21 SV5-30 authorizes before command parsing or hidden subject lookup",as
  const f=fixture(false),spy=vi.spyOn(FinalCheckRepository.prototype,"disposition");
  await expect(f.app.disposition(id,{actor:id,signalId:id})).rejects.toMatchObject({code:"NOT_FOUND"});expect(spy).not.toHaveBeenCalled();
 });
-it("SV5-24 pre-lock read returns fixed running state through controlled projection",async()=>{
+it("SV5-24 pre-lock read returns fixed unlocked state through controlled projection",async()=>{
  const f=fixture();vi.spyOn(FinalCheckRepository.prototype,"read").mockResolvedValue({state:"unlocked",items:[]});
- expect(await f.app.get(id)).toEqual({state:"unlocked",items:[],message:"Running JobGuard's final check"});
+ expect(await f.app.get(id)).toEqual({state:"unlocked",items:[],message:null});
 });
 it("SV5-04 zero completed result gives the exact server message",async()=>{
  const f=fixture();vi.spyOn(FinalCheckRepository.prototype,"read").mockResolvedValue({state:"completed",items:[]});
@@ -24,3 +24,8 @@ it("SV5-30 strict disposition refuses client authority after access",async()=>{
 });
 
 it("closed-job rerun preserves the named refusal through HTTP",()=>{expect(finalCheckFailure(new FinalCheckError("JOB_WORK_CLOSED"))).toEqual({status:409,body:{code:"JOB_WORK_CLOSED"}});});
+
+it.each([['pending', "Running JobGuard's final check"], ['failed', null]] as const)("saved %s state has an agreeing message", async (state, message) => {
+ const f=fixture();vi.spyOn(FinalCheckRepository.prototype,"read").mockResolvedValue({state,items:[]});
+ expect((await f.app.get(id)).message).toBe(message);
+});

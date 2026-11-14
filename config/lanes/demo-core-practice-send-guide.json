@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-core-practice-send-guide": {
+      "branches": ["codex/sandbox/demo-core-practice-send-guide"],
+      "note": "DEMO-S: name the existing quote practice-send controls in Core £1,000 guide step 3; wording plus CI test synchronization; no product behavior or safety-text changes.",
+      "allow": ["apps/web/app/demo-s/core-1000/journey.tsx", "apps/web/e2e/real-gap-proof-by-trade.spec.ts", "apps/web/e2e/prelaunch-per-firm-terms.spec.ts", "apps/web/e2e/real-customer-link-own-quote.spec.ts"]
+    }
+  }
+}
