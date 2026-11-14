@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { startBlankPracticeCompany, authenticatePracticeSession, prepareActivationFixtureV3, PracticeActivationRepository, FinalAccountLockRepository, FinalCheckRepository, JobSourceRepository, FinalCheckCompletionRepository, practiceFinalCheckPorts } from "../src/index.js";
+import { startBlankPracticeCompany, authenticatePracticeSession, prepareActivationFixtureV3, PracticeActivationRepository, FinalAccountLockRepository, FinalCheckRepository, JobSourceRepository, FinalCheckCompletionRepository, practiceFinalCheckPorts, practiceMaterialPool } from "../src/index.js";
 import { ValueApplication } from "../../../apps/api/src/value/value.application.js";
 import { VariationApplication } from "../../../apps/api/src/variation/variation.application.js";
 import { FinalAccountLockApplication } from "../../../apps/api/src/final-account-lock.application.js";
@@ -40,7 +40,8 @@ async function setup(extraNote?: string) {
  const work = new JobWorkStateApplication(f.runtime, session), before = await work.get(jobId);
  await work.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(), expectedRevision: Math.max(0, ...before.events.map(event => event.sequence)), action: "finish" });
  const account = (await accounts.build(jobId, { version: "final-account.assemble.v1", commandId: randomUUID() })).account!;
- const locks = new FinalAccountLockRepository(f.runtime);
+ // 0735 per-firm terms: accept and lock as the job's own practice firm (firm-scoped pool), as main's lock fixtures do.
+ const locks = new FinalAccountLockRepository(practiceMaterialPool(f.runtime, auth.digest));
  await locks.acceptTerms(auth.context, { actorMembershipId: auth.membershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
  await locks.disposition(auth.context, { jobId, actorMembershipId: auth.membershipId, commandId: randomUUID(), scopeItemId: scope, disposition: "done" });
  const preLock = await value.read(jobId);

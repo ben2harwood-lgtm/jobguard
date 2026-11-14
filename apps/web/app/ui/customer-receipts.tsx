@@ -5,10 +5,16 @@ import { isReceiptDate, parseReceiptPounds, practiceReceiptViewV1, type Practice
 import { deriveJobPaymentState } from "../lib/invoice-payment-state";
 import { notifyInvoiceChanged } from "./customer-payment-status";
 const gbp=(p:number)=>`GBP ${(p/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-export function CustomerReceipts({jobId,invoiceId,onChanged}:{jobId:string;invoiceId:string;onChanged:()=>void}) {
+type ReceiptProps={jobId:string;invoiceId:string;onChanged:()=>void};
+export function CustomerReceipts(props:ReceiptProps) {
+ return <ReceiptForm key={`${props.jobId}:${props.invoiceId}`} {...props}/>;
+}
+// The keyed form drops every invoice-specific field before another invoice renders.
+const balanceAmount=(p:number)=>p>0?`${Math.trunc(p/100)}.${String(p%100).padStart(2,"0")}`:"";
+function ReceiptForm({jobId,invoiceId,onChanged}:ReceiptProps) {
  const [view,setView]=useState<PracticeReceiptView|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),[busy,setBusy]=useState(false),[unconfirmed,setUnconfirmed]=useState(false);
- const [amount,setAmount]=useState("500.00"),[paidOn,setPaidOn]=useState(()=>new Date().toISOString().slice(0,10)),[method,setMethod]=useState("bank_transfer"),[reference,setReference]=useState("Practice customer receipt"),[reason,setReason]=useState("Practice receipt correction");
- const writing=useRef(false);
+ const [amount,setAmount]=useState(""),[paidOn,setPaidOn]=useState(()=>new Date().toISOString().slice(0,10)),[method,setMethod]=useState("bank_transfer"),[reference,setReference]=useState("Practice customer receipt"),[reason,setReason]=useState("Practice receipt correction");
+ const writing=useRef(false),active=useRef(false),sequence=useRef(0),initialised=useRef(false),uncertain=useRef(false);
  const base=`/api/jobs/${jobId}/customer-invoices/${invoiceId}/receipts`;
  const parse=useCallback((raw:unknown)=>{
   const value=practiceReceiptViewV1.parse(raw);
@@ -16,28 +22,54 @@ export function CustomerReceipts({jobId,invoiceId,onChanged}:{jobId:string;invoi
   return value;
  },[jobId,invoiceId]);
  const load=useCallback(async()=>{
+  if(!active.current||writing.current)return;
+  const current=++sequence.current;
+  const isCurrent=()=>active.current&&current===sequence.current;
   setLoading(true);setError("");
   for(let i=0;i<6;i++){
-   try{const r=await fetch(base,{cache:"no-store"});if(r.ok){setView(parse(await r.json()));setLoading(false);notifyInvoiceChanged(jobId);return;}}catch{}
+   try{
+    const r=await fetch(base,{cache:"no-store"});
+    if(!isCurrent())return;
+    if(r.ok){
+     const next=parse(await r.json());
+     if(!isCurrent())return;
+     setView(next);
+     if(!initialised.current){setAmount(balanceAmount(next.invoice.balancePence));initialised.current=true;}
+     setLoading(false);notifyInvoiceChanged(jobId);return;
+    }
+   }catch{}
+   if(!isCurrent())return;
    await new Promise(resolve=>setTimeout(resolve,300));
+   if(!isCurrent())return;
   }
   setLoading(false);setError("Receipt history could not load. No balance has been invented.");
  },[base,parse,jobId]);
- useEffect(()=>{void load();},[load]);
+ useEffect(()=>{
+  active.current=true;void load();
+  return ()=>{active.current=false;sequence.current++;};
+ },[load]);
  async function submit(path:string,body:unknown){
-  if(writing.current||unconfirmed||loading)return;
+  if(!active.current||writing.current||uncertain.current||loading)return;
+  // A command supersedes any earlier read. Reads cannot start during a write.
+  const current=++sequence.current;
+  const isCurrent=()=>active.current&&current===sequence.current;
+  const unknown=()=>{uncertain.current=true;setUnconfirmed(true);setError("The result is unknown. Check saved receipt history; do not record the same payment again.");};
   writing.current=true;setBusy(true);setError("");
   try{
    const response=await fetch(path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+   if(!isCurrent())return;
    if(!response.ok){
-    if(response.status>=500){setUnconfirmed(true);setError("The result is unknown. Check saved receipt history; do not record the same payment again.");}
+    if(response.status>=500)unknown();
     else setError(response.status===409?"This receipt command conflicts with saved history. Refresh and review it.":"The receipt request was refused. Check the amount, date, reference and saved invoice.");
     return;
    }
-   setView(parse(await response.json()));notifyInvoiceChanged(jobId);onChanged();
+   const next=parse(await response.json());
+   if(!isCurrent())return;
+   setView(next);setAmount(balanceAmount(next.invoice.balancePence));initialised.current=true;
+   notifyInvoiceChanged(jobId);onChanged();
   }catch{
-   setUnconfirmed(true);setError("The result is unknown. Check saved receipt history; do not record the same payment again.");
-  }finally{writing.current=false;setBusy(false);}
+   if(isCurrent())unknown();
+  }finally{if(isCurrent()){writing.current=false;setBusy(false);setLoading(false);}}
  }
  async function record(){
   const amountPence=parseReceiptPounds(amount);

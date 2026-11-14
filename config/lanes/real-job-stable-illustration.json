@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-job-stable-illustration": {
+      "branches": ["codex/sandbox/real-job-stable-illustration"],
+      "note": "Synthetic demo hardening: stable stock illustrations by saved job ID in Jobs and Overview; no new workflow or data changes.",
+      "allow": [
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/real-designed-screens.test.tsx"
+      ]
+    }
+  }
+}

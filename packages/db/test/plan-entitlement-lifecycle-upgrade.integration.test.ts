@@ -216,13 +216,17 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // ENT-5 changes only these exact routine bodies; preserve every predecessor check.
   const clientAuthority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
   const clientAttribution = await readFile(new URL("../migrations/0644_extra_customer_approval.sql", import.meta.url), "utf8");
+  const practiceProof = await readFile(new URL("../migrations/0736_proof_keeps_finished.sql", import.meta.url), "utf8");
   const replacements = (source: string) => [...source.matchAll(/changed:=replace\((?:original|changed),'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\);/g)]
     .map(match => [match[1]!.replaceAll("''", "'"), match[2]!.replaceAll("''", "'")] as const);
   const authorityChanges = replacements(clientAuthority), attributionChanges = replacements(clientAttribution);
   expect(authorityChanges).toHaveLength(3); expect(attributionChanges).toHaveLength(1);
+  const practiceProofChanges = replacements(practiceProof);
+  expect(practiceProofChanges).toHaveLength(2);
   const clientBodyChanges = new Map([
     ["app.xa_issue_link(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_link uuid, p_approver uuid, p_recipient text, p_token_hash text, p_expires_at timestamp with time zone, p_authorization uuid, p_outbox uuid)", authorityChanges.slice(0, 2)],
     ["app.northside_capture_action()", attributionChanges],
+    ["app.ch4_capture_site_source()", practiceProofChanges],
   ]);
   // ENT-5 changes only these exact predecessor routines; all other definitions stay pinned.
   const routineKey = (identity: string) => identity.replace(/,\s*/gu, ",");

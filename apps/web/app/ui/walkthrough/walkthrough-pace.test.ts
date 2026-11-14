@@ -368,6 +368,43 @@ describe("recent human input and spotlight replacements", () => {
       },
     };
   }
+  it("re-anchors a shrinking job page only after two stable polls", () => {
+    const f = fixture(2);
+    try {
+      Object.assign(window, { scrollY: 893 });
+      let top = -365;
+      f.target().getBoundingClientRect = () => ({ left: 25, top, bottom: top + 44, width: 100, height: 44 });
+      f.scrollBy.mockImplementation(({ top: delta }: { top: number }) => { top -= delta; });
+      f.poll(); // The saved job has shrunk beneath the initial highlight.
+      f.poll(); // One equal measurement does not establish a stable layout.
+      f.windowHandlers.get("resize")!(); f.windowHandlers.get("scroll")!();
+      expect(f.scrollBy).toHaveBeenCalledOnce();
+      f.poll();
+      expect(f.scrollBy).toHaveBeenCalledTimes(2);
+      expect(hooks.setters[5]).toHaveBeenLastCalledWith({ left: 25, top: 12, width: 100, height: 44 });
+      // Settling is finished: later viewer scrolling is never corrected.
+      top = -100; f.poll(); f.poll(); f.poll();
+      expect(f.scrollBy).toHaveBeenCalledTimes(2);
+    } finally { f.cleanup(); }
+  });
+  it("cancels layout settling permanently when the builder takes over", () => {
+    const f = fixture(2);
+    try {
+      f.target().getBoundingClientRect = () => ({ left: 25, top: -365, bottom: -321, width: 100, height: 44 });
+      f.poll(); f.input("keydown"); f.poll();
+      f.time(2000); f.poll(); f.poll(); f.poll();
+      expect(f.scrollBy).toHaveBeenCalledOnce();
+    } finally { f.cleanup(); }
+  });
+  it("ignores viewport movement from scrolling while the initial layout settles", () => {
+    const f = fixture();
+    try {
+      Object.assign(window, { scrollY: 100 });
+      f.target().getBoundingClientRect = () => ({ left: 25, top: 600, bottom: 644, width: 100, height: 44 });
+      f.poll(); f.poll(); f.poll();
+      expect(f.scrollBy).toHaveBeenCalledOnce();
+    } finally { f.cleanup(); }
+  });
   it("manual re-target after trusted input keeps the phone still; Show me and step start still clear", async () => {
     const f = fixture();
     try {

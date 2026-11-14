@@ -135,10 +135,12 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     card.current?.focus({ preventScroll: true });
     let highlighted: HTMLElement | null = null;
     let hadHighlight = false;
-    function update() {
+    let settling: { top: number; height: number; equal: number; moved: boolean } | null = null;
+    function update(poll = false) {
       const root = visibleTarget(step!.target);
       const target = step!.spotlightTarget?.() ?? (root?.matches("button, input, textarea, select, a[href]") ? root : root?.querySelector<HTMLElement>("textarea, input, select, button, a[href]") ?? root);
       if (highlighted !== target) {
+        settling = null;
         highlighted?.classList.remove(styles.target!);
         highlighted = target;
         highlighted?.classList.add(styles.target!);
@@ -147,11 +149,29 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
           const manualInput = !running.current && !currentPlaying.current && (recentInput || pointers.current.size > 0 || touches.current.size > 0);
           // Saving parties changes the target to preview. Only explicit navigation
           // or playback may move this hand step, even after a slow save response.
-          if (card.current && (!hadHighlight || !manualInput) && !(hadHighlight && step!.id === "walk-3" && !running.current && !currentPlaying.current)) clearPhoneDock(highlighted, card.current);
+          if (card.current && (!hadHighlight || !manualInput) && !(hadHighlight && step!.id === "walk-3" && !running.current && !currentPlaying.current)) {
+            clearPhoneDock(highlighted, card.current);
+            const rect = highlighted.getBoundingClientRect();
+            settling = { top: rect.top + (window.scrollY ?? 0), height: rect.height, equal: 0, moved: false };
+          }
           hadHighlight = true;
         }
       }
       if (target) {
+        if (settling && poll) {
+          const recentInput = lastInput.current !== null && performance.now() - lastInput.current < 1_000;
+          const manualInput = !running.current && !currentPlaying.current && (recentInput || pointers.current.size > 0 || touches.current.size > 0);
+          const rect = target.getBoundingClientRect(), top = rect.top + (window.scrollY ?? 0);
+          // Only settle a newly highlighted control. Document coordinates ignore
+          // viewer scrolling; fresh manual input permanently cancels this retry.
+          if (manualInput) settling = null;
+          else if (top !== settling.top || rect.height !== settling.height) {
+            settling = { top, height: rect.height, equal: 0, moved: true };
+          } else if (++settling.equal === 2) {
+            const moved = settling.moved; settling = null;
+            if (moved && card.current) clearPhoneDock(target, card.current);
+          }
+        }
         const rect = target.getBoundingClientRect();
         setBox({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
         setDone(step!.isDone());
@@ -160,9 +180,10 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     const target = visibleTarget(step.target);
     target?.scrollIntoView({ block: "center", behavior: "instant" });
     update();
-    const interval = window.setInterval(update, 200);
-    window.addEventListener("resize", update); window.addEventListener("scroll", update, true);
-    return () => { clearInterval(interval); highlighted?.classList.remove(styles.target!); window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); };
+    const interval = window.setInterval(() => update(true), 200);
+    const track = () => update();
+    window.addEventListener("resize", track); window.addEventListener("scroll", track, true);
+    return () => { clearInterval(interval); highlighted?.classList.remove(styles.target!); window.removeEventListener("resize", track); window.removeEventListener("scroll", track, true); };
   }, [step, finished]);
   function advance() {
     if (!step || !visibleTarget(step.target) || !step.isDone()) return;

@@ -17,7 +17,7 @@ vi.mock("react", async original => {
 });
 vi.mock("../../demo-s/journey-launch", () => ({ recoverCapture: vi.fn().mockResolvedValue("00000000-0000-4000-8000-000000000002") }));
 vi.mock("../../ui/jobguard-app", () => ({ WalkIt: ({ onCaptured }: { onCaptured: typeof memo.onCaptured }) => { memo.onCaptured = onCaptured; return <section />; } }));
-vi.mock("../../ui/workspace-shell", () => ({ WorkspaceShell: ({ jobId }: { jobId: string }) => <section data-workspace-job={jobId} /> }));
+vi.mock("../../ui/workspace-shell", () => ({ WorkspaceShell: ({ jobId, initialPricing }: { jobId: string; initialPricing?: boolean }) => <section data-workspace-job={jobId} data-initial-pricing={initialPricing} /> }));
 vi.mock("../../ui/job-value", () => ({ ValuePage: ({ jobId }: { jobId: string }) => <section data-value-job={jobId} /> }));
 vi.stubGlobal("React", React);
 describe("WALK-3 honest journey boundaries", () => {
@@ -29,7 +29,8 @@ describe("WALK-3 honest journey boundaries", () => {
     }
     expect(stages[2]![1]).toContain("invitation is still to build");
     expect(stages[3]![1]).toContain("not an authenticated customer response");
-    expect(stages[5]![1]).toContain("builder's practice attestation");
+    expect(stages[5]![1]).toContain("the builder records approval of the exact practice revision");
+    expect(stages[5]![1]).toContain("this practice job cannot receive approval from the customer");
     expect(stages[4]![1]).toContain("forget to add it to the bill");
     expect(stages[6]![1]).toContain("JobGuard checks your records against the bill");
     expect(stages[7]![1]).toContain("awaiting customer approval");
@@ -337,6 +338,7 @@ it.each([false, true])("renders the real workspace and report with the own job s
   try {
     const html = renderToStaticMarkup(<VoiceJourney />);
     expect(html).toContain(`${report ? "data-value-job" : "data-workspace-job"}="${jobId}"`);
+    if (!report) expect(html).toContain('data-initial-pricing="true"');
     expect(html).not.toContain("This part uses a prepared example job");
     expect(html).not.toContain("prepared job's figures");
     expect(html).toContain("Use the prepared example job");
@@ -452,7 +454,7 @@ it.each([0, 1])("step 3 waits for the own editor and saves only an unpriced draf
   try {
     renderToStaticMarkup(<VoiceJourney />);
     expect(memo.steps[1]!.isDone()).toBe(true);
-    expect(location.hash).toBe("#quote");
+    expect(location.hash).toBe("");
     revision = initialRevision;
     action = Promise.resolve(memo.steps[2]!.autoAction({} as HTMLElement, controller.signal));
     // Attach the rejection handler before checking the asynchronous handoff.
@@ -462,7 +464,7 @@ it.each([0, 1])("step 3 waits for the own editor and saves only an unpriced draf
     expect(click).not.toHaveBeenCalled();
     ready = true;
     expect(await result).toBeNull();
-    expect(location.hash).toBe("#quote");
+    expect(location.hash).toBe("");
     expect(click.mock.calls.map(([name]) => name)).toEqual([
       ...(initialRevision === 0 ? ["Save draft revision"] : []),
       "Preview immutable quote", "Simulate sending this quote", "Continue fake worker",
