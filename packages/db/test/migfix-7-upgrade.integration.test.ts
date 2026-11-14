@@ -102,11 +102,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const authority = await readFile(new URL("../migrations/0642_extra_client_send_authority.sql", import.meta.url), "utf8");
   const attribution = await readFile(new URL("../migrations/0644_extra_customer_approval.sql", import.meta.url), "utf8");
   const practiceProof = await readFile(new URL("../migrations/0736_proof_keeps_finished.sql", import.meta.url), "utf8");
+  const replacements = (source: string) => [...source.matchAll(/changed:=replace\((?:original|changed),'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\);/g)]
     .map(match => [match[1]!.replaceAll("''", "'"), match[2]!.replaceAll("''", "'")] as const);
   const authorityChanges = replacements(authority), attributionChanges = replacements(attribution);
   expect(authorityChanges).toHaveLength(3); expect(attributionChanges).toHaveLength(1);
   const practiceProofChanges = replacements(practiceProof);
   expect(practiceProofChanges).toHaveLength(2);
+  const practiceOwner = await readFile(new URL("../migrations/0667_final_check_practice_owner_check.sql", import.meta.url), "utf8");
+  const lockAnchor = "BEGIN\n PERFORM app.final_lock_require_owner(p_tenant,p_actor);", lockGuard = "\n" + practiceOwner.split("$guard$")[1]!;
+  // 0735's full lock_final_account body (pinned exactly below) keeps 0667's guard verbatim in the
   // INSTALLED source, right after the first owner check and 0735's own scope refusal.
   const installedLock = replayRoutines.filter(r => r.nspname === "app" && r.proname === "lock_final_account");
   expect(installedLock).toHaveLength(1);
@@ -120,6 +124,10 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.northside_capture_action()", attributionChanges],
     // 0667's practice-owner guard is retained inside 0735's full latest lock_final_account body (pinned below).
     ["app.ch4_capture_site_source()", practiceProofChanges],
+  ]);
+  // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
+  const fullBodies = new Map<string, string>();
+  for (const [identity, migration, overload = 0] of [
     ["app.company_final_check_request_run(j uuid)", "0732_final_check_typed_recovery.sql"],
     ["app.company_final_check_reveal(j uuid)", "0732_final_check_typed_recovery.sql"],
     ["app.cb_delivery(p_session uuid, p_job uuid, p_command uuid, p_payload jsonb)", "0727_billing_export_delivery_once.sql"],
@@ -247,6 +255,12 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Saved-estimate successor: retain recovery's predecessor entry above.
   const savedEstimateSql = await readFile(new URL("../migrations/0737_real_fc_revealed_estimate.sql", import.meta.url), "utf8");
   fullBodies.set("app.read_final_check_reveal(t uuid, j uuid, d text)", savedEstimateSql.split("AS $$")[1]!.split("$$;")[0]!);
+  const namedAdditions = [
+    "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",
+    "ent3b_close_abandoned_visit",
+    "require_receipt_final_check", "connector_promotion", "order_attestation_actor", "platform_invoice_read",
+    "retention_timer", "retention_timer_book", "xa_proceed", "xa_proceed_breaches",
+    "xa_proceed_view", "xa_wait_deadline", "customer_practice_pay_now", "store_extra_pack_artifact",
     "guard_variation_final_account_lock",
     "company_final_check_authority", "company_final_check_read", "company_final_check_terms",
     "company_final_check_disposition", "company_final_check_lock", "company_final_check_request_run", "company_final_check_reveal",

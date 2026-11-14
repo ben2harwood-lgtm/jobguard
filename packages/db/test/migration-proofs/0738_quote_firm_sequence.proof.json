@@ -1,0 +1,387 @@
+{
+  "migration": "0738_quote_firm_sequence.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-quote-firm-sequence",
+        "title": "Bound quote firm number allocation",
+        "description": "Derive immutable practice ownership, validate the private binding and allocate a job reference inside its first preview transaction.",
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Review private binding predicate, durable firm allocation, controlled writes and exact-head PostgreSQL evidence."
+        },
+        "sources": [
+          "packages/db/migrations/0738_quote_firm_sequence.sql"
+        ],
+        "tests": [
+          "packages/db/test/real-quote-firm-sequence-db.integration.test.ts"
+        ],
+        "gaps": [
+          "Dormant foundation. Independent RED review and real PostgreSQL CI pending; successor must integrate allocator before all preview reads."
+        ]
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-quote-firm-sequence",
+        "title": "Bound quote firm number allocation",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Synthetic foundation only; exact-head independent RED review and PostgreSQL CI required before landing."
+        },
+        "downstream": "No repository activation, artifact rewrite, ownership rewrite, commercial send, fee, or provider authority.",
+        "path": "ap-quote-firm-sequence",
+        "cards": [
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-12": "Review private binding predicate, durable firm allocation, controlled writes and exact-head PostgreSQL evidence."
+        },
+        "sources": [
+          "packages/db/migrations/0738_quote_firm_sequence.sql"
+        ],
+        "tests": [
+          "packages/db/test/real-quote-firm-sequence-db.integration.test.ts"
+        ],
+        "gaps": [
+          "Dormant foundation. Independent RED review and real PostgreSQL CI pending; successor must integrate allocator before all preview reads."
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.quote_practice_owners(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "3babe4844a99838310d935520da519c17f1d1b7d0dde1057fc8c00a9d3816d91",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.quote_binding_owner_matches(uuid,text)|jobguard_binding_owner",
+        "group": "a-quote-firm-sequence"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.quote_binding_owner_matches(uuid,text)|jobguard_migration|EXECUTE|-",
+        "group": "a-quote-firm-sequence"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.quote_binding_owner_matches(uuid,text)",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": "733c74995de1ef6aedc3b5cb8ff5d30931214e284c1f58af2edc1f559d03b9e6",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.allocate_quote_job_reference(uuid)|jobguard_migration",
+        "group": "a-quote-firm-sequence"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.allocate_quote_job_reference(uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-quote-firm-sequence"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.allocate_quote_job_reference(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "e5b9bb1419216d5200c076ed62e4ca6e11424633425f3baf561c1f3826a9dc76",
+        "staticWrites": [
+          "app.quote_firm_counter",
+          "app.quote_job_reference"
+        ],
+        "staticCalls": [
+          "app.bound_context_reader",
+          "app.quote_binding_owner_matches",
+          "app.quote_practice_owners"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.quote_reference_requires_preview()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "559041853acc306b4c00e75dd421989d69ac5ed8d54f17eee9cb648c318bd6b7",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.quote_firm_counter|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.quote_job_reference|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.quote_job_reference|quote_job_reference_immutable|app.reject_immutable_authorization_record|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.quote_job_reference|quote_reference_preview_required|app.quote_reference_requires_preview|AFTER INSERT|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.quote_firm_counter",
+        "data": []
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.quote_job_reference",
+        "data": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "quote_practice_owners",
+        "args": "p_tenant uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "quote_binding_owner_matches",
+        "args": "p_tenant uuid, p_owner text",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "allocate_quote_job_reference",
+        "args": "p_job uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "quote_reference_requires_preview",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "quote_firm_counter",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "quote_firm_counter",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "quote_job_reference",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "quote_job_reference",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "quote_firm_counter_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "quote_job_reference_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "quote_firm_allocated_number",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "quote_firm_counter",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "quote_job_reference",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

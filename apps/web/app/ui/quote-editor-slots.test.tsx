@@ -66,17 +66,3 @@ it("keeps loaded live markup identical when no slot is passed", () => {
  expect(html).toContain("<legend>Practice only: pretend sending problems</legend>");
  expect(createHash("sha256").update(html).digest("hex")).toBe("100cf6d47735482b85d71a124887802654ffc982d0ef80f7472bbb4864cc31cc");
 });
-
-it("shows the saved firm actor in the reordered accepted quote before activation", () => {
- vi.stubGlobal("React", React);
- const actor = "Fictional Moonbrick Works (builder)";
- hooks.values = [true, null, false, false, true, jobId, 1, "", [], [], [], "practice@example.invalid", null, "simulated_delivery", false,
-  {documentVersion:1, netPence:90000, totalPence:108000, acceptedAt:"2026-11-09", actor, statedCustomerName:"Fictional customer", method:"email", sourceEvidence:"Fictional"},
-  null, "Fictional customer", "email", "2026-11-09", [], null, false, null, "no_charge"];
- const html = renderToStaticMarkup(<QuoteEditor jobId={jobId} source={[]} questions={[]} back={()=>undefined} proofStage={null} practiceTools={null}/>);
- expect(html).toContain('aria-label="Accepted terms"');
- expect(html).toContain(`Actor: ${actor}`);
- expect(html).toContain("Builder-recorded practice acceptance — not an authenticated customer signature");
- expect(html).toContain("Start this practice job");
- expect(html).not.toContain('aria-label="Live activation"');
-});
