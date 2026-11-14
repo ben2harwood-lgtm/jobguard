@@ -42,7 +42,7 @@ it("uses the existing proof section for incomplete live work", () => {
 });
 it("uses the existing variations heading for extras", () => {
  const id = target(card("live", { variationsApproved: false }));
- hooks.values = [{ variations: [], approvedAdditionsPence: 0, approvedOmissionsPence: 0, pendingExtrasPence: 0, baselinePence: 0 }];
+ hooks.values = [{ jobId, variations: [], approvedAdditionsPence: 0, approvedOmissionsPence: 0, pendingExtrasPence: 0, baselinePence: 0 }];
  expect(renderToStaticMarkup(<JobVariations jobId={jobId}/>)).toContain(` id="${id}"`);
 });
 it("uses the final-account heading without inventing a job total", () => {

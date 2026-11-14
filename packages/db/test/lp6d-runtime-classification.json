@@ -321,5 +321,9 @@
   "app.answer_job_proof_statement(uuid,jsonb)": "Reviewed 0734_job_proof_statement.sql (main after LP-6c): calls app.job_proof_authority, app.current_actor before reads/writes",
   "app.retire_replaced_job_proof_findings(uuid,uuid)": "Reviewed 0734_job_proof_statement.sql (main after LP-6c): calls app.job_proof_authority, app.current_actor before writes",
   "app.final_check_request_scope(uuid)": "Reviewed 0735_per_firm_final_check_terms.sql (main after LP-6c): calls app.final_check_bound_practice (lp6_bound_request), app.authenticate_practice_session; scope only",
-  "app.final_check_runtime_job_terms(uuid,text)": "Reviewed 0735_per_firm_final_check_terms.sql (main after LP-6c): calls app.final_check_request_scope, app.final_check_job_scope, app.final_check_job_terms; terms read only"
+  "app.final_check_runtime_job_terms(uuid,text)": "Reviewed 0735_per_firm_final_check_terms.sql (main after LP-6c): calls app.final_check_request_scope, app.final_check_job_scope, app.final_check_job_terms; terms read only",
+  "app.allocate_quote_job_reference(uuid)": "Reviewed 0738_quote_firm_sequence.sql / 0739_quote_company_sequence.sql (main after LP-6c): tenant from app.bound_context_reader; owner checked by app.quote_binding_owner_matches (lp6_bound_request) before and after locks; refuses unbound",
+  "app.quote_binding_owner_matches(uuid,text)": "Private to the recorded owner/service roles: 0738_quote_firm_sequence.sql (binding_owner, EXECUTE to migration only); reads app.lp6_bound_request; runtime has no EXECUTE",
+  "app.quote_practice_owners(uuid)": "Private to the recorded owner/service roles: 0738_quote_firm_sequence.sql; runtime has no EXECUTE",
+  "app.quote_reference_requires_preview()": "Trigger only (0738_quote_firm_sequence.sql): deferred constraint trigger; runtime has no EXECUTE"
 }

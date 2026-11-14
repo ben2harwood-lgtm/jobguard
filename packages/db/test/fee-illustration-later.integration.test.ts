@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FeeIllustrationRepository, PracticeActivationRepository, QuoteRepository, QuoteDeliveryRepository, QuoteAcceptanceRepository, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, withTenant } from "../src/index.js";
+import { authenticatePracticeSession, FeeIllustrationRepository, PracticeActivationRepository, QuoteRepository, QuoteDeliveryRepository, QuoteAcceptanceRepository, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, withTenant } from "../src/index.js";
 import { FeeIllustrationApplication } from "../../../apps/api/src/workspace/fee-illustration.application.js";
 import { createWorkFixture, closeWorkFixture, seedWorkPractice, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
@@ -18,7 +18,7 @@ afterAll(async () => {
 
 describe("LATER-B18 persisted synthetic illustration", () => {
   it("r1 replays a v1 no_charge practice illustration without changing journals, obligations, statements or receipts", async () => {
-    const practice = await seedWorkPractice(f), context = practice.auth.context;
+    const practice = await seedWorkPractice(f), context = (await authenticatePracticeSession(f.runtime,practice.sessionId)).context;
     const jobId = (await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND saved_v1_sample", [DEMO_TENANT_ID, practice.auth.digest])).rows[0].id as string;
     const scopeId = randomUUID(), revisionId = randomUUID();
     // Prepare fictional confirmed scope on the session's saved v1 sample; use real commands thereafter.

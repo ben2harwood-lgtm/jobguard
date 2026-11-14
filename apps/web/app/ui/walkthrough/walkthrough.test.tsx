@@ -100,3 +100,11 @@ describe("WALK-TOUR-FIXES Escape ownership and step cleanup", () => {
     if (typeof cleanup === "function") cleanup();
   });
 });
+
+
+it("offers explicit customer/site navigation only for the sending step", () => {
+  const html = renderToStaticMarkup(<Walkthrough steps={[{ ...step, id: "walk-3" }]} onClose={() => {}} />);
+  expect(html).toContain("Go to customer/site or quote preview");
+  expect(html).toContain('disabled="">Go to customer/site or quote preview');
+  expect(renderToStaticMarkup(<Walkthrough steps={[step]} onClose={() => {}} />)).not.toContain("Go to customer/site or quote preview");
+});
