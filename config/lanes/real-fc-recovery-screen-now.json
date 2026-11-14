@@ -14,6 +14,7 @@
         "apps/web/app/ui/final-check-reveal-view.ts",
         "apps/web/app/ui/final-check-reveal.test.tsx",
         "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/e2e/SV-3.spec.ts",
         "apps/web/e2e/real-fc-recovery-screen-now.spec.ts"
       ]
     }
