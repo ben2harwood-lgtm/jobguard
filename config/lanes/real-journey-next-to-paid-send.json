@@ -11,6 +11,8 @@
         "packages/db/test/real-journey-practice-send.integration.test.ts",
         "packages/db/src/quote-delivery-repository.ts",
         "apps/web/e2e/real-journey-next-to-paid-send.spec.ts",
+        "apps/web/e2e/real-overview-paid-status.spec.ts",
+        "apps/web/e2e/real-tour-one-saved-job-now.spec.ts",
         "apps/web/e2e/real-journey-next-state.spec.ts",
         "apps/web/e2e/real-journey-money-status.spec.ts",
         "apps/web/e2e/real-journey-receipt-balance-now.spec.ts",

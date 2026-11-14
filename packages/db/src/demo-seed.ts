@@ -6,6 +6,7 @@ import { QuoteRepository } from "./quote-repository.js";
 import { QuoteDeliveryRepository } from "./quote-delivery-repository.js";
 import { PracticeActivationRepository } from "./activation-repository.js";
 import { createHash } from "node:crypto";
+import { authenticatePracticeSession, issuePracticeSession } from "./practice-session.js";
 import { money, type Money } from "@jobguard/core";
 
 export const DEMO_TENANT_ID = "11111111-1111-4111-8111-111111111111";
@@ -77,35 +78,46 @@ export async function seedDemo(environment: DemoEnvironment, boundary: DemoComma
  */
 export async function prepareActivationFixtureV3(owner:Pool,context:VerifiedTenantContext,name:string,acceptedNetPence:number, runtime:Pool=owner, highestSentNetPence=acceptedNetPence, practiceDigest:string|null=null){
  if(process.env.JOBGUARD_ENV!=="synthetic_demo"||context.tenantId!==DEMO_TENANT_ID)throw new DemoSeedSafetyError("CH-1 fixtures require the synthetic tenant");
+ // Every generated job belongs to a practice firm before its first preview.
+ // Explicit owners retain their existing context; legacy fixture callers get a fresh firm.
+ const auth=practiceDigest===null?await authenticatePracticeSession(runtime,await issuePracticeSession(runtime)):null;
+ const firmContext=(() => {
+  if(auth)return auth.context;
+  return context;
+ })();
+ const firmDigest=auth?.digest??practiceDigest;
  const jobId=randomUUID(),scope=randomUUID(),scopeRevision=randomUUID();
- await withTenant(owner,context,async db=>{
-  await db.$client.query(`INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,$3,'quoting',$4::text,CASE WHEN $4::text IS NULL THEN NULL ELSE 'capture' END)`,[jobId,context.tenantId,name,practiceDigest]);
-  await seedSyntheticPartyFixture(db.$client,context.tenantId,jobId);
-  await db.$client.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')`,[scope,context.tenantId,jobId]);
-  await db.$client.query(`INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Generated fictional work','1','item',$5,$5)`,[scopeRevision,context.tenantId,jobId,scope,acceptedNetPence]);
+ await withTenant(owner,firmContext,async db=>{
+  await db.$client.query(`INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,$3,'quoting',$4::text,'capture')`,[jobId,firmContext.tenantId,name,firmDigest]);
+  await seedSyntheticPartyFixture(db.$client,firmContext.tenantId,jobId);
+  await db.$client.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')`,[scope,firmContext.tenantId,jobId]);
+  await db.$client.query(`INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Generated fictional work','1','item',$5,$5)`,[scopeRevision,firmContext.tenantId,jobId,scope,acceptedNetPence]);
  });
  const quotes=new QuoteRepository(runtime),delivery=new QuoteDeliveryRepository(runtime),draftId=randomUUID(),recipient="fixture-customer@example.invalid";
  const values=highestSentNetPence>acceptedNetPence?[highestSentNetPence,acceptedNetPence]:[acceptedNetPence];
  for(const [index,net] of values.entries()){
-  await quotes.saveDraft(context,{jobId,draftId,expectedRevision:index,currency:"GBP",taxPolicyVersion:"candidate_m1_standard_v1",blockingQuestions:[],effectiveAt:new Date(),lines:[{id:randomUUID(),scopeItemId:scope,scopeRevisionId:scopeRevision,description:"Generated fictional work",origin:"captured",included:true,exclusionReason:null,quantity:"1",unit:"item",unitRatePence:net,discountPercent:"0",taxTreatment:"standard_rate_20",rateProvenance:"entered",category:"Work",region:null}]});
-  const preview=await delivery.preview(context,jobId,recipient);
-  await delivery.issue(context,jobId,{commandId:randomUUID(),documentId:preview.documentId,contentHash:preview.hash,recipient});
-  await delivery.execute(context,jobId,preview.documentId,"success");
-  if(index===values.length-1)await withTenant(owner,context,async db=>{
+  await quotes.saveDraft(firmContext,{jobId,draftId,expectedRevision:index,currency:"GBP",taxPolicyVersion:"candidate_m1_standard_v1",blockingQuestions:[],effectiveAt:new Date(),lines:[{id:randomUUID(),scopeItemId:scope,scopeRevisionId:scopeRevision,description:"Generated fictional work",origin:"captured",included:true,exclusionReason:null,quantity:"1",unit:"item",unitRatePence:net,discountPercent:"0",taxTreatment:"standard_rate_20",rateProvenance:"entered",category:"Work",region:null}]});
+  const preview=await delivery.preview(firmContext,jobId,recipient);
+  await delivery.issue(firmContext,jobId,{commandId:randomUUID(),documentId:preview.documentId,contentHash:preview.hash,recipient});
+  await delivery.execute(firmContext,jobId,preview.documentId,"success");
+  if(index===values.length-1)await withTenant(owner,firmContext,async db=>{
    // Owner-only synthetic fixture setup preserves historical-schema upgrade tests.
    // Runtime application callers use the hardened LP-3 signature exclusively.
-   const row=(await db.$client.query(`SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2`,[context.tenantId,jobId])).rows[0];
+   const row=(await db.$client.query(`SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2`,[firmContext.tenantId,jobId])).rows[0];
    await db.$client.query(`SELECT app.record_builder_attested_acceptance($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Practice Customer','email',clock_timestamp(),NULL)`,
-    [context.tenantId,randomUUID(),randomUUID(),jobId,preview.documentId,preview.document.documentVersion,preview.hash,preview.document.totalPence,row.revision,DEMO_MEMBERSHIP_ID]);
+    [firmContext.tenantId,randomUUID(),randomUUID(),jobId,preview.documentId,preview.document.documentVersion,preview.hash,preview.document.totalPence,row.revision,DEMO_MEMBERSHIP_ID]);
   });
  }
  return jobId;
 }
 export async function seedActivationFixturesV3(owner:Pool,runtime:Pool,context:VerifiedTenantContext){
+ if(process.env.JOBGUARD_ENV!=="synthetic_demo"||context.tenantId!==DEMO_TENANT_ID)throw new DemoSeedSafetyError("CH-1 fixtures require the synthetic tenant");
+ const auth=await authenticatePracticeSession(runtime,await issuePracticeSession(runtime));
+ const firmContext=auth.context;
  const jobs={} as Record<"core-1000"|"recovery-18800"|"shadow-30000",string>;
  for(const [name,net] of [["core-1000",100000],["recovery-18800",1880000],["shadow-30000",3000000]] as const){
-  const job=await prepareActivationFixtureV3(owner,context,name,net,runtime);
-  await new PracticeActivationRepository(runtime).start(context,job,{commandId:randomUUID(),scenario:"no_charge"});jobs[name]=job;
+  const job=await prepareActivationFixtureV3(owner,firmContext,name,net,runtime,net,auth.digest);
+  await new PracticeActivationRepository(runtime).start(firmContext,job,{commandId:randomUUID(),scenario:"no_charge"});jobs[name]=job;
  }
  return jobs;
 }

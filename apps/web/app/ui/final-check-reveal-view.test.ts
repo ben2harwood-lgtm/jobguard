@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FINAL_CHECK_EMPTY_TEXT, FINAL_CHECK_RUNNING_TEXT, finalCheckCatchV1, finalCheckDispositionV1 } from "@jobguard/core";
-import { catchCommand, dispositionCommand, finalCheckReadV1, referenceChoices, revealStatus, type LockedLine } from "./final-check-reveal-view";
+import { catchPriceProposals, catchCommand, dispositionCommand, finalCheckReadV1, referenceChoices, revealStatus, type LockedLine } from "./final-check-reveal-view";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const lines: LockedLine[] = [
@@ -31,4 +31,15 @@ describe("final check reveal view", () => {
  it("builds a strict catch confirmation bound to lock, run and signal revision", () => {
   expect(finalCheckCatchV1.parse(catchCommand(completed, completed.items[0]!, id(9)))).toEqual({ version: "final-check.catch.v1", commandId: id(9), lockId: id(7), runId: id(8), signalId: id(5), expectedSignalRevision: 1 });
  });
+});
+
+it("binds nullable safe estimates only to exact confirmed identities in completed reveals",()=>{
+ const read=finalCheckReadV1.parse({...completed,items:[{...revealed,disposition:"confirmed_extra",variationId:id(20),estimatedValuePence:18000}]});
+ expect([...catchPriceProposals(read)]).toEqual([[id(20),18000]]);
+ expect(catchPriceProposals({...read,state:"pending"}).size).toBe(0);
+ expect(catchPriceProposals({...read,items:[{...read.items[0]!,variationId:null}]}).size).toBe(0);
+ for(const estimatedValuePence of ["18000",18000.5,-1,1_000_000_000_001,NaN,Infinity]){
+  expect(finalCheckReadV1.safeParse({...completed,items:[{...revealed,estimatedValuePence}]}).success).toBe(false);
+ }
+ expect(finalCheckReadV1.safeParse({...completed,items:[{...revealed,variationId:"bad"}]}).success).toBe(false);
 });

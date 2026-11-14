@@ -42,8 +42,8 @@ async function createJob(page: Page, text: string, net: number, customer: string
   await click(page, "Preview immutable quote");
   await expect(page.getByRole("region", { name: "Quote preview" })).toContainText(pounds(net * 120));
   await click(page, "Simulate sending this quote");
-  // The queued state renders the fake-worker control after the send returns; wait for it.
-  await click(page, "Continue fake worker");
+  await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
+  if (await page.getByTestId("quote-delivery").textContent() === "Queued — not sent") await click(page, "Continue fake worker");
   await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
   await page.getByLabel("Stated customer", { exact: true }).fill(customer);
   await click(page, "Record practice acceptance"); await click(page, "Start this practice job");

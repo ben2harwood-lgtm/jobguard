@@ -9,12 +9,16 @@ import {DEMO_MEMBERSHIP_ID} from "./demo-seed.js";
 import {withTenant,type VerifiedTenantContext} from "./tenant-context.js";import {firmProfileIssuer} from "./firm-profile-repository.js";
 
 const synchronousFakeExecutions=new Map<string,Promise<void>>();
-export type QuoteDeliveryView={documentId:string;documentVersion:number;quoteRevision:number;contentHash:string;recipient:string;status:"previewed"|"queued"|"simulated_delivery"|"outcome_unknown"|"cancelled";attempts:number;receiptCount:number;effects:{platformDebt:0;chargeAttempts:0;realExternalActions:0}};
+// Additive fields are optional for existing supplied views; repository responses populate both.
+export type QuoteDeliveryView={documentId:string;reference?:string;documentVersion:number;quoteRevision:number;acceptedDocumentReferences?:Record<string,{reference:string;documentVersion:number}>;contentHash:string;recipient:string;status:"previewed"|"queued"|"simulated_delivery"|"outcome_unknown"|"cancelled";attempts:number;receiptCount:number;effects:{platformDebt:0;chargeAttempts:0;realExternalActions:0}};
 export class QuoteDeliveryRepository{
  constructor(private readonly pool:Pool){}
  async preview(context:VerifiedTenantContext,jobId:string,recipient:string){
   if(!recipient.endsWith(".invalid"))throw new Error("SYNTHETIC_RECIPIENT_REQUIRED");
   return withTenant(this.pool,context,async db=>{
+   // Bind credentials first, then let the allocator lock firm and job before any
+   // party/replay/version read. Reservation and immutable preview commit together.
+   const reference=(await db.$client.query<{reference:string}>(`SELECT app.allocate_quote_job_reference($1) AS reference`,[jobId])).rows[0]!.reference;
    const parties=(await db.$client.query(`SELECT app.require_current_job_parties($1,$2) AS snapshot`,[context.tenantId,jobId])).rows[0]?.snapshot;
    if(!parties)throw new Error("JOB_PARTIES_REQUIRED");
    const r=(await db.$client.query<any>(`SELECT qr.*,coalesce(json_agg(json_build_object('id',ql.id,'scopeItemId',ql.scope_item_id,'scopeRevisionId',ql.scope_revision_id,'description',ql.description,'origin',ql.origin,'included',ql.included,'exclusionReason',ql.exclusion_reason,'quantity',ql.quantity_decimal,'unit',ql.unit,'unitRatePence',ql.unit_rate_pence,'discountPercent',ql.discount_decimal,'taxTreatment',ql.tax_treatment,'rateProvenance',ql.rate_provenance,'category',ql.category,'region',ql.region) ORDER BY ql.ordinal) FILTER(WHERE ql.included),'[]') lines FROM app.quote_revision qr JOIN app.quote_draft qd ON(qd.tenant_id,qd.current_revision_id)=(qr.tenant_id,qr.id) LEFT JOIN app.quote_line ql ON(ql.tenant_id,ql.quote_revision_id)=(qr.tenant_id,qr.id) WHERE qr.job_id=$1 AND qr.issuable=true GROUP BY qr.tenant_id,qr.id`,[jobId])).rows[0];
@@ -22,10 +26,10 @@ export class QuoteDeliveryRepository{
    await assertQuoteScopeCoverage(db,context.tenantId,jobId,r.id);
    const lines=(r.lines as QuoteLine[]).map(line=>({scopeItemId:line.scopeItemId,description:line.description,quantity:line.quantity,unit:line.unit,netPence:evaluateDraftQuote({currency:r.currency,taxPolicyVersion:r.tax_policy_version,lines:[line]}).totals.net.pence}));
    if(lines.reduce((total,line)=>total+line.netPence,0)!==Number(r.net_pence))throw new Error("QUOTE_LINE_TOTALS_MISMATCH");
-   const old=(await db.$client.query<any>(`SELECT id,content_hash,snapshot FROM app.quote_document_version WHERE job_id=$1 AND quote_revision_id=$2 AND customer->>'email'=$3 AND parties_snapshot->>'bindingId'=$4 ORDER BY document_version DESC LIMIT 1`,[jobId,r.id,recipient,parties.bindingId])).rows[0];
+   const old=(await db.$client.query<any>(`SELECT id,content_hash,snapshot FROM app.quote_document_version WHERE job_id=$1 AND quote_revision_id=$2 AND customer->>'email'=$3 AND parties_snapshot->>'bindingId'=$4 AND reference=$5 ORDER BY document_version DESC LIMIT 1`,[jobId,r.id,recipient,parties.bindingId,reference])).rows[0];
    if(old){const document=quoteDocumentV1.parse(old.snapshot),pdf=renderQuotePdf(document),hash=createHash("sha256").update(pdf).digest("hex");if(old.content_hash!==hash)throw new Error("QUOTE_CHANGED");if(JSON.stringify(document.issuer)===JSON.stringify(await firmProfileIssuer(db))&&document.lines.length===lines.length&&document.lines.every((line,index)=>line.netPence===lines[index]!.netPence))return{documentId:old.id,document,hash,pdf};}
    const maximum=Number((await db.$client.query(`SELECT coalesce(max(document_version),0) maximum FROM app.quote_document_version WHERE job_id=$1`,[jobId])).rows[0]?.maximum??0),documentVersion=Math.max(r.revision,maximum+1);
-   const document=quoteDocumentV1.parse(attachCancellationKit({jobParties:parties,schemaVersion:"quote-document.v1",documentVersion,reference:`Q-${String(documentVersion).padStart(4,"0")}`,quoteRevisionId:r.id,currency:"GBP",issuer:await firmProfileIssuer(db),customer:{name:parties.customer.name,address:[...parties.site.addressLines,parties.site.town,parties.site.postcode],email:recipient},lines,exclusions:["Replace shelves — not in this practice quote"],qualifications:["Synthetic fixture only; subject to clear site access"],subtotalPence:Number(r.subtotal_pence),discountPence:Number(r.discount_pence),netPence:Number(r.net_pence),taxPence:Number(r.tax_pence),totalPence:Number(r.total_pence)},process.env.JOBGUARD_ENV));
+   const document=quoteDocumentV1.parse(attachCancellationKit({jobParties:parties,schemaVersion:"quote-document.v1",documentVersion,reference,quoteRevisionId:r.id,currency:"GBP",issuer:await firmProfileIssuer(db),customer:{name:parties.customer.name,address:[...parties.site.addressLines,parties.site.town,parties.site.postcode],email:recipient},lines,exclusions:["Replace shelves — not in this practice quote"],qualifications:["Synthetic fixture only; subject to clear site access"],subtotalPence:Number(r.subtotal_pence),discountPence:Number(r.discount_pence),netPence:Number(r.net_pence),taxPence:Number(r.tax_pence),totalPence:Number(r.total_pence)},process.env.JOBGUARD_ENV));
    const pdf=renderQuotePdf(document),hash=createHash("sha256").update(pdf).digest("hex");
    const id=randomUUID();await db.$client.query(`INSERT INTO app.quote_document_version(id,tenant_id,job_id,quote_revision_id,document_version,reference,content_hash,object_key,object_version_id,pdf_byte_length,issuer,customer,snapshot)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[id,context.tenantId,jobId,r.id,document.documentVersion,document.reference,hash,`runtime/quotes/${id}.pdf`,hash,pdf.byteLength,JSON.stringify(document.issuer),JSON.stringify(document.customer),JSON.stringify(document)]);return{documentId:id,document,hash,pdf};
   });
@@ -46,7 +50,26 @@ export class QuoteDeliveryRepository{
    mutate:(db,command)=>mutation.mutate(db,command),
   });return this.view(context,jobId,input.documentId);
  }
- async view(context:VerifiedTenantContext,jobId:string,documentId?:string):Promise<QuoteDeliveryView|null>{return withTenant(this.pool,context,async db=>{const r=(await db.$client.query<any>(`SELECT d.id,d.document_version,d.content_hash,d.customer,s.id send_id,o.id outbox_id,o.status,(SELECT count(*)::int FROM app.action_attempt a WHERE a.action_id=o.id) attempts FROM app.quote_document_version d LEFT JOIN app.quote_send s ON(s.tenant_id,s.document_id)=(d.tenant_id,d.id) LEFT JOIN app.action_outbox o ON(o.tenant_id,o.id)=(s.tenant_id,s.outbox_action_id) WHERE d.job_id=$1 AND ($2::uuid IS NULL OR d.id=$2) ORDER BY d.document_version DESC LIMIT 1`,[jobId,documentId??null])).rows[0];if(!r)return null;const status=r.status==null?"previewed":r.status==="succeeded"?"simulated_delivery":r.status==="outcome_unknown"?"outcome_unknown":r.status==="cancelled"?"cancelled":"queued";return{documentId:r.id,documentVersion:r.document_version,quoteRevision:r.document_version,contentHash:r.content_hash,recipient:r.customer.email,status,attempts:r.attempts??0,receiptCount:r.status==="succeeded"?1:0,effects:{platformDebt:0,chargeAttempts:0,realExternalActions:0}};});}
+ async view(context:VerifiedTenantContext,jobId:string,documentId?:string):Promise<QuoteDeliveryView|null>{
+  return withTenant(this.pool,context,async db=>{
+   const r=(await db.$client.query<any>(`SELECT d.id,d.reference,d.document_version,qr.revision quote_revision,d.content_hash,d.customer,s.id send_id,o.id outbox_id,o.status,(SELECT count(*)::int FROM app.action_attempt a WHERE a.action_id=o.id) attempts
+    FROM app.quote_document_version d
+    JOIN app.quote_revision qr ON(qr.tenant_id,qr.job_id,qr.id)=(d.tenant_id,d.job_id,d.quote_revision_id)
+    LEFT JOIN app.quote_send s ON(s.tenant_id,s.document_id)=(d.tenant_id,d.id)
+    LEFT JOIN app.action_outbox o ON(o.tenant_id,o.id)=(s.tenant_id,s.outbox_action_id)
+    WHERE d.tenant_id=$1 AND d.job_id=$2 AND ($3::uuid IS NULL OR d.id=$3) ORDER BY d.document_version DESC LIMIT 1`,[context.tenantId,jobId,documentId??null])).rows[0];
+   if(!r)return null;
+   // Acceptance labels must follow the accepted document, even after a newer
+   // preview exists. This projection reads facts without changing acceptance.
+   const accepted=(await db.$client.query<{id:string;reference:string;document_version:number}>(`SELECT DISTINCT d.id,d.reference,d.document_version
+    FROM app.job j JOIN app.quote_acceptance a ON(a.tenant_id,a.job_id,a.document_id)=(j.tenant_id,j.id,j.accepted_quote_version_id)
+    JOIN app.quote_document_version d ON(d.tenant_id,d.job_id,d.id)=(a.tenant_id,a.job_id,a.document_id)
+    WHERE j.tenant_id=$1 AND j.id=$2`,[context.tenantId,jobId])).rows;
+   const acceptedDocumentReferences=Object.fromEntries(accepted.map(d=>[d.id,{reference:d.reference,documentVersion:d.document_version}]));
+   const status=r.status==null?"previewed":r.status==="succeeded"?"simulated_delivery":r.status==="outcome_unknown"?"outcome_unknown":r.status==="cancelled"?"cancelled":"queued";
+   return{documentId:r.id,reference:r.reference,documentVersion:r.document_version,quoteRevision:r.quote_revision,acceptedDocumentReferences,contentHash:r.content_hash,recipient:r.customer.email,status,attempts:r.attempts??0,receiptCount:r.status==="succeeded"?1:0,effects:{platformDebt:0,chargeAttempts:0,realExternalActions:0}};
+  });
+ }
  async pdf(context:VerifiedTenantContext,jobId:string,id:string){return withTenant(this.pool,context,async db=>{const r=(await db.$client.query<any>(`SELECT snapshot,content_hash,document_version FROM app.quote_document_version WHERE job_id=$1 AND id=$2`,[jobId,id])).rows[0];if(!r)throw new Error("NOT_FOUND");return{pdf:renderQuotePdf(quoteDocumentV1.parse(r.snapshot)),hash:r.content_hash,version:r.document_version};});}
  async execute(context:VerifiedTenantContext,jobId:string,documentId:string,mode:"success"|"timeout"|"reconcile"){
   const id=await withTenant(this.pool,context,async db=>(await db.$client.query<any>(`SELECT o.id FROM app.action_outbox o JOIN app.quote_send s ON(s.tenant_id,s.outbox_action_id)=(o.tenant_id,o.id) WHERE s.job_id=$1 AND s.document_id=$2 ORDER BY s.issued_at DESC LIMIT 1`,[jobId,documentId])).rows[0]?.id);if(!id)throw new Error("NOT_FOUND");
