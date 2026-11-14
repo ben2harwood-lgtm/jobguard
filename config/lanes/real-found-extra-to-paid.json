@@ -13,6 +13,8 @@
         "apps/web/app/ui/job-final-account.test.tsx",
         "apps/web/app/ui/job-final-account.tsx",
         "apps/web/app/ui/job-variations.tsx",
+        "apps/web/app/ui/practice-journey-anchors.test.tsx",
+        "apps/web/app/ui/quote-editor-slots.test.tsx",
         "apps/web/app/ui/real-found-extra-to-paid.test.tsx",
         "apps/web/e2e/real-found-extra-to-paid.spec.ts"
       ],
