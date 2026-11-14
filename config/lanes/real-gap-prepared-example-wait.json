@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-gap-prepared-example-wait": {
+      "branches": ["codex/sandbox/real-gap-prepared-example-wait"],
+      "note": "Tests only: wait for the prepared example before walkthrough playback. No migration.",
+      "allow": ["apps/web/e2e/real-gap-proof-by-trade.spec.ts"]
+    }
+  }
+}

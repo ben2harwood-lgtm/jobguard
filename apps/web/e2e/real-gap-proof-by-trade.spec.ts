@@ -193,7 +193,10 @@ test("prepared unanswered example retains the certificate walkthrough and resume
  const tour=page.getByRole("region",{name:"Guided walkthrough"});
  for(let step=1;step<=4;step++) {
   await expect(tour).toContainText(`Step ${step} of 9`,{timeout:60_000});
-  if(step===3) await page.getByRole("button",{name:"Use the prepared example job",exact:true}).click();
+  if(step===3) {
+   await page.getByRole("button",{name:"Use the prepared example job",exact:true}).click();
+   await expect(tour).toContainText("This part uses a prepared example job");
+  }
   await tour.getByRole("button",{name:"Show me",exact:true}).click();
  }
  await expect(tour).toContainText("Step 5 of 9");
