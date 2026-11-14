@@ -269,6 +269,7 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[S9] scanner and seven pinned bridges stay byte-identical", async () => {
   const hashes = {
+   // S9 re-pin to these bytes approved by Ben, 14 Nov 2026, router chat: "Yes, repin" (pins first moved in repair 10, 13 Nov, on the checker's source acceptance).
    // LP-6d repair 10 (13 Nov 2026): re-pinned only the seven files this branch changed. Contractor principals now carry
    // their bound request context in a module-private WeakMap set by the one session constructor, read through
    // requireContractorRequestContext; party/work-order/SoR/scheduling repositories take AuthenticatedMembership. Checker accepted on source: prechecks/lp-6d-r10-403be3a6-s9-and-oracle.md.
