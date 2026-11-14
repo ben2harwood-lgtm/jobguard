@@ -121,7 +121,7 @@ beforeAll(async () => {
  f = await createWorkFixture(false);
  // Install the exact predecessor schema; the normal migrator still owns setup.
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
- await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [migration]);
+ await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1),($2)", [migration, "0739_quote_company_sequence.sql"]);
  await migrate(f.admin);
  await installLegacySyntheticPartyFixtures(f.admin);
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
@@ -142,7 +142,19 @@ beforeAll(async () => {
  });
  // A real, authorized synthetic quote_send proves issuance; no provider runs.
  const delivery = new QuoteDeliveryRepository(f.runtime);
- const issued = await delivery.preview(legacyFirm.auth.context, legacyA.id, "customer@example.invalid");
+ // Supply the historical artifact without calling the not-yet-installed allocator.
+ const { QuoteDocumentRepository } = await import("../src/quote-document-repository.js");
+ const legacyDocument = quoteDocumentV1.parse({
+  schemaVersion: "quote-document.v1", documentVersion: 3, reference: "Q-0003", quoteRevisionId: legacyA.quoteRevision, currency: "GBP",
+  issuer: { name: "Fictional builder", address: ["1 Fictional Road"], email: "builder@example.invalid" },
+  customer: { name: "Fictional customer", address: ["2 Fictional Road"], email: "customer@example.invalid" },
+  lines: [{ scopeItemId: legacyA.scope, description: "Paint walls", quantity: "1", unit: "item", netPence: 10000 }],
+  exclusions: [], qualifications: [], subtotalPence: 10000, discountPence: 0, netPence: 10000, taxPence: 2000, totalPence: 12000,
+ });
+ const supplied = await new QuoteDocumentRepository(f.runtime).create(legacyFirm.auth.context, {
+  jobId: legacyA.id, documentId: randomUUID(), quoteRevisionId: legacyA.quoteRevision, objectVersionId: "fictional-legacy-v3", document: legacyDocument,
+ });
+ const issued = { documentId: supplied.id, hash: supplied.content_hash, document: legacyDocument };
  await delivery.issue(legacyFirm.auth.context, legacyA.id, {
   documentId: issued.documentId, contentHash: issued.hash, recipient: "customer@example.invalid", commandId: randomUUID(),
  });
@@ -159,6 +171,8 @@ beforeAll(async () => {
  oldArtifacts = await artifactRows(); oldAuthority = await authorityRows();
  oldPdfs = (oldArtifacts as { snapshot: unknown }[]).map(row => renderQuotePdf(quoteDocumentV1.parse(row.snapshot)));
  await f.admin.query("DELETE FROM public.jobguard_schema_migration WHERE migration_name=$1", [migration]);
+ await migrate(f.admin);
+ await f.admin.query("DELETE FROM public.jobguard_schema_migration WHERE migration_name=$1", ["0739_quote_company_sequence.sql"]);
  await migrate(f.admin);
 }, 120_000);
 afterAll(async () => {
