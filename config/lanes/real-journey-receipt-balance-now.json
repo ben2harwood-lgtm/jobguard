@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-journey-receipt-balance-now": {
+      "branches": ["codex/sandbox/real-journey-receipt-balance-now"],
+      "note": "RED: saved receipt balance defaults, preserved edits and obsolete response protection. No migration.",
+      "allow": [
+        "apps/web/app/ui/customer-receipts.tsx",
+        "apps/web/app/ui/customer-receipts.test.tsx",
+        "apps/web/e2e/real-journey-receipt-balance-now.spec.ts"
+      ]
+    }
+  }
+}

@@ -43,10 +43,15 @@ function PublicCatalogue() {
     </article>)}</section>
   </>;
 }
+function formatBillingDay(day: number): string {
+  if (day >= 11 && day <= 13) return `${day}th`;
+  const suffix = day % 10 === 1 ? "st" : day % 10 === 2 ? "nd" : day % 10 === 3 ? "rd" : "th";
+  return `${day}${suffix}`;
+}
 export function PlanDetails({ view, showCatalogue = true }: { view: SubscriptionPlanView; showCatalogue?: boolean }) {
   return <>
     {showCatalogue && <PublicCatalogue />}
-    <section aria-label="Your subscription"><h2>Your subscription</h2>{view.billingDay !== null && <p>Your billing day: the {view.billingDay}</p>}{view.agreement ? <>
+    <section aria-label="Your subscription"><h2>Your subscription</h2>{view.billingDay !== null && <p>Your billing day: the {formatBillingDay(view.billingDay)}</p>}{view.agreement ? <>
       <p>{view.agreement.plan} · {view.agreement.cadence} · effective {view.agreement.effectiveDate}</p>
       <p>Monthly maximum: {view.agreement.maximumLabel}.</p>
     </> : <p>No accepted subscription agreement.</p>}</section>
