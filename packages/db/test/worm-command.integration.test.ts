@@ -11,14 +11,15 @@ import { withTenant } from "../src/tenant-context.js";
 import { WormBoundaryError } from "@jobguard/storage";
 import { verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { WormCommandRepository } from "../src/worm-command-repository.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), evidence = randomUUID();
 const actor = randomUUID(), second = randomUUID(), samePerson = randomUUID(), user = randomUUID();
-const context = testTenantContext(tenant, { membershipId: actor });
+// LP-6d: requests are bound to the submitting owner's own real session (the one the repository names).
+let context = testTenantContext(tenant, { membershipId: actor });
 const sessionDigest = "a".repeat(64), secondDigest = "b".repeat(64);
 let upgradedRefusal: string;
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, operator: Pool, dir: string, repo: WormCommandRepository, secondRepo: WormCommandRepository;
@@ -62,6 +63,7 @@ beforeAll(async () => {
     await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [uid, tenant, member]);
     await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`worm-${uid}@fictional.invalid`, uid]);
   }
+  context = await testBoundTenantContext(admin, tenant, actor, sessionDigest);
   await importWatchdogFixtureJob(admin, tenant, job, "Synthetic retention");
   expect((await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2", [tenant, job])).rows).toEqual([{ id: job }]);
   const key = `synthetic/tenants/${tenant}/manifest`;
