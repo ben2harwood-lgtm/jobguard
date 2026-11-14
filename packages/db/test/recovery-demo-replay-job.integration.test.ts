@@ -91,8 +91,8 @@ describe("LATER-SAFETY-122 recovery demo command replay", () => {
       await client.query("ROLLBACK");
       const restored = (await client.query("SELECT pg_get_functiondef('app.configure_recovery_demo(uuid,uuid,varchar)'::regprocedure) definition")).rows[0]!.definition;
       expect(restored).toBe(definition);
-      // LP-6d (0980) installs its binding guard ahead of the unchanged 0670 body.
-      const guarded = (await readFile(new URL("../migrations/0980_lp6d_remaining_routines.sql", import.meta.url), "utf8"))
+      // LP-6d (0740) installs its binding guard ahead of the unchanged 0670 body.
+      const guarded = (await readFile(new URL("../migrations/0740_lp6d_remaining_routines.sql", import.meta.url), "utf8"))
         .split("FUNCTION app.configure_recovery_demo(").at(-1)!.split("AS $$")[1]!.split("$$;")[0]!;
       expect(restored.split("$function$")[1]).toBe(guarded);
       expect(guarded).toContain(fixedMigration.split("AS $$")[1]!.split("$$;")[0]!.trim());

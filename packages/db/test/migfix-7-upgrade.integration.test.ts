@@ -253,10 +253,10 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Saved-estimate successor: retain recovery's predecessor entry above.
   const savedEstimateSql = await readFile(new URL("../migrations/0737_real_fc_revealed_estimate.sql", import.meta.url), "utf8");
   fullBodies.set("app.read_final_check_reveal(t uuid, j uuid, d text)", savedEstimateSql.split("AS $$")[1]!.split("$$;")[0]!);
-  // LP-6d (0980, the last migration) recreates its guarded routines: their exact bodies are 0980's, which
+  // LP-6d (0740, the last migration) recreates its guarded routines: their exact bodies are 0740's, which
   // already carry every listed predecessor patch (0642's xa_issue_link authority, 0728's xa_approve) plus the
   // LP-6d binding prefix. lp6d-routines.test.ts pins each one to its latest predecessor body.
-  const lp6dSql = await readFile(new URL("../migrations/0980_lp6d_remaining_routines.sql", import.meta.url), "utf8");
+  const lp6dSql = await readFile(new URL("../migrations/0740_lp6d_remaining_routines.sql", import.meta.url), "utf8");
   const argNames = (args: string) => args.split(",").map(arg => arg.trim().split(/\s+/u)[0]!).filter(Boolean).join(",");
   const lp6dBodies = new Map<string, string>();
   for (const m of lp6dSql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu)) lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
@@ -283,7 +283,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       let definition = prior.definition;
       const lp6dBody = lp6dBodies.get(lp6dKey(row));
       if (lp6dBody !== undefined) {
-        // 0980 owns this routine's latest definition (some change language, e.g. contractor_session sql -> plpgsql).
+        // 0740 owns this routine's latest definition (some change language, e.g. contractor_session sql -> plpgsql).
         expect(row.definition.split("$function$")[1], identity).toBe(lp6dBody);
         continue;
       }

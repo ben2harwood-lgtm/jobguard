@@ -16,14 +16,14 @@ import { company, start } from "./practice-worker-switch-fixtures.js";
 let db: JobDoorsDatabase, visit: Awaited<ReturnType<typeof visitFixture>>, switched: Awaited<ReturnType<typeof company>>;
 beforeAll(async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
-  db = await jobDoorsDatabase(true, "0980_lp6d_remaining_routines.sql");
+  db = await jobDoorsDatabase(true, "0740_lp6d_remaining_routines.sql");
   // Product fixture routes run against the predecessor, before the cutover.
   // No broad runtime fixture write is introduced or restored.
   const predecessor = { admin: db.owner, runtime: db.runtime } as Cluster;
   visit = await visitFixture(predecessor);
   switched = await company(predecessor);
   await start(predecessor, switched, "operative");
-  await db.owner.query(await readFile(new URL("../migrations/0980_lp6d_remaining_routines.sql", import.meta.url), "utf8"));
+  await db.owner.query(await readFile(new URL("../migrations/0740_lp6d_remaining_routines.sql", import.meta.url), "utf8"));
 }, 300_000);
 afterAll(async () => { await db?.close(); vi.unstubAllEnvs(); });
 const refused = { code: "42501", message: "REQUEST_BINDING_REFUSED" };

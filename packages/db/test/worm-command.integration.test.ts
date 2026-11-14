@@ -92,7 +92,7 @@ beforeAll(async () => {
   const before = await oldRoutines();
   await migrate(admin); await migrate(admin);
   expect(await proofDifferences(admin, proof)).toEqual({ rows: [], types: [] });
-  // LP-6d (0980) adds only its early request-binding check to worm_submit; every other body and every ACL is unchanged.
+  // LP-6d (0740) adds only its early request-binding check to worm_submit; every other body and every ACL is unchanged.
   const lp6d = (rows: { proname: string; body: string; proacl: string }[]) => rows.map(r => r.proname === "worm_submit" ? { ...r, body: "worm_submit" } : r);
   const after = await oldRoutines();
   expect(lp6d(after)).toEqual(lp6d(before));

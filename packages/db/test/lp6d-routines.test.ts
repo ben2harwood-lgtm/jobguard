@@ -5,7 +5,7 @@ import routines from "./lp6d-routines.json";
 import classification from "./lp6d-runtime-classification.json";
 import { loadReviewedInventory, pathCompleteness, repoFileExists } from "./lp-0-catalog.js";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
-const sql = read("../migrations/0980_lp6d_remaining_routines.sql");
+const sql = read("../migrations/0740_lp6d_remaining_routines.sql");
 const definitions = (source: string) => [...source.matchAll(/CREATE (?:OR REPLACE )?FUNCTION (app\.\w+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$([\s\S]*?)\$\$\s*;/gis)];
 const argumentsKey = (args: string) => args.replace(/\s+/gu, "").toLowerCase();
 const body = (source: string, routine: typeof routines[number]) => definitions(source)
@@ -116,7 +116,7 @@ it("leaves the final-lock owner helper exclusively to LP-6c", () => {
 
 it("starts from the latest exact predecessor overload rather than an earlier copied body", () => {
   const latest = new Map<string, string>();
-  for (const file of readdirSync(new URL("../migrations/", import.meta.url)).filter(f => f.endsWith(".sql") && f < "0980").sort()) {
+  for (const file of readdirSync(new URL("../migrations/", import.meta.url)).filter(f => f.endsWith(".sql") && f < "0740").sort()) {
     for (const m of definitions(read(`../migrations/${file}`))) latest.set(m[1]! + argumentsKey(m[2]!), `packages/db/migrations/${file}`);
   }
   // Main-only predecessors are exact source snapshots until the router restacks

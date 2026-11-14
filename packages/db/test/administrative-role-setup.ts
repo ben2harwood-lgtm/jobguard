@@ -21,7 +21,7 @@ if (testPath?.endsWith(".integration.test.ts")) {
     const deferredContexts = new WeakMap<import("../src/tenant-context.js").TenantTransaction,
       { original: import("../src/tenant-context.js").VerifiedTenantContext; bound: import("../src/tenant-context.js").VerifiedTenantContext }>();
     return { ...actual,
-      // Historical upgrade databases predate LP-6d's credential bridge (0980): their contractor session
+      // Historical upgrade databases predate LP-6d's credential bridge (0740): their contractor session
       // bridge never bound, so the issued credential has nothing to bind against. Current schemas bind for real.
       bindIssuedCredential: (async (client, context) => {
         const installed = (await client.query(`SELECT to_regprocedure('app.lp6d_contractor_session_identity(uuid)') IS NOT NULL installed`)).rows[0].installed;

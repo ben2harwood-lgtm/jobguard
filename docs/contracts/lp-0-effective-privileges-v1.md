@@ -565,7 +565,7 @@ The `lp6c-customer-delegation` proof group lists exact private grants and owner 
 The proof, MIGFIX-7, plan-entitlement and LP0-17 checks retain exact metadata, latest bodies and authority-path coverage. See `packages/db/migration-notes/0724_lp6c_customer_portal_delegation.md` for current test evidence. Final validation passes: all 892 database files (7,574 tests; 19 existing TODOs), 4,317 API tests, 2,320 web tests and all 14 requested/adjacent Chromium cases at both widths. The database/API/web red list against main is empty. The migration note names the separate ClientDecideExtra customer-link hold affecting ENT-11a/11b; overall CI is not declared green. Exact-head independent RED review remains a separate pre-merge gate.
 
 
-### LP-6d remaining routine binding (0980 placeholder)
+### LP-6d remaining routine binding (0740 placeholder)
 
 The LP-6d delta guards the latest remaining routine bodies on LP-6c c2ec9e98,
 retaining membership, exact approval and business checks after request binding.

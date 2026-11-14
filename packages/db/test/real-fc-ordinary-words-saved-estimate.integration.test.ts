@@ -204,13 +204,13 @@ it("wrong job/tenant, revoked session and invalidated evidence disclose no saved
 it("fresh install and repeat migration pin the exact successor with unchanged security metadata", async () => {
   const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
   const catalog = async () => (await f.admin.query("SELECT pg_get_functiondef(oid) definition,proowner,proacl,prosecdef,proconfig FROM pg_proc WHERE oid='app.read_final_check_reveal(uuid,uuid,text)'::regprocedure")).rows[0];
-  // LP-6d catch-up: 0980 (the last migration) recreates this routine with its binding prefix, so on a full
-  // install the exact successor is 0980's record, and replaying this migration over it is refused by its own
+  // LP-6d catch-up: 0740 (the last migration) recreates this routine with its binding prefix, so on a full
+  // install the exact successor is 0740's record, and replaying this migration over it is refused by its own
   // predecessor guard without changing the catalogue.
   const before = await catalog();
   await expect(f.admin.query(sql)).rejects.toThrow("SAVED_ESTIMATE_UNEXPECTED_PREDECESSOR");
   expect(await catalog()).toEqual(before);
-  const proof = JSON.parse(await readFile(new URL(`./migration-proofs/0980_lp6d_remaining_routines.proof.json`, import.meta.url), "utf8"));
+  const proof = JSON.parse(await readFile(new URL(`./migration-proofs/0740_lp6d_remaining_routines.proof.json`, import.meta.url), "utf8"));
   const record = proof.lp0.find((c: { section: string; after?: { identity?: string } }) => c.section === "routines" && c.after?.identity === "function:app.read_final_check_reveal(uuid,uuid,text)");
   expect(createHash("sha256").update(before.definition).digest("hex")).toBe(record.after.definitionSha256);
   expect(before).toMatchObject({ prosecdef: true, proconfig: ["search_path=pg_catalog, app"] });

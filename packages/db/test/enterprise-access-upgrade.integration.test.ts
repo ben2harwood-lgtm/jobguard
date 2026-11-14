@@ -13,7 +13,7 @@ function expectRelationsUnchanged(before:Relation[],after:Relation[],laterAcl:Se
  }:row);
  for(const row of before){
   if(!laterAcl.has(`${row.nspname}.${row.relname}`)){expect(after).toContainEqual(row);continue;}
-  // A later GRANT/REVOKE may also be column-level (0980 REVOKE UPDATE(revoked_at) ON app.action_authorization),
+  // A later GRANT/REVOKE may also be column-level (0740 REVOKE UPDATE(revoked_at) ON app.action_authorization),
   // which moves that column's attacl only; every other column field stays exact.
   const aclFree=({relacl:_x,...r}:Relation)=>({...r,...(Array.isArray(r.columns)?{columns:(r.columns as Record<string,unknown>[]).map(({attacl:_c,...col})=>col)}:{})});
   expect(after.map(aclFree)).toContainEqual(aclFree(row));

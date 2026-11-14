@@ -101,7 +101,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const abandonedVisitRoutines = live.filter(row => row.nspname === "app" && row.proname === "ent3b_close_abandoned_visit"
     && row.args === "p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_reason text");
   expect(abandonedVisitRoutines).toHaveLength(1);
-  // LP-6d repair 12 (0980): the only change reads the visit operative's (third-party) authority through the private copy.
+  // LP-6d repair 12 (0740): the only change reads the visit operative's (third-party) authority through the private copy.
   expect(abandonedVisitRoutines[0]?.definition?.split("$function$")[1]).toEqual(
     abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]!
       .replace(" IF EXISTS(SELECT 1 FROM app.ent3b_visit_authority(visit_row.membership_id,p_job)",
@@ -272,10 +272,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["lp_require_audit|", "lp_require_audit"],
     ["lp_receipt_immutable|", "lp_receipt_immutable"],
   ].map(([identity, name]) => [identity, finishSql.split(`CREATE OR REPLACE FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
-  // LP-6d (0980) re-creates only the routines it names; each body must be exactly a 0980 body for that name.
-  // Owners, ACLs and other metadata stay checked by the 0980 migration proof.
+  // LP-6d (0740) re-creates only the routines it names; each body must be exactly a 0740 body for that name.
+  // Owners, ACLs and other metadata stay checked by the 0740 migration proof.
   const lp6dBodies = new Map<string, string[]>();
-  for (const m of (await readFile(new URL("../migrations/0980_lp6d_remaining_routines.sql", import.meta.url), "utf8"))
+  for (const m of (await readFile(new URL("../migrations/0740_lp6d_remaining_routines.sql", import.meta.url), "utf8"))
     .matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)) {
     lp6dBodies.set(m[1]!, [...(lp6dBodies.get(m[1]!) ?? []), m[4]!]);
   }

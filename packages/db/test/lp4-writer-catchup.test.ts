@@ -10,9 +10,9 @@ const replacements = new Map(functions(readFileSync(new URL(sealingMigration, di
 const main = new Map<string, { file: string; sql: string }>();
 const final = new Map<string, string>();
 const recreatedWriters: { name: string; file: string; sql: string }[] = [];
-// LP-6d (0980) only prefixes a request-binding guard to these writers; its own test below pins that the
+// LP-6d (0740) only prefixes a request-binding guard to these writers; its own test below pins that the
 // predecessor body survives verbatim, so the latest-main comparisons keep reading the predecessor.
-const lp6dMigration = "0980_lp6d_remaining_routines.sql";
+const lp6dMigration = "0740_lp6d_remaining_routines.sql";
 const lp6dGuarded: { name: string; sql: string; predecessor: string | undefined }[] = [];
 for (const file of readdirSync(directory).filter(f => /^\d{4}.*\.sql$/.test(f)).sort()) {
   for (const fn of functions(readFileSync(new URL(file, directory), "utf8"))) {

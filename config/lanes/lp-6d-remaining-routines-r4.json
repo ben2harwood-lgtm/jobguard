@@ -176,7 +176,10 @@
         "packages/db/test/enterprise-dashboard.authority-race.integration.test.ts",
         "packages/db/test/legacy-repository-command-fixture.ts",
         "packages/db/test/evidence-pack-v3-isolation.integration.test.ts",
-        "packages/db/test/real-fc-ordinary-words-saved-estimate.integration.test.ts"
+        "packages/db/test/real-fc-ordinary-words-saved-estimate.integration.test.ts",
+        "packages/db/migration-notes/0740_lp6d_remaining_routines.md",
+        "packages/db/migrations/0740_lp6d_remaining_routines.sql",
+        "packages/db/test/migration-proofs/0740_lp6d_remaining_routines.proof.json"
       ]
     }
   }

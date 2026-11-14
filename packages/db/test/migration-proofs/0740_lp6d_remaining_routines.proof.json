@@ -1,5 +1,5 @@
 {
-  "migration": "0980_lp6d_remaining_routines.sql",
+  "migration": "0740_lp6d_remaining_routines.sql",
   "lp0": [
     {
       "section": "groups",
@@ -21,7 +21,7 @@
         },
         "downstream": "Reuse LP-6c binding/accessor grants; retain a private switched-session projection and one checked recovery-message authorization revocation entry point. No binding-store or general business-table write grant.",
         "sources": [
-          "packages/db/migrations/0980_lp6d_remaining_routines.sql"
+          "packages/db/migrations/0740_lp6d_remaining_routines.sql"
         ],
         "tests": [
           "packages/db/test/lp6d-routines.test.ts",
@@ -47,7 +47,7 @@
           "LP-6d": "Bind remaining routines while retaining decided permissions."
         },
         "sources": [
-          "packages/db/migrations/0980_lp6d_remaining_routines.sql"
+          "packages/db/migrations/0740_lp6d_remaining_routines.sql"
         ],
         "tests": [
           "packages/db/test/lp6d-routines.test.ts",
