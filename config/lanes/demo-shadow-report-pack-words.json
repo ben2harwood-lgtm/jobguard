@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-shadow-report-pack-words": {
+      "branches": ["codex/sandbox/demo-shadow-report-pack-words"],
+      "note": "DEMO-S: factual wording for saved approved evidence packs in the synthetic shadow report only.",
+      "allow": [
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/e2e/DEMO-J3-integrity.spec.ts",
+        "apps/web/e2e/DEMO-J3-shadow.spec.ts"
+      ]
+    }
+  }
+}
