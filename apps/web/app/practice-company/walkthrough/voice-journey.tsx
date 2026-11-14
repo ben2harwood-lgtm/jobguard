@@ -214,6 +214,9 @@ export function VoiceJourney() {
       const key = `walk-3.prepared:${current.current.tenantId}:${current.current.capture?.jobId}`;
       let id = sessionStorage.getItem(key);
       if (!id) { id = crypto.randomUUID(); sessionStorage.setItem(key, id); }
+      // Restart before loading, so a Show me request made while the example
+      // loads belongs to the new tour and survives the workspace handoff.
+      if (restartTour) { setResumeIndex(2); setTourVersion(id); }
       const jobId = await recoverCapture(id, core1000Source);
       // A different job must not inherit the own job's open quote view.
       const url = new URL(location.href);
@@ -221,7 +224,6 @@ export function VoiceJourney() {
       rememberWalkJob("walkExample", jobId);
       current.current.prepared = jobId;
       setResumeIndex(2); setPrepared(jobId); setReport(false);
-      if (restartTour) setTourVersion(jobId);
     } catch (reason) { setError((reason as Error).message); }
     finally { preparingRef.current = false; setPreparing(false); }
   }
@@ -267,6 +269,9 @@ export function VoiceJourney() {
       },
       async (_, signal) => {
         if (!current.current.prepared && !ownPriced.current) throw new Error("The own job has no saved priced revision.");
+        // Manual preparation can finish before its workspace read mounts. Wait
+        // before deciding whether this job still needs scope review and pricing.
+        await until(() => screen()?.querySelector('[data-testid="workspace-job-id"]')?.getAttribute("data-job-id") === (current.current.prepared || current.current.capture?.jobId), signal);
         // Both paths use the existing real job screens, never inserted end-state facts.
         if (screen().querySelector(".review-line")) await reviewAndPrice(signal);
         else {
@@ -375,6 +380,7 @@ export function VoiceJourney() {
     // its next control (or saved status), never the workspace's first control.
     return stages.map(([title], index) => ({ id: `walk-${index + 1}`, title, words: stageWords(index, prepared), target: index === 0 ? '#walk-screen #walk-source, #walk-screen .review-line' : index === 1 ? '#walk-screen .review-line input, #walk-screen .confirmed-scope button.primary, #walk-screen .quote-editor button.primary' : index === 2 ? '#walk-screen form[aria-label="Customer and site details"] button[type="submit"]' : index === 4 ? '#work-proof .proof-actions button:not(:disabled), #work-proof [data-testid="stage-status"]' : index === 6 || index === 7 ? "#final-check" : "#walk-screen",
       spotlightTarget: () => index === 2 ? partiesTarget() : (index === 8 ? screen()?.querySelector<HTMLElement>(".value-page h1") : screen()?.querySelector<HTMLElement>("[data-walk-action]")) ?? (index === 0 ? screen()?.querySelector<HTMLElement>("#walk-source, .review-line") ?? null : index === 1 ? screen()?.querySelector<HTMLElement>('.review-line input, .confirmed-scope button.primary') ?? [...(screen()?.querySelectorAll<HTMLButtonElement>(".quote-editor button") ?? [])].find(button => button.textContent === "Save draft revision") ?? null : index === 3 ? screen()?.querySelector<HTMLElement>('[aria-label="Live activation"] h2') ?? null : index === 5 ? screen()?.querySelector<HTMLElement>('[data-testid="approved-additions"]') ?? null : null), isDone: () => (index < 2 || !!current.current.prepared || current.current.ownChosen) && done[index]!(), autoAction: async (target, signal, present) => {
+      if (index >= 2) await until(() => !preparingRef.current, signal);
       // Keep the microphone walkthrough's existing prepared example separate
       // from the captured voice draft. Sample and typed tours keep their own job.
       if (index >= 2 && !current.current.prepared && !current.current.ownChosen) {
