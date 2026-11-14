@@ -21,6 +21,9 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
     }
     const practice = (await page.context().cookies()).find(c => c.name === "jg_session")!;
     const digest = createHash("sha256").update(practice.value).digest("hex");
+    // 0735: the job's own practice firm accepts the Final Check terms through the app, before the builder signs in.
+    const terms = await page.request.post(`/api/jobs/${job}/final-account/terms`, { data: { version: "final-check-terms.accept.v1", commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" } });
+    expect(terms.ok()).toBe(true);
     await signInForChooser(page);
     const issuer = await linkIssuer(admin,page);
     const parties = await page.request.get(`/api/jobs/${job}/parties`);

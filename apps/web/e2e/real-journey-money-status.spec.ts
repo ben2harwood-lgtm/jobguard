@@ -23,21 +23,35 @@ async function createJob(page: Page, text: string, net: number, customer: string
   await click(page, "Make my draft"); await click(page, "Check and edit my draft");
   await expect(page.getByRole("heading", { name: "Check the work items", exact: true })).toBeVisible();
   const jobId = new URL(page.url()).pathname.split("/")[2]!;
-  await page.getByLabel("Customer name", { exact: true }).fill(customer);
-  await page.getByLabel("Premises address", { exact: true }).fill(address);
-  // Keep the supplied valid practice postcode, as the hand walk did.
-  await expect(page.getByLabel("UK postcode", { exact: true })).not.toHaveValue("");
+  if (/\bfor\s+.+?\s+at\s+\d/u.test(text)) {
+    // The builder's words name the customer and site, so the form suggests them
+    // and leaves town and postcode for the builder to enter.
+    await expect(page.getByText("Suggested from your words — check before saving", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Customer name", { exact: true })).toHaveValue(customer);
+    await expect(page.getByLabel("Premises address", { exact: true })).toHaveValue(address);
+    await page.getByLabel("Town", { exact: true }).fill("London");
+    await page.getByLabel("UK postcode", { exact: true }).fill("SW1A 1AA");
+  } else {
+    await page.getByLabel("Customer name", { exact: true }).fill(customer);
+    await page.getByLabel("Premises address", { exact: true }).fill(address);
+    // Keep the supplied valid practice postcode, as the hand walk did.
+    await expect(page.getByLabel("UK postcode", { exact: true })).not.toHaveValue("");
+  }
   await click(page, "Save customer and site");
   await expect(page.getByTestId("party-customer")).toHaveText(customer);
   if (split) {
-    await page.locator(".review-line").first().getByRole("button", { name: /^Split /u }).click();
-    const parts = page.locator(".review-line").filter({ has: page.getByText("accepted", { exact: true }) });
+    // The natural-items parser already separates this walk into two work items; older output was one line to Split.
+    const lines = page.locator(".review-line");
+    const separated = await lines.count() > 1;
+    if (!separated) await lines.first().getByRole("button", { name: /^Split /u }).click();
+    const parts = separated ? lines : lines.filter({ has: page.getByText("accepted", { exact: true }) });
     await expect(parts).toHaveCount(2);
     for (let i = 0; i < 2; i++) {
       const part = parts.nth(i);
       await part.getByRole("textbox", { name: /^Description /u }).fill(i === 0 ? "Paint hall stairs and landing" : "Gloss woodwork");
       await part.getByRole("textbox", { name: /^Quantity /u }).fill("1");
       await part.getByRole("textbox", { name: /^Unit /u }).fill("item");
+      if (separated) await part.getByRole("button", { name: /^Accept /u }).click();
     }
   } else {
     const lines = page.locator(".review-line");

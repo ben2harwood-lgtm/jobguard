@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { CustomerMessage } from "./message";
 export default function CustomerSignin() {
-  const [link, setLink] = useState<string[]>(), [message, setMessage] = useState("Open the link from your email to sign in."), [busy, setBusy] = useState(false), [signedInJob, setSignedInJob] = useState<string>();
+  const [link, setLink] = useState<string[]>(), [message, setMessage] = useState("Open your builder’s on-screen practice link, or the link from your email, to sign in."), [busy, setBusy] = useState(false), [signedInJob, setSignedInJob] = useState<string>();
   useEffect(() => {
     const parts = window.location.hash.slice(1).split("/");
     // Remove the bearer credential from browser history before any request or rendering.

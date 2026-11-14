@@ -16,3 +16,8 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
 /* Quote states need to wrap where the reference card used a short document number. */
 .jgd .rr-mini-footer.rr-mini-footer{flex-wrap:wrap}
 .jgd .rr-mini-footer.rr-mini-footer>strong{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+
+/* Opaque card backing keeps the Work heading readable over every photo crop.
+   The outer paint leaves its text position and the workspace layout unchanged. */
+.jgd .work-heading>.page-head{background:var(--white);border-radius:10px;box-shadow:0 0 0 12px var(--white)}
+.jgd .work-heading .kicker{color:var(--teal2)}
