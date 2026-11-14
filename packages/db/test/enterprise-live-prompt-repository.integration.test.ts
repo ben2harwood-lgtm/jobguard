@@ -1,3 +1,4 @@
+import { contractorSessionContext } from "../src/index.js";
 // Real PostgreSQL acceptance tests: CI only in the restricted builder environment.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -40,7 +41,7 @@ it("refuses every role refused by the observation command and rechecks revoked g
 });
 it("binds runtime-read photo bytes to the current session, job, evidence, hash, version and length", async () => {
  const f=await promptFixture(c), foreign=await promptFixture(c), photo=await completionPhoto(c,f,["Fictional vent"]);
- const bytes=await withTenant(c.runtime,f.ctx,db=>readStoredCompletionPhoto(db,f.sessions.supervisor!,{jobId:f.jobId,...photo}));
+ const bytes=await withTenant(c.runtime,await contractorSessionContext(c.runtime,f.sessions.supervisor!),db=>readStoredCompletionPhoto(db,f.sessions.supervisor!,{jobId:f.jobId,...photo}));
  expect(bytes).toBeInstanceOf(Buffer);
  const tags=(session=f.sessions.supervisor!,job=f.jobId,evidence=photo.evidenceId,hash=photo.sha256,version=photo.objectVersion,preimage:Buffer|null=bytes)=>
   withTenant(c.runtime,f.ctx,async db=>(await db.$client.query("SELECT app.contractor_completion_photo_tags($1,$2,$3,$4,$5,$6::bytea) tags",[session,job,evidence,hash,version,preimage])).rows[0]!.tags);

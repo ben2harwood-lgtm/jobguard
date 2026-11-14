@@ -22,7 +22,7 @@ describe("CH-4 existing source storage",()=>{
    await workTenant(f.runtime,a.tenantId,async db=>{
     const d=randomUUID();await db.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,content_hash,status) VALUES($1,$2,$3,'fictional-'||$6,$4,$5,$6)",[d,a.tenantId,a.jobId,kind,CH4_HASH,status]);
     await db.query("INSERT INTO app.supplier_document_version(id,tenant_id,job_id,document_id,version,media_type,byte_length,content_hash,page_count) VALUES($1,$2,$3,$4,1,'text/plain',80,$5,1)",[randomUUID(),a.tenantId,a.jobId,d,CH4_HASH]);
-   });
+   }, { membershipId: a.actorId }); // LP-6d: the job owner's own bound request
   }expect(await workEvents(f,a)).toHaveLength(1);
  });
  it("CH4-A03 delivery and receipt deduplicate their shared source",async()=>{

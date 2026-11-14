@@ -8,7 +8,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { priceSorLine, referenceApprovalRulesV1, workOrderAuditPayloadV1, workOrderBatchAuditPayloadV1 } from "@jobguard/core";
-import {
+import { requireContractorRequestContext,
   ContractorPartyRepository, ContractorRepository, MIGRATION_URLS, SorRepository, WorkOrderRepository, appendAuditBatch, demoFile, demoRow, migrate, prepareWorkOrderDemo, verifiedTenantContextFromMembership, withTenant,
   type AuditEventInput, type AuthenticatedMembership, type WorkOrderDemo,
 } from "../src/index.js";
@@ -16,7 +16,8 @@ import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, parties: ContractorPartyRepository, orders: WorkOrderRepository, rates: SorRepository;
-const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
+// LP-6d: raw calls run in the contractor principal's own bound request (its persisted practice session).
+const ctx = (p: AuthenticatedMembership) => requireContractorRequestContext(p);
 const view = (p: AuthenticatedMembership) => contractors.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
 const command = async (p: AuthenticatedMembership, fields: Record<string, unknown>) => contractors.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view(p)).revision, ...fields });
 async function org() { const p = await contractors.startPractice(randomUUID()); await seedActiveContractorAgreement(admin,p.tenantId); const demo = await prepareWorkOrderDemo(runtime, p); return { p, demo }; }
