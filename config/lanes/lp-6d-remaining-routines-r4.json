@@ -159,7 +159,11 @@
         "packages/db/test/financial-reconciliation-adjustments.integration.test.ts",
         "packages/db/test/financial-reconciliation-queue.integration.test.ts",
         "packages/db/test/migfix-6-fixture.ts",
-        "packages/db/test/command-replay-contract.integration.test.ts"
+        "packages/db/test/command-replay-contract.integration.test.ts",
+        "packages/db/src/import-pre-adoption-repository.ts",
+        "packages/db/src/job-import-v3-repository.ts",
+        "packages/db/test/free-first-job-admission-races.integration.test.ts",
+        "packages/db/test/import-company-owner-history.integration.test.ts"
       ]
     }
   }
