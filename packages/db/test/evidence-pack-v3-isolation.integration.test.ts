@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { prepareEvidencePackV3Sources, withEvidencePackV3Snapshot } from "../src/evidence-pack-v3-sources.js";
@@ -89,6 +90,8 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
     })).rejects.toMatchObject({ code: "55P03" });
     await asFixtureTenant(f.admin, f.source.tenantId, async db => {
       await db.query("SET LOCAL lock_timeout='500ms'");
+      // LP-6d: the raw read is the practice owner's own bound request.
+      await bindOwnSession(db, f.auth.digest);
       const result = await db.query(`SELECT app.read_evidence_pack_v3($1,$2,$3) view,
         app.evidence_pack_v3_material($1,$2,true) material`, [f.source.tenantId, caseId, f.auth.digest]);
       expect(result.rows[0].view.visibleSourceRevision).toBe(zero.revision);
