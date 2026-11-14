@@ -150,13 +150,15 @@ it("confirmed catch identity reloads the same unpriced draft and rejects inconsi
   for (const changed of [
     { sql: "UPDATE app.extra_origin SET source_signal_id=$3 WHERE tenant_id=$1 AND variation_id=$2", value: randomUUID() },
     { sql: "UPDATE app.extra_origin SET job_id=$3 WHERE tenant_id=$1 AND variation_id=$2", value: other.jobId },
-    { sql: "UPDATE app.final_check_disposition_binding SET command_id=$3 WHERE tenant_id=$1 AND command_id=$2", value: otherCatch.variationId },
+    // Both practice firms share the demo tenant: free the other catch's command key inside this rolled-back transaction first.
+    { pre: "UPDATE app.final_check_disposition_binding SET command_id=gen_random_uuid() WHERE tenant_id=$1 AND command_id=$2", sql: "UPDATE app.final_check_disposition_binding SET command_id=$3 WHERE tenant_id=$1 AND command_id=$2", value: otherCatch.variationId },
     { sql: "UPDATE app.command_receipt SET result=jsonb_set(result,'{variationId}',to_jsonb($3::text)) WHERE tenant_id=$1 AND command_id=$2", value: randomUUID() },
   ]) {
     const db = await f.admin.connect();
     try {
       await db.query("BEGIN"); await db.query("SET LOCAL session_replication_role='replica'");
       await db.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
+      if ("pre" in changed && changed.pre) await db.query(changed.pre, [a.tenantId, changed.value]);
       await db.query(changed.sql, [a.tenantId, confirmed.variationId, changed.value]);
       await db.query("SELECT app.bind_request('practice',$1,$2)", [a.digest, a.tenantId]);
       await db.query("SELECT set_config('app.practice_material_digest',$1,true)", [a.digest]);
@@ -215,7 +217,8 @@ it("populated immediate-predecessor upgrade changes only the reveal body, refuse
     await installLegacySyntheticPartyFixtures(db.owner);
     const ddl = await db.owner.query("SELECT format('CREATE ROLE saved_estimate_shadow LOGIN INHERIT IN ROLE jobguard_shadow PASSWORD %L',$1::text) ddl", [db.owner.options.password]);
     await db.owner.query(ddl.rows[0].ddl);
-    shadow = new Pool({ ...db.owner.options, user: "saved_estimate_shadow" });
+    // pg-pool keeps the password non-enumerable, so pass it explicitly as other suites do.
+    shadow = new Pool({ ...db.owner.options, password: db.owner.options.password, user: "saved_estimate_shadow" });
     const fixture = { ...f, admin: db.owner, runtime: db.runtime, shadow };
     const a = await setup(diary, message, fixture); await a.complete();
     const tables = ["shadow_commercial_signal", "final_check_manifest", "final_check_source_attempt", "final_check_run_binding", "shadow_final_check_completion"];

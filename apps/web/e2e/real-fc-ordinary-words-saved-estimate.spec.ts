@@ -112,8 +112,11 @@ test("ordinary words survive the authorised saved reveal with £180.00 and one f
     const confirmation = page.waitForResponse(r => r.url().endsWith(`/api/jobs/${jobId}/final-check/catches`) && r.request().method() === "POST");
     await items.getByRole("button", { name: "Yes — this was extra work", exact: true }).click();
     const confirmedResponse = await confirmation;
-    expect(confirmedResponse.ok(), await confirmedResponse.text()).toBe(true);
-    const confirmed = await confirmedResponse.json();
+    expect(confirmedResponse.ok(), `catch HTTP ${confirmedResponse.status()}`).toBe(true);
+    // Take the new catch's identity from the saved variations; reading this page response body can hang.
+    const created = (await (await page.request.get(`/api/jobs/${jobId}/variations`)).json()).variations;
+    expect(created).toHaveLength(1);
+    const confirmed = { variationId: created[0].id as string };
     const revealed = await read();
     expect(revealed.items).toHaveLength(1);
     expect(revealed.items[0]).toMatchObject({ signalId: saved.items[0].signalId, estimatedValuePence: scenario.estimate, disposition: "confirmed_extra", variationId: confirmed.variationId });
