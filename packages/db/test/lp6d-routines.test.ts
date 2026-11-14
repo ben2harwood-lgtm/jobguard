@@ -224,6 +224,13 @@ it("replaces existing routines and rejects a delegated NULL actor on ordinary po
   expect(value).toContain("IF actor.member_id IS DISTINCT FROM app.current_actor()");
   expect(value).toContain("IF actor.membership_id IS NOT NULL AND actor.membership_id IS DISTINCT FROM app.current_actor()");
 });
+it("keeps the live guard bound to an ordinary actor or the exact customer message scope", () => {
+  const guard = body(sql, routines.find(r => r.name === "app.require_watchdog_live")!);
+  expect(guard).toContain("IF NOT (app.current_actor() IS NULL AND app.lp6d_has_delegated_scope('JobSource.customer_message',p_job)) THEN");
+  expect(guard).toContain("IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN");
+  const scope = definitions(sql).find(m => m[1] === "app.lp6d_has_delegated_scope")![3]!;
+  expect(scope).toContain("app.lp6_delegated_actor(nullif(current_setting('app.tenant_id',true),'')::uuid,p_command_type,p_job) IS NOT NULL");
+});
 it("preserves the exact delegated writer body behind private credential-scoped ports", () => {
   const pattern = /CREATE OR REPLACE FUNCTION identity\.customer_portal_message\([\s\S]*?\$\$;/u;
   const previous = read("../migrations/0724_lp6c_customer_portal_delegation.sql").match(pattern)![0];
@@ -304,7 +311,10 @@ it("pins each private unguarded copy to its guarded original minus only the LP-6
   const unguarded = (name: string) => {
     const guarded = bodyOf(name), prefix = /^\s*BEGIN\n -- LP6D_BOUND[^\n]*\n(?: --[^\n]*\n)*(?: PERFORM app\.current_actor\(\);\n)?.*?\n END IF;\n/su.exec(guarded);
     expect(prefix, name).not.toBeNull();
-    return guarded.slice(prefix![0].length).replace(/;\nEND\n$/u, "").trim();
+    const remainder = guarded.slice(prefix![0].length);
+    // This guard additionally admits the exact delegated message scope checked above.
+    const original = name === "app.require_watchdog_live" ? remainder.replace(/^ END IF;\n/u, "") : remainder;
+    return original.replace(/;\nEND\n$/u, "").trim();
   };
   const maintenanceLine = /\n\s*IF NOT app\.lp6d_maintenance_login\(\) THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;/u;
   for (const [copy, original, adapt] of [

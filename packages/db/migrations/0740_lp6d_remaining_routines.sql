@@ -89,8 +89,12 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, app AS $$
 BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
+ -- Customer evidence triggers retain the customer's existing LP-6c request, scoped
+ -- to this tenant, job and command. A NULL actor alone never grants access.
+ IF NOT (app.current_actor() IS NULL AND app.lp6d_has_delegated_scope('JobSource.customer_message',p_job)) THEN
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
  END IF;
 DECLARE tenant uuid; lifecycle text;
 BEGIN

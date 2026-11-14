@@ -328,11 +328,12 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "48eb79095bb745b4cf779fde9af0a19c417328ec15a8f373569711fe360dfced",
+        "definitionSha256": "4953e2932057df67c4572a2e9f4563c5c305de1b939ee2be57ef1c0df65b9765",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
-          "app.current_tenant"
+          "app.current_tenant",
+          "app.lp6d_has_delegated_scope"
         ]
       }
     },

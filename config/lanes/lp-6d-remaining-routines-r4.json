@@ -181,7 +181,18 @@
         "packages/db/test/real-fc-ordinary-words-saved-estimate.integration.test.ts",
         "packages/db/migration-notes/0740_lp6d_remaining_routines.md",
         "packages/db/migrations/0740_lp6d_remaining_routines.sql",
-        "packages/db/test/migration-proofs/0740_lp6d_remaining_routines.proof.json"
+        "packages/db/test/migration-proofs/0740_lp6d_remaining_routines.proof.json",
+        "packages/db/src/request-binding-error.ts",
+        "packages/db/test/blank-practice-company.integration.test.ts",
+        "packages/db/test/invoice-later.integration.test.ts",
+        "packages/db/test/money-trail-security.integration.test.ts",
+        "packages/db/test/practice-company-marker.integration.test.ts",
+        "packages/db/test/practice-worker-switch-proof.integration.test.ts",
+        "packages/db/test/recovery-timeline-import-anchor.integration.test.ts",
+        "packages/db/test/site-jobs-scope.integration.test.ts",
+        "packages/db/test/site-visit-authority.integration.test.ts",
+        "apps/web/e2e/ENT-8a-possible-extras.spec.ts",
+        "packages/db/test/lp6c-customer-delegation.integration.test.ts"
       ]
     }
   }

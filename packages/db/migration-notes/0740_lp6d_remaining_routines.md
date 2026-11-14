@@ -929,3 +929,73 @@ LP-10; [D3] + [PH11]; [PH13] (LATER: reads wait behind an open revoke, fail-safe
 operative invitation; [G4] "regression: SSO sign-in" (scim-deactivation-access); environmental lp6a pg_dump
 and the recovery-messages single case. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r25-705222a2-whole-*.
+
+
+### LP-6d repair R1 — 14 November 2026
+
+RED: request identity, tenant isolation and evidence authority. Synthetic data only.
+The customer writer already binds the LP-6c delegated request once. Its evidence
+and source inserts subsequently reach `require_watchdog_live` through triggers;
+that guard previously rejected every delegated NULL actor. It now recognizes only
+`JobSource.customer_message` for the bound tenant and exact job through the existing
+private scoped reader. Unbound calls still fail, ordinary actor/tenant comparisons
+remain, and the original live-status check and SHARE lock are unchanged. Added a
+PostgreSQL regression for unbound, wrong-job and wrong-tenant calls. Refreshed the
+0740 proof's exact function definition digest and static call list. The PostgreSQL
+rendering was checked against the old reviewed digest before refreshing; live
+catalogue verification is still required in CI.
+
+ENT-8a's completion-photo failure occurs during `taggedCompletionPhoto` fixture
+setup, before the web request: its `EvidenceService` context omitted the issued
+contractor credential. Retain the actual startPractice token and pass it to the
+existing context constructor so begin/finalize bind normally. The web repository
+already uses contractorSessionContext/withTenant. No assertion, routine guard or
+permission was removed. Added all nine requested missing lane paths and the two
+newly touched test paths.
+
+Local evidence (installed Node 24.17.0, Vitest 4.1.12):
+- From apps/web: `./node_modules/.bin/vitest run --maxWorkers=2 app/lib/prompt-sources-server.test.ts app/api/jobs/'[id]'/customer-messages/route.test.ts app/api/customer-portal/practice-pay-now/route.test.ts` — 3 files, 27 tests PASS.
+- From root: `./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=1 test/lp6d-routines.test.ts test/lp6d-repository-context.test.ts test/migration-proof-loader.test.ts` — 3 files, 129 tests PASS.
+- From root: installed `./node_modules/.bin/tsc -p <project>` passed for packages/config, core, storage, db, ai and apps/api in dependency order; `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit` PASS. Those package compiles also supplied the missing local dist exports for web tests.
+- `node tools/agent-lane-boundary-lint.mjs --lane=lp-6d-remaining-routines-r4` and `git diff --check` PASS.
+- Initial pnpm invocations stalled at the package-manager shim and were interrupted; no packages downloaded. Initial web tests lacked local dist exports; rerun passed after compilation. Initial body-pin test needed to recognize the extra scoped guard block; its business-body comparison remains, with an additional scope assertion.
+
+Required checker commands, NOT executed here (from repository root):
+```
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/lp6c-customer-delegation.integration.test.ts test/customer-portal-message.integration.test.ts test/lp6d-routines.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/enterprise-live-prompt-repository.integration.test.ts test/enterprise-live-prompt-commands.integration.test.ts test/enterprise-live-prompt-races.integration.test.ts
+pnpm test:db
+pnpm test:migrations
+pnpm --filter @jobguard/web test:e2e --workers=2 --project=mobile-360 --project=desktop customer-signin.spec.ts ENT-8a-possible-extras.spec.ts
+```
+CI and independent RED review at the resulting exact head remain required.
+
+HANDOFF: do not commit from the current checkout. HEAD is 3b02894607b90e74e82b3524022c4930e4d020c7;
+the saved origin branch is 0c6f1118ed28e2e6b247c6dd7e52856d4b05fb03. Git writes,
+including fetch/checkout, were explicitly prohibited. All repair files were compared
+to the saved remote head and have the same starting contents there; the router must
+preserve this focused diff and apply it on the required remote head before committing,
+without rebase or force-push. No git writes, PostgreSQL or browser runs performed.
+
+### R1 continuation, 14 November 2026, 20:10 UTC — READY for router commit
+
+The router has resolved the preceding base hold: HEAD 2d8db222 merges both
+3b028946 and required remote head 0c6f1118. The existing seven-file R1 repair
+diff was preserved. Migration 0740 is absent from saved origin/main; no migration
+already on main was edited and lane validation requires no renumbering.
+
+This continuation independently reran the three named DB structural/adapter
+files above (129 tests PASS) and the three named web unit files (27 tests PASS),
+using installed Vitest 4.1.12 with at most two workers. Database, API and web
+TypeScript no-emit checks, repository lint (including lane boundaries), explicit
+piece lane validation and git diff --check PASS. No package downloads or Git
+writes were performed.
+
+GitHub PR/run discovery and `gh run view 43628410533 --log-failed` could not
+connect to api.github.com. The earlier coordinator brief identifies that run's
+two web regressions and missing lane paths; direct failed-log inspection was
+unavailable in this continuation. PostgreSQL and browser suites remain NOT RUN
+under this sandbox's restrictions. No claim is made that every failed CI job
+now passes. The exact checker commands above, required CI and independent RED
+review remain necessary at the resulting committed head. This READY supersedes
+only the previous base-mismatch handoff hold.
