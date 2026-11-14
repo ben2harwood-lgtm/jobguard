@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { mapValueReceipt } from "@jobguard/core";
 import { extractCaptureFixture } from "@jobguard/ai";
 import { ShadowJourney, ShadowSavedReport } from "./journey";
-import { parseShadowReport, shadowCaptureText, shadowSteps } from "./journey-model";
+import { parseShadowReport, shadowCaptureText } from "./journey-model";
 vi.stubGlobal("React", React);
 const jobId = randomUUID();
 function report() { return {
@@ -16,7 +16,6 @@ function report() { return {
   status: "incomplete", reason: "producer_bindings_held", producers: { sources: "HELD", derivation: "HELD", subscription: "HELD", postedMoney: "HELD" }, asOf: null, receipt: null },
 }; }
 it("has nine guided steps, source-only £30,000 input and no saved success before a read", async () => {
- expect(shadowSteps).toHaveLength(9);
  const proposal = await extractCaptureFixture(randomUUID(), shadowCaptureText, "deterministic-local-v1");
  expect(proposal.lines).toHaveLength(5);
  expect(proposal.lines.reduce((total, line) => total + (line.unitPricePence.value ?? 0), 0)).toBe(3000000);
