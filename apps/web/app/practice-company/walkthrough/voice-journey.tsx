@@ -21,7 +21,7 @@ export const stages = [
   ["Send the quote", "Continue on your own saved job. Customer invitation is still to build. Delivery is simulated; nothing is sent."],
   ["Customer says yes", "The existing control records builder-attested practice acceptance, not an authenticated customer response. Record it and start the practice job."],
   ["Add on-site evidence", "Attach the generated fictional photo, check file integrity and complete the stage. The customer asks for one more thing. You do it, but forget to add it to the bill. Save the fictional loft-hatch diary note as evidence, not a priced extra. Never upload a real site photo in this exercise."],
-  ["Price extra work", "Add a £125 fictional extra and approve its exact revision. Approval here is a builder's practice attestation; authenticated customer approval is not available in this practice job."],
+  ["Price extra work", "Add a £125 fictional extra and approve its exact revision. Here, the builder records approval of the exact practice revision; this practice job cannot receive approval from the customer."],
   ["Lock and run Final Check", "Build the final bill, mark the baseline work done, accept the terms and lock. JobGuard checks your records against the bill. Run Final Check and load its saved result; it may take a few minutes. Inspect the fitted loft hatch and the answers before continuing."],
   ["Invoice and simulated payment", "Answer Yes — this was extra work and price the draft catch at £300. It stays a proposal awaiting customer approval, outside the locked bill; no supplementary invoice is issued here. Issue the invoice from the checked bill. Record its full amount as a fictional practice receipt. A recorded receipt is not bank-confirmed payment and cannot earn a recovery fee."],
   ["Read the end report", "Open the report in pounds and follow its saved source links. These are your practice job's recorded figures. The report does not guess money protected."],
@@ -185,7 +185,7 @@ export function VoiceJourney() {
       setOwnWorkspace(saved.index >= 2);
       if (saved.index >= 2) {
         const url = new URL(location.href);
-        url.hash = saved.index >= 6 ? "final-account-title" : saved.index >= 4 ? "work-proof" : "quote";
+        url.hash = saved.index >= 6 ? "final-account-title" : saved.index >= 4 ? "work-proof" : "";
         history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
       }
       setTenantId(session.tenants[0]!.id);
@@ -222,7 +222,8 @@ export function VoiceJourney() {
       () => {
         if (!ownPriced.current && !current.current.prepared && Number(text("quote-revision")) > 0) {
           ownPriced.current = true; remember(true); setOwnWorkspace(true);
-          history.replaceState(null, "", `${location.pathname}${location.search}#quote`);
+          // The tour owns spotlight scrolling; open pricing without a fragment scroll.
+          history.replaceState(null, "", `${location.pathname}${location.search}`);
         }
         return ownPriced.current;
       },
@@ -390,7 +391,7 @@ export function VoiceJourney() {
       {error && <p role="alert">{error}</p>}
     </header>
     <div id="walk-screen" className={styles.screen} tabIndex={-1}>
-      {!tenantId ? <p role="status">Loading your private practice firm…</p> : activeJob ? report ? <ValuePage jobId={activeJob} /> : <WorkspaceShell key={`${activeJob}:${screenVersion}`} jobId={activeJob} /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} initialText="" close={() => location.assign("/practice-company")} onCaptured={result => { rememberWalkJob("walkJob", result.jobId); setCapture(result); }} />}
+      {!tenantId ? <p role="status">Loading your private practice firm…</p> : activeJob ? report ? <ValuePage jobId={activeJob} /> : <WorkspaceShell key={`${activeJob}:${screenVersion}`} jobId={activeJob} initialPricing /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} initialText="" close={() => location.assign("/practice-company")} onCaptured={result => { rememberWalkJob("walkJob", result.jobId); setCapture(result); }} />}
     </div>
     {tenantId && tour && <Walkthrough key={tourVersion || "own"} steps={steps} initialIndex={resumeIndex} onClose={() => setTour(false)} />}
   </>;

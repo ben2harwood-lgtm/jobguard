@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-shadow-practice-payment-label": {
+      "branches": ["codex/sandbox/demo-shadow-practice-payment-label"],
+      "note": "RED DEMO-S: identify the saved shadow report payment match as practice data; copy and unit assertions only. No settlement or persisted behavior changes.",
+      "allow": [
+        "apps/web/app/demo-s/shadow-30000/journey.tsx",
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx"
+      ]
+    }
+  }
+}
