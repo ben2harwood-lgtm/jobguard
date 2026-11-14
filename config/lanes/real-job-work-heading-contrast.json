@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-job-work-heading-contrast": {
+      "branches": [
+        "codex/sandbox/real-job-work-heading-contrast"
+      ],
+      "note": "Work heading contrast only; UI-DESIGN-JOBS regression; NOPR.",
+      "allow": [
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/design-fit.css"
+      ],
+      "test": "apps/web/e2e/UI-DESIGN-JOBS.spec.ts"
+    }
+  }
+}

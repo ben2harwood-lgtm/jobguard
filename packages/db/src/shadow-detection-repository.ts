@@ -158,11 +158,24 @@ export class FinalCheckCompletionRepository {
  * an examined zero. Other unsupported evidence never becomes a claimed zero result. Reconciliation is the same pure rule as the test harness. */
 export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, practicePhotoSha256: string, drainagePhotoSha256?: string) {
   const repo = new FinalCheckRepository(shadowPool), sink = new ShadowDetectionRepository(shadowPool);
+  const baselineCaptures = (context: VerifiedTenantContext, m: FinalCheckManifest) => m.comparisons.baseline.map(line => shadowCaptureV1.parse({ version: "shadow-capture.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId, id: line.scope_item_id, scopeItemId: line.scope_item_id,
+    revisionId: line.commercial_revision_id, serverRecordedAt: m.comparisons.baselineRecordedAt, valuePence: null, kind: "baseline", state: null, scopeArea: "job", description: line.description, recordedPhase: "pre_lock", aiStructured: false, sourceRef: String(line.id) }));
+  async function sourceResult(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]): Promise<FinalCheckSourceResult> {
+    const signalIds = await withTenant(shadowPool, context, async db => (await db.$client.query<{ signal_id: string }>(`
+      SELECT signal_id FROM app.shadow_signal_evidence
+      WHERE tenant_id=$1 AND job_id=$2 AND evidence_id=$3 AND object_version_id=$4
+        AND sha256=$5 AND source_received_at=$6::timestamptz
+      ORDER BY signal_id`, [context.tenantId,m.comparisons.jobId,s.evidenceId,s.objectVersionId,s.sha256,s.receivedAt])).rows.map(row => row.signal_id));
+    return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: signalIds.length ? "detected" : "zero_result", failureCode: null, signalIds };
+  }
   async function observe(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]) {
     const base = { version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
       evidence: { id: s.evidenceId, objectVersionId: s.objectVersionId, sha256: s.sha256, serverReceivedAt: s.receivedAt } };
     const fixture = s.sha256 ? decodeFinalCheckSourceFixture(s.sourceKind,s.sha256) : null;
     if(fixture)return observationV1.parse({...base,kind:s.sourceKind==="completion_photo"?"completion_photo":"note_or_voice",...fixture});
+    // The reviewed J3 drainage recipe uses the proof-stage certificate purpose.
+    // Keep that exact hash/purpose pair; ordinary certificates are handled below.
+    if (s.sourceKind !== "completion_photo" && !(s.sourceKind === "electrical_certificate" && drainagePhotoSha256 !== undefined && s.sha256 === drainagePhotoSha256)) return null;
     const photo = s.sha256 ? decodePracticePhoto(s.sha256, practicePhotoSha256, drainagePhotoSha256) : null;
     if (photo) return observationV1.parse({ ...base, kind: "completion_photo", ...photo });
     return null;
@@ -170,9 +183,15 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
   return {
     read: (context: VerifiedTenantContext, task: { jobId: string; manifestId: string }) => repo.manifest(context, task.jobId, task.manifestId),
     async process(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]): Promise<FinalCheckSourceResult> {
-      const typedKinds = ["job_diary_text", "customer_message_text"];
-      if (typedKinds.includes(s.sourceKind) || (typeof s.input === "object" && s.input !== null &&
-        "evidence_type" in s.input && typedKinds.includes(String(s.input.evidence_type)))) {
+      const structured = s.evidenceId === null && s.processable &&
+        ["unlinked_supplier_version", "unlinked_supplier_document", "unlinked_purchase_order"].includes(s.sourceKind);
+      const decoded = structured ? await readPracticeStructuredSource(runtimePool, context, m, s) : null;
+      // Preserve the structured reader's typed refusal (including a changed
+      // commercial track). A successful read still requires every frozen check
+      // below; no authorization or other exception is caught or converted.
+      if (structured && !decoded) return { version: "final-check.source-result.v1", inputHash: s.inputHash,
+        status: "unsupported", failureCode: "UNSUPPORTED_SOURCE", signalIds: [] };
+      {
         const frozenManifest = await repo.manifest(context, m.comparisons.jobId, m.id);
         const frozen = frozenManifest.sources.find(source => source.id === s.id);
         const { status: _status, ...binding } = s;
@@ -183,10 +202,54 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
           JSON.stringify(binding) !== JSON.stringify(frozenBinding))
           return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: "SOURCE_INVALID", signalIds: [] };
       }
-      if (s.evidenceId === null && s.processable) {
-        const decoded = await readPracticeStructuredSource(runtimePool, context, m, s);
+      if (structured) {
         return { version: "final-check.source-result.v1", inputHash: s.inputHash,
-          status: decoded ? "zero_result" : "unsupported", failureCode: decoded ? null : "UNSUPPORTED_SOURCE", signalIds: [] };
+          status: "zero_result", failureCode: null, signalIds: [] };
+      }
+      // The generated proof PNG is also used for certificates. Purpose comes
+      // from the frozen verified evidence, never from a filename or hash alone.
+      // The checked manifest above also admits company-owned synthetic jobs,
+      // which have no practice digest. Authenticate it when one is present;
+      // the same runtime/RLS source read and frozen binding apply to both paths.
+      let includedCertificate;
+      if (["completion_photo", "electrical_certificate"].includes(s.sourceKind)) {
+        const verified = s.processable ? await withTenant(runtimePool, context, async db => (await db.$client.query<{ legacy_photo: boolean }>(`
+          SELECT CASE WHEN j.practice_session_digest IS NOT NULL
+            THEN NOT app.is_blank_practice_company(j.practice_session_digest::text)
+            ELSE false END AS legacy_photo
+          FROM app.evidence_object e
+          JOIN app.evidence_upload u ON (u.tenant_id,u.job_id,u.id)=(e.tenant_id,e.job_id,e.upload_id)
+          JOIN app.job j ON (j.tenant_id,j.id)=(e.tenant_id,e.job_id)
+          JOIN app.job_commercial_track tr ON (tr.tenant_id,tr.job_id)=(j.tenant_id,j.id)
+          WHERE e.tenant_id=$1 AND e.job_id=$2 AND e.id=$3 AND e.id=$4
+            AND e.evidence_type=$5 AND e.object_version_id=$6 AND e.sha256=$7
+            AND e.server_received_at=$8::timestamptz AND e.server_received_at<=$9::timestamptz
+            AND to_jsonb(e)=$10::jsonb AND e.kind='original' AND e.server_verified_at IS NOT NULL
+            AND u.state='verified' AND u.server_verified_at IS NOT NULL
+            AND u.object_version_id=e.object_version_id AND u.expected_sha256=e.sha256
+            AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=e.tenant_id AND i.evidence_id=e.id)
+            AND current_database()='jobguard_synthetic_demo' AND tr.job_track='small_builder' AND tr.environment='synthetic_demo'
+            AND j.provenance<>'imported'
+            AND (j.practice_session_digest IS NULL OR EXISTS(
+              SELECT 1 FROM app.authenticate_practice_session(j.practice_session_digest::text,j.tenant_id)))`,
+        [context.tenantId,m.comparisons.jobId,s.evidenceId,s.sourceRef,s.sourceKind,s.objectVersionId,s.sha256,s.receivedAt,m.cutoff,JSON.stringify(s.input)])).rows[0]) : undefined;
+        if (!verified) return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: "SOURCE_INVALID", signalIds: [] };
+        if (s.sourceKind === "electrical_certificate" && (drainagePhotoSha256 === undefined || s.sha256 !== drainagePhotoSha256)) {
+          if (s.sha256 !== practicePhotoSha256) return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: "UNSUPPORTED_SOURCE", signalIds: [] };
+          const existing = await sourceResult(context, m, s);
+          // Existing detections remain bound for every admitted source. Only a
+          // verified non-blank practice session can select the legacy demo photo.
+          if (existing.signalIds.length || verified.legacy_photo !== true) return existing;
+          const photo = decodePracticePhoto(s.sha256, practicePhotoSha256)!;
+          // Retain only the historical already-included proof recipe. A generic
+          // certificate cannot create an extra merely because its PNG is shared.
+          const inclusion = reconcileFinalCheck({ tenantId: context.tenantId, jobId: m.comparisons.jobId, signalId: s.id,
+            description: photo.facts.description, scopeArea: "job", scopeItemId: null, coalescedIntoSignalId: null,
+            hasEvidence: true, permanentExclusion: false }, { ...m.comparisons, captures: baselineCaptures(context, m) });
+          if (inclusion.outcome !== "already_in_original_scope") return existing;
+          includedCertificate = observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
+            kind: "completion_photo", ...photo, evidence: { id: s.evidenceId, objectVersionId: s.objectVersionId, sha256: s.sha256, serverReceivedAt: s.receivedAt } });
+        }
       }
       let observation;
       if (s.sourceKind === "job_diary_text" || s.sourceKind === "customer_message_text") {
@@ -196,19 +259,49 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
         observation = observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
           kind: s.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request", ...read.proposal,
           evidence: { id: s.evidenceId, objectVersionId: s.objectVersionId, sha256: s.sha256, serverReceivedAt: s.receivedAt } });
-      } else observation = s.processable ? await observe(context, m, s) : null;
+      } else observation = includedCertificate ?? (s.processable ? await observe(context, m, s) : null);
       if (!observation || observationMustSurface(observation).firedRules.length)
         return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: s.processable ? "UNSUPPORTED_SOURCE" : "SOURCE_INVALID", signalIds: [] };
       const captures = m.comparisons.captures.map(c => shadowCaptureV1.parse(c));
-      await sink.persist(context, { version: "shadow-detection-batch.v1", jobId: m.comparisons.jobId, observations: [observation], captures, proposals: detectShadowObservations([observation], captures, new Date().toISOString()) });
-      const fresh = await repo.manifest(context, m.comparisons.jobId, m.id), signalIds = fresh.signals.filter(x => x.evidenceIds.includes(s.evidenceId!)).map(x => x.signalId);
-      return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: signalIds.length ? "detected" : "zero_result", failureCode: null, signalIds };
+      let observations = [observation];
+      let ambiguousPrice = false;
+      if (["job_diary_text", "customer_message_text"].includes(s.sourceKind)) {
+        observations = [];
+        // Re-read only frozen, verified originals. No amount or pronoun crosses
+        // notes in the reader; here one work identity reconciles source estimates.
+        for (const source of [...m.sources].sort((a,b) => a.id.localeCompare(b.id))) {
+          if (!["job_diary_text", "customer_message_text"].includes(source.sourceKind)) continue;
+          const read = await readFinalCheckTypedText(runtimePool, context, m, source);
+          if (read.status !== "proposal" || read.proposal.facts.workReference !== observation.facts.workReference) continue;
+          const candidate = observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
+            kind: source.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request", ...read.proposal,
+            evidence: { id: source.evidenceId, objectVersionId: source.objectVersionId, sha256: source.sha256, serverReceivedAt: source.receivedAt } });
+          if (observationMustSurface(candidate).firedRules.length) continue;
+          ambiguousPrice ||= read.ambiguousPrice === true;
+          observations.push(candidate);
+        }
+      }
+      let proposals = detectShadowObservations(observations, captures, new Date().toISOString());
+      if (["job_diary_text", "customer_message_text"].includes(s.sourceKind)) {
+        const values = new Set(observations.flatMap(o => o.facts.estimatedValuePence === null ? [] : [o.facts.estimatedValuePence]));
+        const estimate = !ambiguousPrice && values.size === 1 ? [...values][0]! : null;
+        // Immutable existing provenance wins on retry/upgrade. Only new rows get
+        // the reconciled estimate; no retrofitting historical signal amounts.
+        const prior = await withTenant(shadowPool, context, async db => (await db.$client.query<{id:string;estimated_value_pence:string|null}>(
+          "SELECT id,estimated_value_pence FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND id=ANY($3::uuid[])",
+          [context.tenantId,m.comparisons.jobId,proposals.map(p=>p.signalId)])).rows);
+        proposals = proposals.map(p => {
+          const existing = prior.find(row=>row.id===p.signalId);
+          return { ...p, estimatedValuePence: existing ? existing.estimated_value_pence === null ? null : Number(existing.estimated_value_pence) : estimate };
+        });
+      }
+      await sink.persist(context, { version: "shadow-detection-batch.v1", jobId: m.comparisons.jobId, observations, captures, proposals });
+      return sourceResult(context, m, s);
     },
     record: (context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number], result: FinalCheckSourceResult) => repo.record(context, m.comparisons.jobId, m.id, s.id, randomUUID(), result),
     async reconcile(context: VerifiedTenantContext, m: FinalCheckManifest) {
       if (m.result) return { runId: m.result.runId, lockId: m.result.lockId, zeroResult: m.result.zeroResult };
-      const baseline = m.comparisons.baseline.map(line => shadowCaptureV1.parse({ version: "shadow-capture.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId, id: line.scope_item_id, scopeItemId: line.scope_item_id,
-        revisionId: line.commercial_revision_id, serverRecordedAt: m.comparisons.baselineRecordedAt, valuePence: null, kind: "baseline", state: null, scopeArea: "job", description: line.description, recordedPhase: "pre_lock", aiStructured: false, sourceRef: String(line.id) }));
+      const baseline = baselineCaptures(context, m);
       const locked = { ...m.comparisons, captures: [...m.comparisons.captures, ...baseline] };
       const classifications = m.signals.map(s => {
         const result = reconcileFinalCheck({ tenantId: context.tenantId, jobId: m.comparisons.jobId, signalId: s.signalId, description: s.description, scopeArea: "job", scopeItemId: s.scopeItemId,
