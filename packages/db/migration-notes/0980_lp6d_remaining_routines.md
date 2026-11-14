@@ -882,3 +882,10 @@ binding refusals). Re-run alone it shows its usual single failure (1 failed | 10
 the cascade the count is 113. [PW27] is a named hold (router ruling: no private copy can express the
 operator rollback reads without binding). NOT READY. Fail list and logs:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r20b-98b0cb02-whole-* and -recovery-messages-rerun.log.gz.
+
+Repair 21 (PRODUCT CHANGE, flagged: evidence-pack worker ownership read through the pinned private
+copy app.lp6d_evidence_pack_v3_owner; one-pattern test sweep). Whole db at c7efa253 (run.sh WHOLE,
+2 workers): 52 failed | 878 passed files; 95 failed | 8188 passed tests (r20b: 59 / 113 without the
+hang cascade). No newly failing file. NOT READY. Named holds: [PW27], L082 owner expiry while
+waiting, worm-command executor/operator cases. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r21-c7efa253-whole-*.
