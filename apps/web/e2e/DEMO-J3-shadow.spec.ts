@@ -231,7 +231,7 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  await expect(saved.getByText("Complete. All nine steps are saved on this job.", { exact: true })).toBeVisible();
  const figures = saved.getByRole("definition");
  for (const text of ["£800.00", "£80.00", "£720.00", "£3,600.00 · fee £0.00"]) await expect(figures.getByText(text, { exact: true })).toBeVisible();
- await expect(saved).toContainText("an approved pack proves each extra's source chain");
+ await expect(saved).toContainText("Supporting evidence packs: approved packs are saved with records linked to each extra.");
  // Step 3: the photo and diary signals were received before lock; the supplier document is in each pack.
  expect(report.finalCheck.items.flatMap((item: { evidence: { source: string; evidenceAfterLock: boolean }[] }) => item.evidence).map((row: { source: string; evidenceAfterLock: boolean }) => [row.source, row.evidenceAfterLock]).sort()).toEqual([["electrical_certificate", false], ["job_diary_text", false]]);
  for (const pack of report.packs) expect(pack.result.packs[0].sources.some((source: { sourceId: string }) => source.sourceId.startsWith("supplier_document_version:"))).toBe(true);
