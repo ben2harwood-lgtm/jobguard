@@ -908,3 +908,15 @@ waiting; worm-command executor/operator cases and the worm hold-screen concurren
 contractor-session-context [D3] (revoked member's session context); the server-entitlements operative
 invitation; recovery-follow-up-upgrade (repository revoke on a pre-0980 schema). Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r23-582a916e-whole-*.
+
+Repair 24 (tests only; flagged test-expectation changes in enterprise-access-upgrade (column ACL) and DA2
+(source-query count); strict caller-chain test for the CH-6 INVOKER copies per the checker condition).
+Whole db at 0fb26fcb (run.sh WHOLE, 2 workers): 13 failed | 917 passed files; 20 failed | 8277 passed
+tests (r23: 19 / 26). NOT READY. Remaining: named holds [PW27]; L082 owner expiry (invoice-later, -upgrade);
+worm-command executor/operator cases + worm-hold-screen concurrent replay; LP-10; [D3] contractor-session-
+context and [PH11] (same cause: revoked member's session); server-entitlements operative invitation;
+proposed holds [PH13] (binding FOR SHARE on the session row waits behind an open revoke), scim [G4] (SSO
+sign-in role_grant trigger reaches the guarded mon8_feature_decision unbound), recovery-follow-up-upgrade
+(ruling's form does not fit: revokes run at 0111/0115); environmental lp6a pg_dump, recovery-terms-timing,
+recovery-messages single case. Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r24-0fb26fcb-whole-*.
