@@ -159,9 +159,6 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    return {at,text:text.split(needle).join(`"retrievedAt":"${clockPlaceholder}"`)};
   }
   async function replay(){
-   // Install capture listeners before either measured document starts any reads.
-   // Requests started by the previous document cannot enter the new inFlight set.
-   await page.goto('about:blank');
    const responses=new Map<string,{status:number;body:string;headers:Record<string,string>}>();
    const captures=new Map<import('@playwright/test').Request,{response:import('@playwright/test').Response;read:Promise<void>;done:boolean}>();
    const inFlight=new Set<import('@playwright/test').Request>(),failures:Error[]=[];
