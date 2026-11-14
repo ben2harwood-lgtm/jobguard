@@ -95,7 +95,11 @@ export async function priceFoundExtra(_: HTMLElement, signal: AbortSignal) {
     await click("Yes — this was extra work", signal);
     await until(() => !!screen()?.querySelector('[data-testid="final-check-disposition"]'), signal);
   }
+  const previousWorkspace = screen().querySelector("#captured-job-workspace");
   document.getElementById("walk-refresh")?.click();
+  // Refresh remounts the workspace asynchronously. The old variation row can
+  // still be present until React commits; never operate its detached controls.
+  await until(() => screen().querySelector("#captured-job-workspace") !== previousWorkspace, signal);
   let row: HTMLElement | undefined;
   await until(() => {
     row = [...screen().querySelectorAll<HTMLElement>(".variation-list article")].find(item => item.textContent?.includes("fitted loft hatch"));
