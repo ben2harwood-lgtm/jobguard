@@ -385,3 +385,20 @@ it("reads the published final check on the unbound read-only skip through two pi
     expect(reached, copy).toEqual([]);
   }
 });
+
+it("keeps every path to the INVOKER final-check copies running as jobguard_migration (checker condition, repair 23)", () => {
+  // The copies are INVOKER while read_final_check_reveal is DEFINER: equivalent only because their one caller,
+  // ch6_integrity_published, is itself only reached from the migration-owned DEFINER ch6_integrity_sources.
+  const all = readdirSync(new URL("../migrations/", import.meta.url)).filter(f => f.endsWith(".sql")).sort().map(f => read(`../migrations/${f}`));
+  const latest = new Map<string, string>();
+  for (const text of all) for (const m of definitions(text)) latest.set(m[1]!, m[0]!);
+  const callersOf = (name: string) => [...latest].filter(([, def]) => def.includes(`${name}(`) && !new RegExp(`FUNCTION ${name.replace(".", "\\.")}\\(`, "u").test(def)).map(([n]) => n).sort();
+  expect(callersOf("app.ch6_integrity_published")).toEqual(["app.ch6_integrity_sources"]);
+  expect(latest.get("app.ch6_integrity_sources")).toMatch(/SECURITY DEFINER/u);
+  expect(latest.get("app.ch6_integrity_published")).toMatch(/SECURITY INVOKER/u);
+  for (const text of all) expect(text).not.toMatch(/GRANT [^;]*app\.ch6_integrity_published\(/u);
+  expect(read("../migrations/0526_commercial_integrity_sources.sql")).toContain("ALTER FUNCTION app.ch6_integrity_sources(uuid,uuid,text) OWNER TO jobguard_migration;");
+  expect(read("../migrations/0526_commercial_integrity_sources.sql")).toMatch(/REVOKE ALL ON FUNCTION [^;]*app\.ch6_integrity_published\(uuid,uuid,text\)[^;]*FROM PUBLIC,jobguard_runtime,jobguard_shadow,jobguard_infrastructure/u);
+  for (const copy of ["app.lp6d_read_final_check_reveal_unbound", "app.lp6d_final_check_builder_unbound"])
+    expect(callersOf(copy), copy).toEqual(copy.endsWith("builder_unbound") ? ["app.lp6d_read_final_check_reveal_unbound"] : ["app.ch6_integrity_published"]);
+});

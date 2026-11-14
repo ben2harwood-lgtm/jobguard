@@ -7,6 +7,7 @@ import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { randomUUID,createHash } from "node:crypto";
 import { beforeAll,afterAll,it,expect } from "vitest";
 import { MIGRATION_URLS,migrate } from "../src/migrate.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { actor,tenant,member,createIntegrityFixture,seedIntegrityJob,reviewFor,transaction,migrationUrl,type IntegrityFixture } from "./commercial-integrity-v3-fixtures.js";
 const trimPoints=[9,10,11,12,13,32,160,5760,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288,65279];
 let f:IntegrityFixture;beforeAll(async()=>{f=await createIntegrityFixture(false);},120000);afterAll(async()=>{await f?.close();});
@@ -39,7 +40,10 @@ it("CI-P09 own-step upgrade preserves populated old receipt/history/column types
  const auditHash=createHash('sha256').update(JSON.stringify((await f.admin.query("SELECT id,sequence,event_hash,payload_hash FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence",[tenant])).rows)).digest('hex');
  await migrate(f.admin);await migrate(f.admin);
  expect((await f.admin.query(receiptQuery,[tenant,review.commandId])).rows).toEqual(receipt);
- expect(await f.repo.review(f.auth.context,actor,f.auth.digest,x.job,review)).toEqual(result);
+ // LP-6d: after the upgrade the replay is the practice session's own request (the seed context is the
+ // historical unbound one, which the upgraded schema no longer accepts).
+ const current=verifiedTenantContextFromMembership({tenantId:f.auth.context.tenantId,membershipId:f.auth.membershipId,identityUserId:f.auth.identityUserId} as AuthenticatedMembership,{kind:"practice",credential:f.auth.digest});
+ expect(await f.repo.review(current,actor,f.auth.digest,x.job,review)).toEqual(result);
  expect(createHash('sha256').update(JSON.stringify((await f.admin.query("SELECT id,sequence,event_hash,payload_hash FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence",[tenant])).rows)).digest('hex')).toBe(auditHash);
 });
 

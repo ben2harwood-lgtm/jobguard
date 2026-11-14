@@ -27,7 +27,9 @@ export async function startBeforeMigration(name = migrationName, database?: stri
   await c.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [entry]);
  }
  // 0150 seeds without a session bridge and proves the exact predecessor list.
- if (name !== "0562_lp6a_request_binding.sql" && name !== "0150_membership_authority_fix.sql") await applyRequestBindingFoundation(c.admin);
+ // LP-6d: the out-of-order binding foundation reads 0138's practice session digest, so a starter at or
+ // before 0138 stays a historical unbound schema (the request fixtures then run unbound, as before LP-6).
+ if (name !== "0562_lp6a_request_binding.sql" && name !== "0150_membership_authority_fix.sql" && name > "0138_practice_session_hardening.sql") await applyRequestBindingFoundation(c.admin);
  await seedHomeOwner(c); return c;
 }
 export async function applyMigration(c: Cluster, name = migrationName) {
