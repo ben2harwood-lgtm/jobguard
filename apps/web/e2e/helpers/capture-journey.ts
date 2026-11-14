@@ -51,6 +51,10 @@ export async function startWatchdogJob(page: Page) {
   if (await price.isVisible()) await price.click();
   await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
   for (const name of ["Save draft revision", "Preview immutable quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) {
+    if (name === "Continue fake worker") {
+      await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
+      if (await page.getByTestId("quote-delivery").textContent() !== "Queued — not sent") continue;
+    }
     const action = page.getByRole("button", { name, exact: true });
     await expect(action).toBeEnabled(); await action.click();
     if (name === "Save draft revision") await expect(page.getByTestId("quote-revision")).toHaveText("1");
