@@ -21,7 +21,7 @@ async function add(page: Page, description: string, price: string, direction: st
 test("DEMO-J1 guide link alone makes a fresh five-line draft", async ({ page }) => {
   await page.goto("/demo-s");
   await page.getByRole("link", { name: "Practise core-1000 with the guided job screens" }).click();
-  await click(page, "Start core-1000 practice session");
+  await click(page, "Start the £1,000 practice job");
   await click(page, "Make my draft");
   await expect(page.getByTestId("proposal-line-count")).toHaveText("5");
   await click(page, "Check and edit my draft");
