@@ -8,8 +8,8 @@
   },
   {
     "file": "packages/db/src/demo-seed.ts",
-    "line": 100,
-    "fingerprint": "5a5c69f049c0b210dc61aba70fca1217bd6c9eed0cd89574fc8f21b52be23222",
+    "line": 102,
+    "fingerprint": "a6028c98b4d93ba41ec6bea63ccf6ec68bd33ebbb7d40e9af6cfa28866057a9b",
     "reason": "Quote delivery execute receives context/job/document arguments; terminal execute is conservatively covered and unresolved.",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
