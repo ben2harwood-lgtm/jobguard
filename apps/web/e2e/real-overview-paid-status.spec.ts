@@ -24,6 +24,9 @@ async function createJob(page: Page, text: string, net: number, customer: string
   await expect(page.getByRole("form", { name: "Customer and site details" }).getByText(/^Saved at /u)).toBeVisible();
   const lines = page.locator(".review-line");
   for (let i = 0; i < await lines.count(); i++) {
+    // Natural words leave one unsplit line without quantity or unit; scope confirmation requires both.
+    await lines.nth(i).getByRole("textbox", { name: /^Quantity /u }).fill("1");
+    await lines.nth(i).getByRole("textbox", { name: /^Unit /u }).fill("job");
     await lines.nth(i).getByRole("button", { name: /^Accept /u }).click();
   }
   const answers = page.getByRole("textbox", { name: /^Answer /u });
