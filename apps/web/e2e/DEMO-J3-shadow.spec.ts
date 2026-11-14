@@ -13,7 +13,7 @@ import { finishDispositionsAndTerms } from "./helpers/final-account-lock-journey
 async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  test.setTimeout(720_000);
  await openCapture(page); await page.goto("/demo-s/shadow-30000");
- const create = page.getByRole("button", { name: "Create or recover the J3 capture" });
+ const create = page.getByRole("button", { name: "Create or resume the £30,000 practice job" });
  await create.click();
  const reference = page.getByLabel("Saved job reference");
  await expect(reference).not.toHaveValue(""); const jobId = await reference.inputValue();

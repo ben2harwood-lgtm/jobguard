@@ -180,6 +180,7 @@
 .jgd .photo-card>.photo-copy:not(.jgd-legacy *){padding:11px 8px;flex:1}
 .jgd .photo-card h3:not(.jgd-legacy *){font-size:15px;margin:9px 0}
 .jgd .photo-card p:not(.jgd-legacy *){font-size:11px;color:#6b8596;line-height:1.6}
+.jgd .photo-card .photo-disclosure:not(.jgd-legacy *){font-size:14px;color:#344b42;line-height:1.5;margin:0 0 12px}
 .jgd .progress-rail:not(.jgd-legacy *){display:flex;gap:8px;padding:16px 18px;border-bottom:1px solid #e9f0f3}
 .jgd .progress-step:not(.jgd-legacy *){flex:1;position:relative;font-size:10px;color:#6d8190;text-align:center}
 .jgd .progress-step span:not(.jgd-legacy *){display:grid;place-items:center;margin:0 auto 7px;height:25px;width:25px;border-radius:50%;background:#e8f0f3;color:#6a8190;font-weight:750}

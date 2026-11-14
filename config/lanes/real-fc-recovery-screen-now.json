@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-fc-recovery-screen-now": {
+      "branches": [
+        "codex/sandbox/real-fc-recovery-screen-now"
+      ],
+      "note": "Part one: automatic saved Final Check recovery screen and conservative invoice refresh on today's job page. RED; synthetic practice only; no backend or migrations.",
+      "allow": [
+        "apps/web/app/ui/customer-invoices.test.tsx",
+        "apps/web/app/ui/customer-invoices.tsx",
+        "apps/web/app/ui/final-account-lock.test.tsx",
+        "apps/web/app/ui/final-account-lock.tsx",
+        "apps/web/app/ui/final-check-reveal-view.ts",
+        "apps/web/app/ui/final-check-reveal.test.tsx",
+        "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/e2e/SV-3.spec.ts",
+        "apps/web/e2e/real-fc-recovery-screen-now.spec.ts"
+      ]
+    }
+  }
+}
