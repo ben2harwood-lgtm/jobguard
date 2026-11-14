@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-gap-firm-onboarding": {
+      "branches": ["codex/sandbox/real-gap-firm-onboarding"],
+      "allow": [
+        "apps/web/app/sign-in/sign-in.tsx",
+        "apps/web/app/sign-in/sign-in.test.tsx",
+        "apps/web/e2e/real-gap-firm-onboarding.spec.ts"
+      ]
+    }
+  }
+}

@@ -21,12 +21,16 @@ test(`WALK-3 ${mode} completes the builder’s own job without a second job`, as
   });
   const revealed: string[] = [];
   const checkedJobs = new Set<string>();
-  page.on("response", async response => {
-    if (response.request().method() === "GET" && /\/api\/jobs\/[^/]+\/final-check$/.test(response.url()) && response.ok()) {
+  // Buffer the real server response before delivering it to the document. A
+  // workspace remount may abort its fetch after headers, discarding CDP's body.
+  await page.route(/\/api\/jobs\/[^/]+\/final-check$/, async route => {
+    const response = await route.fetch();
+    if (route.request().method() === "GET" && response.ok()) {
       checkedJobs.add(new URL(response.url()).pathname.split("/")[3]!);
       const body = await response.json();
       for (const item of body.items ?? []) revealed.push(item.description);
     }
+    await route.fulfill({ response });
   });
   await page.goto("/practice-company?name=Tommy");
   await expect(page.getByRole("heading", { name: "Tommy's practice firm", exact: true })).toBeVisible();

@@ -173,7 +173,7 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  expect(late.ok()).toBe(false); expect(await post("diary", diary)).toEqual(note);
  // Keep the unapproved checkpoint before continuing main's full paid journey.
  await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
- await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
+ await page.getByRole("button", { name: "Load this job’s saved results" }).click();
  const unapproved = page.getByRole("region", { name: "Saved shadow journey report" });
  for (const text of ["£33,600.00 net", "Customer approval: Awaiting customer", "fitted garden drainage", "fitted loft hatch", "No invoice issued", "recovery fee £0"]) await expect(unapproved).toContainText(text);
  // Leg 6b: send the priced catches, then the customer signs in and approves
@@ -190,7 +190,7 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  // Approved but unbilled is honestly still incomplete on the saved report.
  expect(approvedReport.status).toBe("incomplete");
  await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
- await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
+ await page.getByRole("button", { name: "Load this job’s saved results" }).click();
  await expect(page.getByRole("region", { name: "Saved shadow journey report" }).getByText("Incomplete. Step 6: approved by the customer. No fee is charged.", { exact: true })).toBeVisible();
  // Legs 7–9: one combined invoice, matched settled receipt, exact source-backed
  // allocations, SV-6 reviews, MON-4A statement and CH-8 offline-verified packs.
@@ -225,18 +225,18 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
   packs: expectedPacks.sort(byCase),
  });
  await page.goto(`/demo-s/shadow-30000?jobId=${jobId}`);
- await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
+ await page.getByRole("button", { name: "Load this job’s saved results" }).click();
  const saved = page.getByRole("region", { name: "Saved shadow journey report" });
  for (const text of ["£34,400.00", "£41,280.00", "£500.00", "£300.00", "fitted garden drainage", "fitted loft hatch", "recovery fee £0"]) await expect(saved).toContainText(text);
  await expect(saved.getByText("Complete. All nine steps are saved on this job.", { exact: true })).toBeVisible();
  const figures = saved.getByRole("definition");
  for (const text of ["£800.00", "£80.00", "£720.00", "£3,600.00 · fee £0.00"]) await expect(figures.getByText(text, { exact: true })).toBeVisible();
- await expect(saved).toContainText("an approved pack proves each extra's source chain");
+ await expect(saved).toContainText("Supporting evidence packs: approved packs are saved with records linked to each extra.");
  // Step 3: the photo and diary signals were received before lock; the supplier document is in each pack.
  expect(report.finalCheck.items.flatMap((item: { evidence: { source: string; evidenceAfterLock: boolean }[] }) => item.evidence).map((row: { source: string; evidenceAfterLock: boolean }) => [row.source, row.evidenceAfterLock]).sort()).toEqual([["electrical_certificate", false], ["job_diary_text", false]]);
  for (const pack of report.packs) expect(pack.result.packs[0].sources.some((source: { sourceId: string }) => source.sourceId.startsWith("supplier_document_version:"))).toBe(true);
  // Reload the report to prove the same persisted bindings survive navigation.
- await page.reload(); await page.getByRole("button", { name: "Load saved J3 evidence" }).click();
+ await page.reload(); await page.getByRole("button", { name: "Load this job’s saved results" }).click();
  await expect(saved).toContainText("£34,400.00");
  expect(await read("shadow-demo")).toEqual(report);
  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
