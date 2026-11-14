@@ -106,7 +106,11 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
           <button className="primary" style={targetSize} disabled={!allDisposed || !view.termsAccepted || account.issueBlocked}
             onClick={() => void command("lock", { version: "final-account.lock.v1", commandId: crypto.randomUUID(), finalAccountRevisionId: account.id, expectedRevision: account.revision, declarationVersion: FINAL_ACCOUNT_DECLARATION_VERSION })}>Complete final account</button>
         </fieldset>
-      </> : <p data-testid="final-check-state" role="status">{view.checkStatus === "pending" ? FINAL_CHECK_RUNNING_TEXT : view.checkStatus === "failed" ? "JobGuard's final check could not finish. Try again in the final check panel." : view.checkStatus === "completed" ? "JobGuard's final check is complete." : "The saved final check status is unavailable."}</p>}
+      </> : <>
+        {/* Lock-check rows certify reconciliation, not the current run state. The
+            FinalCheckReveal panel reads that state and owns failure/retry UI. */}
+        <p data-testid="final-check-state" role="status">{view.checkStatus === "completed" ? "JobGuard's final check is complete." : FINAL_CHECK_RUNNING_TEXT}</p>
+      </>}
       <CustomerInvoices jobId={jobId} finalAccount={view.account ?? { ...account, issueBlocked: true }} lockGuard={{ code: view.invoiceGuard, kind: "final", ...(view.lock ? {lockedRevision:{id:view.lock.finalAccountRevisionId,sourceHash:view.lock.sourceHash,issueBlocked:false}} : {}) }} />
     </> : null}
     {error ? <p ref={errorTarget} tabIndex={-1} data-testid="final-account-lock-error" role="alert" data-error-code={error}>{Object.hasOwn(invoiceGuardMessages, error) ? invoiceGuardMessages[error as keyof typeof invoiceGuardMessages] : error}</p> : null}

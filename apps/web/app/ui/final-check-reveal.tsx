@@ -10,8 +10,9 @@ const answers = Object.keys(answerLabels) as RevealAnswer[];
 
 /** Reveal and non-confirming answers after the lock. "Yes, extra work" waits on SV-5 Q2. */
 export function FinalCheckReveal({ jobId }: { jobId: string }) {
- const [snapshot, setSnapshot] = useState<{ jobId: string; read: FinalCheckRead } | null>(null), [disputes, setDisputes] = useState(0), [busy, setBusy] = useState(true), [error, setError] = useState(""), [requested, setRequested] = useState(false);
- const read = snapshot?.jobId === jobId ? snapshot.read : null;
+ const [savedRead, setRead] = useState<FinalCheckRead | null>(null), [disputes, setDisputes] = useState(0), [busy, setBusy] = useState(true), [error, setError] = useState(""), [requested, setRequested] = useState(false);
+ const savedJob = useRef(jobId);
+ const read = savedJob.current === jobId ? savedRead : null;
  const lifetime = useRef(0);
  const currentJob = useRef(jobId), epoch = useRef(0), active = useRef<AbortController | null>(null);
  const writing = useRef(false), uncertain = useRef(false), state = useRef<FinalCheckRead["state"] | null>(null);
@@ -30,7 +31,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
    if (queue && (queue.status === 401 || queue.status === 403)) throw new Error("ACCESS_UNAVAILABLE");
    const open = queue?.ok ? (await queue.json() as unknown[]).length : 0;
    if (currentJob.current === jobId && epoch.current === requestEpoch && !controller.signal.aborted) {
-    setSnapshot({ jobId, read: saved }); setDisputes(open); setError("");
+    savedJob.current = jobId; setRead(saved); setDisputes(open); setError("");
     if (saved.state === "failed" || saved.state === "unlocked" || saved.state === "completed") uncertain.current = false;
     if (state.current !== saved.state) {
      state.current = saved.state;
@@ -39,14 +40,14 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
    }
   } catch {
    if (currentJob.current === jobId && epoch.current === requestEpoch) {
-    setSnapshot(null); setDisputes(0);
+    setRead(null); setDisputes(0);
     state.current = null; window.dispatchEvent(new CustomEvent(FINAL_CHECK_CHANGED_EVENT, { detail: { jobId } }));
     setError("The saved final check is unavailable. Load the saved final check to try again.");
    }
   } finally { clearTimeout(timeout); if (active.current === controller) active.current = null; if (epoch.current === requestEpoch) setBusy(false); }
  }, [jobId]);
  useEffect(() => {
-  setSnapshot(null); setError(""); setRequested(false); state.current = null; uncertain.current = false; writing.current = false;
+  setRead(null); setError(""); setRequested(false); state.current = null; uncertain.current = false; writing.current = false;
   const changed = (event: Event) => { if ((event as CustomEvent<{jobId?: string}>).detail?.jobId === jobId && !writing.current) void load(); };
   const focus = () => { void load(); };
   const visible = () => { if (document.visibilityState === "visible") void load(); };

@@ -90,3 +90,24 @@ it.each(["pending","failed","completed"])("saved %s status replaces unconditiona
  if(state==="pending")expect(markup).toContain("Running JobGuard");else expect(markup).not.toContain("still running");
  if(state==="completed")expect(markup).toContain("final check is complete");
 });
+
+// Legacy lock-check rows are not the Final Check run status: no row can mean
+// processing is still underway, and failed rows must keep the invoice guard.
+it.each([null, "pending", "failed"])("keeps the lock progress text for a %s reconciliation row without allowing invoices", async checkStatus => {
+ const {render,fetch}=await setup(true,true);
+ const invoiceGuard=checkStatus==="failed"?"FINAL_CHECK_FAILED":"FINAL_CHECK_NOT_COMPLETE";
+ fetch.mockResolvedValue({ok:true,json:async()=>({version:"final-account-lock.view.v1",jobId,account,
+  lock:{id:scopeItemId,finalAccountRevisionId:account.id,sourceHash:account.sourceHash,lockedAt:"2026-11-13T00:00:00Z"},
+  captures:[],dispositions:[],termsAccepted:true,checkStatus,invoiceGuard})});
+ window.dispatchEvent(new CustomEvent("jobguard:final-check-changed",{detail:{jobId}}));await tick();
+ const tree=render(),markup=renderToStaticMarkup(tree);
+ expect(markup).toContain("Running JobGuard&#x27;s final check");
+ expect(markup).not.toContain("status is unavailable");
+ const invoices=(node:React.ReactNode):React.ReactElement<Record<string,unknown>>|undefined=>{
+  if(Array.isArray(node))return node.map(invoices).find(Boolean);
+  if(!React.isValidElement<Record<string,unknown>>(node))return undefined;
+  if(node.props.lockGuard)return node;
+  return invoices(node.props.children as React.ReactNode);
+ };
+ expect(invoices(tree)?.props.lockGuard).toMatchObject({code:invoiceGuard});
+});
