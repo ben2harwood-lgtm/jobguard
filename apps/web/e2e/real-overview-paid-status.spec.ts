@@ -21,6 +21,7 @@ async function createJob(page: Page, text: string, net: number, customer: string
   await page.getByLabel("UK postcode", { exact: true }).fill("SW1A 1AA");
   await click(page, "Save customer and site");
   await expect(page.getByTestId("party-customer")).toHaveText(customer);
+  await expect(page.getByRole("form", { name: "Customer and site details" }).getByText(/^Saved at /u)).toBeVisible();
   const lines = page.locator(".review-line");
   for (let i = 0; i < await lines.count(); i++) {
     await lines.nth(i).getByRole("button", { name: /^Accept /u }).click();
