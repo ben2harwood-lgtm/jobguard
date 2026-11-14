@@ -95,7 +95,11 @@ export async function priceFoundExtra(_: HTMLElement, signal: AbortSignal) {
     await click("Yes — this was extra work", signal);
     await until(() => !!screen()?.querySelector('[data-testid="final-check-disposition"]'), signal);
   }
+  const previousWorkspace = screen().querySelector("#captured-job-workspace");
   document.getElementById("walk-refresh")?.click();
+  // Refresh remounts the workspace asynchronously. The old variation row can
+  // still be present until React commits; never operate its detached controls.
+  await until(() => screen().querySelector("#captured-job-workspace") !== previousWorkspace, signal);
   let row: HTMLElement | undefined;
   await until(() => {
     row = [...screen().querySelectorAll<HTMLElement>(".variation-list article")].find(item => item.textContent?.includes("fitted loft hatch"));
@@ -205,6 +209,9 @@ export function VoiceJourney() {
       const key = `walk-3.prepared:${current.current.tenantId}:${current.current.capture?.jobId}`;
       let id = sessionStorage.getItem(key);
       if (!id) { id = crypto.randomUUID(); sessionStorage.setItem(key, id); }
+      // Restart before loading, so a Show me request made while the example
+      // loads belongs to the new tour and survives the workspace handoff.
+      if (restartTour) { setResumeIndex(2); setTourVersion(id); }
       const jobId = await recoverCapture(id, core1000Source);
       // A different job must not inherit the own job's open quote view.
       const url = new URL(location.href);
@@ -212,7 +219,6 @@ export function VoiceJourney() {
       rememberWalkJob("walkExample", jobId);
       current.current.prepared = jobId;
       setResumeIndex(2); setPrepared(jobId); setReport(false);
-      if (restartTour) setTourVersion(jobId);
     } catch (reason) { setError((reason as Error).message); }
     finally { preparingRef.current = false; setPreparing(false); }
   }
@@ -254,6 +260,9 @@ export function VoiceJourney() {
       },
       async (_, signal) => {
         if (!current.current.prepared && !ownPriced.current) throw new Error("The own job has no saved priced revision.");
+        // Manual preparation can finish before its workspace read mounts. Wait
+        // before deciding whether this job still needs scope review and pricing.
+        await until(() => screen()?.querySelector('[data-testid="workspace-job-id"]')?.getAttribute("data-job-id") === (current.current.prepared || current.current.capture?.jobId), signal);
         // Both paths use the existing real job screens, never inserted end-state facts.
         if (screen().querySelector(".review-line")) await reviewAndPrice(signal);
         else {
@@ -363,6 +372,7 @@ export function VoiceJourney() {
     return stages.map(([title], index) => ({ id: `walk-${index + 1}`, title, words: stageWords(index, prepared), target: index === 2 ? "#walk-prepare, #walk-screen" : index === 4 ? '#work-proof .proof-actions button:not(:disabled), #work-proof [data-testid="stage-status"]' : index === 6 || index === 7 ? "#final-check" : "#walk-screen", // After steps 4 and 6 the pressed button is gone (step 4 also remounts); spotlight the saved
       // result so the reading hold never falls back to a control far up the page.
       spotlightTarget: () => (index === 8 ? screen()?.querySelector<HTMLElement>(".value-page h1") : screen()?.querySelector<HTMLElement>("[data-walk-action]")) ?? (index === 1 ? [...(screen()?.querySelectorAll<HTMLButtonElement>(".quote-editor button") ?? [])].find(button => button.textContent === "Save draft revision") ?? null : index === 2 ? document.getElementById("walk-prepare") : index === 3 ? screen()?.querySelector<HTMLElement>('[aria-label="Live activation"] h2') ?? null : index === 5 ? screen()?.querySelector<HTMLElement>('[data-testid="approved-additions"]') ?? null : null), isDone: () => (index < 2 || !!current.current.prepared || current.current.ownChosen) && done[index]!(), autoAction: async (target, signal) => {
+      if (index >= 2) await until(() => !preparingRef.current, signal);
       // No choice means the prepared tour, including autoplay and old resume URLs.
       if (index >= 2 && !current.current.prepared && !current.current.ownChosen) {
         await prepare(false);
