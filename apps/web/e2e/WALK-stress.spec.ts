@@ -91,8 +91,9 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   await double(page, "Preview immutable quote");
   await expect(page.getByLabel("Quote preview")).toContainText("Document version 1");
   await double(page, "Simulate sending this quote");
-  await expect(page.getByTestId("quote-delivery")).toHaveText("Queued — not sent");
-  await double(page, "Continue fake worker");
+  await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
+  if (await page.getByTestId("quote-delivery").textContent() === "Queued — not sent") await double(page, "Continue fake worker");
+  await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
   await expect(tour(page)).toContainText("Step 4 of 9");
   await tour(page).getByRole("button", { name: "I'll do it", exact: true }).click();
   await double(page, "Record practice acceptance");

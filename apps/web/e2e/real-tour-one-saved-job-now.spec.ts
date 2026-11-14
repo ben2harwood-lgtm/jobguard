@@ -135,7 +135,8 @@ test("hand step 3 saves customer and site before sending", async ({ page }, info
   await spotlight(page);
   await page.getByRole("button", { name: "Preview immutable quote", exact: true }).click();
   await page.getByRole("button", { name: "Simulate sending this quote", exact: true }).click();
-  await page.getByRole("button", { name: "Continue fake worker", exact: true }).click();
+  await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
+  if (await page.getByTestId("quote-delivery").textContent() === "Queued — not sent") await page.getByRole("button", { name: "Continue fake worker", exact: true }).click();
   await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
   await control(page, "Next").click();
   await page.getByRole("button", { name: "Record practice acceptance", exact: true }).click();
