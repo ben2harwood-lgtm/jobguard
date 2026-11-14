@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 // CI-only PostgreSQL: upgrade from the exact base, then exercise the new command with real runtime/shadow roles.
 import {readFile} from "node:fs/promises";
 import {randomUUID,createHash} from "node:crypto";
@@ -49,7 +50,7 @@ it("0613 upgrades without changing a locked job, work events or meter; replay is
  const observations=await readLateSourceObservations(f.runtime,a.context,a.jobId);
  expect(observations).toHaveLength(1);expect(observations[0]!.evidence).toEqual(saved.record.evidence);
  const sink=new ShadowDetectionRepository(f.shadow),batch={version:"shadow-detection-batch.v1",jobId:a.jobId,observations,captures:[],proposals:detectShadowObservations(observations,[],new Date().toISOString())};
- await sink.persist(a.context,batch);await sink.persist(a.context,batch);
+ await sink.persist(verifiedTenantContextForQueuedJob(a.tenantId),batch);await sink.persist(verifiedTenantContextForQueuedJob(a.tenantId),batch);
  await finalCheckTenant(f.shadow,a.tenantId,async db=>{
   expect((await db.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND coalesced_into_signal_id IS NULL",[a.tenantId,a.jobId])).rows).toEqual([{n:1}]);
   expect((await db.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toContainEqual({reason:"evidence_after_lock"});
