@@ -5,10 +5,12 @@
       "branches": [
         "codex/sandbox/demo-shadow-guide-one-source"
       ],
-      "note": "DEMO-S: remove unused duplicate shadow guide text and its redundant static assertion; rendered guide and parsers unchanged. No migration.",
+      "note": "DEMO-S: remove unused duplicate shadow guide text and its redundant static assertion; rendered guide and parsers unchanged. CI repair: preserve Show me across prepared walkthrough loading. No migration.",
       "allow": [
         "apps/web/app/demo-s/shadow-30000/journey-model.ts",
-        "apps/web/app/demo-s/shadow-30000/journey.test.tsx"
+        "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx"
       ]
     }
   }
