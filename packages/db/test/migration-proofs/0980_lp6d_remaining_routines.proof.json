@@ -3920,7 +3920,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "a66c775191f21fdb79bd2ecc364b63179763b7aa1d45f29cb5b64a75c9306842",
+        "definitionSha256": "3549eaf7183a5c2e25747a43427e991b73568e6bf77eef2bf857fc59f2c0a75a",
         "staticWrites": [],
         "staticCalls": [
           "app.authenticate_practice_session",
@@ -3928,6 +3928,7 @@
           "app.ch6_source",
           "app.current_actor",
           "app.current_tenant",
+          "app.lp6d_read_final_check_reveal_unbound",
           "app.lp6d_request_bound",
           "app.read_final_check_reveal"
         ]
@@ -7439,6 +7440,50 @@
           "app.authenticate_practice_session"
         ]
       }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6d_read_final_check_reveal_unbound(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "70f3673d1d6653b8049bc48acfe71cdb9ca247be32948ecc8c4374431446b64e",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_check_read_authority",
+          "app.lp6d_final_check_builder_unbound",
+          "app.require_authoritative_final_check"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6d_final_check_builder_unbound(uuid,uuid,text,boolean)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "db6b29b03f044f2e38ccc1819d225081201b99c3b0463e62d2906d6236759112",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_check_read_authority"
+        ]
+      }
     }
   ],
   "upgrade": [
@@ -7839,6 +7884,36 @@
         "nspname": "app",
         "proname": "lp6d_evidence_pack_v3_owner",
         "args": "t uuid, c uuid, d text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_final_check_builder_unbound",
+        "args": "t uuid, j uuid, d text, locking boolean",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_read_final_check_reveal_unbound",
+        "args": "t uuid, j uuid, d text",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,

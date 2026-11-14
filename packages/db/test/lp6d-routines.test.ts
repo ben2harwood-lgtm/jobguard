@@ -49,6 +49,11 @@ it("keeps every predecessor body and permission rule behind an early binding che
       previous = previous.replace("  AND NOT app.xc_link_current(k.id)) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;",
         "  -- LP6D_ISSUER (checker r10): each link's issuer is a third party; read through the private issuer chain.\n  AND NOT app.lp6d_xc_link_current(k.id)) THEN RAISE EXCEPTION 'PERMISSION_DENIED' USING ERRCODE='42501'; END IF;");
     }
+    // Repair 23 (Router ruling): the unbound read-only skip reads the published check through the pinned copy.
+    if (routine.name === "app.ch6_integrity_published") {
+      previous = previous.replace(" reveal:=app.read_final_check_reveal(t,j,d);\n",
+        " -- LP6D_UNBOUND_COPY (repair 23): the unbound read-only skip reads the published check through the pinned copy.\n reveal:=CASE WHEN app.lp6d_request_bound() THEN app.read_final_check_reveal(t,j,d) ELSE app.lp6d_read_final_check_reveal_unbound(t,j,d) END;\n");
+    }
     // This additional comparison precedes hidden billability source reads.
     const changed = body(sql, routine)
       .replace(/ IF a\.membership_id IS DISTINCT FROM app\.current_actor\(\) OR a\.tenant_id IS DISTINCT FROM app\.current_tenant\(\) THEN\n  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';\n END IF;\n/u, "")
@@ -346,4 +351,37 @@ it("accepts the LP-6c delegated customer only for its own job and ClientDecideEx
   expect(definitions(sql).filter(m => m[1] === "app.lp6d_is_delegated_actor").at(-1)![3]!).toContain("p_actor IS NOT NULL AND p_actor IS NOT DISTINCT FROM");
   expect(sql).toContain("ALTER FUNCTION app.lp6d_is_delegated_actor(uuid,text,uuid) OWNER TO jobguard_command_writer;");
   expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_is_delegated_actor(uuid,text,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;");
+});
+
+it("reads the published final check on the unbound read-only skip through two pinned private copies (repair 23)", () => {
+  const bodyOf = (name: string) => definitions(sql).filter(m => m[1] === name).at(-1)![3]!;
+  const unguarded = (name: string) => {
+    const guarded = bodyOf(name), prefix = /^\s*BEGIN\n -- LP6D_BOUND[^\n]*\n(?: --[^\n]*\n)*(?: PERFORM app\.current_actor\(\);\n)?.*?\n END IF;\n/su.exec(guarded)!;
+    return guarded.slice(prefix[0].length).replace(/;\nEND\n$/u, "").trim();
+  };
+  expect(bodyOf("app.lp6d_final_check_builder_unbound").trim()).toBe(unguarded("app.final_check_builder"));
+  expect(bodyOf("app.lp6d_read_final_check_reveal_unbound").trim())
+    .toBe(unguarded("app.read_final_check_reveal").replace("app.final_check_builder(", "app.lp6d_final_check_builder_unbound("));
+  // The guarded originals keep their binding checks.
+  for (const name of ["app.final_check_builder", "app.read_final_check_reveal"]) expect(bodyOf(name)).toContain("IF app.current_actor() IS NULL OR");
+  for (const sig of ["lp6d_final_check_builder_unbound(uuid,uuid,text,boolean)", "lp6d_read_final_check_reveal_unbound(uuid,uuid,text)"]) {
+    expect(sql).toContain(`ALTER FUNCTION app.${sig} OWNER TO jobguard_migration;`);
+    expect(sql).toContain(`REVOKE ALL ON FUNCTION app.${sig} FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_shadow;`);
+    expect(sql).toContain(`EXECUTE format('REVOKE ALL ON FUNCTION app.${sig} FROM %I',login.rolname);`);
+  }
+  expect(sql).not.toMatch(/GRANT [^;]*app\.lp6d_(?:final_check_builder|read_final_check_reveal)_unbound\(/u);
+  expect(sql).not.toMatch(/SECURITY DEFINER[^$]*AS \$\$\n[^$]*lp6d_(?:final_check_builder|read_final_check_reveal)_unbound/u);
+  // Caller list: the builder copy only from the reveal copy, the reveal copy only from ch6_integrity_published's unbound branch.
+  const callers = (copy: string) => definitions(sql).filter(m => m[3]!.includes(`app.${copy}(`)).map(m => m[1]).sort();
+  expect(callers("lp6d_final_check_builder_unbound")).toEqual(["app.lp6d_read_final_check_reveal_unbound"]);
+  expect(callers("lp6d_read_final_check_reveal_unbound")).toEqual(["app.ch6_integrity_published"]);
+  expect(bodyOf("app.ch6_integrity_published").match(/app\.lp6d_read_final_check_reveal_unbound\(/gu)).toHaveLength(1);
+  expect(bodyOf("app.ch6_integrity_published")).toContain(
+    " reveal:=CASE WHEN app.lp6d_request_bound() THEN app.read_final_check_reveal(t,j,d) ELSE app.lp6d_read_final_check_reveal_unbound(t,j,d) END;\n");
+  // Neither copy reaches a third guarded routine.
+  for (const copy of ["app.lp6d_final_check_builder_unbound", "app.lp6d_read_final_check_reveal_unbound"]) {
+    const reached = [...bodyOf(copy).matchAll(/app\.([a-z0-9_]+)\(/gu)].map(m => `app.${m[1]}`)
+      .filter(n => !n.startsWith("app.lp6d_") && definitions(sql).some(d => d[1] === n));
+    expect(reached, copy).toEqual([]);
+  }
 });
