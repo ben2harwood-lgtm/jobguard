@@ -11,6 +11,7 @@ const hooks = vi.hoisted(() => {
     active: false,
     reset() { for (const cleanup of cleanups.values()) cleanup(); cleanups.clear(); slots.length = 0; effects.length = 0; cursor = 0; },
     render() { cursor = 0; },
+    setState(index: number, value: unknown) { slots[index] = value; },
     flush() { while (effects.length) effects.shift()!(); },
     useState(initial: unknown) {
       const index = cursor++;
@@ -36,11 +37,12 @@ vi.mock("react", async original => {
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("./designed-ui", async original => {
   const actual = await original<typeof import("./designed-ui")>();
-  return { ...actual, useJobs: () => ({ jobs: state.jobs, failed: false }), useJobFacts: () => state.facts,
+  return { ...actual, Screen: ({ children }: { children: (workspace: Workspace) => React.ReactNode }) => children(workspace),
+    useJobs: () => ({ jobs: state.jobs, failed: false }), useJobFacts: () => state.facts,
     useAttention: () => ({ items: actual.attentionJobs(state.jobs, state.decisions, state.facts), complete: state.decisions !== null && state.facts !== null && state.jobs.every(job => state.facts?.[job.id]?.checksAvailable), loading: state.facts === null && state.decisions === null, failed: state.facts !== null && (state.decisions === null || state.jobs.some(job => !state.facts?.[job.id]?.checksAvailable)) }) };
 });
 import { StateScreen, shortDate, quoteLine, agreedLine, attentionJobs, projectBillCheck, readJobFacts, unavailableFacts, jobValueV1, catchLabel, type JobFacts, type Decisions, type Workspace } from "./designed-ui";
-import { JobsList, Overview, MoneyTab, useJobDetail } from "./jobs-screens";
+import { DesignedJob, JobsList, Overview, MoneyTab, useJobDetail } from "./jobs-screens";
 import { Today } from "./home-screens";
 vi.stubGlobal("React", React);
 const job: JobSummary = { id: "10000000-0000-4000-8000-000000000001", tenantId: "20000000-0000-4000-8000-000000000001", title: "Practice extension", status: "draft", customerLabel: "Customer", siteLabel: "Site", updatedLabel: "", document: { kind: "none", reference: null, delivery: "not_sent" }, customerPayment: "unknown", pilotNoCharge: true };
@@ -85,10 +87,61 @@ it("offers the blank practice firm first and keeps example sign-in as the second
 });
 
 const detailJob = { ...job, revision: 4, updatedAt: "2026-11-09T12:00:00Z", scopeIdentityIds: [] };
+it.each([{ scopeIdentityIds: [] }, { scopeIdentityIds: ["30000000-0000-4000-8000-000000000001"] }])("visibly discloses the Overview illustration beside saved job facts (%j)", ({ scopeIdentityIds }) => {
+  const html = renderToStaticMarkup(<Overview site="Site" detail={{ job: { ...detailJob, scopeIdentityIds }, summary: job, value: null, checks: 0, photo: "/design/assets/reference-job-martin.jpg" }}/>);
+  expect(html).toContain('<p class="photo-disclosure">Illustrative photograph of a property</p>');
+  expect(html.indexOf('class="photo-disclosure"')).toBeLessThan(html.indexOf("AGREED WORK"));
+  expect(html).toContain(`<h3>${job.title}</h3>`);
+  expect(html).toContain(scopeIdentityIds.length ? "1 confirmed item of work." : "The agreed work has not been confirmed yet.");
+  expect(html).toContain('src="/design/assets/reference-job-martin.jpg"');
+});
 const emptyDecisions: Decisions = { decisions: [], counts: { mandatory: 0, advisory: 0, pending: 0 } };
 const facts: JobFacts = { agreed: 108000, payment: { state: "not_invoiced", label: "Work under way", paymentStatus: "No invoice issued", invoiceCount: 0 }, value: null, blocker: null, checksAvailable: true };
 beforeEach(() => { state.jobs = []; state.facts = null; state.decisions = null; hooks.active = false; });
 afterEach(() => { hooks.reset(); hooks.active = false; vi.unstubAllGlobals(); vi.stubGlobal("React", React); });
+
+it("keeps each saved job's illustration when searching, reordering or adding jobs", () => {
+  hooks.active = true;
+  const second = { ...job, id: "10000000-0000-4000-8000-000000000002", title: "Second fictional job" };
+  const added = { ...job, id: "10000000-0000-4000-8000-000000000003", title: "Added fictional job" };
+  const photos = () => {
+    hooks.render();
+    const html = renderToStaticMarkup(<JobsList workspace={workspace}/>);
+    return Object.fromEntries([...html.matchAll(/<article class="job-row"><img[^>]*src="([^"]+)"[^>]*alt="Illustrative building"[^>]*\/><div class="job-name"><strong>([^<]+)<\/strong>/gu)].map(([, src, title]) => [title, src]));
+  };
+  state.jobs = [job, second];
+  const original = photos();
+  expect(Object.keys(original)).toEqual([job.title, second.title]);
+  expect(new Set(Object.values(original)).size).toBe(2);
+  state.jobs = [second, job];
+  expect(photos()).toEqual(original);
+  state.jobs = [added, second, job];
+  expect(photos()).toMatchObject(original);
+  hooks.setState(0, job.title);
+  expect(photos()).toEqual({ [job.title]: original[job.title] });
+  hooks.setState(0, "no matching job");
+  expect(photos()).toEqual({});
+  hooks.setState(0, "");
+  expect(photos()).toMatchObject(original);
+});
+
+it("loads the same illustration in Overview regardless of the saved list order or a missing summary", async () => {
+  const second = { ...job, id: "10000000-0000-4000-8000-000000000002", title: "Second fictional job" };
+  state.jobs = [second, job];
+  const list = renderToStaticMarkup(<JobsList workspace={workspace}/>);
+  const photo = /src="([^"]+)"[^>]*alt="Illustrative building"[^>]*\/><div class="job-name"><strong>Practice extension<\/strong>/u.exec(list)?.[1];
+  expect(photo).toBeTruthy();
+  for (const jobs of [[second, job], [job, second], []]) {
+    hooks.reset(); hooks.active = true;
+    vi.stubGlobal("window", new EventTarget());
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => response(url.startsWith("/api/jobs?")
+      ? { version: 1, tenantId: job.tenantId, jobs }
+      : { version: 1, environment: "synthetic_demo", job: detailJob })));
+    const render = () => { hooks.render(); const html = renderToStaticMarkup(<DesignedJob jobId={job.id} tab="overview"/>); hooks.flush(); return html; };
+    render();
+    await vi.waitFor(() => expect(render()).toContain(`src="${photo}" alt="Illustrative photograph of a property"`));
+  }
+});
 
 it("shows the active accepted gross on every designed card and Money without inventing invoice money", () => {
   state.jobs = [{ ...job, status: "live" }]; state.facts = { [job.id]: facts }; state.decisions = emptyDecisions;

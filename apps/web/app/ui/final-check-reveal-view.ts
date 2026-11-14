@@ -53,3 +53,6 @@ export function dispositionCommand(read: FinalCheckRead, revealed: RevealItem, a
 export function catchCommand(read: FinalCheckRead, revealed: RevealItem, commandId: string) {
  return { version: "final-check.catch.v1" as const, commandId, lockId: read.lockId!, runId: read.runId!, signalId: revealed.signalId, expectedSignalRevision: revealed.signalRevision };
 }
+
+/** Job-scoped invalidation only. Consumers reread their own authorised endpoints. */
+export const FINAL_CHECK_CHANGED_EVENT = "jobguard:final-check-changed";

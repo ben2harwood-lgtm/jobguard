@@ -122,9 +122,14 @@ ITEM: Replace shelves`);
     const checkPanel = page.getByTestId("final-check-reveal");
     await expect(checkPanel).toHaveAttribute("aria-busy", "false");
     const readCheck = async () => {
+      // Poll the same saved read the screen renders: a separate API read can
+      // see worker completion after the screen has already loaded pending.
+      const response = page.waitForResponse(r => r.url().endsWith(`/api/jobs/${jobId}/final-check`) && r.request().method() === "GET");
       await click("Load the saved final check");
+      const saved = await response;
+      expect(saved.ok(), await saved.text()).toBe(true);
       await expect(checkPanel).toHaveAttribute("aria-busy", "false");
-      return (await (await page.request.get(`/api/jobs/${jobId}/final-check`)).json()).state as string;
+      return (await saved.json()).state as string;
     };
     const initialCheckState = await readCheck();
     expect(initialCheckState, "Failed source processing must stop this journey; see source-diagnostics").not.toBe("failed");
@@ -198,9 +203,10 @@ test("prepared unanswered example retains the certificate walkthrough and resume
    // Preparing replaces the workspace and remounts the tour. Wait for that
    // saved job before Show me can start an action on the outgoing tour.
    await expect(page.getByRole("heading",{name:"Prepared example · simulated customer",exact:true})).toBeVisible();
-   const example=new URL(page.url()).searchParams.get("walkExample");
-   expect(example).toBeTruthy();
-   await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id",example!);
+   const preparedJobId=new URL(page.url()).searchParams.get("walkExample");
+   expect(preparedJobId).not.toBeNull();
+   expect(preparedJobId).toBeTruthy();
+   await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id",preparedJobId!);
    await expect(page.locator("#walk-screen .review-line").first()).toBeVisible();
    await expect(tour).toContainText("This part uses a prepared example job");
   }
