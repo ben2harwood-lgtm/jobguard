@@ -21,17 +21,12 @@ test(`WALK-3 ${mode} completes the builder’s own job without a second job`, as
   });
   const revealed: string[] = [];
   const checkedJobs = new Set<string>();
-  // Read the real upstream body before forwarding it. A browser response can be
-  // aborted by the workspace refresh before Chromium exposes its body to CDP.
-  await page.route(/\/api\/jobs\/[^/]+\/final-check$/, async route => {
-    if (route.request().method() !== "GET") return route.continue();
-    const response = await route.fetch();
-    if (response.ok()) {
-      checkedJobs.add(new URL(route.request().url()).pathname.split("/")[3]!);
+  page.on("response", async response => {
+    if (response.request().method() === "GET" && /\/api\/jobs\/[^/]+\/final-check$/.test(response.url()) && response.ok()) {
+      checkedJobs.add(new URL(response.url()).pathname.split("/")[3]!);
       const body = await response.json();
       for (const item of body.items ?? []) revealed.push(item.description);
     }
-    await route.fulfill({ response });
   });
   await page.goto("/practice-company?name=Tommy");
   await expect(page.getByRole("heading", { name: "Tommy's practice firm", exact: true })).toBeVisible();
