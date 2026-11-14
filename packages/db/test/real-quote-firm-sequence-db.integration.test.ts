@@ -14,7 +14,7 @@ import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 const tenant = "11111111-1111-4111-8111-111111111111";
 const actor = "d1500000-0000-4000-8000-000000000003";
 const user = "d1500000-0000-4000-8000-000000000001";
-const migration = "0941_quote_firm_sequence.sql";
+const migration = "0738_quote_firm_sequence.sql";
 const sha = (s: string | Uint8Array) => createHash("sha256").update(s).digest("hex");
 let f: WorkFixture;
 const priorEnvironment = process.env.JOBGUARD_ENV;

@@ -1,6 +1,6 @@
 # real-quote-firm-sequence-db — RED dormant foundation
 
-0941 is reserved for this piece; 0940 belongs to customer-link. Renumber SQL,
+0738 is reserved for this piece; 0940 belongs to customer-link. Renumber SQL,
 proof and these notes together at landing. No existing repository, route,
 screen, approval or document is changed. NOPR=1; router commits/pushes. No stacking.
 
