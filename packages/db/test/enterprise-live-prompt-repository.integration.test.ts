@@ -44,7 +44,8 @@ it("binds runtime-read photo bytes to the current session, job, evidence, hash, 
  const bytes=await withTenant(c.runtime,await contractorSessionContext(c.runtime,f.sessions.supervisor!),db=>readStoredCompletionPhoto(db,f.sessions.supervisor!,{jobId:f.jobId,...photo}));
  expect(bytes).toBeInstanceOf(Buffer);
  const tags=(session=f.sessions.supervisor!,job=f.jobId,evidence=photo.evidenceId,hash=photo.sha256,version=photo.objectVersion,preimage:Buffer|null=bytes)=>
-  withTenant(c.runtime,f.ctx,async db=>(await db.$client.query("SELECT app.contractor_completion_photo_tags($1,$2,$3,$4,$5,$6::bytea) tags",[session,job,evidence,hash,version,preimage])).rows[0]!.tags);
+  // LP-6d: a real session reads as its own bound request; a made-up one binds nothing (f.ctx stays unbound).
+  contractorSessionContext(c.runtime,session).catch(()=>f.ctx).then(ctx=>withTenant(c.runtime,ctx,async db=>(await db.$client.query("SELECT app.contractor_completion_photo_tags($1,$2,$3,$4,$5,$6::bytea) tags",[session,job,evidence,hash,version,preimage])).rows[0]!.tags));
  expect(await tags()).toEqual(["Fictional vent"]);
  for(const bad of [Buffer.from(bytes!).fill(0),bytes!.subarray(1),null]) await expect(tags(undefined,undefined,undefined,undefined,undefined,bad)).rejects.toThrow("PROMPT_SOURCE_INVALID");
  await expect(tags(undefined,undefined,undefined,"0".repeat(64))).rejects.toThrow("PROMPT_SOURCE_INVALID");
@@ -52,7 +53,8 @@ it("binds runtime-read photo bytes to the current session, job, evidence, hash, 
  await expect(tags(undefined,undefined,randomUUID())).rejects.toThrow("PROMPT_SOURCE_INVALID");
  await expect(tags(undefined,foreign.jobId)).rejects.toThrow("EXTRA_FORBIDDEN");
  await expect(tags(f.sessions.operative!)).rejects.toThrow("EXTRA_FORBIDDEN");
- await expect(tags(randomUUID())).rejects.toThrow("EXTRA_FORBIDDEN");
+ // Raw, class (a): a made-up session binds no request, so the binding check refuses first; nothing is read.
+ await expect(tags(randomUUID())).rejects.toThrow("REQUEST_BINDING_REFUSED");
  await ownerTx(c,f.p.tenantId,async db=>{await db.$client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),f.p.tenantId,photo.evidenceId,f.p.membershipId]);});
  await expect(tags()).rejects.toThrow("PROMPT_SOURCE_INVALID");
  await command(c,f,{kind:"grant.revoke",grantId:f.members.supervisor.grant});
