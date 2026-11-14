@@ -5,13 +5,18 @@
       "branches": [
         "codex/sandbox/demo-shadow-saved-results-name"
       ],
-      "note": "DEMO-S: use the visible saved-results button text as its accessible name; no behavior changes or migrations.",
+      "note": "DEMO-S: visible saved-results accessible name and CI repairs for order review, shadow capture and walkthrough refresh races; no migrations or new product behavior.",
       "allow": [
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
         "apps/web/app/demo-s/shadow-30000/journey.test.tsx",
         "apps/web/app/demo-s/shadow-30000/journey.tsx",
         "apps/web/e2e/DEMO-A1-rest.spec.ts",
         "apps/web/e2e/DEMO-J3-integrity.spec.ts",
         "apps/web/e2e/DEMO-J3-shadow.spec.ts",
+        "apps/web/e2e/M2-1-order-screen.spec.ts",
+        "apps/web/e2e/SV-3.spec.ts",
+        "apps/web/e2e/WALK-3.spec.ts",
         "apps/web/e2e/prelaunch-per-firm-terms.spec.ts"
       ]
     }
