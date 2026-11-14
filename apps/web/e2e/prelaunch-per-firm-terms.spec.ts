@@ -11,7 +11,12 @@ async function ownJob(page: Page) {
  await click(page,"＋ Start a new job");
  await page.getByLabel("Work details").fill("JOB: Fictional room\nITEM: Paint walls | £200.00");
  await click(page,"Make my draft"); await click(page,"Check and edit my draft");
- await click(page,"Save customer and site"); await click(page,"Accept Paint walls");
+ await click(page,"Save customer and site");
+ // Finish the party save before scope confirmation advances the job revision.
+ await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+ await expect(button(page,"Save customer and site")).toBeEnabled();
+ await expect(page.getByRole("form", { name: "Customer and site details" }).locator("fieldset")).toBeEnabled();
+ await click(page,"Accept Paint walls");
  await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
  await click(page,"Confirm scope"); await click(page,"Price the work");
  await startWatchdogJob(page);

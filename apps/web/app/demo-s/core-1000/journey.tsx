@@ -19,7 +19,7 @@ export function Core1000Guide({ chooserHref = "/demo-s" }: { chooserHref?: strin
     <InstructionTour>
       <li>Start a new draft using the five supplied work items. Check the notes beside each item and accept all five. Answer the waste disposal question, save the made-up customer and site details, then click Confirm scope to save the work list.</li>
       <li>Click Price the work. Save the first quote at £900 before VAT. Change Clean site to £200 and save the second quote at £1,000 before VAT, £200 example VAT, £1,200 including VAT.</li>
-      <li>Preview the saved quote and try the practice send. Use the next practice-send button to finish the send without contacting anyone. Record practice acceptance, then click Start this practice job. This example has no fee limit and starting it creates no amount to pay.</li>
+      <li>Preview the saved quote, click Simulate sending this quote, then click Continue fake worker to finish the practice send without contacting anyone. Record practice acceptance, then click Start this practice job. This example has no fee limit and starting it creates no amount to pay.</li>
       <li>Log Extra preparation +£125, Omit cabinet painting −£25 and Pending trim repair +£50. Approve the saved versions of the first two only. Leave the £50 waiting for approval.</li>
       <li>Attach the supplied practice image, check that the uploaded file matches the original and mark the stage complete. Build the final bill: £1,100 before VAT, £220 example VAT, £1,320 including VAT.</li>
       <li>Review the extras you logged and mark each of the five original work items Done. Accept the Final Check terms if this business has not already accepted them, then complete the final account to save the bill for checking. Click Run the final check (practice). When the check finishes, load its saved result. Wait for Final Check to finish before issuing the invoice.</li>
@@ -64,7 +64,7 @@ export function Core1000Journey({ requestedJobId, chooserHref }: { requestedJobI
     </> : <section className="workspace-page">
       {checking ? <p role="status">Checking practice session…</p> : tenantId ?
         <WalkIt tenantId={tenantId} initialText={core1000Source} reviewHref={core1000Link} close={() => location.assign(chooserHref ?? "/demo-s")} /> :
-        <button disabled={busy} onClick={() => void start()} aria-label="Start core-1000 practice session">Start the £1,000 practice job</button>}
+        <button disabled={busy} onClick={() => void start()}>Start the £1,000 practice job</button>}
       {error && <p role="alert">{error}</p>}
     </section>}
   </>;
