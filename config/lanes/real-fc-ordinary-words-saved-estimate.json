@@ -7,8 +7,10 @@
       ],
       "allow": [
         "apps/web/e2e/real-fc-ordinary-words-saved-estimate.spec.ts",
+        "packages/db/migrations/0737_real_fc_revealed_estimate.sql",
         "packages/db/migrations/0945_real_fc_revealed_estimate.sql",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0737_real_fc_revealed_estimate.proof.json",
         "packages/db/test/migration-proofs/0945_real_fc_revealed_estimate.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/real-fc-ordinary-words-saved-estimate.integration.test.ts"

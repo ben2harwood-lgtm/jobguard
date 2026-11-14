@@ -13,7 +13,7 @@ import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
-const migration = "0945_real_fc_revealed_estimate.sql";
+const migration = "0737_real_fc_revealed_estimate.sql";
 const diary = "Customer asked for an extra heated towel rail while we were on site. Agreed 180 pounds. Fitted it today.";
 const message = "Hi, yes please go ahead and fit the heated towel rail as well. 180 pounds is fine. Thanks.";
 let f: FinalCheckFixture;
