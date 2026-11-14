@@ -173,9 +173,9 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    const finishedListener=(request:import('@playwright/test').Request)=>{inFlight.delete(request);lastActivity=Date.now()};
    const failedListener=(request:import('@playwright/test').Request)=>{
     finishedListener(request);
-    // Only this goto may cancel the departing document's exact things-to-check polling fetch.
+    // Only this goto may cancel the departing document's exact things-to-check or final-check polling fetch (#752 polls a pending check).
     // Every other route/error, or request from the destination document, remains a failure.
-    if(navigation?.departingRequests.has(request)&&request.failure()?.errorText==='net::ERR_ABORTED'&&request.method()==='GET'&&request.resourceType()==='fetch'&&request.url()===new URL(`/api/jobs/${jobId}/things-to-check`,page.url()).href)return;
+    if(navigation?.departingRequests.has(request)&&request.failure()?.errorText==='net::ERR_ABORTED'&&request.method()==='GET'&&request.resourceType()==='fetch'&&[`/api/jobs/${jobId}/things-to-check`,`/api/jobs/${jobId}/final-check`].map(path=>new URL(path,page.url()).href).includes(request.url()))return;
     failures.push(new Error(`Q request failed: ${request.method()} ${request.url()}: ${request.failure()?.errorText}`));
    };
    const listener=(response:import('@playwright/test').Response)=>{

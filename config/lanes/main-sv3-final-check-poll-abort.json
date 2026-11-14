@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "main-sv3-final-check-poll-abort": {
+      "branches": [
+        "codex/sandbox/main-sv3-final-check-poll-abort"
+      ],
+      "note": "Test-only main repair: SV-3 Q tolerates the departing document's aborted final-check poll (added by #752), under the same exact conditions as the things-to-check poll.",
+      "allow": [
+        "apps/web/e2e/SV-3.spec.ts"
+      ]
+    }
+  }
+}
