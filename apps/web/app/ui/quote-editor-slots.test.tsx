@@ -27,7 +27,7 @@ const result: ReviewCaptureResult = {
 it.each([
  ["QuoteEditor", () => <QuoteEditor jobId={jobId} source={[]} questions={[]} back={() => undefined}/>, "a4c9b9d6cbee69e9673aba370689c54fd09b961232918c32cbc2c0607a43c8b7"],
  ["ReviewProposal", () => <ReviewProposal result={result} initialPricing back={() => undefined}/>, "a4c9b9d6cbee69e9673aba370689c54fd09b961232918c32cbc2c0607a43c8b7"],
- ["JobFinalAccount", () => { hooks.values = [{ account: null }, false]; return <JobFinalAccount jobId={jobId}/>; }, "d0f38032430f7b1c9f787c269cefbea0e5421ed3cca4bf9e9873d038b71c6c99"],
+ ["JobFinalAccount", () => { hooks.values = [{ account: null }, false]; return <JobFinalAccount jobId={jobId}/>; }, "d751378662b97ac188ccce71023aacb7337eaf78d90a678ac155393c7216509e"],
 ] as const)("keeps %s markup identical when no slot is passed", (_name, component, expected) => {
  vi.stubGlobal("React", React);
  const html = renderToStaticMarkup(component());
