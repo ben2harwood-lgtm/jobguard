@@ -21,7 +21,6 @@ async function saveName(page: Page, value: string) {
 }
 test("blank firm saves its name and issues an ordinary-words quote", async ({ page, browser }) => {
  test.setTimeout(300_000);
- await page.setViewportSize({ width: 390, height: 844 });
  await page.goto("/practice-company");
  await expect(page.getByRole("heading", { name: "Ready for your first job", exact: true })).toBeVisible();
  await saveName(page,name);
@@ -37,6 +36,9 @@ test("blank firm saves its name and issues an ordinary-words quote", async ({ pa
  const quote = page.locator(".quote-editor");
  await expect(quote).toHaveAttribute("data-quote-ready","true");
  const job = (await quote.getAttribute("data-job-id"))!;
+ // Open the saved Quote section explicitly; plain job URLs open Scope in page order v2.
+ await page.goto(`/jobs/${job}#quote`);
+ await expect(quote).toHaveAttribute("data-quote-ready","true");
  await click(page,"Save draft revision");
  await expect(page.getByTestId("quote-revision")).toHaveText("1");
  await click(page,"Preview immutable quote");
@@ -50,7 +52,11 @@ test("blank firm saves its name and issues an ordinary-words quote", async ({ pa
  expect(createHash("sha256").update(bytes).digest("hex")).toBe(hash);
  await click(page,"Simulate sending this quote"); await click(page,"Continue fake worker");
  await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
+ const recording = page.waitForResponse(response => response.url().endsWith(`/jobs/${job}/quotes/acceptance`) && response.request().method() === "POST");
  await click(page,"Record practice acceptance");
+ const recorded = await recording;
+ expect(recorded.ok()).toBe(true);
+ expect((await recorded.json()).activeAcceptance.actor).toBe(`${name} (builder)`);
  await expect(page.getByText(`Actor: ${name} (builder)`,{exact:true})).toBeVisible();
  await noOverflow(page); await page.reload();
  await expect(page.getByText(`Actor: ${name} (builder)`,{exact:true})).toBeVisible();
@@ -58,7 +64,7 @@ test("blank firm saves its name and issues an ordinary-words quote", async ({ pa
  await page.goto(`/jobs/${job}#quote`);
  await expect(page.getByText(`Actor: ${name} (builder)`,{exact:true})).toBeVisible();
  await noOverflow(page);
- const separate = await browser.newContext({baseURL:new URL(page.url()).origin,viewport:{width:390,height:844}});
+ const separate = await browser.newContext({baseURL:new URL(page.url()).origin,viewport:page.viewportSize()!});
  try {
   const other = await separate.newPage(); await other.goto("/practice-company");
   await expect(other.getByRole("heading",{name:"Ready for your first job",exact:true})).toBeVisible();

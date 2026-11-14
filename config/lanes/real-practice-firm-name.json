@@ -8,6 +8,7 @@
       "allow": [
         "apps/web/app/firm-details/firm-details.test.tsx",
         "apps/web/app/firm-details/firm-details.tsx",
+        "apps/web/app/ui/quote-editor-slots.test.tsx",
         "apps/web/e2e/real-practice-firm-name.spec.ts",
         "packages/db/migrations/0949_practice_firm_name.sql",
         "packages/db/src/acceptance-repository.ts",
