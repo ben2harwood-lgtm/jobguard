@@ -58,7 +58,7 @@ test("two own jobs keep their references across revision and reload", async ({ p
  await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
  await click(page,"Record practice acceptance");
  await expect(page.getByTestId("accepted-revision")).toContainText("Quote Q-0002");
- await page.reload();
+ await page.goto(`/jobs/${secondId}#quote`);
  await expect(page.getByRole("region",{name:"Saved quote"})).toContainText("Quote Q-0002");
  await expect(page.getByTestId("accepted-revision")).toContainText("Quote Q-0002");
  await page.goto(`/jobs/${firstId}#quote`);
