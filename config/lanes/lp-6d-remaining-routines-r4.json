@@ -7,6 +7,8 @@
       ],
       "note": "RED LP-6d repair 10 on origin/main e3dac41b (Claude builder, real PostgreSQL). NOT READY. NOPR.",
       "allow": [
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
         "apps/api/src/audit-export/audit-export.application.ts",
         "apps/api/src/auth/context-boundary.test.ts",
         "apps/api/src/contractor/contractor.projection.test.ts",
