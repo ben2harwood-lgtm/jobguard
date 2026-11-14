@@ -15,7 +15,7 @@ export function ShadowSavedReport({ report }: { report: ShadowReport }) {
    <dt>Proposed fee (simulation)</dt><dd>{pounds(report.value.receipt.found.fee?.pence ?? 0)}</dd>
    <dt>Yours before VAT and tax</dt><dd>{pounds(report.value.receipt.found.yoursBeforeVatAndTax?.pence ?? 0)}</dd>
    <dt>Your captures</dt><dd>{pounds(report.value.receipt.tracked.pence)} · fee {pounds(report.value.receipt.trackedFee.pence)}</dd>
-   <dt>Settlement</dt><dd>Confirmed: a completed practice payment is matched to each extra</dd></dl>}
+   <dt>Saved practice payment</dt><dd>Saved practice data: a completed practice payment is matched to each extra.</dd></dl>}
   <p>Customer approval: {report.customerApproval.state === "not_ready_yet" ? "Not ready for the customer yet" : report.customerApproval.state === "awaiting_customer" ? "Awaiting customer" : "Approved through the customer portal"}.</p>
   <ul>{report.customerApproval.approvals.map(approval => <li key={approval.variationId}>
    <a href={`/jobs/${report.jobId}#final-check`}>Variation {approval.variationId}</a> · approved {approval.approvedAt} · customer portal
