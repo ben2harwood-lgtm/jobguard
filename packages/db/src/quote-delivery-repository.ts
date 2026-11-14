@@ -41,7 +41,7 @@ export class QuoteDeliveryRepository{
     // Check the immutable send under its existing replay lock, before receipt reuse.
     const prior=(await db.$client.query<{content_hash:string;recipients:string[]}>(`SELECT content_hash,recipients FROM app.quote_send WHERE job_id=$1 AND document_id=$2`,[jobId,input.documentId])).rows[0];
     if(prior&&(prior.content_hash!==input.contentHash||JSON.stringify(prior.recipients)!==JSON.stringify([input.recipient])))throw new Error("COMMAND_CONFLICT");
-    if(artifact.content_hash!==input.contentHash)throw new Error("QUOTE_CHANGED");
+    if(artifact.content_hash!==input.contentHash||artifact.snapshot.customer.email!==input.recipient)throw new Error("QUOTE_CHANGED");
    },
    mutate:(db,command)=>mutation.mutate(db,command),
   });return this.view(context,jobId,input.documentId);
