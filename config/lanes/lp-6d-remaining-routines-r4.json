@@ -175,7 +175,8 @@
         "packages/db/test/enterprise-dashboard-plan.integration.test.ts",
         "packages/db/test/enterprise-dashboard.authority-race.integration.test.ts",
         "packages/db/test/legacy-repository-command-fixture.ts",
-        "packages/db/test/evidence-pack-v3-isolation.integration.test.ts"
+        "packages/db/test/evidence-pack-v3-isolation.integration.test.ts",
+        "packages/db/test/real-fc-ordinary-words-saved-estimate.integration.test.ts"
       ]
     }
   }

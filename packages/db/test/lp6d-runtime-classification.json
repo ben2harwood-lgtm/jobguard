@@ -314,5 +314,12 @@
   "infrastructure.retention_timer(uuid,uuid,jsonb,text)": "Private to the recorded owner/service roles: 0601_retention_review_timer.sql; runtime has no EXECUTE",
   "outbound_control.claims_enabled()": "Operational public boolean; no business or identity authority",
   "outbound_control.record_reconciliation(uuid,uuid)": "Private to the recorded owner/service roles: 0581_restore_reconciliation.sql; runtime has no EXECUTE",
-  "outbound_control.require_reconciliation()": "Private to the recorded owner/service roles: 0581_restore_reconciliation.sql; runtime has no EXECUTE"
+  "outbound_control.require_reconciliation()": "Private to the recorded owner/service roles: 0581_restore_reconciliation.sql; runtime has no EXECUTE",
+  "app.retired_job_proof_findings(uuid)": "Reviewed 0734_job_proof_statement.sql (main after LP-6c): calls app.job_proof_authority (bound_context_reader actor/tenant) before reads",
+  "app.read_job_proof_statement(uuid,uuid)": "Reviewed 0734_job_proof_statement.sql (main after LP-6c): calls app.job_proof_authority (bound_context_reader actor/tenant) before reads",
+  "app.job_proof_requirement(uuid,uuid)": "Reviewed 0734_job_proof_statement.sql (main after LP-6c): calls app.job_proof_authority, app.job_proof_practice_bound before reads",
+  "app.answer_job_proof_statement(uuid,jsonb)": "Reviewed 0734_job_proof_statement.sql (main after LP-6c): calls app.job_proof_authority, app.current_actor before reads/writes",
+  "app.retire_replaced_job_proof_findings(uuid,uuid)": "Reviewed 0734_job_proof_statement.sql (main after LP-6c): calls app.job_proof_authority, app.current_actor before writes",
+  "app.final_check_request_scope(uuid)": "Reviewed 0735_per_firm_final_check_terms.sql (main after LP-6c): calls app.final_check_bound_practice (lp6_bound_request), app.authenticate_practice_session; scope only",
+  "app.final_check_runtime_job_terms(uuid,text)": "Reviewed 0735_per_firm_final_check_terms.sql (main after LP-6c): calls app.final_check_request_scope, app.final_check_job_scope, app.final_check_job_terms; terms read only"
 }
