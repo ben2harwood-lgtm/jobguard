@@ -19,7 +19,7 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const tenant = "11111111-1111-4111-8111-111111111111";
 const actor = "d1500000-0000-4000-8000-000000000003";
-const migration = "0941_quote_firm_sequence.sql";
+const migration = "0738_quote_firm_sequence.sql";
 const recipient = "customer@example.invalid";
 const sha = (value: string | Uint8Array) => createHash("sha256").update(value).digest("hex");
 let f: WorkFixture, delivery: QuoteDeliveryRepository;
@@ -69,7 +69,7 @@ beforeAll(async () => {
  process.env.JOBGUARD_ENV = "synthetic_demo";
  f = await createWorkFixture(false);
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
- await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1),($2)", [migration, "0944_quote_company_sequence.sql"]);
+ await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1),($2)", [migration, "0739_quote_company_sequence.sql"]);
  await migrate(f.admin); await installLegacySyntheticPartyFixtures(f.admin);
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
  const user = "d1500000-0000-4000-8000-000000000001", account = randomUUID();
@@ -100,12 +100,12 @@ beforeAll(async () => {
  historical = (await f.admin.query("SELECT * FROM app.quote_document_version ORDER BY job_id,document_version")).rows;
  await f.admin.query("DELETE FROM public.jobguard_schema_migration WHERE migration_name=$1", [migration]); await migrate(f.admin);
  predecessorCatalogue = await routineCatalogue(); predecessorPosture = await privatePosture();
- // The actual repository path is refused by 0941 for a legitimate company job.
+ // The actual repository path is refused by 0738 for a legitimate company job.
  const context = await companyContext(tenant);
  const companyJob = await job(legacyFirm, context);
  await expect(delivery.preview(context, companyJob.id, recipient)).rejects.toThrow("QUOTE_REFERENCE_REFUSED");
  predecessorCompany = { context, job: companyJob };
- await f.admin.query("DELETE FROM public.jobguard_schema_migration WHERE migration_name=$1", ["0944_quote_company_sequence.sql"]);
+ await f.admin.query("DELETE FROM public.jobguard_schema_migration WHERE migration_name=$1", ["0739_quote_company_sequence.sql"]);
  await migrate(f.admin);
 }, 120_000);
 afterAll(async () => {
@@ -345,8 +345,8 @@ async function privatePosture() {
  return (await f.admin.query(`SELECT c.relname,pg_get_userbyid(c.relowner) owner,c.relacl::text,c.relrowsecurity,c.relforcerowsecurity
   FROM pg_class c WHERE c.oid IN ('app.quote_firm_counter'::regclass,'app.quote_job_reference'::regclass) ORDER BY c.relname`)).rows;
 }
-it("0944 composes the exact routine successor proof and preserves private catalogue posture", async()=>{
- const proof=JSON.parse(await readFile(new URL('./migration-proofs/0944_quote_company_sequence.proof.json',import.meta.url),'utf8'));
+it("0739 composes the exact routine successor proof and preserves private catalogue posture", async()=>{
+ const proof=JSON.parse(await readFile(new URL('./migration-proofs/0739_quote_company_sequence.proof.json',import.meta.url),'utf8'));
  const current=await routineCatalogue();
  expect(current).toHaveLength(2);
  for(const [index,row] of current.entries()) {

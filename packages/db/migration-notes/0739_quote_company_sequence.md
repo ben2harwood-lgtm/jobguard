@@ -1,7 +1,7 @@
 # real-quote-firm-sequence — RED repair 2
 
-0944 is a placeholder: renumber SQL, proof and notes together at landing if
-reserved elsewhere. 0941 and its proof/notes are unchanged. Forward fix only;
+0739 is a placeholder: renumber SQL, proof and notes together at landing if
+reserved elsewhere. 0738 and its proof/notes are unchanged. Forward fix only;
 never reset counters, rewrite owners or grandfathered documents/duplicates.
 
 Only two routine definitions change. CREATE OR REPLACE preserves their owners,
@@ -37,17 +37,17 @@ as an expected test outcome. D04, G1–G5, real data and launch remain closed.
 ## Upgrade, validation and handoff
 
 Both numbering suites construct historical artifacts with neither allocator
-migration installed, then install 0941 before 0944. The company regression
+migration installed, then install 0738 before 0739. The company regression
 uses actual JobRepository.create and runtime QuoteDeliveryRepository.preview;
-the shared-tenant real company request is rejected at 0941 and succeeds after
-0944. Existing historical artifacts, PDFs/hashes, sends/acceptances and legacy
+the shared-tenant real company request is rejected at 0738 and succeeds after
+0739. Existing historical artifacts, PDFs/hashes, sends/acceptances and legacy
 duplicates are compared unchanged. Existing concurrency, rollback, failed-preview,
 allocator-only-commit and imported-lineage tests continue to run.
 
 The successor proof carries exact predecessor/successor entries for the two
 routine identities, preserving every posture field, and appends authority-path
 and group metadata. Definition hashes are derived with PostgreSQL's canonical
-function formatting, validated against both existing 0941 hashes; this is source
+function formatting, validated against both existing 0738 hashes; this is source
 evidence only. Actual catalogue comparison on PostgreSQL is still required.
 No catalogue observation, global baseline refresh or fingerprint waiver is claimed.
 

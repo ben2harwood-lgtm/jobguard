@@ -1,5 +1,5 @@
 {
-  "migration": "0944_quote_company_sequence.sql",
+  "migration": "0739_quote_company_sequence.sql",
   "lp0": [
     {
       "section": "routines",
@@ -102,7 +102,7 @@
           "LP-12": "Review private binding predicate, durable firm allocation, controlled writes and exact-head PostgreSQL evidence."
         },
         "sources": [
-          "packages/db/migrations/0941_quote_firm_sequence.sql"
+          "packages/db/migrations/0738_quote_firm_sequence.sql"
         ],
         "tests": [
           "packages/db/test/real-quote-firm-sequence-db.integration.test.ts"
@@ -122,8 +122,8 @@
           "LP-12": "Review private binding predicate, durable firm allocation, controlled writes and exact-head PostgreSQL evidence."
         },
         "sources": [
-          "packages/db/migrations/0941_quote_firm_sequence.sql",
-          "packages/db/migrations/0944_quote_company_sequence.sql"
+          "packages/db/migrations/0738_quote_firm_sequence.sql",
+          "packages/db/migrations/0739_quote_company_sequence.sql"
         ],
         "tests": [
           "packages/db/test/real-quote-firm-sequence-db.integration.test.ts",
@@ -154,7 +154,7 @@
           "LP-12": "Review private binding predicate, durable firm allocation, controlled writes and exact-head PostgreSQL evidence."
         },
         "sources": [
-          "packages/db/migrations/0941_quote_firm_sequence.sql"
+          "packages/db/migrations/0738_quote_firm_sequence.sql"
         ],
         "tests": [
           "packages/db/test/real-quote-firm-sequence-db.integration.test.ts"
@@ -181,8 +181,8 @@
           "LP-12": "Review private binding predicate, durable firm allocation, controlled writes and exact-head PostgreSQL evidence."
         },
         "sources": [
-          "packages/db/migrations/0941_quote_firm_sequence.sql",
-          "packages/db/migrations/0944_quote_company_sequence.sql"
+          "packages/db/migrations/0738_quote_firm_sequence.sql",
+          "packages/db/migrations/0739_quote_company_sequence.sql"
         ],
         "tests": [
           "packages/db/test/real-quote-firm-sequence-db.integration.test.ts",

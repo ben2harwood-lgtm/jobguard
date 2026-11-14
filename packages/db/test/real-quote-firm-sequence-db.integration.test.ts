@@ -14,7 +14,7 @@ import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 const tenant = "11111111-1111-4111-8111-111111111111";
 const actor = "d1500000-0000-4000-8000-000000000003";
 const user = "d1500000-0000-4000-8000-000000000001";
-const migration = "0941_quote_firm_sequence.sql";
+const migration = "0738_quote_firm_sequence.sql";
 const sha = (s: string | Uint8Array) => createHash("sha256").update(s).digest("hex");
 let f: WorkFixture;
 const priorEnvironment = process.env.JOBGUARD_ENV;
@@ -121,7 +121,7 @@ beforeAll(async () => {
  f = await createWorkFixture(false);
  // Install the exact predecessor schema; the normal migrator still owns setup.
  await f.admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
- await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1),($2)", [migration, "0944_quote_company_sequence.sql"]);
+ await f.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1),($2)", [migration, "0739_quote_company_sequence.sql"]);
  await migrate(f.admin);
  await installLegacySyntheticPartyFixtures(f.admin);
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
@@ -172,7 +172,7 @@ beforeAll(async () => {
  oldPdfs = (oldArtifacts as { snapshot: unknown }[]).map(row => renderQuotePdf(quoteDocumentV1.parse(row.snapshot)));
  await f.admin.query("DELETE FROM public.jobguard_schema_migration WHERE migration_name=$1", [migration]);
  await migrate(f.admin);
- await f.admin.query("DELETE FROM public.jobguard_schema_migration WHERE migration_name=$1", ["0944_quote_company_sequence.sql"]);
+ await f.admin.query("DELETE FROM public.jobguard_schema_migration WHERE migration_name=$1", ["0739_quote_company_sequence.sql"]);
  await migrate(f.admin);
 }, 120_000);
 afterAll(async () => {
