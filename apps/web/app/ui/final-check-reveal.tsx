@@ -1,5 +1,5 @@
 "use client";
-import { jobPageFetch as fetch } from "./job-page-fetch";
+import { JOB_SAVED_EVENT, jobPageFetch as fetch } from "./job-page-fetch";
 import {lateSourceReceiptV1} from "@jobguard/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { answerLabels, catchCommand, dispositionCommand, dispositionLabels, finalCheckReadV1, referenceChoices, revealStatus, type FinalCheckRead, type RevealAnswer, type RevealItem } from "./final-check-reveal-view";
@@ -11,8 +11,8 @@ const answers = Object.keys(answerLabels) as RevealAnswer[];
 /** Reveal and non-confirming answers after the lock. "Yes, extra work" waits on SV-5 Q2. */
 export function FinalCheckReveal({ jobId }: { jobId: string }) {
  const [read, setRead] = useState<FinalCheckRead | null>(null), [disputes, setDisputes] = useState(0), [busy, setBusy] = useState(true), [error, setError] = useState(""), [requested, setRequested] = useState(false);
- const currentJob = useRef(jobId), epoch = useRef(0);
- currentJob.current = jobId;
+ const currentJob = useRef(jobId), epoch = useRef(0), busyRef = useRef(busy);
+ currentJob.current = jobId; busyRef.current = busy;
  const load = useCallback(async () => {
   const requestEpoch = ++epoch.current; setBusy(true);
   try {
@@ -24,6 +24,30 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   finally { if (epoch.current === requestEpoch) setBusy(false); }
  }, [jobId]);
  useEffect(() => { setRead(null); void load(); return () => { epoch.current++; }; }, [load]);
+ // Completion can happen after the last read. Keep re-reading pending checks,
+ // including after a failed refresh. Schedule from settlement so slow reads
+ // never accumulate polling requests, and failures don't end the loop.
+ useEffect(() => {
+  if (read?.state !== "pending") return;
+  let cancelled = false;
+  let timer: ReturnType<typeof setTimeout>;
+  const poll = async () => {
+   if (!busyRef.current) await load();
+   if (!cancelled) timer = setTimeout(() => void poll(), 3000);
+  };
+  timer = setTimeout(() => void poll(), 3000);
+  return () => { cancelled = true; clearTimeout(timer); };
+ }, [load, read?.state]);
+ // The final account is completed in a sibling panel; notice that save so an
+ // already-mounted, unlocked reveal starts following the worker too.
+ useEffect(() => {
+  if (read?.state !== "unlocked") return;
+  const saved = (event: Event) => {
+   if ((event as CustomEvent<{ jobId: string }>).detail?.jobId === jobId) void load();
+  };
+  window.addEventListener(JOB_SAVED_EVENT, saved);
+  return () => window.removeEventListener(JOB_SAVED_EVENT, saved);
+ }, [jobId, load, read?.state]);
  // Practice only: the worker runs the check; this page just asks and then re-reads.
  const requestRun = async () => {
   if (busy) return;
