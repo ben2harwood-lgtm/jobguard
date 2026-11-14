@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FinalAccountLock } from "./final-account-lock";
@@ -8,12 +8,13 @@ vi.mock("./customer-invoices", () => ({ CustomerInvoices: () => null, invoiceGua
  FINAL_CHECK_NOT_COMPLETE: "JobGuard's final check is still running",
  FINAL_CHECK_FAILED: "JobGuard's final check could not finish, so this bill stays locked",
 } }));
+vi.mock("./customer-payment-status", () => ({ INVOICE_CHANGED_EVENT: "invoice-changed" }));
 const hooks = vi.hoisted(() => {
   let cursor = 0;
   const slots: { value?: unknown; current?: unknown; deps?: readonly unknown[]; cleanup?: (() => void) | undefined }[] = [];
   const effects: (() => void)[] = [];
   return {
-    reset() { cursor = 0; slots.length = 0; effects.length = 0; },
+    reset() { for (const slot of slots) slot?.cleanup?.(); cursor = 0; slots.length = 0; effects.length = 0; },
     render() { cursor = 0; },
     effects() { while (effects.length) effects.shift()!(); },
     useState(initial: unknown) {
@@ -37,6 +38,7 @@ const hooks = vi.hoisted(() => {
   };
 });
 vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), ...hooks }));
+beforeEach(() => { vi.stubGlobal("window", new EventTarget()); vi.stubGlobal("document", Object.assign(new EventTarget(), {visibilityState:"visible"})); });
 afterEach(() => { hooks.reset(); vi.unstubAllGlobals(); });
 
 
@@ -78,4 +80,34 @@ it("unreviewed scope and missing terms each explain why completion is disabled",
  expect(find(tree, "Accept final check terms")!.props.disabled).toBe(false);
  expect(markup).toContain("Choose Done, Removed or Deferred for every accepted line");
  expect(markup).toContain("Press “Accept final check terms” before completing");
+});
+
+it.each(["pending","failed","completed"])("saved %s status replaces unconditional running text",async state=>{
+ const {render,fetch}=await setup(true,true);
+ fetch.mockResolvedValue({ok:true,json:async()=>({version:"final-account-lock.view.v1",jobId,account,lock:{id:scopeItemId,finalAccountRevisionId:account.id,sourceHash:account.sourceHash,lockedAt:"2026-11-13T00:00:00Z"},captures:[],dispositions:[],termsAccepted:true,checkStatus:state,invoiceGuard:state==="completed"?null:state==="failed"?"FINAL_CHECK_FAILED":"FINAL_CHECK_NOT_COMPLETE"})});
+ window.dispatchEvent(new CustomEvent("jobguard:final-check-changed",{detail:{jobId}}));await tick();
+ const markup=renderToStaticMarkup(render());expect(markup).toContain('data-testid="final-check-state"');
+ if(state==="pending")expect(markup).toContain("Running JobGuard");else expect(markup).not.toContain("still running");
+ if(state==="completed")expect(markup).toContain("final check is complete");
+});
+
+// Legacy lock-check rows are not the Final Check run status: no row can mean
+// processing is still underway, and failed rows must keep the invoice guard.
+it.each([null, "pending", "failed"])("keeps the lock progress text for a %s reconciliation row without allowing invoices", async checkStatus => {
+ const {render,fetch}=await setup(true,true);
+ const invoiceGuard=checkStatus==="failed"?"FINAL_CHECK_FAILED":"FINAL_CHECK_NOT_COMPLETE";
+ fetch.mockResolvedValue({ok:true,json:async()=>({version:"final-account-lock.view.v1",jobId,account,
+  lock:{id:scopeItemId,finalAccountRevisionId:account.id,sourceHash:account.sourceHash,lockedAt:"2026-11-13T00:00:00Z"},
+  captures:[],dispositions:[],termsAccepted:true,checkStatus,invoiceGuard})});
+ window.dispatchEvent(new CustomEvent("jobguard:final-check-changed",{detail:{jobId}}));await tick();
+ const tree=render(),markup=renderToStaticMarkup(tree);
+ expect(markup).toContain("Running JobGuard&#x27;s final check");
+ expect(markup).not.toContain("status is unavailable");
+ const invoices=(node:React.ReactNode):React.ReactElement<Record<string,unknown>>|undefined=>{
+  if(Array.isArray(node))return node.map(invoices).find(Boolean);
+  if(!React.isValidElement<Record<string,unknown>>(node))return undefined;
+  if(node.props.lockGuard)return node;
+  return invoices(node.props.children as React.ReactNode);
+ };
+ expect(invoices(tree)?.props.lockGuard).toMatchObject({code:invoiceGuard});
 });
