@@ -889,3 +889,11 @@ copy app.lp6d_evidence_pack_v3_owner; one-pattern test sweep). Whole db at c7efa
 hang cascade). No newly failing file. NOT READY. Named holds: [PW27], L082 owner expiry while
 waiting, worm-command executor/operator cases. Fail list and log:
 ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r21-c7efa253-whole-*.
+
+Repair 22 (contractor-owner-grant, managed-recovery, recovery-demo-replay-job, evidence-pack-v3-isolation).
+Whole db at dcfa2025 (run.sh WHOLE, 2 workers): 50 failed | 880 passed files; 79 failed | 8204 passed
+tests (r21: 52 / 95); evidence-pack-v3-isolation passed separately afterwards (4/4). Only newly listed
+file: recovery-terms-timing (known environmental timing case). NOT READY. Named holds: [PW27]; L082
+owner expiry while waiting; worm-command executor/operator cases; LP-10 (worker tenant setting trusted
+from the queue for the private worker copies). Fail list and log:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r22-dcfa2025-whole-*.
