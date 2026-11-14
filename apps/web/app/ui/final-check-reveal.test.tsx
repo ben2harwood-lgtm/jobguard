@@ -215,3 +215,46 @@ it("a timed-out poll cannot restart polling after the cap has paused it", async 
  const count = fetch.mock.calls.length;
  await vi.advanceTimersByTimeAsync(6000); expect(fetch).toHaveBeenCalledTimes(count);
 });
+
+
+it.each(["ok", "failed", "timeout"])("coalesces overlapping loads into one follow-up after %s without aborting", async outcome => {
+ vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+ const fetch = server();
+ let finish!: (value: ReturnType<typeof response>) => void;
+ let signal: AbortSignal | undefined;
+ fetch.mockImplementationOnce((_input, init) => {
+  signal = init?.signal ?? undefined;
+  return new Promise(resolve => { finish = resolve; });
+ });
+ const tree = render();
+ click(tree, "Load the saved final check");
+ window.dispatchEvent(new Event("focus")); changed();
+ document.dispatchEvent(new Event("visibilitychange"));
+ expect(fetch).toHaveBeenCalledTimes(1); expect(signal?.aborted).toBe(false);
+ if (outcome === "timeout") await vi.advanceTimersByTimeAsync(10000);
+ else finish(outcome === "failed" ? response({}, false, 503) : response(saved("unlocked")));
+ await tick();
+ expect(signal?.aborted).toBe(false); expect(fetch).toHaveBeenCalledTimes(2);
+ expect(text(render())).toContain("runs after you complete");
+ if (outcome === "timeout") { finish(response(saved("failed"))); await tick(); }
+ expect(text(render())).not.toContain("could not finish");
+ await tick(); expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it.each(["unmount", "job change"])("%s aborts outstanding and timed-out reads and discards a queued reread", async departure => {
+ vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+ const fetch = server(); const signals: AbortSignal[] = [];
+ fetch.mockImplementation((_input, init) => new Promise((_resolve, reject) => {
+  const signal = init!.signal!; signals.push(signal);
+  signal.addEventListener("abort", () => reject(new Error("aborted")));
+ }));
+ render(); changed();
+ await vi.advanceTimersByTimeAsync(10000); await tick();
+ expect(signals).toHaveLength(2); expect(signals.every(signal => !signal.aborted)).toBe(true);
+ changed();
+ if (departure === "unmount") hooks.reset();
+ else render("18000000-0000-4000-8000-000000000009");
+ await tick();
+ expect(signals[0]!.aborted).toBe(true); expect(signals[1]!.aborted).toBe(true);
+ expect(fetch).toHaveBeenCalledTimes(departure === "unmount" ? 2 : 3);
+});

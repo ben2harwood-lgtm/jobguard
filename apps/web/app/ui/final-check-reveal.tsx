@@ -16,21 +16,34 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
  const read = savedJob.current === jobId ? savedRead : null;
  const lifetime = useRef(0);
  const currentJob = useRef(jobId), epoch = useRef(0), active = useRef<AbortController | null>(null);
+ const reread = useRef(false), controllers = useRef(new Set<AbortController>());
  const writing = useRef(false), uncertain = useRef(false), state = useRef<FinalCheckRead["state"] | null>(null);
  currentJob.current = jobId;
  const load = useCallback(async () => {
-  active.current?.abort();
-  const controller = new AbortController(); active.current = controller;
+  if (currentJob.current !== jobId) return;
+  if (active.current) { reread.current = true; return; }
+  const controller = new AbortController(); active.current = controller; controllers.current.add(controller);
   const requestEpoch = ++epoch.current; setBusy(true);
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  let timedOut = false;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-   const response = await fetch(`/api/jobs/${jobId}/final-check`, { cache: "no-store", signal: controller.signal });
-   if (!response.ok) throw new Error("The saved final check is unavailable. Load the saved final check to try again.");
-   const saved = finalCheckReadV1.parse(await response.json());
-   // The authorised unlocked projection is fixed; do not read hidden diagnostics.
-   const queue = saved.state === "unlocked" ? null : await fetch(`/api/jobs/${jobId}/final-check/disputes`, { cache: "no-store", signal: controller.signal });
-   if (queue && (queue.status === 401 || queue.status === 403)) throw new Error("ACCESS_UNAVAILABLE");
-   const open = queue?.ok ? (await queue.json() as unknown[]).length : 0;
+   const reading = (async () => {
+    try {
+     const response = await fetch(`/api/jobs/${jobId}/final-check`, { cache: "no-store", signal: controller.signal });
+     if (!response.ok) throw new Error("The saved final check is unavailable. Load the saved final check to try again.");
+     const saved = finalCheckReadV1.parse(await response.json());
+     if (timedOut || controller.signal.aborted) throw new Error("READ_EXPIRED");
+     // The authorised unlocked projection is fixed; do not read hidden diagnostics.
+     const queue = saved.state === "unlocked" ? null : await fetch(`/api/jobs/${jobId}/final-check/disputes`, { cache: "no-store", signal: controller.signal });
+     if (queue && (queue.status === 401 || queue.status === 403)) throw new Error("ACCESS_UNAVAILABLE");
+     const open = queue?.ok ? (await queue.json() as unknown[]).length : 0;
+     return { saved, open };
+    } finally { controllers.current.delete(controller); }
+   })();
+   // A timeout ends the UI wait; only departure may cancel the network read.
+   const { saved, open } = await Promise.race([reading, new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => { timedOut = true; reject(new Error("READ_TIMEOUT")); }, 10000);
+   })]);
    if (currentJob.current === jobId && epoch.current === requestEpoch && !controller.signal.aborted) {
     savedJob.current = jobId; setRead(saved); setDisputes(open); setError("");
     if (saved.state === "failed" || saved.state === "unlocked" || saved.state === "completed") uncertain.current = false;
@@ -46,7 +59,14 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
     state.current = null; window.dispatchEvent(new CustomEvent(FINAL_CHECK_CHANGED_EVENT, { detail: { jobId } }));
     setError("The saved final check is unavailable. Load the saved final check to try again.");
    }
-  } finally { clearTimeout(timeout); if (active.current === controller) active.current = null; if (epoch.current === requestEpoch) setBusy(false); }
+  } finally {
+   clearTimeout(timeout);
+   if (active.current === controller) active.current = null;
+   if (epoch.current === requestEpoch) {
+    if (reread.current) { reread.current = false; void load(); }
+    else setBusy(false);
+   }
+  }
  }, [jobId]);
  useEffect(() => {
   setRead(null); setError(""); setRequested(false); state.current = null; uncertain.current = false; writing.current = false;
@@ -55,7 +75,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   const visible = () => { if (document.visibilityState === "visible") void load(); };
   window.addEventListener(JOB_SAVED_EVENT, changed); window.addEventListener("focus", focus); document.addEventListener("visibilitychange", visible);
   void load();
-  return () => { lifetime.current++; epoch.current++; active.current?.abort(); window.removeEventListener(JOB_SAVED_EVENT, changed); window.removeEventListener("focus", focus); document.removeEventListener("visibilitychange", visible); };
+  return () => { lifetime.current++; epoch.current++; reread.current = false; active.current = null; for (const controller of controllers.current) controller.abort(); controllers.current.clear(); window.removeEventListener(JOB_SAVED_EVENT, changed); window.removeEventListener("focus", focus); document.removeEventListener("visibilitychange", visible); };
  }, [jobId, load]);
  const refreshPaused = error.startsWith("Automatic refresh");
  useEffect(() => {
