@@ -8,8 +8,10 @@ type Relation = { nspname:string; relname:string; relacl:unknown; [key:string]:u
 function expectRelationsUnchanged(before:Relation[],after:Relation[],laterAcl:Set<string>) {
  for(const row of before){
   if(!laterAcl.has(`${row.nspname}.${row.relname}`)){expect(after).toContainEqual(row);continue;}
-  const {relacl:_a,...kept}=row;
-  expect(after.map(({relacl:_x,...r})=>r)).toContainEqual(kept);
+  // A later GRANT/REVOKE may also be column-level (0980 REVOKE UPDATE(revoked_at) ON app.action_authorization),
+  // which moves that column's attacl only; every other column field stays exact.
+  const aclFree=({relacl:_x,...r}:Relation)=>({...r,...(Array.isArray(r.columns)?{columns:(r.columns as Record<string,unknown>[]).map(({attacl:_c,...col})=>col)}:{})});
+  expect(after.map(aclFree)).toContainEqual(aclFree(row));
  }
 }
 type Policy = { schemaname:string; tablename:string; policyname:string; qual:string|null; with_check:string|null; [key:string]:unknown };
@@ -54,6 +56,10 @@ it('ACL comparison permits only named-table permissions and rejects column chang
  expectRelationsUnchanged(before,[tightened,unnamed],laterAcl);
  expect(()=>expectRelationsUnchanged(before,[{...tightened,columns:[...named.columns,{attname:'stray'}]},unnamed],laterAcl)).toThrow();
  expect(()=>expectRelationsUnchanged(before,[tightened,{...unnamed,relacl:['runtime=arw']}],laterAcl)).toThrow();
+ // Column-level ACL: allowed only on a named table, and only the attacl field.
+ expectRelationsUnchanged(before,[{...tightened,columns:[{attname:'id',attacl:['runtime=w']}]},unnamed],laterAcl);
+ expect(()=>expectRelationsUnchanged(before,[tightened,{...unnamed,columns:[{attname:'id',attacl:['runtime=w']}]}],laterAcl)).toThrow();
+ expect(()=>expectRelationsUnchanged(before,[{...tightened,columns:[{attname:'renamed',attacl:['runtime=w']}]},unnamed],laterAcl)).toThrow();
 });
 type RoutineAcl = { nspname: string; proname: string; args: string; proacl: string | null };
 function lp6cRoutineAcl(row: RoutineAcl) {

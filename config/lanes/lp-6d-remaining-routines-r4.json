@@ -170,7 +170,8 @@
         "packages/db/test/server-entitlements.integration.test.ts",
         "packages/db/test/commercial-integrity-v3-upgrade.integration.test.ts",
         "packages/db/test/fee-illustration-later-upgrade.integration.test.ts",
-        "packages/db/test/managed-recovery-guard-upgrade.integration.test.ts"
+        "packages/db/test/managed-recovery-guard-upgrade.integration.test.ts",
+        "packages/db/test/enterprise-access-upgrade.integration.test.ts"
       ]
     }
   }
