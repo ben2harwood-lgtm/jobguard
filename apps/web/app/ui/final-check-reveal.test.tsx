@@ -169,7 +169,7 @@ it("rejects an older pending reply after a newer completed read", async () => {
  expect(text(render())).toContain("found nothing missing");
 });
 
-it("unmount aborts a pending poll and removes its timer and listeners", async () => {
+it("unmount leaves a pending poll unaborted, discards it, and removes its timer and listeners", async () => {
  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
  const fetch = server(); status = "pending"; render(); await tick(); render();
  let signal: AbortSignal | undefined;
@@ -179,7 +179,7 @@ it("unmount aborts a pending poll and removes its timer and listeners", async ()
  }));
  await vi.advanceTimersByTimeAsync(2000); render();
  hooks.reset(); await tick();
- expect(signal?.aborted).toBe(true); expect(vi.getTimerCount()).toBe(0);
+ expect(signal?.aborted).toBe(false); expect(vi.getTimerCount()).toBe(0);
  const count = fetch.mock.calls.length;
  changed(); window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange"));
  await vi.advanceTimersByTimeAsync(12000); expect(fetch).toHaveBeenCalledTimes(count);
@@ -241,7 +241,7 @@ it.each(["ok", "failed", "timeout"])("coalesces overlapping loads into one follo
  await tick(); expect(fetch).toHaveBeenCalledTimes(2);
 });
 
-it.each(["unmount", "job change"])("%s aborts outstanding and timed-out reads and discards a queued reread", async departure => {
+it.each(["unmount", "job change"])("%s aborts nothing, discards outstanding and timed-out reads and a queued reread", async departure => {
  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
  const fetch = server(); const signals: AbortSignal[] = [];
  fetch.mockImplementation((_input, init) => new Promise((_resolve, reject) => {
@@ -255,6 +255,6 @@ it.each(["unmount", "job change"])("%s aborts outstanding and timed-out reads an
  if (departure === "unmount") hooks.reset();
  else render("18000000-0000-4000-8000-000000000009");
  await tick();
- expect(signals[0]!.aborted).toBe(true); expect(signals[1]!.aborted).toBe(true);
+ expect(signals[0]!.aborted).toBe(false); expect(signals[1]!.aborted).toBe(false);
  expect(fetch).toHaveBeenCalledTimes(departure === "unmount" ? 2 : 3);
 });

@@ -16,7 +16,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
  const read = savedJob.current === jobId ? savedRead : null;
  const lifetime = useRef(0);
  const currentJob = useRef(jobId), epoch = useRef(0), active = useRef<AbortController | null>(null);
- const reread = useRef(false), controllers = useRef(new Set<AbortController>());
+ const reread = useRef(false), controllers = useRef(new Set<AbortController>()), timers = useRef(new Set<ReturnType<typeof setTimeout>>());
  const writing = useRef(false), uncertain = useRef(false), state = useRef<FinalCheckRead["state"] | null>(null);
  currentJob.current = jobId;
  const load = useCallback(async () => {
@@ -40,9 +40,9 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
      return { saved, open };
     } finally { controllers.current.delete(controller); }
    })();
-   // A timeout ends the UI wait; only departure may cancel the network read.
+   // A timeout ends the UI wait. Nothing cancels the network read: late replies are discarded by the lifetime, epoch and job guards.
    const { saved, open } = await Promise.race([reading, new Promise<never>((_resolve, reject) => {
-    timeout = setTimeout(() => { timedOut = true; reject(new Error("READ_TIMEOUT")); }, 10000);
+    timeout = setTimeout(() => { if (timeout) timers.current.delete(timeout); timedOut = true; reject(new Error("READ_TIMEOUT")); }, 10000); timers.current.add(timeout);
    })]);
    if (currentJob.current === jobId && epoch.current === requestEpoch && !controller.signal.aborted) {
     savedJob.current = jobId; setRead(saved); setDisputes(open); setError("");
@@ -60,7 +60,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
     setError("The saved final check is unavailable. Load the saved final check to try again.");
    }
   } finally {
-   clearTimeout(timeout);
+   clearTimeout(timeout); if (timeout) timers.current.delete(timeout);
    if (active.current === controller) active.current = null;
    if (epoch.current === requestEpoch) {
     if (reread.current) { reread.current = false; void load(); }
@@ -75,7 +75,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   const visible = () => { if (document.visibilityState === "visible") void load(); };
   window.addEventListener(JOB_SAVED_EVENT, changed); window.addEventListener("focus", focus); document.addEventListener("visibilitychange", visible);
   void load();
-  return () => { lifetime.current++; epoch.current++; reread.current = false; active.current = null; for (const controller of controllers.current) controller.abort(); controllers.current.clear(); window.removeEventListener(JOB_SAVED_EVENT, changed); window.removeEventListener("focus", focus); document.removeEventListener("visibilitychange", visible); };
+  return () => { lifetime.current++; epoch.current++; reread.current = false; active.current = null; for (const timer of timers.current) clearTimeout(timer); timers.current.clear(); window.removeEventListener(JOB_SAVED_EVENT, changed); window.removeEventListener("focus", focus); document.removeEventListener("visibilitychange", visible); };
  }, [jobId, load]);
  const refreshPaused = error.startsWith("Automatic refresh");
  useEffect(() => {
