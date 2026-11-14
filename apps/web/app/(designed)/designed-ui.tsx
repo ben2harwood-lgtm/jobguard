@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { jobsResponseV1, sessionResponseV1, type JobSummary, type SessionView } from "../lib/contracts";
 import { jobWorkspaceResponseV1 } from "@jobguard/api/workspace-contracts";
+import { jobValueResponseV1, catchAttentionV1 } from "@jobguard/api/value-contracts";
 import { practiceInvoiceResponseV1 } from "@jobguard/api/customer-invoice-contracts";
 import { deriveJobPaymentState, type JobPaymentState } from "../lib/invoice-payment-state";
 import { jobStatusLabels } from "../ui/workspace-lifecycle";
@@ -91,8 +92,8 @@ export function statusTag(status: JobSummary["status"]) {
 export function needsChecking(job: JobSummary) { return job.document.delivery === "queued" || job.document.delivery === "outcome_unknown" || job.customerPayment === "due"; }
 export const siteOrTitle = (job: JobSummary) => known(job.siteLabel) || job.title;
 
-export async function readJson(url: string) {
-  const response = await fetch(url, { cache: "no-store" });
+export async function readJson(url: string, signal?: AbortSignal) {
+  const response = await fetch(url, { cache: "no-store", ...(signal ? { signal } : {}) });
   if (response.status === 401) throw new Error("UNAUTHENTICATED");
   if (response.status === 403 || response.status === 404) throw new Error("FORBIDDEN");
   if (!response.ok) throw new Error("UNAVAILABLE");
@@ -100,6 +101,9 @@ export async function readJson(url: string) {
 }
 
 export const jobValueV1 = z.object({
+  version: z.literal("job-value.v1"), environment: z.literal("synthetic_demo"), jobId: z.guid(),
+  foundAfterLock: jobValueResponseV1.shape.foundAfterLock,
+  catchAttention: z.array(catchAttentionV1).default([]),
   approvedExtras: z.object({ pence: z.number().int().nullable() }), invoicedGross: z.object({ pence: z.number().int().nullable() }),
   recordedGross: z.object({ pence: z.number().int().nullable() }), outstandingGross: z.object({ pence: z.number().int().nullable() }),
   pendingExtras: z.array(z.unknown()),
@@ -147,11 +151,13 @@ export function useJobs(tenantId: string) {
   const [saved, setSaved] = useState<{ tenantId: string; jobs: JobSummary[] | null; failed: boolean } | null>(null);
   useEffect(() => {
     let current = true, generation = 0;
+    let controller: AbortController | undefined;
     let ids: string[] = [];
     const load = () => {
       const run = ++generation;
+      controller?.abort(); controller = new AbortController();
       setSaved(null);
-      void readJson(`/api/jobs?tenantId=${encodeURIComponent(tenantId)}`).then(raw => {
+      void readJson(`/api/jobs?tenantId=${encodeURIComponent(tenantId)}`, controller.signal).then(raw => {
         const parsed = jobsResponseV1.parse(raw);
         if (parsed.tenantId !== tenantId || parsed.jobs.some(job => job.tenantId !== tenantId)) throw new Error("WRONG_WORKSPACE_RESPONSE");
         if (current && run === generation) { ids = parsed.jobs.map(job => job.id); setSaved({ tenantId, jobs: parsed.jobs, failed: false }); }
@@ -165,7 +171,7 @@ export function useJobs(tenantId: string) {
     };
     window.addEventListener("focus", load);
     for (const event of JOB_EVENTS) window.addEventListener(event, changed);
-    return () => { current = false; window.removeEventListener("focus", load); for (const event of JOB_EVENTS) window.removeEventListener(event, changed); };
+    return () => { current = false; controller?.abort(); window.removeEventListener("focus", load); for (const event of JOB_EVENTS) window.removeEventListener(event, changed); };
   }, [tenantId]);
   return saved?.tenantId === tenantId ? saved : { jobs: null, failed: false };
 }
@@ -193,11 +199,12 @@ export function projectBillCheck(raw: unknown, jobId: string, tenantId: string) 
   if (view.checkStatus !== "completed" || view.invoiceGuard) return "Waiting for the Final Check — this bill stays locked. No invoice can be issued yet.";
   return null;
 }
-export async function readJobFacts(jobId: string, tenantId: string): Promise<JobFacts> {
+export async function readJobFacts(jobId: string, tenantId: string, signal?: AbortSignal): Promise<JobFacts> {
   const path = `/api/jobs/${encodeURIComponent(jobId)}`;
   // Establish workspace membership before reading private facts; UUIDs alone are not authority.
-  const { job } = jobWorkspaceResponseV1.parse(await readJson(path));
+  const { job } = jobWorkspaceResponseV1.parse(await readJson(path, signal));
   if (job.id !== jobId || job.tenantId !== tenantId) throw new Error("WRONG_JOB_RESPONSE");
+  signal?.throwIfAborted();
   let revoked = false;
   async function optional<T>(read: () => Promise<T>): Promise<T | undefined> {
     try { return await read(); } catch (error) {
@@ -206,7 +213,7 @@ export async function readJobFacts(jobId: string, tenantId: string): Promise<Job
     }
   }
   async function readBound(suffix: string) {
-    const raw = await readJson(`${path}${suffix}`);
+    const raw = await readJson(`${path}${suffix}`, signal);
     const identity = z.object({ jobId: z.guid(), tenantId: z.guid().optional() }).parse(raw);
     if (identity.jobId !== jobId || (identity.tenantId !== undefined && identity.tenantId !== tenantId)) throw new Error("WRONG_JOB_RESPONSE");
     return raw;
@@ -214,9 +221,17 @@ export async function readJobFacts(jobId: string, tenantId: string): Promise<Job
   const [acceptance, payment, value, blocker] = await Promise.all([
     optional(async () => acceptanceReadV1.parse(await readBound("/quotes/acceptance")).activeAcceptance),
     optional(async () => deriveJobPaymentState(practiceInvoiceResponseV1.parse(await readBound("/customer-invoices")).invoices)),
-    optional(async () => jobValueV1.parse(await readBound("/value"))),
+    optional(async () => {
+      const value = jobValueV1.parse(await readBound("/value"));
+      for (const row of [...value.foundAfterLock, ...value.catchAttention]) {
+        const suffix = `#variation-${row.id}`;
+        if (row.href !== `/jobs/${jobId}${suffix}` && row.href !== `/jobs/${jobId}/work${suffix}`) throw new Error("WRONG_CATCH_RESPONSE");
+      }
+      return value;
+    }),
     optional(async () => projectBillCheck(await readBound("/final-account/lock"), jobId, tenantId)),
   ]);
+  signal?.throwIfAborted();
   if (revoked) return unavailableFacts;
   return { agreed: acceptance === undefined ? undefined : acceptance?.totalPence ?? null, payment: payment ?? null,
     value: value ?? null, blocker: blocker ?? null, checksAvailable: blocker !== undefined && acceptance !== undefined && payment !== undefined && value !== undefined };
@@ -239,49 +254,66 @@ export function useJobFacts(tenantId: string, jobIds: readonly string[]) {
   const [saved, setSaved] = useState<{ key: string; facts: Record<string, JobFacts> } | null>(null);
   useEffect(() => {
     let current = true, generation = 0;
+    let controller: AbortController | undefined;
     const requested = JSON.parse(ids) as string[];
     const load = () => {
       const run = ++generation;
+      controller?.abort(); controller = new AbortController();
+      const signal = controller.signal;
       setSaved(null);
-      void Promise.all(requested.map(async id => [id, await readJobFacts(id, tenantId).catch(() => unavailableFacts)] as const))
+      void Promise.all(requested.map(async id => [id, await readJobFacts(id, tenantId, signal).catch(() => unavailableFacts)] as const))
         .then(entries => { if (current && run === generation) setSaved({ key, facts: Object.fromEntries(entries) }); });
     };
     load(); const cleanup = onJobRefresh(requested, load);
-    return () => { current = false; cleanup(); };
+    return () => { current = false; controller?.abort(); cleanup(); };
   }, [key, ids, tenantId]);
   return saved?.key === key ? saved.facts : null;
 }
-export type AttentionJob = { id: string; title: string; reasons: string[]; href: string };
+export type AttentionLink = { label: string; href: string };
+export type AttentionJob = { id: string; title: string; reasons: string[]; href: string; links: AttentionLink[] };
+export function catchLabel(row: JobValue["catchAttention"][number]) {
+  if (row.status === "needs_price") return `Needs a price: ${row.description}`;
+  if (row.status === "needs_approval") return `${money(row.pence)} net proposed price awaiting approval: ${row.description}`;
+  return `${money(row.pence)} net approved extra not yet invoiced: ${row.description}`;
+}
 export function attentionJobs(jobs: readonly JobSummary[], decisions: Decisions | null, facts: Record<string, JobFacts> | null): AttentionJob[] {
   return jobs.flatMap(job => {
-    const reasons = (decisions?.decisions ?? []).filter(item => item.jobId === job.id && item.resolution === "open").map(item => `${item.title}: ${item.detail}`);
+    const links: AttentionLink[] = (facts?.[job.id]?.value?.catchAttention ?? []).map(row => ({ label: catchLabel(row), href: `/jobs/${job.id}/work#variation-${row.id}` }));
+    for (const item of decisions?.decisions ?? []) {
+      if (item.jobId === job.id && item.resolution === "open") links.push({ label: `${item.title}: ${item.detail}`, href: `/jobs/${job.id}/work#final-account-title` });
+    }
     const blocker = facts?.[job.id]?.blocker;
-    if (blocker) reasons.push(blocker);
-    return reasons.length ? [{ id: job.id, title: job.title, reasons, href: `/jobs/${job.id}/work#final-account-title` }] : [];
+    if (blocker) links.push({ label: blocker, href: `/jobs/${job.id}/work#final-account-title` });
+    return links.length ? [{ id: job.id, title: job.title, reasons: links.map(link => link.label), links, href: links[0]!.href }] : [];
   });
 }
-export function useAttention(workspace: Workspace, jobs: JobSummary[] | null, facts: Record<string, JobFacts> | null, refreshKey = 0) {
-  const [saved, setSaved] = useState<{ tenantId: string; decisions: Decisions | null } | null>(null);
+export function useAttention(workspace: Workspace, jobs: JobSummary[] | null, facts: Record<string, JobFacts> | null, refreshKey = 0, jobsFailed = false) {
+  const [saved, setSaved] = useState<{ key: string; decisions: Decisions | null } | null>(null);
   const ids = JSON.stringify((jobs ?? []).map(job => job.id));
+  const key = `${workspace.tenantId}:${ids}:${refreshKey}`;
   useEffect(() => {
     let current = true, generation = 0;
+    let controller: AbortController | undefined;
     const load = () => {
       const run = ++generation;
+      controller?.abort(); controller = new AbortController();
       setSaved(null);
-      void readJson(`/api/decisions?tenantId=${encodeURIComponent(workspace.tenantId)}`).then(raw => {
+      void readJson(`/api/decisions?tenantId=${encodeURIComponent(workspace.tenantId)}`, controller.signal).then(raw => {
         const identity = z.object({ tenantId: z.guid().optional() }).parse(raw);
         if (identity.tenantId !== undefined && identity.tenantId !== workspace.tenantId) throw new Error("WRONG_WORKSPACE_RESPONSE");
         return decisionsV1.parse(raw);
       }).catch(() => null)
-        .then(decisions => { if (current && run === generation) setSaved({ tenantId: workspace.tenantId, decisions }); });
+        .then(decisions => { if (current && run === generation) setSaved({ key, decisions }); });
     };
     load(); const cleanup = onJobRefresh(JSON.parse(ids) as string[], load);
-    return () => { current = false; cleanup(); };
-  }, [workspace.tenantId, ids, refreshKey]);
-  const decisions = saved?.tenantId === workspace.tenantId ? saved.decisions : null;
+    return () => { current = false; controller?.abort(); cleanup(); };
+  }, [workspace.tenantId, ids, refreshKey, key]);
+  const decisions = saved?.key === key ? saved.decisions : null;
   const items = attentionJobs(jobs ?? [], decisions, facts);
   const complete = jobs !== null && decisions !== null && facts !== null && jobs.every(job => facts[job.id]?.checksAvailable);
-  return { items, complete };
+  const loading = !jobsFailed && (jobs === null || facts === null || saved?.key !== key);
+  const failed = jobsFailed || (saved?.key === key && saved.decisions === null) || (facts !== null && (jobs ?? []).some(job => !facts[job.id]?.checksAvailable));
+  return { items, complete, loading, failed };
 }
 
 const ROUTES: Record<string, string> = { today: "/today", jobs: "/jobs", check: "/check", money: "/money", more: "/more" };

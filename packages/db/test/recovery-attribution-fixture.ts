@@ -1,3 +1,5 @@
+import { practiceMaterialPool } from "../src/practice-session.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 // Synthetic parent fixtures only. No source qualification or financial authority is implied.
 import { randomUUID } from "node:crypto";
@@ -11,6 +13,7 @@ import { migrate } from "../src/migrate.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { unattributedTermsHistory } from "./sv5pre-fixtures.js";
 export const LOCK_OWNER = "40000000-0000-4000-8000-000000000004";
 export const LOCK_USER = "30000000-0000-4000-8000-000000000003";
 export const LOCK_HASH = "a".repeat(64);
@@ -66,9 +69,17 @@ export async function seedAccount(admin: Pool, tenantId: string = randomUUID(), 
  return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context: (await admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(admin, tenantId, LOCK_OWNER) : testTenantContext(tenantId, { membershipId: LOCK_OWNER }), input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
 }
 export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof seedAccount>>) {
- const repo = new FinalAccountLockRepository(f.runtime);
- await repo.acceptTerms(a.context, { actorMembershipId: LOCK_OWNER, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
- await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
+ const digest=(await f.admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])).rows[0].practice_session_digest;
+ if(digest){
+  const principal=(await f.runtime.query("SELECT * FROM app.authenticate_practice_session($1,$2)",[digest,a.tenantId])).rows[0];
+  a.context=verifiedTenantContextFromMembership({tenantId:a.tenantId,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership,{kind:"practice",credential:digest});
+  // The bound practice session acts as its own member; lock with that same member.
+  a.input={...a.input,actorMembershipId:principal.membership_id};
+ }
+ const repo = new FinalAccountLockRepository(digest?practiceMaterialPool(f.runtime,digest):f.runtime);
+ if (!(await unattributedTermsHistory(f.admin, a.tenantId, a.jobId, a.input.actorMembershipId)))
+  await repo.acceptTerms(a.context, { actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+ await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
  return repo;
 }
 
