@@ -139,8 +139,40 @@ describe("completed autoplay results", () => {
       steps: [{ id: "last", timeoutMs: 1000, target: "#last", title: "Check", words: "the saved result", isDone: () => done, autoAction }, ...(nextTarget ? [{ id: "next", target: "#next", title: "Next", words: "Ready", isDone: () => true, autoAction }] : [])], onClose: () => {},
     }));
     hooks.effects[3]!();
-    return { autoAction, controller: hooks.refs[1]!.current as AbortController };
+    return { autoAction, controller: hooks.refs[1]!.current as AbortController, reveal: () => { visible = true; } };
   }
+  it("waits for a deferred visible control before executing autoplay and confirming completion", async () => {
+    const { autoAction, reveal } = playback({ visible: false, done: false, reduced: true });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(autoAction).not.toHaveBeenCalled();
+    expect(hooks.setters[0]).not.toHaveBeenCalled();
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    reveal(); await vi.advanceTimersByTimeAsync(101);
+    expect(autoAction).toHaveBeenCalledOnce();
+    // Readiness and a resolved action do not establish saved completion.
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("advances once saved completion is already true when a deferred target appears", async () => {
+    const { autoAction, reveal } = playback({ visible: false, reduced: true });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    reveal(); await vi.advanceTimersByTimeAsync(100);
+    expect(autoAction).not.toHaveBeenCalled();
+    expect(hooks.setters[6]).toHaveBeenCalledWith(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("stopping while the next control is mounting prevents any later action or advance", async () => {
+    const { autoAction, controller, reveal } = playback({ visible: false, done: false, reduced: true });
+    await vi.advanceTimersByTimeAsync(300);
+    controller.abort(); reveal(); await vi.advanceTimersByTimeAsync(1000);
+    expect(autoAction).not.toHaveBeenCalled();
+    expect(hooks.setters[0]).not.toHaveBeenCalled();
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it("reads the viewer's final step outside its action deadline", async () => {
     const { controller } = playback();
     await vi.advanceTimersByTimeAsync(0);
@@ -274,6 +306,43 @@ describe("recent human input and spotlight replacements", () => {
       },
     };
   }
+  it("re-anchors a shrinking job page only after two stable polls", () => {
+    const f = fixture(2);
+    try {
+      Object.assign(window, { scrollY: 893 });
+      let top = -365;
+      f.target().getBoundingClientRect = () => ({ left: 25, top, bottom: top + 44, width: 100, height: 44 });
+      f.scrollBy.mockImplementation(({ top: delta }: { top: number }) => { top -= delta; });
+      f.poll(); // The saved job has shrunk beneath the initial highlight.
+      f.poll(); // One equal measurement does not establish a stable layout.
+      f.windowHandlers.get("resize")!(); f.windowHandlers.get("scroll")!();
+      expect(f.scrollBy).toHaveBeenCalledOnce();
+      f.poll();
+      expect(f.scrollBy).toHaveBeenCalledTimes(2);
+      expect(hooks.setters[5]).toHaveBeenLastCalledWith({ left: 25, top: 12, width: 100, height: 44 });
+      // Settling is finished: later viewer scrolling is never corrected.
+      top = -100; f.poll(); f.poll(); f.poll();
+      expect(f.scrollBy).toHaveBeenCalledTimes(2);
+    } finally { f.cleanup(); }
+  });
+  it("cancels layout settling permanently when the builder takes over", () => {
+    const f = fixture(2);
+    try {
+      f.target().getBoundingClientRect = () => ({ left: 25, top: -365, bottom: -321, width: 100, height: 44 });
+      f.poll(); f.input("keydown"); f.poll();
+      f.time(2000); f.poll(); f.poll(); f.poll();
+      expect(f.scrollBy).toHaveBeenCalledOnce();
+    } finally { f.cleanup(); }
+  });
+  it("ignores viewport movement from scrolling while the initial layout settles", () => {
+    const f = fixture();
+    try {
+      Object.assign(window, { scrollY: 100 });
+      f.target().getBoundingClientRect = () => ({ left: 25, top: 600, bottom: 644, width: 100, height: 44 });
+      f.poll(); f.poll(); f.poll();
+      expect(f.scrollBy).toHaveBeenCalledOnce();
+    } finally { f.cleanup(); }
+  });
   it("manual re-target after trusted input keeps the phone still; Show me and step start still clear", async () => {
     const f = fixture();
     try {

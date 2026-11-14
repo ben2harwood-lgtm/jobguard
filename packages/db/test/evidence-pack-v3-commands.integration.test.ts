@@ -1,3 +1,4 @@
+import { practiceMaterialPool } from "../src/practice-session.js";
 import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 // CI-only PostgreSQL: actual activated request and checked writer boundaries.
 import { randomUUID } from "node:crypto";
@@ -9,7 +10,7 @@ import { asFixtureTenant } from "./recovery-attribution-fixture.js";
 let f: V3Fixture;
 beforeAll(async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createEvidencePackV3Fixture();
-  await new FinalAccountLockRepository(f.runtime).acceptTerms(f.auth.context, { actorMembershipId: f.auth.membershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+  await new FinalAccountLockRepository(practiceMaterialPool(f.runtime,f.auth.digest)).acceptTerms(f.auth.context, { actorMembershipId: f.auth.membershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
 }, 90_000);
 afterAll(async () => { if (f) await closeEvidencePackV3Fixture(f); vi.unstubAllEnvs(); });
 it("generation, replay and approval create one exact artifact and one approval", async () => {
