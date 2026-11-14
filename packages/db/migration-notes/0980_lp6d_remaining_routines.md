@@ -874,3 +874,11 @@ Fail list and log: ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaini
 Repair 20 ([PW4] API mapping, flagged; [PW16], sync-snapshot, watchdog per rulings). Whole db at
 8f4a30af (run.sh WHOLE, 2 workers): 60 failed | 870 passed (930); 118 failed | 8164 passed | 16 skipped | 19 todo (8317) (r19 at be421f81: 63 files / 124 tests). NOT READY.
 Fail list and log: ~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r20-8f4a30af-whole-*.
+
+Repair 20b (invoice-later, worm-command fixtures). Whole db at 98b0cb02 (run.sh WHOLE, 2 workers):
+59 failed | 871 passed files; 130 failed | 8152 passed tests. The test count is inflated by one
+run-time hang in recovery-messages (one test timed out and its stuck client cascaded into 17
+binding refusals). Re-run alone it shows its usual single failure (1 failed | 105 passed); without
+the cascade the count is 113. [PW27] is a named hold (router ruling: no private copy can express the
+operator rollback reads without binding). NOT READY. Fail list and logs:
+~/.local/share/full-steam/coordinator/prechecks/lp-6d-remaining-routines-r20b-98b0cb02-whole-* and -recovery-messages-rerun.log.gz.
