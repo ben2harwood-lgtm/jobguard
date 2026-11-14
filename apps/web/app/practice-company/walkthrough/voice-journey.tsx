@@ -185,7 +185,7 @@ export function VoiceJourney() {
       setOwnWorkspace(saved.index >= 2);
       if (saved.index >= 2) {
         const url = new URL(location.href);
-        url.hash = saved.index >= 6 ? "final-account-title" : saved.index >= 4 ? "work-proof" : "quote";
+        url.hash = saved.index >= 6 ? "final-account-title" : saved.index >= 4 ? "work-proof" : "";
         history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
       }
       setTenantId(session.tenants[0]!.id);
@@ -222,7 +222,8 @@ export function VoiceJourney() {
       () => {
         if (!ownPriced.current && !current.current.prepared && Number(text("quote-revision")) > 0) {
           ownPriced.current = true; remember(true); setOwnWorkspace(true);
-          history.replaceState(null, "", `${location.pathname}${location.search}#quote`);
+          // The tour owns spotlight scrolling; open pricing without a fragment scroll.
+          history.replaceState(null, "", `${location.pathname}${location.search}`);
         }
         return ownPriced.current;
       },
@@ -390,7 +391,7 @@ export function VoiceJourney() {
       {error && <p role="alert">{error}</p>}
     </header>
     <div id="walk-screen" className={styles.screen} tabIndex={-1}>
-      {!tenantId ? <p role="status">Loading your private practice firm…</p> : activeJob ? report ? <ValuePage jobId={activeJob} /> : <WorkspaceShell key={`${activeJob}:${screenVersion}`} jobId={activeJob} /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} initialText="" close={() => location.assign("/practice-company")} onCaptured={result => { rememberWalkJob("walkJob", result.jobId); setCapture(result); }} />}
+      {!tenantId ? <p role="status">Loading your private practice firm…</p> : activeJob ? report ? <ValuePage jobId={activeJob} /> : <WorkspaceShell key={`${activeJob}:${screenVersion}`} jobId={activeJob} initialPricing /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} initialText="" close={() => location.assign("/practice-company")} onCaptured={result => { rememberWalkJob("walkJob", result.jobId); setCapture(result); }} />}
     </div>
     {tenantId && tour && <Walkthrough key={tourVersion || "own"} steps={steps} initialIndex={resumeIndex} onClose={() => setTour(false)} />}
   </>;
