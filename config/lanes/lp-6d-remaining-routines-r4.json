@@ -158,7 +158,8 @@
         "packages/db/test/connector-billing-status-promotion.integration.test.ts",
         "packages/db/test/financial-reconciliation-adjustments.integration.test.ts",
         "packages/db/test/financial-reconciliation-queue.integration.test.ts",
-        "packages/db/test/migfix-6-fixture.ts"
+        "packages/db/test/migfix-6-fixture.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts"
       ]
     }
   }

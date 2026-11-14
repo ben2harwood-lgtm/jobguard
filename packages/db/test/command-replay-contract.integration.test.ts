@@ -14,7 +14,7 @@ import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repo
 import { cluster, world } from "./contractor-billing-fixtures.js";
 import { direct } from "./site-extra-fixtures.js";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
-import { ExtraRepository, readExtraDuplicateCandidates, resolveExtraDuplicateCandidates } from "../src/index.js";
+import { ContractorRepository, ExtraRepository, readExtraDuplicateCandidates, requireContractorRequestContext, resolveExtraDuplicateCandidates } from "../src/index.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
 import { JobRepository } from "../src/job-repository.js";
 
@@ -271,7 +271,9 @@ it("ResolveDuplicateCandidates replays one stored result and refuses changed int
     [session, actor.tenantId, actor.membershipId, actor.identityUserId, digestOf(session)]);
     const input = { version: "duplicate-disposition.v1", commandId: randomUUID(), groupId: group.id,
       fingerprint: group.fingerprint, disposition: "not_duplicates", reasonCode: "different_work" };
-    const run = async (raw: unknown) => resolveExtraDuplicateCandidates(c.runtime, await testActorContext(c.admin, w.ctx, actor), session, w.s.jobId, raw);
+    // LP-6d: the disposition is that practice session's own bound request.
+    const own = requireContractorRequestContext(await new ContractorRepository(c.runtime).resolveSession(session));
+    const run = async (raw: unknown) => resolveExtraDuplicateCandidates(c.runtime, own, session, w.s.jobId, raw);
     const results = await Promise.all([run(input), run(input)]);
     expect(results[1]).toEqual(results[0]);
     const counts = async () => (await c.admin.query(`SELECT

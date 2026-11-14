@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { goodsReceiptV1, supplierFactCorrectionV1 } from "@jobguard/core";
 import { MaterialRepository, migrate, PurchaseOrderRepository, SupplierDocumentRepository } from "../src/index.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, bindTestClient } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
@@ -106,6 +106,8 @@ describe("supplier receipt exact decimals (repair r1, real PostgreSQL)", () => {
     try {
       await client.query("BEGIN");
       await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenant]);
+      // LP-6d: the raw runtime write is the fixture owner's own bound request.
+      await bindTestClient(admin, client, tenant, "40000000-0000-4000-8000-000000000004");
       await client.query(`INSERT INTO app.goods_receipt(id,tenant_id,job_id,order_draft_id,document_id,revision,
         ordered_quantity,delivered_quantity,accepted_quantity,rejected_quantity,missing_quantity,unit)
         SELECT $1,tenant_id,job_id,order_draft_id,document_id,2,$4::numeric,0,0,0,$4::numeric,unit
