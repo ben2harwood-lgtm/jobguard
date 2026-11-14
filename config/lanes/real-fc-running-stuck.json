@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-fc-running-stuck": {
+      "branches": [
+        "codex/sandbox/real-fc-running-stuck"
+      ],
+      "allow": [
+        "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/app/ui/final-check-reveal.test.tsx"
+      ]
+    }
+  }
+}
