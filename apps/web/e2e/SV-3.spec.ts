@@ -224,7 +224,13 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
      expect(destination!.url(),'Q destination response is the requested page').toBe(new URL(route,page.url()).href);
     }finally{navigation=undefined}
     if(route==='/classic'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
-    else{const price=page.getByRole('button',{name:'Price the work',exact:true});await expect(price).toBeVisible();await price.click();await expect(page.locator('.quote-editor')).toBeVisible()} // a fresh load of the job shows the scope summary first; the quote editor opens from this button, as in startWatchdogJob
+    else{
+     const price=page.getByRole('button',{name:'Price the work',exact:true});await expect(price).toBeVisible();
+     // Opening the editor remounts FinalCheckReveal and aborts its scope-view read.
+     // Capture that response completely before changing views, just as before navigation.
+     await drain();
+     await price.click();await expect(page.locator('.quote-editor')).toBeVisible();
+    } // a fresh load of the job shows the scope summary first; the quote editor opens from this button, as in startWatchdogJob
     await drain();
     const view=await page.evaluate(()=>{
      const read=(selector:string)=>[...document.querySelectorAll(selector)].map(n=>n.textContent);
