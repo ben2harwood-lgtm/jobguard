@@ -362,8 +362,10 @@ it("0944 composes the exact routine successor proof and preserves private catalo
 it("refuses a genuine delegated customer binding and preserves credential-row revocation locking", async()=>{
  const home=await firm(), j=await job(home);
  const c=(await f.admin.query("SELECT b.customer_id FROM app.job_party_current p JOIN app.job_party_binding b ON(b.tenant_id,b.id)=(p.tenant_id,p.binding_id) WHERE p.tenant_id=$1 AND p.job_id=$2",[tenant,j.id])).rows[0].customer_id;
- const link=sha(randomUUID()), digest=sha(randomUUID());
- await f.admin.query("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6)",[tenant,home.digest,j.id,c,link,`customer-signin-reference.v1:${tenant}/${j.id}/${c}/${'a'.repeat(43)}`]);
+ const link=sha(randomUUID()), digest=sha(randomUUID()), builderDigest=sha(randomUUID());
+ // Portal issuance requires a current identity session, separate from practice ownership.
+ await testBoundTenantContext(f.admin,tenant,home.auth.membershipId,builderDigest);
+ await f.admin.query("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6)",[tenant,builderDigest,j.id,c,link,`customer-signin-reference.v1:${tenant}/${j.id}/${c}/${'a'.repeat(43)}`]);
  await f.admin.query("SELECT identity.customer_portal_use($1,$2,$3,$4,$5,'redeem')",[tenant,j.id,c,link,digest]);
  const before=await privateSnapshot();
  // Binder is private to migration; establish genuine delegated authority as its
