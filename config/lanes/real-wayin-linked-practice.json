@@ -29,7 +29,8 @@
         "packages/db/test/extra-origin.integration.test.ts",
         "packages/db/migration-notes/0733_identity_linked_practice.md",
         "tools/commercial-integrity-boundary.unresolved.json",
-        "tools/commercial-integrity-current-source-guard.unresolved.json"
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
+        "apps/api/src/value/value-v3-business.application.test.ts"
       ]
     }
   }
