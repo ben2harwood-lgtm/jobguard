@@ -182,6 +182,35 @@ const coveredTables = [
 type CoveredTable = typeof coveredTables[number];
 type Operation = "UPDATE" | "DELETE";
 
+// Include the referencing timeline tables explicitly: even empty FK tables
+// would otherwise refuse TRUNCATE before any statement trigger could run.
+const truncateTables = [...coveredTables, "recovery_timeline_run", "recovery_timeline_signal"] as const;
+const truncateHistory = `TRUNCATE ${truncateTables.map(table => `app.${table}`).join(", ")}`;
+async function historySnapshot(client: Pool | PoolClient) {
+  const result = [];
+  for (const table of truncateTables) {
+    result.push({ table, rows: (await client.query(`SELECT to_jsonb(r) AS data FROM app.${table} r ORDER BY to_jsonb(r)::text`)).rows });
+  }
+  return result;
+}
+
+async function assertTruncateRefused(client: PoolClient) {
+  const before = await historySnapshot(client);
+  for (const table of coveredTables) {
+    expect(before.find(row => row.table === table)!.rows.length, `${table} must contain normal history`).toBeGreaterThan(0);
+  }
+  await client.query("SAVEPOINT truncate_attempt");
+  let error: unknown;
+  try { await client.query(truncateHistory); }
+  catch (caught) { error = caught; }
+  finally {
+    await client.query("ROLLBACK TO SAVEPOINT truncate_attempt");
+    await client.query("RELEASE SAVEPOINT truncate_attempt");
+  }
+  expect(error).toMatchObject({ code: "55000", message: "decision and authorization records are immutable" });
+  expect(await historySnapshot(client)).toEqual(before);
+}
+
 /** Run against one existing row as the owner, avoiding grant-based refusals and
  * FK-based false positives. Roll back each attempt even in the mutation case. */
 async function assertRefused(client: PoolClient, table: CoveredTable, operation: Operation) {
@@ -266,5 +295,55 @@ describe("LATER-SAFETY-104 owner-proof append-only recovery records", () => {
       await assertRefused(client, table, "UPDATE");
       await assertRefused(client, table, "DELETE");
     });
+  });
+
+  it("has an enabled conditional BEFORE TRUNCATE statement guard on every covered table", async () => {
+    const catalog = await admin.query(`SELECT c.relname, t.tgtype::int AS type, t.tgenabled AS enabled,
+      t.tgfoid::regproc::text AS function, pg_get_expr(t.tgqual,t.tgrelid) AS condition
+      FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+      JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='app' AND t.tgname='recovery_history_no_truncate' AND NOT t.tgisinternal
+      ORDER BY c.relname`);
+    expect(catalog.rows.map(row => row.relname)).toEqual([...coveredTables].sort());
+    for (const row of catalog.rows) {
+      // tgtype: BEFORE (2) + TRUNCATE (32), with no ROW bit.
+      expect(row).toMatchObject({ type: 34, enabled: "O", function: "app.reject_immutable_authorization_record" });
+      expect(row.condition).toBe("(current_setting('is_superuser'::text) <> 'on'::text)");
+    }
+  });
+
+  it.each(coveredTables)("refuses owner TRUNCATE through %s alone without losing history", async table => {
+    await asOwner(async client => {
+      // Isolate each guard so another table's trigger cannot mask its absence.
+      for (const other of coveredTables) {
+        if (other !== table) await client.query(`DROP TRIGGER recovery_history_no_truncate ON app.${other}`);
+      }
+      await assertTruncateRefused(client);
+    }); // Rollback restores every scratch trigger removal.
+  });
+
+  it("detects removal of all TRUNCATE guards, permits the same owner statement, and restores history", async () => {
+    const before = await historySnapshot(admin);
+    await asOwner(async client => {
+      for (const table of coveredTables) await client.query(`DROP TRIGGER recovery_history_no_truncate ON app.${table}`);
+      await expect(assertTruncateRefused(client)).rejects.toThrow();
+      // An explicit success, not merely a missing 55000: grants and FKs allow it.
+      await client.query(truncateHistory);
+      for (const snapshot of await historySnapshot(client)) expect(snapshot.rows).toEqual([]);
+    });
+    expect(await historySnapshot(admin)).toEqual(before);
+    await asOwner(assertTruncateRefused);
+  });
+
+  it("keeps intentional superuser fixture TRUNCATE working and rolls it back", async () => {
+    const before = await historySnapshot(admin);
+    const client = await admin.connect();
+    try {
+      await client.query("BEGIN");
+      expect((await client.query("SELECT current_setting('is_superuser') AS value")).rows).toEqual([{ value: "on" }]);
+      await client.query(truncateHistory);
+      for (const snapshot of await historySnapshot(client)) expect(snapshot.rows).toEqual([]);
+    } finally { await client.query("ROLLBACK"); client.release(); }
+    expect(await historySnapshot(admin)).toEqual(before);
   });
 });
