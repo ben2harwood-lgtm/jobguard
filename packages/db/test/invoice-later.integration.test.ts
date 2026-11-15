@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, PracticeInvoiceRepository, CustomerBillingCommandService, withTenant } from "../src/index.js";
 import { prepareBaselineInvoice } from "./sv5pre-fixtures.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures, syntheticOwnerPool } from "./pool-test-utils.js";
-import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 
 const T = randomUUID(), A = randomUUID(), U = randomUUID(), M = randomUUID(), H = "a".repeat(64);
 const context = testTenantContext(T, { membershipId: M }), credential = randomUUID();
@@ -242,14 +242,17 @@ describe("LATER-B16 persisted invoice facts", () => {
   expect(events.rowCount).toBe(1);
  });
  it("L082 owner expiry while waiting for the invoice lock refuses the credit", async () => {
-  const f = await fresh(), input = await creditCommand(f), actor = randomUUID();
-  await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')`,[actor,T,A,U]);
+  const f = await fresh(), input = await creditCommand(f), actor = randomUUID(), actorUser = randomUUID();
+  // Give this owner its own identity so credential resolution cannot select the fixture's other owner M.
+  await admin.query(`INSERT INTO identity.identity_user(id) VALUES($1)`,[actorUser]);
+  await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')`,[actor,T,A,actorUser]);
+  const actorContext = await testBoundTenantContext(admin,T,actor);
   const holder = await admin.connect();
   let pending: ReturnType<typeof callCredit> | undefined;
   try {
    await holder.query("BEGIN");
    await holder.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,0))`,[T,f.invoice.id]);
-   pending = callCredit({...input,actorMembershipId:actor},testTenantContext(T,{membershipId:actor}));
+   pending = callCredit({...input,actorMembershipId:actor},actorContext);
    const observed = pending.then(value=>({value}),error=>({error:error as Error}));
    let waiting = false;
    for(let attempt=0;attempt<100&&!waiting;attempt++) {

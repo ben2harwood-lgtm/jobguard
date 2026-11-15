@@ -216,7 +216,8 @@
         "packages/db/test/extra-proceed-upgrade.integration.test.ts",
         "packages/db/test/practice-worker-switch-upgrade.integration.test.ts",
         "packages/db/test/builder-acceptance-sent-head.integration.test.ts",
-        "packages/db/test/subscription-internal-owner.integration.test.ts"
+        "packages/db/test/subscription-internal-owner.integration.test.ts",
+        "packages/db/test/invoice-later-upgrade.integration.test.ts"
       ]
     }
   }

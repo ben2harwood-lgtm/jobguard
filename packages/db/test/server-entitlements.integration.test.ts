@@ -92,6 +92,10 @@ it("MON-8 real installed guards reference the one service; no public or infrastr
 it("MON-8 an operative email invitation cannot provision after its agreement is suspended", async () => {
   const f=await startSession(c);await status(c,f,"active");
   const digest=randomUUID().replaceAll("-","").repeat(2),email=`${randomUUID()}@invitation.invalid`;
+  // LP-6d: a real identity session resolves through current_memberships, which needs both
+  // the issuer's email and locator (contractor practice alone does not create either).
+  await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)",[`${f.p.identityUserId}@fixture.invalid`,f.p.identityUserId]);
+  await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[f.p.identityUserId,f.p.tenantId,f.p.membershipId]);
   await c.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')",[randomUUID(),f.p.identityUserId,digest,randomUUID()]);
   const invitation=(await c.admin.query("SELECT identity.invite_member($1,$2,$3,'operative') id",[digest,f.p.tenantId,email])).rows[0].id;
   await status(c,f,"suspended");
