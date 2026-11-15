@@ -5,8 +5,7 @@ async function click(page: Page, name: string) {
  await expect(button).toBeEnabled(); await button.click();
 }
 async function blankFirm(page: Page) {
-  await page.goto("/today");
-  await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+  await page.goto("/practice-company");
   await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
   await click(page, "＋ Start a new job");
 }

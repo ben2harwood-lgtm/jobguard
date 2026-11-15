@@ -5,8 +5,7 @@ const bathroom = "Bathroom refit for Mrs Sample at 4 Madeup Lane. Rip out the ol
 const decorating = "Paint the hall, stairs and landing for Mr Example at 9 Notreal Road, two coats, woodwork in gloss, should be about 900 quid, four days.";
 const postcodeError = "Check UK postcode. Use a valid-format practice postcode, such as SW1A 1AA. Nothing was saved.";
 async function draft(page: Page, text: string) {
-  await page.goto("/");
-  await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+  await page.goto("/practice-company");
   await expect(page.getByRole("heading", { name: "Ready for your first job", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "＋ Start a new job", exact: true }).click();
   await page.getByLabel("Work details").fill(text);

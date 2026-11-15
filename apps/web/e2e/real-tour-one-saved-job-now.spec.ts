@@ -6,8 +6,7 @@ const tour = (page: Page) => page.getByRole("region", { name: "Guided walkthroug
 const control = (page: Page, name: string) => tour(page).getByRole("button", { name, exact: true });
 async function frontDoor(page: Page, phone: boolean) {
   if (phone) await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+  await page.goto("/practice-company");
   await expect(page.getByRole("heading", { name: "Ready for your first job", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Walk your first practice job", exact: true }).click();
   await expect(tour(page)).toContainText("Step 1 of 9");
