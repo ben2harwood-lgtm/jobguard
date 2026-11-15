@@ -1,5 +1,6 @@
 -- LATER-SAFETY-152 r1. Placeholder: router reserves the landing number.
 -- Forward fix only; existing immutable facts and allocation runs are retained.
+BEGIN;
 CREATE OR REPLACE FUNCTION app.cb_derive(p_session uuid,p_job uuid,p_command uuid,p_source text,p_invoice text,p_hash text,p_projection jsonb) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a uuid; run uuid; prev uuid; h text; contract uuid; movement jsonb; l jsonb; exported uuid; line_job uuid; f record;
@@ -48,3 +49,4 @@ BEGIN
  INSERT INTO app.billing_application_event(tenant_id,id,job_id,run_id,command_id) VALUES(t,gen_random_uuid(),p_job,run,p_command);
  RETURN run;
 END $$;
+COMMIT;
