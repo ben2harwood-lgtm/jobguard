@@ -105,7 +105,7 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   expect(inventory.entries.some(e => e.key.startsWith("acl|col|app.action_authorization.") && e.key.includes("|jobguard_runtime|UPDATE|"))).toBe(false);
   // r8: the revocation routine, revoke-claim helper and seven runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each),
   // plus (r10) the command-writer-owned delegated-actor match check (owner + migration EXECUTE). LP-6c's accessor gains no grant.
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(28); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each) and the escalation worker (owner + runtime EXECUTE)
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(30); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each) and the escalation worker (owner + runtime EXECUTE); LP-10 sink hold: + the actor-less recovery delivery worker (owner + runtime EXECUTE)
   expect(inventory.entries.some(e => e.key.startsWith("acl|routine|function:app.lp6_delegated_actor(") && e.key.includes("|jobguard_migration|"))).toBe(false);
 });
 
@@ -479,4 +479,46 @@ it("keeps WORM workers actor-less behind their existing private audit port", () 
   // 0749 leaves these accepted bodies and their credential-only ACLs alone.
   expect(sql).not.toMatch(/CREATE (?:OR REPLACE )?FUNCTION (?:app\.worm_(?:audit|claim|finish)|worm_control\.worm_\w+)\(/u);
   expect(sql).not.toMatch(/GRANT [^;]*jobguard_worm_(?:executor|operator)[^;]*TO jobguard_runtime/u);
+});
+
+
+it("pins the actor-less recovery delivery port, private lock copy and sole trigger caller", () => {
+  const bodyOf = (name: string) => definitions(sql).filter(m => m[1] === name).at(-1)![3]!;
+  const guarded = bodyOf("app.lp6d_share_sink_authorization");
+  const business = guarded.slice(guarded.indexOf(" IF p_tenant IS NULL OR"));
+  expect(bodyOf("app.lp6d_share_sink_authorization_worker").trim()).toBe(`BEGIN\n${business}`.trim());
+  expect(guarded).toContain("LP6D_BOUND");
+  const predecessors = definitions(sql).filter(m => m[1] === "app.guard_recovery_message_sink");
+  expect(predecessors).toHaveLength(2);
+  expect(bodyOf("app.guard_recovery_message_sink")).toBe(predecessors[0]![3]!.replace(
+    " PERFORM app.lp6d_share_sink_authorization(NEW.tenant_id,NEW.outbox_action_id);",
+    " -- Only the migration-owned actor-less worker can reach the private lock copy.\n IF current_user='jobguard_migration' AND NOT app.lp6d_request_bound() THEN\n  PERFORM app.lp6d_share_sink_authorization_worker(NEW.tenant_id,NEW.outbox_action_id);\n ELSE\n  PERFORM app.lp6d_share_sink_authorization(NEW.tenant_id,NEW.outbox_action_id);\n END IF;"));
+  const latest = new Map<string, string>();
+  for (const file of readdirSync(new URL("../migrations/", import.meta.url)).filter(f => f.endsWith(".sql")).sort())
+    for (const m of definitions(read(`../migrations/${file}`))) latest.set(m[1]!, m[3]!);
+  expect([...latest].filter(([, b]) => b.includes("app.lp6d_share_sink_authorization_worker(")).map(([n]) => n))
+    .toEqual(["app.guard_recovery_message_sink"]);
+  const sig = "app.lp6d_share_sink_authorization_worker(uuid,uuid)";
+  expect(sql).toContain(`REVOKE ALL ON FUNCTION ${sig} FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_shadow;`);
+  expect(sql).toContain(`EXECUTE format('REVOKE ALL ON FUNCTION ${sig} FROM %I',login.rolname);`);
+  expect(sql).not.toMatch(/GRANT [^;]*app\.lp6d_share_sink_authorization_worker\(/u);
+  const worker = bodyOf("app.lp6d_recovery_message_sink_worker");
+  expect(worker).toContain("IF app.lp6d_request_bound() THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED'");
+  expect(worker).toContain("IF current_database()<>'jobguard_synthetic_demo'");
+  expect(worker).toContain("WHERE ap.tenant_id=t AND ap.outbox_action_id=p_outbox;");
+  expect(worker).toContain("m.recipient,m.body,m.content_hash,m.attachment_hash");
+  // The unchanged trigger's source check reads originals through 0734's existing flag-gated migration read; restored after.
+  expect(worker).toContain("prior_original:=current_setting('app.job_proof_source_read',true);\n PERFORM set_config('app.job_proof_source_read','on',true);\n INSERT INTO app.recovery_message_sink(");
+  expect(worker).toContain("GET DIAGNOSTICS n = ROW_COUNT;\n PERFORM set_config('app.job_proof_source_read',coalesce(prior_original,''),true);\n IF n=0 THEN");
+  expect(sql.slice(sql.indexOf("-- BEGIN lp-6d-lp10-recovery-sink"))).not.toMatch(/CREATE POLICY|GRANT [^;]* ON (?:TABLE )?app\./u);
+  expect(sql).toContain("GRANT EXECUTE ON FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) TO jobguard_runtime;");
+  expect(sql).toContain("existing queue-tenant-trust named hold until LP-10");
+  expect(classification["app.lp6d_recovery_message_sink_worker(uuid,text)"]).toMatch(/^Reviewed /u);
+});
+
+it("keeps the recovery worker trigger invoker-owned and the delivery port migration-owned", () => {
+  const trigger = definitions(sql).filter(m => m[1] === "app.guard_recovery_message_sink").at(-1)![0]!;
+  expect(trigger).not.toMatch(/SECURITY DEFINER/u);
+  expect(sql).toContain("ALTER FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) OWNER TO jobguard_migration;");
+  expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) FROM PUBLIC,jobguard_identity,jobguard_infrastructure,jobguard_shadow;");
 });

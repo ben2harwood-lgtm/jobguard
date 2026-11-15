@@ -289,6 +289,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     .matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)) {
     lp6dBodies.set(m[1]!, [...(lp6dBodies.get(m[1]!) ?? []), m[4]!]);
   }
+  // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
+  lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     if (prior.definition !== null && current?.source !== prior.source && lp6dBodies.get(`${prior.nspname}.${prior.proname}`)?.includes(current?.source)) {

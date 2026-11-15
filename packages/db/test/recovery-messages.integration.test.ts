@@ -658,7 +658,8 @@ describe('raw runtime SQL stays fail-closed', () => {
     expect(grants).toEqual(tables.map(table_name => ({ table_name, privileges: ['INSERT', 'SELECT'] })));
     const definers = (await admin.query(`SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.prosecdef AND p.proname LIKE '%recovery_message%'`)).rows;
     // LP-6d's one checked revocation routine replaces runtime's direct UPDATE on action_authorization.revoked_at.
-    expect(definers).toEqual([{ proname: 'revoke_recovery_message_authorization' }]);
+    // lp6d_recovery_message_sink_worker is LP-10's actor-less delivery route (the outbox worker's sink write).
+    expect(definers.map(row => row.proname).sort()).toEqual(['lp6d_recovery_message_sink_worker', 'revoke_recovery_message_authorization']);
   });
 });
 
@@ -1672,6 +1673,53 @@ describe('a message states the one current case figures, approved landings inclu
     }, 'legacy_supplier_landing');
   });
 
+  it('keeps the actor-less sink route unavailable to requests, raw runtime writes and foreign queue tenants', async () => {
+    await inIsolatedWorld(async () => {
+      const { caseId, view } = await approved();
+      const outbox = view.approval!.outboxActionId;
+      await admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE id=$1", [outbox]);
+      expect(await code(() => inTenant(query => query('SELECT app.lp6d_recovery_message_sink_worker($1,$2)', [outbox, 'bound'])))).toBe('42501');
+      const sink = await runtime.connect();
+      try {
+        await sink.query('BEGIN');
+        await sink.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        const refused = async (sql: string, args: unknown[], expected: string) => {
+          await sink.query('SAVEPOINT refused');
+          expect(await code(() => sink.query(sql, args))).toBe(expected);
+          await sink.query('ROLLBACK TO refused');
+        };
+        await refused('SELECT app.lp6d_share_sink_authorization_worker($1,$2)', [fixture.tenantId, outbox], '42501');
+        await refused(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)`, [randomUUID(), fixture.tenantId, fixture.jobId, caseId, view.id, outbox, view.message.recipient, view.message.body, view.message.contentHash, view.message.attachmentHash], '42501');
+        await sink.query("SELECT set_config('app.tenant_id',$1,true)", [randomUUID()]);
+        await refused('SELECT app.lp6d_recovery_message_sink_worker($1,$2)', [outbox, 'foreign'], '23514');
+        await sink.query("SELECT set_config('app.tenant_id','',true)");
+        await refused('SELECT app.lp6d_recovery_message_sink_worker($1,$2)', [outbox, 'missing'], '23514');
+      } finally { await sink.query('ROLLBACK'); sink.release(); }
+      expect(await sinkCount(view.id)).toBe(0);
+      expect(await outboxStatus(outbox)).toBe('executing');
+    });
+  });
+
+  it('refuses an actor-less worker delivery whose approved amount changed after a landing', async () => {
+    await inIsolatedWorld(async () => {
+      await activateJobForLanding();
+      const { caseId, view } = await approved('merchant_overcharge');
+      await land(caseId, 12000);
+      const outbox = view.approval!.outboxActionId;
+      await admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE id=$1", [outbox]);
+      const sink = await runtime.connect();
+      try {
+        await sink.query('BEGIN');
+        await sink.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        expect(await code(() => sink.query('SELECT app.lp6d_recovery_message_sink_worker($1,$2)', [outbox, 'stale']))).toBe('23514');
+      } finally { await sink.query('ROLLBACK'); sink.release(); }
+      expect(await sinkCount(view.id)).toBe(0);
+      expect(await outboxStatus(outbox)).toBe('executing');
+      expect(await count('SELECT count(*) n FROM app.landing_allocation WHERE case_id=$1', [caseId])).toBe(1);
+    }, 'legacy_supplier_landing');
+  });
+
   it('serializes a delivery and the approved-landing routine on the one case lock, in both orders', async () => {
     await inIsolatedWorld(async () => {
       await activateJobForLanding();
@@ -1698,8 +1746,8 @@ describe('a message states the one current case figures, approved landings inclu
       const sink = await runtime.connect();
       try {
         await sink.query('BEGIN'); await sink.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
-        await sink.query(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'locked','synthetic_demo',0)`, [randomUUID(), fixture.tenantId, fixture.jobId, second.caseId, second.view.id, second.view.approval!.outboxActionId, second.view.message.recipient, second.view.message.body, second.view.message.contentHash, second.view.message.attachmentHash]);
+        // Actor-less outbox delivery uses the private worker route; no request binding.
+        await sink.query('SELECT app.lp6d_recovery_message_sink_worker($1,$2)', [second.view.approval!.outboxActionId, 'locked']);
         let landed = false;
         const landing2 = approveLanding(command).then(() => { landed = true; });
         await until(() => waitingForCaseLock(second.caseId), 'the landing routine held behind the delivery');

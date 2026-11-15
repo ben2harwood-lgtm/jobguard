@@ -1299,3 +1299,131 @@ foreign tenant, and a credential other than the bound one) AND that
 `lp6d_contractor_session_identity(p_session)`, the identity the binder used, is the bound actor. With
 the shipped `contractor_session` the two are the same set, so behaviour is equal; they differ only when
 the lookup is replaced (the PW27 rollback drill). The r19 recorded-owner branch is unchanged.
+
+## LP-6d LP-10 recovery-sink hold — 15 November 2026
+
+RED, NOPR build-ahead leaf `lp-6d-lp10-recovery-sink`, based on exact round-PASS
+head `4948b6a3d83244dc806be5fd729732df249df0ed`. This repairs only the actor-less
+held-open delivery transaction in recovery-messages. No contractor-session or
+practice-session authentication, binding routine, credential resolution or
+refusal-principal behavior changes. No FLAGGED: sign-in boundary changes.
+
+0749 remains last. All SQL additions are in the final bounded
+`-- BEGIN/END lp-6d-lp10-recovery-sink` block, with its own transaction following
+the original migration's COMMIT. No existing routine body is edited in place.
+
+- New `app.lp6d_recovery_message_sink_worker(uuid,text)`: migration-owned,
+  fixed-search-path definer, refuses bound requests and non-synthetic databases;
+  selects commercial fields from the stored message/approval for the queued
+  tenant and outbox identity. It does not claim or complete outbox work, create
+  authorization, or perform an external send. Classified with a Reviewed reason.
+- New private INVOKER `app.lp6d_share_sink_authorization_worker(uuid,uuid)`:
+  exact existing lock helper minus its request-binding prefix. PUBLIC, every
+  existing non-superuser login and all business roles lose direct EXECUTE.
+- Recreated `app.guard_recovery_message_sink()` from its latest 0749 body:
+  only the authorization-lock helper call changes. The unbound migration-owned
+  worker reaches the private copy; all other callers retain the guarded helper.
+  Every case/source lock, approval, expiry/revocation, amount, snapshot and pack
+  check remains. Drift and latest-definition caller-list pins cover the copy and
+  trigger; both upgrade successor checks name the final body.
+
+The same **existing queue-tenant-trust named hold** as the escalation worker
+remains: the queue selects `app.tenant_id`, rather than a dedicated worker
+credential deriving it. This change does not implement LP-10 or authorize real
+customer data. The private copy is unavailable to request callers; the worker
+port refuses a bound request. Existing authorized bound raw-sink assertions
+remain unchanged; no new request-side bypass is introduced.
+
+Only the delivery setup in the existing two-order lock test changes to call the
+worker port. All existing assertions remain. Two additional PostgreSQL cases
+cover bound-request refusal, private-helper denial, raw unbound INSERT denial,
+foreign/missing queued tenant, unchanged outbox/sink state, and refusal after an
+approved landing changes the approved amount. The original concurrency test
+still proves delivery holds the case lock until commit and landing waits.
+
+Initial review — LATER / SIMPLICITY: `app.lp6d_share_sink_authorization_worker`
+in 0749 duplicates the lock helper by design. When LP-10 supplies worker
+credentials, consolidate the two paths behind that credential boundary to
+remove duplicate-body maintenance; retain the drift pins until then.
+
+Local evidence (installed tools only; no downloads, PostgreSQL, browsers or git
+writes):
+
+- Dependency builds: `./node_modules/.bin/tsc -p packages/core/tsconfig.json`
+  and `./node_modules/.bin/tsc -p packages/storage/tsconfig.json` — PASS.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` and
+  `./node_modules/.bin/tsc -p packages/db/tsconfig.json` — PASS (typecheck/build).
+- `./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=1 test/lp6d-routines.test.ts test/lp6d-repository-context.test.ts test/migration-proof-loader.test.ts`
+  — PASS, 3 files / 134 tests. An earlier run could not import unbuilt workspace
+  dependencies; rebuilding them resolved collection without source changes.
+- `node tools/commercial-integrity-boundary.mjs` and
+  `node tools/commercial-integrity-current-source-guard.mjs` — PASS, each reports
+  94 protected roots / 0 diagnostics / 10 existing baselined unresolved cases.
+  Neither unresolved file is changed.
+- PostgreSQL discovery using `vitest list --maxWorkers=1` (three named files per
+  invocation) collected the exact counts below. Discovery did not run PG hooks.
+- Lane lint against origin/main reports inherited LP-6d paths; against the
+  issued base it refuses a HEAD/self comparison before the router's commit.
+  The leaf lane lists only this leaf's changed paths (its own path is implicit).
+  Router must rerun lane lint after committing, with LANE_BASE_REF set to the
+  round-PASS base. Do not expand the lane to include inherited changes.
+
+**Router PG step:** leave `0749_lp6d_remaining_routines.proof.json` unchanged
+here. Regenerate it from a live catalogue after stacking this leaf, limited to
+these two new functions, the sink trigger's latest body and associated ACL/call
+facts; run proof/catalogue checks against that refreshed proof. No catalogue
+execution or proof regeneration is claimed locally. Forward fix through a
+reviewed successor after installation; no destructive rollback.
+
+Run from repository root on real PostgreSQL (expected counts from collection;
+all must pass, no skips):
+
+```sh
+./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=2 test/recovery-messages.integration.test.ts test/outbox.integration.test.ts test/lp6d-routines.integration.test.ts
+# 138 passes: 108 recovery-messages + 15 outbox + 15 lp6d-routines
+./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=2 test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/recovery-follow-up.integration.test.ts
+# 82 passes: 1 migfix-7 upgrade + 1 plan-entitlement upgrade + 80 follow-up
+```
+
+Required CI must also preserve the existing recovery-* and outbox suite results
+and the whole-db baseline: this cured recovery-message file must leave the fail
+list, and nothing new may join it. Other sibling holds are not repaired here.
+Fresh catalogue proof, real lock execution, exact-head independent RED review
+and CI remain router gates. This is a code handoff, not a merge or release.
+
+- `./apps/api/node_modules/.bin/vitest run --root apps/api --maxWorkers=1 src/auth/context-boundary.test.ts`
+  — PASS, 146 tests. Initial concurrent run: 143 passed, 3 timeouts; isolated
+  rerun passed all 146 with unchanged source, assertions and timeout limits.
+- `git diff --check` — PASS. Exact lane-path equality against uncommitted
+  changes — PASS (seven explicit paths plus the implicit lane file).
+- `node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs tools/commercial-integrity-current-source-guard.test.mjs`
+  — PASS, 253 tests, zero skips. Initial parallel invocation had two CLI child
+  ETIMEDOUT failures; sequential rerun passed with unchanged limits/checks.
+
+READY for router commit and PostgreSQL verification; NOPR remains in force.
+
+### LP-10 recovery sink, repair r2 (coordinator FIX: recovery-messages :661 and :1749)
+
+- **Cause, confirmed on real PostgreSQL.** Inside the worker definer the unchanged
+  sink trigger runs as `jobguard_migration`. Every helper it calls returned the
+  same answer as `jobguard_runtime` except `app.recovery_message_sources_current`
+  (runtime `true`, migration `false`). Its only table migration could not see is
+  `app.synthetic_evidence_original`: runtime has `tenant_isolation`, migration has
+  only 0734's `job_proof_source_read` (SELECT, same tenant, open only while
+  `app.job_proof_source_read='on'`). With that flag on, migration sees the same
+  one row and the check returns `true`.
+- **Fix.** The worker sets `app.job_proof_source_read` to `on` (transaction-local)
+  just for its one sink INSERT, then restores the prior value; it counts rows with
+  `GET DIAGNOSTICS` because the restoring `PERFORM` resets `FOUND`. The trigger and
+  every check in it stay as they were. There's no new policy, no new grant, and
+  no table is touched.
+- **Proof.** Regenerated from the live catalogue: the sink trigger's `after`
+  (new digest and calls), two new routine records and upgrade rows for the two
+  workers, plus owner and runtime EXECUTE entries for the delivery worker. These
+  are the two facts lp-0 reported as unreviewed.
+- **Expectations.** recovery-messages :661 now lists the worker as LP-10's
+  actor-less delivery route. The lp6d-routines group-entry count goes from 28 to 30
+  (owner plus runtime EXECUTE for the worker).
+- **migfix-7 latest-body pin.** It now reads overload index 3, the 4th
+  `FUNCTION app.guard_recovery_message_sink(` in 0749, which is this leaf's
+  CREATE. Index 1 was 0749's earlier ALTER statement and crashed the upgrade test.
