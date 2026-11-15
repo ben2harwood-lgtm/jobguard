@@ -6118,6 +6118,22 @@
       "section": "entries",
       "before": null,
       "after": {
+        "key": "owner|routine|function:app.lp6d_recovery_message_sink_worker(uuid,text)|jobguard_migration",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp6d_recovery_message_sink_worker(uuid,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
         "key": "owner|routine|function:app.lp6d_watchdog_live_maintenance(uuid)|jobguard_migration",
         "group": "a-lp6d-routine-binding"
       }
@@ -6414,11 +6430,13 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "1b7268d7513cbe62f1c96e485c433a04df6135adb74001103b0438858d292b0a",
+        "definitionSha256": "88eee4ef16417da2d12524e41e94ef8433fae332f6371df5498fef0fcdb1d190",
         "staticWrites": [],
         "staticCalls": [
           "app.lock_recovery_message_sources",
+          "app.lp6d_request_bound",
           "app.lp6d_share_sink_authorization",
+          "app.lp6d_share_sink_authorization_worker",
           "app.recovery_follow_up_stop_reason",
           "app.recovery_message_case_snapshot",
           "app.recovery_message_proofs_current",
@@ -6706,6 +6724,48 @@
           "app.current_actor",
           "app.current_tenant",
           "app.lp6d_maintenance_login"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6d_share_sink_authorization_worker(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "2a9d60542c962bd7f53f77a011982db471a804f870a226aab41253c6d2c54fed",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6d_recovery_message_sink_worker(uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "ee8b5cb06058a39ebb00ca06fb967bac80bed6f85e00b8bc674004f7887cebf6",
+        "staticWrites": [
+          "app.recovery_message_sink"
+        ],
+        "staticCalls": [
+          "app.lp6d_request_bound"
         ]
       }
     },
@@ -7747,6 +7807,36 @@
         "nspname": "app",
         "proname": "lp6d_share_sink_authorization",
         "args": "p_tenant uuid, p_outbox uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_share_sink_authorization_worker",
+        "args": "p_tenant uuid, p_outbox uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_recovery_message_sink_worker",
+        "args": "p_outbox uuid, p_reference text",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
         "prosecdef": true,

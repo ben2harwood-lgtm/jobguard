@@ -105,7 +105,7 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   expect(inventory.entries.some(e => e.key.startsWith("acl|col|app.action_authorization.") && e.key.includes("|jobguard_runtime|UPDATE|"))).toBe(false);
   // r8: the revocation routine, revoke-claim helper and seven runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each),
   // plus (r10) the command-writer-owned delegated-actor match check (owner + migration EXECUTE). LP-6c's accessor gains no grant.
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(28); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each) and the escalation worker (owner + runtime EXECUTE)
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(30); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each) and the escalation worker (owner + runtime EXECUTE); LP-10 sink hold: + the actor-less recovery delivery worker (owner + runtime EXECUTE)
   expect(inventory.entries.some(e => e.key.startsWith("acl|routine|function:app.lp6_delegated_actor(") && e.key.includes("|jobguard_migration|"))).toBe(false);
 });
 
@@ -507,6 +507,10 @@ it("pins the actor-less recovery delivery port, private lock copy and sole trigg
   expect(worker).toContain("IF current_database()<>'jobguard_synthetic_demo'");
   expect(worker).toContain("WHERE ap.tenant_id=t AND ap.outbox_action_id=p_outbox;");
   expect(worker).toContain("m.recipient,m.body,m.content_hash,m.attachment_hash");
+  // The unchanged trigger's source check reads originals through 0734's existing flag-gated migration read; restored after.
+  expect(worker).toContain("prior_original:=current_setting('app.job_proof_source_read',true);\n PERFORM set_config('app.job_proof_source_read','on',true);\n INSERT INTO app.recovery_message_sink(");
+  expect(worker).toContain("GET DIAGNOSTICS n = ROW_COUNT;\n PERFORM set_config('app.job_proof_source_read',coalesce(prior_original,''),true);\n IF n=0 THEN");
+  expect(sql.slice(sql.indexOf("-- BEGIN lp-6d-lp10-recovery-sink"))).not.toMatch(/CREATE POLICY|GRANT [^;]* ON (?:TABLE )?app\./u);
   expect(sql).toContain("GRANT EXECUTE ON FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) TO jobguard_runtime;");
   expect(sql).toContain("existing queue-tenant-trust named hold until LP-10");
   expect(classification["app.lp6d_recovery_message_sink_worker(uuid,text)"]).toMatch(/^Reviewed /u);

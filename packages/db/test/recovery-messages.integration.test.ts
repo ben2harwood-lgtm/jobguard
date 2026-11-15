@@ -658,7 +658,8 @@ describe('raw runtime SQL stays fail-closed', () => {
     expect(grants).toEqual(tables.map(table_name => ({ table_name, privileges: ['INSERT', 'SELECT'] })));
     const definers = (await admin.query(`SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.prosecdef AND p.proname LIKE '%recovery_message%'`)).rows;
     // LP-6d's one checked revocation routine replaces runtime's direct UPDATE on action_authorization.revoked_at.
-    expect(definers).toEqual([{ proname: 'revoke_recovery_message_authorization' }]);
+    // lp6d_recovery_message_sink_worker is LP-10's actor-less delivery route (the outbox worker's sink write).
+    expect(definers.map(row => row.proname).sort()).toEqual(['lp6d_recovery_message_sink_worker', 'revoke_recovery_message_authorization']);
   });
 });
 

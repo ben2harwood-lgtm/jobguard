@@ -1365,3 +1365,29 @@ and CI remain router gates. This is a code handoff, not a merge or release.
   ETIMEDOUT failures; sequential rerun passed with unchanged limits/checks.
 
 READY for router commit and PostgreSQL verification; NOPR remains in force.
+
+### LP-10 recovery sink, repair r2 (coordinator FIX: recovery-messages :661 and :1749)
+
+- **Cause, confirmed on real PostgreSQL.** Inside the worker definer the unchanged
+  sink trigger runs as `jobguard_migration`. Every helper it calls returned the
+  same answer as `jobguard_runtime` except `app.recovery_message_sources_current`
+  (runtime `true`, migration `false`). Its only table migration could not see is
+  `app.synthetic_evidence_original`: runtime has `tenant_isolation`, migration has
+  only 0734's `job_proof_source_read` (SELECT, same tenant, open only while
+  `app.job_proof_source_read='on'`). With that flag on, migration sees the same
+  one row and the check returns `true`.
+- **Fix.** The worker sets `app.job_proof_source_read` to `on` (transaction-local)
+  just for its one sink INSERT, then restores the prior value; it counts rows with
+  `GET DIAGNOSTICS` because the restoring `PERFORM` resets `FOUND`. The trigger and
+  every check in it stay as they were. There's no new policy, no new grant, and
+  no table is touched.
+- **Proof.** Regenerated from the live catalogue: the sink trigger's `after`
+  (new digest and calls), two new routine records and upgrade rows for the two
+  workers, plus owner and runtime EXECUTE entries for the delivery worker. These
+  are the two facts lp-0 reported as unreviewed.
+- **Expectations.** recovery-messages :661 now lists the worker as LP-10's
+  actor-less delivery route. The lp6d-routines group-entry count goes from 28 to 30
+  (owner plus runtime EXECUTE for the worker).
+- **migfix-7 latest-body pin.** It now reads overload index 3, the 4th
+  `FUNCTION app.guard_recovery_message_sink(` in 0749, which is this leaf's
+  CREATE. Index 1 was 0749's earlier ALTER statement and crashed the upgrade test.

@@ -7923,20 +7923,28 @@ REVOKE ALL ON FUNCTION app.guard_recovery_message_sink() FROM PUBLIC;
 
 -- Queue route takes only action identity and provider reference. All commercial
 -- fields come from the stored message/approval, never caller-supplied content.
+-- The unchanged sink trigger runs here as jobguard_migration. Its source check reads
+-- app.synthetic_evidence_original, where migration has only 0734's existing
+-- tenant-scoped, SELECT-only, flag-gated job_proof_source_read policy. Open that
+-- flag for this one insert and restore it: no new policy or grant.
 CREATE FUNCTION app.lp6d_recovery_message_sink_worker(p_outbox uuid,p_reference text) RETURNS void
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE t uuid;
+DECLARE t uuid; prior_original text; n bigint;
 BEGIN
  IF app.lp6d_request_bound() THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  BEGIN t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
  EXCEPTION WHEN invalid_text_representation THEN t:=NULL; END;
  IF t IS NULL OR p_reference IS NULL OR p_reference='' THEN RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
+ prior_original:=current_setting('app.job_proof_source_read',true);
+ PERFORM set_config('app.job_proof_source_read','on',true);
  INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions)
  SELECT gen_random_uuid(),m.tenant_id,m.job_id,m.case_id,m.id,ap.outbox_action_id,m.recipient,m.body,m.content_hash,m.attachment_hash,p_reference,'synthetic_demo',0
  FROM app.recovery_message_approval ap JOIN app.recovery_message m ON m.tenant_id=ap.tenant_id AND m.id=ap.message_id
  WHERE ap.tenant_id=t AND ap.outbox_action_id=p_outbox;
- IF NOT FOUND THEN RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
+ GET DIAGNOSTICS n = ROW_COUNT;
+ PERFORM set_config('app.job_proof_source_read',coalesce(prior_original,''),true);
+ IF n=0 THEN RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
 END $$;
 ALTER FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) FROM PUBLIC,jobguard_identity,jobguard_infrastructure,jobguard_shadow;
