@@ -129,7 +129,8 @@ export async function seedWorkPractice(f:WorkFixture) {
  const sessionId=await issuePracticeSession(f.runtime),principal=await authenticatePracticeSession(f.runtime,sessionId);
  // A separate identity credential leaves the practice session free for revocation races.
  const bindingCredential=randomBytes(32).toString("hex");
- const auth={...principal,context:await testBoundTenantContext(f.admin,principal.context.tenantId,principal.membershipId,bindingCredential)};
+ // 0735: Final Check terms are accepted per firm, through the practice-bound context.
+ const auth={...principal,practiceContext:principal.context,context:await testBoundTenantContext(f.admin,principal.context.tenantId,principal.membershipId,bindingCredential)};
  const jobId=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live' AND practice_scenario='home'",[DEMO_TENANT_ID,auth.digest])).rows[0].id as string;
  return {sessionId,jobId,auth,bindingCredential};
 }

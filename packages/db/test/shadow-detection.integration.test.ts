@@ -250,8 +250,11 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
    }finally{await db.query("ROLLBACK");db.release()}
   }
   const reader=new ShadowObservationReader(runtime,new FixtureObservationSources([]));await reader.assertTermsRelation();
-  expect(await reader.hasAcceptedTerms(testTenantContext(T))).toBe(true);
-  expect(await reader.hasAcceptedTerms(testTenantContext(O))).toBe(false);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T),J)).toBe(true);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T),K)).toBe(true);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T),L)).toBe(false);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T),randomUUID())).toBe(false);
+  expect(await reader.hasAcceptedTerms(testTenantContext(O),L)).toBe(false);
   await expect(withTenant(runtime,testTenantContext(T),db=>db.$client.query("INSERT INTO app.final_check_terms_acceptance(tenant_id) VALUES($1)",[T]))).rejects.toMatchObject({code:"42501"});
   await withTenant(shadow,testTenantContext(T),db=>db.$client.query(routine,args));
   expect((await admin.query("SELECT rule FROM app.shadow_must_surface_firing WHERE id=$1",[args[3]])).rows).toEqual([{rule:"safety"}]);

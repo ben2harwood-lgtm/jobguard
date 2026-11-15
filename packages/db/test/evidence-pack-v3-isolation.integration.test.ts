@@ -1,3 +1,4 @@
+import { practiceMaterialPool } from "../src/practice-session.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { prepareEvidencePackV3Sources, withEvidencePackV3Snapshot } from "../src/evidence-pack-v3-sources.js";
@@ -31,13 +32,12 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
   const { ShadowObservationReader, FixtureObservationSources } = await import("../src/shadow-observation-reader.js");
   const { ShadowDetectionRepository } = await import("../src/shadow-detection-repository.js");
   const { detectShadowObservations } = await import("@jobguard/core");
-  await new FinalAccountLockRepository(f.runtime).acceptTerms(f.auth.context, { actorMembershipId: f.auth.membershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+  await new FinalAccountLockRepository(practiceMaterialPool(f.runtime,f.auth.digest)).acceptTerms(f.auth.context, { actorMembershipId: f.auth.membershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
   // Must-surface reads require a live, session-scoped small-builder job. The
   // ordinary pack fixture above has already reached invoiced, so create a live
   // job through the existing quote/activation writers rather than alter its state.
   const { prepareActivationFixtureV3 } = await import("../src/demo-seed.js");
   const { PracticeActivationRepository } = await import("../src/activation-repository.js");
-  const { practiceMaterialPool } = await import("../src/practice-session.js");
   const { RecoveryCaseRepository } = await import("../src/recovery-case-repository.js");
   const { recoverySourceCatalogueV1 } = await import("@jobguard/core");
   const scoped = practiceMaterialPool(f.runtime, f.auth.digest);

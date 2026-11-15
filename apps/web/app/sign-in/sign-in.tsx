@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { FirmDetailsScreen } from "../firm-details/firm-details";
 type Session={csrfToken:string;principal:{id:string};memberships:{id:string;tenantId:string;role:string;name:string}[]};
 // What an accepted invitation did to this browser's sign-in: nobody was signed in ("new"), the business was added to the
 // account that was already signed in ("added"), or verification signed this browser in as a different account ("switched").
@@ -10,6 +11,23 @@ export function IdentitySignIn() {
   const errorRef=useRef<HTMLParagraphElement>(null);
   useEffect(()=>{const id=new URLSearchParams(location.search).get("invitationId");if(id){setInvitationId(id);setPurpose("invitation");setInvitationLink(true);}void fetch("/api/auth/session",{cache:"no-store"}).then(async r=>{if(r.ok)setSession(await r.json() as Session);else if(r.status!==401)setError("Identity storage is unavailable. Try again.");}).catch(()=>setError("Identity storage is unavailable. Try again.")).finally(()=>setChecking(false));},[]);
   useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
+  // A session may be signed out or switched in another tab while this form is open.
+  useEffect(()=>{
+    if(!session)return;
+    let active=true, latest=0;
+    async function refresh() {
+      if(document.visibilityState==="hidden")return;
+      const request=++latest;setChecking(true);
+      try {
+        const response=await fetch("/api/auth/session",{cache:"no-store"});
+        const next=response.ok?await response.json() as Session:null;
+        if(active&&request===latest){setSession(next);if(!response.ok&&response.status!==401)setError("Identity storage is unavailable. Try again.");}
+      }catch{if(active&&request===latest){setSession(null);setError("Identity storage is unavailable. Try again.");}}
+      finally{if(active&&request===latest)setChecking(false);}
+    }
+    window.addEventListener("focus",refresh);document.addEventListener("visibilitychange",refresh);
+    return ()=>{active=false;window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",refresh);};
+  },[session?.csrfToken]);
   async function submit(event:FormEvent,verify:boolean) {
     event.preventDefault();setBusy(true);setError("");
     try {
@@ -34,7 +52,11 @@ export function IdentitySignIn() {
     <h1>Sign in to JobGuard</h1><p>Use the supplied fictional address. Do not enter real names or email addresses.</p>
     {error&&<p role="alert" ref={errorRef} tabIndex={-1}>{error}</p>}
     {checking?<p role="status">Checking your persisted session…</p>:<>
-      {session&&<section aria-label="Verified account"><h2>You're signed in.</h2>{session.memberships.map(m=><article key={m.id}><h3>{m.name}</h3><p>{m.role === "read_only" ? "Read only" : m.role.charAt(0).toUpperCase()+m.role.slice(1)}</p></article>)}<details><summary>Technical details</summary><p>Identity: <span data-testid="identity-id">{session.principal.id}</span></p>{session.memberships.map(m=><div key={m.id}><p data-testid="identity-tenant">{m.tenantId}</p><p>Membership: {m.id}</p></div>)}</details>{accepted==="new"&&<p role="status">Invitation accepted. Your memberships above are current.</p>}{accepted==="added"&&<p role="status">Invitation accepted. The invited business is now one of this account's memberships above.</p>}{accepted==="switched"&&<p role="status">Invitation accepted. This browser is now signed in as the invited address, which is a different account from the one you were using. The memberships above belong to that account; sign in with your previous address to return to the other one.</p>}<p>This is a practice version: made-up jobs only, nothing is sent or charged.</p><p><a href="/classic">Open my jobs</a></p><p><a href="/plans">See plans and prices</a></p><button type="button" disabled={busy} onClick={()=>void signout()}>Sign out</button></section>}
+      {session&&<section aria-label="Verified account"><h2>You're signed in.</h2>{session.memberships.map(m=><article key={m.id}><h3>{m.name}</h3><p>{m.role === "read_only" ? "Read only" : m.role.charAt(0).toUpperCase()+m.role.slice(1)}</p></article>)}<details><summary>Technical details</summary><p>Identity: <span data-testid="identity-id">{session.principal.id}</span></p>{session.memberships.map(m=><div key={m.id}><p data-testid="identity-tenant">{m.tenantId}</p><p>Membership: {m.id}</p></div>)}</details>{accepted==="new"&&<p role="status">Invitation accepted. Your memberships above are current.</p>}{accepted==="added"&&<p role="status">Invitation accepted. The invited business is now one of this account's memberships above.</p>}{accepted==="switched"&&<p role="status">Invitation accepted. This browser is now signed in as the invited address, which is a different account from the one you were using. The memberships above belong to that account; sign in with your previous address to return to the other one.</p>}<p>This is a practice version: made-up jobs only, nothing is sent or charged.</p>{!busy&&session.memberships.length===1&&session.memberships[0]!.role==="owner"&&<section className="practice-firm-profile" aria-label="Name your practice business">
+        <h2>Name your practice business</h2><p>Use made-up business details only. The trading name does not rename your sign-in business or membership.</p>
+        <style>{`.practice-firm-profile fieldset{min-width:0;margin:0}.practice-firm-profile label{display:block;margin-bottom:12px}.practice-firm-profile input{display:block;box-sizing:border-box;width:100%;min-height:44px}.practice-firm-profile button,.practice-firm-profile a{min-height:44px}.practice-firm-profile a{display:inline-flex;align-items:center}`}</style>
+        <FirmDetailsScreen key={`${session.principal.id}:${session.memberships[0]!.id}`}/>
+      </section>}<p><a href="/classic">Open my jobs</a></p><p><a href="/plans">See plans and prices</a></p><button type="button" disabled={busy} onClick={()=>void signout()}>Sign out</button></section>}
       {(!session||(invitationLink&&!accepted))&&<section aria-label={session?"Accept an invitation":"Sign in"}>
       {session&&<><h2>Accept an invitation</h2><p>You are signed in. Verifying signs this browser in as the address the invitation was sent to. If that is the address you are signed in with, the invited business is added to this account. If it is a different address, this browser switches to that other account and signs this one out here.</p><p>Enter the address the invitation was sent to and the code sent to it.</p></>}
       <form onSubmit={e=>void submit(e,false)}>

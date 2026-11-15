@@ -135,7 +135,7 @@ The referenced coordinator precheck file was absent from this checkout; diagnosi
 used the supplied failure report and inspected source/callers/tests.
 
 LATER / SIMPLICITY (initial inspection):
-`packages/db/migrations/0734_identity_linked_practice.sql`, legacy routine patch
+`packages/db/migrations/0741_identity_linked_practice.sql`, legacy routine patch
 loop: replace the three body overlays with explicit latest routine definitions
 in a separate focused change. This would make guard placement reviewable without
 depending on string positions. Deferred optional work to keep this repair focused;
@@ -249,3 +249,70 @@ required migration/tenant and browser journeys after the router pushes. The
 protected S9 practice-session bridge pin must be refreshed separately by the
 router; it was not changed to make a check pass. Exact-head RED review and green
 required CI remain necessary before landing.
+
+
+## Catch-up — 0741 and current-main unions (15 November 2026)
+
+READY for router staging/commit and CI, RED (practice sign-in/sessions and tenancy).
+Base remains 16229f556; the pre-existing merge has MERGE_HEAD and origin/main at
+358bef066. No Git writes were performed. Fetch/merge and git mv could not be run
+under the supplied read-only Git constraint: the merge was already started and
+ordinary filesystem renames prepare the three paths for router staging. A
+read-only `git ls-remote origin refs/heads/main` failed because github.com could
+not resolve; the router must verify main freshness before completing the merge.
+The two conflicted files now contain exactly the union of their shared lists.
+Their index entries remain unmerged until the router stages the resolutions.
+
+Renamed only this piece's migration, proof and note to 0741; 0740 remains reserved
+for #779. All old lane paths remain alongside the three new paths. Updated the
+linked-practice upgrade fixture and both seven-routine latest-body pin lists.
+Main's 0734_job_proof_statement and all main 0734–0739 SQL/proofs/notes remain
+byte-identical to MERGE_HEAD. Ben's approved practice-session baseline entries
+remain unchanged in both commercial-integrity unresolved files.
+
+Latest-body audit: no routine was rebased. Inspected all 13 function definitions
+in this piece against every CREATE FUNCTION/CREATE OR REPLACE FUNCTION in
+0735–0739 and checked references to those names. Those main migrations replace
+none of this piece's routines. In particular issue_practice_session,
+start_blank_practice_company, start_blank_practice_company_v2,
+seed_saved_v1_sample, authenticate_practice_session, lp6_session_authority and
+is_blank_practice_company retain their reviewed bodies. No body/fingerprint
+update is needed. SQL SHA-256 remains
+cfc151987aef24e3ddfadb906f155cbb222a281c336faa8f60fcb2ea9a54ee50;
+proof changes are migration-name substitutions only. C261: no new behavior or
+test expectation change beyond exact unions and renamed migration references.
+
+Local checks (installed binaries, no downloads):
+
+- `node tools/commercial-integrity-boundary.mjs` — 94 protected roots,
+  0 diagnostics, 10 baselined unresolved sites.
+- `node tools/commercial-integrity-current-source-guard.mjs` — 94 protected roots,
+  0 diagnostics, 10 baselined unresolved cases.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1 src/blank-practice-company.test.ts test/migration-proof-loader.test.ts test/extra-proceed-migration.test.ts`
+  — 85 passed, three files, Vitest 4.1.12.
+- From packages/db: `./node_modules/.bin/vitest run --maxWorkers=1 test/lp-0-catalog.test.ts test/lp6a-binding.test.ts test/lp6b-withtenant.test.ts`
+  — 49 passed, three files.
+- `./packages/db/node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — passed.
+- `./packages/db/node_modules/.bin/tsc -p /tmp/real-wayin-linked-practice-0741-tsconfig.json`
+  — passed; temporary config includes both linked-practice suites and the three
+  affected upgrade suites.
+- Source assertions: exact conflict unions, unchanged SQL, name-only proof,
+  untouched main migrations and approved baseline entries — passed.
+- Existing lane-policy exports: selected branch, all catch-up paths and migration
+  ordering against MERGE_HEAD — passed (source-only check).
+- `git diff --check` — passed; read-only check, not a staged-resolution claim.
+
+Not run here: PostgreSQL or browser suites (sandbox cannot start PostgreSQL or
+bind localhost). Router/CI commands after push, each named Vitest run <=3 files:
+
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/real-wayin-linked-practice.integration.test.ts test/real-wayin-linked-practice-races.integration.test.ts test/practice-session.integration.test.ts`
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/blank-practice-company.integration.test.ts test/identity.integration.test.ts`
+- `pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/extra-proceed-upgrade.integration.test.ts test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts`
+- `pnpm test:db`; `pnpm test:migrations`; required current-main typecheck/lint/test/build
+  and affected browser journeys in CI.
+
+These commands require actual PG evidence for fresh/upgrade catalogs, replay,
+RLS/ACLs, preserved rows, latest bodies, linked credentials and lifecycle races.
+The supplied checker PASS at d4318ee8 is prior-head evidence, not an independent
+review of this catch-up. Exact-head RED review and green CI remain landing gates.
+No commit, push, PR, reset, force-push, deployment or launch was performed.

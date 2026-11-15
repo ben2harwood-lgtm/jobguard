@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-overview-illustrative-photo": {
+      "branches": ["codex/sandbox/real-overview-illustrative-photo"],
+      "allow": [
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/design.css",
+        "apps/web/app/(designed)/real-designed-screens.test.tsx"
+      ]
+    }
+  }
+}

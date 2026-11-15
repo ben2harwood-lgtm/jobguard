@@ -1,8 +1,9 @@
+import { historicalAcceptedQuote } from "./lp-legacy-sandbox-fixture.js";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { jobDoorsDatabase, transaction } from "./lp-job-doors-fixtures.js";
-import { prepareActivationFixtureV3, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_ACCOUNT_ID as A, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
+import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_ACCOUNT_ID as A, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { migrate } from "../src/migrate.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
@@ -18,7 +19,7 @@ beforeAll(async()=>{
 },300_000);
 afterAll(async()=>{await db?.close();if(environment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=environment;});
 it("0519 alone preserves populated v1 commercial history, then repeat migrate succeeds",async()=>{
-  const job=await prepareActivationFixtureV3(db.owner,context,"Fictional before LP3",100100);
+  const job=await historicalAcceptedQuote(db.owner,context,"Fictional before LP3",100100);
   const d=(await db.owner.query("SELECT j.revision,d.* FROM app.job j JOIN app.quote_document_version d ON(d.tenant_id,d.id)=(j.tenant_id,j.accepted_quote_version_id) WHERE j.tenant_id=$1 AND j.id=$2",[T,job])).rows[0];
   await transaction(db.owner,T,c=>c.query(`SELECT app.switch_job_live($1,$2,$3,$4,$5,$6,$7,$8,$9,100100,1502,'synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',$10,clock_timestamp())`,[T,randomUUID(),randomUUID(),randomUUID(),job,d.id,d.document_version,d.content_hash,d.revision,M]));
   const tables=["app.job","app.quote_acceptance","app.acceptance_event","app.job_activation","app.cap_snapshot","app.synthetic_obligation"];

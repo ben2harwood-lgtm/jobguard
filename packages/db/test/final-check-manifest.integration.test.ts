@@ -1,3 +1,4 @@
+import { practiceMaterialPool } from "../src/practice-session.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {randomUUID} from "node:crypto";
@@ -144,7 +145,7 @@ it('SB-06: Double lock, replayed lock, or a later revision edits the lock', asyn
  const a=await seedFinalCheckJob(f);
  const { FinalAccountLockRepository } = await import('../src/final-account-lock-repository.js');
  const { FINAL_CHECK_ACTOR } = await import('./final-check-fixture.js');
- const repo=new FinalAccountLockRepository(f.runtime), input={jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:'final_account_declaration.v1' as const};
+ const repo=new FinalAccountLockRepository(practiceMaterialPool(f.runtime,a.digest)), input={jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:'final_account_declaration.v1' as const};
  const first=await repo.lock(a.context,input);
  expect(await repo.lock(a.context,input)).toEqual(first);
  const read=async()=> (await f.admin.query('SELECT row_to_json(l)::text bytes FROM app.final_account_lock l WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows;

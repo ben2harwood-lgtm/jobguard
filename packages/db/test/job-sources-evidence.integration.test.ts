@@ -45,7 +45,7 @@ describe("SV-7A independent finalized fixture evidence observations",()=>{
   for(const state of ["draft","rejected","withdrawn"]){const id=randomUUID();const capture=shadowCaptureV1.parse({version:"shadow-capture.v1",tenantId:o.tenantId,jobId:o.jobId,id,scopeItemId:id,revisionId:id,serverRecordedAt:o.evidence.serverReceivedAt,valuePence:null,kind:"log_extra",state,scopeArea:"job",description:"outside tap",recordedPhase:"pre_lock",aiStructured:false,sourceRef:id});expect(matchObservationCapture(o,[capture]).outcome).toBe("builder_captured");expect(detectShadowObservations([o],[capture],"2026-10-13T12:00:00Z")).toEqual([])}
  });
  it("SV7A-21 reader extension preserves terms gate and existing locked/imported restrictions",async()=>{
-  const reader=new ShadowObservationReader(f.runtime,new FixtureObservationSources([]));expect(await reader.hasAcceptedTerms(f.practice.auth.context)).toBe(false);
+  const reader=new ShadowObservationReader(f.runtime,new FixtureObservationSources([]));expect(await reader.hasAcceptedTerms(f.practice.auth.context,f.practice.jobId)).toBe(false);
   const result=await reader.read(f.practice.auth.context,{version:"shadow-observation-read.v1",jobId:f.practice.jobId});expect(result.observations.length).toBeGreaterThan(0);
  });
 });

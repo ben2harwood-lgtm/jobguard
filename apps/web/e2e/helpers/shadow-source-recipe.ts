@@ -24,7 +24,7 @@ export async function holdShadowRecipeSources(context: VerifiedTenantContext, fo
    const reader = new ShadowObservationReader(runtime, { async decode(source) {
     return source.kind === "completion_photo" ? decodePracticePhoto(source.sha256, hash("completion-photo"), hash("j3-drainage-photo")) : null;
    } });
-   expect(await reader.hasAcceptedTerms(context)).toBe(true);
+   expect(await reader.hasAcceptedTerms(context, jobId)).toBe(true);
    const { observations, captures } = await reader.read(context, { version: "shadow-observation-read.v1", jobId });
    expect(observations.map(o => o.facts.estimatedValuePence).sort()).toEqual([30000, 50000]);
    await expect(reader.read(foreignContext, { version: "shadow-observation-read.v1", jobId })).rejects.toThrow("OBSERVATION_JOB_UNAVAILABLE");

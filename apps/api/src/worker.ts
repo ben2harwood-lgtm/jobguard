@@ -40,7 +40,7 @@ const corpus=shadowFixtureCorpusV1.parse(JSON.parse(await readFile(new URL("../.
 const observationReader=new ShadowObservationReader(runtimePool,new FixtureObservationSources(corpus.cases.flatMap(c=>c.observations)));
 const detectionRepository=new ShadowDetectionRepository(shadowPool);
 const fixtureProposer=new ShadowFixtureProposer(Object.assign({},...corpus.cases.map(c=>c.responses)));
-const detectionWorker=new ShadowDetectionWorker({assertTermsRelation:()=>observationReader.assertTermsRelation(),hasAcceptedTerms:context=>observationReader.hasAcceptedTerms(context),read:(context,request)=>observationReader.read(context,request),propose:(o,id,at)=>fixtureProposer.propose(o,id,at),persist:(context,request)=>detectionRepository.persist(context,request)},process.env.JOBGUARD_ENV??"disabled");
+const detectionWorker=new ShadowDetectionWorker({assertTermsRelation:()=>observationReader.assertTermsRelation(),hasAcceptedTerms:(context,jobId)=>observationReader.hasAcceptedTerms(context,jobId),read:(context,request)=>observationReader.read(context,request),propose:(o,id,at)=>fixtureProposer.propose(o,id,at),persist:(context,request)=>detectionRepository.persist(context,request)},process.env.JOBGUARD_ENV??"disabled");
 await detectionWorker.start();
 // Queued identifiers enter business repositories only through this constructor.
 function queueContext(payload:unknown){const parsed=z.object({tenantId:z.string().uuid()}).strict().parse(payload);return verifiedTenantContextForQueuedJob(parsed.tenantId);}
@@ -92,7 +92,7 @@ tasks.hold_demo_sources=async(payload,helpers)=>{
  const task=demoHoldTaskV1.parse(payload),context=queueContext({tenantId:task.tenantId});
  const late=await readLateSourceObservations(runtimePool,context,task.jobId);
  if(late.length){
-  if(!await practiceHoldReader.hasAcceptedTerms(context))throw new Error("SHADOW_TERMS_NOT_ACCEPTED");
+  if(!await practiceHoldReader.hasAcceptedTerms(context,task.jobId))throw new Error("SHADOW_TERMS_NOT_ACCEPTED");
   await detectionRepository.persist(context,{version:"shadow-detection-batch.v1",jobId:task.jobId,observations:late,captures:[],
    proposals:detectShadowObservations(late,[],new Date().toISOString())});
  }else try{
@@ -117,7 +117,7 @@ tasks.build_evidence_pack_v3 = async payload => {
  const task = z.object({version:z.literal("evidence-pack-task.v3"),tenantId:z.string().uuid(),commandId:z.string().uuid()}).strict().parse(payload);
  const context = queueContext({tenantId:task.tenantId});
  await executeEvidencePackV3(context, task, packRepository, async jobId => {
-  if (!await observationReader.hasAcceptedTerms(context)) throw new Error("SHADOW_TERMS_NOT_ACCEPTED");
+  if (!await observationReader.hasAcceptedTerms(context,jobId)) throw new Error("SHADOW_TERMS_NOT_ACCEPTED");
   const {observations,captures} = await observationReader.read(context,{version:"shadow-observation-read.v1",jobId});
   await detectionRepository.persist(context,{version:"shadow-detection-batch.v1",jobId,observations,captures,
    proposals:detectShadowObservations(observations,captures,new Date().toISOString())});

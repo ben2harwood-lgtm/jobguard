@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-found-money-attention": {
+      "branches": [
+        "codex/sandbox/real-found-money-attention"
+      ],
+      "allow": [
+        "apps/api/src/value/contracts.ts",
+        "apps/api/src/value/value.application.test.ts",
+        "apps/api/src/value/value.application.ts",
+        "apps/web/app/(designed)/designed-ui.tsx",
+        "apps/web/app/(designed)/home-screens.tsx",
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/real-designed-screens.test.tsx",
+        "apps/web/e2e/real-found-money-attention.spec.ts",
+        "packages/db/test/real-found-money-attention.integration.test.ts"
+      ]
+    }
+  }
+}
