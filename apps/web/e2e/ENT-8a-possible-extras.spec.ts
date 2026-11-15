@@ -20,7 +20,8 @@ async function fixture() {
  const admin = new Pool({ connectionString: E2E_ADMIN_DATABASE_URL, max: 1 }), runtime = new Pool({ connectionString: E2E_RUNTIME_URL, max: 2 });
  const c = { admin, runtime, close: async () => { await runtime.end(); await admin.end(); } };
  try {
-  const contractors = new db.ContractorRepository(runtime), p = await contractors.startPractice(crypto.randomUUID());
+  const session = crypto.randomUUID();
+  const contractors = new db.ContractorRepository(runtime), p = await contractors.startPractice(session);
   await seedActiveContractorAgreement(admin, p.tenantId);
   const demo = await db.prepareWorkOrderDemo(runtime, p, { siteCount: 3 });
   await new db.WorkOrderRepository(runtime).importCsv(p, { commandId: crypto.randomUUID(), name: "fictional-inbox.csv", kind: "csv", csv: db.demoFile([db.demoRow(demo, 1), db.demoRow(demo, 2)]) });
@@ -37,7 +38,7 @@ async function fixture() {
    await admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) VALUES($1,$2,$3,$4,$5,clock_timestamp(),clock_timestamp()+interval '6 days')", [crypto.randomUUID(), p.tenantId, memberId, actor.identity_user_id, createHash("sha256").update(token).digest("hex")]);
    sessions[role] = token; members[role] = { member: { membershipId: memberId }, grant: actor.id };
   }
-  const f = { p, ctx: db.verifiedTenantContextFromMembership(p), jobId: jobs[0]!.job_id as string, otherJob: jobs[1]!.job_id as string, sessions, members };
+  const f = { p, ctx: db.verifiedTenantContextFromMembership(p, { kind: "contractor_practice", credential: session }), jobId: jobs[0]!.job_id as string, otherJob: jobs[1]!.job_id as string, sessions, members };
   const repo = new db.EnterpriseLivePromptRepository(runtime);
   await repo.importMaterials(sessions.finance!, materialsInput(f));
   return { c, f, repo, prompt: (await repo.list(sessions.supervisor!, listInput(f))).items[0]! };

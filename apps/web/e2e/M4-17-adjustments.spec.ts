@@ -1,3 +1,4 @@
+import { bindTestClient } from "../../../packages/db/test/tenant-context-test-utils";
 import { test, expect } from "@playwright/test";
 import { Pool } from "pg";
 import { randomUUID, createHash } from "node:crypto";
@@ -29,6 +30,7 @@ async function fixture() {
   const owner = await admin.connect();
   try {
    await owner.query("BEGIN"); await owner.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+   await bindTestClient(owner, owner, tenantId, p.membershipId);
    await owner.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional reconciliation','draft')", [jobId, tenantId]);
    const customer = randomUUID(), customerRevision = randomUUID(), site = randomUUID(), siteRevision = randomUUID(), binding = randomUUID();
    await owner.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [tenantId, customer]);

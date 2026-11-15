@@ -151,7 +151,8 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
   for (const role of ["owner", "unassigned operative"] as const) {
     it(`[C9] direct runtime writer refuses a structurally valid ${role} origin through its own authority check, with no revision, basis or audit written`, async () => {
       const f = await siteFixture(c), tenant = f.p.tenantId, before = await written(c, tenant), head = await chainHead(c, tenant);
-      await expect(withTenant(c.admin, f.ctx, async db => {
+      // LP-6d: the direct writer runs as the stored origin's raising member, so its own authority check decides.
+      await expect(withTenant(c.admin, await testActorContext(c.admin, f.ctx, (role === "owner" ? f.members.owner : f.unassigned).member), async db => {
         const who = role === "owner" ? f.members.owner : f.unassigned;
         const raw = await directRaise(db, f, who, role === "owner" ? "owner" : "operative");
         await db.$client.query("SET LOCAL ROLE jobguard_runtime");
@@ -177,7 +178,7 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
     });
     await command(c, f, { kind: "grant.revoke", grantId: who.grant });
     const before = await written(c, tenant), head = await chainHead(c, tenant);
-    await expect(withTenant(c.runtime, f.ctx, async db => {
+    await expect(withTenant(c.runtime, await testActorContext(c.admin, f.ctx, who.member), async db => {
       const error = await db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'2',$3)", [f.jobId, raw.variationId, "a".repeat(64)]).then(() => undefined, e => e);
       expect(error).toMatchObject({ code: "P0002", message: "NOT_FOUND" }); throw error;
     })).rejects.toMatchObject({ code: "P0002", message: "NOT_FOUND" });
@@ -194,13 +195,13 @@ describe("ENT-3c access: the same refusals as every command, decided by the data
     const f = await siteFixture(c), tenant = f.p.tenantId;
     const result = await log(f, f.members.supervisor, f.jobId, { quantity: "2" });
     const before = await written(c, tenant), head = await chainHead(c, tenant);
-    await expect(withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'2',$3)", [f.jobId, result.variationId, "a".repeat(64)]))).rejects.toMatchObject({ code: "23514", message: "INVALID_COMMAND" });
+    await expect(withTenant(c.runtime, await testActorContext(c.admin, f.ctx, f.members.supervisor.member), db => db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'2',$3)", [f.jobId, result.variationId, "a".repeat(64)]))).rejects.toMatchObject({ code: "23514", message: "INVALID_COMMAND" });
     expect(await written(c, tenant)).toEqual(before); expect(await chainHead(c, tenant)).toBe(head);
   });
 
   it("[C5] direct runtime writer accepts an authorized stored supervisor origin and open receipt with its basis and raised audit in one committing transaction", async () => {
     const f = await siteFixture(c), tenant = f.p.tenantId;
-    const raw = await withTenant(c.admin, f.ctx, async db => {
+    const raw = await withTenant(c.admin, await testActorContext(c.admin, f.ctx, f.members.supervisor.member), async db => {
       const raw = await directRaise(db, f, f.members.supervisor, "supervisor");
       await db.$client.query("SET LOCAL ROLE jobguard_runtime");
       await db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,'2',$3)", [f.jobId, raw.variationId, "a".repeat(64)]);
@@ -581,7 +582,8 @@ describe("ENT-3c live only, races, atomic audit and the immutable record", () =>
     }).catch(error => { if (!/PRICING_AUDIT_REQUIRED|INVALID_ORIGIN/u.test(String(error?.message))) throw error; });
     // The routine called directly as the runtime role: committed extra, free-text extra, NULL, zero and malformed arguments.
     const free = await repo.logSiteExtra(await testActorContext(c.admin, f.ctx, who.member), who.member, { commandId: randomUUID(), jobId: f.jobId, note: "free", description: "free extra" });
-    const direct = (variation: string, quantity: string | null, hash: string | null) => withTenant(c.runtime, f.ctx, db => db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,$3,$4)", [f.jobId, variation, quantity, hash]));
+    const raiser = await testActorContext(c.admin, f.ctx, who.member);
+    const direct = (variation: string, quantity: string | null, hash: string | null) => withTenant(c.runtime, raiser, db => db.$client.query("SELECT app.ent3c_record_sor_revision($1,$2,$3,$4)", [f.jobId, variation, quantity, hash]));
     const before = await written(c, tenant);
     await expect(direct(result.variationId, "2", "a".repeat(64))).rejects.toMatchObject({ message: "INVALID_COMMAND" });
     await expect(direct(free.variationId, "2", "a".repeat(64))).rejects.toMatchObject({ message: "INVALID_COMMAND" });

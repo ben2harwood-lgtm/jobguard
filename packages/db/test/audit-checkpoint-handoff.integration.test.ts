@@ -8,7 +8,7 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { bootstrapSyntheticDemo, SYNTHETIC_DATABASE_NAME } from "../src/demo-bootstrap.js";
 import { runAuditCheckpointHandoff } from "../src/audit-checkpoint-handoff.js";
-import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, appendAuditBatch, verifyAuditChain, verifySignedAuditExport, verifiedTenantContextFromMembership, type AuthenticatedMembership, type AuditEvent, type AuditCheckpoint, type TenantTransaction } from "../src/index.js";
+import { AuditExportRepository, ContractorRepository, requireContractorRequestContext, exportAuditCheckpoints, appendAuditBatch, verifyAuditChain, verifySignedAuditExport, verifiedTenantContextFromMembership, type AuthenticatedMembership, type AuditEvent, type AuditCheckpoint, type TenantTransaction } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, directory: string, admin: Pool, owner: Pool, runtime: Pool, ownerUrl: string, runtimeUrl: string, alternateUrl: string;
@@ -45,7 +45,8 @@ async function ordinary(p: AuthenticatedMembership) {
   await contractor.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: view.revision, kind: "member.invite", role: "supervisor", email: `${randomUUID()}@fictional.invalid`, scope: { kind: "tenant", id: p.tenantId }, clientId: null, contractId: null });
 }
 async function exportFor(p: AuthenticatedMembership) {
-  return new AuditExportRepository(runtime).create(verifiedTenantContextFromMembership(p), { membershipId: p.membershipId, identityUserId: p.identityUserId }, { version: "audit-export-request.v1", commandId: randomUUID() });
+  // LP-6d: the export is the practice owner's own bound request (its session principal's request context).
+  return new AuditExportRepository(runtime).create(requireContractorRequestContext(p), { membershipId: p.membershipId, identityUserId: p.identityUserId }, { version: "audit-export-request.v1", commandId: randomUUID() });
 }
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";

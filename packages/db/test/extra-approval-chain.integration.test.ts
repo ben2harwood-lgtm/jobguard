@@ -2,7 +2,7 @@ import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { evaluateExtraApprovalRequirement } from "@jobguard/core";
-import { ExtraApprovalRepository, ActionExecutor, withTenant, sha256Hex, canonicalJson, type VerifiedTenantContext } from "../src/index.js";
+import { verifiedTenantContextForQueuedJob, ExtraApprovalRepository, ActionExecutor, withTenant, sha256Hex, canonicalJson, type VerifiedTenantContext } from "../src/index.js";
 import { chainWorld, cluster, chain, command, reviseRules, submitted, approveInput, newToken, emailOf, newJob, raiseOn, sleep, demoRules, type Cluster, type ChainWorld } from "./extra-approval-chain-fixtures.js";
 
 let c: Cluster, w: ChainWorld, ctx: VerifiedTenantContext, repo: ExtraApprovalRepository;
@@ -269,8 +269,10 @@ it("E5B-09 Standard F: runtime reads only, routines re-check the actor, helpers 
   }
   const s = await submitted(c, w, 40000);
   // A runtime caller who skips the repository (no processing receipt) or names someone else's receipt is refused by the routine itself.
-  await expect(withTenant(c.runtime, ctx, db => db.$client.query("SELECT app.xa_approve($1,$2,$3,$4,0,$5,$6,false,NULL)", [s.jobId, s.requestId, randomUUID(), sup().membershipId, s.hash, s.net]))).rejects.toMatchObject({ message: "INVALID_COMMAND" });
-  await expect(withTenant(c.admin, ctx, async db => {
+  // LP-6d: each direct call runs in the named approver's own bound request, so the routine (not the binding) refuses.
+  const supCtx = await testActorContext(c.admin, ctx, sup());
+  await expect(withTenant(c.runtime, supCtx, db => db.$client.query("SELECT app.xa_approve($1,$2,$3,$4,0,$5,$6,false,NULL)", [s.jobId, s.requestId, randomUUID(), sup().membershipId, s.hash, s.net]))).rejects.toMatchObject({ message: "INVALID_COMMAND" });
+  await expect(withTenant(c.admin, supCtx, async db => {
     const id = randomUUID();
     await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'ApproveExtraStep',$3,$4,'processing',$5)", [w.p.tenantId, id, `forged:${id}`, "a".repeat(64), sup2().membershipId]);
     await db.$client.query("SET LOCAL ROLE jobguard_runtime");
@@ -297,10 +299,10 @@ it("E5B-10 a later rule version leaves an existing snapshot unchanged (runs last
 it("E5B-11 escalation fires once, only listed alternates gain authority, original approvers keep it", async () => {
   const wait = 61_000 - (Date.now() - tSlow); if (wait > 0) await sleep(wait + 500);
   expect(await code(repo.approveExtraStep(await testActorContext(c.admin, ctx, surveyor()), surveyor(), approveInput(slow, 0)))).toBe("PERMISSION_DENIED"); // before any escalation
-  const first = (await repo.escalateOverdue(ctx)).filter(x => x.request_id === slow.requestId);
+  const first = (await repo.escalateOverdue(verifiedTenantContextForQueuedJob(ctx.tenantId))).filter(x => x.request_id === slow.requestId);
   expect(first).toHaveLength(1); expect(first[0]!.eligible_roles).toEqual(["commercial_manager", "surveyor"]);
   const restarted = new ExtraApprovalRepository(c.runtime); // a restarted worker
-  expect((await restarted.escalateOverdue(ctx)).filter(x => x.request_id === slow.requestId)).toEqual([]);
+  expect((await restarted.escalateOverdue(verifiedTenantContextForQueuedJob(ctx.tenantId))).filter(x => x.request_id === slow.requestId)).toEqual([]);
   expect(await sql("SELECT 1 FROM app.extra_escalation_fact WHERE request_id=$1", [slow.requestId])).toHaveLength(1);
   const q = (await repo.queue(await testActorContext(c.admin, ctx, surveyor()), surveyor().membershipId)).filter(x => x.request_id === slow.requestId);
   expect(q).toHaveLength(1); expect(q[0]).toMatchObject({ lane: "mandatory", escalated: true, overdue: true });
@@ -411,7 +413,8 @@ it.each(["pending", "retryable"])("LATER-SAFETY-36 cancels a %s send after its s
   }]);
   await command(c, q.world, { kind: "grant.create", membershipId: q.sender.member.membershipId,
     role: "surveyor", scope: { kind: "branch", id: q.world.demo.branchId }, contractId: null });
-  const restored = await withTenant(c.runtime, q.context, db => db.$client.query(
+  // LP-6d: the sender's authority is read inside the sender's own bound request.
+  const restored = await withTenant(c.runtime, await testActorContext(c.admin, q.context, q.sender.member), db => db.$client.query(
     "SELECT app.xc_send_authority($1,k.variation_id) allowed FROM app.extra_client_link k WHERE k.tenant_id=$2 AND k.outbox_action_id=$3",
     [q.sender.member.membershipId, q.world.p.tenantId, q.sent.outboxActionId]));
   expect(restored.rows).toEqual([{ allowed: true }]);

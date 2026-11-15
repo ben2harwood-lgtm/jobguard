@@ -23,6 +23,8 @@ import {withTenant} from "../src/tenant-context.js";
 import {testTenantContext, testBoundTenantContext} from "./tenant-context-test-utils.js";
 import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
 import {pngBytes} from "./site-extra-evidence-fixtures.js";
+// LP-6d: guarded practice reads run inside the practice session's own bound request.
+const bindPractice=(db:{query:(sql:string,values?:unknown[])=>Promise<unknown>},digest:string,tenant:string)=>db.query("SELECT app.bind_request('practice',$1,$2)",[digest,tenant]);
 const hash="a".repeat(64);
 async function combinedReceiptFixture(f:FinalCheckFixture,lateCatch=false){
  const baselineNetPence=3000000;
@@ -74,7 +76,7 @@ async function combinedReceiptFixture(f:FinalCheckFixture,lateCatch=false){
  await locks.acceptTerms(auth.context,{actorMembershipId:actor.membershipId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),scopeItemId:scope,disposition:"done"});
  // A value read is identical with no hidden signals and with held signals.
- const readBeforeLock=()=>finalCheckTenant(f.runtime,DEMO_TENANT_ID,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[jobId,auth.digest])).rows[0].result);
+ const readBeforeLock=()=>finalCheckTenant(f.runtime,DEMO_TENANT_ID,async db=>{await bindPractice(db,auth.digest,DEMO_TENANT_ID);return (await db.query("SELECT app.read_value_job($1,$2) result",[jobId,auth.digest])).rows[0].result;});
  expect(await readBeforeLock()).toBeNull();
  const signals=[randomUUID(),randomUUID()];
  for(const [index,signalId] of signals.entries())await finalCheckTenant(f.shadow,DEMO_TENANT_ID,async db=>{
@@ -229,7 +231,7 @@ it("combined J3 value retains £3,600 captures and £800/£80/£720 recovery, re
  expect(serializeExactPence(sumExactPence(assessments.map(a=>parseExactPence(attributionValueReceipt(a).yoursBeforeVatAndTax))))).toEqual({numerator:"72000",denominator:"1"});
  // Read through the same lock-gated projection used by the J3 report. Its
  // public contract retains locked capture IDs, while the invoice uses copies.
- const readValue=()=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result);
+ const readValue=()=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>{await bindPractice(db,x.auth.digest,x.context.tenantId);return (await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result;});
  const auditBefore=(await f.admin.query("SELECT count(*)::int n FROM app.audit_event")).rows;
  const raw=await readValue();expect(await readValue()).toEqual(raw);
  const receipt=mapValueReceipt(raw);
@@ -246,7 +248,9 @@ it("combined J3 value retains £3,600 captures and £800/£80/£720 recovery, re
  const foreign=await issuePracticeSession(f.runtime);
  await expect(new ReceiptCaseAllocationApplication(f.runtime,foreign).view(x.jobId)).rejects.toMatchObject({code:"NOT_FOUND"});
  const foreignAuth=await authenticatePracticeSession(f.runtime,foreign);
- await expect(finalCheckTenant(f.runtime,x.context.tenantId,db=>db.query("SELECT app.read_value_job($1,$2)",[x.jobId,foreignAuth.digest]))).rejects.toThrow("VALUE_FORBIDDEN");
+ // LP-6d: a foreign practice credential cannot be bound here, and the caller's own bound request cannot read with it.
+ await expect(finalCheckTenant(f.runtime,x.context.tenantId,db=>db.query("SELECT app.read_value_job($1,$2)",[x.jobId,foreignAuth.digest]))).rejects.toThrow("REQUEST_BINDING_REFUSED");
+ await expect(finalCheckTenant(f.runtime,x.context.tenantId,async db=>{await bindPractice(db,x.auth.digest,x.context.tenantId);return db.query("SELECT app.read_value_job($1,$2)",[x.jobId,foreignAuth.digest]);})).rejects.toThrow(/REQUEST_BINDING_REFUSED|VALUE_FORBIDDEN/u);
  const {StoredReceiptCaseAllocationRepository}=await import("../src/stored-receipt-case-allocation-repository.js");
  await expect(new StoredReceiptCaseAllocationRepository(f.runtime,"synthetic_demo").command(testTenantContext(randomUUID()),x.jobId,x.auth.digest,{version:"stored-receipt-case-command.v1",action:"review",commandId:randomUUID(),factLineId:snapshot.rows[0]!.lineAllocationId,caseId:x.catches[0]!.caseId,workId:x.catches[0]!.workId,expectedCaseRevision:1})).rejects.toThrow();
  // Original locked baseline cannot borrow a catch's recovery case.
