@@ -1,0 +1,6 @@
+{
+  "migration": "0748_receipt_proposal_historical_capacity.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

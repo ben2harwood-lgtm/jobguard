@@ -167,7 +167,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["lp5_bind_effect", "p_command uuid, p_authorization uuid, p_adapter text, p_reference jsonb", "0724_lp6c_customer_portal_delegation.sql"],
     ["lp5b_contractor_result", "p_command uuid, p_outcome jsonb", "0722_abandoned_visit_authority.sql"],
     ["ent3b_closeout_guard", "", "0722_abandoned_visit_authority.sql"],
-    ["receipt_fact_proposal", "t uuid, j uuid, p jsonb", "0692_final_check_post_invoice_receipt_gate.sql"],
+    ["receipt_fact_proposal", "t uuid, j uuid, p jsonb", "0748_receipt_proposal_historical_capacity.sql"],
     ["read_final_check_manifest", "t uuid, j uuid, m uuid", "0698_final_check_post_invoice_rerun.sql"],
     ["evidence_pack_v3_material", "t uuid, c uuid, ordinary_only boolean", "0698_final_check_post_invoice_rerun.sql"],
     ["begin_final_check", "t uuid, j uuid, detector text, policy text", "0698_final_check_post_invoice_rerun.sql"],

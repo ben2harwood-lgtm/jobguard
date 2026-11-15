@@ -147,7 +147,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.lp5b_contractor_result(p_command uuid, p_outcome jsonb)", "0722_abandoned_visit_authority.sql"],
     ["app.ent3b_closeout_guard()", "0722_abandoned_visit_authority.sql"],
     ["app.ent3b_close_abandoned_visit(p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_reason text)", "0722_abandoned_visit_authority.sql"],
-    ["app.receipt_fact_proposal(t uuid, j uuid, p jsonb)", "0692_final_check_post_invoice_receipt_gate.sql"],
+    ["app.receipt_fact_proposal(t uuid, j uuid, p jsonb)", "0748_receipt_proposal_historical_capacity.sql"],
     ["app.contractor_admin_command(actor uuid, payload jsonb, request_hash text)", "0696_contractor_admin_expected_revision.sql"],
     ["app.read_final_check_manifest(t uuid, j uuid, m uuid)", "0698_final_check_post_invoice_rerun.sql"],
     ["app.evidence_pack_v3_material(t uuid, c uuid, ordinary_only boolean)", "0698_final_check_post_invoice_rerun.sql"],
