@@ -169,7 +169,7 @@ it("does not put live job controls inside the quote fieldset or sidebar", () => 
  expect(activationFound).toBe(true);
 });
 
-it("handles fragment navigation with main’s loading/remount path", () => {
+it("does not fetch, reset loading or clear the job and capture on fragment navigation", () => {
  workspace("quoting");
  const listeners = new Map<string, () => void>();
  const fetch = vi.fn(()=>new Promise(()=>{}));
@@ -182,20 +182,20 @@ it("handles fragment navigation with main’s loading/remount path", () => {
  // The second shell effect installs navigation; the initial-load effect is separate.
  const cleanup = state.effects[1]!() as () => void;
  listeners.get("hashchange")!();
- expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/proposal`, expect.objectContaining({cache:"no-store"}));
- expect(state.setters[3]).toHaveBeenCalledWith(true);
- expect(state.setters[0]).toHaveBeenCalledWith(null);
- expect(state.setters[1]).toHaveBeenCalledWith(null);
+ expect(fetch).not.toHaveBeenCalled();
+ expect(state.setters[3]).not.toHaveBeenCalled();
+ expect(state.setters[0]).not.toHaveBeenCalled();
+ expect(state.setters[1]).not.toHaveBeenCalled();
  cleanup();
 });
-it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"])("uses main’s scope/editor key for %s navigation", fragment => {
+it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"])("keeps the mounted editor identity stable for %s navigation", fragment => {
  function review(node:React.ReactNode):React.ReactElement | undefined {
   if (Array.isArray(node)) return node.map(review).find(Boolean);
   if (!React.isValidElement<{children?:React.ReactNode}>(node)) return;
   if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node;
   return review(node.props.children);
  }
- expect(review(workspace("live",fragment))!.key).toBe(`${jobId}:${["#scope", "#job-diary"].includes(fragment) ? "scope" : "editor"}`);
+ expect(review(workspace("live",fragment))!.key).toBe(jobId);
 });
 
 
@@ -205,6 +205,11 @@ it.each(["", "#scope", "#quote", "#final-account-title", "#recovery-cases"])("us
  expect(html.match(/data-testid="final-account-lock"/gu) ?? []).toHaveLength(pricing ? 1 : 0);
  expect(html.match(/data-testid="final-check-reveal"/gu)).toHaveLength(1);
  if (pricing) expect(html.indexOf('id="final-account-title"')).toBeLessThan(html.indexOf('id="practice-tools"'));
+ // Once pricing has mounted the account, ordinary navigation keeps the same
+ // review key and the account tree. The browser test checks the live DOM identity.
+ const mounted = renderToStaticMarkup(workspace("live", fragment, true));
+ expect(mounted.match(/data-testid="final-account-lock"/gu)).toHaveLength(1);
+ expect(mounted.match(/data-testid="final-check-reveal"/gu)).toHaveLength(1);
 });
 
 
@@ -230,4 +235,15 @@ it.each(["accepted", "live", "invoiced", "paid"] as const)("renders one proof st
  const proof = html.indexOf('id="work-proof"');
  const editor = html.indexOf('class="quote-editor"');
  expect(proof < editor).toBe(status === "accepted");
+});
+
+it("keeps Continue focus on the current account control instead of its sibling heading", () => {
+ const action = {};
+ const panel = { contains: (node: unknown) => node === action };
+ const heading = { matches: () => true, closest: () => panel, focus: vi.fn(), scrollIntoView: vi.fn() };
+ const root = { contains: () => true, querySelector: vi.fn(() => heading) };
+ vi.stubGlobal("document", { activeElement: action, body: {}, getElementById: () => root });
+ workspace("live", "#final-account-title"); state.effects[3]!();
+ expect(heading.focus).not.toHaveBeenCalled();
+ expect(heading.scrollIntoView).not.toHaveBeenCalled();
 });

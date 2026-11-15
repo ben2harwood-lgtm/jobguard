@@ -35,6 +35,7 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
  const[capture,setCapture]=useState<CaptureWorkspaceResponse|null>(null);
  const[error,setError]=useState<"forbidden"|"unavailable"|null>(null);
  const[loading,setLoading]=useState(true),[fragment,setFragment]=useState("");
+ const[completionLabel,setCompletionLabel]=useState<string|null>(null);
  const errorRef=useRef<HTMLHeadingElement>(null),generation=useRef(0),activeRequest=useRef<AbortController|null>(null);
  const currentJobId=useRef(jobId);currentJobId.current=jobId;
  const acceptSnapshot=useCallback((snapshot:CaptureWorkspaceResponse)=>{
@@ -44,23 +45,23 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
  },[]);
  const load=useCallback(async()=>{
   const current=++generation.current;activeRequest.current?.abort();const controller=new AbortController();activeRequest.current=controller;
-  setLoading(true);setError(null);setJob(null);setCapture(null);
+  setLoading(true);setError(null);setJob(null);setCapture(null);setCompletionLabel(null);
   try{
    const proposalResponse=await fetch(`/api/jobs/${encodeURIComponent(jobId)}/proposal`,{cache:"no-store",signal:controller.signal});
    if(current!==generation.current)return;
-   if(proposalResponse.ok){const parsed=captureWorkspaceResponseV1.parse(await proposalResponse.json());if(current===generation.current)setCapture(parsed);return;}
+   if(proposalResponse.ok){const parsed=captureWorkspaceResponseV1.parse(await proposalResponse.json());if(parsed.jobId!==jobId)throw new Error("WRONG_JOB_RESPONSE");if(current===generation.current)setCapture(parsed);return;}
    // Only an absent capture permits the non-capture workspace. A failed capture
    // service must not be disguised as an apparently healthy partial workspace.
    if(proposalResponse.status!==404){setError(proposalResponse.status===401||proposalResponse.status===403?"forbidden":"unavailable");return;}
    const response=await fetch(`/api/jobs/${encodeURIComponent(jobId)}`,{cache:"no-store",signal:controller.signal});
    if(current!==generation.current)return;
    if(!response.ok){setError([401,403,404].includes(response.status)?"forbidden":"unavailable");return;}
-   const parsed=jobWorkspaceResponseV1.parse(await response.json());if(current===generation.current)setJob(parsed.job);
+   const parsed=jobWorkspaceResponseV1.parse(await response.json());if(parsed.job.id!==jobId)throw new Error("WRONG_JOB_RESPONSE");if(current===generation.current)setJob(parsed.job);
   }catch{if(current===generation.current&&!controller.signal.aborted)setError("unavailable");}
   finally{if(current===generation.current)setLoading(false);}
  },[jobId]);
  useEffect(()=>{void load();return()=>{generation.current++;activeRequest.current?.abort();}},[load]);
- useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load();};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
+ useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
  useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
  const section=capture?requestedWorkspaceSection(capture.status,fragment==="#variations-title"?"#work-proof":fragment):"scope";
  // Plain saved-job URLs retain the confirmed-scope step. Explicit job anchors
@@ -69,27 +70,34 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
  useEffect(()=>{
   if(loading||!capture||!fragment)return;
   const root=document.getElementById("captured-job-workspace");if(!root)return;
-  const selector=fragment==="#quote"?"#quote":fragment==="#scope"?"#scope":fragment==="#work-proof"?"#work-proof h2":fragment==="#variations-title"?"#variations-title":fragment==="#practice-tools"?"#practice-tools":section==="final-account"?"#final-account-title":".quote-editor h2";
+  if(!["#scope","#quote","#work-proof","#variations-title","#final-account-title","#final-check","#practice-tools","#job-diary","#customer-messages"].includes(fragment)&&!/^#(?:variation|invoice)-[a-f0-9-]{36}$/iu.test(fragment))return;
+  const selector=fragment==="#quote"?"#quote":fragment==="#scope"?"#scope":fragment==="#work-proof"?"#work-proof h2":fragment==="#variations-title"?"#variations-title":fragment==="#practice-tools"?"#practice-tools":fragment==="#final-check"?"#final-check":section==="final-account"?"#final-account-title":".quote-editor h2";
   let observer:MutationObserver|undefined;
   const source=/^#(?:variation|invoice)-[a-f0-9-]{36}$/iu.test(fragment)?fragment.slice(1):null;
-  const focus=()=>{const target=source?document.getElementById(source):root.querySelector<HTMLElement>(selector);if(!target||!root.contains(target))return false;target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:"start"});observer?.disconnect();return true;};
+  const focus=()=>{
+   // Open the existing editor through its own control, retaining the mounted review and drafts.
+   if(pricing&&!root.querySelector(".quote-editor")){
+    const open=Array.from(root.querySelectorAll<HTMLButtonElement>(".confirmed-scope button")).find(button=>button.textContent==="Price the work");open?.click();
+    if(open)return false;
+   }
+   const target=source?document.getElementById(source):root.querySelector<HTMLElement>(selector);if(!target||!root.contains(target))return false;const focusRegion=target.matches?.("h1,h2,h3")?(target.closest?.("section")??target):target;if(target!==document.activeElement&&focusRegion.contains?.(document.activeElement)&&document.activeElement!==document.body){observer?.disconnect();return true;}for(let parent=target.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;target.style&&(target.style.scrollMarginTop="96px");target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:"start"});observer?.disconnect();return true;};
   if(focus())return;
   observer=new MutationObserver(()=>{focus();});observer.observe(root,{childList:true,subtree:true});
   const timeout=window.setTimeout(()=>observer?.disconnect(),15000);
   return()=>{observer?.disconnect();window.clearTimeout(timeout);};
  },[capture,loading,section,fragment]);
- if(loading)return <main className="workspace-page" aria-live="polite"><p>Loading your job…</p></main>;
+ if(loading||(capture&&capture.jobId!==jobId)||(job&&job.id!==jobId))return <main className="workspace-page" aria-live="polite"><p>Loading your job…</p></main>;
  if(error)return <main className="workspace-page"><section className="workspace-error" role="alert"><h1 ref={errorRef} tabIndex={-1}>{error==="forbidden"?"You cannot open this job":"Your job could not load"}</h1><p>{error==="forbidden"?"Use a job available to this practice session.":"Nothing was changed. Try loading the saved job again."}</p>{error==="unavailable"&&<button className="primary" onClick={()=>void load()}>Try again</button>}<Link href="/classic">Back to Jobs</Link></section></main>;
  if(capture)return <WatchdogStatusProvider jobId={jobId} initialStatus={capture.status}>
   <main className="workspace-page" id="captured-job-workspace" data-testid="workspace-job-id" data-job-id={jobId}>
-   <header><h1>{capture.proposal.title}</h1><p className="status">{jobStatusLabels[capture.status]}</p></header>
+   <header><h1>{capture.proposal.title}</h1><p className="status">{completionLabel??jobStatusLabels[capture.status]}</p></header>
    {!hasStartedWork(capture.status)&&<WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>}
    {/* Put stable section links before panels that load asynchronously. */}
    <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope">Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote">Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof">Work and proof</a><a href="#final-account-title">Final account and invoices</a></>}</nav>
-   <PracticeJourney jobId={jobId} status={capture.status}/>
+   <PracticeJourney jobId={jobId} status={capture.status} onSavedLabel={setCompletionLabel}/>
    <JobParties jobId={jobId}/>
    {/* The same saved status removes pre-live proof and enables the editor proof slot. */}
-   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={`${jobId}:${section==="scope"?"scope":"editor"}`} result={capture} initialPricing={pricing} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId} extrasHref="#variations-title"/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
+   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={jobId} result={capture} initialPricing={pricing} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId} extrasHref="#variations-title"/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
    <hr/>
    <h2 id="practice-tools">Practice tools — demo only, not part of your job</h2>
    <p>These tools use fictional examples to explore JobGuard; they are separate from your job’s next steps.</p>
