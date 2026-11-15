@@ -10,7 +10,7 @@ import { testActorContext } from "./tenant-context-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
 
 // Real PostgreSQL only. The coding sandbox authors this suite; CI executes it.
-const migration = "0746_enterprise_fee_rejected_line.sql";
+const migration = "0745_enterprise_fee_rejected_line.sql";
 const exclusion = "  AND invoice_line->'rejected'='false'::jsonb\n";
 let c: Awaited<ReturnType<typeof cluster>>;
 beforeAll(async () => { c = await startBeforeMigration(migration); }, 240000);

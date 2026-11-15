@@ -41,7 +41,7 @@ checks unchanged function metadata and populated rows/types, rather than claimin
 an unexecuted database result. No protected allowance or contract edit is needed
 by source inspection; exact-head CI must verify that conclusion.
 
-Migration 0746 preserves all old facts, contributions, statements and journals.
+Migration 0745 preserves all old facts, contributions, statements and journals.
 New preparations exclude rejected principal; stale approvals cannot post changed
 facts. Already posted fees correct through the existing later-period linked
 compensation flow. No production gate is opened and no live activation occurs.
@@ -58,7 +58,7 @@ router must preserve migration ordering/reservations and rerun required checks.
   verifies rejected=true with nonzero stored allocation and billed net, and
   witnesses the predecessor's erroneous Q=250000/31 and 806p fee. It snapshots
   populated facts, allocations, origin/export, derivations/contributions,
-  statements/approvals, journals, receipts and audit; applies only 0746; checks
+  statements/approvals, journals, receipts and audit; applies only 0745; checks
   metadata and prior row/type preservation; repeats migration; derives zero and
   posts linked compensation in a later period without changing earlier rows.
 - R151-ZERO (two orderings) covers rejection before and after payment, retains
@@ -141,3 +141,36 @@ statement preparation helpers overlap the existing enterprise fee integration
 suites. A future common fixture export from those existing helpers would reduce
 setup drift across money regressions. That protected fixture extraction is outside
 this repair's allowed files and does not block it.
+
+## Repair r1 — upgrade successor lists (15 November 2026)
+
+RED LATER-SAFETY-151 repair on exact starting head
+`ecd05623d8f6af9b93b7911f40375eb2ab875dae`. Renumbered the SQL, proof and
+this note from 0746 to reserved 0745, updated the proof/test references, and
+registered the exact `ef_inputs` successor immediately before the 0704
+`ef_prepare_statement` entry in both upgrade suites. The lane retains all old
+paths and adds the new paths and both upgrade tests. No fee logic changed.
+
+Actually executed for r1:
+- `PATH=/tmp/later-safety-151-bin:$PATH pnpm --filter @jobguard/db typecheck`: PASS.
+- Read-only source comparison against HEAD: renamed SQL is byte-identical,
+  SHA-256 `8e99ea8b300744ff6eff97a3f810eaf56941133b27392ec183ec2a620c723888`.
+- Existing lane-policy loader/path validator: PASS for every changed/untracked
+  path; proof migration reference matches 0745.
+- `git diff --check`: PASS.
+
+PostgreSQL commands for CI/router (not run in this sandbox):
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/enterprise-fee-rejected-line.integration.test.ts test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts
+pnpm test:db
+pnpm test:migrations
+```
+
+READY for router commit and NOPR handoff; exact-head RED review and green CI
+remain required. Git is read-only here: no fetch, merge, git mv, staging, commit
+or push was attempted. Filesystem renames prepare the same rename diff without
+writing the Git index. Router must fetch and merge current origin/main, keeping
+both sides, and revalidate before integration. No reset or force-push.
+The referenced `prechecks/later-safety-151.md` is absent in this worktree; the
+issued brief supplied the two named successor-list corrections.
