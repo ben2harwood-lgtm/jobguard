@@ -1,5 +1,5 @@
 {
-  "migration": "0949_practice_firm_name.sql",
+  "migration": "0751_practice_firm_name.sql",
   "lp0": [
     {
       "section": "routines",
@@ -120,7 +120,7 @@
         "sources": [
           "packages/db/migrations/0726_firm_profile.sql",
           "packages/db/src/firm-profile-repository.ts",
-          "packages/db/migrations/0949_practice_firm_name.sql",
+          "packages/db/migrations/0751_practice_firm_name.sql",
           "packages/db/src/quote-delivery-repository.ts",
           "packages/db/src/acceptance-repository.ts"
         ],
@@ -189,7 +189,7 @@
         "sources": [
           "packages/db/migrations/0726_firm_profile.sql",
           "packages/db/src/firm-profile-repository.ts",
-          "packages/db/migrations/0949_practice_firm_name.sql",
+          "packages/db/migrations/0751_practice_firm_name.sql",
           "packages/db/src/quote-delivery-repository.ts",
           "packages/db/src/acceptance-repository.ts"
         ],

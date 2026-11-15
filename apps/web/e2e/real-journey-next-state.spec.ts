@@ -49,8 +49,7 @@ test("walk 2 saved facts select the no-extra account and paid end states", async
     return { facts, result };
   };
 
-  await page.goto("/");
-  await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+  await page.goto("/practice-company");
   await expect(page.getByRole("heading", { name: "Ready for your first job", exact: true })).toBeVisible();
   await click("＋ Start a new job");
   await page.getByLabel("Work details").fill("Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
@@ -67,8 +66,11 @@ test("walk 2 saved facts select the no-extra account and paid end states", async
   await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 900.00");
   await click("Save draft revision"); await expect(page.getByTestId("quote-revision")).toHaveText("1");
-  await click("Preview immutable quote"); await click("Simulate sending this quote"); await click("Continue fake worker");
+  await click("Preview immutable quote"); await click("Simulate sending this quote");
+  await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
+  if (await page.getByTestId("quote-delivery").textContent() === "Queued — not sent") await click("Continue fake worker");
   await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
+  await expect(page.getByRole("button", { name: "Continue fake worker", exact: true })).toHaveCount(0);
   await click("Record practice acceptance"); await click("Start this practice job");
   await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
   await page.goto(`/jobs/${jobId}#quote`);

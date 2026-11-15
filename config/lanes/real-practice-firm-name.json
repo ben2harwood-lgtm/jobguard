@@ -16,7 +16,13 @@
         "packages/db/src/quote-delivery-repository.ts",
         "packages/db/test/migration-proofs/0949_practice_firm_name.proof.json",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
-        "packages/db/test/practice-firm-name.integration.test.ts"
+        "packages/db/test/practice-firm-name.integration.test.ts",
+        "packages/db/migrations/0751_practice_firm_name.sql",
+        "packages/db/test/migration-proofs/0751_practice_firm_name.proof.json",
+        "packages/db/migration-notes/0949_practice_firm_name.md",
+        "packages/db/migration-notes/0751_practice_firm_name.md",
+        "packages/db/test/lp6d-runtime-classification.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }

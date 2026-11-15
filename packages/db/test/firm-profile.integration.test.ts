@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { migrate } from "../src/migrate.js";
 import { startBeforeMigration, applyMigration, seedHomeOwner, startSession, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { startBlankPracticeCompany } from "../src/blank-practice-company.js";
 import { authenticatePracticeSession } from "../src/practice-session.js";
@@ -17,7 +18,7 @@ const own = "0726_firm_profile.sql";
 const profile = { version: "firm-profile.v1", tradingName: " Fictional Oak Works ", addressLines: ["12 Example Lane"], contactEmail: "oak@fictional.invalid", contactPhone: "01234 000000" };
 beforeAll(async () => {
  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
- c = await startBeforeMigration(own); await applyMigration(c, own); await seedHomeOwner(c);
+ c = await startBeforeMigration(own); await applyMigration(c, own); await migrate(c.admin); await seedHomeOwner(c);
 }, 240_000);
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 // Company tests use a persisted real identity session, never a contractor practice tenant.

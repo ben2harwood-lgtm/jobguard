@@ -18,7 +18,7 @@ import { click, fill, reviewAndPrice, screen, text, until } from "./screen-actio
 export const stages = [
   ["Record a quote", "Talk through a made-up job using on-device voice. Type it in, or press Show me to see a sample. No real names or addresses. Show me uses labelled sample text; it does not record your microphone."],
   ["Check the quote lines", "Check the source excerpts and fix a line. Accept the lines, answer the questions, confirm scope and save a priced draft. Show me changes one description before saving."],
-  ["Send the quote", "Continue on your own saved job. Save customer and site in the highlighted form first. After saving, go to Preview immutable quote, then Simulate sending this quote and Continue fake worker. Customer invitation is still to build. Delivery is simulated; nothing is sent."],
+  ["Send the quote", "Continue on your own saved job. Save customer and site in the highlighted form first. After saving, go to Preview immutable quote, then Simulate sending this quote. If delivery is queued, choose Continue fake worker. Customer invitation is still to build. Delivery is simulated; nothing is sent."],
   ["Customer says yes", "The existing control records builder-attested practice acceptance, not an authenticated customer response. Record it and start the practice job."],
   ["Add on-site evidence", "Attach the generated fictional photo, check file integrity and complete the stage. The customer asks for one more thing. You do it, but forget to add it to the bill. Save the fictional loft-hatch diary note as evidence, not a priced extra. Never upload a real site photo in this exercise."],
   ["Price extra work", "Add a £125 fictional extra and approve its exact revision. Here, the builder records approval of the exact practice revision; this practice job cannot receive approval from the customer."],
@@ -293,7 +293,9 @@ export function VoiceJourney() {
         await until(partiesSaved, signal);
         await click("Preview immutable quote", signal);
         await click("Simulate sending this quote", signal);
-        await click("Continue fake worker", signal);
+        await until(() => ["Queued — not sent", "Simulated delivery — nothing sent"].includes(text("quote-delivery")), signal);
+        if (text("quote-delivery") === "Queued — not sent") await click("Continue fake worker", signal);
+        await until(done[2]!, signal);
       },
       async (_, signal) => {
         if (!screen().querySelector('[data-testid="activation-policy"]')) {

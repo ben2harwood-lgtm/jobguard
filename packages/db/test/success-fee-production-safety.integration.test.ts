@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 // PostgreSQL CI: genuine synthetic commands and rollback-only corruption attacks.
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,expect,it} from "vitest";
@@ -28,7 +29,7 @@ it.each(["builder_capture","disclosed_before_lock"] as const)("PostgreSQL exclud
    await db.query("ALTER TABLE app.shadow_commercial_signal DISABLE TRIGGER USER");
    await db.query("UPDATE app.shadow_commercial_signal SET disclosed_before_lock=true WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[x.context.tenantId,x.jobId,x.signal]);
   }
-  await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[x.auth.digest]);await db.query("SET LOCAL ROLE jobguard_runtime");
   await db.query("SELECT app.write_success_fee_v3($1,$2,$3,NULL)",[x.jobId,x.auth.digest,x.command]);
  })).rejects.toThrow("SUCCESS_FEE_SOURCE_CHANGED");
  expect(await journals(x)).toEqual([]);
@@ -69,7 +70,7 @@ it("rebuild verifies source attribution and expired/revoked statement authority 
  for(const attack of ["source","revoked","expired","environment","statement"]){
   const x=await catchFeeFixture(f),review=await x.execute();
   await expect(rolledBack(f.admin,async db=>{
-   await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+   await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]); await bindOwnSession(db, x.auth.digest);
    await db.query("SELECT app.write_success_fee_v3($1,$2,$3,NULL)",[x.jobId,x.auth.digest,approve(review)]);
    if(attack==="source"){
     await db.query("ALTER TABLE app.success_fee_source DISABLE TRIGGER USER");
@@ -104,7 +105,7 @@ it("split reversal names each cancelled derivation, refuses a mismatched link, a
  expect(review.statement).toMatchObject({feePence:0,priorPence:8000,deltaPence:-8000,compensatesDerivationId:first.derivationId,compensations});
  // Even a coherently rehashed saved review cannot authorize a mismatched derivation.
  await expect(rolledBack(f.admin,async db=>{
-  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]); await bindOwnSession(db, x.auth.digest);
   await db.query("ALTER TABLE app.success_fee_review DISABLE TRIGGER USER");
   await db.query("UPDATE app.success_fee_review SET statement=jsonb_set(statement,'{compensations,1,derivationId}',to_jsonb($3::text)) WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,review.reviewId,first.derivationId]);
   const forged=(await db.query("UPDATE app.success_fee_review SET statement_hash=app.final_lock_hash(statement) WHERE tenant_id=$1 AND id=$2 RETURNING statement_hash",[x.context.tenantId,review.reviewId])).rows[0].statement_hash as string;
@@ -127,6 +128,8 @@ it("the fee writer itself refuses changed proof rebounding below the original ap
  const x=await catchFeeFixture(f);await x.execute(approve(await x.execute()));
  await rolledBack(f.admin,async db=>{
   await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  // LP-6d: the practice owner's own request, so the writer (not the binding) answers.
+  await bindOwnSession(db,x.auth.digest);
   const a=x.assessment;
   const live=(await db.query("SELECT app.recovery_attribution_sources($1,$2,$3,$4) source",[x.context.tenantId,x.jobId,{caseId:a.caseId,workId:a.workId,lineId:a.lineId,lockId:a.lockId},x.actor.membershipId])).rows[0].source;
   // Isolate the writer from the allocator's separate refusal. Only this rollback

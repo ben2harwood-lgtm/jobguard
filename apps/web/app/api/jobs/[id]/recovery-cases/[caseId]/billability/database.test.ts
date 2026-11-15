@@ -38,6 +38,8 @@ async function owner(x:Fixture,same=false){
  await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[user]);
  if(!same)await finalCheckTenant(f.admin,x.context.tenantId,async db=>{const account=(await db.query("SELECT account_id FROM app.membership WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,x.actor.membershipId])).rows[0].account_id;await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[member,x.context.tenantId,account,user]);});
  await f.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')",[randomUUID(),user,state.digest,randomUUID()]);
+ await f.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING",[`${user}@fictional.invalid`,user]);
+ await f.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[user,x.context.tenantId,member]);
 }
 const approve=(command:Awaited<ReturnType<typeof ready>>["command"])=>{const {claimedEligiblePrincipalPence:_amount,reasons:_reasons,...base}=command;return {...base,action:"approve",commandId:randomUUID(),reviewCommandId:command.commandId};};
 it("route records one review and one approval under duplicate/replay and serves the stored review to the second person",async()=>{

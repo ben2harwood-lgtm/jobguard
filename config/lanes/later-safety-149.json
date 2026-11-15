@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-149": {
+      "branches": [
+        "codex/sandbox/later-safety-149"
+      ],
+      "allow": [
+        "packages/db/migrations/0744_subscription_internal_owner_guard.sql",
+        "packages/db/migrations/0746_subscription_internal_owner_guard.sql",
+        "packages/db/test/migration-proofs/0744_subscription_internal_owner_guard.proof.json",
+        "packages/db/test/migration-proofs/0746_subscription_internal_owner_guard.proof.json",
+        "packages/db/test/subscription-internal-owner.integration.test.ts",
+        "packages/db/test/subscription-persistence.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

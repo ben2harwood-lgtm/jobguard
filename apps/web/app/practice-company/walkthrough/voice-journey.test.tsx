@@ -225,7 +225,7 @@ describe("step 3 prepared workspace loading", () => {
       if (selector.includes("workspace-job-id")) return mounted ? { getAttribute: () => preparedId } : null;
       if (selector === ".review-line") return {};
       if (selector === ".quote-editor") return { getAttribute: () => "true" };
-      return { textContent: selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "Not queued" : selector.includes("quote-revision") ? "1" : "Fictional customer" };
+      return { textContent: selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "Queued — not sent" : selector.includes("quote-revision") ? "1" : "Fictional customer" };
     } };
     vi.stubGlobal("document", { getElementById: () => root });
     vi.stubGlobal("sessionStorage", { getItem: () => jobId, setItem: vi.fn() });
@@ -258,7 +258,7 @@ describe("step 3 prepared workspace loading", () => {
     const root = {
       querySelector: vi.fn((selector: string) => {
         if (selector.includes("workspace-job-id")) return mountedJob ? { getAttribute: () => mountedJob } : null;
-        if (selector.includes("quote-delivery")) return { textContent: delivered ? "Simulated delivery — nothing sent" : "Not queued" };
+        if (selector.includes("quote-delivery")) return { textContent: delivered ? "Simulated delivery — nothing sent" : "Queued — not sent" };
         if (selector === ".review-line") return mountedJob ? {} : null;
         if (selector === ".quote-editor") return mountedJob ? { getAttribute: () => "true" } : null;
         if (selector.includes("quote-revision")) return { textContent: String(revision) };
@@ -479,13 +479,13 @@ it.each(["", preparedId])("waits for server-confirmed activation before remounti
 });
 
 
-it("fresh autoplay keeps one captured job", async () => {
+it.each([false, true])("fresh autoplay keeps one captured job; queued delivery %s", async queued => {
   memo.states = [jobId, capture(), 0, 2, true, false, "", false, true, "", false, true]; memo.cursor = 0;
   let delivered = false;
   const root = {
     querySelector: (selector: string) => selector === ".review-line" ? {} : {
       getAttribute: () => selector === ".quote-editor" ? "true" : jobId,
-      textContent: selector.includes("quote-revision") ? "1" : selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "" : "Fictional customer",
+      textContent: selector.includes("quote-revision") ? "1" : selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "Queued — not sent" : "Fictional customer",
     },
   };
   vi.stubGlobal("document", { getElementById: () => root });
@@ -493,7 +493,7 @@ it("fresh autoplay keeps one captured job", async () => {
   vi.stubGlobal("location", { href: "https://example.test/practice-company/walkthrough?walkJob=" + jobId });
   vi.stubGlobal("history", { replaceState: vi.fn() });
   const price = vi.spyOn(screenActions, "reviewAndPrice").mockResolvedValue();
-  const click = vi.spyOn(screenActions, "click").mockImplementation(async name => { if (name === "Continue fake worker") delivered = true; });
+  const click = vi.spyOn(screenActions, "click").mockImplementation(async name => { if (name === "Continue fake worker" || name === "Simulate sending this quote" && !queued) delivered = true; });
   try {
     vi.mocked(recoverCapture).mockClear();
     renderToStaticMarkup(<VoiceJourney />);
@@ -501,7 +501,7 @@ it("fresh autoplay keeps one captured job", async () => {
     expect(memo.steps[1]!.isDone()).toBe(true);
     await memo.steps[2]!.autoAction({} as HTMLElement, new AbortController().signal);
     expect(price).toHaveBeenCalledTimes(1);
-    expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview immutable quote", "Simulate sending this quote", "Continue fake worker"]);
+    expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview immutable quote", "Simulate sending this quote", ...(queued ? ["Continue fake worker"] : [])]);
     expect(recoverCapture).not.toHaveBeenCalled();
     expect(memo.setState.mock.calls.filter(([value]) => value === preparedId)).toHaveLength(0);
     expect(memo.steps[2]!.isDone()).toBe(true);
@@ -518,7 +518,7 @@ it.each([0, 1])("step 3 waits for the own editor and saves only an unpriced draf
       if (selector === ".quote-editor") return { getAttribute: () => { readyChecked = true; return String(ready); } };
       if (selector.includes("workspace-job-id")) return { getAttribute: () => activeJob };
       if (selector.includes("quote-revision")) return { textContent: String(revision) };
-      if (selector.includes("quote-delivery")) return { textContent: delivered ? "Simulated delivery — nothing sent" : "Not queued" };
+      if (selector.includes("quote-delivery")) return { textContent: delivered ? "Simulated delivery — nothing sent" : "Queued — not sent" };
       if (selector.includes("party-binding-id")) return { textContent: jobId };
       if (selector.includes("party-customer")) return { textContent: "Fictional customer" };
       return null;
@@ -577,7 +577,7 @@ it("hand step 3 saves customer and site before sending", async () => {
     if (selector.includes("workspace-job-id")) return { getAttribute: () => jobId };
     if (selector.includes("party-binding-id")) return { textContent: savedParties ? jobId : "" };
     if (selector.includes("party-customer")) return { textContent: savedParties ? "Fictional customer" : "" };
-    if (selector.includes("quote-delivery")) return { textContent: delivered ? "Simulated delivery — nothing sent" : "" };
+    if (selector.includes("quote-delivery")) return { textContent: delivered ? "Simulated delivery — nothing sent" : "Queued — not sent" };
     return {};
   } };
   vi.stubGlobal("document", { getElementById: () => root });
@@ -677,7 +677,7 @@ it("guided microphone playback keeps its prepared example separate from the save
     if (selector === ".review-line") return null;
     if (selector === ".quote-editor") return { getAttribute: () => "true" };
     if (selector.includes("workspace-job-id")) return { getAttribute: () => preparedId };
-    return { textContent: selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "" : selector.includes("quote-revision") ? "1" : "Saved fictional customer" };
+    return { textContent: selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "Queued — not sent" : selector.includes("quote-revision") ? "1" : "Saved fictional customer" };
   } };
   vi.stubGlobal("document", { getElementById: () => root });
   vi.stubGlobal("sessionStorage", { getItem: () => preparedId, setItem: vi.fn() });

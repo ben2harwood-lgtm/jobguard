@@ -33,9 +33,19 @@ test("REAL-OWN-JOB-TO-PAID: a blank firm's own £900 job reaches its paid end re
     await expect(page.getByTestId("final-account-lock")).toBeVisible();
   };
   try {
-    await page.goto("/practice-company");
-    await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
-    await click("＋ Start a new job");
+    await page.goto("/");
+    const enteredLegacyPaths: string[] = [];
+    page.on("framenavigated", frame => {
+      if (frame === page.mainFrame() && ["/practice-company", "/classic"].includes(new URL(frame.url()).pathname)) {
+        enteredLegacyPaths.push(new URL(frame.url()).pathname);
+      }
+    });
+    await click("Start my own practice firm");
+    await expect(page.getByTestId("designed-today")).toBeVisible();
+    await page.getByRole("navigation", { name: /^(Main|Mobile) navigation$/ }).getByRole("button", { name: "Jobs", exact: true }).click();
+    const jobs = page.getByTestId("designed-jobs-list");
+    await expect(jobs.getByText("No jobs yet", { exact: true })).toBeVisible();
+    await jobs.getByRole("button", { name: "Start a new job", exact: true }).click();
     await page.getByLabel("Work details").fill(`JOB: Practice decorating
 ITEM: Protect room | £200.00
 ITEM: Prepare walls | £200.00
@@ -45,7 +55,8 @@ ITEM: Clean site | £100.00
 ITEM: Replace shelves`);
     await click("Make my draft"); await click("Check and edit my draft");
     await expect(page.getByRole("heading", { name: "Check the work items", exact: true })).toBeVisible();
-    jobId = new URL(page.url()).pathname.split("/").at(-1)!;
+    await expect(page.getByTestId("designed-job-work")).toBeVisible();
+    jobId = new URL(page.url()).pathname.split("/")[2]!;
     await click("Save customer and site");
     await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
     for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"]) await click(`Accept ${name}`);
@@ -57,13 +68,15 @@ ITEM: Replace shelves`);
     await expect(page.getByTestId("quote-net")).toHaveText("GBP 900.00");
     await click("Save draft revision"); await expect(page.getByTestId("quote-revision")).toHaveText("1");
     await click("Preview immutable quote"); await click("Simulate sending this quote");
-    await click("Continue fake worker");
+    await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
+    if (await page.getByTestId("quote-delivery").textContent() === "Queued — not sent") await click("Continue fake worker");
     await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
+    await expect(page.getByRole("button", { name: "Continue fake worker", exact: true })).toHaveCount(0);
     await click("Record practice acceptance"); await click("Start this practice job");
     await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
     // Reopen the saved job to load the site-work and Final Check panels, rather
     // than borrowing the walkthrough's prepared example or injecting local state.
-    await page.goto(`/jobs/${jobId}#quote`);
+    await page.goto(`/jobs/${jobId}/work#quote`);
     await click("Finished on site");
     await expect(page.getByTestId("work-state")).toHaveText("Finished on site");
     await click("Build final account");
@@ -150,10 +163,16 @@ ITEM: Replace shelves`);
     await page.getByTestId("uiwire12-receipt-reference").fill("Fictional own-job payment");
     await click("Record practice receipt");
     await expect(page.getByTestId("invoice-balance")).toHaveText("GBP 0.00");
-    await page.goto(`/jobs/${jobId}/value`);
+    await page.getByRole("navigation", { name: "Job sections" }).getByRole("button", { name: "Money", exact: true }).click();
+    await expect(page.getByTestId("designed-job-money")).toBeVisible();
     await expect(page.getByTestId("value-invoiced-gross")).toHaveText("£1,080.00");
     await expect(page.getByTestId("value-recorded-gross")).toHaveText("£1,080.00");
     await expect(page.getByTestId("value-outstanding-gross")).toHaveText("£0.00");
+    await page.reload();
+    await expect(page.getByTestId("value-invoiced-gross")).toHaveText("£1,080.00");
+    await expect(page.getByTestId("value-recorded-gross")).toHaveText("£1,080.00");
+    await expect(page.getByTestId("value-outstanding-gross")).toHaveText("£0.00");
+    expect(enteredLegacyPaths).toEqual([]);
   } finally {
     if (jobId) {
       const comparisons = await admin.query(`SELECT r.id revision_id,r.revision,r.source_hash,d.current_revision_id head_id,d.revision head_revision

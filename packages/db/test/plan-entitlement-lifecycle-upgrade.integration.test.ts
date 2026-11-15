@@ -80,6 +80,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const signedInvoiceSql = await readFile(new URL("../migrations/0731_combined_invoice_signed_vat.sql", import.meta.url), "utf8");
   const signedInvoiceOid = (await c.admin.query("SELECT 'app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)'::regprocedure::oid oid")).rows[0].oid;
   lp6cReplacements.set(signedInvoiceOid, signedInvoiceSql.split("FUNCTION app.issue_lock_bound_customer_invoice(")[1]!.split("AS $$")[1]!.split(/\$\$\s*;/u)[0]!);
+  // LATER-SAFETY-150 replaces only the internal 14-argument builder attestation body.
+  const sentHeadSql = await readFile(new URL("../migrations/0743_builder_acceptance_sent_head.sql", import.meta.url), "utf8");
+  const sentHeadOid = (await c.admin.query("SELECT 'app.record_builder_attested_acceptance(uuid,uuid,uuid,uuid,uuid,integer,character,bigint,integer,uuid,character varying,character varying,timestamp with time zone,uuid)'::regprocedure::oid oid")).rows[0].oid;
+  lp6cReplacements.set(sentHeadOid, [...sentHeadSql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)][0]![4]!);
   // Only these six exact identities receive their latest 0724 bodies. Their
   // owners, ACLs and all other metadata remain checked by successor proofs.
   const delegationSql = await readFile(new URL("../migrations/0724_lp6c_customer_portal_delegation.sql", import.meta.url), "utf8");
@@ -101,8 +105,11 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const abandonedVisitRoutines = live.filter(row => row.nspname === "app" && row.proname === "ent3b_close_abandoned_visit"
     && row.args === "p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_reason text");
   expect(abandonedVisitRoutines).toHaveLength(1);
+  // LP-6d repair 12 (0740): the only change reads the visit operative's (third-party) authority through the private copy.
   expect(abandonedVisitRoutines[0]?.definition?.split("$function$")[1]).toEqual(
-    abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+    abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]!
+      .replace(" IF EXISTS(SELECT 1 FROM app.ent3b_visit_authority(visit_row.membership_id,p_job)",
+        " -- LP6D_THIRD_PARTY (repair 12): the visit's operative is a third party with no request of its own; its\n -- current visit authority is read through the private copy, never through the caller's binding.\n IF EXISTS(SELECT 1 FROM app.lp6d_visit_authority_of(visit_row.membership_id,p_job)"));
   const recoverySql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql", import.meta.url), "utf8");
   for (const [name,args] of [
     ["final_check_read_authority","t uuid, j uuid, d text, locking boolean"],
@@ -129,7 +136,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(emergencyRoutines).toHaveLength(1);
   expect(emergencyRoutines[0]?.definition?.split("$function$")[1]).toEqual(emergencyBody);
   // 0709 replaces only this exact overload on 0656's body; pin its entire body, including all predecessor guards.
-  const feeResult = await readFile(new URL("../migrations/0708_fee_result_json_errors.sql", import.meta.url), "utf8");
+  const feeResult = await readFile(new URL("../migrations/0742_fee_webhook_receipt_binding.sql", import.meta.url), "utf8");
   const feeResultBody = feeResult.split("CREATE OR REPLACE FUNCTION app.replace_fee_reservation_book")[1]!.split("AS $$")[1]!.split("$$;")[0];
   expect(live.filter(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
     && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")).toHaveLength(1);
@@ -153,17 +160,15 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const paymentFeeWriterOid = (await c.admin.query("SELECT 'app.write_payment_fee(uuid,text,jsonb)'::regprocedure::oid oid")).rows[0].oid;
   const collectRecheck = await readFile(new URL("../migrations/0587_payment_fee_collect_recheck.sql", import.meta.url), "utf8");
   const paymentFeeWriterBody = collectRecheck.split("CREATE OR REPLACE FUNCTION app.write_payment_fee")[1]!.split("AS $$")[1]!.split("$$;")[0];
-  // Ben's router ruling: the 0584 effective-session successor was renumbered to 0658 by stem only.
-  // Only this exact routine may take its reviewed successor body; its complete definition header stays exact.
-  const effectiveSessionOid = (await c.admin.query("SELECT 'app.lp6_session_authority(text,text,uuid)'::regprocedure::oid oid")).rows[0].oid;
-  const effectiveSessionMigration = await readFile(new URL("../migrations/0658_lp6b_effective_session_actor.sql", import.meta.url), "utf8");
-  const effectiveSessionBody = effectiveSessionMigration.split("AS $$")[1]!.split("$$;")[0];
   // 0567 changes only the checked settlement overload's expected approval hash.
   const settlementOid = (await c.admin.query("SELECT 'app.record_simulated_settlement(uuid,uuid,uuid,character varying,bigint,timestamp with time zone,uuid,uuid,uuid)'::regprocedure::oid oid")).rows[0].oid;
   const selfComparison = "(SELECT content_hash FROM app.action_authorization WHERE tenant_id=p_tenant AND id=p_authorization)";
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
+    ["ef_inputs", "t uuid, ag app.enterprise_agreement_version, p_period text", "0745_enterprise_fee_rejected_line.sql"],
+    ["mon2_command", "t uuid, digest text, command_id uuid, v jsonb", "0746_subscription_internal_owner_guard.sql"],
     ["ef_prepare_statement", "p_session uuid, p_command uuid, p_period text", "0704_enterprise_fee_period_order.sql"],
+    ["cb_derive", "p_session uuid, p_job uuid, p_command uuid, p_source text, p_invoice text, p_hash text, p_projection jsonb", "0748_billing_policy_hold_projection.sql"],
     ["ef_post_statement", "p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid", "0704_enterprise_fee_period_order.sql"],
     ["receipt_fact_invoice_line", "t uuid, j uuid, i uuid, l uuid, r uuid, k uuid, ch uuid", "0713_supplementary_after_combined_receipt.sql"],
     ["issue_practice_customer_invoice", "p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date", "0723_lp6c_money_binding.sql"],
@@ -172,7 +177,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["lp5_bind_effect", "p_command uuid, p_authorization uuid, p_adapter text, p_reference jsonb", "0724_lp6c_customer_portal_delegation.sql"],
     ["lp5b_contractor_result", "p_command uuid, p_outcome jsonb", "0722_abandoned_visit_authority.sql"],
     ["ent3b_closeout_guard", "", "0722_abandoned_visit_authority.sql"],
-    ["receipt_fact_proposal", "t uuid, j uuid, p jsonb", "0692_final_check_post_invoice_receipt_gate.sql"],
+    ["receipt_fact_proposal", "t uuid, j uuid, p jsonb", "0747_receipt_proposal_historical_capacity.sql"],
     ["read_final_check_manifest", "t uuid, j uuid, m uuid", "0698_final_check_post_invoice_rerun.sql"],
     ["evidence_pack_v3_material", "t uuid, c uuid, ordinary_only boolean", "0698_final_check_post_invoice_rerun.sql"],
     ["begin_final_check", "t uuid, j uuid, detector text, policy text", "0698_final_check_post_invoice_rerun.sql"],
@@ -237,6 +242,16 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const routineKey = (identity: string) => identity.replace(/,\s*/gu, ",");
   const ent5Bodies = new Map<string, string>();
   const ent5Replacements = [
+    ["app.current_firm_profile_key()", "0751_practice_firm_name.sql"],
+    ["app.job_saved_firm_name(j uuid)", "0751_practice_firm_name.sql"],
+    // Linked-practice successors retain metadata and replace these seven bodies.
+    ["app.issue_practice_session(digest text)", "0741_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company(digest text,previous_digest text)", "0741_identity_linked_practice.sql"],
+    ["app.start_blank_practice_company_v2(new_token text,previous_token text)", "0741_identity_linked_practice.sql"],
+    ["app.seed_saved_v1_sample()", "0741_identity_linked_practice.sql"],
+    ["app.authenticate_practice_session(digest text,requested_tenant uuid)", "0741_identity_linked_practice.sql"],
+    ["app.lp6_session_authority(p_kind text,p_credential text,p_tenant uuid)", "0749_lp6d_remaining_routines.sql"],
+    ["app.is_blank_practice_company(digest text)", "0741_identity_linked_practice.sql"],
     ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
     ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0635_extra_same_step.sql"],
     ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0728_extra_reject_null_step.sql"],
@@ -253,7 +268,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   for (const [identity, file] of ent5Replacements) {
     const sql = await readFile(new URL(`../migrations/${file}`, import.meta.url), "utf8");
     const replacement = [...sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\(([^)]*)\)[\s\S]*?AS \$\$([\s\S]*?)\$\$;/gu)]
-      .find(match => routineKey(`${match[1]}(${match[2]})`) === identity);
+      .find(match => routineKey(`${match[1]}(${match[2]!.replace(/ DEFAULT [^,]+/gu, "")})`) === identity);
     expect(replacement, identity).toBeDefined();
     ent5Bodies.set(identity, replacement![3]!);
   }
@@ -269,8 +284,23 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["lp_require_audit|", "lp_require_audit"],
     ["lp_receipt_immutable|", "lp_receipt_immutable"],
   ].map(([identity, name]) => [identity, finishSql.split(`CREATE OR REPLACE FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
+  // LP-6d (0740) re-creates only the routines it names; each body must be exactly a 0740 body for that name.
+  // Owners, ACLs and other metadata stay checked by the 0740 migration proof.
+  const lp6dBodies = new Map<string, string[]>();
+  for (const m of (await readFile(new URL("../migrations/0749_lp6d_remaining_routines.sql", import.meta.url), "utf8"))
+    .matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)) {
+    lp6dBodies.set(m[1]!, [...(lp6dBodies.get(m[1]!) ?? []), m[4]!]);
+  }
+  // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
+  lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    if (prior.definition !== null && current?.source !== prior.source && lp6dBodies.get(`${prior.nspname}.${prior.proname}`)?.includes(current?.source)) {
+      // The header may change only in LANGUAGE (contractor_session's checked bridge moves from sql to plpgsql).
+      const header = (definition: string) => definition.replace(/^ LANGUAGE \w+$/mu, " LANGUAGE <checked>");
+      expect(header(current!.definition)).toEqual(header(prior.definition.replace(prior.source, () => current!.source)));
+      continue;
+    }
     // 0733 changes these exact bodies; retain every routine's security metadata.
     const customerLinkRoutines = [
       "app.customer_portal_current(g app.customer_portal_grant)",
@@ -393,10 +423,6 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       const sql = await readFile(new URL("../migrations/0616_payment_fee_current_review.sql", import.meta.url), "utf8");
       expect(current?.definition?.split("$function$")[1]).toEqual(sql.split("AS $$")[1]!.split("$$;")[0]);
       expect(current?.source).toBe(sql.split("AS $$")[1]!.split("$$;")[0]);
-    } else if (prior.oid === effectiveSessionOid) {
-      const predecessorParts = prior.definition.split("$function$");
-      expect(predecessorParts).toHaveLength(3);
-      expect(current?.definition).toEqual(`${predecessorParts[0]}$function$${effectiveSessionBody}$function$${predecessorParts[2]}`);
     } else if (prior.nspname === "app" && prior.proname === "adopt_invoiced_job_v3" &&
       prior.args === "t uuid, source_job uuid, d text, cmd uuid, auth uuid, approved jsonb, request_hash text") {
       const migration = await readFile(new URL("../migrations/0625_company_import_once.sql", import.meta.url), "utf8");

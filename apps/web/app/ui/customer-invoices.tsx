@@ -7,6 +7,15 @@ import { CustomerReceipts } from "./customer-receipts";
 import { INVOICE_CHANGED_EVENT, notifyInvoiceChanged } from "./customer-payment-status";
 import { FINAL_CHECK_CHANGED_EVENT } from "./final-check-reveal-view";
 import { CustomerInvoicePayNow } from "./pay-now-synthetic";
+// A saved-history refresh or account rebuild can remount an issuer. Neither
+// authorises a second command after a lost response in this page session.
+const uncertainIssues = new WeakMap<Window, Set<string>>();
+function issueIsUncertain(jobId:string,mark=false):boolean {
+ if(typeof window==="undefined")return false;
+ let jobs=uncertainIssues.get(window);
+ if(mark){if(!jobs){jobs=new Set();uncertainIssues.set(window,jobs);}jobs.add(jobId);}
+ return jobs?.has(jobId)??false;
+}
 const INVOICE_ISSUE_UNCERTAIN_EVENT="jobguard:invoice-issue-uncertain";
 const pounds=(p:number)=>`GBP ${(p/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 export const invoiceGuardMessages = {
@@ -14,12 +23,13 @@ export const invoiceGuardMessages = {
  FINAL_CHECK_NOT_COMPLETE: "JobGuard's final check is still running",
  FINAL_CHECK_FAILED: "JobGuard's final check could not finish, so this bill stays locked",
 } as const;
-function invoiceFailureMessage(code: string): string {
+function invoiceFailureMessage(code: string, unchangedLockedRevision = false): string {
  if (Object.hasOwn(invoiceGuardMessages, code)) return invoiceGuardMessages[code as keyof typeof invoiceGuardMessages];
+ if (code === "STALE_REVISION") return "The final account changed. Please reload and rebuild the saved account before issuing this invoice.";
  if (["STALE_FINAL_ACCOUNT_AUTHORIZATION", "STALE_OR_BLOCKED_FINAL_ACCOUNT"].includes(code)) return "The final account changed. Rebuild it before issuing this invoice.";
  if (["SUPPLEMENTARY_INVOICE_NO_NEW_LINES", "SUPPLEMENTARY_INVOICE_ALREADY_ISSUED", "FINAL_ACCOUNT_ALREADY_INVOICED", "NO_NEW_INVOICE_LINES"].includes(code)) return "This revision has no new unbilled lines. Check the saved invoice history.";
  if (code === "FINAL_INVOICE_ALREADY_ISSUED") return "This final invoice has already been issued. Reload the saved invoice history.";
- if (code === "SUPPLEMENTARY_INVOICE_BASE_REQUIRED") return "Issue the final invoice before adding a supplementary invoice.";
+ if (code === "SUPPLEMENTARY_INVOICE_BASE_REQUIRED") return unchangedLockedRevision ? "This is still the locked account. Approve the extra, then press “Rebuild from approved sources” before issuing a supplementary invoice." : "Issue the final invoice before adding a supplementary invoice.";
  if (code === "INVOICE_SOURCE_CORRECTION_REQUIRED") return "Previously billed lines changed. Use an invoice correction before issuing another bill.";
  if (code === "INVOICE_AMOUNT_INVALID") return "There are no valid new billable lines in this revision. Check the saved account and invoice history.";
  if (code === "FINAL_INVOICE_REVISION_MISMATCH") return "This revision does not belong to the locked bill. Rebuild from approved sources.";
@@ -49,13 +59,13 @@ function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccoun
   }catch{if(!controller.signal.aborted){setView(null);setError("Customer invoices could not load. Check the saved records before issuing again.");setLoading(false);}}
  },[jobId]);
  useEffect(()=>{
-  setView(null);uncertain.current=false;writing.current=false;setError("");
+  setView(null);uncertain.current=issueIsUncertain(jobId);writing.current=false;setError(uncertain.current?"The invoice result is unknown. Repeated issue is blocked; check the saved invoice history.":"");
   const changed=(event:Event)=>{if((event as CustomEvent<{jobId?:string}>).detail?.jobId===jobId)void load(true);};
   const focus=()=>{void load(true);};
   const visible=()=>{if(document.visibilityState==="visible")void load(true);};
   const unknown=(event:Event)=>{
    if((event as CustomEvent<{jobId?:string}>).detail?.jobId!==jobId)return;
-   uncertain.current=true;
+   uncertain.current=issueIsUncertain(jobId,true);
    setError("The invoice result is unknown. Repeated issue is blocked; check the saved invoice history.");
    void load();
   };
@@ -72,14 +82,15 @@ function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccoun
    if(currentJob.current!==jobId||lifetime.current!==generation)return;
    if(r.ok){const next=practiceInvoiceResponseV1.parse(await r.json());if(next.jobId!==jobId)throw new Error("WRONG_JOB_RESPONSE");if(currentJob.current===jobId&&lifetime.current===generation){setView(next);notifyInvoiceChanged(jobId);}}
    else { if(r.status>=500)throw new Error("UNKNOWN"); const body = await r.json(); if(currentJob.current!==jobId||lifetime.current!==generation)return; const code = typeof body.code === "string" ? body.code : ""; setErrorCode(code); setError(invoiceFailureMessage(code)); }
-  }catch{if(currentJob.current===jobId&&lifetime.current===generation){uncertain.current=true;window.dispatchEvent(new CustomEvent(INVOICE_ISSUE_UNCERTAIN_EVENT,{detail:{jobId}}));setError("The invoice result is unknown. Repeated issue is blocked; reload the saved invoice history.");await load(true);}}
+  }catch{if(currentJob.current===jobId&&lifetime.current===generation){uncertain.current=issueIsUncertain(jobId,true);window.dispatchEvent(new CustomEvent(INVOICE_ISSUE_UNCERTAIN_EVENT,{detail:{jobId}}));setError("The invoice result is unknown. Repeated issue is blocked; reload the saved invoice history.");await load(true);}}
   finally{if(currentJob.current===jobId&&lifetime.current===generation){writing.current=false;setBusy(false);}}
  }
  if(loading)return <section aria-live="polite"><h3>Customer invoice</h3><p>Loading invoice history…</p></section>;
  if(error&&!view)return <section role="alert"><h3>Customer invoice unavailable</h3><p>{error}</p><button onClick={()=>void load()}>Try invoice history again</button></section>;
- const invoice=view?.invoices.at(-1);
+ const invoices=view?.invoices??[];
+ const invoice=invoices.at(-1);
  return <section className="customer-invoice"><h3>Customer invoice</h3><p>Reference VAT is illustrative. This is not a real tax invoice.</p>
-  {!invoice?<button className="primary" disabled={busy||uncertain.current||finalAccount.issueBlocked} onClick={()=>void issue()}>Issue and simulate this invoice</button>:<article id={`invoice-${invoice.id}`}>
+  {!invoice?<button className="primary" disabled={busy||uncertain.current||finalAccount.issueBlocked} onClick={()=>void issue()}>Issue and simulate this invoice</button>:invoices.map(invoice=><article key={invoice.id} id={`invoice-${invoice.id}`}>
    <p>Issued separately from delivery.</p><dl>
     <div><dt>Invoice number</dt><dd data-testid="customer-invoice-number">{invoice.number}</dd></div>
     <div><dt>Invoice gross</dt><dd data-testid="invoice-gross">{pounds(invoice.totalPence)}</dd></div>
@@ -93,7 +104,7 @@ function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccoun
    <p>Need to change it? Issue a correction; this snapshot and number cannot be edited.</p>
    <CustomerCreditNotes jobId={jobId} invoiceId={invoice.id} onChanged={()=>void load(true)}/>
    <CustomerReceipts key={invoice.id} jobId={jobId} invoiceId={invoice.id} onChanged={()=>void load(true)}/>
-  </article>}
+  </article>)}
   {busy&&<p role="status">Issuing this invoice. Wait for the saved result before continuing.</p>}
   {finalAccount.issueBlocked&&!invoice&&<p>Complete the required proof, then press “Rebuild from approved sources” to include it before issuing this bill.</p>}
   {error&&<p role="alert" data-error-code={errorCode}>{error}</p>}
@@ -119,13 +130,13 @@ function LockBoundCustomerInvoices({jobId,finalAccount,guard}:{jobId:string;fina
   }catch{if(!controller.signal.aborted){setIssued(null);setError("INVOICE_HISTORY_UNAVAILABLE");}}
  },[jobId]);
  useEffect(()=>{
-  setIssued(null);setError("");uncertain.current=false;writing.current=false;
+  setIssued(null);uncertain.current=issueIsUncertain(jobId);setError(uncertain.current?"INVOICE_OUTCOME_UNKNOWN":"");writing.current=false;
   const changed=(event:Event)=>{if((event as CustomEvent<{jobId?:string}>).detail?.jobId===jobId)void load();};
   const focus=()=>{void load();};
   const visible=()=>{if(document.visibilityState==="visible")void load();};
   const unknown=(event:Event)=>{
    if((event as CustomEvent<{jobId?:string}>).detail?.jobId!==jobId)return;
-   uncertain.current=true;
+   uncertain.current=issueIsUncertain(jobId,true);
    setError("INVOICE_OUTCOME_UNKNOWN");
    void load();
   };
@@ -154,7 +165,7 @@ function LockBoundCustomerInvoices({jobId,finalAccount,guard}:{jobId:string;fina
    if(saved.jobId!==jobId)throw new Error("WRONG_JOB_RESPONSE");
    if(currentJob.current===jobId&&lifetime.current===generation){setIssued(saved);notifyInvoiceChanged(jobId);}
   }catch{
-   if(currentJob.current===jobId&&lifetime.current===generation){uncertain.current=true;window.dispatchEvent(new CustomEvent(INVOICE_ISSUE_UNCERTAIN_EVENT,{detail:{jobId}}));setError("INVOICE_OUTCOME_UNKNOWN");window.dispatchEvent(new CustomEvent(FINAL_CHECK_CHANGED_EVENT,{detail:{jobId}}));await load();}
+   if(currentJob.current===jobId&&lifetime.current===generation){uncertain.current=issueIsUncertain(jobId,true);window.dispatchEvent(new CustomEvent(INVOICE_ISSUE_UNCERTAIN_EVENT,{detail:{jobId}}));setError("INVOICE_OUTCOME_UNKNOWN");window.dispatchEvent(new CustomEvent(FINAL_CHECK_CHANGED_EVENT,{detail:{jobId}}));await load();}
   }finally{if(currentJob.current===jobId&&lifetime.current===generation){writing.current=false;setBusy(false);}}
  }
  const latest=issued?.invoices.at(-1);
@@ -162,9 +173,12 @@ function LockBoundCustomerInvoices({jobId,finalAccount,guard}:{jobId:string;fina
   <button style={{minHeight:44,minWidth:44}} disabled={finalDisabled} onClick={()=>void issue("final")}>Issue final invoice</button>
   <button style={{minHeight:44,minWidth:44}} disabled={supplementaryDisabled} onClick={()=>void issue("supplementary")}>Issue supplementary invoice</button>
   {busy&&<p role="status">Issuing this invoice. Wait for the saved result before continuing.</p>}
+  {issued&&!hasFinal&&<p>Issue the final invoice before adding a supplementary invoice.</p>}
+  {hasFinal&&finalAccount.id===guard.lockedRevision?.id&&<p>This is still the locked account. Approve the extra, then press “Rebuild from approved sources” to create a later account for its supplementary invoice.</p>}
+  {hasFinal&&!unbilled&&finalAccount.id!==guard.lockedRevision?.id&&<p>This account has already been billed. There are no new unbilled sources in this revision.</p>}
   {guard.code&&<p role="alert" data-error-code={guard.code}>{invoiceGuardMessages[guard.code]}</p>}
   {finalAccount.issueBlocked&&<p>Complete the required proof, then press “Rebuild from approved sources” before issuing this bill.</p>}
-  {error&&<p role="alert" data-error-code={error}>{error==="INVOICE_OUTCOME_UNKNOWN"?"The invoice result is unknown. Repeated issue is blocked. Check the saved invoice history before continuing.":invoiceFailureMessage(error)}</p>}
+  {error&&<p role="alert" data-error-code={error}>{error==="INVOICE_OUTCOME_UNKNOWN"?"The invoice result is unknown. Repeated issue is blocked. Check the saved invoice history before continuing.":invoiceFailureMessage(error,hasFinal&&finalAccount.id===guard.lockedRevision?.id)}</p>}
   {error&&<button type="button" disabled={busy} onClick={()=>void load()}>Refresh saved invoice history</button>}
   {latest&&<dl>
    <div><dt>Saved invoice number</dt><dd data-testid="lock-bound-invoice-number">{latest.number}</dd></div>

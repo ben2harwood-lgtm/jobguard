@@ -11,7 +11,7 @@ import { QuoteAcceptanceRepository } from "../src/acceptance-repository.js";
 import { withTenant, verifiedTenantContextForQueuedJob, verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 
-const own = "0949_practice_firm_name.sql";
+const own = "0751_practice_firm_name.sql";
 const start = { version: "blank-practice-company.v1", action: "start" };
 const profile = { version: "firm-profile.v1", tradingName: "Fictional Moonbrick Works", addressLines: [], contactEmail: "", contactPhone: "" };
 const recipient = "customer@fictional.invalid";
@@ -87,6 +87,9 @@ it("blank practice owner saves a name for only its own quote and acceptance", as
  const bytes = await delivery.pdf(a.auth.context,a.job,fresh.documentId);
  await repo.save(a.auth.context,{...profile,tradingName:"Fictional Moonbrick Later"});
  expect((await issue(fresh,command))?.documentId).toBe(fresh.documentId);
+ // Main #768 keeps replay authorization exact even after the issuer is renamed.
+ await expect(delivery.issue(a.auth.context,a.job,{documentId:fresh.documentId,contentHash:fresh.hash,recipient:"changed@fictional.invalid",commandId:command})).rejects.toThrow("COMMAND_CONFLICT");
+ await expect(delivery.issue(a.auth.context,a.job,{documentId:fresh.documentId,contentHash:"0".repeat(64),recipient,commandId:command})).rejects.toThrow("COMMAND_CONFLICT");
  expect(await delivery.pdf(a.auth.context,a.job,fresh.documentId)).toEqual(bytes);
  expect(await immutable()).toEqual(issuedBeforeRename);
  expect((await preview()).document.issuer.name).toBe("Fictional Moonbrick Later");
