@@ -43,7 +43,7 @@ export async function bindTestTenantContext(owner: Pool, context: ReturnType<typ
 }
 
 /** Real persisted credential and membership bridge for synthetic command fixtures. */
-export async function testBoundTenantContext(owner: Pool, tenantId: string, membershipId: string, credential = createHash("sha256").update(`lp6-test:${tenantId}:${membershipId}`).digest("hex")) {
+export async function testBoundTenantContext(owner: Pick<Pool, "query">, tenantId: string, membershipId: string, credential = createHash("sha256").update(`lp6-test:${tenantId}:${membershipId}`).digest("hex")) {
   const member = (await owner.query<{ identity_user_id: string }>(
     "SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [tenantId, membershipId],
   )).rows[0];
@@ -72,7 +72,7 @@ export async function testActorContext(owner: Pool, context: ReturnType<typeof t
 
 /** Bind one fixture actor's real persisted credential into a caller-managed transaction
  * (a raw client that already ran BEGIN), exactly as withTenant binds it. */
-export async function bindTestClient(owner: Pool, client: { query: Pool["query"] }, tenantId: string, membershipId: string) {
+export async function bindTestClient(owner: Pick<Pool, "query">, client: { query: Pool["query"] }, tenantId: string, membershipId: string) {
   const credential = createHash("sha256").update(`lp6-test:${tenantId}:${membershipId}`).digest("hex");
   await testBoundTenantContext(owner, tenantId, membershipId, credential);
   await client.query("SELECT app.bind_request('real',$1,$2)", [credential, tenantId]);

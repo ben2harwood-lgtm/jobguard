@@ -999,3 +999,71 @@ under this sandbox's restrictions. No claim is made that every failed CI job
 now passes. The exact checker commands above, required CI and independent RED
 review remain necessary at the resulting committed head. This READY supersedes
 only the previous base-mismatch handoff hold.
+
+### LP-6d repair R6 — web shards 2 and 5 (15 November 2026)
+
+READY for router commit/CI, based on the requested local head
+60d5b3201863015f8ba2227ebe687ff44fcf101d. No Git writes were performed;
+fetch/merge are unavailable under the explicitly read-only Git restriction.
+`gh run view 43642943300 --log-failed` could not connect to api.github.com,
+so the MON-6 failure's exact CI stack remains unverified here.
+
+- M4-1-S binds each captured job's own practice session through the existing
+  bindOwnSession helper before landing setup, and before its subsequent reversal.
+- M4-17 binds its named owner through bindTestClient before historical invoice
+  setup. The existing fixture helper now accepts a query-only owner connection,
+  allowing provisioning/binding inside the already open transaction without
+  borrowing another connection from its max-one pool.
+- Accounting export preview/read/approval and fake execution bind their supplied
+  real company credential before app.accounting_export. Binding refusals still
+  roll back and map to EXPORT_FORBIDDEN; route-change calls retain withTenant's
+  existing authenticated binding. New units exercise all five operation refusals
+  and a successful bound preview.
+- Hold submissions resolve a real identity context through the existing identity
+  bridge, checking that it names the same owner as the contractor practice
+  session. withTenant now binds that real request before mon9_session/worm_submit.
+  A different identity owner is refused. Executor/operator credentials, queued
+  execution and their authorization design are unchanged; no R3 design work was
+  needed for this owner-request fix.
+- MON-6's source-visible unbound advance_final_account_draft setup call now binds
+  its named actor before the revision writes. Its later receipt context retains
+  the already issued real session digest. This is source-inspected remediation,
+  pending the CI setup stack and actual PostgreSQL/browser execution.
+
+All existing test assertions remain unchanged; no tests were disabled. No SQL,
+source pins, migration proof, provider, production capability or policy changed.
+The existing lane includes every changed source/test/receipt path; its own lane
+file is implicitly editable and must not grant config/lanes/ explicitly.
+
+Local checks use installed Node 24.17.0, Vitest 4.1.12 and TypeScript 5.8.3.
+The pnpm shim stalled before executing checks and was interrupted; installed
+executables were used directly without package installation.
+- TypeScript: each package/app's `./node_modules/.bin/tsc -p tsconfig.json --noEmit`
+  PASS for config, core, db, storage, ai, api and web. Web was checked again after
+  the final fixture-binding placement changes.
+- From root: `./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=1 test/accounting-export-repository.test.ts src/worm-command-repository.test.ts`
+  PASS: 2 files, 46 tests.
+- From apps/web: installed Vitest with `run --maxWorkers=2`, at most three named
+  unit files per invocation. Complete unit result recorded below.
+- `node tools/agent-lane-boundary-lint.mjs --lane=lp-6d-remaining-routines-r4`
+  and `git diff --check` PASS.
+
+A broad web discovery initially included the PostgreSQL-backed materials route
+suite; its setup failed with `no free port in 58800..59200`. The batch driver was
+stopped and continued with units only, without rerunning completed green batches.
+No PostgreSQL or browser pass is claimed. Four web PostgreSQL files remain CI-only.
+
+Required commands NOT executable here (PostgreSQL/localhost unavailable):
+```
+pnpm --filter @jobguard/web test:e2e --workers=2 --project=mobile-360 --project=desktop M4-1-S.spec.ts M4-17-adjustments.spec.ts m5-1-export-preview.spec.ts m4-4-evidence-holds.spec.ts MON-6-stored-pay-now-preview.spec.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/accounting-export.integration.test.ts test/worm-hold-screen.integration.test.ts test/lp6d-routines.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/recovery.integration.test.ts test/practice-invoice-audit.integration.test.ts
+pnpm --filter @jobguard/web exec vitest run --maxWorkers=2 'app/api/contractor/jobs/[id]/possible-extras/materials/route.integration.test.ts' 'app/api/subscription-mandate/route.integration.test.ts' 'app/api/jobs/[id]/recovery-cases/[caseId]/managed-recovery/route.integration.test.ts'
+pnpm --filter @jobguard/web exec vitest run --maxWorkers=1 'app/api/jobs/[id]/recovery-cases/[caseId]/billability/database.test.ts'
+pnpm test:db
+pnpm test:migrations
+```
+Required green CI on current main and independent exact-head RED review remain
+router gates. No merge or independent-verification claim is made.
+
+R6 complete web unit result: **234 files, 2911 tests PASS**, in batches of at most three named files and at most two workers. Logs: /tmp/lp6d-r6-web-units.log and /tmp/lp6d-r6-web-units-remaining.log.
