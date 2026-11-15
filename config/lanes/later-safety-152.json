@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-152": {
+      "branches": ["codex/sandbox/later-safety-152"],
+      "allow": [
+        "packages/db/src/contractor-billing-repository.ts",
+        "packages/db/test/contractor-billing-import-failure.integration.test.ts",
+        "packages/db/migrations/9999_billing_policy_hold_projection.sql",
+        "packages/db/migrations/0748_billing_policy_hold_projection.sql",
+        "packages/db/test/migration-proofs/9999_billing_policy_hold_projection.proof.json",
+        "packages/db/test/migration-proofs/0748_billing_policy_hold_projection.proof.json",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
