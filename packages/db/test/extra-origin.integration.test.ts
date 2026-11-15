@@ -277,9 +277,12 @@ describe("ENT-4b origin persistence", () => {
    // renewed caller review 4 Nov 2026 (Ben: 'Yes, update S9')
    // Renewed caller source review 6 Nov 2026, later-safety-108 repair 4: v1 ownership now requires the succeeded import receipt.
    // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
-   "packages/db/src/practice-session.ts": "49c6c2dadcaa0412208dbce6585c0e30a283b4d4c3b98b50179eec3bad054729",
+   // 13 Nov 2026: refreshed for REAL-WAYIN-LINKED-PRACTICE (0734) at the coordinator-reviewed e76c9b33 file; Ben: "Yes, land it" (card jobguard-wayin-direct-yes-2026-11-11).
+   // re-pin approved by Ben, 15 Nov 2026, router chat: Yes, refresh them
+   "packages/db/src/practice-session.ts": "ca87026313b99e833e4145ba853c021bb0ffbebcd76279510155cfc62a64de56",
    "packages/db/src/contractor-repository.ts": "51d371939722dd3f0763f3c0b4861bf10848fee41564e7af99b31ff773a9ff5f",
    "packages/db/src/contractor-party-repository.ts": "93729040b706e520f24e757d14ef9c8e78fe32c835071aa05a2f421ec3bd11bd",
+   // 15 Nov 2026 catch-up to main (router): each pin above is one side's approved value (each file changed on one side only).
    // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
    // ~/.local/share/full-steam/coordinator/prechecks/batch-41.md: importCsvInTransaction makes no new context;
    // ConnectorPromotionRepository.promote uses context and principal from the same persisted session.
@@ -290,7 +293,7 @@ describe("ENT-4b origin persistence", () => {
    // Ben 6 Nov router-chat "yes": exactly the emergency-notice and retention-timer constructor sites.
    // Hold: break-glass identity design goes to Ben before real data.
    // Scanner bytes change only for the renewed caller review citation above.
-   "apps/api/src/auth/context-boundary.test.ts": "d4b3a9a710274e09a8d35123aa4b07cd68f87ba6d066ae2b2cb5909fda236bd2"
+   "apps/api/src/auth/context-boundary.test.ts": "cb340ddf7c231aa395f004ac993332eacf2cce2445df870d5b79869e224455b1"
   };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });

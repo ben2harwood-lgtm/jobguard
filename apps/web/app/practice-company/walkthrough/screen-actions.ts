@@ -10,6 +10,10 @@ export async function until(check: () => boolean, signal: AbortSignal) {
   }
   signal.throwIfAborted();
 }
+function openAncestors(element: HTMLElement) {
+  let details=element.parentElement?.closest("details");
+  while(details){details.open=true;details=details.parentElement?.closest("details");}
+}
 async function point(element: HTMLElement, signal?: AbortSignal) {
   document.querySelectorAll("[data-walk-action]").forEach(element => element.removeAttribute("data-walk-action"));
   element.setAttribute("data-walk-action", "true");
@@ -20,18 +24,27 @@ async function point(element: HTMLElement, signal?: AbortSignal) {
   signal?.throwIfAborted();
 }
 export async function click(name: string, signal: AbortSignal) {
+  signal.throwIfAborted();
   let button: HTMLButtonElement | undefined;
   await until(() => {
-    button = [...screen().querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.trim() === name && b.getClientRects().length > 0 && !b.disabled && !b.closest("fieldset[disabled]"));
+    signal.throwIfAborted();
+    button = [...screen().querySelectorAll<HTMLButtonElement>("button")].find(b => {
+      if(b.textContent?.trim()!==name||b.disabled||b.closest("fieldset[disabled]"))return false;
+      openAncestors(b);
+      return b.getClientRects().length>0;
+    });
     return !!button;
   }, signal);
   await point(button!, signal);
+  signal.throwIfAborted();
+  if(button!.disabled||button!.closest("fieldset[disabled]"))return;
   button!.click();
   await new Promise(resolve => setTimeout(resolve, 0));
 }
 export async function fill(selector: string, value: string) {
   const element = screen().querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(selector);
   if (!element) throw new Error("This field is not ready. Check the screen before continuing.");
+  openAncestors(element);
   const prototype = element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(element, value);
   element.dispatchEvent(new Event(element instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }));

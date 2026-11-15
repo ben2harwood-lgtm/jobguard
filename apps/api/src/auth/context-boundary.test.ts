@@ -92,12 +92,14 @@ const APPROVED_PRACTICE_FILES = [
 const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   // Renewed caller source review 6 Nov 2026, later-safety-108 repair 4: v1 ownership now requires the succeeded import receipt.
   // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
-  "packages/db/src/practice-session.ts": "49c6c2dadcaa0412208dbce6585c0e30a283b4d4c3b98b50179eec3bad054729",
+  "packages/db/src/practice-session.ts": "ca87026313b99e833e4145ba853c021bb0ffbebcd76279510155cfc62a64de56",
   // LP-6d repair 10 re-pin (checker accepted on source: prechecks/lp-6d-r10-403be3a6-s9-and-oracle.md): the contractor request context
   // is created once, by sessionPrincipal(), for a persisted contractor practice session, and kept in a
   // module-private WeakMap; requireContractorRequestContext returns it. One constructor call (was 2).
   // Repair 11: refusal-only principals keep their context in a separate map, read only by requireContractorRefusalContext.
   "packages/db/src/contractor-repository.ts": "51d371939722dd3f0763f3c0b4861bf10848fee41564e7af99b31ff773a9ff5f",
+  // 15 Nov 2026 catch-up to main (router): each pin is one side's approved value (each file changed on one side only).
+  "packages/db/src/contractor-party-repository.ts": "93729040b706e520f24e757d14ef9c8e78fe32c835071aa05a2f421ec3bd11bd",
   // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
   // ~/.local/share/full-steam/coordinator/prechecks/batch-41.md: importCsvInTransaction makes no new context;
   // its one new caller, ConnectorPromotionRepository.promote, takes context and principal from the same
