@@ -353,6 +353,8 @@ it("practice unlocked reads stay fixed with missing terms and zero/many hidden s
     await client.query("SET LOCAL session_replication_role='replica'");
     await client.query("DELETE FROM app.final_check_terms_acceptance WHERE tenant_id=$1", [a.tenantId]);
     await client.query("SET LOCAL session_replication_role='origin'");
+    // LP-6d: the raw read runs inside the practice owner's own bound request.
+    await client.query("SELECT app.bind_request('practice',$1,$2)", [a.digest, a.tenantId]);
     await client.query("SET LOCAL ROLE jobguard_runtime");
     const read = async () => (await client.query("SELECT app.read_final_check_reveal($1,$2,$3) result", [a.tenantId, a.jobId, a.digest])).rows[0].result;
     expect(await read()).toEqual({ state: "unlocked", items: [] });

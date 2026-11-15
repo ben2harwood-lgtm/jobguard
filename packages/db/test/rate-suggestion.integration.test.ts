@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { RateSuggestionRepository } from "../src/rate-suggestion-repository.js";
@@ -46,8 +47,8 @@ it("M5-6 real PostgreSQL: provenance, races, replay, stale data, isolation and a
   const sqlInput = { ...input, query: { ...query, tenantId: a.tenantId } };
   for (const forged of [{ ...sqlInput, acceptedRatePence: 999 }, { ...sqlInput, enabled: true }, { ...sqlInput, actorId: b.actorId },
     { ...sqlInput, acceptedRatePence: null }, { ...sqlInput, query: { ...sqlInput.query, unit: null } }]) {
-    await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.accept_rate_suggestion($1,$2,$3::jsonb)",
-      [a.tenantId, a.digest, JSON.stringify(forged)]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("INVALID_ACCEPTANCE");
+    await expect(workTenant(f.runtime, a.tenantId, async db => { await bindOwnSession(db, a.digest); return db.query("SELECT app.accept_rate_suggestion($1,$2,$3::jsonb)",
+      [a.tenantId, a.digest, JSON.stringify(forged)]); }, { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("INVALID_ACCEPTANCE");
   }
   expect((await f.admin.query("SELECT count(*)::int n FROM app.rate_suggestion_acceptance WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(0);
   const before = await unchangedTables(a);

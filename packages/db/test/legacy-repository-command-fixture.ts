@@ -24,6 +24,14 @@ function observeCheckedResults(db:TenantTransaction){
  const observedQuery=async(...args:any[])=>{
   const sql=args[0],values=args[1];
   try{
+   // LP-6d (router ruling r24): a pre-0740 schema has no app.revoke_recovery_message_authorization; there the
+   // historical revoke is the repository's own pre-0740 statement, run only while the routine is absent.
+   if(sql==="SELECT app.revoke_recovery_message_authorization($1,$2,$3,$4)"&&Array.isArray(values)
+    &&!(await originalQuery.call(client,"SELECT to_regprocedure('app.revoke_recovery_message_authorization(uuid,uuid,uuid,uuid)') IS NOT NULL AS installed")).rows[0].installed){
+    const authorization=(await originalQuery.call(client,"SELECT authorization_id FROM app.recovery_message_approval WHERE tenant_id=$1 AND message_id=$2",[values[0],values[3]])).rows[0]?.authorization_id;
+    await originalQuery.call(client,"UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL",[values[0],authorization]);
+    return {rows:[{revoke_recovery_message_authorization:null}],rowCount:1};
+   }
    const result=await originalQuery.apply(client,args);
    // Preserve the exact result returned by the historical checked routine. This
    // observes real PostgreSQL output; it changes no statement or result.

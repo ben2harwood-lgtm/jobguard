@@ -2,7 +2,7 @@ import { testActorContext } from "./tenant-context-test-utils.js";
 // PostgreSQL suite NOT RUN locally. Exercises the real persisted office-origin writer.
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
-import { ExtraRepository, EnterpriseFeeRepository } from "../src/index.js";
+import { ExtraRepository, EnterpriseFeeRepository, contractorSessionContext } from "../src/index.js";
 import { EnterpriseLivePromptRepository } from "../src/enterprise-live-prompt-repository.js";
 import { cluster,promptFixture,materialsInput,listInput,type PromptFixture } from "./enterprise-live-prompt-fixtures.js";
 import { command } from "./site-extra-fixtures.js";
@@ -29,8 +29,8 @@ describe("ENT-8A-P office advisory",()=>{
   const fee=new EnterpriseFeeRepository(c.runtime);
   const period=(await c.admin.query("SELECT to_char(clock_timestamp() AT TIME ZONE 'Europe/London','YYYY-MM') p")).rows[0]!.p;
   const derive=async()=>{
-   const d=await fee.derive(f.ctx,f.sessions.finance!,{version:"enterprise-fee-derive.v1",commandId:randomUUID(),agreementVersionId:agreementId,period});
-   return fee.read(f.ctx,f.sessions.finance!,d.derivationId);
+   const d=await fee.derive(await contractorSessionContext(c.runtime,f.sessions.finance!),f.sessions.finance!,{version:"enterprise-fee-derive.v1",commandId:randomUUID(),agreementVersionId:agreementId,period});
+   return fee.read(await contractorSessionContext(c.runtime,f.sessions.finance!),f.sessions.finance!,d.derivationId);
   };
   const before=await derive();
   expect(before).toMatchObject({cumulativeFeePence:0,contributions:[]});

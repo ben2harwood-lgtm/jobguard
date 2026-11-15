@@ -21,25 +21,55 @@ if (testPath?.endsWith(".integration.test.ts")) {
     const deferredContexts = new WeakMap<import("../src/tenant-context.js").TenantTransaction,
       { original: import("../src/tenant-context.js").VerifiedTenantContext; bound: import("../src/tenant-context.js").VerifiedTenantContext }>();
     return { ...actual,
+      // Historical upgrade databases predate LP-6d's credential bridge (0740): their contractor session
+      // bridge never bound, so the issued credential has nothing to bind against. Current schemas bind for real.
+      bindIssuedCredential: (async (client, context) => {
+        const installed = (await client.query(`SELECT to_regprocedure('app.lp6d_contractor_session_identity(uuid)') IS NOT NULL installed`)).rows[0].installed;
+        if (installed) await actual.bindIssuedCredential(client, context);
+      }) as typeof actual.bindIssuedCredential,
       bindAfterLocks: (async (db, context) => {
         const pair = deferredContexts.get(db);
         return actual.bindAfterLocks(db, pair?.original === context ? pair.bound : context);
       }) as typeof actual.bindAfterLocks,
       withTenant: (async (pool, context, work, deferred) => {
-        const { needsTestRequestBinding, bindTestTenantContext } = await import("./tenant-context-test-utils.js");
-        if (!needsTestRequestBinding(context)) return actual.withTenant(pool, context, work, deferred);
+        const { needsTestRequestBinding, bindTestTenantContext, testTenantContext } = await import("./tenant-context-test-utils.js");
+        // A historical database has no binding API, so this fixture client runs unbound. Map a
+        // late-binding approval's own context to that replacement, as the bound path below does.
+        const historical = async (target: Pool, original: typeof context, run: typeof work, label: typeof deferred) => {
+          const replacement = testTenantContext(original.tenantId, { bindRequest: false });
+          return actual.withTenant(target, replacement, async db => {
+            deferredContexts.set(db, { original, bound: replacement });
+            try { return await run(db); } finally { deferredContexts.delete(db); }
+          }, label);
+        };
+        // Production-shaped contexts go straight to the real boundary (no probe connection, so
+        // connect counts and race barriers stay exact). Only a historical upgrade database with
+        // no binding API retries this fixture client unbound.
+        if (!needsTestRequestBinding(context)) {
+          try { return await actual.withTenant(pool, context, work, deferred); }
+          catch (error) {
+            if ((error as { code?: string }).code !== "42883" || !/app\.bind_request/u.test(String((error as Error).message))) throw error;
+            return await historical(pool, context, work, deferred);
+          }
+        }
         // Race/loss fixtures expose connect only. Reuse that same connection:
         // acquiring a probe then a second client changes their race barriers.
         const client = typeof pool.query === "function" ? undefined : await pool.connect();
         let delegated = false;
         const requestPool = client ? { connect: async () => { delegated = true; return client; } } as Pool : pool;
         try {
-          const { database, port, administrative } = (await (client ?? pool).query<{
-            database: string; port: number; administrative: boolean;
+          const { database, port, binding_installed } = (await (client ?? pool).query<{
+            database: string; port: number; administrative: boolean; binding_installed: boolean;
           }>(`SELECT current_database() AS database, inet_server_port() AS port,
-            (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) AS administrative`)).rows[0]!;
-          // Owner fixture writes are setup, not authenticated business requests.
-          if (administrative) return await actual.withTenant(requestPool, context, work, deferred);
+            (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) AS administrative,
+            EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+              WHERE n.nspname='app' AND p.proname='bind_request'
+                AND oidvectortypes(p.proargtypes)='text, text, uuid') AS binding_installed`)).rows[0]!;
+          // Historical upgrade databases have no binding API. Adapt only this
+          // fixture client; current schemas and direct-SQL attacks keep real guards.
+          if (!binding_installed) {
+            return await historical(requestPool, context, work, deferred);
+          }
           const credentials = clusterAdmins.get(Number(port));
           if (!credentials) throw new Error("Missing embedded PostgreSQL admin credentials for request fixture");
           const owner = new Pool({ host: "127.0.0.1", port, database, ...credentials, max: 1 });

@@ -124,3 +124,33 @@ describe("[D2] ENT-10a2 immediate request refusal",()=>{
   await auditRows(h,f.principal.tenantId);await auditRows(h,other.principal.tenantId);
  });
 });
+
+it("[G4] SSO operative bootstrap consumes a private permit and refuses a suspended entitlement without writes",async()=>{
+ const f=await fixture(h),p=await person(f,"operative");
+ expect((await h.admin.query("SELECT count(*)::integer n FROM app.role_grant WHERE tenant_id=$1 AND membership_id=$2 AND role='operative'",[f.principal.tenantId,p.membershipId])).rows[0].n).toBe(1);
+ expect((await h.admin.query("SELECT * FROM identity.lp6d_sso_grant_permit")).rows).toEqual([]);
+ await h.admin.query("INSERT INTO app.contractor_agreement_status_revision(tenant_id,id,assignment_id,revision,status,schema_version,environment,fictional_source) SELECT tenant_id,$2,assignment_id,revision+1,'suspended',schema_version,environment,$3 FROM app.contractor_agreement_status_revision WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1",[f.principal.tenantId,randomUUID(),`fictional-fixture:${randomUUID()}`]);
+ const tables=["app.role_grant","identity.sso_grant","identity.sso_subject","identity.sso_session_binding","identity.lp6d_sso_grant_permit"];
+ const before=await Promise.all(tables.map(table=>canonicalRows(h,table)));
+ await expect(f.signin(`held@${f.domain}`,randomUUID(),false,["operative"])).rejects.toThrow();
+ expect(await Promise.all(tables.map(table=>canonicalRows(h,table)))).toEqual(before);
+});
+
+it("[G4] every login and business role lacks the SSO permit and private operative decision, including forged GUCs",async()=>{
+ const owner=(await h.admin.query("SELECT pg_get_userbyid(proowner) owner,prosecdef FROM pg_proc WHERE oid='identity.sso_complete(uuid,jsonb,character,uuid,character,text,timestamp with time zone)'::regprocedure")).rows[0];
+ expect(owner).toEqual({owner:"jobguard_migration",prosecdef:true});
+ const roles=(await h.admin.query("SELECT rolname FROM pg_roles WHERE rolcanlogin AND NOT rolsuper UNION SELECT unnest(ARRAY['jobguard_runtime','jobguard_identity','jobguard_infrastructure','jobguard_shadow']) rolname")).rows;
+ for(const {rolname} of roles){
+  const rights=(await h.admin.query("SELECT has_function_privilege($1,'app.lp6d_sso_operative_roles_decision(uuid)','EXECUTE') callable,has_table_privilege($1,'identity.lp6d_sso_grant_permit','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') marker",[rolname])).rows[0];
+  expect(rights,rolname).toEqual({callable:false,marker:false});
+ }
+ for(const pool of [h.runtime,h.identity]){
+  const client=await pool.connect();
+  try{
+   await client.query("BEGIN");
+   await client.query("SELECT set_config('app.lp6d_sso_grant_permit','true',true)");
+   await expect(client.query("INSERT INTO identity.lp6d_sso_grant_permit VALUES($1,$2,$3,pg_backend_pid(),pg_current_xact_id())",[randomUUID(),randomUUID(),randomUUID()])).rejects.toMatchObject({code:"42501"});
+  }finally{await client.query("ROLLBACK");client.release();}
+  await expect(pool.query("SELECT app.lp6d_sso_operative_roles_decision($1)",[randomUUID()])).rejects.toMatchObject({code:"42501"});
+ }
+});
