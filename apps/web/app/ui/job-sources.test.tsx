@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as React from "react";
-import { JOB_DIARY_NOTICE, JOB_DIARY_NOTICE_VERSION } from "@jobguard/core";
+import { diaryReadV1, JOB_DIARY_NOTICE, JOB_DIARY_NOTICE_VERSION } from "@jobguard/core";
+import { renderToStaticMarkup } from "react-dom/server";
 import { JobDiary } from "./job-sources";
 
 // The same hook harness used by job-parties.test.tsx exercises handlers without a browser.
@@ -33,7 +34,7 @@ const hooks = vi.hoisted(() => {
   };
 });
 vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React>(), ...hooks }));
-afterEach(() => { hooks.reset(); vi.unstubAllGlobals(); });
+afterEach(() => { hooks.reset(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 
 type Node = React.ReactElement<Record<string, any>>;
@@ -43,14 +44,14 @@ function find(node: React.ReactNode, match: (node: Node) => boolean): Node | und
   return match(node) ? node : find(node.props.children, match);
 }
 const jobId = "11111111-1111-4111-8111-111111111111";
-async function panel(outcome: () => Promise<unknown>) {
+async function panel(outcome: () => Promise<unknown>, extrasHref?: string) {
   hooks.reset(); vi.stubGlobal("React", React);
   const commands: Record<string, unknown>[] = [];
   vi.stubGlobal("fetch", vi.fn(async (_url, options) => {
     if (options?.method === "POST") { commands.push(JSON.parse(options.body)); return outcome(); }
     return { ok: true, json: async () => ({ version: "job-diary-read.v1", environment: "synthetic_demo", realExternalActions: 0, jobId, entries: [], notice: JOB_DIARY_NOTICE, noticeVersion: JOB_DIARY_NOTICE_VERSION }) };
   }));
-  const render = () => { hooks.render(); const tree = JobDiary({ jobId }); hooks.effects(); return tree; };
+  const render = () => { hooks.render(); const tree = JobDiary({ jobId, ...(extrasHref ? { extrasHref } : {}) }); hooks.effects(); return tree; };
   render(); await new Promise<void>(resolve => setImmediate(resolve));
   const input = (id: string) => find(render(), n => n.props.id === id)!;
   const checkbox = () => find(render(), n => n.props.type === "checkbox")!;
@@ -103,5 +104,35 @@ describe("SV-7A diary on-site screen", () => {
     expect(find(p.render(), n => n.props.role === "alert")!.props.children).toContain(message);
     expect(p.input("diary-text").props.value).toBe("Keep this fictional draft");
     expect(p.checkbox().props.checked).toBe(true);
+  });
+});
+
+describe("REAL-DIARY-EXTRA-LINK standing notice", () => {
+  it.each(["#variations-title", `/jobs/${jobId}/work#variations-title`])("links the exact phrase to %s without changing the notice text", async extrasHref => {
+    const p = await panel(async () => ({ ok: true }), extrasHref);
+    const notice = find(p.render(), n => n.props["data-testid"] === "diary-notice")!;
+    const link = find(notice, n => n.type === "a")!;
+    expect(link.props).toMatchObject({ href: extrasHref, children: "Log an extra" });
+    const markup = renderToStaticMarkup(notice);
+    expect(markup.replace(/<[^>]*>/gu, "")).toBe(JOB_DIARY_NOTICE);
+    expect(markup.match(/<a /gu)).toHaveLength(1);
+  });
+
+  it("keeps the identical plain-text notice when no target is supplied", async () => {
+    const p = await panel(async () => ({ ok: true }));
+    const notice = find(p.render(), n => n.props["data-testid"] === "diary-notice")!;
+    expect(notice.props.children).toBe(JOB_DIARY_NOTICE);
+    expect(find(notice, n => n.type === "a")).toBeUndefined();
+  });
+
+  it("leaves an unrelated notice unchanged even with an extras target", async () => {
+    // Simulate a future validated notice; the production evidence schema stays unchanged.
+    const parse = diaryReadV1.parse.bind(diaryReadV1);
+    const unrelated = "Keep this note for your records. Log an Extra later.";
+    vi.spyOn(diaryReadV1, "parse").mockImplementationOnce(raw => ({ ...parse(raw), notice: unrelated as typeof JOB_DIARY_NOTICE }));
+    const p = await panel(async () => ({ ok: true }), "#variations-title");
+    const notice = find(p.render(), n => n.props["data-testid"] === "diary-notice")!;
+    expect(notice.props.children).toBe(unrelated);
+    expect(find(notice, n => n.type === "a")).toBeUndefined();
   });
 });
