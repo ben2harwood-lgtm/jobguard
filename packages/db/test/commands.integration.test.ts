@@ -119,7 +119,13 @@ describe("consequential command authorization",()=>{
    "DELETE FROM app.commercial_grant_use WHERE authorization_id=$1"]) {
    await expect(withTenant(runtime,context,d=>d.$client.query(sql,[authorization]))).rejects.toMatchObject({code:"42501"});
   }
-  const other=testTenantContext("81000000-0000-4000-8000-000000000002");
+  // LP-6d: the cross-tenant probe is another company's own bound member, so it reaches the grant check it was written for.
+  const OTHER="81000000-0000-4000-8000-000000000002", otherUser=randomUUID(), otherAccount=randomUUID(), otherMember=randomUUID();
+  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[OTHER]);
+  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[otherUser]);
+  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic other')",[otherAccount,OTHER]);
+  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[otherMember,OTHER,otherAccount,otherUser]);
+  const other=await testBoundTenantContext(admin,OTHER,otherMember);
   await withTenant(runtime,other,async d=>{
    expect((await d.$client.query("SELECT authorization_id FROM app.commercial_grant_use WHERE authorization_id=$1",[authorization])).rows).toEqual([]);
    await expect(executeAuthorizedCommercialAction(d,authorization,requested,async()=>{throw new Error("cross-tenant invocation")})).rejects.toMatchObject({code:"AUTHORIZATION_INVALID"});

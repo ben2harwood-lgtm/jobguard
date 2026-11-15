@@ -65,7 +65,7 @@ describe("LATER-B16 own migration preservation", () => {
     await db.query(`INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)`,[name]);
    }
    await installLegacySyntheticPartyFixtures(admin);
-   const f = await seedEvidencePackFixture(admin), context = testTenantContext(f.tenantId);
+   const f = await seedEvidencePackFixture(admin), context = testTenantContext(f.tenantId,{membershipId:f.memberId});
    await db.query(`CREATE ROLE invoice_later_upgrade_login LOGIN PASSWORD '${credential}' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO invoice_later_upgrade_login`);
    runtime = new Pool({host:"127.0.0.1",port,database:"postgres",user:"invoice_later_upgrade_login",password:credential});
    const repo = new PracticeInvoiceRepository(runtime);

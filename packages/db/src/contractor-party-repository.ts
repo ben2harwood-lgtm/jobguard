@@ -1,12 +1,15 @@
+import { RequestBindingRefusedError } from "./request-binding-error.js";
+import { requireContractorRequestContext } from "./contractor-repository.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { ContractorPartyError, contractorPartyErrorCodes, contractorCustomerLinkV1, contractorPartyImportBoundaryV1, contractorPartyResultV1, contractorResidentReadV1, contractorPartyAuditPayload } from "@jobguard/core";
 import { ContractorRepository } from "./contractor-repository.js";
 import { appendAuditBatch } from "./audit.js";
-import { withTenant, verifiedTenantContextFromMembership, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
+import { withTenant, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
 const uuid = z.string().uuid();
 /** Never propagate PostgreSQL DETAIL, query arguments or untrusted contacts into HTTP/log errors. */
 function failure(error: unknown): never {
+  if (error instanceof RequestBindingRefusedError) throw new ContractorPartyError("NOT_FOUND");
   if (error instanceof ContractorPartyError) throw error;
   const e = error as { code?: string; message?: string };
   const known = contractorPartyErrorCodes.find(code => e.message === code || e.code === code);
@@ -32,7 +35,7 @@ export class ContractorPartyRepository {
     if (!uuid.safeParse(clientId).success) throw new ContractorPartyError("NOT_FOUND");
     if (!parsed.success) throw new ContractorPartyError("INVALID_COMMAND");
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
+      return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
         await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [principal.tenantId]);
         await this.verify(db, principal);
         const row = (await db.$client.query<{ result: unknown }>("SELECT app.link_contractor_customer($1,$2,$3::jsonb) result", [principal.membershipId, clientId, JSON.stringify(parsed.data)])).rows[0]!;
@@ -60,7 +63,7 @@ export class ContractorPartyRepository {
   }
   async bind(principal: AuthenticatedMembership, raw: unknown) {
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
+      return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
         const result = await this.bindInTransaction(db, principal, raw);
         // Reached only after the routine accepted a complete import, so the job ID is present and valid.
         const input = contractorPartyImportBoundaryV1.parse(raw);
@@ -78,7 +81,7 @@ export class ContractorPartyRepository {
   async readResident(principal: AuthenticatedMembership, jobId: string) {
     if (!uuid.safeParse(jobId).success) throw new ContractorPartyError("NOT_FOUND");
     try {
-      return await withTenant(this.pool, verifiedTenantContextFromMembership(principal), async db => {
+      return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
         await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [principal.tenantId]);
         await this.verify(db, principal);
         const row = (await db.$client.query<{ result: unknown }>("SELECT app.read_contractor_resident($1,$2) result", [principal.membershipId, jobId])).rows[0]!;
