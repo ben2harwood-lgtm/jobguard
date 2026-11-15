@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 // Synthetic PostgreSQL authorization regression; no providers or customer data.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -36,6 +37,8 @@ describe("recovery timeline import authority (real PostgreSQL)", () => {
   async function apply(signal: Signal, digest = f.auth.digest, contextTenant = tenant, targetTenant = tenant) {
     return transaction(f.runtime, async db => {
       await db.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true)", [contextTenant, digest]);
+      // LP-6d: the named practice session binds its own request; a foreign one stays unbound.
+      await bindOwnSession(db, digest);
       return db.query("SELECT app.apply_recovery_timeline_signal($1,$2) state", [targetTenant, JSON.stringify(signal)]);
     });
   }
@@ -85,7 +88,9 @@ describe("recovery timeline import authority (real PostgreSQL)", () => {
   it("refuses another tenant with 42501 and leaves no history", async () => {
     const signal = await followUp((await seedIntegrityJob(f, false)).job);
     const otherTenant = randomUUID();
-    await expect(apply(signal, f.auth.digest, otherTenant)).rejects.toMatchObject(forbidden);
+    // Router ruling (a), LP-6d: a forged tenant context binds no request, so the binding check refuses first
+    // (same 42501 shape, nothing disclosed) and no history is written.
+    await expect(apply(signal, f.auth.digest, otherTenant)).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
     await expect(apply(signal, f.auth.digest, otherTenant, otherTenant)).rejects.toMatchObject({ code: "42501" });
     expect(await history(signal)).toEqual({ runs: [], signals: [] });
   });
@@ -104,6 +109,7 @@ describe("recovery timeline import authority (real PostgreSQL)", () => {
       await db.query(definition.replace(anchor!, ""));
       await db.query(`SET LOCAL ROLE ${f.login}`);
       await db.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true)", [tenant, f.auth.digest]);
+      await bindOwnSession(db, f.auth.digest);
       const granted = await db.query("SELECT app.apply_recovery_timeline_signal($1,$2) state", [tenant, JSON.stringify(signal)]);
       expect(granted.rows[0].state).toBe("waiting");
       // The same forged-case rejection assertion must fail without the anchor.

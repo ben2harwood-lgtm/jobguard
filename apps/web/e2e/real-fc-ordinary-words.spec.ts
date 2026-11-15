@@ -18,8 +18,7 @@ const scenarios = [
 test("ordinary towel-rail words persist one possible extra with both sources and exact proposed pence; ceiling certificate stays non-commercial", async ({ page }, info) => {
   if (info.project.name === "mobile-360") await page.setViewportSize({width:390,height:844});
   let firmTenantId: string | undefined;
-  await page.goto("/");
-  await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+  await page.goto("/practice-company");
   await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
   for (const [index,scenario] of scenarios.entries()) {
     if (index > 0) await page.goto("/classic");

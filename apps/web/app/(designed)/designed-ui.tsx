@@ -380,9 +380,40 @@ function SettingsPanel({ workspace, close }: { workspace: Workspace; close: () =
 
 export function StateScreen({ load, retry, title, active = "jobs" }: { load: Load; retry: () => void; title: string; active?: string }) {
   const [busy, setBusy] = useState(false);
-  async function signIn() { setBusy(true); try { await fetch("/api/session", { method: "POST" }); } finally { setBusy(false); retry(); } }
+  const [startFailed, setStartFailed] = useState(false);
+
+  async function startPractice(ownFirm: boolean) {
+    setBusy(true);
+    setStartFailed(false);
+    try {
+      const response = ownFirm
+        ? await fetch("/api/practice-company", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ version: "blank-practice-company.v1", action: "start" }),
+          })
+        : await fetch("/api/session", { method: "POST" });
+      if (!response.ok) throw new Error("PRACTICE_START_FAILED");
+      retry();
+    } catch {
+      setStartFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const body = load.state === "loading" ? <Card title="Getting your jobs ready"><div className="card-body"><p aria-live="polite">Loading…</p></div></Card>
-    : load.state === "signed-out" ? <Card title="Open the practice workspace"><div className="card-body"><div className="head-buttons"><a className="btn primary" href="/practice-company">Start my own practice firm</a><button type="button" className="btn" disabled={busy} onClick={() => void signIn()}>Look around an example firm</button></div><p style={{ marginTop: 18 }}>Made-up jobs only. Nothing is sent or charged.</p></div></Card>
+    : load.state === "signed-out" ? <Card title="Open the practice workspace">
+      <div className="card-body">
+        <div className="head-buttons">
+          <button type="button" className="btn primary" disabled={busy} onClick={() => void startPractice(true)}>Start my own practice firm</button>
+          <button type="button" className="btn" disabled={busy} onClick={() => void startPractice(false)}>Look around an example firm</button>
+        </div>
+        {busy && <p role="status">Opening your practice workspace…</p>}
+        {startFailed && <p role="alert">The practice workspace couldn’t open. Please try again.</p>}
+        <p style={{ marginTop: 18 }}>Made-up jobs only. Nothing is sent or charged.</p>
+      </div>
+    </Card>
     : <Card title="Your jobs did not load"><div className="card-body"><p role="alert">Nothing changed. Please try again.</p><div style={{ marginTop: 18 }}><button type="button" className="btn primary" onClick={retry}>Try again</button></div></div></Card>;
   return <Shell workspace={null} title={title} subtitle="One place to manage the job, spot problems early and know what comes next." active={active}><div className="rr-state">{body}</div></Shell>;
 }

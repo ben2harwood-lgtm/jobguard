@@ -128,16 +128,19 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
+    // LP-6d LP-10 sink hold: the latest body is the 4th "FUNCTION app.guard_recovery_message_sink(" in 0749 (after the earlier CREATE, ALTER and REVOKE).
+    ["app.guard_recovery_message_sink()", "0749_lp6d_remaining_routines.sql", 3],
     // 0741 recreates these exact bodies; never pin their pre-linked predecessors.
     ["app.issue_practice_session(digest text)", "0741_identity_linked_practice.sql"],
     ["app.start_blank_practice_company(digest text, previous_digest text)", "0741_identity_linked_practice.sql"],
     ["app.start_blank_practice_company_v2(new_token text, previous_token text)", "0741_identity_linked_practice.sql"],
     ["app.seed_saved_v1_sample()", "0741_identity_linked_practice.sql"],
     ["app.authenticate_practice_session(digest text, requested_tenant uuid)", "0741_identity_linked_practice.sql"],
-    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0741_identity_linked_practice.sql"],
+    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0749_lp6d_remaining_routines.sql"],
     ["app.is_blank_practice_company(digest text)", "0741_identity_linked_practice.sql"],
     ["app.company_final_check_request_run(j uuid)", "0732_final_check_typed_recovery.sql"],
     ["app.company_final_check_reveal(j uuid)", "0732_final_check_typed_recovery.sql"],
+    ["app.cb_derive(p_session uuid, p_job uuid, p_command uuid, p_source text, p_invoice text, p_hash text, p_projection jsonb)", "0748_billing_policy_hold_projection.sql"],
     ["app.cb_delivery(p_session uuid, p_job uuid, p_command uuid, p_payload jsonb)", "0727_billing_export_delivery_once.sql"],
     ["app.cb_csv_cell(v text)", "0727_billing_export_delivery_once.sql"],
     ["identity.extra_customer_approval(t uuid, j uuid, c uuid, digest text, input jsonb)", "0725_lp6c_client_extra_decision.sql"],
@@ -147,7 +150,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.lp5b_contractor_result(p_command uuid, p_outcome jsonb)", "0722_abandoned_visit_authority.sql"],
     ["app.ent3b_closeout_guard()", "0722_abandoned_visit_authority.sql"],
     ["app.ent3b_close_abandoned_visit(p_actor uuid, p_command uuid, p_job uuid, p_visit uuid, p_reason text)", "0722_abandoned_visit_authority.sql"],
-    ["app.receipt_fact_proposal(t uuid, j uuid, p jsonb)", "0692_final_check_post_invoice_receipt_gate.sql"],
+    ["app.receipt_fact_proposal(t uuid, j uuid, p jsonb)", "0747_receipt_proposal_historical_capacity.sql"],
     ["app.contractor_admin_command(actor uuid, payload jsonb, request_hash text)", "0696_contractor_admin_expected_revision.sql"],
     ["app.read_final_check_manifest(t uuid, j uuid, m uuid)", "0698_final_check_post_invoice_rerun.sql"],
     ["app.evidence_pack_v3_material(t uuid, c uuid, ordinary_only boolean)", "0698_final_check_post_invoice_rerun.sql"],
@@ -189,6 +192,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.work_order_commit(actor uuid, payload jsonb)", "0676_work_order_expected_revision.sql"],
     ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0699_sync_checkpoint_bound_reader.sql"],
     ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
+    ["app.ef_inputs(t uuid, ag app.enterprise_agreement_version, p_period text)", "0745_enterprise_fee_rejected_line.sql"],
+    ["app.mon2_command(t uuid, digest text, command_id uuid, v jsonb)", "0746_subscription_internal_owner_guard.sql"],
     ["app.ef_prepare_statement(p_session uuid, p_command uuid, p_period text)", "0704_enterprise_fee_period_order.sql"],
     ["app.ef_post_statement(p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid)", "0704_enterprise_fee_period_order.sql"],
     ["app.accounting_export_route_read(t uuid, digest text, source text)", "0709_accounting_export_route_read_exported.sql"],
@@ -249,6 +254,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.surface_shadow_signal_early(p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb)", "0735_per_firm_final_check_terms.sql"],
     ["app.accept_final_check_terms(p_tenant uuid, p_actor uuid, p_command uuid, p_version text)", "0735_per_firm_final_check_terms.sql"],
     ["app.guard_final_lock_disclosure_terms()", "0735_per_firm_final_check_terms.sql"],
+    ["app.store_extra_pack_artifact(p_command uuid, p_job uuid, p_extra uuid, p_digest text, p_artifact jsonb)", "0744_extra_pack_source_bijection.sql"],
   ] as readonly (readonly [string, string, number?])[]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {
@@ -259,6 +265,14 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Saved-estimate successor: retain recovery's predecessor entry above.
   const savedEstimateSql = await readFile(new URL("../migrations/0737_real_fc_revealed_estimate.sql", import.meta.url), "utf8");
   fullBodies.set("app.read_final_check_reveal(t uuid, j uuid, d text)", savedEstimateSql.split("AS $$")[1]!.split("$$;")[0]!);
+  // LP-6d (0740, the last migration) recreates its guarded routines: their exact bodies are 0740's, which
+  // already carry every listed predecessor patch (0642's xa_issue_link authority, 0728's xa_approve) plus the
+  // LP-6d binding prefix. lp6d-routines.test.ts pins each one to its latest predecessor body.
+  const lp6dSql = await readFile(new URL("../migrations/0749_lp6d_remaining_routines.sql", import.meta.url), "utf8");
+  const argNames = (args: string) => args.split(",").map(arg => arg.trim().split(/\s+/u)[0]!).filter(Boolean).join(",");
+  const lp6dBodies = new Map<string, string>();
+  for (const m of lp6dSql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu)) lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
+  const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;
   const namedAdditions = [
     "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",
     "ent3b_close_abandoned_visit",
@@ -286,6 +300,12 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     }
     if (prior) {
       let definition = prior.definition;
+      const lp6dBody = lp6dBodies.get(lp6dKey(row));
+      if (lp6dBody !== undefined) {
+        // 0740 owns this routine's latest definition (some change language, e.g. contractor_session sql -> plpgsql).
+        expect(row.definition.split("$function$")[1], identity).toBe(lp6dBody);
+        continue;
+      }
       if (fullBodies.has(identity)) {
         const parts = definition.split("$function$");
         parts[1] = fullBodies.get(identity)!;
@@ -309,7 +329,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
         if (defines(text)) { sql = text; break; }
       }
       expect(sql).toBeDefined();
-      const body = fullBodies.get(identity) ?? sql!.split(new RegExp(`CREATE (?:OR REPLACE )?${create.replace(/[.()]/gu, "\\$&")}`, "u"))[1]!.split("AS $$")[1]!.split("$$;")[0];
+      const body = lp6dBodies.get(lp6dKey(row)) ?? fullBodies.get(identity) ?? sql!.split(new RegExp(`CREATE (?:OR REPLACE )?${create.replace(/[.()]/gu, "\\$&")}`, "u"))[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(row.definition.split("$function$")[1]).toBe(body);
     }
   }
