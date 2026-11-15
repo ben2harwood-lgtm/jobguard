@@ -38,7 +38,7 @@ it("binds nullable safe estimates only to exact confirmed identities in complete
  expect([...catchPriceProposals(read)]).toEqual([[id(20),18000]]);
  expect(catchPriceProposals({...read,state:"pending"}).size).toBe(0);
  expect(catchPriceProposals({...read,items:[{...read.items[0]!,variationId:null}]}).size).toBe(0);
- for(const estimatedValuePence of ["18000",18000.5,-1,1_000_000_000_001,NaN,Infinity]){
+ for(const estimatedValuePence of ["18000",18000.5,-1,1_000_000_000_001,Number.MAX_SAFE_INTEGER+1,NaN,Infinity,-Infinity]){
   expect(finalCheckReadV1.safeParse({...completed,items:[{...revealed,estimatedValuePence}]}).success).toBe(false);
  }
  expect(finalCheckReadV1.safeParse({...completed,items:[{...revealed,variationId:"bad"}]}).success).toBe(false);

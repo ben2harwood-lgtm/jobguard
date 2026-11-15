@@ -91,8 +91,7 @@ test("ordinary words survive the authorised saved reveal with £180.00 and one f
     await expect(items).toHaveCount(1);
     await expect(items).toContainText(scenario.description);
     await expect(items).not.toContainText("painted walls");
-    // The real endpoint is the assertion boundary; no fabricated completion or
-    // dependency on the separate screen-wording piece.
+    // Assert the card beside the real saved endpoint; never fabricate completion.
     const read = async () => {
       const response = await page.request.get(`/api/jobs/${jobId}/final-check`);
       expect(response.ok(), await response.text()).toBe(true);
@@ -102,12 +101,19 @@ test("ordinary words survive the authorised saved reveal with £180.00 and one f
     expect(saved.state).toBe("completed");
     expect(saved.items).toHaveLength(1);
     expect(saved.items[0]).toMatchObject({ description: scenario.description, estimatedValuePence: scenario.estimate, variationId: null });
+    const estimateLabel = scenario.estimate === 18000 ? "Estimated extra: £180.00" : "Estimated extra: £150.00";
+    await expect(items.getByTestId("final-check-estimate")).toHaveText(estimateLabel);
+    await items.getByTestId("final-check-estimate").scrollIntoViewIfNeeded();
+    await expect(items.getByTestId("final-check-estimate")).toBeInViewport();
     expect(saved.items[0].evidence).toHaveLength(2);
     expect(saved.items[0].evidence.map((source: { source: string }) => source.source).sort()).toEqual(["customer_message_text", "job_diary_text"]);
     expect(new Set(saved.items[0].evidence.map((source: { id: string }) => source.id)).size).toBe(2);
     await page.reload();
     expect(await read()).toEqual(saved);
     await click(page, "Load the saved final check");
+    await expect(items.getByTestId("final-check-estimate")).toHaveText(estimateLabel);
+    await items.getByTestId("final-check-estimate").scrollIntoViewIfNeeded();
+    await expect(items.getByTestId("final-check-estimate")).toBeInViewport();
     const confirmation = page.waitForResponse(r => r.url().endsWith(`/api/jobs/${jobId}/final-check/catches`) && r.request().method() === "POST");
     await items.getByRole("button", { name: "Yes — this was extra work", exact: true }).click();
     const confirmedResponse = await confirmation;
@@ -127,5 +133,6 @@ test("ordinary words survive the authorised saved reveal with £180.00 and one f
     expect((await (await page.request.get(`/api/jobs/${jobId}/variations`)).json()).variations).toEqual(variations.variations);
     await click(page, "Load the saved final check");
     await expect(items.getByRole("listitem")).toHaveCount(2);
+    await expect(items.getByTestId("final-check-estimate")).toHaveText(estimateLabel);
   }
 });
