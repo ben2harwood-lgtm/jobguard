@@ -10,7 +10,9 @@
         "apps/web/app/practice-company/walkthrough/screen-actions.ts",
         "apps/web/app/ui/quote-editor-reference.test.tsx",
         "apps/web/app/ui/quote-editor.tsx",
-        "apps/web/e2e/real-quote-firm-sequence-screen.spec.ts"
+        "apps/web/e2e/real-quote-firm-sequence-screen.spec.ts",
+        "apps/web/e2e/UIWIRE-4.spec.ts",
+        "apps/web/e2e/UIWIRE-5.spec.ts"
       ]
     }
   }

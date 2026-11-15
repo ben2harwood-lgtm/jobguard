@@ -140,7 +140,7 @@ it.each(["outcome_unknown", "failed"])("keeps %s saved execution unresolved",asy
  expect(all(render(),n=>n.type==="button"&&text(n)==="Record practice acceptance")).toHaveLength(0);
 });
 
-it.each(["saved", "manual", "focus", "unsaved"])("folds completed history only when safe (%s), keeping its mounted contents",async kind=>{
+it.each(["saved", "manual", "focus", "unsaved"])("keeps quote history open on activation (%s), preserving its mounted contents",async kind=>{
  accepted=acceptance();render();await settle();let tree=render();
  const history=all(tree,n=>n.type==="details"&&text(n).startsWith("Quote history"))[0]!;
  const details={open:true,contains:()=>kind==="focus"};history.props.ref.current=details;
@@ -153,7 +153,7 @@ it.each(["saved", "manual", "focus", "unsaved"])("folds completed history only w
  vi.stubGlobal("localStorage",{setItem:vi.fn()});
  activation={id:jobId,acceptedDocumentId:jobId,acceptedDocumentVersion:1,acceptedDocumentHash:"a".repeat(64),acceptedNetPence:10000,recoveryCapPence:null,policyVersion:"reference_fee_policy_v3",scenario:"no_charge",baseStatus:"none",baseCreditPence:0,activatedAt:"2026-11-09T00:00:00Z"};
  await button(tree,"Start this practice job").props.onClick();await settle();tree=render();
- expect(details.open).toBe(kind!=="saved");
+ expect(details.open).toBe(true);
  expect(all(tree,n=>n.props["aria-label"]==="Accepted terms")).toHaveLength(1);
  expect(text(tree)).toContain("Saved proof controls");expect(text(tree)).toContain("Invoice controls");
 });
