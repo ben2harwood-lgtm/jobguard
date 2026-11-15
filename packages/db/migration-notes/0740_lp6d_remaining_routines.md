@@ -1067,3 +1067,60 @@ Required green CI on current main and independent exact-head RED review remain
 router gates. No merge or independent-verification claim is made.
 
 R6 complete web unit result: **234 files, 2911 tests PASS**, in batches of at most three named files and at most two workers. Logs: /tmp/lp6d-r6-web-units.log and /tmp/lp6d-r6-web-units-remaining.log.
+
+### LP-6d repair R6b — reconciliation binding and hold identity fixture (15 Nov 2026)
+
+READY for router commit and CI, on checked-out head
+01d7000f1e92e5c90d5cf71c07fc687c2ae5a74c (PR #776). Git is read-only:
+no fetch/merge, commit or push was attempted. Router must fetch and merge any
+new remote commits before committing; never reset or force-push.
+
+- FinancialReconciliationQueueRepository binds its supplied session in the same
+  transaction before financial_reconciliation_queue and adjustments_read. Its
+  UUID is a contractor_practice credential, not accounting export's real-session
+  digest. This also covers the membership-only context used to seed the run.
+  Reuse mapRequestBindingRefusal to preserve RECONCILIATION_FORBIDDEN (403)
+  after rollback; other failures retain their existing response mapping.
+  Units cover successful run/read ordering and refusal before guarded SQL for
+  run, read, adjustments read, proposal and approval.
+- Item 2's definite source-visible cause is the browser fixture's 14-character
+  `synthetic-csrf`: identity.session() parses identitySessionV1 before context()
+  or WORM submission, and that schema requires >=24 characters. The context
+  input schema has the same minimum. Both fail locally with the old fixture.
+  Fixture sessions now use randomBytes(24).toString('base64url'), exactly as the
+  provider does. No browser assertion, response code, identity-session owner
+  match, CSRF schema or WORM executor/operator design was relaxed or changed.
+  R6 already supplies csrfToken, origin and requestedTenantId correctly.
+- All touched paths are admitted in the existing lane. No migration, policy,
+  source pin, stored format, production capability or live service changed.
+
+Local checks (installed executables; Vitest 4.1.12; no packages downloaded):
+- From root: `./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=1 src/financial-reconciliation-queue-repository.test.ts test/accounting-export-repository.test.ts src/worm-command-repository.test.ts`
+  PASS: 3 files, 57 tests on final source.
+- From apps/web: `./node_modules/.bin/vitest run --maxWorkers=2 app/lib/evidence-hold-server.test.ts 'app/jobs/[id]/evidence-holds/evidence-holds.test.tsx'`
+  PASS: 2 files, 36 tests. The initial invocation also named nonexistent
+  app/lib/financial-reconciliation-adjustments-server.test.ts; Vitest discovered
+  only the two real named files, and did not run any PostgreSQL suite.
+- From packages/db and apps/web: `./node_modules/.bin/tsc -p tsconfig.json --noEmit`
+  PASS. Database typecheck repeated after reuse of the existing refusal mapper.
+- Direct Node check against installed/built identitySessionV1 and
+  tenantRequestCredentialsV1: old fixture rejected at csrfToken by both;
+  provider-length replacement accepted by both. This verifies schema behavior,
+  not database execution or browser success.
+- `git diff --check` and
+  `node tools/agent-lane-boundary-lint.mjs --lane=lp-6d-remaining-routines-r4`
+  PASS.
+
+Not run here: PostgreSQL and browser suites cannot start PostgreSQL or bind
+localhost in this sandbox. Router/CI must run:
+```
+pnpm --filter @jobguard/web test:e2e --workers=2 --project=mobile-360 --project=desktop M4-17-adjustments.spec.ts m4-4-evidence-holds.spec.ts
+pnpm --filter @jobguard/web test:e2e --workers=2 --project=mobile-360 --project=desktop M4-1-S.spec.ts m5-1-export-preview.spec.ts MON-6-stored-pay-now-preview.spec.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/financial-reconciliation-queue.integration.test.ts test/financial-reconciliation-adjustments.integration.test.ts test/worm-hold-screen.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/worm-command.integration.test.ts test/lp6d-routines.integration.test.ts
+pnpm test:db
+pnpm test:migrations
+```
+Green CI against current main and independent exact-head RED review remain
+required. Browser restoration is source-inspected and locally unit-tested,
+not independently verified or claimed as an executed browser pass.

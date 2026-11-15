@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { reconcileFinancialSnapshot } from "@jobguard/core";
 import { FinancialReconciliationQueueRepository } from "./financial-reconciliation-queue-repository.js";
 import { verifiedTenantContextForQueuedJob as testTenantContext } from "./tenant-context.js";
@@ -20,8 +20,9 @@ beforeEach(()=>{process.env.JOBGUARD_ENV='synthetic_demo';});
 it('computes its report, binds SQL parameters and preserves input',async()=>{
  const h=harness(),before=structuredClone(command),result=await h.repo.run(testTenantContext(scope.tenantId),id(8),command);
  expect(command).toEqual(before);expect(result.report).toEqual(reconcileFinancialSnapshot(snapshot));
- expect(h.calls.map(c=>c.sql)).toEqual(['BEGIN',"SELECT set_config('app.tenant_id', $1, true)",'SELECT app.financial_reconciliation_queue($1,$2,$3::jsonb) result','COMMIT']);
- const params=h.calls[2]!.params!;expect(params.slice(0,2)).toEqual([id(8),scope.jobId]);
+ expect(h.calls.map(c=>c.sql)).toEqual(['BEGIN',"SELECT set_config('app.tenant_id', $1, true)",'SELECT app.bind_request($1, $2, $3)','SELECT app.financial_reconciliation_queue($1,$2,$3::jsonb) result','COMMIT']);
+ expect(h.calls[2]!.params).toEqual(["contractor_practice",id(8),scope.tenantId]);
+ const params=h.calls[3]!.params!;expect(params.slice(0,2)).toEqual([id(8),scope.jobId]);
  expect(JSON.parse(params[2] as string)).toMatchObject({action:'run',report:result.report});
 });
 it('refuses production, tenant substitution, unsafe money and authority fields before SQL',async()=>{
@@ -57,4 +58,35 @@ it('refuses a stored result for another tenant, job or run identity',async()=>{
  }
  h.set({id:id(99),snapshot,report:reconcileFinancialSnapshot(snapshot)});
  await expect(h.repo.read(ctx,id(8),scope.jobId,id(7))).rejects.toThrow('RECONCILIATION_CONFLICT');
+});
+
+it.each(['run','read','readAdjustments','propose','approve'] as const)('%s refuses an invalid request binding before guarded SQL',async operation=>{
+ const context=testTenantContext(scope.tenantId),session=id(8);
+ const query=vi.fn(async(sql:string)=>{
+  if(sql.includes('app.bind_request'))throw Object.assign(new Error('REQUEST_BINDING_REFUSED'),{code:'42501'});
+  return {rows:[]};
+ });
+ const release=vi.fn(),repo=new FinancialReconciliationQueueRepository({connect:async()=>({query,release})} as unknown as Pool);
+ const adjustment={version:'financial-reconciliation-adjustment.v1',...scope,commandId:id(10),invoiceRevision:id(4),reportHash:reconcileFinancialSnapshot(snapshot).sourceHash,fact:{...scope,id:id(11),invoiceId:id(3),kind:'payment',amount:120,sourceId:id(5)}};
+ const attempt=()=>operation==='run'?repo.run(context,session,command)
+  :operation==='read'?repo.read(context,session,scope.jobId,id(7))
+  :operation==='readAdjustments'?repo.readAdjustments(context,session,scope.jobId,id(7))
+  :operation==='propose'?repo.propose(context,session,{version:'financial-reconciliation-propose.v1',runId:id(7),adjustment})
+  :repo.approve(context,session,{version:'financial-reconciliation-approve.v1',commandId:id(10),jobId:scope.jobId,adjustmentId:id(11),contentHash:'a'.repeat(64)});
+ await expect(attempt()).rejects.toThrow('RECONCILIATION_FORBIDDEN');
+ expect(query).toHaveBeenCalledWith('SELECT app.bind_request($1, $2, $3)',['contractor_practice',session,scope.tenantId]);
+ expect(query.mock.calls.some(([sql])=>sql.includes('app.financial_reconciliation'))).toBe(false);
+ expect(query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
+ expect(release).toHaveBeenCalledOnce();
+});
+
+it('binds adjustment reads to their own finance session before returning stored rows',async()=>{
+ const context=testTenantContext(scope.tenantId),session=id(8);
+ const query=vi.fn(async(sql:string,_params?:unknown[])=>({rows:sql.includes('financial_reconciliation_adjustments_read')?[{result:[]}]:[]}));
+ const repo=new FinancialReconciliationQueueRepository({connect:async()=>({query,release:vi.fn()})} as unknown as Pool);
+ expect(await repo.readAdjustments(context,session,scope.jobId,id(7))).toEqual([]);
+ expect(query.mock.calls.map(([sql])=>sql)).toEqual(['BEGIN',"SELECT set_config('app.tenant_id', $1, true)",
+  'SELECT app.bind_request($1, $2, $3)','SELECT app.financial_reconciliation_adjustments_read($1,$2,$3) result','COMMIT']);
+ expect(query.mock.calls[2]?.[1]).toEqual(['contractor_practice',session,scope.tenantId]);
+ expect(query.mock.calls[3]?.[1]).toEqual([session,scope.jobId,id(7)]);
 });

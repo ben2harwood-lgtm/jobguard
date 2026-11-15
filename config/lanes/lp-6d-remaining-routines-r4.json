@@ -201,7 +201,10 @@
         "apps/web/e2e/M4-17-adjustments.spec.ts",
         "apps/web/e2e/MON-6-stored-pay-now-preview.spec.ts",
         "packages/db/src/accounting-export-repository.ts",
-        "packages/db/test/accounting-export-repository.test.ts"
+        "packages/db/test/accounting-export-repository.test.ts",
+        "packages/db/src/financial-reconciliation-queue-repository.ts",
+        "packages/db/src/financial-reconciliation-queue-repository.test.ts",
+        "apps/web/e2e/m4-4-evidence-holds.spec.ts"
       ]
     }
   }
