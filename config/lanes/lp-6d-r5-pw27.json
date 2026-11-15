@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6d-r5-pw27": {
+      "branches": ["codex/sandbox/lp-6d-r5-pw27"],
+      "allow": [
+        "config/lanes/lp-6d-r5-pw27.json",
+        "packages/db/test/practice-worker-switch-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
