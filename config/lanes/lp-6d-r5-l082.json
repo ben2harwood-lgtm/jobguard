@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6d-r5-l082": {
+      "branches": ["codex/sandbox/lp-6d-r5-l082"],
+      "note": "LP-6d L082 RED: bind the expiry-race and upgrade fixtures to their own owner; no runtime changes.",
+      "allow": [
+        "packages/db/test/invoice-later.integration.test.ts",
+        "packages/db/test/invoice-later-upgrade.integration.test.ts",
+        "config/lanes/lp-6d-r5-l082.json"
+      ]
+    }
+  }
+}
