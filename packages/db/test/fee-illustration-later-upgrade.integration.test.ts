@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -43,7 +44,8 @@ it("L101 upgrade preserves populated illustration identities, named values, full
   await migrate(f.admin); await migrate(f.admin);
   expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
   // The pre-upgrade command replays with the same persisted source IDs and timestamp.
-  await workTenant(f.admin, DEMO_TENANT_ID, db => db.query("SELECT app.create_fee_illustration_source($1,$2)", [owner.jobId, commandId]));
+  // LP-6d: after the upgrade the replay is the practice owner's own bound request.
+  await workTenant(f.admin, DEMO_TENANT_ID, async db => { await bindOwnSession(db, owner.auth.digest); return db.query("SELECT app.create_fee_illustration_source($1,$2)", [owner.jobId, commandId]); }, { bindRequest: false });
   expect(await proofDifferences(f.admin, before)).toEqual({ rows: [], types: [] });
   await rolledBack(f.admin, async db => {
     await db.query("SET LOCAL session_replication_role='replica'");

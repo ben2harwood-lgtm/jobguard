@@ -1,4 +1,5 @@
 import { requireServerEntitlement } from "./plan-entitlement-service.js";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { utcDatetimeV1 } from "@jobguard/core";
 import { createHash, generateKeyPairSync, randomUUID, sign, verify, createPublicKey } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
@@ -31,6 +32,8 @@ export class AuditExportError extends Error {
   constructor(readonly code: "AUDIT_EXPORT_UNAUTHENTICATED" | "AUDIT_EXPORT_FORBIDDEN" | "AUDIT_EXPORT_MODE_HELD" | "AUDIT_EXPORT_CHECKPOINT_REQUIRED" | "AUDIT_EXPORT_INVALID_INPUT" | "AUDIT_EXPORT_INVALID" | "AUDIT_EXPORT_COMMAND_CONFLICT" | "AUDIT_EXPORT_UNAVAILABLE") { super(code); }
 }
 const hash = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
+/** LP-6d: a session that can no longer be bound is the same export refusal, with no export read or written. */
+const forbiddenBinding = (error: unknown): never => { if (error instanceof RequestBindingRefusedError) throw new AuditExportError("AUDIT_EXPORT_FORBIDDEN"); throw error; };
 export function auditExportFingerprint(pem: string): string {
   const key = createPublicKey(pem);
   if (key.asymmetricKeyType !== "ed25519") throw new AuditExportError("AUDIT_EXPORT_INVALID");
@@ -113,7 +116,7 @@ export class AuditExportRepository {
       await db.$client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))", [context.tenantId]);
       if (!await this.authorized(db, context, actor, "list")) return null;
       return (await db.$client.query<AuditExportRow>(`SELECT id,created_at::text AS "createdAt",entry_count AS "entryCount",head_hash AS "headHash",file FROM app.audit_export WHERE tenant_id=$1 ORDER BY created_at,id`, [context.tenantId])).rows;
-    });
+    }).catch(forbiddenBinding);
     if (result === null) throw new AuditExportError("AUDIT_EXPORT_FORBIDDEN");
     return result;
   }
@@ -136,7 +139,7 @@ export class AuditExportRepository {
       const file = signAuditExport({ version: "audit-export.v1", environment: "synthetic_demo", notice: AUDIT_EXPORT_NOTICE, sandbox: AUDIT_EXPORT_SANDBOX, tenantId: context.tenantId, exportId: request.commandId, createdAt: exportEvent!.occurredAt.toISOString(), entryCount: entries.length, headHash: exportEvent!.eventHash, checkpoints: checkpoints.map(c => ({ ...c, recordedAt: c.recordedAt.toISOString() })), entries: entries.map(e => ({ ...e, occurredAt: e.occurredAt.toISOString() })) });
       await db.$client.query(`INSERT INTO app.audit_export(tenant_id,id,actor_membership_id,created_at,entry_count,head_hash,file) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)`, [context.tenantId, request.commandId, actor.membershipId, exportEvent!.occurredAt, entries.length, exportEvent!.eventHash, JSON.stringify(file)]);
       return { id: request.commandId, createdAt: exportEvent!.occurredAt.toISOString(), entryCount: entries.length, headHash: exportEvent!.eventHash, file };
-    });
+    }).catch(forbiddenBinding);
     // Refusal is thrown AFTER commit so the refusal audit is durable.
     if (!result) throw new AuditExportError("AUDIT_EXPORT_FORBIDDEN");
     return result;
