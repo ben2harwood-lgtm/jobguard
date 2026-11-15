@@ -7847,10 +7847,7 @@ DO $$ DECLARE r record; BEGIN
  END LOOP;
 END $$;
 
-COMMIT;
-
 -- BEGIN lp-6d-lp10-recovery-sink
-BEGIN;
 -- Actor-less synthetic delivery, following lp6d_escalate_overdue_worker. The
 -- queue selects app.tenant_id: existing queue-tenant-trust named hold until LP-10
 -- supplies the dedicated worker credential. This is not a web/worker login split.
@@ -7944,5 +7941,5 @@ END $$;
 ALTER FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) FROM PUBLIC,jobguard_identity,jobguard_infrastructure,jobguard_shadow;
 GRANT EXECUTE ON FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) TO jobguard_runtime;
-COMMIT;
 -- END lp-6d-lp10-recovery-sink
+COMMIT;
