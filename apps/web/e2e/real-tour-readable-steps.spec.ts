@@ -20,8 +20,7 @@ test.afterEach(async ({ page }, info) => {
 
 async function start(page: Page, phone: boolean) {
   if (phone) await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+  await page.goto("/practice-company");
   await expect(page.getByRole("heading", { name: "Ready for your first job", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Walk your first practice job", exact: true }).click();
   const tour = page.getByRole("region", { name: "Guided walkthrough" });

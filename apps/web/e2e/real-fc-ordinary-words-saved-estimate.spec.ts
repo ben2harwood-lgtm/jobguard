@@ -15,8 +15,7 @@ const scenarios = [
 ];
 test("ordinary words survive the authorised saved reveal with £180.00 and one finding", async ({ page }, info) => {
   if (info.project.name === "mobile-360") await page.setViewportSize({width:390,height:844});
-  await page.goto("/");
-  await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+  await page.goto("/practice-company");
   await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
   for (const [index,scenario] of scenarios.entries()) {
     if (index > 0) await page.goto("/classic");

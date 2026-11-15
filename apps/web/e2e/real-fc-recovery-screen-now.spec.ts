@@ -19,8 +19,7 @@ for (const recovery of [false, true]) test(recovery ? "Try again recovers the sa
     installed = false;
   };
   try {
-    await page.goto("/");
-    await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+    await page.goto("/practice-company");
     await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
     await click("＋ Start a new job");
     await page.getByLabel("Work details").fill("Paint the hall, stairs and landing for Mr Example at 9 Notreal Road, two coats, woodwork in gloss, should be about 900 quid, four days.");

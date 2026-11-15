@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "designed-practice-entry": {
+      "branches": [
+        "codex/sandbox/designed-practice-entry"
+      ],
+      "allow": [
+        "apps/web/app/(designed)/designed-ui.tsx",
+        "apps/web/app/(designed)/real-designed-screens.test.tsx",
+        "apps/web/e2e/real-fc-ordinary-words-saved-estimate.spec.ts",
+        "apps/web/e2e/real-fc-ordinary-words.spec.ts",
+        "apps/web/e2e/real-fc-recovery-screen-now.spec.ts",
+        "apps/web/e2e/real-fc-typed-recovery.spec.ts",
+        "apps/web/e2e/real-fc-typed-sources.spec.ts",
+        "apps/web/e2e/real-found-extra-to-paid.spec.ts",
+        "apps/web/e2e/real-journey-money-status.spec.ts",
+        "apps/web/e2e/real-journey-next-state.spec.ts",
+        "apps/web/e2e/real-journey-next-to-paid-send.spec.ts",
+        "apps/web/e2e/real-overview-paid-status.spec.ts",
+        "apps/web/e2e/real-own-job-to-paid.spec.ts",
+        "apps/web/e2e/real-parties-atomic-save.spec.ts",
+        "apps/web/e2e/real-tour-one-saved-job-now.spec.ts",
+        "apps/web/e2e/real-tour-readable-steps.spec.ts",
+        "apps/web/e2e/real-words-natural-items.spec.ts"
+      ]
+    }
+  }
+}
