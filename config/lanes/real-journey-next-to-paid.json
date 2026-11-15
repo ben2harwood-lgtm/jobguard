@@ -14,7 +14,8 @@
         "apps/web/app/ui/workspace-lifecycle.ts",
         "apps/web/app/ui/workspace-shell-order.test.tsx",
         "apps/web/app/ui/workspace-shell.tsx",
-        "apps/web/e2e/real-journey-next-to-paid.spec.ts"
+        "apps/web/e2e/real-journey-next-to-paid.spec.ts",
+        "packages/db/src/final-check-typed-text.test.ts"
       ]
     }
   }

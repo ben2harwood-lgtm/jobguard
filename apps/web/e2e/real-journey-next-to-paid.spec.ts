@@ -15,8 +15,7 @@ async function saved(page: Page, jobId: string, suffix: string) {
  const response = await page.request.get(`/api/jobs/${jobId}/${suffix}`); expect(response.ok(), await response.text()).toBe(true); return response.json();
 }
 async function start(page: Page, text = ordinary) {
- await page.goto("/jobs");
- await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+ await page.goto("/practice-company");
  await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
  await click(page, "＋ Start a new job"); await page.getByLabel("Work details").fill(text);
  await click(page, "Make my draft"); await click(page, "Check and edit my draft");
@@ -78,6 +77,30 @@ for (const scenario of [ordinary, fiveItems]) test(scenario === ordinary ? "walk
  await expect(onward).toHaveText("Build and complete the final account"); await onward.click();
  await click(page, "Build final account");
  const panel = page.getByTestId("final-account-lock"); await expect(panel).toBeVisible();
+ if (scenario === ordinary) {
+  // The generated photo says "painted walls". The reference matcher cannot
+  // infer that from "Paint the hall, stairs and landing, two coats". Record the
+  // builder's inclusion explicitly before lock, rejecting it as an extra so
+  // there is no added bill line or unresolved approval left in the journey.
+  const inclusion = "Painted walls included in the £900 baseline; no additional charge";
+  await panel.getByLabel("Final-review extra description", { exact: true }).fill(inclusion);
+  await panel.getByLabel("Final-review extra price (£, optional)", { exact: true }).fill("0.00");
+  await click(page, "Add final-review extra");
+  await expect(panel.getByLabel("Final-review extra description", { exact: true })).toHaveValue("");
+  await expect(panel).toHaveAttribute("aria-busy", "false");
+  const review = await saved(page, jobId, "final-account/lock");
+  const capture = review.captures.find((item: { description: string }) => item.description === inclusion);
+  expect(capture).toMatchObject({ state: "priced", origin: "final_review", netPence: 0 });
+  const extra = page.getByTestId(`variation-${capture.id}`);
+  await extra.getByRole("button", { name: "Reject revision", exact: true }).click();
+  await expect(extra).toContainText("Rejected — retained in history");
+  expect((await saved(page, jobId, "final-account/lock")).captures).toContainEqual(expect.objectContaining({ id: capture.id, state: "rejected", netPence: 0 }));
+  const rebuilt = page.waitForResponse(response => response.url().endsWith(`/api/jobs/${jobId}/final-account`) && response.request().method() === "POST");
+  await click(page, "Rebuild from approved sources");
+  const rebuiltResponse = await rebuilt; expect(rebuiltResponse.ok(), await rebuiltResponse.text()).toBe(true);
+  await expect(page.getByTestId("final-net")).toHaveText("£900.00");
+  await expect(panel.getByTestId("lock-state")).toHaveText("Final account review");
+ }
  const mounted = await panel.elementHandle();
  const note = page.getByTestId("job-diary").getByLabel("Note", { exact: true });
  await note.fill("Fictional unfinished draft — keep this edit");
