@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-176": {
+      "branches": [
+        "codex/sandbox/later-safety-176"
+      ],
+      "note": "RED: action-specific billability CSRF preparation; preserves review and approval authorities.",
+      "allow": [
+        "apps/web/app/lib/recovery-billability-server.ts",
+        "apps/web/app/lib/recovery-billability-server.test.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/route.test.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/database.test.ts",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/billability/screen.tsx",
+        "apps/web/app/jobs/[id]/recovery-cases/[caseId]/billability/screen.test.tsx",
+        "apps/web/e2e/M4-2-billability.spec.ts"
+      ]
+    }
+  }
+}
