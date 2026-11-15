@@ -241,7 +241,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["app.start_blank_practice_company_v2(new_token text,previous_token text)", "0741_identity_linked_practice.sql"],
     ["app.seed_saved_v1_sample()", "0741_identity_linked_practice.sql"],
     ["app.authenticate_practice_session(digest text,requested_tenant uuid)", "0741_identity_linked_practice.sql"],
-    ["app.lp6_session_authority(p_kind text,p_credential text,p_tenant uuid)", "0741_identity_linked_practice.sql"],
+    ["app.lp6_session_authority(p_kind text,p_credential text,p_tenant uuid)", "0749_lp6d_remaining_routines.sql"],
     ["app.is_blank_practice_company(digest text)", "0741_identity_linked_practice.sql"],
     ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
     ["app.xa_approve(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_step integer,p_hash text,p_net bigint,p_reject boolean,p_reason text)", "0635_extra_same_step.sql"],
@@ -278,7 +278,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // LP-6d (0740) re-creates only the routines it names; each body must be exactly a 0740 body for that name.
   // Owners, ACLs and other metadata stay checked by the 0740 migration proof.
   const lp6dBodies = new Map<string, string[]>();
-  for (const m of (await readFile(new URL("../migrations/0740_lp6d_remaining_routines.sql", import.meta.url), "utf8"))
+  for (const m of (await readFile(new URL("../migrations/0749_lp6d_remaining_routines.sql", import.meta.url), "utf8"))
     .matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)) {
     lp6dBodies.set(m[1]!, [...(lp6dBodies.get(m[1]!) ?? []), m[4]!]);
   }

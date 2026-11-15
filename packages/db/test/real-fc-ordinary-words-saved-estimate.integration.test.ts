@@ -210,7 +210,7 @@ it("fresh install and repeat migration pin the exact successor with unchanged se
   const before = await catalog();
   await expect(f.admin.query(sql)).rejects.toThrow("SAVED_ESTIMATE_UNEXPECTED_PREDECESSOR");
   expect(await catalog()).toEqual(before);
-  const proof = JSON.parse(await readFile(new URL(`./migration-proofs/0740_lp6d_remaining_routines.proof.json`, import.meta.url), "utf8"));
+  const proof = JSON.parse(await readFile(new URL(`./migration-proofs/0749_lp6d_remaining_routines.proof.json`, import.meta.url), "utf8"));
   const record = proof.lp0.find((c: { section: string; after?: { identity?: string } }) => c.section === "routines" && c.after?.identity === "function:app.read_final_check_reveal(uuid,uuid,text)");
   expect(createHash("sha256").update(before.definition).digest("hex")).toBe(record.after.definitionSha256);
   expect(before).toMatchObject({ prosecdef: true, proconfig: ["search_path=pg_catalog, app"] });

@@ -4766,15 +4766,30 @@ $$;
 ALTER FUNCTION app.lp6d_contractor_session_identity(uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp6d_contractor_session_identity(uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
 
--- Latest body: packages/db/migrations/0658_lp6b_effective_session_actor.sql
+-- Latest body: packages/db/migrations/0741_identity_linked_practice.sql
 CREATE OR REPLACE FUNCTION app.lp6_session_authority(p_kind text,p_credential text,p_tenant uuid)
  RETURNS TABLE(session_ref text,actor_id uuid,expires_at timestamptz)
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
-DECLARE real_session identity.session; home control_plane.practice_session;
+DECLARE linked record; real_session identity.session; home control_plane.practice_session;
  practice control_plane.contractor_practice_session; selected_actor uuid;
  selected_ref text; deadline timestamptz; saved_tenant text:=current_setting('app.tenant_id',true);
  saved_sso text:=current_setting('app.sso_session_id',true);
 BEGIN
+ IF p_kind='practice' AND EXISTS(SELECT 1 FROM control_plane.identity_practice_namespace WHERE owner_digest=p_credential) THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+ IF p_kind='practice' AND EXISTS(SELECT 1 FROM control_plane.identity_practice_credential WHERE token_digest=p_credential) THEN
+  IF p_tenant IS DISTINCT FROM '11111111-1111-4111-8111-111111111111'::uuid THEN
+   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
+  BEGIN
+   SELECT * INTO linked FROM app.linked_practice_authority(p_credential);
+  EXCEPTION WHEN invalid_authorization_specification THEN
+   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END;
+  SELECT a.membership_id INTO selected_actor FROM app.anonymous_practice_authority(p_credential,p_tenant) a;
+  IF selected_actor IS NULL THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
+  RETURN QUERY SELECT encode(sha256(convert_to('lp6-home:'||linked.owner_digest,'UTF8')),'hex'),selected_actor,linked.deadline;
+  RETURN;
+ END IF;
  IF p_tenant IS NULL OR p_kind IS NULL OR p_credential IS NULL THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;

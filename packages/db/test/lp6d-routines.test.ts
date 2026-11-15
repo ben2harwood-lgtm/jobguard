@@ -5,7 +5,7 @@ import routines from "./lp6d-routines.json";
 import classification from "./lp6d-runtime-classification.json";
 import { loadReviewedInventory, pathCompleteness, repoFileExists } from "./lp-0-catalog.js";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
-const sql = read("../migrations/0740_lp6d_remaining_routines.sql");
+const sql = read("../migrations/0749_lp6d_remaining_routines.sql");
 const definitions = (source: string) => [...source.matchAll(/CREATE (?:OR REPLACE )?FUNCTION (app\.\w+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$([\s\S]*?)\$\$\s*;/gis)];
 const argumentsKey = (args: string) => args.replace(/\s+/gu, "").toLowerCase();
 const body = (source: string, routine: typeof routines[number]) => definitions(source)
@@ -116,7 +116,7 @@ it("leaves the final-lock owner helper exclusively to LP-6c", () => {
 
 it("starts from the latest exact predecessor overload rather than an earlier copied body", () => {
   const latest = new Map<string, string>();
-  for (const file of readdirSync(new URL("../migrations/", import.meta.url)).filter(f => f.endsWith(".sql") && f < "0740").sort()) {
+  for (const file of readdirSync(new URL("../migrations/", import.meta.url)).filter(f => f.endsWith(".sql") && f < "0749").sort()) {
     for (const m of definitions(read(`../migrations/${file}`))) latest.set(m[1]! + argumentsKey(m[2]!), `packages/db/migrations/${file}`);
   }
   // Main-only predecessors are exact source snapshots until the router restacks
@@ -129,9 +129,9 @@ it("starts from the latest exact predecessor overload rather than an earlier cop
     .toBe(latest.get(routine.name + argumentsKey(routine.arguments)));
 });
 
-it("preserves LP-6b's entire latest session helper except its private projection edge", () => {
+it("preserves the entire latest session helper (0741 way-in, on LP-6b) except its private projection edge", () => {
   const pattern = /CREATE OR REPLACE FUNCTION app\.lp6_session_authority\([\s\S]*?\$\$;/u;
-  const previous = read("../migrations/0658_lp6b_effective_session_actor.sql").match(pattern)![0];
+  const previous = read("../migrations/0741_identity_linked_practice.sql").match(pattern)![0];
   expect(sql.match(pattern)![0]).toBe(previous.replace("FROM app.contractor_session(p_credential::uuid) effective", "FROM app.lp6d_contractor_session_identity(p_credential::uuid) effective"));
   expect(sql).not.toContain("GRANT EXECUTE ON FUNCTION app.current_actor()");
   expect(sql).not.toContain("GRANT EXECUTE ON FUNCTION app.bind_request(text,text,uuid)");
@@ -476,7 +476,7 @@ it("keeps WORM workers actor-less behind their existing private audit port", () 
     .filter(m => m[2]!.includes("app.worm_audit("));
   expect(callers.map(m => m[1]).sort()).toEqual(["app.worm_claim", "app.worm_finish", "worm_control.worm_reconcile"]);
   for (const caller of callers) expect(caller[2]).not.toMatch(/current_actor|bind_request/u);
-  // 0740 leaves these accepted bodies and their credential-only ACLs alone.
+  // 0749 leaves these accepted bodies and their credential-only ACLs alone.
   expect(sql).not.toMatch(/CREATE (?:OR REPLACE )?FUNCTION (?:app\.worm_(?:audit|claim|finish)|worm_control\.worm_\w+)\(/u);
   expect(sql).not.toMatch(/GRANT [^;]*jobguard_worm_(?:executor|operator)[^;]*TO jobguard_runtime/u);
 });

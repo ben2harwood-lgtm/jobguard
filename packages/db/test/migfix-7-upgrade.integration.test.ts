@@ -134,7 +134,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.start_blank_practice_company_v2(new_token text, previous_token text)", "0741_identity_linked_practice.sql"],
     ["app.seed_saved_v1_sample()", "0741_identity_linked_practice.sql"],
     ["app.authenticate_practice_session(digest text, requested_tenant uuid)", "0741_identity_linked_practice.sql"],
-    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0741_identity_linked_practice.sql"],
+    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0749_lp6d_remaining_routines.sql"],
     ["app.is_blank_practice_company(digest text)", "0741_identity_linked_practice.sql"],
     ["app.company_final_check_request_run(j uuid)", "0732_final_check_typed_recovery.sql"],
     ["app.company_final_check_reveal(j uuid)", "0732_final_check_typed_recovery.sql"],
@@ -262,7 +262,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // LP-6d (0740, the last migration) recreates its guarded routines: their exact bodies are 0740's, which
   // already carry every listed predecessor patch (0642's xa_issue_link authority, 0728's xa_approve) plus the
   // LP-6d binding prefix. lp6d-routines.test.ts pins each one to its latest predecessor body.
-  const lp6dSql = await readFile(new URL("../migrations/0740_lp6d_remaining_routines.sql", import.meta.url), "utf8");
+  const lp6dSql = await readFile(new URL("../migrations/0749_lp6d_remaining_routines.sql", import.meta.url), "utf8");
   const argNames = (args: string) => args.split(",").map(arg => arg.trim().split(/\s+/u)[0]!).filter(Boolean).join(",");
   const lp6dBodies = new Map<string, string>();
   for (const m of lp6dSql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu)) lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);

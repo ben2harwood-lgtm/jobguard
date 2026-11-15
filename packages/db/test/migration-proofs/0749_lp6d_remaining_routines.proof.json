@@ -1,5 +1,5 @@
 {
-  "migration": "0740_lp6d_remaining_routines.sql",
+  "migration": "0749_lp6d_remaining_routines.sql",
   "lp0": [
     {
       "section": "groups",
@@ -21,7 +21,7 @@
         },
         "downstream": "Reuse LP-6c binding/accessor grants; retain a private switched-session projection and one checked recovery-message authorization revocation entry point. No binding-store or general business-table write grant. SSO completion alone may mint an exact transaction-bound, consumed operative-role permit in private identity control-plane storage after checking operative_roles; no login can access that storage or its dedicated decision.",
         "sources": [
-          "packages/db/migrations/0740_lp6d_remaining_routines.sql"
+          "packages/db/migrations/0749_lp6d_remaining_routines.sql"
         ],
         "tests": [
           "packages/db/test/lp6d-routines.test.ts",
@@ -49,7 +49,7 @@
           "LP-6d": "Bind remaining routines while retaining decided permissions."
         },
         "sources": [
-          "packages/db/migrations/0740_lp6d_remaining_routines.sql"
+          "packages/db/migrations/0749_lp6d_remaining_routines.sql"
         ],
         "tests": [
           "packages/db/test/lp6d-routines.test.ts",
@@ -102,10 +102,12 @@
         "definitionSha256": null,
         "staticWrites": [],
         "staticCalls": [
+          "app.anonymous_practice_authority",
           "app.authenticate_practice_session",
           "app.contractor_practice_home_deadline",
           "app.contractor_practice_session_digest",
           "app.contractor_session",
+          "app.linked_practice_authority",
           "identity.sso_session_memberships"
         ]
       },
@@ -122,12 +124,14 @@
         "otherExecute": [
           "jobguard_binding_owner"
         ],
-        "definitionSha256": "31845dd320e328c75cec5f035c1da26fdc707e72cb4143c5683e91a409bb16a8",
+        "definitionSha256": "5e062091a49a10b83c08ff66bf6f741ce4cdfdde7c9b741cfada2af01e8be7fd",
         "staticWrites": [],
         "staticCalls": [
+          "app.anonymous_practice_authority",
           "app.authenticate_practice_session",
           "app.contractor_practice_home_deadline",
           "app.contractor_practice_session_digest",
+          "app.linked_practice_authority",
           "app.lp6d_contractor_session_identity",
           "identity.sso_session_memberships"
         ]
