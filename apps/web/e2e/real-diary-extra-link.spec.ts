@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { JOB_DIARY_NOTICE } from "@jobguard/core";
 
 test("REAL-DIARY-EXTRA-LINK: own job diary opens reachable extra-work controls", async ({ page }, testInfo) => {
  test.setTimeout(360_000);
+ const { JOB_DIARY_NOTICE } = await import("@jobguard/core");
  if (testInfo.project.name.includes("mobile")) await page.setViewportSize({ width: 390, height: 844 });
  const click = async (name: string) => { const button = page.getByRole("button", { name, exact: true }); await expect(button).toBeEnabled(); await button.click(); };
  await page.goto("/practice-company");
