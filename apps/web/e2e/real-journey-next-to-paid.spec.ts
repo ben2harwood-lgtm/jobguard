@@ -87,12 +87,20 @@ for (const scenario of [ordinary, fiveItems]) test(scenario === ordinary ? "walk
   await expect(note).toHaveValue("Fictional unfinished draft — keep this edit");
  }
 
+ await expect(panel.getByTestId("lock-state")).toHaveText("Final account review");
  const dispositions = panel.getByRole("combobox");
  for (let i = 0; i < await dispositions.count(); i++) { await dispositions.nth(i).selectOption("done"); await expect(panel).toHaveAttribute("aria-busy", "false"); }
  const terms = panel.getByRole("button", { name: "Accept final check terms", exact: true }); if (await terms.isEnabled()) await terms.click();
  await expect(panel).toHaveAttribute("aria-busy", "false");
  const complete = panel.getByRole("button", { name: "Complete final account", exact: true }); if (!(await complete.isEnabled())) await click(page, "Rebuild from approved sources");
  await expect(complete).toBeEnabled(); await complete.click();
+ await expect(panel.getByTestId("lock-state")).toHaveText("Final account completed");
+ // Locking records pending work; the synthetic worker requires an explicit request.
+ await click(page, "Load the saved final check");
+ await expect(page.getByTestId("final-check-reveal")).toHaveAttribute("aria-busy", "false");
+ const initialCheck = await saved(page, jobId, "final-check");
+ expect(initialCheck.state).not.toBe("failed");
+ if (initialCheck.state === "pending") await click(page, "Run the final check (practice)");
  await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.", { timeout: 180_000 });
  await expect(onward).toHaveText("Issue the customer invoice"); await onward.click();
  await click(page, "Issue and simulate this invoice"); await expect(page.getByTestId("invoice-gross")).toHaveText("GBP 1,080.00");
@@ -115,6 +123,8 @@ for (const scenario of [ordinary, fiveItems]) test(scenario === ordinary ? "walk
  const foreign = await browser.newContext({ baseURL: new URL(page.url()).origin });
  try {
   const visitor = await foreign.newPage(); await visitor.goto("/practice-company");
+  // Navigation finishes before the client creates this visitor's separate session.
+  await expect(visitor.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
   const refused = await visitor.request.get(`/api/jobs/${jobId}/customer-invoices`); expect(refused.status()).toBe(404);
  } finally { await foreign.close(); }
 });
@@ -124,7 +134,10 @@ test("walk 2: Continue opens the pending extra approval", async ({ page }, info)
  const jobId = await start(page); await proof(page);
  const extra = page.locator(".variation-entry");
  await extra.getByLabel("Description", { exact: true }).fill("Fictional ceiling extra"); await extra.getByLabel("Variation price (£, optional)").fill("150.00");
+ const proposed = page.waitForResponse(response => response.url().endsWith(`/api/jobs/${jobId}/variations`) && response.request().method() === "POST");
  await click(page, "Add proposed variation");
+ const proposalResponse = await proposed; expect(proposalResponse.ok(), await proposalResponse.text()).toBe(true);
+ await expect(extra.getByLabel("Description", { exact: true })).toHaveValue("");
  const view = await saved(page, jobId, "variations"); const pending = view.variations.find((item: { description: string }) => item.description === "Fictional ceiling extra"); expect(pending).toBeTruthy();
  const article = page.getByTestId(`variation-${pending.id}`);
  await article.evaluate(element => { for (let parent = element.parentElement; parent; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = false; });

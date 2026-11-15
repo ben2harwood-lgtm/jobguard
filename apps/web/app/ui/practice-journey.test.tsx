@@ -39,9 +39,11 @@ const jobId = "11111111-1111-4111-8111-111111111111";
 const otherJobId = "22222222-2222-4222-8222-222222222222";
 const response = (body: unknown, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 
-async function journey(status: string, variationStatus = 400, variationCode = "ACTIVATION_REQUIRED", invoiceJobId = jobId) {
+async function journey(status: string, variationStatus = 400, variationCode = "ACTIVATION_REQUIRED", invoiceJobId = jobId, overrides: Record<string, { body: unknown; status: number }> = {}) {
   vi.stubGlobal("React", React);
   const fetch = vi.fn(async (path: string) => {
+    const override = overrides[path.split("/").at(-1)!];
+    if (override) return response(override.body, override.status);
     if (path.endsWith("/proof")) return response({ version: "practice-proof-view.v1", environment: "synthetic_demo", jobId, completion: null, realExternalActions: 0 });
     if (path.endsWith("/variations")) return response({ code: variationCode }, variationStatus);
     if (path.endsWith("/customer-invoices")) return response({ version: 1, environment: "synthetic_demo", jobId: invoiceJobId, invoices: [] });
@@ -122,4 +124,45 @@ it("clears previous-job facts immediately and ignores late other-job replies",as
  expect(render(otherJobId)).toContain("Checking saved progress");
  for(const release of releases.slice(0,9))release();await settle();
  const html=render(otherJobId);expect(html).not.toContain("journey-customer-balance");expect(html).not.toContain("You finished this practice job");
+});
+
+const lifecycleAbsences = [
+  ["proof", 404, "NOT_FOUND"],
+  ["final-check", 403, "FINAL_CHECK_FORBIDDEN"],
+] as const;
+for (const [endpoint, httpStatus, code] of lifecycleAbsences) {
+  it.each(["draft", "quoting", "accepted", "lost"])(`allows documented ${endpoint} absence before activation for %s`, async status => {
+    const { html } = await journey(status, 400, "ACTIVATION_REQUIRED", jobId, {
+      [endpoint]: { body: { code }, status: httpStatus },
+    });
+    expect(html).toContain("Continue this job");
+    expect(html).not.toContain("could not be checked");
+  });
+  it.each([
+    ["live", httpStatus, { code }],
+    ["invoiced", httpStatus, { code }],
+    ["paid", httpStatus, { code }],
+    ["accepted", 503, { code }],
+    ["accepted", 401, { code }],
+    ["accepted", httpStatus === 404 ? 403 : 404, { code }],
+    ["accepted", httpStatus, { code: "DATABASE_UNAVAILABLE" }],
+    ["accepted", httpStatus, { code, unexpected: true }],
+  ])(`refuses unexpected ${endpoint} absence for %s / %s / %j`, async (status, refusedStatus, body) => {
+    const { html } = await journey(status, 400, "ACTIVATION_REQUIRED", jobId, {
+      variations: { status: 200, body: { version: 1, environment: "synthetic_demo", jobId,
+        baselinePence: 90000, capPence: 0, parentScopeItemId: jobId,
+        approvedAdditionsPence: 0, approvedOmissionsPence: 0, pendingExtrasPence: 0, variations: [] } },
+      [endpoint]: { body, status: refusedStatus },
+    });
+    expect(html).toContain("Saved progress could not be checked");
+    expect(html).not.toContain("journey-customer-balance");
+  });
+}
+it.each(["draft", "quoting", "accepted", "lost"])("allows the combined pre-activation absences for %s", async status => {
+  const { html } = await journey(status, 400, "ACTIVATION_REQUIRED", jobId, {
+    proof: { body: { code: "NOT_FOUND" }, status: 404 },
+    "final-check": { body: { code: "FINAL_CHECK_FORBIDDEN" }, status: 403 },
+  });
+  expect(html).toContain("Continue this job");
+  expect(html).not.toContain("could not be checked");
 });

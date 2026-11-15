@@ -51,22 +51,22 @@ export function PracticeJourney({ jobId, status, onSavedLabel }: { jobId: string
     readJson(`${path}/proposal`, controller.signal),
     readJson(`${path}/quotes`, controller.signal, status === "draft" ? { status: 404, code: "NOT_FOUND" } : undefined),
     readJson(`${path}/quotes/delivery`, controller.signal),
-    readJson(`${path}/proof`, controller.signal, status === "draft" ? { status: 404, code: "NOT_FOUND" } : undefined),
+    readJson(`${path}/proof`, controller.signal, beforeActivation ? { status: 404, code: "NOT_FOUND" } : undefined),
     readJson(`${path}/variations`, controller.signal, beforeActivation ? { status: 400, code: "ACTIVATION_REQUIRED" } : undefined),
     readJson(`${path}/final-account`, controller.signal),
     readJson(`${path}/final-account/lock`, controller.signal),
-    readJson(`${path}/final-check`, controller.signal),
+    readJson(`${path}/final-check`, controller.signal, beforeActivation ? { status: 403, code: "FINAL_CHECK_FORBIDDEN" } : undefined),
     readJson(`${path}/customer-invoices`, controller.signal),
    ]);
    const proposal = captureWorkspaceResponseV1.parse(proposalRaw);
-   if ((variationsRaw === undefined && !["draft", "quoting", "accepted", "lost"].includes(proposal.status)) || (proofRaw === undefined && proposal.status !== "draft") || (quoteRaw === undefined && proposal.status !== "draft")) throw new Error("Unexpected projection absence");
+   if ((variationsRaw === undefined && !["draft", "quoting", "accepted", "lost"].includes(proposal.status)) || (proofRaw === undefined && !["draft", "quoting", "accepted", "lost"].includes(proposal.status)) || (quoteRaw === undefined && proposal.status !== "draft")) throw new Error("Unexpected projection absence");
    const quote = quoteRaw === undefined ? { jobId, draft: null } : quoteWorkspaceResponseV1.parse(quoteRaw);
    const delivery = deliveryView.parse(deliveryRaw);
    const proof = proofRaw === undefined ? { jobId, completion: null } : proofView.parse(proofRaw);
    const variations = variationsRaw === undefined ? { jobId, variations: [] } : variationWorkspaceResponseV1.parse(variationsRaw);
    const account = finalAccountResponseV1.parse(accountRaw);
    const lock = lockView.parse(lockRaw);
-   const check = finalCheckReadV1.parse(checkRaw);
+   const check = checkRaw === undefined ? undefined : finalCheckReadV1.parse(checkRaw);
    const invoices = practiceInvoiceResponseV1.parse(invoicesRaw);
    if (proposal.jobId !== jobId || [quote, proof, variations, account, lock, invoices].some(view => view.jobId !== jobId)) throw new Error("Wrong job projection");
    const facts: Facts = {
