@@ -20,6 +20,9 @@ export class FinancialReconciliationQueueRepository {
  private async call(context:VerifiedTenantContext,session:string,jobId:string,command:Record<string,unknown>){
   if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new FinancialReconciliationError("RECONCILIATION_DISABLED");
   return withTenant(this.pool,context,async db=>{
+   // This repository also seeds runs from a membership-only context. Bind the
+   // actual finance session before the routine's early authority check.
+   await db.$client.query("SELECT app.bind_request($1, $2, $3)",["contractor_practice",uuid.parse(session),context.tenantId]);
    const row=await db.$client.query<{result:unknown}>("SELECT app.financial_reconciliation_queue($1,$2,$3::jsonb) result",[uuid.parse(session),uuid.parse(jobId),JSON.stringify({version:"financial-reconciliation-storage.v1",...command})]);
    return row.rows[0]?.result;
   });
@@ -51,6 +54,7 @@ export class FinancialReconciliationQueueRepository {
  async readAdjustments(context:VerifiedTenantContext,session:string,jobId:string,runId:string){
   if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new FinancialReconciliationError("RECONCILIATION_DISABLED");
   const raw=await withTenant(this.pool,context,async db=>{
+   await db.$client.query("SELECT app.bind_request($1, $2, $3)",["contractor_practice",uuid.parse(session),context.tenantId]);
    const result=await db.$client.query<{result:unknown}>("SELECT app.financial_reconciliation_adjustments_read($1,$2,$3) result",[uuid.parse(session),uuid.parse(jobId),uuid.parse(runId)]);
    return result.rows[0]?.result;
   });

@@ -239,11 +239,12 @@ export class ExtraApprovalRepository {
   async queue(context: VerifiedTenantContext, memberId: string): Promise<Result[]> {
     try { return await withTenant(this.pool, context, async db => (await db.$client.query("SELECT * FROM app.xa_queue($1)", [memberId])).rows as Result[]); } catch (error) { failure(error); }
   }
-  /** Deterministic scheduled-job hook: a graphile task (or a test) calls this per tenant. The server clock decides; a repeat run fires nothing twice. */
+  /** Deterministic scheduled-job hook: a graphile task (or a test) calls this per tenant. The server clock decides; a repeat run fires nothing twice.
+   * LP-6d (router ruling r11): the actor-less sweep runs through the worker definer; app.xa_escalate itself requires a bound request. */
   async escalateOverdue(context: VerifiedTenantContext): Promise<Result[]> {
     try {
       return await withTenant(this.pool, context, async db => {
-        const fired = (await db.$client.query<{ request_id: string; job_id: string; variation_id: string; step_index: number; eligible_roles: string[] }>("SELECT * FROM app.xa_escalate()")).rows;
+        const fired = (await db.$client.query<{ request_id: string; job_id: string; variation_id: string; step_index: number; eligible_roles: string[] }>("SELECT * FROM app.lp6d_escalate_overdue_worker()")).rows;
         await appendAuditBatch(db, fired.map(f => ({ ...audit("00000000-0000-4000-8000-000000000000", "contractor.extra.escalated", f.variation_id, { job: f.job_id, extra: f.variation_id, request: f.request_id, step: String(f.step_index) }), actorRef: "system:extra-escalation" })));
         return fired as unknown as Result[];
       });
