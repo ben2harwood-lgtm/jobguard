@@ -125,7 +125,7 @@ describe("390px dock geometry", () => {
 
 // Execute the component's real autoplay effect without a browser or a DOM renderer.
 describe("completed autoplay results", () => {
-  function playback({ reduced = false, done = true, visible = true, reject = false, webdriver = false, nextTarget = false } = {}) {
+  function playback({ reduced = false, done = true, visible = true, reject = false, webdriver = false, nextTarget = false, presentation = false, captureDelay = 0, savedPresentation = false } = {}) {
     vi.useFakeTimers(); vi.stubGlobal("React", React);
     vi.stubGlobal("navigator", { webdriver });
     vi.stubGlobal("matchMedia", () => ({ matches: reduced }));
@@ -134,13 +134,75 @@ describe("completed autoplay results", () => {
     vi.stubGlobal("window", { setTimeout, clearTimeout });
     // index, playing, busy, done, error, box, finished, waiting, expanded, holding
     hooks.states = [0, true];
-    const autoAction = vi.fn(() => { if (reject) throw new Error("Rejected action"); });
+    const autoAction = vi.fn(async (_: HTMLElement, signal: AbortSignal, present?: (title: string, words: string) => Promise<void>) => {
+      if (reject) throw new Error("Rejected action");
+      if (presentation) {
+        await present!("Read", "sample words");
+        signal.throwIfAborted();
+        if (captureDelay) await new Promise(resolve => setTimeout(resolve, captureDelay));
+        signal.throwIfAborted(); done = true;
+        if (savedPresentation) await present!("Saved", "review the draft");
+      }
+    });
     renderToStaticMarkup(React.createElement(Walkthrough, {
       steps: [{ id: "last", timeoutMs: 1000, target: "#last", title: "Check", words: "the saved result", isDone: () => done, autoAction }, ...(nextTarget ? [{ id: "next", target: "#next", title: "Next", words: "Ready", isDone: () => true, autoAction }] : [])], onClose: () => {},
     }));
     hooks.effects[3]!();
     return { autoAction, controller: hooks.refs[1]!.current as AbortController, reveal: () => { visible = true; } };
   }
+  it("autoplay Next waits for capture then advances without another hold", async () => {
+    playback({ done: false, presentation: true, captureDelay: 200, savedPresentation: true });
+    await vi.advanceTimersByTimeAsync(650);
+    (hooks.refs[3]!.current as () => void)();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(199);
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(hooks.setters[6]).toHaveBeenCalledWith(true);
+    expect(hooks.setters[9]!.mock.calls.filter(([value]) => value === true)).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("Stop after Next still prevents advancement while capture is pending", async () => {
+    const { controller } = playback({ done: false, presentation: true, captureDelay: 200, savedPresentation: true });
+    await vi.advanceTimersByTimeAsync(650);
+    (hooks.refs[3]!.current as () => void)();
+    await vi.advanceTimersByTimeAsync(100);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("sample presentation holds outside the business deadline and Next cannot complete capture", async () => {
+    const { controller } = playback({ done: false, presentation: true });
+    await vi.advanceTimersByTimeAsync(650);
+    expect(hooks.setters[9]).toHaveBeenCalledWith(true);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(controller.signal.aborted).toBe(false);
+    expect(hooks.setters[0]).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(readingTime("Read", "sample words") - 2000);
+    expect(controller.signal.aborted).toBe(false);
+    // Saved completion is followed by the existing completed-result hold.
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    controller.abort(); await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it.each([false, true])("sample presentation cancellation leaves capture incomplete (reduced: %s)", async reduced => {
+    const { controller } = playback({ done: false, presentation: true, reduced });
+    await vi.advanceTimersByTimeAsync(650);
+    if (reduced) await vi.advanceTimersByTimeAsync(60000);
+    expect(controller.signal.aborted).toBe(false);
+    controller.abort(); await vi.advanceTimersByTimeAsync(0);
+    expect(hooks.setters[0]).not.toHaveBeenCalled();
+    expect(hooks.setters[6]).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("webdriver bypasses sample presentation as well as result reading", async () => {
+    playback({ done: false, presentation: true, webdriver: true });
+    await vi.advanceTimersByTimeAsync(650);
+    expect(hooks.setters[9]).not.toHaveBeenCalledWith(true);
+    expect(hooks.setters[6]).toHaveBeenCalledWith(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it("waits for a deferred visible control before executing autoplay and confirming completion", async () => {
     const { autoAction, reveal } = playback({ visible: false, done: false, reduced: true });
     await vi.advanceTimersByTimeAsync(300);
@@ -267,13 +329,14 @@ describe("recent human input and spotlight replacements", () => {
     const autoAction = vi.fn(() => { complete = true; });
     const steps = [0, 1, 2].map(index => ({ id: `step-${index}`, target: "#root", title: "Read", words: "the saved result", isDone: () => complete, autoAction }));
     let tree: React.ReactNode;
+    const onClose = vi.fn();
     const states: unknown[] = [initialIndex, false, false, false, "", { left: 0, top: 0, width: 1, height: 1 }, false, false, false, false];
     function render() {
       refIndex = 0; hooks.effects.length = 0; hooks.setters.length = 0; hooks.states = states;
-      tree = Walkthrough({ steps, onClose: () => {}, initialIndex });
+      tree = Walkthrough({ steps, onClose, initialIndex });
     }
-    function button(label: string): { onClick: () => void } {
-      function find(node: React.ReactNode): { onClick: () => void } | undefined {
+    function button(label: string): { onClick: () => void; disabled?: boolean } {
+      function find(node: React.ReactNode): { onClick: () => void; disabled?: boolean } | undefined {
         for (const child of React.Children.toArray(node)) {
           if (!React.isValidElement<{ children?: React.ReactNode; onClick: () => void }>(child)) continue;
           if (child.type === "button" && child.props.children === label) return child.props;
@@ -292,7 +355,7 @@ describe("recent human input and spotlight replacements", () => {
       documentHandlers.get(name)?.({ type: name, isTrusted: trusted, pointerId: 1, changedTouches: [{ identifier: 1 }], ...detail });
     }
     return {
-      states, refs, add, remove, removeWindow, windowHandlers, scrollBy, button, render, input, replace,
+      states, refs, add, remove, removeWindow, windowHandlers, scrollBy, button, render, input, replace, onClose,
       poll: () => poll(), time: (value: number) => { now = value; },
       target: () => target!, clear: () => { target = null; poll(); },
       enter(index: number) {
@@ -448,6 +511,44 @@ describe("recent human input and spotlight replacements", () => {
       f.states[1] = false; f.render(); f.input("keydown"); f.replace();
       expect(f.scrollBy).toHaveBeenCalledTimes(4);
     } finally { (f.refs[1]!.current as AbortController | null)?.abort(); f.cleanup(); }
+  });
+  it("Stop then Close settles reading and reopens idle at the current step with Play enabled", async () => {
+    const f = fixture(1);
+    let resumeIndex = 0;
+    try {
+      f.states[1] = true; f.render(); hooks.effects[3]!();
+      await vi.advanceTimersByTimeAsync(650);
+      expect(hooks.setters[9]).toHaveBeenCalledWith(true);
+      const controller = f.refs[1]!.current as AbortController;
+      f.states[2] = true; f.states[9] = true; f.render();
+      f.button("Stop playback").onClick();
+      expect(controller.signal.aborted).toBe(true);
+      expect(f.refs[2]!.current).toBe(false);
+      expect(f.refs[3]!.current).toBeNull();
+      expect(hooks.setters[2]).toHaveBeenCalledWith(false);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(vi.getTimerCount()).toBe(0);
+      f.button("Close walkthrough").onClick();
+      expect(f.onClose).toHaveBeenCalledExactlyOnceWith(1);
+      resumeIndex = f.onClose.mock.calls[0]![0] as number;
+    } finally { f.cleanup(); }
+    const reopened = fixture(resumeIndex);
+    try {
+      expect(reopened.states[0]).toBe(1);
+      expect(reopened.refs[1]!.current).toBeNull();
+      expect(reopened.refs[2]!.current).toBe(false);
+      expect(reopened.button("Play the whole thing").disabled).toBe(false);
+      reopened.states[1] = true; reopened.render(); hooks.effects[3]!();
+      await vi.advanceTimersByTimeAsync(650);
+      const controller = reopened.refs[1]!.current as AbortController;
+      // Navigation/unmount also cancels a fresh reading hold.
+      reopened.cleanup();
+      expect(controller.signal.aborted).toBe(true);
+      expect(reopened.refs[2]!.current).toBe(false);
+      expect(reopened.refs[3]!.current).toBeNull();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { reopened.cleanup(); }
   });
   it("registers and removes every native capture listener and the blur listener", () => {
     const f = fixture(); f.cleanup();

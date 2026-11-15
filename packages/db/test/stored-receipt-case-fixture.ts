@@ -1,5 +1,6 @@
-// Fake source documents only. All constraints/triggers stay enabled; quote,
-// activation, variation, final account, invoice, feed and receipt use writers.
+// Fake source documents only. All constraints/triggers stay enabled. Historical
+// quotes use SQL fixture data; current quotes and all later steps use writers.
+import {historicalAcceptedQuote} from "./lp-legacy-sandbox-fixture.js";
 import {createHash,randomUUID} from "node:crypto";
 import {priceVariation} from "@jobguard/core";
 import {prepareActivationFixtureV3,DEMO_TENANT_ID,DEMO_MEMBERSHIP_ID,DEMO_IDENTITY_USER_ID} from "../src/demo-seed.js";
@@ -38,7 +39,11 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
   await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,account,DEMO_IDENTITY_USER_ID]);
  });
  const session=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,session),context=(await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? auth.context : testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID }),actor={membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID};
- const scoped=practiceMaterialPool(f.runtime,auth.digest),jobId=await prepareActivationFixtureV3(f.admin,context,baselineNetPence===3000000?"shadow-30000":"Fictional receipt allocation",baselineNetPence,scoped,baselineNetPence,auth.digest);
+ const scoped=practiceMaterialPool(f.runtime,auth.digest);
+ const hasAllocator=(await f.admin.query("SELECT to_regprocedure('app.allocate_quote_job_reference(uuid)') installed")).rows[0].installed;
+ const title=baselineNetPence===3000000?"shadow-30000":"Fictional receipt allocation";
+ const jobId=hasAllocator ? await prepareActivationFixtureV3(f.admin,context,title,baselineNetPence,scoped,baselineNetPence,auth.digest)
+  : await historicalAcceptedQuote(f.admin,context,title,baselineNetPence,auth.digest);
  await new PracticeActivationRepository(scoped).start(context,jobId,{commandId:randomUUID(),scenario:"no_charge"});
  const scope=(await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY created_at,id LIMIT 1",[DEMO_TENANT_ID,jobId])).rows[0].id as string;
  // Synthetic certificate image using the existing valid PNG fixture helper.

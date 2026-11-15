@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-fc-ordinary-words-party-wait": {
+      "branches": [
+        "codex/sandbox/real-fc-ordinary-words-party-wait"
+      ],
+      "allow": [
+        "apps/web/e2e/real-fc-ordinary-words.spec.ts"
+      ]
+    }
+  }
+}

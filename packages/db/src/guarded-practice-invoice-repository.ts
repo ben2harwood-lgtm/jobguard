@@ -36,6 +36,7 @@ export class GuardedPracticeInvoiceRepository {
   }
  }
  list(...args: Parameters<PracticeInvoiceRepository["list"]>) { return this.projection().list(...args); }
+ listForJobs(...args: Parameters<PracticeInvoiceRepository["listForJobs"]>) { return this.projection().listForJobs(...args); }
  artifact(...args: Parameters<PracticeInvoiceRepository["artifact"]>) { return this.projection().artifact(...args); }
  creditView(...args: Parameters<PracticeInvoiceRepository["creditView"]>) { return this.projection().creditView(...args); }
  previewCredit(...args: Parameters<PracticeInvoiceRepository["previewCredit"]>) { return this.projection().previewCredit(...args); }

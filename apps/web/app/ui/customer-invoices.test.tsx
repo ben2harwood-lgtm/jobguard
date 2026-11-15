@@ -168,3 +168,40 @@ it("unavailable saved history clears old invoice details and disables issue",asy
  fetch.mockResolvedValue({ok:false,status:403,json:async()=>({})});window.dispatchEvent(new Event("focus"));await tick();const tree=lockRender();
  expect(renderToStaticMarkup(tree)).not.toContain("DEMO-001");expect(issueButtons(tree).every(n=>n.props.disabled)).toBe(true);
 });
+
+it("the ordinary practice issuer remains eligible with an unblocked saved account and no invoices",async()=>{
+ vi.stubGlobal("React",React);vi.stubGlobal("fetch",vi.fn().mockResolvedValue({ok:true,json:async()=>history()}));
+ render();await tick();const tree=render();
+ expect(children(tree).find(n=>n.type==="button"&&n.props.children==="Issue and simulate this invoice")!.props.disabled).toBe(false);
+});
+it("an unpaid main invoice permits a distinct, unbilled descendant without inventing payment",async()=>{
+ vi.stubGlobal("React",React);const later={...finalAccount,id:"18000000-0000-4000-8000-000000000005",sourceHash:"c".repeat(64)};
+ vi.stubGlobal("fetch",vi.fn().mockResolvedValue({ok:true,json:async()=>history([invoice])}));lockRender(later);await tick();
+ expect(issueButtons(lockRender(later)).map(n=>n.props.disabled)).toEqual([true,false]);
+ expect(renderToStaticMarkup(lockRender(later))).toContain("GBP 1,080.00");
+});
+it("unchanged locked revision explains rebuilding separately from a missing main invoice",async()=>{
+ vi.stubGlobal("React",React);vi.stubGlobal("fetch",vi.fn().mockResolvedValue({ok:true,json:async()=>history([invoice])}));
+ lockRender();await tick();expect(renderToStaticMarkup(lockRender())).toContain("still the locked account");
+});
+it("lost issue remains blocked through issuer remount and history refresh",async()=>{
+ vi.stubGlobal("React",React);vi.stubGlobal("fetch",vi.fn().mockResolvedValue({ok:true,json:async()=>history()}));
+ lockRender();await tick();window.dispatchEvent(new CustomEvent("jobguard:invoice-issue-uncertain",{detail:{jobId}}));await tick();
+ hooks.reset();lockRender();await tick();expect(issueButtons(lockRender()).every(n=>n.props.disabled)).toBe(true);
+});
+it("all saved invoice articles retain their identity and receipt controls after a supplement",async()=>{
+ vi.stubGlobal("React",React);const later={...invoice,id:"18000000-0000-4000-8000-000000000008",number:"DEMO-002"};
+ vi.stubGlobal("fetch",vi.fn().mockResolvedValue({ok:true,json:async()=>history([invoice,later])}));render();await tick();
+ const articles=children(render()).filter(n=>n.type==="article");expect(articles.map(n=>n.props.id)).toEqual([`invoice-${invoice.id}`,`invoice-${later.id}`]);
+});
+
+it("STALE_REVISION explains reloading and rebuilding the saved account after an ordinary issue refusal",async()=>{
+ vi.stubGlobal("React",React);
+ const fetch=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>history()})
+  .mockResolvedValueOnce({ok:false,status:409,json:async()=>({code:"STALE_REVISION"})});
+ vi.stubGlobal("fetch",fetch);render();await tick();
+ const button=children(render()).find(n=>n.type==="button"&&n.props.children==="Issue and simulate this invoice")!;
+ (button.props.onClick as ()=>void)();await tick();
+ expect(children(render()).find(n=>n.props.role==="alert")!.props).toMatchObject({"data-error-code":"STALE_REVISION",children:"The final account changed. Please reload and rebuild the saved account before issuing this invoice."});
+ expect(fetch.mock.calls.filter(call=>call[1]?.method==="POST")).toHaveLength(1);
+});

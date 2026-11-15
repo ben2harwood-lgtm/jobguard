@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-tour-one-saved-job-now": {
+      "branches": [
+        "codex/sandbox/real-tour-one-saved-job-now"
+      ],
+      "note": "RED: one captured private practice job by default; explicit prepared alternative; parties-first sending and cancellable viewer presentation. No migrations.",
+      "allow": [
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough-pace.test.ts",
+        "apps/web/app/ui/walkthrough/walkthrough.test.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough.tsx",
+        "apps/web/e2e/WALK-3.spec.ts",
+        "apps/web/e2e/real-tour-one-saved-job-now.spec.ts"
+      ]
+    }
+  }
+}

@@ -36,7 +36,7 @@ export function ShadowSavedReport({ report }: { report: ShadowReport }) {
   {report.assessments && <section><h3>Saved fee calculations</h3><p>The latest saved calculation for each missed extra and bill item. These examples have not been approved and do not charge a fee. Undoing a payment requires a new calculation.</p>
    <ul>{report.assessments.map(({ assessment: a, illustrationAsAssessed: illustration }) => <li key={a.assessmentId}>Revision {a.revision} · {a.assessmentOutcome} · example calculation: recovered {illustration.display.recovered ?? "See the linked record for the exact amount"}, proposed fee {illustration.display.fee}, yours {illustration.display.yoursBeforeVatAndTax ?? "See the linked record for the exact amount"} before VAT and tax
     <a href={`/api/jobs/${report.jobId}/success-fee-attribution`}> View the records behind this calculation {a.assessmentId}</a></li>)}</ul></section>}
-  <p>Supporting evidence packs: {report.status === "complete" ? "an approved pack proves each extra's source chain" : "not all approved yet"}.</p>
+  <p>Supporting evidence packs: {report.status === "complete" ? "approved packs are saved with records linked to each extra" : "not all approved yet"}.</p>
   <p>Job value report: {report.value.status}{report.value.status === "incomplete" ? "; supporting records are not ready yet" : "; figures and supporting records saved"}.</p>
   <p><a href={`/api/jobs/${report.jobId}/shadow-demo`}>View the saved records behind this report</a></p>
  </section>;
@@ -106,9 +106,9 @@ export function ShadowJourney() {
    <li><p>The £3,200 of extras you logged plus £400 added at review total £3,600, with £0 recovery fee. Open the evidence pack and value report to check the records behind each figure.</p></li>
   </ol>
   <p><a href="/classic">Open Jobs and start the safe practice demo</a></p>
-  <button disabled={busy} onClick={() => void start()} aria-label="Create or recover the J3 capture">Create or resume the £30,000 practice job</button>
+  <button disabled={busy} onClick={() => void start()}>Create or resume the £30,000 practice job</button>
   <form onSubmit={event => void load(event)}><label>Saved job reference<input value={jobId} disabled={busy} onChange={event => { setJobId(event.target.value); setReport(null); }}/></label>
-   <button disabled={busy} type="submit" aria-label="Load saved J3 evidence">Load this job’s saved results</button></form>
+   <button disabled={busy} type="submit">Load this job’s saved results</button></form>
   {jobId && z.string().uuid().safeParse(jobId).success && <p><a href={`/jobs/${jobId}`} aria-label="Continue this job through its real controls">Open this job to follow the steps</a> · <a href={`/jobs/${jobId}#final-account-title`}>Final account and lock</a> · <a href={`/jobs/${jobId}/shadow-journey`}>Return to the £30,000 practice guide</a></p>}
   {error && <p role="alert">{error}</p>}
   {report && <ShadowSavedReport report={report} />}

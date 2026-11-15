@@ -57,8 +57,10 @@ ITEM: Replace shelves`);
     await expect(page.getByTestId("quote-net")).toHaveText("GBP 900.00");
     await click("Save draft revision"); await expect(page.getByTestId("quote-revision")).toHaveText("1");
     await click("Preview immutable quote"); await click("Simulate sending this quote");
-    await click("Continue fake worker");
+    await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
+    if (await page.getByTestId("quote-delivery").textContent() === "Queued — not sent") await click("Continue fake worker");
     await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
+    await expect(page.getByRole("button", { name: "Continue fake worker", exact: true })).toHaveCount(0);
     await click("Record practice acceptance"); await click("Start this practice job");
     await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
     // Reopen the saved job to load the site-work and Final Check panels, rather
@@ -99,9 +101,15 @@ ITEM: Replace shelves`);
     const checkPanel = page.getByTestId("final-check-reveal");
     await expect(checkPanel).toHaveAttribute("aria-busy", "false");
     const readCheck = async () => {
+      // Poll the snapshot loaded by the screen. A second API read can observe
+      // worker completion after the screen has already loaded a pending result.
+      const loaded = page.waitForResponse(response => response.url().endsWith(`/api/jobs/${jobId}/final-check`) && response.request().method() === "GET");
       await click("Load the saved final check");
+      const response = await loaded;
+      expect(response.ok()).toBe(true);
+      const saved = await response.json();
       await expect(checkPanel).toHaveAttribute("aria-busy", "false");
-      return (await (await page.request.get(`/api/jobs/${jobId}/final-check`)).json()).state as string;
+      return saved.state as string;
     };
     const initialCheckState = await readCheck();
     expect(initialCheckState, "Failed source processing must stop this journey; see source-diagnostics").not.toBe("failed");
