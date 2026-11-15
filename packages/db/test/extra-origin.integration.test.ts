@@ -279,8 +279,9 @@ describe("ENT-4b origin persistence", () => {
    // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
    // 13 Nov 2026: refreshed for REAL-WAYIN-LINKED-PRACTICE (0734) at the coordinator-reviewed e76c9b33 file; Ben: "Yes, land it" (card jobguard-wayin-direct-yes-2026-11-11).
    // re-pin approved by Ben, 15 Nov 2026, router chat: Yes, refresh them
+   // LP-6d R4 re-pin (contractor-repository.ts resolveSession refusal-only fallback; context-boundary.test.ts) approved by Ben, 15 Nov 2026, router chat: "Yes, update them"
    "packages/db/src/practice-session.ts": "ca87026313b99e833e4145ba853c021bb0ffbebcd76279510155cfc62a64de56",
-   "packages/db/src/contractor-repository.ts": "51d371939722dd3f0763f3c0b4861bf10848fee41564e7af99b31ff773a9ff5f",
+   "packages/db/src/contractor-repository.ts": "6c0bbd9b64a9c886b3ad08e8956803bad100ea31c2ca5ca6b367e46d59d55e3d",
    "packages/db/src/contractor-party-repository.ts": "93729040b706e520f24e757d14ef9c8e78fe32c835071aa05a2f421ec3bd11bd",
    // 15 Nov 2026 catch-up to main (router): each pin above is one side's approved value (each file changed on one side only).
    // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
@@ -293,7 +294,7 @@ describe("ENT-4b origin persistence", () => {
    // Ben 6 Nov router-chat "yes": exactly the emergency-notice and retention-timer constructor sites.
    // Hold: break-glass identity design goes to Ben before real data.
    // Scanner bytes change only for the renewed caller review citation above.
-   "apps/api/src/auth/context-boundary.test.ts": "cb340ddf7c231aa395f004ac993332eacf2cce2445df870d5b79869e224455b1"
+   "apps/api/src/auth/context-boundary.test.ts": "63d38a478e5133df000601640c1cc08061c4927da16d2d83a1af1cb7e5f86a37"
   };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });
