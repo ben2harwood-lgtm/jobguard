@@ -47,13 +47,7 @@ export function IdentitySignIn({ embedded = false }: { embedded?: boolean }) {
       const response=await fetch(`/api/auth/${verify?"verify":"request"}`,{method:"POST",headers:{"content-type":"application/json",...(session?{"x-csrf-token":session.csrfToken}:{})},body:JSON.stringify({version:verify?"identity-verify.v1":"identity-request.v1",email,purpose,...(invitationId?{invitationId}:{}),...(verify?{code}:{})})});
       const body=await response.json() as {code?:string;fixtureCode?:string};
       if(!response.ok)throw new Error(body.code??"IDENTITY_UNAVAILABLE");
-      if(verify){const current=await fetch("/api/auth/session",{cache:"no-store"});if(!current.ok)throw new Error("IDENTITY_UNAVAILABLE");const next=await current.json() as Session;setSession(next);setCode("");setFixtureCode("");setRequested(false);if(purpose==="invitation"){setAccepted(!session?"new":session.principal.id===next.principal.id?"added":"switched");history.replaceState(null,"","/sign-in");}else if(!embedded){
-        // Signing in for customer-link authorization must keep an existing anonymous
-        // job credential. Opening the linked firm remains an explicit action.
-        const practice=await fetch("/api/session",{cache:"no-store"});
-        if(practice.status===401)await enterPractice(next);
-        else if(!practice.ok)throw new Error("PRACTICE_ENTRY_REFUSED");
-      }}
+      if(verify){const current=await fetch("/api/auth/session",{cache:"no-store"});if(!current.ok)throw new Error("IDENTITY_UNAVAILABLE");const next=await current.json() as Session;setSession(next);setCode("");setFixtureCode("");setRequested(false);if(purpose==="invitation"){setAccepted(!session?"new":session.principal.id===next.principal.id?"added":"switched");history.replaceState(null,"","/sign-in");}else if(!embedded){await enterPractice(next);}}
       else {setRequested(true);setFixtureCode(body.fixtureCode??"");}
     }catch(e){const reason=(e as Error).message;setError(reason==="PRACTICE_ENTRY_REFUSED"?"Your account is verified, but practice entry could not be confirmed. Use Open my jobs to recover your current firm. Your previous jobs have not been deleted.":reason==="INVALID_CODE"?"That code is invalid or expired. Request another code.":reason==="RATE_LIMITED"?"Please wait before requesting another code.":reason==="IDENTITY_ROUTE_BLOCKED"?"Use a supplied fictional .invalid address. Real identity email is blocked pending D04.":"Identity storage is unavailable. Your sign-in has not completed.");}
     finally{setBusy(false);}

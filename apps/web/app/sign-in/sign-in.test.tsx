@@ -131,40 +131,12 @@ function elements(node: React.ReactNode): React.ReactElement[] {
 it.each([false,true])("ordinary verification automatically enters only an eligible owner (ambiguous=%s)",async ambiguous=>{
   const next={...session,csrfToken:"fictional-csrf",memberships:ambiguous?session.memberships:owner.memberships};
   const assign=vi.fn();vi.stubGlobal("location",{assign});
-  const fetcher=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>({})}).mockResolvedValueOnce({ok:true,json:async()=>next}).mockResolvedValueOnce({ok:false,status:401}).mockResolvedValueOnce({ok:true,json:async()=>({ok:true})});
+  const fetcher=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>({})}).mockResolvedValueOnce({ok:true,json:async()=>next}).mockResolvedValueOnce({ok:true,json:async()=>({ok:true})});
   vi.stubGlobal("fetch",fetcher);
   state.values=["builder@practice.invalid","signin","","12345678","12345678",true,false,"",null,false,false,null];
   const forms=elements(IdentitySignIn({})).filter(node=>node.type==="form");
   (forms.at(-1)!.props as {onSubmit:(event:unknown)=>void}).onSubmit({preventDefault:vi.fn()});
   await new Promise(resolve=>setTimeout(resolve,0));
-  if(ambiguous){expect(fetcher).toHaveBeenCalledTimes(3);expect(assign).not.toHaveBeenCalled();expect(state.writes).toContain("Your practice firm needs exactly one current owner membership. No business has been selected.");}
-  else{expect(fetcher).toHaveBeenNthCalledWith(4,"/api/auth/practice",{method:"POST",headers:{"content-type":"application/json","x-csrf-token":"fictional-csrf"},body:JSON.stringify({version:"linked-practice-company.v1",action:"enter"})});expect(assign).toHaveBeenCalledWith("/practice-company");}
-});
-
-// MON-5 signs in to authorize a customer link for a job already captured anonymously.
-it.each([false,true])("verification preserves an existing unlinked job credential (blank=%s)",async blank=>{
-  const assign=vi.fn();vi.stubGlobal("location",{assign});
-  const fetcher=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>({})})
-    .mockResolvedValueOnce({ok:true,json:async()=>({...owner,csrfToken:"fictional-csrf"})})
-    .mockResolvedValueOnce({ok:true,json:async()=>({linkedCompany:false,blankCompany:blank})});
-  vi.stubGlobal("fetch",fetcher);
-  state.values=["builder@practice.invalid","signup","","12345678","12345678",true,false,"",null,false,false,null];
-  const forms=elements(IdentitySignIn({})).filter(node=>node.type==="form");
-  (forms.at(-1)!.props as {onSubmit:(event:unknown)=>void}).onSubmit({preventDefault:vi.fn()});
-  await vi.waitFor(()=>expect(fetcher).toHaveBeenCalledWith("/api/session",{cache:"no-store"}));
-  expect(fetcher.mock.calls.map(call=>call[0])).toEqual(["/api/auth/verify","/api/auth/session","/api/session"]);
-  expect(assign).not.toHaveBeenCalled();
-});
-
-it("practice storage failure after verification cannot replace a job credential",async()=>{
-  const assign=vi.fn();vi.stubGlobal("location",{assign});
-  const fetcher=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>({})})
-    .mockResolvedValueOnce({ok:true,json:async()=>({...owner,csrfToken:"fictional-csrf"})})
-    .mockResolvedValueOnce({ok:false,status:503});
-  vi.stubGlobal("fetch",fetcher);
-  state.values=["builder@practice.invalid","signin","","12345678","12345678",true,false,"",null,false,false,null];
-  const forms=elements(IdentitySignIn({})).filter(node=>node.type==="form");
-  (forms.at(-1)!.props as {onSubmit:(event:unknown)=>void}).onSubmit({preventDefault:vi.fn()});
-  await vi.waitFor(()=>expect(state.writes).toContain("Your account is verified, but practice entry could not be confirmed. Use Open my jobs to recover your current firm. Your previous jobs have not been deleted."));
-  expect(fetcher).toHaveBeenCalledTimes(3);expect(assign).not.toHaveBeenCalled();
+  if(ambiguous){expect(fetcher).toHaveBeenCalledTimes(2);expect(assign).not.toHaveBeenCalled();expect(state.writes).toContain("Your practice firm needs exactly one current owner membership. No business has been selected.");}
+  else{expect(fetcher).toHaveBeenNthCalledWith(3,"/api/auth/practice",{method:"POST",headers:{"content-type":"application/json","x-csrf-token":"fictional-csrf"},body:JSON.stringify({version:"linked-practice-company.v1",action:"enter"})});expect(assign).toHaveBeenCalledWith("/practice-company");}
 });

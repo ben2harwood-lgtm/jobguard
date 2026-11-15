@@ -460,20 +460,9 @@ it("obsolete fact reads are aborted when the workspace changes", async () => {
  expect(signals[1]?.aborted).toBe(false);
 });
 
-it("starts linked /jobs/new with empty own-job text and a separate example hint",()=>{
-  workspace.session.linkedCompany=true;
+it("starts /jobs/new with empty own-job text and a separate example hint",()=>{
   const html=renderToStaticMarkup(<DesignedNewJob/>);
-  delete workspace.session.linkedCompany;
   expect(html).toMatch(/<textarea[^>]*placeholder=/);
   expect(html).toMatch(/<textarea[^>]*><\/textarea>/);
   expect(html).toContain("Describe your own job. The example is a hint only.");
-});
-
-it.each([false,true])("designed new job keeps the supplied example for unlinked sessions (linked=%s)",linked=>{
-  workspace.session.linkedCompany=linked;
-  try {
-    const html=renderToStaticMarkup(<DesignedNewJob/>);
-    const text=html.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/)![1]!;
-    expect(text).toBe(linked?"":"Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
-  } finally {delete workspace.session.linkedCompany;}
 });
