@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6d-r5-mon8": {
+      "branches": ["codex/sandbox/lp-6d-r5-mon8"],
+      "note": "RED LP-6d MON-8 hold: complete the invitation issuer identity fixture; router PostgreSQL validation and independent exact-head review required.",
+      "allow": [
+        "packages/db/test/server-entitlements.integration.test.ts",
+        "config/lanes/lp-6d-r5-mon8.json"
+      ]
+    }
+  }
+}
