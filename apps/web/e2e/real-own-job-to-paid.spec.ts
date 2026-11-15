@@ -42,7 +42,7 @@ test("REAL-OWN-JOB-TO-PAID: a blank firm's own £900 job reaches its paid end re
     });
     await click("Start my own practice firm");
     await expect(page.getByTestId("designed-today")).toBeVisible();
-    await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Jobs", exact: true }).click();
+    await page.getByRole("navigation", { name: /^(Main|Mobile) navigation$/ }).getByRole("button", { name: "Jobs", exact: true }).click();
     const jobs = page.getByTestId("designed-jobs-list");
     await expect(jobs.getByText("No jobs yet", { exact: true })).toBeVisible();
     await jobs.getByRole("button", { name: "Start a new job", exact: true }).click();
