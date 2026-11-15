@@ -40,7 +40,14 @@ export class ContractorBillingRepository {
    for(const g of groups){
     const rows=g.facts;
     const valid=rows.filter(r=>r.match_valid&&!r.ambiguous);
-    let projection=deriveUnambiguousBilling(valid.map(r=>r.payload));
+    let projection:BillingProjection;
+    try{projection=deriveUnambiguousBilling(valid.map(r=>r.payload));}
+    catch(e){
+     if(!(e instanceof BillingDataError)||e.code!=="BILLING_POLICY_HELD")throw e;
+     // Policy ambiguity is a held business state. cb_derive carries the last
+     // validated amounts forward; malformed derivations still roll back.
+     projection={...deriveUnambiguousBilling([]),held:valid.map(r=>({sourceEventId:r.payload.sourceEventId,reason:"COMPOSITION_REQUIRED" as const}))};
+    }
     projection={...projection,held:[...projection.held,...rows.filter(r=>!r.match_valid||r.ambiguous).map(r=>({sourceEventId:r.payload.sourceEventId,reason:"COMPOSITION_REQUIRED" as const}))].sort((a,b)=>a.sourceEventId.localeCompare(b.sourceEventId))};
     await db.$client.query("SELECT app.cb_derive($1,$2,$3,$4,$5,$6,$7::jsonb)",[session,job,input.commandId,g.source,g.invoiceNumber,g.inputHash,canonicalJson(projection)]);
    }

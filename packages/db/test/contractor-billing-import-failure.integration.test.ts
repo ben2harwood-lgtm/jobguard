@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BillingDataError, billingImportCommandV1, billingStatusV1, deriveUnambiguousBilling, normalizeBillingStatus, type BillingStatus } from "@jobguard/core";
+import { billingImportCommandV1, billingStatusV1, deriveUnambiguousBilling, normalizeBillingStatus, type BillingStatus } from "@jobguard/core";
 import { EnterpriseFeeRepository, withTenant } from "../src/index.js";
 import { canonicalJson } from "../src/work-order-repository.js";
 import { cluster, code, world, type World } from "./contractor-billing-fixtures.js";
@@ -9,13 +9,12 @@ import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { newJob } from "./extra-approval-chain-fixtures.js";
 
 function inconsistentPayment(invoice: BillingStatus): BillingStatus {
-  const composition = structuredClone(invoice.composition)!;
-  // Still complete, arithmetically consistent and correctly matched. Only the
-  // established invoice's composition differs, which is a derivation error.
-  composition.lines[0]!.existedAt = "2026-10-01T00:00:01Z";
+  // Schema-valid, fully matched payment exceeds the invoice's outstanding
+  // balance. Unlike composition ambiguity, this is a malformed derivation.
   return billingStatusV1.parse({ ...invoice, sourceEventId: randomUUID(), factType: "paid",
-    effectiveAt: "2026-10-04T12:00:00Z", reconciliationId: randomUUID(), composition,
-    amount: { netPence: 1000, vatPence: 200, grossPence: 1200 } });
+    effectiveAt: "2026-10-04T12:00:00Z", reconciliationId: randomUUID(),
+    amount: { netPence: invoice.amount.netPence + 1, vatPence: invoice.amount.vatPence,
+      grossPence: invoice.amount.grossPence + 1 } });
 }
 
 it("schema-valid inconsistent movement throws BillingDataError rather than returning a held projection", () => {
@@ -27,7 +26,7 @@ it("schema-valid inconsistent movement throws BillingDataError rather than retur
       { externalInvoiceLineId: "order", kind: "original_order", existedAt: "2026-10-01T00:00:00Z",
         netPence: 1000, vatPence: 200, grossPence: 1200, match: null },
     ] }, explicit: null, separateInvoice: false, lineAdjustments: [] });
-  expect(() => deriveUnambiguousBilling([invoice, inconsistentPayment(invoice)])).toThrow(BillingDataError);
+  expect(() => deriveUnambiguousBilling([invoice, inconsistentPayment(invoice)])).toThrowError("BILLING_INVALID");
 });
 
 describe("LATER-SAFETY-152 real PostgreSQL atomic import failure", () => {
@@ -83,7 +82,7 @@ describe("LATER-SAFETY-152 real PostgreSQL atomic import failure", () => {
           [w.session, w.s.jobId, parsed.commandId, g.source, g.invoiceNumber, g.inputHash, canonicalJson(projection)]);
         derived.push(g.invoiceNumber);
       }
-    })).rejects.toMatchObject({ name: "BillingDataError", code: "BILLING_POLICY_HELD" });
+    })).rejects.toMatchObject({ name: "BillingDataError", code: "BILLING_INVALID" });
     expect(derived).toEqual(expectedGroups.slice(0, -1));
   }
 
@@ -138,13 +137,38 @@ describe("LATER-SAFETY-152 real PostgreSQL atomic import failure", () => {
     expect(await snapshot(w)).toEqual(before);
     expect(await code(w.repo.import(w.ctx, w.session, w.s.jobId, command))).toBe("BILLING_INVALID");
     expect(await snapshot(w)).toEqual(before);
-    const corrected = { ...command, events: [ordinary, { ...bad, composition: invoice.composition }] };
+    const corrected = { ...command, events: [ordinary, { ...bad, amount: { netPence: 1000, vatPence: 200, grossPence: 1200 } }] };
     const result = await w.repo.import(w.ctx, w.session, w.s.jobId, corrected), after = await snapshot(w);
     expect(await w.repo.import(w.ctx, w.session, w.s.jobId, corrected)).toEqual(result);
     expect(await snapshot(w)).toEqual(after);
     expect(await code(w.repo.import(w.ctx, w.session, w.s.jobId, { ...corrected, transport: "csv" }))).toBe("BILLING_CONFLICT");
     expect(await snapshot(w)).toEqual(after);
     expect((await w.repo.read(w.ctx, w.session, w.s.jobId)).invoices).toHaveLength(2);
+  });
+
+  it("keeps a policy-held payment held while preserving the last valid projection", async () => {
+    const { w, invoice } = await setupPaid();
+    const before = (await w.repo.read(w.ctx, w.session, w.s.jobId)).invoices[0]!;
+    const composition = structuredClone(invoice.composition)!;
+    composition.lines[0]!.existedAt = "2026-10-01T00:00:01Z";
+    const heldPayment = billingStatusV1.parse(w.event("paid", { invoiceNumber: invoice.invoiceNumber,
+      effectiveAt: "2026-10-04T12:00:00Z", reconciliationId: randomUUID(), composition,
+      amount: { netPence: 1000, vatPence: 200, grossPence: 1200 } }));
+    const priorPayment = (await c.admin.query("SELECT payload FROM app.billing_fact WHERE tenant_id=$1 AND payload->>'factType'='paid'", [w.w.p.tenantId])).rows[0].payload as BillingStatus;
+    expect(() => deriveUnambiguousBilling([invoice, priorPayment, heldPayment])).toThrowError("BILLING_POLICY_HELD");
+    const command = w.importInput([heldPayment]);
+    const result = await w.repo.import(w.ctx, w.session, w.s.jobId, command);
+    const after = await w.repo.read(w.ctx, w.session, w.s.jobId), current = after.invoices[0]!;
+    expect(current.runId).not.toBe(before.runId);
+    expect(current.projection).toEqual({ ...before.projection, held: [invoice, priorPayment, heldPayment]
+      .map(e => ({ sourceEventId: e.sourceEventId, reason: "COMPOSITION_REQUIRED" }))
+      .sort((a, b) => a.sourceEventId.localeCompare(b.sourceEventId)) });
+    expect(current.projection.totals.matchedExtraNet).toEqual({ numerator: "250000", denominator: "31" });
+    const fact = (await c.admin.query("SELECT id FROM app.billing_fact WHERE tenant_id=$1 AND source_event_id=$2", [w.w.p.tenantId, heldPayment.sourceEventId])).rows[0];
+    expect(after.quarantine).toContainEqual({ fact_id: fact.id, reason: "COMPOSITION_REQUIRED" });
+    const saved = await snapshot(w);
+    expect(await w.repo.import(w.ctx, w.session, w.s.jobId, command)).toEqual(result);
+    expect(await snapshot(w)).toEqual(saved);
   });
 
   it("keeps a genuinely empty first invoice, missing prerequisites, ambiguous and quarantined facts successful", async () => {
@@ -185,7 +209,7 @@ describe("LATER-SAFETY-152 real PostgreSQL atomic import failure", () => {
     await c.admin.query(`INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at)
       VALUES($1,$2,$3,$4,$5,clock_timestamp(),clock_timestamp()+interval '1 hour')`,
       [supervisorSession, w.w.p.tenantId, supervisor.membershipId, supervisor.identityUserId, digestOf(supervisorSession)]);
-    const valid = w.importInput([{ ...inconsistentPayment(invoice), composition: invoice.composition }]);
+    const valid = w.importInput([{ ...inconsistentPayment(invoice), amount: { netPence: 1000, vatPence: 200, grossPence: 1200 } }]);
     expect(billingImportCommandV1.safeParse(valid).success).toBe(true);
     const before = await snapshot(w), foreignBefore = await snapshot(foreign);
     expect(await code(w.repo.import(w.ctx, supervisorSession, w.s.jobId, valid))).toBe("BILLING_FORBIDDEN");
