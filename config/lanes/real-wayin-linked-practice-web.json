@@ -25,7 +25,11 @@
         "apps/web/app/ui/jobguard-app.tsx",
         "apps/web/app/ui/jobguard-linked-entry.test.tsx",
         "apps/web/e2e/real-gap-firm-onboarding.spec.ts",
-        "apps/web/e2e/real-wayin-linked-practice.spec.ts"
+        "apps/web/e2e/real-wayin-linked-practice.spec.ts",
+        "apps/web/e2e/M0-6L.spec.ts",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/api/session/route.ts",
+        "apps/web/app/api/session/route.test.ts"
       ]
     }
   }

@@ -48,5 +48,5 @@ export async function enforcePracticePair(pool: Pool, token: string | undefined,
   const jar = await cookies();
   // Linked authentication returns the canonical namespace digest, never the credential digest.
   const linked = !!token && auth.digest !== createHash("sha256").update(token).digest("hex");
-  if (linked || jar.get("jobguard_session") || jar.get(pairingCookie)) await authenticateLinkedPractice(pool, token);
+  if (linked || jar.get(pairingCookie)) await authenticateLinkedPractice(pool, token);
 }

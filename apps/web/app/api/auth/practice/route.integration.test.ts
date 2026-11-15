@@ -11,6 +11,7 @@ vi.mock("next/headers",()=>({cookies:async()=>({get:(key:string)=>plumbing.jar.h
 import { POST } from "./route";
 import { POST as verify } from "../verify/route";
 import { POST as signout } from "../signout/route";
+import { POST as anonymousSession } from "../../session/route";
 import { GET as sessionRoute } from "../../session/route";
 import { POST as anonymousEntry } from "../../practice-company/route";
 import { identityApplication, closeIdentityApplication } from "../../../lib/identity-server";
@@ -81,10 +82,12 @@ it("foreign cookies, wrong-parent same-firm credentials and missing/forged recei
     use(a.jar);plumbing.jar.set("jg_session",cookie);plumbing.jar.set("jobguard_session",other.parent);
     await expect(syntheticWorkspace()).rejects.toThrow("UNAUTHENTICATED");expect((await sessionRoute()).status).toBe(401);
   }
+  expect(await counts()).toEqual(before);
   const device=await owner(o.email,"signin"),second=await linked(device);
+  const afterDevice=await counts();
   use(a.jar);plumbing.jar.set("jg_session",second.token);await expect(syntheticWorkspace()).rejects.toThrow("UNAUTHENTICATED");expect((await sessionRoute()).status).toBe(401);
   for(const receipt of [undefined,"v1."+"0".repeat(64)]) {use(a.jar);if(receipt)plumbing.jar.set(pairingCookie,receipt);else plumbing.jar.delete(pairingCookie);await expect(syntheticWorkspace()).rejects.toThrow("UNAUTHENTICATED");expect((await sessionRoute()).status).toBe(401);}
-  expect(await counts()).toEqual(before);
+  expect(await counts()).toEqual(afterDevice);
   await expect(authorizePracticeJob(c.runtime,b.token,id)).rejects.toThrow("NOT_FOUND");
   // Explicit entry replaces unrelated cookies; it cannot adopt the unrelated jobs.
   plumbing.jar.set("jobguard_session",other.parent);plumbing.jar.set("jg_session",a.token);
@@ -140,4 +143,19 @@ it("sign-out failure retains credentials for retry; successful revocation invali
   } finally {await c.admin.query("ALTER TABLE identity.unavailable_security_event RENAME TO security_event");}
   const response=await signout(request("/api/auth/signout",{},o.csrf));expect(response.status).toBe(200);accept(response);expect(plumbing.jar.size).toBe(0);
   await expect(authenticatePracticeSession(c.runtime,a.token)).rejects.toThrow("UNAUTHENTICATED");
+});
+
+it("explicit anonymous examples replace a linked receipt while preserving identity and linked jobs for re-entry",async()=>{
+  const o=await owner(),a=await linked(o),id=await job(a);
+  const response=await anonymousSession(request("/api/session"));
+  expect(response.status).toBe(200);accept(response);
+  expect(plumbing.jar.get("jobguard_session")).toBe(o.parent);
+  expect(plumbing.jar.has(pairingCookie)).toBe(false);
+  const anonymous=await authenticatePracticeSession(c.runtime,plumbing.jar.get("jg_session"));
+  expect(anonymous.digest).not.toBe(a.auth.digest);
+  expect((await sessionRoute()).status).toBe(200);
+  await expect(authorizePracticeJob(c.runtime,plumbing.jar.get("jg_session"),id)).rejects.toThrow("NOT_FOUND");
+  const recovered=await linked(o);
+  expect(recovered.auth.digest).toBe(a.auth.digest);
+  await expect(authorizePracticeJob(c.runtime,recovered.token,id)).resolves.toBeDefined();
 });

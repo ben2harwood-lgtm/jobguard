@@ -25,3 +25,19 @@ it("linked refusal displays recovery instead of an empty firm or a reset retry",
   expect(html).toContain("A reset will not be repeated.");
   expect(html).not.toContain("Ready for your first job");expect(html).not.toContain("Start the demo");
 });
+
+it.each(["Fictional Repairs Ltd", null])("reads the linked trading name through the identity-authorized route (%s)",async name=>{
+  const session={version:1,principal:{displayName:"Practice builder"},blankCompany:true,tenants:[{id:"10000000-0000-4000-8000-000000000001",name:"Builder's practice firm"}]};
+  const fetcher=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>session}).mockResolvedValueOnce({ok:true,json:async()=>({profile:name?{version:"firm-profile.v1",tradingName:name}:null})});
+  vi.stubGlobal("fetch",fetcher);
+  renderToStaticMarkup(<JobGuardApp blankPractice linkedPractice practiceFirmLabel="Fictional membership"/>);
+  await f.effects[0]!();await new Promise(resolve=>setTimeout(resolve,0));
+  expect(fetcher.mock.calls.map(call=>call[0])).toEqual(["/api/session","/api/firm-profile"]);
+  expect(f.writes).toContainEqual({...session,tenants:[{...session.tenants[0],name:name??"Fictional membership"}]});
+});
+it("a refused identity profile read cannot display a linked firm",async()=>{
+  vi.stubGlobal("fetch",vi.fn().mockResolvedValueOnce({ok:true,json:async()=>({version:1,principal:{displayName:"Practice builder"},blankCompany:true,tenants:[]})}).mockResolvedValueOnce({ok:false,json:async()=>({code:"UNAUTHENTICATED"})}));
+  renderToStaticMarkup(<JobGuardApp blankPractice linkedPractice/>);
+  await f.effects[0]!();await new Promise(resolve=>setTimeout(resolve,0));
+  expect(f.writes).toContain(null);expect(f.writes).not.toContainEqual(expect.objectContaining({blankCompany:true}));
+});

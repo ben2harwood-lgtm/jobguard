@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { authenticatePracticeSession, FirmProfileRepository } from "@jobguard/db";
+import { authenticatePracticeSession } from "@jobguard/db";
 import { JobGuardApp } from "../ui/jobguard-app";
 import { IdentitySignIn } from "../sign-in/sign-in";
 import { practiceFirmName } from "../lib/contracts";
@@ -10,11 +10,8 @@ export default async function PracticeCompanyPage({ searchParams }: { searchPara
   const jar = await cookies(), token = jar.get("jg_session")?.value;
   try {
     if (jar.get("jobguard_session") || jar.get(pairingCookie)) {
-      const { application, session } = await authenticateLinkedPractice(syntheticPool(), token);
-      const context = await application.context({ sessionToken: jar.get("jobguard_session")!.value,
-        requestedTenantId: session.memberships[0]!.tenantId, csrfToken: session.csrfToken, origin: application.allowedOrigin });
-      const profile = await new FirmProfileRepository(syntheticPool()).read(context);
-      return <><IdentitySignIn embedded/><JobGuardApp blankPractice linkedPractice practiceFirmLabel={profile.profile?.tradingName || session.memberships[0]!.name}/></>;
+      const { session } = await authenticateLinkedPractice(syntheticPool(), token);
+      return <><IdentitySignIn embedded/><JobGuardApp blankPractice linkedPractice practiceFirmLabel={session.memberships[0]!.name}/></>;
     }
     if (token) await enforcePracticePair(syntheticPool(), token, await authenticatePracticeSession(syntheticPool(), token));
   } catch {

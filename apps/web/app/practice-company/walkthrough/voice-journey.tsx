@@ -417,7 +417,7 @@ export function VoiceJourney() {
       {error && <p role="alert">{error}</p>}
     </header>
     <div id="walk-screen" className={styles.screen} tabIndex={-1}>
-      {!tenantId ? <p role="status">Loading your private practice firm…</p> : activeJob ? report ? <ValuePage jobId={activeJob} /> : <WorkspaceShell key={`${activeJob}:${screenVersion}`} jobId={activeJob} initialPricing /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} initialText="" close={() => location.assign("/practice-company")} onCaptured={result => { rememberWalkJob("walkJob", result.jobId);
+      {!tenantId ? <p role="status">Loading your private practice firm…</p> : activeJob ? report ? <ValuePage jobId={activeJob} /> : <WorkspaceShell key={`${activeJob}:${screenVersion}`} jobId={activeJob} initialPricing /> : capture ? <ReviewProposal result={capture} back={() => location.assign("/practice-company")} /> : <WalkIt tenantId={tenantId} close={() => location.assign("/practice-company")} onCaptured={result => { rememberWalkJob("walkJob", result.jobId);
         if (result.source.kind === "browser_local_transcript") {
           const url = new URL(location.href); url.searchParams.delete("walkOwn");
           history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
