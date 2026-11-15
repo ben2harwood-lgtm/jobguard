@@ -128,13 +128,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
+    // LP-6d LP-10 sink hold: the latest body is the 4th "FUNCTION app.guard_recovery_message_sink(" in 0749 (after the earlier CREATE, ALTER and REVOKE).
+    ["app.guard_recovery_message_sink()", "0749_lp6d_remaining_routines.sql", 3],
     // 0741 recreates these exact bodies; never pin their pre-linked predecessors.
     ["app.issue_practice_session(digest text)", "0741_identity_linked_practice.sql"],
     ["app.start_blank_practice_company(digest text, previous_digest text)", "0741_identity_linked_practice.sql"],
     ["app.start_blank_practice_company_v2(new_token text, previous_token text)", "0741_identity_linked_practice.sql"],
     ["app.seed_saved_v1_sample()", "0741_identity_linked_practice.sql"],
     ["app.authenticate_practice_session(digest text, requested_tenant uuid)", "0741_identity_linked_practice.sql"],
-    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0741_identity_linked_practice.sql"],
+    ["app.lp6_session_authority(p_kind text, p_credential text, p_tenant uuid)", "0749_lp6d_remaining_routines.sql"],
     ["app.is_blank_practice_company(digest text)", "0741_identity_linked_practice.sql"],
     ["app.company_final_check_request_run(j uuid)", "0732_final_check_typed_recovery.sql"],
     ["app.company_final_check_reveal(j uuid)", "0732_final_check_typed_recovery.sql"],
@@ -263,6 +265,14 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Saved-estimate successor: retain recovery's predecessor entry above.
   const savedEstimateSql = await readFile(new URL("../migrations/0737_real_fc_revealed_estimate.sql", import.meta.url), "utf8");
   fullBodies.set("app.read_final_check_reveal(t uuid, j uuid, d text)", savedEstimateSql.split("AS $$")[1]!.split("$$;")[0]!);
+  // LP-6d (0740, the last migration) recreates its guarded routines: their exact bodies are 0740's, which
+  // already carry every listed predecessor patch (0642's xa_issue_link authority, 0728's xa_approve) plus the
+  // LP-6d binding prefix. lp6d-routines.test.ts pins each one to its latest predecessor body.
+  const lp6dSql = await readFile(new URL("../migrations/0749_lp6d_remaining_routines.sql", import.meta.url), "utf8");
+  const argNames = (args: string) => args.split(",").map(arg => arg.trim().split(/\s+/u)[0]!).filter(Boolean).join(",");
+  const lp6dBodies = new Map<string, string>();
+  for (const m of lp6dSql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu)) lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
+  const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;
   const namedAdditions = [
     "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",
     "ent3b_close_abandoned_visit",
@@ -283,6 +293,12 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);
     if (prior) {
       let definition = prior.definition;
+      const lp6dBody = lp6dBodies.get(lp6dKey(row));
+      if (lp6dBody !== undefined) {
+        // 0740 owns this routine's latest definition (some change language, e.g. contractor_session sql -> plpgsql).
+        expect(row.definition.split("$function$")[1], identity).toBe(lp6dBody);
+        continue;
+      }
       if (fullBodies.has(identity)) {
         const parts = definition.split("$function$");
         parts[1] = fullBodies.get(identity)!;
@@ -306,7 +322,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
         if (defines(text)) { sql = text; break; }
       }
       expect(sql).toBeDefined();
-      const body = fullBodies.get(identity) ?? sql!.split(new RegExp(`CREATE (?:OR REPLACE )?${create.replace(/[.()]/gu, "\\$&")}`, "u"))[1]!.split("AS $$")[1]!.split("$$;")[0];
+      const body = lp6dBodies.get(lp6dKey(row)) ?? fullBodies.get(identity) ?? sql!.split(new RegExp(`CREATE (?:OR REPLACE )?${create.replace(/[.()]/gu, "\\$&")}`, "u"))[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(row.definition.split("$function$")[1]).toBe(body);
     }
   }

@@ -5,9 +5,13 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 
 // Owner-only fictional legacy records: never seed authoritative money effects.
 export async function legacyRecoveryFixture(admin: Pool, runtime: Pool) {
-  const LEGACY_TENANT = randomUUID();
-  const LEGACY_CONTEXT = testTenantContext(LEGACY_TENANT);
+  const LEGACY_TENANT = randomUUID(), LEGACY_OWNER = randomUUID(), LEGACY_USER = randomUUID(), LEGACY_ACCOUNT = randomUUID();
+  // LP-6d: the landing commands are a made-up owner's own bound request.
+  const LEGACY_CONTEXT = testTenantContext(LEGACY_TENANT, { membershipId: LEGACY_OWNER });
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [LEGACY_TENANT]);
+  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [LEGACY_USER]);
+  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional legacy practice')", [LEGACY_ACCOUNT, LEGACY_TENANT]);
+  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [LEGACY_OWNER, LEGACY_TENANT, LEGACY_ACCOUNT, LEGACY_USER]);
   async function world(planCredit: boolean) {
     const job = randomUUID(), evidence = randomUUID(), upload = randomUUID(), activation = randomUUID(), obligation = randomUUID(), digest = planCredit ? "d" : "e";
     await admin.query(`SET session_replication_role=replica;
