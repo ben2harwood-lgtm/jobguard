@@ -29,7 +29,6 @@ ITEM: Replace shelves`);
  await expect(page.getByTestId("quote-net")).toHaveText("GBP 900.00");
  await click("Save draft revision"); await expect(page.getByTestId("quote-revision")).toHaveText("1");
  await click("Preview immutable quote"); await click("Simulate sending this quote");
- await click("Continue fake worker");
  await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
  await click("Record practice acceptance"); await click("Start this practice job");
  await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
