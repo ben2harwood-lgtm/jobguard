@@ -45,7 +45,7 @@ it("a stale linked receipt does not change the authoritative anonymous demo path
   const token = randomUUID();
   f.jar.set("jobguard_session", "fictional-owner"); f.jar.set("jg_practice_pair", "stale");
   f.query.mockResolvedValue({rows:[{linked:false}]});
-  await enforcePracticePair(pool, token);
+  await expect(enforcePracticePair(pool, token)).resolves.toBe(false);
   expect(f.session).not.toHaveBeenCalled(); expect(f.practice).not.toHaveBeenCalled();
 });
 
@@ -77,7 +77,7 @@ it("checks the signed receipt and live identity for a linked marker", async () =
   f.jar.set(pairingCookie,practicePairReceipt(identity,token,secret));
   f.session.mockResolvedValue({memberships:[{role:"owner"}]});
   f.practice.mockResolvedValue({digest:"canonical-linked-namespace"});
-  await enforcePracticePair(pool,token);
+  await expect(enforcePracticePair(pool,token)).resolves.toBe(true);
   expect(f.session).toHaveBeenCalledWith(identity);
   expect(f.practice).toHaveBeenCalledWith(pool,token);
 });

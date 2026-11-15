@@ -51,4 +51,5 @@ export async function enforcePracticePair(pool: Pool, token: string | undefined)
   const result = await pool.query("SELECT app.is_linked_practice_session($1) linked", [createHash("sha256").update(token).digest("hex")]);
   const linked = z.boolean().parse(result.rows[0]?.linked);
   if (linked) await authenticateLinkedPractice(pool, token);
+  return linked;
 }

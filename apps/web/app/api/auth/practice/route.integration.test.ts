@@ -13,6 +13,7 @@ import { POST as verify } from "../verify/route";
 import { POST as signout } from "../signout/route";
 import { POST as anonymousSession } from "../../session/route";
 import { GET as sessionRoute } from "../../session/route";
+import { POST as evaluateDecisions } from "../../decisions/route";
 import { POST as anonymousEntry } from "../../practice-company/route";
 import { identityApplication, closeIdentityApplication } from "../../../lib/identity-server";
 import { syntheticWorkspace, closeSyntheticPool } from "../../../lib/synthetic-server";
@@ -76,6 +77,20 @@ it("first entry, lost entry reply, retry and second device seed zero jobs and re
   const id=await job(first);await expect(authorizePracticeJob(c.runtime,second.token,id)).resolves.toBeDefined();
   expect((await syntheticWorkspace()).blankCompany).toBe(true);
   await expect(authorizePracticeJob(c.runtime,second.token,id)).resolves.toBeDefined();
+});
+it("a nonblank linked workspace keeps credential tenant metadata and refuses a mismatched command tenant", async () => {
+  const o=await owner(),a=await linked(o),id=await job(a);
+  // Exercise the branch used after a chooser launch without changing the credential.
+  await c.admin.query("DELETE FROM control_plane.blank_practice_session WHERE token_digest=$1",[a.auth.digest]);
+  const workspace=await syntheticWorkspace();
+  expect(workspace.blankCompany).toBe(false);
+  expect(workspace.tenants).toEqual([{id:a.auth.context.tenantId,name:"Builder's practice firm"}]);
+  const response=await sessionRoute();
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({tenants:workspace.tenants,linkedCompany:true});
+  const mismatch=await evaluateDecisions(request("/api/decisions",{version:"finding-evaluation-command.v1",commandId:randomUUID(),tenantId:randomUUID(),jobId:id}));
+  expect(mismatch.status).toBe(404);
+  expect(await mismatch.json()).toEqual({code:"NOT_FOUND"});
 });
 it("foreign cookies, wrong-parent same-firm credentials and missing/forged receipts cannot show linked jobs",async()=>{
   const o=await owner(),a=await linked(o),id=await job(a),other=await owner(),b=await linked(other);
@@ -157,6 +172,7 @@ it("explicit anonymous examples replace a linked receipt while preserving identi
   expect((await c.runtime.query("SELECT app.is_linked_practice_session($1) linked",[digest(plumbing.jar.get("jg_session")!)])).rows[0].linked).toBe(false);
   expect(anonymous.digest).not.toBe(a.auth.digest);
   expect((await sessionRoute()).status).toBe(200);
+  expect(await (await sessionRoute()).json()).toMatchObject({linkedCompany:false});
   // The SQL marker, rather than a leftover receipt, selects the anonymous path.
   plumbing.jar.set(pairingCookie,"stale-linked-receipt");
   expect((await sessionRoute()).status).toBe(200);

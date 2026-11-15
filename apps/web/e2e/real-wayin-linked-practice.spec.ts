@@ -81,7 +81,7 @@ test("fictional sign-in opens the same own practice firm without the classic det
     // A switched parent with stale practice cookies must show recovery, not an empty firm.
     const otherIdentity=(await stranger.cookies()).find(c=>c.name==="jobguard_session")!;
     await fresh.addCookies([otherIdentity]);await freshPage.goto("/practice-company?name=Forged");
-    await expect(freshPage.getByRole("alert")).toContainText("Your previous jobs have not been deleted");await expect(freshPage.getByRole("heading",{name:"Ready for your first job",exact:true})).toHaveCount(0);
+    await expect(freshPage.getByRole("alert").filter({ hasText: "Your previous jobs have not been deleted" })).toContainText("Your previous jobs have not been deleted");await expect(freshPage.getByRole("heading",{name:"Ready for your first job",exact:true})).toHaveCount(0);
   } finally{await fresh.close();await second.close();await stranger.close();await anonymous.close();}
 });
 
