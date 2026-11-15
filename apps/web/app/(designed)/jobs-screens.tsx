@@ -56,7 +56,7 @@ function NewJob({ workspace }: { workspace: Workspace }) {
   const router = useRouter();
   return <Shell workspace={workspace} title="Start a new job." subtitle="Describe the work in your own words. JobGuard makes a draft for you to check — nothing is sent yet." active="jobs">
     <Head kicker="NEW JOB" title="Describe the work" text="Type or paste what you plan to do. You can check and change everything before a quote."/>
-    <Legacy label="Start a new job" cards><WalkIt mode="own" tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/></Legacy>
+    <Legacy label="Start a new job" cards><WalkIt mode={workspace.session.linkedCompany?"own":"example"} tenantId={workspace.tenantId} close={() => router.push("/jobs")} reviewHref={id => `/jobs/${id}/work`}/></Legacy>
   </Shell>;
 }
 

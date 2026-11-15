@@ -41,3 +41,11 @@ it("a refused identity profile read cannot display a linked firm",async()=>{
   await f.effects[0]!();await new Promise(resolve=>setTimeout(resolve,0));
   expect(f.writes).toContain(null);expect(f.writes).not.toContainEqual(expect.objectContaining({blankCompany:true}));
 });
+
+it.each([false,true])("blank firm capture uses empty input only for linked practice (linked=%s)",linked=>{
+  const session={version:1,principal:{displayName:"Practice builder"},blankCompany:true,tenants:[{id:"tenant",name:"Practice firm"}]};
+  f.values=[session,false,"tenant",[],{mandatory:0,advisory:0,pending:0},false,null,"",true,false,false,false,false,false,false,null,false,false];
+  const html=renderToStaticMarkup(<JobGuardApp blankPractice linkedPractice={linked}/>);
+  const text=html.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/)![1]!;
+  expect(text).toBe(linked?"":"Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
+});
