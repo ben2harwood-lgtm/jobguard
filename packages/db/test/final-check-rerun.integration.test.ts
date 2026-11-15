@@ -111,6 +111,8 @@ it('rolled-back mutations prove the no-longer-verifies predicate and predecessor
  const db=await f.admin.connect();
  try{
   await db.query('BEGIN');await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+  // LP-6d: the scratch mutation runs inside the practice owner's own bound request.
+  await db.query("SELECT app.bind_request('practice',$1,$2)",[a.digest,a.tenantId]);
   const original=(await db.query("SELECT pg_get_functiondef('app.require_final_check_rerun(uuid,uuid,uuid)'::regprocedure) body")).rows[0].body as string;
   const anchor="IF failure IS DISTINCT FROM 'FINAL_CHECK_INPUT_UNAVAILABLE' THEN RAISE EXCEPTION 'FINAL_CHECK_SOURCE_CHANGED'; END IF;";
   expect(original.split(anchor)).toHaveLength(2);await db.query(original.replace(anchor,''));

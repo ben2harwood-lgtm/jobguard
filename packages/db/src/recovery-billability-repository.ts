@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { approveBillability, reviewBillability, MAX_MONEY_PENCE, type RecoveryBillabilityApproval, type RecoveryBillabilityReview } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 
 const id = z.string().uuid().refine(value => value === value.toLowerCase());
 const base = { version: z.literal("recovery-billability-command.v1"), commandId: id, caseId: id, workId: id, lineId: id, expectedCaseRevision: z.number().int().positive().safe() };
@@ -36,6 +37,11 @@ export class RecoveryBillabilityRepository {
     if (!parsed.success) throw new Error("INVALID_BILLABILITY_INPUT");
     const command = parsed.data, job = id.parse(jobId);
     return withTenant(this.pool, context, async db => {
+      // Bind the command's own credential, including the separate owner's real
+      // session for approval. The helper rejects any conflicting existing binding.
+      await db.$client.query("SELECT app.bind_request($1, $2, $3)", [
+        command.action === "review" ? "practice" : "real", sessionDigest, context.tenantId,
+      ]);
       const invoke = async (result: Result | null): Promise<Prepared> => (await db.$client.query<{ result: Prepared }>(
         "SELECT app.recovery_billability($1,$2,$3::jsonb,$4::jsonb) result", [job, sessionDigest, command, result],
       )).rows[0]!.result;
@@ -51,6 +57,9 @@ export class RecoveryBillabilityRepository {
           "constraint" in error && error.constraint === "billability_one_line_approval") {
         throw new Error("BILLABILITY_LINE_ALREADY_APPROVED");
       }
+      // LP-6d: an unbound or mismatched request (for example another tenant's context) is refused as forbidden.
+      if (error instanceof RequestBindingRefusedError || (typeof error === "object" && error !== null && "code" in error && error.code === "42501"
+        && "message" in error && error.message === "REQUEST_BINDING_REFUSED")) throw new Error("BILLABILITY_FORBIDDEN");
       throw error;
     });
   }
