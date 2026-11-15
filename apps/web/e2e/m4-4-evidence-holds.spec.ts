@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { randomUUID, createHash, createHmac } from "node:crypto";
+import { randomBytes, randomUUID, createHash, createHmac } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Pool } from "pg";
@@ -28,7 +28,9 @@ test("owners request holds, see stored applied states, and a different person re
       await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
       await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [members[n], tenant, account, user]);
       const digest = createHmac("sha256", E2E_AUTH_CODE_SECRET).update(`session:${identityTokens[n]}`).digest("hex");
-      await admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'synthetic-csrf',clock_timestamp()+interval '1 day','synthetic_demo')", [randomUUID(), user, digest]);
+      // Match the real provider: both identity session/context schemas require >=24 characters.
+      const csrfToken = randomBytes(24).toString("base64url");
+      await admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,$4,clock_timestamp()+interval '1 day','synthetic_demo')", [randomUUID(), user, digest, csrfToken]);
       await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, tenant, members[n]]);
       await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`hold-${user}@fictional.invalid`, user]);
       await admin.query(`INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at)
