@@ -16,8 +16,7 @@ async function savedTitle(page: Page) {
 }
 
 async function draft(page: Page, text: string) {
-  await page.goto("/");
-  await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+  await page.goto("/practice-company");
   await expect(page.getByRole("heading", { name: "Ready for your first job", exact: true })).toBeVisible();
   const jobs = await page.request.get(`/api/jobs?tenantId=${await page.getByLabel("Select workspace").inputValue()}`);
   expect(jobs.ok()).toBe(true);

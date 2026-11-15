@@ -80,7 +80,7 @@ it.each(["draft", "accepted", "live"] as const)("adds the agreed line without ch
 });
 it("offers the blank practice firm first and keeps example sign-in as the secondary action", () => {
   const html = renderToStaticMarkup(<StateScreen load={{ state: "signed-out" }} retry={() => {}} title="Today"/>);
-  expect(html).toContain('class="btn primary" href="/practice-company">Start my own practice firm</a>');
+  expect(html).toContain('class="btn primary">Start my own practice firm</button>');
   expect(html).toContain('class="btn">Look around an example firm</button>');
   expect(html.indexOf("Start my own practice firm")).toBeLessThan(html.indexOf("Look around an example firm"));
   expect(html).toContain("Made-up jobs only. Nothing is sent or charged.");
