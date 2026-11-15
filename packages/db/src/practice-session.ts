@@ -17,19 +17,20 @@ export async function issuePracticeSession(pool: Pool): Promise<string> {
 export async function authenticatePracticeSession(pool: Pool, token: string | undefined, requestedTenantId?: string) {
  syntheticOnly(); const parsed=practiceSessionV1.safeParse(token);
  if(!parsed.success)throw new PracticeAccessError("UNAUTHENTICATED");
- const digest=digestToken(parsed.data);
+ const presented=digestToken(parsed.data);
  let result;
- try { result=await pool.query(requestedTenantId?"SELECT p.*, app.practice_owner_digest($1,$2) owner_digest FROM app.authenticate_practice_session($1,$2) p":"SELECT p.*, app.practice_owner_digest($1) owner_digest FROM app.authenticate_practice_session($1) p",requestedTenantId?[digest,requestedTenantId]:[digest]); } catch (error) {
+ try { result=await pool.query(requestedTenantId?"SELECT p.*, app.practice_owner_digest($1,$2) owner_digest FROM app.authenticate_practice_session($1,$2) p":"SELECT p.*, app.practice_owner_digest($1) owner_digest FROM app.authenticate_practice_session($1) p",requestedTenantId?[presented,requestedTenantId]:[presented]); } catch (error) {
   if ((error as {code?:string}).code==="28000")throw new PracticeAccessError("UNAUTHENTICATED");
   if ((error as {code?:string}).code!=="42883" ||
    !(error instanceof Error && error.message.startsWith("function app.practice_owner_digest(")))throw error;
   // Retain the supported pre-0942 anonymous upgrade path.
-  result=await pool.query(requestedTenantId?"SELECT * FROM app.authenticate_practice_session($1,$2)":"SELECT * FROM app.authenticate_practice_session($1)",requestedTenantId?[digest,requestedTenantId]:[digest]);
+  result=await pool.query(requestedTenantId?"SELECT * FROM app.authenticate_practice_session($1,$2)":"SELECT * FROM app.authenticate_practice_session($1)",requestedTenantId?[presented,requestedTenantId]:[presented]);
  }
  const row=result.rows[0];
  if(!row)throw new PracticeAccessError("UNAUTHENTICATED"); const principal=principalV1.parse(row);
- const context=verifiedTenantContextFromMembership({tenantId:principal.tenant_id,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership, {kind:"practice",credential:digest});
- return {context,digest:principal.owner_digest ?? digest,membershipId:principal.membership_id,identityUserId:principal.identity_user_id};
+ const context=verifiedTenantContextFromMembership({tenantId:principal.tenant_id,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership, {kind:"practice",credential:presented});
+ const digest = principal.owner_digest ?? presented;
+ return {context,digest,membershipId:principal.membership_id,identityUserId:principal.identity_user_id};
 }
 
 /**
