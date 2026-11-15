@@ -7848,3 +7848,101 @@ DO $$ DECLARE r record; BEGIN
 END $$;
 
 COMMIT;
+
+-- BEGIN lp-6d-lp10-recovery-sink
+BEGIN;
+-- Actor-less synthetic delivery, following lp6d_escalate_overdue_worker. The
+-- queue selects app.tenant_id: existing queue-tenant-trust named hold until LP-10
+-- supplies the dedicated worker credential. This is not a web/worker login split.
+-- Private lock copy: original minus only the request-binding prefix, drift-pinned.
+CREATE FUNCTION app.lp6d_share_sink_authorization_worker(p_tenant uuid,p_outbox uuid) RETURNS void
+ LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN
+ IF p_tenant IS NULL OR p_tenant IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN
+  RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
+ PERFORM 1 FROM app.action_outbox o JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id
+  WHERE o.tenant_id=p_tenant AND o.id=p_outbox FOR SHARE OF a;
+END $$;
+ALTER FUNCTION app.lp6d_share_sink_authorization_worker(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_share_sink_authorization_worker(uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_shadow;
+DO $$ DECLARE login record; BEGIN
+ FOR login IN SELECT rolname FROM pg_roles WHERE rolcanlogin AND NOT rolsuper LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION app.lp6d_share_sink_authorization_worker(uuid,uuid) FROM %I',login.rolname);
+ END LOOP;
+END $$;
+
+-- Rebase on the latest 0749 trigger; preserve every source, approval and case lock.
+CREATE OR REPLACE FUNCTION app.guard_recovery_message_sink() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE m app.recovery_message; s record; latest_pack integer; pack_sources jsonb;
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtext(NEW.tenant_id::text),hashtext(NEW.case_id::text));
+ PERFORM app.lock_recovery_message_sources(NEW.tenant_id);
+ SELECT * INTO m FROM app.recovery_message WHERE tenant_id=NEW.tenant_id AND id=NEW.message_id AND job_id=NEW.job_id AND case_id=NEW.case_id;
+ -- LP6D_NO_RUNTIME_AUTHORIZATION_UPDATE: a migration-owned definer takes the authorization row lock,
+ -- so this invoker needs no UPDATE grant on action_authorization. The check below re-reads the row.
+ -- Only the migration-owned actor-less worker can reach the private lock copy.
+ IF current_user='jobguard_migration' AND NOT app.lp6d_request_bound() THEN
+  PERFORM app.lp6d_share_sink_authorization_worker(NEW.tenant_id,NEW.outbox_action_id);
+ ELSE
+  PERFORM app.lp6d_share_sink_authorization(NEW.tenant_id,NEW.outbox_action_id);
+ END IF;
+ IF NOT FOUND OR NOT EXISTS (
+  SELECT 1 FROM app.recovery_message_approval ap
+  JOIN app.action_outbox o ON o.tenant_id=ap.tenant_id AND o.id=ap.outbox_action_id
+  JOIN app.action_authorization a ON a.tenant_id=o.tenant_id AND a.id=o.authorization_id
+  JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id AND r.resolution='approved'
+  JOIN app.membership mem ON mem.tenant_id=a.tenant_id AND mem.id=a.actor_membership_id AND mem.role='owner' AND mem.revoked_at IS NULL
+   AND (mem.expires_at IS NULL OR mem.expires_at>clock_timestamp())
+  WHERE ap.tenant_id=m.tenant_id AND ap.message_id=m.id AND ap.outbox_action_id=NEW.outbox_action_id
+   AND o.status='executing' AND a.revoked_at IS NULL AND a.expires_at>clock_timestamp()
+   AND m.recipient=NEW.recipient AND m.body=NEW.body AND m.content_hash=NEW.content_hash AND m.attachment_hash=NEW.attachment_hash
+  FOR SHARE OF mem,o)
+ THEN RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
+ -- M4-6-S: a reminder whose follow-up has stopped (cancelled, or its practice run archived) is never recorded as delivered.
+ IF EXISTS (SELECT 1 FROM app.recovery_follow_up_reminder l WHERE l.tenant_id=m.tenant_id AND l.message_id=m.id
+   AND app.recovery_follow_up_stop_reason(l.tenant_id,l.follow_up_id) IS NOT NULL) THEN
+  RAISE EXCEPTION 'RECOVERY_MESSAGE_CHANGED' USING ERRCODE='23514'; END IF;
+ SELECT * INTO s FROM app.recovery_message_case_snapshot(m.tenant_id,m.job_id,m.case_id);
+ IF NOT FOUND OR s.synthetic IS NOT TRUE OR s.environment<>'synthetic_demo' OR s.case_revision<>m.case_revision OR s.outstanding_pence<>m.amount_pence
+    OR app.recovery_message_source_refs(m.immutable_content) IS DISTINCT FROM s.source_refs THEN
+  RAISE EXCEPTION 'RECOVERY_MESSAGE_CHANGED' USING ERRCODE='23514'; END IF;
+ SELECT max(p.revision) INTO latest_pack FROM app.evidence_pack_revision p WHERE p.tenant_id=m.tenant_id AND p.case_id=m.case_id;
+ SELECT p.sources INTO pack_sources FROM app.evidence_pack_revision p
+  WHERE p.tenant_id=m.tenant_id AND p.job_id=m.job_id AND p.case_id=m.case_id AND p.pack_id=m.pack_id AND p.revision=m.pack_revision
+   AND p.manifest_hash=m.manifest_hash AND p.content_hash=m.attachment_hash
+   AND p.source_omissions='[]'::jsonb AND p.format='TEXT' AND p.artifact_text IS NOT NULL
+   AND encode(sha256(convert_to(p.artifact_text,'UTF8')),'hex')=p.content_hash
+   AND encode(sha256(convert_to(p.canonical_manifest,'UTF8')),'hex')=p.manifest_hash;
+ IF latest_pack IS DISTINCT FROM m.pack_revision OR pack_sources IS NULL
+    OR NOT EXISTS (SELECT 1 FROM app.evidence_pack_attachment_approval x WHERE x.tenant_id=m.tenant_id AND x.id=m.attachment_approval_id AND x.pack_id=m.pack_id
+      AND x.manifest_hash=m.manifest_hash AND x.content_hash=m.attachment_hash)
+    OR NOT app.recovery_message_proofs_current(m.tenant_id,m.job_id,pack_sources)
+    OR NOT app.recovery_message_sources_current(m.tenant_id,m.job_id,m.case_id,pack_sources) THEN
+  RAISE EXCEPTION 'RECOVERY_MESSAGE_CHANGED' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.guard_recovery_message_sink() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.guard_recovery_message_sink() FROM PUBLIC;
+
+-- Queue route takes only action identity and provider reference. All commercial
+-- fields come from the stored message/approval, never caller-supplied content.
+CREATE FUNCTION app.lp6d_recovery_message_sink_worker(p_outbox uuid,p_reference text) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid;
+BEGIN
+ IF app.lp6d_request_bound() THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
+ IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
+ EXCEPTION WHEN invalid_text_representation THEN t:=NULL; END;
+ IF t IS NULL OR p_reference IS NULL OR p_reference='' THEN RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
+ INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions)
+ SELECT gen_random_uuid(),m.tenant_id,m.job_id,m.case_id,m.id,ap.outbox_action_id,m.recipient,m.body,m.content_hash,m.attachment_hash,p_reference,'synthetic_demo',0
+ FROM app.recovery_message_approval ap JOIN app.recovery_message m ON m.tenant_id=ap.tenant_id AND m.id=ap.message_id
+ WHERE ap.tenant_id=t AND ap.outbox_action_id=p_outbox;
+ IF NOT FOUND THEN RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
+END $$;
+ALTER FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) FROM PUBLIC,jobguard_identity,jobguard_infrastructure,jobguard_shadow;
+GRANT EXECUTE ON FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) TO jobguard_runtime;
+COMMIT;
+-- END lp-6d-lp10-recovery-sink

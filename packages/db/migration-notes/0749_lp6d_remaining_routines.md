@@ -1263,3 +1263,105 @@ named files per invocation):
 READY for the router to commit and push for CI. PostgreSQL execution and exact-head
 independent RED review remain required before merge; no acceptance or live SSO
 readiness is claimed.
+
+## LP-6d LP-10 recovery-sink hold — 15 November 2026
+
+RED, NOPR build-ahead leaf `lp-6d-lp10-recovery-sink`, based on exact round-PASS
+head `4948b6a3d83244dc806be5fd729732df249df0ed`. This repairs only the actor-less
+held-open delivery transaction in recovery-messages. No contractor-session or
+practice-session authentication, binding routine, credential resolution or
+refusal-principal behavior changes. No FLAGGED: sign-in boundary changes.
+
+0749 remains last. All SQL additions are in the final bounded
+`-- BEGIN/END lp-6d-lp10-recovery-sink` block, with its own transaction following
+the original migration's COMMIT. No existing routine body is edited in place.
+
+- New `app.lp6d_recovery_message_sink_worker(uuid,text)`: migration-owned,
+  fixed-search-path definer, refuses bound requests and non-synthetic databases;
+  selects commercial fields from the stored message/approval for the queued
+  tenant and outbox identity. It does not claim or complete outbox work, create
+  authorization, or perform an external send. Classified with a Reviewed reason.
+- New private INVOKER `app.lp6d_share_sink_authorization_worker(uuid,uuid)`:
+  exact existing lock helper minus its request-binding prefix. PUBLIC, every
+  existing non-superuser login and all business roles lose direct EXECUTE.
+- Recreated `app.guard_recovery_message_sink()` from its latest 0749 body:
+  only the authorization-lock helper call changes. The unbound migration-owned
+  worker reaches the private copy; all other callers retain the guarded helper.
+  Every case/source lock, approval, expiry/revocation, amount, snapshot and pack
+  check remains. Drift and latest-definition caller-list pins cover the copy and
+  trigger; both upgrade successor checks name the final body.
+
+The same **existing queue-tenant-trust named hold** as the escalation worker
+remains: the queue selects `app.tenant_id`, rather than a dedicated worker
+credential deriving it. This change does not implement LP-10 or authorize real
+customer data. The private copy is unavailable to request callers; the worker
+port refuses a bound request. Existing authorized bound raw-sink assertions
+remain unchanged; no new request-side bypass is introduced.
+
+Only the delivery setup in the existing two-order lock test changes to call the
+worker port. All existing assertions remain. Two additional PostgreSQL cases
+cover bound-request refusal, private-helper denial, raw unbound INSERT denial,
+foreign/missing queued tenant, unchanged outbox/sink state, and refusal after an
+approved landing changes the approved amount. The original concurrency test
+still proves delivery holds the case lock until commit and landing waits.
+
+Initial review — LATER / SIMPLICITY: `app.lp6d_share_sink_authorization_worker`
+in 0749 duplicates the lock helper by design. When LP-10 supplies worker
+credentials, consolidate the two paths behind that credential boundary to
+remove duplicate-body maintenance; retain the drift pins until then.
+
+Local evidence (installed tools only; no downloads, PostgreSQL, browsers or git
+writes):
+
+- Dependency builds: `./node_modules/.bin/tsc -p packages/core/tsconfig.json`
+  and `./node_modules/.bin/tsc -p packages/storage/tsconfig.json` — PASS.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` and
+  `./node_modules/.bin/tsc -p packages/db/tsconfig.json` — PASS (typecheck/build).
+- `./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=1 test/lp6d-routines.test.ts test/lp6d-repository-context.test.ts test/migration-proof-loader.test.ts`
+  — PASS, 3 files / 134 tests. An earlier run could not import unbuilt workspace
+  dependencies; rebuilding them resolved collection without source changes.
+- `node tools/commercial-integrity-boundary.mjs` and
+  `node tools/commercial-integrity-current-source-guard.mjs` — PASS, each reports
+  94 protected roots / 0 diagnostics / 10 existing baselined unresolved cases.
+  Neither unresolved file is changed.
+- PostgreSQL discovery using `vitest list --maxWorkers=1` (three named files per
+  invocation) collected the exact counts below. Discovery did not run PG hooks.
+- Lane lint against origin/main reports inherited LP-6d paths; against the
+  issued base it refuses a HEAD/self comparison before the router's commit.
+  The leaf lane lists only this leaf's changed paths (its own path is implicit).
+  Router must rerun lane lint after committing, with LANE_BASE_REF set to the
+  round-PASS base. Do not expand the lane to include inherited changes.
+
+**Router PG step:** leave `0749_lp6d_remaining_routines.proof.json` unchanged
+here. Regenerate it from a live catalogue after stacking this leaf, limited to
+these two new functions, the sink trigger's latest body and associated ACL/call
+facts; run proof/catalogue checks against that refreshed proof. No catalogue
+execution or proof regeneration is claimed locally. Forward fix through a
+reviewed successor after installation; no destructive rollback.
+
+Run from repository root on real PostgreSQL (expected counts from collection;
+all must pass, no skips):
+
+```sh
+./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=2 test/recovery-messages.integration.test.ts test/outbox.integration.test.ts test/lp6d-routines.integration.test.ts
+# 138 passes: 108 recovery-messages + 15 outbox + 15 lp6d-routines
+./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=2 test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/recovery-follow-up.integration.test.ts
+# 82 passes: 1 migfix-7 upgrade + 1 plan-entitlement upgrade + 80 follow-up
+```
+
+Required CI must also preserve the existing recovery-* and outbox suite results
+and the whole-db baseline: this cured recovery-message file must leave the fail
+list, and nothing new may join it. Other sibling holds are not repaired here.
+Fresh catalogue proof, real lock execution, exact-head independent RED review
+and CI remain router gates. This is a code handoff, not a merge or release.
+
+- `./apps/api/node_modules/.bin/vitest run --root apps/api --maxWorkers=1 src/auth/context-boundary.test.ts`
+  — PASS, 146 tests. Initial concurrent run: 143 passed, 3 timeouts; isolated
+  rerun passed all 146 with unchanged source, assertions and timeout limits.
+- `git diff --check` — PASS. Exact lane-path equality against uncommitted
+  changes — PASS (seven explicit paths plus the implicit lane file).
+- `node --test --test-concurrency=1 tools/commercial-integrity-boundary.test.mjs tools/commercial-integrity-current-source-guard.test.mjs`
+  — PASS, 253 tests, zero skips. Initial parallel invocation had two CLI child
+  ETIMEDOUT failures; sequential rerun passed with unchanged limits/checks.
+
+READY for router commit and PostgreSQL verification; NOPR remains in force.

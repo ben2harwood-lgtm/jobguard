@@ -128,6 +128,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
+    ["app.guard_recovery_message_sink()", "0749_lp6d_remaining_routines.sql", 1],
     // 0741 recreates these exact bodies; never pin their pre-linked predecessors.
     ["app.issue_practice_session(digest text)", "0741_identity_linked_practice.sql"],
     ["app.start_blank_practice_company(digest text, previous_digest text)", "0741_identity_linked_practice.sql"],

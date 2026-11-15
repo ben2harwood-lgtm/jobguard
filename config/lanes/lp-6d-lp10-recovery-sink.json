@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-6d-lp10-recovery-sink": {
+      "branches": [
+        "codex/sandbox/lp-6d-lp10-recovery-sink"
+      ],
+      "note": "RED LP-6d LP-10 recovery-sink hold only; NOPR build-ahead; router PG proof regeneration and exact-head independent review required.",
+      "allow": [
+        "packages/db/migrations/0749_lp6d_remaining_routines.sql",
+        "packages/db/test/lp6d-routines.test.ts",
+        "packages/db/test/lp6d-runtime-classification.json",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/recovery-messages.integration.test.ts",
+        "packages/db/migration-notes/0749_lp6d_remaining_routines.md"
+      ]
+    }
+  }
+}
