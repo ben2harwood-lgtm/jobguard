@@ -31,8 +31,11 @@
         "apps/web/app/api/session/route.ts",
         "apps/web/app/api/session/route.test.ts",
         "packages/db/migrations/0744_linked_practice_marker.sql",
+        "packages/db/migrations/0750_linked_practice_marker.sql",
         "packages/db/test/migration-proofs/0744_linked_practice_marker.proof.json",
-        "packages/db/migration-notes/0744_linked_practice_marker.md"
+        "packages/db/test/migration-proofs/0750_linked_practice_marker.proof.json",
+        "packages/db/migration-notes/0744_linked_practice_marker.md",
+        "packages/db/migration-notes/0750_linked_practice_marker.md"
       ]
     }
   }
