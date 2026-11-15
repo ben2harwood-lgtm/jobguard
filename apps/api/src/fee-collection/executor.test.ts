@@ -1,8 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { describe, expect, it, vi } from "vitest";
 import { DarkFeeCollectionExecutor } from "./executor.js";
 import type { CollectionSessionContext } from "./contracts.js";
 import { fixture, ctx, id, hash } from "./test-fixture.js";
 describe("M4-12 dark card collection and shared balance reservation", () => {
+  it("signs state-only submissions as v1 and each exact webhook identity as v2", async () => {
+    const f = fixture(), sign = vi.spyOn(f.rail, "signStoreResult");
+    await f.executor.reserve(ctx, f.intent);
+    await f.executor.execute(ctx, id(10));
+    expect(JSON.parse(sign.mock.results[0]!.value.body).version).toBe("fake-fee-result.v1");
+    for (const eventId of [id(30), id(31)]) {
+      const e = f.event(id(10), "collection", eventId);
+      await f.executor.webhook(ctx, "stripe_card", e.body, e.signature);
+      const receipt = JSON.parse(sign.mock.results.at(-1)!.value.body);
+      expect(receipt).toEqual({ version: "fake-fee-result.v2", environment: "synthetic_demo",
+        tenantId: ctx.tenantId, attempt: f.book().attempts[0], event: { key: `stripe_card:${eventId}`,
+          hash: createHash("sha256").update(JSON.stringify(f.rail.verifyWebhook(e.body, e.signature))).digest("hex") } });
+    }
+    const count = sign.mock.calls.length, e = f.event(id(10), "collection", id(31));
+    await f.executor.webhook(ctx, "stripe_card", e.body, e.signature);
+    expect(sign).toHaveBeenCalledTimes(count);
+  });
   it("serializes double-clicks, changed-input replays and alternate rails against one balance", async () => {
     const f = fixture();
     const results = await Promise.all([f.executor.reserve(ctx, f.intent), f.executor.reserve(ctx, f.intent)]);

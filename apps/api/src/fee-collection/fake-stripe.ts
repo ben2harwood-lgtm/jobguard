@@ -1,6 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { FeeCollectionError, pence, type Attempt } from "./contracts.js";
+import { FeeCollectionError, pence, type FeeWebhookReceiptEvent, type Attempt } from "./contracts.js";
 import type { CollectionRail, RailEvent } from "./executor.js";
 const eventSchema = z.object({
   version: z.literal("fake-stripe-event.v1"), environment: z.literal("synthetic_demo"),
@@ -18,8 +18,9 @@ export class FakeStripeCardRail implements CollectionRail {
   definiteFailure = false;
   constructor(private readonly testSigningSecret: string) {}
   /** Signed synthetic store fixture, distinct from either provider's protocol. */
-  signStoreResult(tenantId: string, attempt: Readonly<Attempt>) {
-    const body = JSON.stringify({ version: "fake-fee-result.v1", environment: "synthetic_demo", tenantId, attempt });
+  signStoreResult(tenantId: string, attempt: Readonly<Attempt>, event?: FeeWebhookReceiptEvent) {
+    const body = JSON.stringify({ version: event ? "fake-fee-result.v2" : "fake-fee-result.v1",
+      environment: "synthetic_demo", tenantId, attempt, ...(event ? { event } : {}) });
     return { body, signature: createHmac("sha256", this.testSigningSecret).update(body).digest("hex") };
   }
   async submit(tenantId: string, attempt: Readonly<Attempt>) {
