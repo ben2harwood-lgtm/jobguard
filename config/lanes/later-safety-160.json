@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-160": {
+      "branches": ["codex/sandbox/later-safety-160"],
+      "allow": [
+        "apps/web/app/api/contractor/origin.ts",
+        "apps/web/app/api/contractor/origin.test.ts",
+        "apps/web/playwright.config.ts"
+      ]
+    }
+  }
+}
