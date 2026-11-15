@@ -183,6 +183,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.work_order_commit(actor uuid, payload jsonb)", "0676_work_order_expected_revision.sql"],
     ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0699_sync_checkpoint_bound_reader.sql"],
     ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
+    ["app.mon2_command(t uuid, digest text, command_id uuid, v jsonb)", "0744_subscription_internal_owner_guard.sql"],
     ["app.ef_prepare_statement(p_session uuid, p_command uuid, p_period text)", "0704_enterprise_fee_period_order.sql"],
     ["app.ef_post_statement(p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid)", "0704_enterprise_fee_period_order.sql"],
     ["app.accounting_export_route_read(t uuid, digest text, source text)", "0709_accounting_export_route_read_exported.sql"],
