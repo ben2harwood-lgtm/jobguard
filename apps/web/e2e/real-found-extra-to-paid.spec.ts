@@ -18,8 +18,7 @@ const scenarios = [
 for (const scenario of [...scenarios.map(s=>({...s,paid:true})),{...scenarios[0]!,paid:false}]) test(`a found own-job extra appears with its proposed price and reaches a paid supplementary invoice: ${scenario.description}, main ${scenario.paid?"paid":"unpaid"}`, async ({ page, browser }, info) => {
   let jobId="";
   if (info.project.name === "mobile-360") await page.setViewportSize({width:390,height:844});
-  await page.goto("/");
-  await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+  await page.goto("/practice-company");
   await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
 
     await click(page, "＋ Start a new job");

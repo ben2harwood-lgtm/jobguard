@@ -18,8 +18,7 @@ test("ordinary typed job retains its bill through bounded worker recovery", asyn
     installed = false;
   };
   try {
-    await page.goto("/");
-    await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+    await page.goto("/practice-company");
     await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
     await click("＋ Start a new job");
     await page.getByLabel("Work details").fill("Paint the hall, stairs and landing for Mr Example at 9 Notreal Road, two coats, woodwork in gloss, should be about 900 quid, four days.");

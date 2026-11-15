@@ -49,8 +49,7 @@ test("walk 2 saved facts select the no-extra account and paid end states", async
     return { facts, result };
   };
 
-  await page.goto("/");
-  await page.getByRole("link", { name: "Start my own practice firm", exact: true }).click();
+  await page.goto("/practice-company");
   await expect(page.getByRole("heading", { name: "Ready for your first job", exact: true })).toBeVisible();
   await click("＋ Start a new job");
   await page.getByLabel("Work details").fill("Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
