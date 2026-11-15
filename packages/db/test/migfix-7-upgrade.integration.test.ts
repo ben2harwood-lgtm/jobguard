@@ -175,7 +175,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0733_real_customer_link_own_quote.sql"],
     ["identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)", "0733_real_customer_link_own_quote.sql"],
     ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0655_emergency_token_minted.sql"],
-    ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0708_fee_result_json_errors.sql"],
+    ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0742_fee_webhook_receipt_binding.sql"],
     ["app.ch6_integrity_authority(t uuid, j uuid, digest text)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.ch6_integrity_sources(t uuid, j uuid, d text)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.ch6_record_integrity_review(t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb)", "0660_baseline_ancestry_audit_trust.sql"],

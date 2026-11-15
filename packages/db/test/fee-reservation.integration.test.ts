@@ -790,10 +790,10 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     // Reuse the real verifier and signer; make the first signed result stale.
     const sign = dd.signStoreResult.bind(dd);
     let first = true;
-    dd.signStoreResult = (tenantId, attempt) => {
-      if (!first) return sign(tenantId, attempt);
+    dd.signStoreResult = (tenantId, attempt, event) => {
+      if (!first) return sign(tenantId, attempt, event);
       first = false;
-      return sign(tenantId, { ...attempt, amountPence: 1 });
+      return sign(tenantId, { ...attempt, amountPence: 1 }, event);
     };
     // verifyWebhookBatch validates the object's known fake submission identity.
     const mandateId = id(82);
@@ -832,8 +832,8 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     // Keep batch verification real; only the first store result has a malformed body.
     const sign = dd.signStoreResult.bind(dd);
     let first = true;
-    dd.signStoreResult = (tenantId, attempt) => {
-      if (!first) return sign(tenantId, attempt);
+    dd.signStoreResult = (tenantId, attempt, event) => {
+      if (!first) return sign(tenantId, attempt, event);
       first = false;
       const body = '{"version":';
       return { body, signature: createHmac("sha256", "fake-dd-test-signing-secret").update(body).digest("hex") };
