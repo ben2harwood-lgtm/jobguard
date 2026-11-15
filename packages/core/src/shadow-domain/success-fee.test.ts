@@ -140,12 +140,68 @@ describe("SV-1 shadow domain", () => {
         const replacement = facts(id(4), 20000, "merchant_overcharge", { mode: "applied_credit", credit: { ...credit, consumedNetPence: 20000, sourceRef: "fixture://reduced-credit" }, proof: { ...q.proof, sourceRef: "fixture://reduced-proof" } });
         check(input([], [original, principal(q, "fixture://reverse", "reversal", original.sourceRef), principal(replacement, "fixture://replacement")], 3000), 0, 0, -3000);
     });
-    it("round2 re-receipt after F11 refund currently fails closed for M4-8-S", () => {
+    it("re-receipt after F11 refund restores qualifying principal", () => {
         const q = [facts(id(9), 250000, "withheld_customer_payment")];
         const original = ev(receipt(300000, [line(id(9), 250000, 300000)], "fixture://F11"), q);
         const refund = ev({ ...original.receipt, direction: "reversal", sourceRef: "fixture://refund" }, q, original.receipt.sourceRef);
         const fresh = ev({ ...original.receipt, effectiveAt: after, sourceRef: "fixture://fresh-payment" }, q);
-        expect(() => derive(input([original, refund, fresh]))).toThrow();
+        check(input([original, refund, fresh]), 250000, 25000, 25000);
+    });
+    it.each([
+        ["full reversal", [10000], 10000, 30000],
+        ["partial reversal", [4000], 4000, 24000],
+        ["repeated partial reversals", [2000, 2000], 4000, 24000]
+    ] as const)("restores current outstanding after %s", (_label, refunds, replacement, outstanding) => {
+        const qs = [facts(id(4), 30000)];
+        const original = ev(receipt(10000, [line(id(4), 30000, 30000)], "fixture://original"), qs);
+        let settled = 10000;
+        const reversals = refunds.map((amount, index) => {
+            const refund = ev({ ...receipt(amount, [line(id(4), 30000, 30000, settled)], `fixture://refund-${index}`), direction: "reversal" }, qs, original.receipt.sourceRef);
+            settled -= amount;
+            return refund;
+        });
+        const fresh = ev({ ...receipt(replacement, [line(id(4), 30000, 30000, outstanding)], "fixture://fresh"), effectiveAt: after }, qs);
+        check(input([original, ...reversals, fresh]), 10000, 1000, 1000);
+        for (const stale of [20000, outstanding - 1])
+            expect(() => derive(input([original, ...reversals, { ...fresh, receipt: { ...fresh.receipt, lines: [line(id(4), 30000, 30000, stale)] } }]))).toThrow("SOURCE_BINDING_MISMATCH");
+    });
+    it("restores the latest balance including an intervening receipt", () => {
+        const qs = [facts(id(4), 30000)];
+        const original = ev(receipt(10000, [line(id(4), 30000, 30000)], "fixture://original"), qs);
+        const intervening = ev({ ...receipt(5000, [line(id(4), 30000, 30000, 20000)], "fixture://intervening"), effectiveAt: after }, qs);
+        const refund = ev({ ...receipt(4000, [line(id(4), 30000, 30000, 10000)], "fixture://refund"), direction: "reversal" }, qs, original.receipt.sourceRef);
+        const fresh = ev({ ...receipt(4000, [line(id(4), 30000, 30000, 19000)], "fixture://fresh"), effectiveAt: after }, qs);
+        check(input([original, intervening, refund, fresh]), 15000, 1500, 1500);
+        expect(() => derive(input([original, intervening, refund, { ...fresh, receipt: { ...fresh.receipt, lines: original.receipt.lines } }]))).toThrow("SOURCE_BINDING_MISMATCH");
+    });
+    it("restores pro-rata fractional balances without rounding", () => {
+        const qs = [facts(id(4), 30000)];
+        const lines = [line(id(4), 30000, 30000), line("baseline", 20001, 20001)];
+        const original = ev(receipt(10000, lines, "fixture://original"), qs);
+        const first = derive(input([original]));
+        const settled = lines.map(l => ({ ...l, outstandingGross: serializeExactPence(first.allocations.find(a => a.lineId === l.id)!.gross) }));
+        const refund = ev({ ...receipt(4000, settled, "fixture://refund"), direction: "reversal" }, qs, original.receipt.sourceRef);
+        const restored = lines.map(l => ({ ...l, outstandingGross: serializeExactPence(exactPence(BigInt(l.grossPence) * 44001n, 50001n)) }));
+        const fresh = ev(receipt(4000, restored, "fixture://fresh"), qs);
+        const out = check(input([original, refund, fresh]), exactPence(100000000n, 16667n), 600, 600);
+        expect(out.Q).toEqual(first.Q);
+        expect(out.allocations.filter(a => a.sourceRef === "fixture://fresh").every(a => a.rule === "pro_rata")).toBe(true);
+    });
+    it("restoring balances preserves original source, line, invoice, ratio and reversal caps", () => {
+        const qs = [facts(id(4), 30000)];
+        const original = ev(receipt(10000, [line(id(4), 30000, 30000)], "fixture://original"), qs);
+        const refund = ev({ ...receipt(4000, [line(id(4), 30000, 30000, 10000)], "fixture://refund"), direction: "reversal" }, qs, original.receipt.sourceRef);
+        for (const changes of [{ reversesSourceRef: "fixture://missing" }, { reversesSourceRef: refund.receipt.sourceRef }])
+            expect(() => derive(input([original, { ...refund, ...changes }]))).toThrow("SOURCE_BINDING_MISMATCH");
+        for (const changes of [{ id: id(9) }, { invoiceId: "other" }, { netPence: 29999 }, { grossPence: 30001 }]) {
+            const lines = refund.receipt.lines.map(l => ({ ...l, ...changes }));
+            expect(() => derive(input([original, { ...refund, receipt: { ...refund.receipt, lines } }]))).toThrow("SOURCE_BINDING_MISMATCH");
+        }
+        expect(() => derive(input([original, refund, refund]))).toThrow();
+        const excess = ev({ ...receipt(6001, [line(id(4), 30000, 30000, 6000)], "fixture://excess"), direction: "reversal" }, qs, original.receipt.sourceRef);
+        expect(() => derive(input([original, refund, excess]))).toThrow();
+        for (const changes of [{ tenantId: id(9) }, { jobId: id(9) }])
+            expect(() => derive(input([original, { ...refund, qualifyingLines: qs.map(q => ({ ...q, ...changes })) }]))).toThrow();
     });
     it.each(Array.from({ length: 10 }, (_value, batch) => batch))("splitting receipts preserves exact cumulative Q and F (batch %i)", batch => {
         let seed = 0x5101;
