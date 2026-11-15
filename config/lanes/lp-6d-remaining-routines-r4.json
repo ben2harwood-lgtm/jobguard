@@ -215,7 +215,8 @@
         "packages/db/src/worm-command-repository.test.ts",
         "packages/db/test/extra-proceed-upgrade.integration.test.ts",
         "packages/db/test/practice-worker-switch-upgrade.integration.test.ts",
-        "packages/db/test/builder-acceptance-sent-head.integration.test.ts"
+        "packages/db/test/builder-acceptance-sent-head.integration.test.ts",
+        "packages/db/test/subscription-internal-owner.integration.test.ts"
       ]
     }
   }
