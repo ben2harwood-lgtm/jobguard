@@ -138,6 +138,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.is_blank_practice_company(digest text)", "0741_identity_linked_practice.sql"],
     ["app.company_final_check_request_run(j uuid)", "0732_final_check_typed_recovery.sql"],
     ["app.company_final_check_reveal(j uuid)", "0732_final_check_typed_recovery.sql"],
+    ["app.cb_derive(p_session uuid, p_job uuid, p_command uuid, p_source text, p_invoice text, p_hash text, p_projection jsonb)", "0748_billing_policy_hold_projection.sql"],
     ["app.cb_delivery(p_session uuid, p_job uuid, p_command uuid, p_payload jsonb)", "0727_billing_export_delivery_once.sql"],
     ["app.cb_csv_cell(v text)", "0727_billing_export_delivery_once.sql"],
     ["identity.extra_customer_approval(t uuid, j uuid, c uuid, digest text, input jsonb)", "0725_lp6c_client_extra_decision.sql"],
