@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-147": {
+      "branches": [
+        "codex/sandbox/later-safety-147"
+      ],
+      "note": "LATER-SAFETY-147: RED owner TRUNCATE protection for recovery history; NOPR.",
+      "allow": [
+        "packages/db/migrations/0744_recovery_history_no_truncate.sql",
+        "packages/db/test/migration-proofs/0744_recovery_history_no_truncate.proof.json",
+        "packages/db/test/recovery-record-immutable.integration.test.ts"
+      ]
+    }
+  }
+}

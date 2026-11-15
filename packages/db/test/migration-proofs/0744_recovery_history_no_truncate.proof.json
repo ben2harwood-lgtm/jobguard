@@ -1,0 +1,57 @@
+{
+  "migration": "0744_recovery_history_no_truncate.sql",
+  "lp0": [
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_message|recovery_history_no_truncate|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_message_approval|recovery_history_no_truncate|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_message_event|recovery_history_no_truncate|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_message_sink|recovery_history_no_truncate|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up|recovery_history_no_truncate|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up_owner|recovery_history_no_truncate|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up_event|recovery_history_no_truncate|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up_due|recovery_history_no_truncate|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up_reminder|recovery_history_no_truncate|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.recovery_follow_up_advance|recovery_history_no_truncate|app.reject_immutable_authorization_record|BEFORE TRUNCATE|O"
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}
