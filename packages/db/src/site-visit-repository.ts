@@ -6,6 +6,7 @@ import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { assertContractorGate, canonicalJson, derivedUuid } from "./work-order-repository.js";
 import { withTenant, InvalidTenantContextError, type VerifiedTenantContext, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
 import { requireLiveJob, WatchdogError } from "./watchdog.js";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 // Each command-type string is written once, here, and reaches SQL only as a bound parameter.
 const startCommandType = "StartSiteVisit";
 const completeCommandType = "CompleteSiteVisit";
@@ -84,8 +85,24 @@ export class SiteVisitRepository {
   return answer.data.reason_code === "allowed" ? null : { code: "NOT_FOUND", reason: "job_out_of_scope" };
  }
  private async recordRefusal(context: VerifiedTenantContext, actor: AuthenticatedMembership, kind: Kind, input: Input, reason: Reason): Promise<void> {
+  // Router ruling (r9): the refusal audit is written first by the private refusal writer, in its own
+  // transaction, so a member who can no longer be bound (revoked/expired) still leaves the record.
+  // No guarded routine is called. Historical schemas without the writer keep the original path.
+  const tenant = context.tenantId.toLowerCase(), id = derivedUuid(`visit-refusal:${tenant}:${input.commandId.toLowerCase()}:${reason}`);
+  const client = await this.pool.connect();
+  try {
+   await client.query("BEGIN");
+   await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+   const installed = (await client.query<{ installed: boolean }>("SELECT to_regprocedure('app.lp6d_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid)') IS NOT NULL installed")).rows[0]?.installed;
+   if (installed) {
+    await client.query("SELECT app.lp6d_record_visit_refusal($1,$2,$3,$4,$5,$6,$7,$8)", [tenant, id, input.commandId, actor.membershipId, actor.identityUserId, kind === "start" ? startCommandType : completeCommandType, reason, input.jobId]);
+    await client.query("COMMIT");
+    return;
+   }
+   await client.query("ROLLBACK");
+  } catch { await client.query("ROLLBACK").catch(() => undefined); return; /* never changes the typed refusal */ }
+  finally { client.release(); }
   try { await withTenant(this.pool, context, async db => {
-   const tenant = context.tenantId.toLowerCase(), id = derivedUuid(`visit-refusal:${tenant}:${input.commandId.toLowerCase()}:${reason}`);
    // At most one per command id and reason; a concurrent duplicate fails on the audit table's unique id and is swallowed below.
    if ((await db.$client.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND id=$2", [tenant, id])).rowCount) return;
    const member = await db.$client.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3", [tenant, actor.membershipId, actor.identityUserId]);
@@ -163,7 +180,7 @@ export class SiteVisitRepository {
   }
  }
  private async executeVisit<T extends StartedVisit | CompletedVisit>(context: VerifiedTenantContext, actor: AuthenticatedMembership, kind: Kind, input: Input, schema: z.ZodType<T>): Promise<T> {
-  let refusal: Refusal | undefined;
+  let refusal: Refusal | undefined, unstamped = false;
   try {
    if (!context || typeof context.tenantId !== "string") throw new InvalidTenantContextError();
    if (!same(actor.tenantId, context.tenantId)) refusal = { code: "VISIT_FORBIDDEN", reason: "member_inactive" };
@@ -181,12 +198,15 @@ export class SiteVisitRepository {
     }
    }
   } catch (error) {
-   if (error instanceof InvalidTenantContextError) refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" };
+   // An unstamped context never connects; it gets the uniform refusal with no refusal record (as before LP-6d).
+   if (error instanceof InvalidTenantContextError) { unstamped = true; refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" }; }
+   // LP-6d: a member whose request can no longer be bound (revoked or expired) is the inactive-member refusal.
+   else if (error instanceof RequestBindingRefusedError) refusal = { code: "VISIT_FORBIDDEN", reason: "member_inactive" };
    else if (error instanceof SiteVisitError) throw error;
    else throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
   }
   if (!refusal) throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
-  await this.recordRefusal(context, actor, kind, input, refusal.reason);
+  if (!unstamped) await this.recordRefusal(context, actor, kind, input, refusal.reason);
   throw new SiteVisitError(refusal.code);
  }
  async startVisit(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<StartedVisit> {
@@ -240,6 +260,10 @@ export class SiteVisitRepository {
   } catch (error) {
    if (error instanceof SiteVisitError) throw error;
    if (error instanceof InvalidTenantContextError) throw new SiteVisitError("NOT_FOUND");
+   // LP-6d (repair 14, flagged): a member whose request can no longer be bound (revoked or expired) gets the
+   // same inactive-member refusal as the visit commands above, never an unavailable error.
+   if (error instanceof RequestBindingRefusedError || ((error as { code?: string; message?: string }).code === "42501"
+    && (error as { message?: string }).message === "REQUEST_BINDING_REFUSED")) throw new SiteVisitError("VISIT_FORBIDDEN");
    throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
   }
  }

@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 // Reviewer/CI: actual PostgreSQL runtime roles, not executed in the no-socket sandbox.
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,expect,it } from "vitest";
@@ -9,6 +10,8 @@ afterAll(async()=>{if(f)await closeLockFixture(f);});
 async function raw(job=a.p.jobId,digest=a.auth.digest,tenant:string|null=a.p.tenantId,write=false){
  const db=await f.runtime.connect();
  try{await db.query("BEGIN");if(tenant!==null)await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  // LP-6d: the named practice session binds its own request; a forged or foreign one stays unbound and is refused.
+  if(tenant!==null)await bindOwnSession(db,digest);
   return (await db.query(write?"SELECT app.write_success_fee_v3($1,$2,$3::jsonb,$4::jsonb) result":"SELECT app.read_success_fee_v3($1,$2) result",write?[job,digest,a.command,{approved:true,qualifies:true}]:[job,digest])).rows[0].result;
  }finally{await db.query("ROLLBACK");db.release();}
 }
@@ -74,7 +77,8 @@ it("SF-14/15 wrong track, mode and policy are refused (rolled-back administrativ
   try{await db.query("BEGIN");
    // Execute each statement separately; node-postgres extended protocol rejects batches with parameters.
    for(const statement of defect.split(';').map(s=>s.trim()))await db.query(statement,statement.includes('$1')?[a.p.jobId]:[]);
-   await db.query("SET LOCAL ROLE jobguard_runtime");await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.p.tenantId]);
+   // LP-6d: the practice owner's own request (tenant first), so the defect (not the binding) is refused.
+   await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.p.tenantId]);await bindOwnSession(db,a.auth.digest);await db.query("SET LOCAL ROLE jobguard_runtime");
    await expect(db.query("SELECT app.read_success_fee_v3($1,$2)",[a.p.jobId,a.auth.digest])).rejects.toMatchObject({code:'42501'});
   }finally{await db.query("ROLLBACK");db.release();}
  }
@@ -116,7 +120,7 @@ it("SQL guard mutations are detected by the boundary oracle (reviewer-executed)"
 it("post-live billing availability also permits invoiced and paid jobs with the same v3 baseline",async()=>{
  for(const status of ['invoiced','paid']){
   const db=await f.admin.connect();
-  try{await db.query('BEGIN');await db.query('UPDATE app.job SET status=$1 WHERE tenant_id=$2 AND id=$3',[status,a.p.tenantId,a.p.jobId]);await db.query('SET LOCAL ROLE jobguard_runtime');await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.p.tenantId]);
+  try{await db.query('BEGIN');await db.query('UPDATE app.job SET status=$1 WHERE tenant_id=$2 AND id=$3',[status,a.p.tenantId,a.p.jobId]);await db.query('SET LOCAL ROLE jobguard_runtime');await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.p.tenantId]);await bindOwnSession(db,a.auth.digest);
    expect((await db.query('SELECT app.read_success_fee_v3($1,$2) result',[a.p.jobId,a.auth.digest])).rows[0].result).toMatchObject({state:'dependency_bound'});
   }finally{await db.query('ROLLBACK');db.release();}
  }

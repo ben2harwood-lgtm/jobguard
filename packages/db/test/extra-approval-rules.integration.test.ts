@@ -2,7 +2,7 @@ import { testActorContext } from "./tenant-context-test-utils.js";
 // Synthetic PostgreSQL proofs. CI only: this sandbox cannot start PostgreSQL.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { ExtraApprovalRepository } from "../src/index.js";
+import { verifiedTenantContextForQueuedJob, ExtraApprovalRepository } from "../src/index.js";
 import { approveInput, chainWorld, cluster, command, demoRules, reviseRules, submitted, type Cluster } from "./extra-approval-chain-fixtures.js";
 let c: Cluster;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await cluster(); }, 240_000);
@@ -76,8 +76,8 @@ it("Q08 without a backup the mandatory queue stays waiting and overdue, without 
     await owner.query("ALTER TABLE app.extra_approval_request ENABLE TRIGGER immutable");
     await owner.query("COMMIT");
   } catch (error) { await owner.query("ROLLBACK"); throw error; } finally { owner.release(); }
-  expect((await repo.escalateOverdue(ctx)).filter(r => r.request_id === s.requestId)).toEqual([]);
-  expect((await repo.queue(ctx, w.members.supervisor.member.membershipId)).filter(r => r.request_id === s.requestId)).toMatchObject([{ lane: "mandatory", overdue: true, escalated: false }]);
-  expect((await repo.queue(ctx, w.members.surveyor.member.membershipId)).filter(r => r.request_id === s.requestId)).toEqual([]);
+  expect((await repo.escalateOverdue(verifiedTenantContextForQueuedJob(ctx.tenantId))).filter(r => r.request_id === s.requestId)).toEqual([]);
+  expect((await repo.queue(await testActorContext(c.admin, ctx, w.members.supervisor.member), w.members.supervisor.member.membershipId)).filter(r => r.request_id === s.requestId)).toMatchObject([{ lane: "mandatory", overdue: true, escalated: false }]);
+  expect((await repo.queue(await testActorContext(c.admin, ctx, w.members.surveyor.member), w.members.surveyor.member.membershipId)).filter(r => r.request_id === s.requestId)).toEqual([]);
   expect((await c.admin.query("SELECT id FROM app.extra_approval_outcome WHERE request_id=$1", [s.requestId])).rows).toEqual([]);
 });

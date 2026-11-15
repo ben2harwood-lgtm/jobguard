@@ -10,10 +10,14 @@ export function isRequestBindingRefusal(error: unknown): boolean {
     && "code" in error && error.code === "42501" && error.message === "REQUEST_BINDING_REFUSED");
 }
 
-/** Translate only a failed bind, after withTenant has rolled back and released the client. */
+/**
+ * Translate only a binding refusal, after withTenant has rolled back and released the client: the failed bind
+ * itself, or (LP-6d repair 16, flagged) a guarded routine's own REQUEST_BINDING_REFUSED when the request names
+ * an actor or session it is not bound to. Either way the caller sees its usual refusal code, never the binding's.
+ */
 export function mapRequestBindingRefusal<T>(work: Promise<T>, refusal: () => Error): Promise<T> {
   return work.catch(error => {
-    if (error instanceof RequestBindingRefusedError) throw refusal();
+    if (isRequestBindingRefusal(error)) throw refusal();
     throw error;
   });
 }

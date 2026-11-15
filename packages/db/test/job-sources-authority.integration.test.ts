@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,describe,expect,it} from "vitest";
 import {withTenant} from "../src/tenant-context.js";
@@ -8,7 +9,9 @@ describe("SV-7A source storage/read authority",()=>{
  let f:SourceFixture;beforeAll(async()=>{f=await sourcesFixture();await seedSource(f)},60000);afterAll(async()=>closeWorkFixture(f));
  it("SV7A-07 SV7A-08 read routine itself refuses session/job substitutions with an identical code",async()=>{
   const a=f.practice.auth;
-  for(const [job,digest] of [[randomUUID(),a.digest],[f.practice.jobId,"a".repeat(64)]])await expect(workTenant(f.runtime,a.context.tenantId,db=>db.query("SELECT app.read_job_sources($1,$2,$3,$4)",[a.context.tenantId,job,digest,"diary"]))).rejects.toMatchObject({message:"JOB_SOURCE_FORBIDDEN",code:"42501"});
+  // Router ruling r14 (2): the caller is the real practice session, bound as itself; it substitutes the job or the
+  // session digest. Both substitutions reach the routine and return ONE identical code (no enumeration).
+  for(const [job,digest] of [[randomUUID(),a.digest],[f.practice.jobId,"a".repeat(64)]])await expect(workTenant(f.runtime,a.context.tenantId,async db=>{await bindOwnSession(db,a.digest);return db.query("SELECT app.read_job_sources($1,$2,$3,$4)",[a.context.tenantId,job,digest,"diary"]);})).rejects.toMatchObject({message:"JOB_SOURCE_FORBIDDEN",code:"42501"});
   await expect(f.repository.read({...a.context},f.practice.jobId,a.digest,"diary")).rejects.toMatchObject({code:"INVALID_TENANT_CONTEXT"});
  });
  it("SV7A-16 runtime SQL denies all writes, missing context reads nothing, ownership/RLS/grants remain narrow",async()=>{
@@ -71,10 +74,13 @@ describe("SV-7A source storage/read authority",()=>{
   // Public code belongs to the repository boundary; a refused bind never runs its callback.
   await expect(f.repository.read(f.practice.auth.context,f.practice.jobId,f.practice.auth.digest,"diary")).rejects.toMatchObject({message:"JOB_SOURCE_FORBIDDEN"});
   // Retain the original SQL-level revoked-session proof independently of the earlier bind.
+  // Router ruling r14 (2) / (a): a revoked session can no longer bind, so the SQL read is refused by the binding
+  // check first (same 42501 shape) and returns nothing.
   await expect(rolledBack(f.runtime,async db=>{
    await db.query("SELECT set_config('app.tenant_id',$1,true)",[f.practice.auth.context.tenantId]);
+   await bindOwnSession(db,f.practice.auth.digest);
    return db.query("SELECT app.read_job_sources($1,$2,$3,'diary')",[f.practice.auth.context.tenantId,f.practice.jobId,f.practice.auth.digest]);
-  })).rejects.toMatchObject({message:"JOB_SOURCE_FORBIDDEN",code:"42501"});
+  })).rejects.toMatchObject({message:"REQUEST_BINDING_REFUSED",code:"42501"});
  });
  it("SV7A-07 persisted expired sessions and inactive actors fail the SQL read boundary",async()=>{
   const {auth,jobId}=f.practice;
@@ -90,8 +96,12 @@ describe("SV-7A source storage/read authority",()=>{
   ])await rolledBack(f.admin,async db=>{
    await db.query("SELECT set_config('app.tenant_id',$1,true)",[auth.context.tenantId]);
    await db.query(mutation,[mutation.includes('control_plane')?other.digest:auth.membershipId]);
+   // Router ruling r14 (2) / (a): an expired/revoked session or inactive actor can no longer bind; when the binding
+   // is refused the read is refused first (REQUEST_BINDING_REFUSED), otherwise the routine refuses; nothing is read.
+   await bindOwnSession(db,other.digest);
+   const bound=(await db.query("SELECT app.lp6d_request_bound() bound")).rows[0].bound as boolean;
    await db.query("SET LOCAL ROLE jobguard_runtime");
-   await expect(db.query("SELECT app.read_job_sources($1,$2,$3,'diary')",[auth.context.tenantId,targetJobId,other.digest])).rejects.toMatchObject({message:"JOB_SOURCE_FORBIDDEN",code:"42501"});
+   await expect(db.query("SELECT app.read_job_sources($1,$2,$3,'diary')",[auth.context.tenantId,targetJobId,other.digest])).rejects.toMatchObject({message:bound?"JOB_SOURCE_FORBIDDEN":"REQUEST_BINDING_REFUSED",code:"42501"});
   });
  });
 });

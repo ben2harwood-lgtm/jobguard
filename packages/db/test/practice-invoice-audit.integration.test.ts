@@ -8,7 +8,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, PracticeInvoiceRepository, withTenant } from "../src/index.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, bindTestClient } from "./tenant-context-test-utils.js";
 
 const T = randomUUID(), A = randomUUID(), U = randomUUID(), M = randomUUID(), H = "a".repeat(64);
 const context = testTenantContext(T, { membershipId: M });
@@ -148,6 +148,8 @@ describe("practice invoice audit regressions (real PostgreSQL)", () => {
     try {
       await holder.query("BEGIN");
       await holder.query(`SELECT set_config('app.tenant_id',$1,true)`,[T]);
+      // LP-6d: the holding issuer is the practice member's own bound request.
+      await bindTestClient(admin,holder,T,M);
       // The stored issuer takes and retains the exact advisory xact lock.
       await holder.query(`SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,
         [T,f.jobId,f.invoiceId,M,randomUUID(),pending.netPence,pending.reason,preview.previewHash]);
