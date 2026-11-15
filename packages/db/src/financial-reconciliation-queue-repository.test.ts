@@ -73,7 +73,7 @@ it.each(['run','read','readAdjustments','propose','approve'] as const)('%s refus
   :operation==='readAdjustments'?repo.readAdjustments(context,session,scope.jobId,id(7))
   :operation==='propose'?repo.propose(context,session,{version:'financial-reconciliation-propose.v1',runId:id(7),adjustment})
   :repo.approve(context,session,{version:'financial-reconciliation-approve.v1',commandId:id(10),jobId:scope.jobId,adjustmentId:id(11),contentHash:'a'.repeat(64)});
- await expect(attempt()).rejects.toThrow('RECONCILIATION_FORBIDDEN');
+ await expect(attempt()).rejects.toMatchObject({code:'42501',message:'REQUEST_BINDING_REFUSED'});
  expect(query).toHaveBeenCalledWith('SELECT app.bind_request($1, $2, $3)',['contractor_practice',session,scope.tenantId]);
  expect(query.mock.calls.some(([sql])=>sql.includes('app.financial_reconciliation'))).toBe(false);
  expect(query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');

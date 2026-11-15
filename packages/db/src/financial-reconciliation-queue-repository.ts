@@ -1,4 +1,3 @@
-import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import {
@@ -20,13 +19,13 @@ export class FinancialReconciliationQueueRepository {
  constructor(private readonly pool:Pool){}
  private async call(context:VerifiedTenantContext,session:string,jobId:string,command:Record<string,unknown>){
   if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new FinancialReconciliationError("RECONCILIATION_DISABLED");
-  return mapRequestBindingRefusal(withTenant(this.pool,context,async db=>{
+  return withTenant(this.pool,context,async db=>{
    // This repository also seeds runs from a membership-only context. Bind the
    // actual finance session before the routine's early authority check.
    await db.$client.query("SELECT app.bind_request($1, $2, $3)",["contractor_practice",uuid.parse(session),context.tenantId]);
    const row=await db.$client.query<{result:unknown}>("SELECT app.financial_reconciliation_queue($1,$2,$3::jsonb) result",[uuid.parse(session),uuid.parse(jobId),JSON.stringify({version:"financial-reconciliation-storage.v1",...command})]);
    return row.rows[0]?.result;
-  }),()=>new FinancialReconciliationError("RECONCILIATION_FORBIDDEN"));
+  });
  }
  private stored(raw:unknown,context:VerifiedTenantContext,jobId:string):{runId:string;snapshot:Snapshot;report:Report}|null{
   if(raw===null)return null;
@@ -54,11 +53,11 @@ export class FinancialReconciliationQueueRepository {
  }
  async readAdjustments(context:VerifiedTenantContext,session:string,jobId:string,runId:string){
   if(process.env.JOBGUARD_ENV!=="synthetic_demo")throw new FinancialReconciliationError("RECONCILIATION_DISABLED");
-  const raw=await mapRequestBindingRefusal(withTenant(this.pool,context,async db=>{
+  const raw=await withTenant(this.pool,context,async db=>{
    await db.$client.query("SELECT app.bind_request($1, $2, $3)",["contractor_practice",uuid.parse(session),context.tenantId]);
    const result=await db.$client.query<{result:unknown}>("SELECT app.financial_reconciliation_adjustments_read($1,$2,$3) result",[uuid.parse(session),uuid.parse(jobId),uuid.parse(runId)]);
    return result.rows[0]?.result;
-  }),()=>new FinancialReconciliationError("RECONCILIATION_FORBIDDEN"));
+  });
   if(raw===null)return null;
   const rows=z.array(z.object({adjustmentId:uuid,adjustment:financialReconciliationAdjustmentV1,contentHash:hash,approvalId:uuid.nullable()}).strict()).parse(raw);
   for(const row of rows)if(row.adjustment.tenantId!==context.tenantId||row.adjustment.jobId!==jobId||reconciliationAdjustmentHash(row.adjustment)!==row.contentHash)
