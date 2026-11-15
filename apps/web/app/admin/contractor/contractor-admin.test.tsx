@@ -11,6 +11,7 @@ vi.mock('react',async importOriginal=>({...await importOriginal<typeof import('r
  useEffect:(effect:()=>void,deps:unknown[])=>{const i=hooks.cursor++,previous=hooks.cells[i] as unknown[]|undefined;if(!previous||deps.some((dep,index)=>!Object.is(dep,previous[index])))hooks.effects.push(effect);hooks.cells[i]=deps;},
 }));
 vi.mock('next/link',()=>({default:'a'}));
+import { referenceApprovalRulesV1, type ContractorWorkspace, type ContractorCommand } from '@jobguard/core';
 import { ContractorAdmin } from './contractor-admin';
 const id='11111111-1111-4111-8111-111111111111';
 const view={version:'contractor-workspace.v1',environment:'synthetic_demo',tenantId:id,membershipId:id,revision:3,realExternalActions:0,units:[{id,kind:'branch',parent_id:null,name:'Fictional branch'}],teams:[{id,branch_id:id,name:'Fictional team'}],members:[],grants:[],teamMemberships:[],clients:[],contracts:[]};
@@ -177,4 +178,67 @@ describe('session-preserving practice recovery',()=>{
   }
   expect(sessionPosts(fetchMock)).toHaveLength(0);
  });
+});
+
+function control(tree:Node[],name:string){return nodes(tree.find(x=>x.type==='label'&&label(x)===name)!.props.children).find(x=>['select','input','textarea'].includes(x.type as string))!;}
+function change(name:string,value:string){control(render(),name).props.onChange!({target:{value}});}
+type ContractRevision=Extract<ContractorCommand,{kind:'contract.revise'}>;
+const uuid=(n:number)=>`22222222-2222-4222-8222-${String(n).padStart(12,'0')}`;
+function contractWorkspace():ContractorWorkspace {
+ const document={version:'client-contract.v1' as const,reference:'FICTIONAL-NEGOTIATED',startsOn:'2025-01-02',endsOn:'2029-12-31',sorVersionIds:[uuid(9)],tenderedAdjustment:{numerator:'17',denominator:'200'},photoRule:'optional' as const,vatCode:'synthetic-unreviewed' as const,exportedNotBilledAlertDays:73};
+ const rules={...referenceApprovalRulesV1,proceedLimit:{pence:12345,currency:'GBP' as const},bands:[{upToPence:null,steps:[{role:'surveyor' as const,timeLimitMinutes:123,escalationRole:null,alternateRoles:[]}]}],clientApproval:{kind:'threshold' as const,abovePence:900,beforeWorkAbovePence:800,timeLimitMinutes:99},evidence:{photosRequired:false,residentConfirmationRequired:true}};
+ const latest={id:uuid(2),contract_id:uuid(3),client_id:uuid(4),revision:10,document,rules,rule_version_id:uuid(5)};
+ return {...view,realExternalActions:0,version:'contractor-workspace.v1',environment:'synthetic_demo',units:[],teams:[],clients:[{id,branch_id:id,name:'Fictional unrelated client'},{id:uuid(4),branch_id:id,name:'Fictional persisted client'}],contracts:[latest,{...latest,id:uuid(6),revision:2,document:{...document,reference:'FICTIONAL-OLDER'},rules:{...referenceApprovalRulesV1}}]};
+}
+describe('immutable contractor terms preservation',()=>{
+ it.each([false,true])('posts the latest complete stored terms and rules when only the limit changes, and reloads without changing history (reverse order: %s)',async reverse=>{
+  let persisted=contractWorkspace();if(reverse)persisted.contracts.reverse();const originals=structuredClone(persisted.contracts),latest=originals.find(x=>x.revision===10)!;const posts:ContractRevision[]=[];
+  vi.stubGlobal('fetch',vi.fn(async(_url:unknown,options?:{method?:string;body?:string})=>{
+   if(options?.method==='POST'){const body=JSON.parse(options.body!) as ContractRevision;posts.push(body);persisted={...persisted,revision:4,contracts:[...persisted.contracts,{id:uuid(7),contract_id:body.contractId,client_id:body.clientId,revision:11,document:body.document,rules:body.rules,rule_version_id:uuid(8)}]};}
+   return ok(persisted);
+  }));
+  await mount();change('Existing contract',uuid(3));change('Proceed limit (£)','333.07');await click(render(),'Save contract version');
+  expect(posts).toHaveLength(1);expect(posts[0]).toMatchObject({kind:'contract.revise',clientId:uuid(4),contractId:uuid(3),expectedRevision:3,document:latest.document,rules:{...latest.rules,proceedLimit:{pence:33307,currency:'GBP'}}});
+  expect(persisted.contracts.slice(0,2)).toEqual(originals);expect(persisted.contracts[2]!.document).toEqual(latest.document);
+  await click(render(),'Reload persisted organisation');expect(control(render(),'Proceed limit (£)').props.value).toBe('333.07');
+  expect(JSON.parse(control(render(),'Approval rules draft').props.value!)).toEqual(persisted.contracts[2]!.rules);
+ });
+ it('loads another contract, preserves deliberate rule edits, and resets defaults only for explicit new creation',async()=>{
+  const persisted=contractWorkspace();const other={...persisted.contracts[0]!,id:uuid(20),contract_id:uuid(21),client_id:id,revision:1,document:{...persisted.contracts[0]!.document,reference:'FICTIONAL-SECOND'},rules:{...referenceApprovalRulesV1,proceedLimit:{pence:87654,currency:'GBP' as const}}};persisted.contracts.push(other);
+  const posts:ContractRevision[]=[];vi.stubGlobal('fetch',vi.fn(async(_url:unknown,options?:{method?:string;body?:string})=>{if(options?.method==='POST')posts.push(JSON.parse(options.body!));return ok(persisted);}));
+  await mount();change('Existing contract',uuid(3));expect(control(render(),'Proceed limit (£)').props.value).toBe('123.45');
+  change('Existing contract',other.contract_id);expect(control(render(),'Proceed limit (£)').props.value).toBe('876.54');expect(JSON.parse(control(render(),'Approval rules draft').props.value!)).toEqual(other.rules);
+  const edited={...other.rules,evidence:{photosRequired:false,residentConfirmationRequired:true}};change('Approval rules draft',JSON.stringify(edited));await click(render(),'Save contract version');
+  expect(posts[0]).toMatchObject({clientId:id,document:other.document,rules:edited});
+  change('Existing contract','');expect(control(render(),'Proceed limit (£)').props.value).toBe('250.00');await click(render(),'Save contract version');
+  expect(posts[1]).toMatchObject({clientId:id,document:{reference:'FICTIONAL-CONTRACT',sorVersionIds:[],tenderedAdjustment:{numerator:'-35',denominator:'1000'}},rules:referenceApprovalRulesV1});expect(posts[1]!.contractId).not.toBe(other.contract_id);
+ });
+ it.each(['missing','client mismatch','missing client'])('refuses %s selection without a default replacement',async fault=>{
+  let persisted=contractWorkspace();const fetchMock=vi.fn(async()=>ok(persisted));vi.stubGlobal('fetch',fetchMock);
+  await mount();change('Existing contract',uuid(3));
+  if(fault==='client mismatch')change('Contract client',id);
+  else{persisted={...persisted,...(fault==='missing'?{contracts:[]}:{clients:[]})};await click(render(),'Reload persisted organisation');}
+  const calls=fetchMock.mock.calls.length;await click(render(),'Save contract version');expect(fetchMock).toHaveBeenCalledTimes(calls);expect(label(render().find(x=>x.props.role==='alert')!)).toBe('CONTRACT_SELECTION_MISMATCH');
+ });
+ it.each(['STALE_REVISION','lost response','refresh failure'])('keeps terms and requires reload after %s during contract save',async fault=>{
+  const persisted=contractWorkspace();let fail=true,posts=0;
+  const fetchMock=vi.fn(async(_url:unknown,options?:{method?:string})=>{
+   if(options?.method==='POST'){posts++;if(fail&&fault==='STALE_REVISION')return {ok:false,json:async()=>({code:fault})};if(fail&&fault==='lost response')throw new Error(fault);}
+   else if(fail&&posts&&fault==='refresh failure')throw new Error('refresh failed');
+   return ok(persisted);
+  });vi.stubGlobal('fetch',fetchMock);await mount();change('Existing contract',uuid(3));change('Proceed limit (£)','300.00');await click(render(),'Save contract version');
+  expect(posts).toBe(1);expect(button(render(),'Save contract version').props.disabled).toBe(true);await click(render(),'Save contract version');expect(posts).toBe(1);
+  fail=false;await click(render(),'Reload persisted organisation');expect(control(render(),'Proceed limit (£)').props.value).toBe('123.45');expect(button(render(),'Save contract version').props.disabled).toBe(false);
+ });
+ it('blocks save during a read, ignores a superseded read, and rejects invalid rules and imprecise money',async()=>{
+  const persisted=contractWorkspace(),pending=deferred<ReturnType<typeof ok>>();let reads=0,posts=0;
+  vi.stubGlobal('fetch',vi.fn(async(_url:unknown,options?:{method?:string})=>{if(options?.method==='POST'){posts++;return ok(persisted);}reads++;return reads===2?pending.promise:ok(persisted);}));
+  await mount();change('Existing contract',uuid(3));button(render(),'Reload persisted organisation').props.onClick!();await settle();expect(button(render(),'Save contract version').props.disabled).toBe(true);expect(control(render(),'Existing contract').props.disabled).toBe(true);change('Existing contract','');expect(control(render(),'Existing contract').props.value).toBe(uuid(3));await click(render(),'Save contract version');expect(posts).toBe(0);
+  // A later authoritative read wins even if the earlier request returns last.
+  await click(render(),'Reload persisted organisation');pending.resolve(ok({...persisted,contracts:[]}));await settle();
+  for(const bad of ['0.001','1e3','-1.00']){change('Proceed limit (£)',bad);await click(render(),'Save contract version');expect(posts).toBe(0);expect(label(render().find(x=>x.props.role==='alert')!)).toBe('INVALID_RULE_DOCUMENT');}
+  change('Proceed limit (£)','123.45');change('Approval rules draft','{}');await click(render(),'Save contract version');expect(posts).toBe(0);
+  change('Approval rules draft',JSON.stringify(persisted.contracts[0]!.rules));await click(render(),'Save contract version');expect(posts).toBe(1);
+ });
+
 });
