@@ -80,6 +80,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const signedInvoiceSql = await readFile(new URL("../migrations/0731_combined_invoice_signed_vat.sql", import.meta.url), "utf8");
   const signedInvoiceOid = (await c.admin.query("SELECT 'app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)'::regprocedure::oid oid")).rows[0].oid;
   lp6cReplacements.set(signedInvoiceOid, signedInvoiceSql.split("FUNCTION app.issue_lock_bound_customer_invoice(")[1]!.split("AS $$")[1]!.split(/\$\$\s*;/u)[0]!);
+  // LATER-SAFETY-150 replaces only the internal 14-argument builder attestation body.
+  const sentHeadSql = await readFile(new URL("../migrations/0743_builder_acceptance_sent_head.sql", import.meta.url), "utf8");
+  const sentHeadOid = (await c.admin.query("SELECT 'app.record_builder_attested_acceptance(uuid,uuid,uuid,uuid,uuid,integer,character,bigint,integer,uuid,character varying,character varying,timestamp with time zone,uuid)'::regprocedure::oid oid")).rows[0].oid;
+  lp6cReplacements.set(sentHeadOid, [...sentHeadSql.matchAll(/CREATE OR REPLACE FUNCTION app\.(\w+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)][0]![4]!);
   // Only these six exact identities receive their latest 0724 bodies. Their
   // owners, ACLs and all other metadata remain checked by successor proofs.
   const delegationSql = await readFile(new URL("../migrations/0724_lp6c_customer_portal_delegation.sql", import.meta.url), "utf8");
