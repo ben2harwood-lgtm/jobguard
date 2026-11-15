@@ -325,7 +325,8 @@ describe("0745 populated predecessor upgrade",()=>{
     })).rejects.toThrow("PREDECESSOR_ACCEPTED_STALE_SENT_QUOTE");
     const before=await snapshotRows(db.owner), acl=await catalog(db.owner);
     await migrate(db.owner);
-    expect(await snapshotRows(db.owner)).toEqual(before);
+    // LP-6d's later migration creates identity.lp6d_sso_grant_permit empty.
+    expect(await snapshotRows(db.owner)).toEqual({...before,"identity.lp6d_sso_grant_permit":[]});
     expect(await catalog(db.owner)).toEqual(acl);
     expect(acl.map(r=>r.runtime)).toEqual([false,true]);
     expect(acl.every(r=>r.owner==="jobguard_migration"&&r.prosecdef)).toBe(true);
