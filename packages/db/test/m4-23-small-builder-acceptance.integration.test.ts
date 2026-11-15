@@ -81,6 +81,8 @@ function collection(x: Subject) {
   // Only the CI fake-rail operator connection supplies terminal outcomes. No HTTP path.
   const rail = (raw: unknown) => finalCheckTenant(f.admin, x.context.tenantId, async db => {
     await db.query("SELECT set_config('app.practice_material_digest',$1,true)", [x.auth.digest]);
+    // LP-6d: the guarded fee read inside the writer needs the practice owner's bound request.
+    await db.query("SELECT app.bind_request('practice',$1,$2)", [x.auth.digest, x.context.tenantId]);
     return (await db.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb) result",
       [x.jobId, x.auth.digest, raw])).rows[0].result;
   });

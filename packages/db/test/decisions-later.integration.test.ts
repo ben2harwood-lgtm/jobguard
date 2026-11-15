@@ -1,4 +1,5 @@
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -190,6 +191,8 @@ it("the owner can check findings on a parties import; a stranger's forged ancest
         : / AND rv\.result->>'sourceJobId'=source\.id::text/;
       expect(definition).toMatch(pattern);
       await db.query(definition.replace(pattern, ""));
+      // LP-6d: the raw call is the named session's own bound request.
+      await bindOwnSession(db, mutation === "remove_receipt" ? owner.auth.digest : stranger.auth.digest);
       const result = db.query("SELECT app.decision_check_command($1,$2,'begin') result", [
         mutation === "remove_receipt" ? owner.auth.digest : stranger.auth.digest,
         JSON.stringify({ ...owner.command, commandId: randomUUID(), jobId: imported.jobId }),

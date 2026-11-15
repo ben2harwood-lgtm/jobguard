@@ -1,3 +1,5 @@
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
+import { snapshotRows } from "./upgrade-proof-utils.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
@@ -8,7 +10,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { contractorRoles, customerTypes, referenceApprovalRulesV1, jobPartiesCommandResultV1, type ContractorPartyImport } from "@jobguard/core";
-import { ContractorRepository, ContractorPartyRepository, assertContractorPartiesRequired, JobRepository, JobPartiesRepository, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type TenantTransaction } from "../src/index.js";
+import { ContractorRepository, ContractorPartyRepository, assertContractorPartiesRequired, JobRepository, JobPartiesRepository, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, requireContractorRequestContext, withTenant, type AuthenticatedMembership, type TenantTransaction } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, parties: ContractorPartyRepository;
 const tables = ["contractor_client_customer", "contractor_party_binding", "contractor_resident_contact"];
@@ -93,7 +95,8 @@ describe("CH-3b PostgreSQL guarantees", () => {
       const id = randomUUID(), scope = role === "client_approver" ? { kind: "client", id: f.client } : role === "operative" ? { kind: "team", id: f.v.teams[0]!.id } : { kind: "tenant", id: f.p.tenantId };
       await command(f.p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope, clientId: role === "client_approver" ? f.client : null, contractId: null });
       const row = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [id]))).rows[0];
-      const actor = { ...f.p, membershipId: id, identityUserId: row.identity_user_id };
+      // LP-6d: each refused role acts through its own persisted credential, so the refusal is the scope check, not the binding.
+      const actor = await memberSessionPrincipal(admin, runtime, f.p.tenantId, id);
       for (const jobId of [f.job, randomUUID()]) await expect(parties.readResident(actor, jobId)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
     }
     // ENT-1 refuses to invite an owner (0054:233): the owner row is the practice principal itself, and the refusal is asserted.
@@ -139,7 +142,10 @@ describe("CH-3b PostgreSQL guarantees", () => {
       const grants = (await admin.query("SELECT pg_get_userbyid(p.proowner) owner,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure FROM pg_proc p WHERE p.oid=$1::regprocedure", [signature])).rows[0];
       expect(grants).toEqual({ owner: "jobguard_migration", runtime: true, infrastructure: false });
     }
-    await expect(runtime.query("SELECT app.bind_contractor_parties($1,$2::jsonb)", [f.p.membershipId, JSON.stringify(f.input)])).rejects.toMatchObject({ message: "NOT_FOUND" });
+    // LP-6d refuses the unbound call before any party/job lookup.
+    const beforeUnbound = await snapshotRows(admin, ["app.contractor_party_binding", "app.command_receipt"]);
+    await expect(runtime.query("SELECT app.bind_contractor_parties($1,$2::jsonb)", [f.p.membershipId, JSON.stringify(f.input)])).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+    expect(await snapshotRows(admin, ["app.contractor_party_binding", "app.command_receipt"])).toEqual(beforeUnbound);
     // Every CH-3b function pins search_path; the three routines and the record trigger function are the only SECURITY DEFINER ones.
     const functions = (await admin.query("SELECT p.proname,p.prosecdef,p.proconfig,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1::text[]) ORDER BY p.proname", [["bind_contractor_parties", "link_contractor_customer", "read_contractor_resident", "require_contractor_party_receipt", "require_contractor_party_record", "valid_contractor_resident"]])).rows;
     const pinned = ["search_path=pg_catalog"];
@@ -221,7 +227,9 @@ it('denies a job UUID colliding with an ENT-1 team; team membership is not a job
  const member=randomUUID();await command(f.p,{kind:'member.invite',id:member,role:'supervisor',email:'supervisor@example.invalid',scope:{kind:'team',id:job},clientId:null,contractId:null});
  const identity=(await withTenant(runtime,ctx(f.p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[member]))).rows[0].identity_user_id;
  const actor={...f.p,membershipId:member,identityUserId:identity};
- sessions.set(actor, await testBoundTenantContext(admin, actor.tenantId, actor.membershipId));
+ const context = await testBoundTenantContext(admin, actor.tenantId, actor.membershipId);
+ Object.assign(actor, { context });
+ sessions.set(actor, context);
  expect((await withTenant(runtime,ctx(actor),db=>db.$client.query("SELECT app.contractor_allowed($1,'resident.read',$2) allowed",[member,job]))).rows[0].allowed).toBe(true);
  await expect(parties.readResident(actor,job)).rejects.toMatchObject({code:'NOT_FOUND'});
 });
@@ -246,9 +254,9 @@ const effects = (f: Fixture) => withTenant(runtime, ctx(f.p), async db => (await
   [f.job, f.input.commandId, [f.customer.revisionId]])).rows[0]);
 async function invite(f: Fixture, role: string): Promise<AuthenticatedMembership> {
   const id = randomUUID(); await command(f.p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope: { kind: "tenant", id: f.p.tenantId }, clientId: null, contractId: null });
-  const row = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [id]))).rows[0];
-  const actor = { ...f.p, membershipId: id, identityUserId: row.identity_user_id };
-  sessions.set(actor, await testBoundTenantContext(admin, actor.tenantId, id));
+  // LP-6d: the invited member acts through its own persisted contractor practice session.
+  const actor = await memberSessionPrincipal(admin, runtime, f.p.tenantId, id);
+  sessions.set(actor, requireContractorRequestContext(actor));
   return actor;
 }
 async function reviseCustomer(f: Fixture, type: string, name = "Fictional Client") {
