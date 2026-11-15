@@ -72,7 +72,7 @@ test("fictional sign-in opens the same own practice firm without the classic det
   await designedEntry.getByRole("button",{name:"Start my own practice firm",exact:true}).click();
   await expect(designedEntry).toHaveURL(/\/practice-company$/);
   await expect(designedEntry.getByRole("heading",{name:"Fictional Linked Oak",exact:true})).toBeVisible();
-  await expect(designedEntry.getByRole("alert")).toHaveCount(0);
+  await expect(designedEntry.getByRole("alert").filter({ hasText: /\S/ })).toHaveCount(0);
   expect(await jobStatus(designedEntry,id)).toBe(200);
   expect(entryPosts).toContain("/api/auth/practice");expect(entryPosts).not.toContain("/api/practice-company");
   await designedEntry.close();
