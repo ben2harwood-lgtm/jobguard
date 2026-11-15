@@ -7,8 +7,10 @@
       ],
       "allow": [
         "packages/db/migrations/0748_receipt_proposal_historical_capacity.sql",
+        "packages/db/migrations/0747_receipt_proposal_historical_capacity.sql",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0748_receipt_proposal_historical_capacity.proof.json",
+        "packages/db/test/migration-proofs/0747_receipt_proposal_historical_capacity.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/receipt-proposal-historical-capacity.integration.test.ts"
       ]

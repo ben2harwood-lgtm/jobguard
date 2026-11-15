@@ -107,7 +107,7 @@ it("refuses a replacement at review after a fully allocated line is refunded, be
 
   // Disposable mutation removes just the new bound. The same early-refusal
   // assertion must fail; rollback restores the function before any further test.
-  const sql = await readFile(new URL("../migrations/0748_receipt_proposal_historical_capacity.sql", import.meta.url), "utf8");
+  const sql = await readFile(new URL("../migrations/0747_receipt_proposal_historical_capacity.sql", import.meta.url), "utf8");
   const start = sql.indexOf("CREATE OR REPLACE FUNCTION"), end = sql.indexOf("END $$;", start) + "END $$;".length;
   const body = sql.slice(start, end);
   const checkStart = body.indexOf("  -- Historical positive capacity,"), checkEnd = body.indexOf("  g:=gcd(gn,gd);", checkStart);
