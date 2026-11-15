@@ -1,0 +1,6 @@
+{
+  "migration": "0753_subscription_pending_downgrade.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

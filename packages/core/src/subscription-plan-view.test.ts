@@ -13,6 +13,7 @@ function fixture(plan: "Solo" | "Builder" = "Builder", places = 8, length = 30, 
       plan: upgrade && n >= 10 ? "Builder" : plan, countedPlaces: n < extraDays ? places : 7, trial: false, annualPrepaid: false })),
   } });
   return { version: "subscription-persisted-read.v1", hypothetical: true, environment: "synthetic_demo",
+    changes: [], changeOutcomes: [],
     agreements: [{ tenant_id: id(1), id: id(2), revision: 1, plan, cadence: "monthly", anchor_day: 1,
       maximum_pence: plan === "Solo" ? 4900 : 16900, effective_date: start }],
     periods: [{ tenant_id: id(1), id: id(3), period_start: start, period_end: date(length), agreement_revision: 1,
@@ -71,7 +72,7 @@ describe("MON-2A P2 plan screen projection", () => {
   it("selects applied effective revisions, never a future revision or pending change", () => {
     const raw = fixture();
     raw.agreements.push({ ...raw.agreements[0]!, id: id(20), revision: 2, plan: "Solo", maximum_pence: 4900, effective_date: "2026-05-01" });
-    expect(view({ ...raw, changes: [{ plan: "Solo", effective_date: "2026-04-01" }] }).agreement?.plan).toBe("Builder");
+    expect(view({ ...raw, changes: [{ tenant_id: id(1), id: id(30), expected_revision: 1, plan: "Solo", effective_date: "2026-05-01" }] }).agreement?.plan).toBe("Builder");
     expect(subscriptionPlanView(raw, "2026-05-01").agreement?.plan).toBe("Solo");
     raw.agreements.push({ ...raw.agreements[0]!, id: id(21), revision: 3, plan: "Solo", maximum_pence: 4900 });
     expect(view(raw).agreement?.plan).toBe("Solo");
@@ -111,4 +112,25 @@ it("C2 preserves the exact statement approval binding and rejects a malformed ha
   expect(view(withHash)).toMatchObject({revision:1,periods:[{statementId:id(4),contentHash:"a".repeat(64),amount:{pence:8900,currency:"GBP"}}]});
   expect(()=>view({...raw,statements:raw.statements.map(s=>({...s,artifact_hash:"forged"}))})).toThrow();
   expect(view(raw).periods[0]!.contentHash).toBeUndefined();
+});
+
+const pending = { tenant_id: id(1), id: id(30), expected_revision: 1, plan: "Solo", effective_date: "2026-05-01" };
+const outcome = { tenant_id: id(1), change_id: id(30), source_id: id(40), outcome: "refused_capacity" };
+it("reload projects the stored pending boundary, even after it is due; every recorded outcome clears it", () => {
+  const raw = { ...fixture(), changes: [pending] };
+  expect(subscriptionPlanView(raw, "2026-06-01").pendingDowngrade).toEqual({ changeId: id(30), plan: "Solo", effectiveDate: "2026-05-01" });
+  for (const value of ["applied", "refused_capacity", "refused_stale", "refused_authority"]) {
+    expect(view({ ...raw, changeOutcomes: [{ ...outcome, outcome: value }] }).pendingDowngrade).toBeNull();
+  }
+});
+it("fails closed on ambiguous pending history and invalid tenant-qualified change/outcome links", () => {
+  for (const patch of [
+    { changes: [pending, { ...pending, id: id(31) }] },
+    { changes: [{ ...pending, tenant_id: id(99) }] },
+    { changes: [{ ...pending, expected_revision: 99 }] },
+    { changes: [pending], changeOutcomes: [{ ...outcome, tenant_id: id(99) }] },
+    { changes: [pending], changeOutcomes: [{ ...outcome, change_id: id(99) }] },
+    { changes: [pending], changeOutcomes: [outcome, outcome] },
+  ]) expect(() => view({ ...fixture(), ...patch })).toThrow("INVALID_SUBSCRIPTION_INPUT");
+  expect(view({ ...fixture(), changes: [pending, { ...pending, id: id(31) }], changeOutcomes: [outcome] }).pendingDowngrade?.changeId).toBe(id(31));
 });

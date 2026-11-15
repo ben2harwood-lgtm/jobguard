@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-162": {
+      "branches": [
+        "codex/sandbox/later-safety-162"
+      ],
+      "allow": [
+        "apps/web/app/plans/plan-screen-headers.test.ts",
+        "apps/web/app/plans/plan-screen.test.tsx",
+        "apps/web/app/plans/plan-screen.tsx",
+        "packages/core/src/subscription-plan-view.test.ts",
+        "packages/core/src/subscription-plan-view.ts",
+        "packages/db/migrations/0753_subscription_pending_downgrade.sql",
+        "packages/db/src/subscription-repository.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0753_subscription_pending_downgrade.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/subscription-pending-downgrade.integration.test.ts"
+      ]
+    }
+  }
+}
