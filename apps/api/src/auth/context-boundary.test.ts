@@ -97,7 +97,9 @@ const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   // is created once, by sessionPrincipal(), for a persisted contractor practice session, and kept in a
   // module-private WeakMap; requireContractorRequestContext returns it. One constructor call (was 2).
   // Repair 11: refusal-only principals keep their context in a separate map, read only by requireContractorRefusalContext.
-  "packages/db/src/contractor-repository.ts": "51d371939722dd3f0763f3c0b4861bf10848fee41564e7af99b31ff773a9ff5f",
+  // R4 re-pin (FLAGGED: sign-in boundary, needs checker caller review): resolveSession returns refusedSessionPrincipal's
+  // refusal-only principal when contractor_session refuses a revoked base owner (D3/PH11). Still one constructor call.
+  "packages/db/src/contractor-repository.ts": "6c0bbd9b64a9c886b3ad08e8956803bad100ea31c2ca5ca6b367e46d59d55e3d",
   // 15 Nov 2026 catch-up to main (router): each pin is one side's approved value (each file changed on one side only).
   "packages/db/src/contractor-party-repository.ts": "93729040b706e520f24e757d14ef9c8e78fe32c835071aa05a2f421ec3bd11bd",
   // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.

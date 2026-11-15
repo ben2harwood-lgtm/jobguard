@@ -1263,3 +1263,27 @@ named files per invocation):
 READY for the router to commit and push for CI. PostgreSQL execution and exact-head
 independent RED review remain required before merge; no acceptance or live SSO
 readiness is claimed.
+
+## R4: revoked-member session resolution (D3, PH11) and in-flight revoke waits (PH13)
+
+FLAGGED: sign-in boundary (`app.contractor_session`, `app.start_contractor_practice`,
+`ContractorRepository.resolveSession`).
+
+- PH13 root cause: LP-6d made `contractor_session` call `bind_request`, whose
+  `lp6_session_authority` takes `FOR SHARE` on the contractor practice row. Main's bridge took no
+  lock. A lookup (`resolveSession`) or a start (`startPractice` binds after
+  `start_contractor_practice`) during an open revoke therefore waited on the revoke's row lock; the
+  tests hold the revoke open until that call returns, so it hung. The second-revoke wait itself was
+  already visible on the routine's own `FOR UPDATE`.
+- `contractor_session`: a bound transaction behaves exactly as before. An unbound call first probes
+  the row with `FOR SHARE NOWAIT`; when it gets the lock it binds as before. Only while an end is in
+  flight (lock not available) does it answer from committed state, as main did, without binding,
+  and still with binding's own refusals (revoked/expired base owner or effective actor refuse).
+- `start_contractor_practice` (latest body 0138): the existing-session read takes `FOR SHARE NOWAIT`;
+  while that session's end is in flight the start returns the ended-session answer at once, so
+  `startPractice` refuses before its binding and never waits. A new session is unchanged.
+- `resolveSession` (D3, PH11, main's behaviour): when `contractor_session` refuses binding and
+  `lp6d_refused_contractor_principal` names a live session whose base membership is inactive, it
+  returns that refusal-only principal. No repository query or command accepts it; every guarded
+  routine still refuses its binding. The holder can end their own session through the existing
+  `contractor-session-revoke` path only.

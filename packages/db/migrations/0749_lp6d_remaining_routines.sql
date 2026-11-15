@@ -4848,15 +4848,48 @@ END $$;
 CREATE OR REPLACE FUNCTION app.contractor_session(s uuid)
  RETURNS TABLE(tenant_id uuid,membership_id uuid,identity_user_id uuid)
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE selected_tenant uuid;
+DECLARE selected_tenant uuid; bound boolean; settled boolean:=true; saved text; base_active boolean; answer record;
 BEGIN
  -- LP6D_BOUND: this credential bridge binds before returning an actor. The
  -- private projection below is also used by the binding lookup, avoiding a cycle.
  SELECT live.tenant_id INTO selected_tenant FROM app.contractor_practice_session_live(s) live;
  IF selected_tenant IS NULL THEN RETURN; END IF;
- PERFORM app.bind_request('contractor_practice',s::text,selected_tenant);
- RETURN QUERY SELECT effective.* FROM app.lp6d_contractor_session_identity(s) effective
-  WHERE effective.tenant_id=app.current_tenant() AND effective.membership_id=app.current_actor();
+ -- R4 (PH13): an unbound lookup never waits behind an in-flight end of this session. Main's bridge
+ -- took no lock; binding's FOR SHARE would wait for the open revoke. Probe without waiting first.
+ BEGIN PERFORM app.current_actor(); bound:=true;
+ EXCEPTION WHEN insufficient_privilege THEN bound:=false; END;
+ IF NOT bound THEN
+  BEGIN
+   PERFORM 1 FROM control_plane.contractor_practice_session x
+    WHERE x.session_digest=app.contractor_practice_session_digest(s) FOR SHARE NOWAIT;
+  EXCEPTION WHEN lock_not_available THEN settled:=false; END;
+ END IF;
+ IF settled THEN
+  PERFORM app.bind_request('contractor_practice',s::text,selected_tenant);
+  RETURN QUERY SELECT effective.* FROM app.lp6d_contractor_session_identity(s) effective
+   WHERE effective.tenant_id=app.current_tenant() AND effective.membership_id=app.current_actor();
+  RETURN;
+ END IF;
+ -- An end is in flight: answer from committed state as main did, but with binding's own refusals
+ -- (revoked/expired base owner or effective actor). Nothing is bound; every guarded routine still binds.
+ saved:=current_setting('app.tenant_id',true);
+ PERFORM set_config('app.tenant_id',selected_tenant::text,true);
+ base_active:=EXISTS(SELECT 1 FROM app.contractor_practice_session_live(s) l JOIN app.membership base
+   ON (base.tenant_id,base.id,base.identity_user_id)=(l.tenant_id,l.membership_id,l.identity_user_id)
+  WHERE base.revoked_at IS NULL AND (base.expires_at IS NULL OR base.expires_at>clock_timestamp())
+   AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE (r.tenant_id,r.membership_id)=(base.tenant_id,base.id)));
+ SELECT effective.tenant_id,effective.membership_id,effective.identity_user_id INTO answer
+  FROM app.lp6d_contractor_session_identity(s) effective
+  JOIN app.membership m ON (m.tenant_id,m.id,m.identity_user_id)=(effective.tenant_id,effective.membership_id,effective.identity_user_id)
+  WHERE m.tenant_id=selected_tenant
+   AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+   AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE (r.tenant_id,r.membership_id)=(m.tenant_id,m.id))
+  LIMIT 1;
+ PERFORM set_config('app.tenant_id',coalesce(saved,''),true);
+ IF NOT base_active OR answer.membership_id IS NULL THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+ RETURN QUERY SELECT answer.tenant_id,answer.membership_id,answer.identity_user_id;
 END $$;
 
 -- Router ruling (r8): contractor_session keeps refusing a revoked base owner. That
@@ -4884,6 +4917,39 @@ END $$;
 ALTER FUNCTION app.lp6d_refused_contractor_principal(uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp6d_refused_contractor_principal(uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.lp6d_refused_contractor_principal(uuid) TO jobguard_runtime;
+
+-- Latest body: packages/db/migrations/0138_practice_session_hardening.sql
+-- LP-6a bootstrap (actorless issuer, never bound): only the existing-session read changes.
+CREATE OR REPLACE FUNCTION app.start_contractor_practice(s uuid) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid; u uuid; a uuid; m uuid; r uuid; b uuid; team_id uuid; assignment uuid; digest char(64); reading timestamptz; home timestamptz;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(s::text,55));
+ -- R4 (PH13): an existing session is read under FOR SHARE without waiting. While its end is in flight
+ -- the start refuses at once (the ended-session answer), so the binding that follows never waits on it.
+ BEGIN
+  SELECT x.tenant_id INTO t FROM control_plane.contractor_practice_session x WHERE x.session_digest=app.contractor_practice_session_digest(s) FOR SHARE NOWAIT;
+ EXCEPTION WHEN lock_not_available THEN RETURN '00000000-0000-0000-0000-000000000000'::uuid;
+ END;
+ IF t IS NOT NULL THEN
+  IF EXISTS(SELECT 1 FROM app.contractor_practice_session_live(s)) THEN RETURN t; END IF;
+  RETURN '00000000-0000-0000-0000-000000000000'::uuid;
+ END IF;
+ digest:=app.contractor_practice_session_digest(s); reading:=clock_timestamp(); home:=app.contractor_practice_home_deadline(digest,reading);
+ IF home='-infinity'::timestamptz THEN RETURN '00000000-0000-0000-0000-000000000000'::uuid; END IF;
+ t:=gen_random_uuid(); u:=gen_random_uuid(); a:=gen_random_uuid(); m:=gen_random_uuid(); r:=gen_random_uuid(); b:=gen_random_uuid(); team_id:=gen_random_uuid(); assignment:=gen_random_uuid();
+ PERFORM set_config('app.tenant_id',t::text,true);
+ INSERT INTO control_plane.tenant(id) VALUES(t); INSERT INTO identity.identity_user(id) VALUES(u);
+ INSERT INTO app.account(id,tenant_id,name) VALUES(a,t,'Fictional contractor');
+ INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES(m,t,a,u,'owner');
+ INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) VALUES(gen_random_uuid(),t,m,u,digest,reading,LEAST(home,reading+interval '7 days'));
+ PERFORM app.assign_commercial_track(t,assignment,'contractor','synthetic-agreement:'||t,0,'operations:synthetic-generator');
+ INSERT INTO app.contractor_member VALUES(t,m,NULL,'owner@fictional.invalid');
+ INSERT INTO app.org_unit VALUES(t,t,'tenant',NULL,NULL,'Fictional contractor'),(t,r,'region',t,'tenant','Fictional region'),(t,b,'branch',r,'region','Fictional branch');
+ INSERT INTO app.team(tenant_id,id,branch_id,name) VALUES(t,team_id,b,'Fictional team');
+ INSERT INTO app.role_grant VALUES(t,gen_random_uuid(),m,'owner','tenant',t,NULL);
+ RETURN t;
+END $$;
 
 -- Router ruling (r9): a revoked member's site-visit refusal is still a 403 whose audit is
 -- written FIRST, never through an unbound call into a guarded routine. This private writer

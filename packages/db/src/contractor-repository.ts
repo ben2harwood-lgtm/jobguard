@@ -1,4 +1,4 @@
-import { RequestBindingRefusedError } from "./request-binding-error.js";
+import { RequestBindingRefusedError, isRequestBindingRefusal } from "./request-binding-error.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { ContractorError, contractorCommandV1, contractorQueryV1, contractorWorkspaceV1, type ContractorCommand } from "@jobguard/core";
@@ -59,7 +59,17 @@ export function requireContractorRefusalContext(principal: AuthenticatedMembersh
 export class ContractorRepository {
  constructor(private readonly pool: Pool) {}
  async resolveSession(sessionId: string): Promise<AuthenticatedMembership> {
-  const row=(await this.pool.query<{tenant_id:string;membership_id:string;identity_user_id:string}>("SELECT * FROM app.contractor_session($1)",[sessionId])).rows[0];
+  let row: {tenant_id:string;membership_id:string;identity_user_id:string} | undefined;
+  try { row=(await this.pool.query<{tenant_id:string;membership_id:string;identity_user_id:string}>("SELECT * FROM app.contractor_session($1)",[sessionId])).rows[0]; }
+  catch(error) {
+   // R4 (D3/PH11, main's behaviour): a live session whose base membership was revoked still names its
+   // principal, for attribution and ending the session only. It is refusal-only: no repository query or
+   // command accepts it, and every guarded routine still refuses its binding.
+   if(!isRequestBindingRefusal(error)) throw error;
+   const refused=await this.refusedSessionPrincipal(sessionId);
+   if(refused) return refused;
+   throw error;
+  }
   if(!row) throw new ContractorError("UNAUTHENTICATED");
   return sessionPrincipal(row, sessionId);
  }

@@ -186,6 +186,69 @@
     {
       "section": "routines",
       "before": {
+        "identity": "function:app.start_contractor_practice(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "f87a23ba22b0de7a8fa89bb2e6668b818ddb2201906c697fdd8d2af735dbb861",
+        "staticWrites": [
+          "app.account",
+          "app.contractor_member",
+          "app.membership",
+          "app.org_unit",
+          "app.role_grant",
+          "app.team",
+          "control_plane.contractor_practice_session",
+          "control_plane.tenant",
+          "identity.identity_user"
+        ],
+        "staticCalls": [
+          "app.assign_commercial_track",
+          "app.contractor_practice_home_deadline",
+          "app.contractor_practice_session_digest",
+          "app.contractor_practice_session_live"
+        ]
+      },
+      "after": {
+        "identity": "function:app.start_contractor_practice(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "ff2c0e08e1367719ee0c538277f81710ab659f2e033c4a679a7f8050884dc737",
+        "staticWrites": [
+          "app.account",
+          "app.contractor_member",
+          "app.membership",
+          "app.org_unit",
+          "app.role_grant",
+          "app.team",
+          "control_plane.contractor_practice_session",
+          "control_plane.tenant",
+          "identity.identity_user"
+        ],
+        "staticCalls": [
+          "app.assign_commercial_track",
+          "app.contractor_practice_home_deadline",
+          "app.contractor_practice_session_digest",
+          "app.contractor_practice_session_live"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
         "identity": "function:app.transition_scope_progress(uuid,uuid,uuid,integer,character varying,character varying)",
         "owner": "jobguard_migration",
         "securityDefiner": true,
@@ -4378,10 +4441,11 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "0c741ca30193158dcc31dbd3755f15b4d7536718e2b3a9d31d623cad3e6b270f",
+        "definitionSha256": "31ec4cf4fc9e0ae0751ebf8717464de6d68653d025e08445b41ed982b933b053",
         "staticWrites": [],
         "staticCalls": [
           "app.bind_request",
+          "app.contractor_practice_session_digest",
           "app.contractor_practice_session_live",
           "app.current_actor",
           "app.current_tenant",
