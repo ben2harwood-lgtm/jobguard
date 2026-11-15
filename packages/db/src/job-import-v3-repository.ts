@@ -6,6 +6,7 @@ import { CommandError, UserCommandDispatcher, type CommandMutation, type Consequ
 import { meterPlaceAdmissionHold } from "./meter-place-admission.js";
 import { practiceOwnedJobsSql } from "./practice-session.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { isRequestBindingRefusal } from "./request-binding-error.js";
 import { importFixtureV3, importTargetJobIdV3, importPublicRequestHashV3 } from "./job-import-v3-fixtures.js";
 import { ImportPreAdoptionRepository, importedCatchCommand } from "./import-pre-adoption-repository.js";
 
@@ -34,6 +35,8 @@ async function owned(db: TenantTransaction, tenantId: string, digest: string, jo
     : "SELECT app.ch5_import_actor($2,$1) membership_id", [digest, tenantId])).rows[0];
   } catch (error) {
     if (error instanceof Error && ["METER_FORBIDDEN", "FORBIDDEN"].includes(error.message)) throw new JobImportV3Error("FORBIDDEN");
+    // LP-6d: a request bound to another actor or company refuses at binding; keep the main FORBIDDEN code.
+    if (isRequestBindingRefusal(error)) throw new JobImportV3Error("FORBIDDEN");
     throw error;
   }
   if (!principal || (expectedActor !== undefined && uuid.parse(principal.membership_id) !== uuid.parse(expectedActor))) throw new JobImportV3Error("FORBIDDEN");

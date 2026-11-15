@@ -1,10 +1,11 @@
+import type { AuthenticatedMembership } from "./tenant-context.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { encodeWorkOrderCsv, referenceApprovalRulesV1, type WorkOrderSampleId } from "@jobguard/core";
 import { ContractorPartyRepository } from "./contractor-party-repository.js";
 import { ContractorRepository } from "./contractor-repository.js";
 import { SorRepository } from "./sor-repository.js";
-import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "./tenant-context.js";
+import { verifiedTenantContextFromMembership, withTenant } from "./tenant-context.js";
 
 /**
  * Generated, fictional fixtures for ENT-2 (C3): the demo organisation's housing association, contract, schedule of rates, sites and operative,
