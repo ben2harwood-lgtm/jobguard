@@ -39,10 +39,8 @@ export class ContractorBillingRepository {
    const groups=(await db.$client.query("SELECT app.cb_inputs($1,$2) groups",[session,job])).rows[0].groups as {source:string;invoiceNumber:string;inputHash:string;facts:{payload:BillingStatus;match_valid:boolean;ambiguous:boolean}[]}[];
    for(const g of groups){
     const rows=g.facts;
-    let projection:BillingProjection;
     const valid=rows.filter(r=>r.match_valid&&!r.ambiguous);
-    try{projection=deriveUnambiguousBilling(valid.map(r=>r.payload));}
-    catch(e){if(!(e instanceof BillingDataError))throw e;projection={...deriveUnambiguousBilling([]),held:rows.map(r=>({sourceEventId:r.payload.sourceEventId,reason:"COMPOSITION_REQUIRED" as const}))};}
+    let projection=deriveUnambiguousBilling(valid.map(r=>r.payload));
     projection={...projection,held:[...projection.held,...rows.filter(r=>!r.match_valid||r.ambiguous).map(r=>({sourceEventId:r.payload.sourceEventId,reason:"COMPOSITION_REQUIRED" as const}))].sort((a,b)=>a.sourceEventId.localeCompare(b.sourceEventId))};
     await db.$client.query("SELECT app.cb_derive($1,$2,$3,$4,$5,$6,$7::jsonb)",[session,job,input.commandId,g.source,g.invoiceNumber,g.inputHash,canonicalJson(projection)]);
    }

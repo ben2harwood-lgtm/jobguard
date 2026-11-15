@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-152": {
+      "branches": ["codex/sandbox/later-safety-152"],
+      "allow": [
+        "packages/db/src/contractor-billing-repository.ts",
+        "packages/db/test/contractor-billing-import-failure.integration.test.ts"
+      ]
+    }
+  }
+}
