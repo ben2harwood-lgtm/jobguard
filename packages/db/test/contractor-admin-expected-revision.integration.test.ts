@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { readFileSync } from "node:fs";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -37,6 +38,9 @@ describe("contractor admin requires expectedRevision (real embedded PostgreSQL)"
  }
  async function direct(db: PoolClient, raw: Record<string, unknown>) {
   await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]);
+  // LP-6d: the direct call runs inside the owner's own bound request (its persisted fixture credential).
+  await testBoundTenantContext(c.admin, f.p.tenantId, f.p.membershipId);
+  await db.query("SELECT app.bind_request('real',$1,$2)", [sha256Hex(`lp6-test:${f.p.tenantId}:${f.p.membershipId}`), f.p.tenantId]);
   await db.query("SET LOCAL ROLE jobguard_runtime");
   return db.query("SELECT app.contractor_admin_command($1,$2::jsonb,$3) result", [f.p.membershipId, JSON.stringify(raw), sha256Hex(canonicalJson(raw))]);
  }

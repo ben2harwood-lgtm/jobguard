@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { PracticeWorkerSwitchError } from "@jobguard/core";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
-import { currentCommand, type Cluster } from "./contractor-practice-session-fixtures.js";
+import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, WorkOrderRepository, workOrderFailure, requireContractorRequestContext, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { currentCommand, memberSessionPrincipal, companyRows, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { cluster, company, start, end, state, lookup, repo, on, off, text, expireSwitch, makeSessionExpired, startSessionWithHomeRecord, endHomeRecord, resolvers, raw, requestContext } from "./practice-worker-switch-fixtures.js";
 let c: Cluster;
 beforeAll(async () => { process.env.JOBGUARD_ENV = "synthetic_demo"; c = await cluster(); }, 120000);
@@ -221,10 +221,50 @@ it("[PW9] home record ending during a current switch leaves both session and swi
 it("[PW32] decision 39 grants stay with the member and revocation removes job access", async () => {
  const f = await company(c), contracts = new ContractorRepository(c.runtime);
  await start(c, f);
- for (const role of ["operative", "supervisor", "surveyor"]) await contracts.command(f.p, await currentCommand(c, f, { kind: "grant.create", membershipId: f.members.operative, role, scope: { kind: "team", id: f.demo.teamId }, contractId: null }));
- await contracts.command(f.p, await currentCommand(c, f, { kind: "membership.revoke", membershipId: f.members.operative }));
- await expect(new JobSchedulingRepository(c.runtime).assignments(await lookup(c, f), f.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
- await end(c, f); await expect(start(c, f)).rejects.toMatchObject({ code: "NOT_FOUND" });
+ // Router ruling (PW32): the owner administers during a switch only through a request bound to the owner (its own
+ // owner session), never through the acting session; the acting (worker-bound) session is refused.
+ const owner = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.p.membershipId);
+ await expect(contracts.command(f.p, await currentCommand(c, f, { kind: "grant.create", membershipId: f.members.operative, role: "operative", scope: { kind: "team", id: f.demo.teamId }, contractId: null }))).rejects.toMatchObject({ code: "FORBIDDEN" });
+ for (const role of ["operative", "supervisor", "surveyor"]) await contracts.command(owner, await currentCommand(c, f, { kind: "grant.create", membershipId: f.members.operative, role, scope: { kind: "team", id: f.demo.teamId }, contractId: null }));
+ await contracts.command(owner, await currentCommand(c, f, { kind: "membership.revoke", membershipId: f.members.operative }));
+ // Router ruling (decision 39): the revoked worker's acting session is refused at the first gate (contractor_session),
+ // which counts as "job access removed": no assignment is returned and nothing is written. The caller-visible code
+ // on the scheduling path stays main's NOT_FOUND (workOrderFailure, exactly as the API scheduling route maps it).
+ const writes = async () => (await c.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1", [f.p.tenantId])).rows[0].n as number;
+ const before = await writes();
+ const scheduling = async () => new JobSchedulingRepository(c.runtime).assignments(await new WorkOrderRepository(c.runtime).resolveSession(f.session), f.jobId);
+ await expect(scheduling().catch(error => { throw workOrderFailure(error); })).rejects.toMatchObject({ code: "NOT_FOUND" });
+ expect(await writes()).toBe(before);
+ // Router ruling r19: the recorded owner ends the switch through its own owner-bound request; main's next assertion stays.
+ await repo(c).switchOff(requireContractorRequestContext(owner), owner, f.session, off());
+ await expect(start(c, f)).rejects.toMatchObject({ code: "NOT_FOUND" });
+});
+it("[PW32] the recorded owner alone ends a switch after the worker is revoked, end-only and idempotent (r19)", async () => {
+ const f = await company(c), b = await company(c), contracts = new ContractorRepository(c.runtime);
+ await start(c, f);
+ const owner = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.p.membershipId);
+ const sameFirm = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.members.admin!);
+ const otherFirmOwner = await memberSessionPrincipal(c.admin, c.runtime, b.p.tenantId, b.p.membershipId);
+ await contracts.command(owner, await currentCommand(c, f, { kind: "membership.revoke", membershipId: f.members.operative }));
+ const live = async () => (await c.admin.query("SELECT ended_at,end_reason FROM control_plane.practice_worker_switch WHERE tenant_id=$1 ORDER BY started_at DESC LIMIT 1", [f.p.tenantId])).rows[0];
+ const ended = async () => (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='practice.worker_switch.ended'", [f.p.tenantId])).rows[0].n as number;
+ const before = await companyRows(c, f.p.tenantId), endedBefore = await ended();
+ const refusedUnchanged = async () => { expect((await live()).ended_at).toBeNull(); expect(await ended()).toBe(endedBefore); expect(await companyRows(c, f.p.tenantId)).toEqual(before); };
+ // The revoked acting session stays refused, and nothing is written.
+ await expect(end(c, f)).rejects.toBeDefined(); await refusedUnchanged();
+ // A non-owner member of the same firm is refused.
+ await expect(repo(c).switchOff(requireContractorRequestContext(sameFirm), sameFirm, f.session, off())).rejects.toBeInstanceOf(PracticeWorkerSwitchError); await refusedUnchanged();
+ // Another firm's owner is refused.
+ await expect(repo(c).switchOff(requireContractorRequestContext(otherFirmOwner), otherFirmOwner, f.session, off())).rejects.toBeInstanceOf(PracticeWorkerSwitchError); await refusedUnchanged();
+ // The recorded owner ends it through its own owner-bound request: one end event, actorRef the owner.
+ const command = off(), first = await repo(c).switchOff(requireContractorRequestContext(owner), owner, f.session, command);
+ expect(first).toMatchObject({ state: "owner", endReason: "switched_back" });
+ expect((await live()).end_reason).toBe("switched_back"); // existing reason values only (no new schema)
+ expect(await ended()).toBe(endedBefore + 1);
+ expect((await c.admin.query("SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='practice.worker_switch.ended' ORDER BY sequence DESC LIMIT 1", [f.p.tenantId])).rows[0].actor_ref).toBe(`membership:${f.p.membershipId}`);
+ // Replay returns the same end and writes no second end event.
+ expect(await repo(c).switchOff(requireContractorRequestContext(owner), owner, f.session, command)).toEqual(first);
+ expect(await ended()).toBe(endedBefore + 1);
 });
 it("[PW23] catalogue-wide scan stores neither session values nor extra digests", async () => {
  const { digestOf } = await import("./practice-worker-switch-fixtures.js");
@@ -293,8 +333,13 @@ it.each(["owner membership", "owner grant", "small-builder track"])("[PW4] %s ca
   });
  }
  const shapes = [];
+ // LP-6d: a revoked owner's session can no longer be bound (contractor_session refuses it before any request
+ // context exists), so that case is driven through the API route a caller uses; its visible answer stays main's.
+ const { PracticeWorkerSwitchApplication } = await import("../../../apps/api/src/contractor/practice-worker-switch.application.js");
  for (const workerId of [f.members.supervisor, f.members.operative, randomUUID(), other.members.operative]) {
-  const failure = await repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId }).catch(error => ({ code: error.code, message: error.message })); shapes.push(failure);
+  const failure = await (change === "owner membership"
+   ? new PracticeWorkerSwitchApplication(c.runtime).start({ version: "contractor-principal.v1", sessionId: f.session }, workerId, on())
+   : repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId })).catch(error => ({ code: error.code, message: error.message })); shapes.push(failure);
  }
  expect(shapes).toEqual(Array(4).fill({ code: "SWITCH_FORBIDDEN", message: "SWITCH_FORBIDDEN" }));
  expect(await text(c, "control_plane.practice_worker_switch", f.p.tenantId)).toEqual([]);
@@ -317,9 +362,14 @@ it("[PW32] team move and grant revocation remain available while acting", async 
  const f = await company(c), contractors = new ContractorRepository(c.runtime);
  const team = await contractors.command(f.p, await currentCommand(c, f, { kind: "team.create", branchId: f.demo.branchId, name: "Fictional second team" }));
  await start(c, f);
- await contractors.command(f.p, await currentCommand(c, f, { kind: "team.move", membershipId: f.members.operative, fromTeamId: f.demo.teamId, toTeamId: team.id }));
+ // Router ruling (PW32): available while acting, but only in a separate request bound to the owner; the same admin
+ // commands through the acting (worker-bound) session are refused.
+ const owner = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.p.membershipId);
+ await expect(contractors.command(f.p, await currentCommand(c, f, { kind: "team.move", membershipId: f.members.operative, fromTeamId: f.demo.teamId, toTeamId: team.id }))).rejects.toMatchObject({ code: "FORBIDDEN" });
+ await contractors.command(owner, await currentCommand(c, f, { kind: "team.move", membershipId: f.members.operative, fromTeamId: f.demo.teamId, toTeamId: team.id }));
  const grant = (await c.admin.query("SELECT g.id FROM app.role_grant g WHERE g.tenant_id=$1 AND g.membership_id=$2 AND g.scope_id=$3 AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE r.tenant_id=g.tenant_id AND r.grant_id=g.id)", [f.p.tenantId, f.members.operative, team.id])).rows[0]!.id;
- await contractors.command(f.p, await currentCommand(c, f, { kind: "grant.revoke", grantId: grant }));
+ await expect(contractors.command(f.p, await currentCommand(c, f, { kind: "grant.revoke", grantId: grant }))).rejects.toMatchObject({ code: "FORBIDDEN" });
+ await contractors.command(owner, await currentCommand(c, f, { kind: "grant.revoke", grantId: grant }));
  await expect(new JobSchedulingRepository(c.runtime).assignments(await lookup(c, f), f.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
  await end(c, f);
 });

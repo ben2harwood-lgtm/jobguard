@@ -21,6 +21,8 @@ function fixture(enabled = false) {
       ...Object.fromEntries(["agreements","changes","changeOutcomes","periods","statements","reviews","work","attempts","results","corrections","alerts","onboarding","periodLines","placeBindings","places","statementLines","operationsCards"].map(key => [key, []])),
     } }] };
     if (sql.startsWith("SELECT app.mon2_command")) throw new Error("claim reached");
+    // LP-6d: the exact-grant executor takes its authorization row lock through the migration-owned lock helper first.
+    if (sql.startsWith("SELECT app.lp6d_lock_action_authorization(")) { expect(inTransaction).toBe(true); return { rows: [{}] }; }
     if (sql.startsWith("SELECT a.*")) return { rows: [{ tenant_id: context.tenantId, action_type: "quote.send", recipient: null,
       content_hash: "a".repeat(64), aggregate_revision: 1, amount_pence: null, currency: null, policy_version: "synthetic.v1",
       expires_at: new Date("2099-01-01") }] };

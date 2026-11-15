@@ -36,8 +36,10 @@ it("ENT-5 worker discovery, crash rollback, concurrent restart, tenant confineme
   expect(await discover()).toEqual(expect.arrayContaining([{tenant_id: a.p.tenantId}, {tenant_id: b.p.tenantId}]));
   expect((await discover()).every(row => Object.keys(row).join() === "tenant_id")).toBe(true);
   // Crash after the fact insert but before appendAuditBatch: rollback must leave neither behind.
-  await expect(withTenant(c.runtime, context, async db => {
-    const fired = await db.$client.query("SELECT * FROM app.xa_escalate()");
+  // The worker runs each tenant under the queued job's unbound context.
+  await expect(withTenant(c.runtime, verifiedTenantContextForQueuedJob(context.tenantId), async db => {
+    // LP-6d (router ruling r11): the actor-less sweep runs through the worker definer, as the repository does.
+    const fired = await db.$client.query("SELECT * FROM app.lp6d_escalate_overdue_worker()");
     expect(fired.rows.some(row => row.request_id === overdue.requestId)).toBe(true);
     throw new Error("synthetic crash before audit");
   })).rejects.toThrow("synthetic crash before audit");
@@ -46,7 +48,7 @@ it("ENT-5 worker discovery, crash rollback, concurrent restart, tenant confineme
   const pair = await Promise.all([run(), run()]);
   expect(pair.flat().filter(row => row.request_id === overdue.requestId)).toHaveLength(1);
   // Fresh repository instance represents a restart after commit, before job acknowledgement.
-  expect(await new ExtraApprovalRepository(c.runtime).escalateOverdue(context)).toEqual([]);
+  expect(await new ExtraApprovalRepository(c.runtime).escalateOverdue(verifiedTenantContextForQueuedJob(context.tenantId))).toEqual([]);
   expect((await c.admin.query("SELECT 1 FROM app.extra_escalation_fact WHERE request_id=$1", [overdue.requestId])).rows).toHaveLength(1);
   expect((await c.admin.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND event_type='contractor.extra.escalated' AND subject_ref=$2", [a.p.tenantId, overdue.extraId])).rows).toHaveLength(1);
   expect((await c.admin.query("SELECT 1 FROM app.extra_escalation_fact WHERE request_id=$1", [other.requestId])).rows).toEqual([]);
@@ -56,11 +58,11 @@ it("ENT-5 worker discovery, crash rollback, concurrent restart, tenant confineme
   // A valid different tenant identifier confines execution to that tenant, never to A's requests.
   expect((await escalateOverdueExtrasTask(c.runtime, verifiedTenantContextForQueuedJob(b.p.tenantId))).map(row => row.request_id)).toEqual([other.requestId]);
   expect(await discover()).toEqual([]);
-  expect((await repository.queue(context, a.members.surveyor.member.membershipId)).some(row => row.request_id === overdue.requestId)).toBe(true);
+  expect((await repository.queue(await testActorContext(c.admin, context, a.members.surveyor.member), a.members.surveyor.member.membershipId)).some(row => row.request_id === overdue.requestId)).toBe(true);
   await expect(repository.approveExtraStep(await testActorContext(c.admin, context, a.members.finance.member), a.members.finance.member, approveInput(overdue, 0))).rejects.toMatchObject({code: "PERMISSION_DENIED"});
   await command(c, a, {kind: "grant.revoke", grantId: a.members.surveyor.grant});
   await expect(repository.approveExtraStep(await testActorContext(c.admin, context, a.members.surveyor.member), a.members.surveyor.member, approveInput(overdue, 0))).rejects.toMatchObject({code: "PERMISSION_DENIED"});
-  expect((await repository.queue(context, a.members.surveyor.member.membershipId)).some(row => row.request_id === overdue.requestId)).toBe(false);
+  expect((await repository.queue(await testActorContext(c.admin, context, a.members.surveyor.member), a.members.surveyor.member.membershipId)).some(row => row.request_id === overdue.requestId)).toBe(false);
   // The original approver retains authority; a decided request cannot fire again.
   await repository.approveExtraStep(await testActorContext(c.admin, context, a.members.supervisor.member), a.members.supervisor.member, approveInput(overdue, 0, {commandId: randomUUID()}));
   expect(await run()).toEqual([]);
