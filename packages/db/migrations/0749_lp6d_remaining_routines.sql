@@ -1344,7 +1344,7 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a uuid; identity_user uuid; member_role text; role_set text[];
@@ -1401,7 +1401,7 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; j uuid:=(p_input->>'jobId')::uuid; a uuid; result jsonb; lim integer:=coalesce((p_input->>'limit')::integer,50); x jsonb;
@@ -1441,7 +1441,7 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; j uuid:=(p_input->>'jobId')::uuid; a uuid; cid uuid:=(p_input->>'commandId')::uuid;
@@ -1608,7 +1608,7 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a uuid; r app.command_receipt;
@@ -1654,7 +1654,7 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; w app.work_order; r app.work_order_revision; cfg app.extra_prompt_rule_settings; entries jsonb; work_ids jsonb; sources jsonb; observations jsonb;
@@ -1684,7 +1684,7 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE answer uuid;
@@ -2641,7 +2641,7 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE a uuid;
@@ -2660,7 +2660,7 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a uuid; h jsonb:=p_history::jsonb;
@@ -2721,7 +2721,7 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a uuid; h jsonb;
@@ -2986,7 +2986,7 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid; live record; rule record; saved control_plane.practice_worker_switch; marker control_plane.practice_company_marker; reading timestamptz; replay boolean:=false;
@@ -3056,7 +3056,7 @@ BEGIN
   WHERE base.tenant_id=app.current_tenant() AND s.tenant_id=app.current_tenant()
    AND base.membership_id=app.current_actor() AND s.owner_membership_id=app.current_actor()) THEN
   NULL;
- ELSIF NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+ ELSIF NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid; live record; saved control_plane.practice_worker_switch; reading timestamptz; replay boolean:=false;
@@ -3098,7 +3098,7 @@ BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid; live record; saved control_plane.practice_worker_switch; answer text:='owner';
@@ -4686,7 +4686,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$BEGIN
  -- LP6D_BOUND: run before original DECLARE initializers and business locks.
  PERFORM app.current_actor();
  IF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
-  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session) checked_session WHERE checked_session.tenant_id=app.current_tenant() AND checked_session.membership_id=app.current_actor()) THEN
+  OR NOT EXISTS(SELECT 1 FROM app.contractor_session(p_session)) OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(p_session) checked_session WHERE checked_session.tenant_id=app.current_tenant() AND checked_session.membership_id=app.current_actor()) THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; a uuid;

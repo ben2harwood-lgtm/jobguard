@@ -1697,7 +1697,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "3f9c89d400cb1eeef57146d6b9c6cfb166e2ce14ab49e929abf47af148af0be2",
+        "definitionSha256": "ba32c73d0d3626f441a130477cb639a371cb25970507e307b3ccc2f8139523da",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_job_team",
@@ -1706,6 +1706,7 @@
           "app.contractor_session",
           "app.current_actor",
           "app.current_tenant",
+          "app.lp6d_contractor_session_identity",
           "app.mon8_require_feature",
           "app.require_watchdog_live"
         ]
@@ -1741,12 +1742,13 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "24346bb0e3e4d113fb5f4c8d634eba04397fa0470778fb9cced0bdb4bac94f04",
+        "definitionSha256": "68da8dc0bc1193aa3eca5d5cd2b26d4a6e48ced8c4b71b64a0513a61546e9a8f",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_session",
           "app.current_actor",
           "app.current_tenant",
+          "app.lp6d_contractor_session_identity",
           "app.lp_authority"
         ]
       }
@@ -1797,7 +1799,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "9c98578715db500cb8ec44f84edbb17f4a316070d5a43ddb42181f994a093c98",
+        "definitionSha256": "368326a9bac1a466899925876b24fa7dcfb2a2a21361b322867e769a2c556769",
         "staticWrites": [
           "app.command_receipt",
           "app.contractor_job_finish",
@@ -1815,6 +1817,7 @@
           "app.contractor_session",
           "app.current_actor",
           "app.current_tenant",
+          "app.lp6d_contractor_session_identity",
           "app.lp_authority",
           "app.lp_citations_valid",
           "app.lp_evaluate",
@@ -1853,12 +1856,13 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "42a2a239146486a7ab88a53fd918809cddbb10b729143468cb70d6fb4f458193",
+        "definitionSha256": "4caf88936e04234df9cdc6b885cb58a7d799246499ac953a9ccdd478b907de42",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_session",
           "app.current_actor",
-          "app.current_tenant"
+          "app.current_tenant",
+          "app.lp6d_contractor_session_identity"
         ]
       }
     },
@@ -1936,12 +1940,13 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "33e619c4f3c53dbf329eb22ef9c0757c2dba169f07abb347e4113722de0b71f2",
+        "definitionSha256": "4ce8d8b9c08925021c261b00c006898985fd38b0fb1ec832d528aa4722013841",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_session",
           "app.current_actor",
           "app.current_tenant",
+          "app.lp6d_contractor_session_identity",
           "app.lp_authority"
         ]
       }
@@ -1976,12 +1981,13 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "761578fe1bdd224462878db929512d6c08e8f89ab1468c9a4717534181bd05e7",
+        "definitionSha256": "640ae6e6524bc29778d850918ac13539557b67c9e922da8b8db5e7dcabfbf97e",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_session",
           "app.current_actor",
           "app.current_tenant",
+          "app.lp6d_contractor_session_identity",
           "app.lp_authority"
         ]
       }
@@ -2843,12 +2849,13 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "5bd12a06259abffad4e0eaa9560368cf5ee5a500f998b24b009202733efce343",
+        "definitionSha256": "4b01d3a21f342a02529983e99d5c13af65939f9a1125545dc645e3d4adddf616",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_session",
           "app.current_actor",
           "app.current_tenant",
+          "app.lp6d_contractor_session_identity",
           "app.mon8_require_feature",
           "app.mon8_retained_baseline_actor"
         ]
@@ -2889,7 +2896,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "3ab5df09ce909590148c5b55557eb916fca2717eeb14fec105647bda894fe9e8",
+        "definitionSha256": "162de12b016257bee7b6218c8da84e33a38df3ca5e986bbf60aeddb4d314da62",
         "staticWrites": [
           "app.enterprise_baseline_batch",
           "app.enterprise_baseline_team"
@@ -2900,7 +2907,8 @@
           "app.current_actor",
           "app.current_tenant",
           "app.enterprise_baseline_actor",
-          "app.lp4_seal_audit"
+          "app.lp4_seal_audit",
+          "app.lp6d_contractor_session_identity"
         ]
       }
     },
@@ -2935,13 +2943,14 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "d1cdbe73e50c2b923b3a8521144abd055bd7ff593f90695a2bb0b51567b83290",
+        "definitionSha256": "3095478d2219848cf564e7d157df442c90ecd2c9796c5376ccf1d2839866a461",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_allowed",
           "app.contractor_session",
           "app.current_actor",
           "app.current_tenant",
+          "app.lp6d_contractor_session_identity",
           "app.mon8_retained_baseline_actor"
         ]
       }
@@ -3115,7 +3124,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "08ff9db168e8a01376e7eb5f942c2c30885519e1357778387b3145e552f4860e",
+        "definitionSha256": "2f3981972ca2c3305adf89d1730d219e8dcb9b650b6727a0838c477637082c73",
         "staticWrites": [
           "control_plane.practice_company_marker",
           "control_plane.practice_worker_switch"
@@ -3125,6 +3134,7 @@
           "app.contractor_session",
           "app.current_actor",
           "app.current_tenant",
+          "app.lp6d_contractor_session_identity",
           "app.mon8_require_feature",
           "app.practice_worker_switch_decision"
         ]
@@ -3162,7 +3172,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "8471f879400d247efab57f1cf87caade308babb5f453acf69ce9704c61e4e01f",
+        "definitionSha256": "e9a08a1cd9a0d33c3cf1e3e6b7236688ff84291ee0597853faef8c47e0fe3bd1",
         "staticWrites": [
           "control_plane.practice_worker_switch"
         ],
@@ -3170,7 +3180,8 @@
           "app.contractor_practice_session_live",
           "app.contractor_session",
           "app.current_actor",
-          "app.current_tenant"
+          "app.current_tenant",
+          "app.lp6d_contractor_session_identity"
         ]
       }
     },
@@ -3205,13 +3216,14 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "686877444936e86491d09b37cd1d353016c0af0a05061de4625bbddf6465fea9",
+        "definitionSha256": "e256c40b0e4321b556e90742b8860e37df98c9003a9a03158a310698d7f3d81f",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_practice_session_live",
           "app.contractor_session",
           "app.current_actor",
-          "app.current_tenant"
+          "app.current_tenant",
+          "app.lp6d_contractor_session_identity"
         ]
       }
     },
@@ -4358,13 +4370,14 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "583110fa2ca52616de9f25be0ffde93d755871d22bfb9159e27e7503a7d150f8",
+        "definitionSha256": "25a96d1396467f8e4b00c5bdead6fee8b033a958860f968fb4b1d9650cd1a153",
         "staticWrites": [],
         "staticCalls": [
           "app.contractor_member_active",
           "app.contractor_session",
           "app.current_actor",
-          "app.current_tenant"
+          "app.current_tenant",
+          "app.lp6d_contractor_session_identity"
         ]
       }
     },

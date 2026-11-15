@@ -1287,3 +1287,15 @@ FLAGGED: sign-in boundary (`app.contractor_session`, `app.start_contractor_pract
   returns that refusal-only principal. No repository query or command accepts it; every guarded
   routine still refuses its binding. The holder can end their own session through the existing
   `contractor-session-revoke` path only.
+
+## R4 second commit: session-argument prefixes use the binder's identity (PW27)
+
+FLAGGED: sign-in boundary. The 13 LP6D prefixes that compared `contractor_session(p_session)`
+with `current_actor()` (lp_authority, lp_read, lp_command, lp_finish, lp_sources,
+lp_observation_prompt, enterprise_baseline_actor/import/read, practice_worker_switch_on/off/state,
+mon8_retained_baseline_actor) now require BOTH that `contractor_session(p_session)` answers (so every
+refusal it makes still refuses: ended/expired session, revoked base owner, contractor revocation,
+foreign tenant, and a credential other than the bound one) AND that
+`lp6d_contractor_session_identity(p_session)`, the identity the binder used, is the bound actor. With
+the shipped `contractor_session` the two are the same set, so behaviour is equal; they differ only when
+the lookup is replaced (the PW27 rollback drill). The r19 recorded-owner branch is unchanged.
