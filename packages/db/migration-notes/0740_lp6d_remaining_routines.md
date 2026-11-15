@@ -1124,3 +1124,67 @@ pnpm test:migrations
 Green CI against current main and independent exact-head RED review remain
 required. Browser restoration is source-inspected and locally unit-tested,
 not independently verified or claimed as an executed browser pass.
+
+### LP-6d repair R2 — G4 SSO operative-role bootstrap, 15 November 2026
+
+RED. Built on the supplied 595da0da head, confirmed by read-only git inspection.
+The supplied sandbox instructions prohibit git writes, so fetching and any merge
+remain with the router. No git mutation, package installation, PostgreSQL server,
+browser, provider, real data or deployment was attempted.
+
+`identity.sso_complete` now checks a dedicated owner-only copy of the guarded
+feature decision, fixed to `operative_roles` / `new_work`, before writing an
+operative grant. Its existing `sso` decision remains separate. The INVOKER trigger
+cannot identify its caller from `current_user`, so the repair also needs a private
+one-shot permit, scoped to tenant, grant UUID, member, backend and transaction.
+Only SSO completion writes the permit; the migration-role branch of the trigger
+consumes it with DELETE and checks FOUND. Missing permits and
+all other roles still use `mon8_require_feature`. The remaining trigger body is
+unchanged. Insert failure rolls the permit back with the grant transaction.
+This extra table is necessary to distinguish SSO from unrelated migration-owned
+definers without trusting a client-set setting or weakening all definer paths.
+
+`identity.lp6d_sso_grant_permit` is an explicitly scoped identity/control-plane
+exception, not business data: migration-owned, no login grants, no retained rows
+on successful completion, no builder reads. PUBLIC, runtime, identity,
+infrastructure, shadow and each existing login receive explicit revocations on
+both table and decision. Existing non-SSO paths keep the bound feature decision.
+No general runtime table access or new network action is introduced. Migration
+0740 owns this change; no later migration or historical migration was edited.
+Forward fix through a reviewed successor if already installed; no destructive
+rollback. Upgrade empty-table expectations and the lane include the new storage.
+
+Coverage adds drift pins for the decision and unchanged trigger rules, a latest-
+definition caller list covering app and identity, and PostgreSQL regressions for
+operative SSO success/permit consumption, suspended entitlement/no writes, actual
+SSO definer ownership, all non-superuser login/business-role privileges, direct
+private-helper refusal and forged-setting permit refusal. Existing G4 and
+recovery-message tests remain enabled. Refreshed 0740's catalogue proof with the
+new routine, relation/index/empty rows, SSO and trigger digests and static calls/
+writes. The PostgreSQL function rendering reproduced both the previously pinned
+SSO digest and baseline trigger digest before calculating replacements; this is
+source verification, not an executed PostgreSQL catalogue check.
+
+Local checks actually executed with installed tools:
+
+- `./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=2 test/lp6d-routines.test.ts test/lp6d-repository-context.test.ts test/migration-proof-loader.test.ts` — PASS, 3 files / 131 tests. Initial source-pin failure was fixed by updating its exact expected SSO body to include the new checked permit, then rerun successfully.
+- `./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=2 test/lp-0-catalog.test.ts` — PASS, 31 tests.
+- `./node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit` — PASS; the same command for `apps/api` and `apps/web` — PASS.
+- `pnpm typecheck` emitted a package-manager warning and made no check progress; interrupted. Direct installed TypeScript checks above completed; no root-script pass claimed.
+- `node tools/agent-lane-boundary-lint.mjs` — PASS after removing the unnecessary self-entry (the lane file is implicitly editable).
+- `node tools/lint.mjs` — PASS, including money and PL/pgSQL checks.
+- Vitest `list --root packages/db --maxWorkers=2` with only `test/scim-deactivation-access.integration.test.ts test/recovery-messages.integration.test.ts test/lp6d-routines.integration.test.ts` — PASS, 138 discovered cases; discovery only.
+- `git diff --check` — PASS.
+
+Required CI PostgreSQL commands (not run in this sandbox; <=2 workers and <=3
+named files per invocation):
+
+```sh
+./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=2 test/scim-deactivation-access.integration.test.ts test/recovery-messages.integration.test.ts test/lp6d-routines.integration.test.ts
+./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=2 test/migfix-7.integration.test.ts test/migfix-7-upgrade.integration.test.ts test/lp-0-catalog.test.ts
+./packages/db/node_modules/.bin/vitest run --root packages/db --maxWorkers=2 test/lp-0-grant-freeze.integration.test.ts test/lp-0-authority-paths.integration.test.ts
+```
+
+READY for the router to commit and push for CI. PostgreSQL execution and exact-head
+independent RED review remain required before merge; no acceptance or live SSO
+readiness is claimed.

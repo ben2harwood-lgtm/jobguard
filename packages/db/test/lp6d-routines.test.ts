@@ -171,7 +171,13 @@ it("bounds pre-session SSO to a private SSO-only helper while guarding all runti
   const previous = source.match(/CREATE OR REPLACE FUNCTION identity\.sso_complete\([\s\S]*?\$\$;/u)![0];
   expect(sql.match(/CREATE OR REPLACE FUNCTION identity\.sso_complete\([\s\S]*?\$\$;/u)![0])
     .toBe(previous.replace("app.mon8_feature_decision(member,'sso')", "app.mon8_sso_feature_decision(member)")
-      .replace("PERFORM app.mon8_require_feature(member,'sso');", "IF NOT (app.mon8_sso_feature_decision(member)->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;"));
+      .replace("PERFORM app.mon8_require_feature(member,'sso');", "IF NOT (app.mon8_sso_feature_decision(member)->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;")
+      .replace("  grant_id:=gen_random_uuid();", `  grant_id:=gen_random_uuid();
+  IF group_row.role='operative' THEN
+   IF NOT (app.lp6d_sso_operative_roles_decision(member)->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+   INSERT INTO identity.lp6d_sso_grant_permit(tenant_id,grant_id,membership_id,backend_pid,transaction_id)
+    VALUES(t,grant_id,member,pg_backend_pid(),pg_current_xact_id());
+  END IF;`));
 });
 
 it("records private and request identities, and omits owners of runtime-inaccessible routines", async () => {
@@ -411,4 +417,46 @@ it("keeps every path to the INVOKER final-check copies running as jobguard_migra
   expect(read("../migrations/0526_commercial_integrity_sources.sql")).toMatch(/REVOKE ALL ON FUNCTION [^;]*app\.ch6_integrity_published\(uuid,uuid,text\)[^;]*FROM PUBLIC,jobguard_runtime,jobguard_shadow,jobguard_infrastructure/u);
   for (const copy of ["app.lp6d_read_final_check_reveal_unbound", "app.lp6d_final_check_builder_unbound"])
     expect(callersOf(copy), copy).toEqual(copy.endsWith("builder_unbound") ? ["app.lp6d_read_final_check_reveal_unbound"] : ["app.ch6_integrity_published"]);
+});
+
+it("pins the SSO operative entitlement copy and one-shot trigger permit to their guarded predecessors (G4)", () => {
+  const bodyOf = (name: string) => definitions(sql).filter(m => m[1] === name).at(-1)![3]!;
+  // The existing private decision is already pinned to the guarded body above.
+  expect(bodyOf("app.lp6d_sso_operative_roles_decision"))
+    .toBe(bodyOf("app.mon8_sso_feature_decision").replace("feature constant text:='sso'", "feature constant text:='operative_roles'"));
+  const previous = definitions(read("../migrations/0549_contractor_feature_guards.sql"))
+    .find(m => m[1] === "app.guard_contractor_grant")![3]!;
+  const guard = bodyOf("app.guard_contractor_grant");
+  const permit = guard.slice(guard.indexOf("  -- Only a migration-owned SSO definer"), guard.indexOf("\n END IF;"));
+  expect(guard.replace(permit, "  PERFORM app.mon8_require_feature(NEW.membership_id,'operative_roles');")).toBe(previous);
+  expect(permit).toContain("IF current_user='jobguard_migration' THEN");
+  expect(permit).toContain("tenant_id=NEW.tenant_id AND grant_id=NEW.id AND membership_id=NEW.membership_id");
+  expect(permit).toContain("backend_pid=pg_backend_pid() AND transaction_id=pg_current_xact_id()");
+  expect(permit).toContain("IF NOT FOUND THEN PERFORM app.mon8_require_feature(NEW.membership_id,'operative_roles'); END IF;");
+  expect(permit).toContain("ELSE\n   PERFORM app.mon8_require_feature(NEW.membership_id,'operative_roles');");
+  expect(sql).not.toMatch(/FUNCTION app\.guard_contractor_grant\(\)[^$]*SECURITY DEFINER/u);
+  for (const target of ["FUNCTION app.lp6d_sso_operative_roles_decision(uuid)", "TABLE identity.lp6d_sso_grant_permit"]) {
+    expect(sql).toContain(`REVOKE ALL ON ${target} FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_shadow;`);
+    expect(sql).toMatch(new RegExp(`REVOKE ALL ON ${target.replace(/[().]/gu, "\\$&")} FROM %I`, "u"));
+    expect(sql).not.toMatch(new RegExp(`GRANT [^;]*ON ${target.replace(/[().]/gu, "\\$&")}`, "u"));
+  }
+});
+
+it("allows only the migration-owned SSO completion definer to mint an operative grant permit (G4 caller list)", () => {
+  const latest = new Map<string, string>();
+  // Include identity routines as well as app: only the live definitions count.
+  for (const file of readdirSync(new URL("../migrations/", import.meta.url)).filter(f => f.endsWith(".sql")).sort()) {
+    for (const m of read(`../migrations/${file}`).matchAll(/CREATE (?:OR REPLACE )?FUNCTION ((?:app|identity)\.\w+)\([^$]*?\bAS\s+\$\$([\s\S]*?)\$\$\s*;/giu)) latest.set(m[1]!, m[0]!);
+  }
+  const callers = (pattern: RegExp) => [...latest].filter(([, def]) => pattern.test(def.split("AS $$")[1]!)).map(([name]) => name).sort();
+  expect(callers(/app\.lp6d_sso_operative_roles_decision\(/u)).toEqual(["identity.sso_complete"]);
+  expect(callers(/identity\.lp6d_sso_grant_permit/u)).toEqual(["app.guard_contractor_grant", "identity.sso_complete"]);
+  expect(callers(/INSERT INTO identity\.lp6d_sso_grant_permit/u)).toEqual(["identity.sso_complete"]);
+  expect(callers(/DELETE FROM identity\.lp6d_sso_grant_permit/u)).toEqual(["app.guard_contractor_grant"]);
+  const complete = latest.get("identity.sso_complete")!;
+  expect(complete).toContain("SECURITY DEFINER SET search_path=pg_catalog");
+  expect(complete).toContain("IF group_row.role='operative' THEN");
+  expect(complete.indexOf("app.lp6d_sso_operative_roles_decision(member)")).toBeLessThan(complete.indexOf("INSERT INTO identity.lp6d_sso_grant_permit"));
+  expect(complete.indexOf("INSERT INTO identity.lp6d_sso_grant_permit")).toBeLessThan(complete.indexOf("INSERT INTO app.role_grant VALUES"));
+  expect(read("../migrations/0120_enterprise_identity.sql")).toContain("WHERE n.nspname='identity' AND p.proname LIKE 'sso_%' LOOP\n  EXECUTE format('ALTER FUNCTION %s OWNER TO jobguard_migration',f);");
 });

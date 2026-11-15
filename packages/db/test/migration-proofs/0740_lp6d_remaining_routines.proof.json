@@ -19,7 +19,7 @@
         "responsibilities": {
           "LP-6d": "Bind remaining routines while retaining decided permissions."
         },
-        "downstream": "Reuse LP-6c binding/accessor grants; retain a private switched-session projection and one checked recovery-message authorization revocation entry point. No binding-store or general business-table write grant.",
+        "downstream": "Reuse LP-6c binding/accessor grants; retain a private switched-session projection and one checked recovery-message authorization revocation entry point. No binding-store or general business-table write grant. SSO completion alone may mint an exact transaction-bound, consumed operative-role permit in private identity control-plane storage after checking operative_roles; no login can access that storage or its dedicated decision.",
         "sources": [
           "packages/db/migrations/0740_lp6d_remaining_routines.sql"
         ],
@@ -39,7 +39,7 @@
       "after": {
         "id": "ap-lp6d-routine-binding",
         "title": "Checked remaining routines and authorization revocation",
-        "description": "Reuse LP-6c binding/accessor grants; retain a private switched-session projection and one checked recovery-message authorization revocation entry point. No binding-store or general business-table write grant.",
+        "description": "Reuse LP-6c binding/accessor grants; retain a private switched-session projection and one checked recovery-message authorization revocation entry point. No binding-store or general business-table write grant. SSO completion checks operative_roles through an owner-only pinned copy and mints a private one-shot grant permit; every other grant retains the guarded feature check.",
         "cards": [
           "LP-6d"
         ],
@@ -5735,13 +5735,14 @@
         "otherExecute": [
           "jobguard_identity"
         ],
-        "definitionSha256": "545d207febe61ac1ef2ade4d708d197e9c40a8c694b47ac954ccf6d35a909f52",
+        "definitionSha256": "64c043822e464ee4e47d6b2317de14a6488f5745141c759486f334ff696491ac",
         "staticWrites": [
           "app.contractor_member",
           "app.membership",
           "app.role_grant",
           "app.role_grant_revocation",
           "identity.identity_user",
+          "identity.lp6d_sso_grant_permit",
           "identity.membership_locator",
           "identity.oidc_assertion_use",
           "identity.security_event",
@@ -5754,6 +5755,7 @@
         ],
         "staticCalls": [
           "app.contractor_member_active",
+          "app.lp6d_sso_operative_roles_decision",
           "app.mon8_sso_feature_decision",
           "identity.sso_load_connection"
         ]
@@ -7493,6 +7495,62 @@
           "app.final_check_read_authority"
         ]
       }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6d_sso_operative_roles_decision(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "365f7654c29dffb5c64a7974bc4ed27a5795c9c06c3be71fb8a5a20ffee14bc2",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.guard_contractor_grant()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "78fc88279a64384d985221b175c2417b5d20f89817661a1775e6c33b58ad3d8d",
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.guard_contractor_grant()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "9dfa481174a262e411f45a87fe228b9f1a8e0477d395986d9af471796bd505fb",
+        "staticWrites": [
+          "identity.lp6d_sso_grant_permit"
+        ],
+        "staticCalls": [
+          "app.mon8_require_feature"
+        ]
+      }
     }
   ],
   "upgrade": [
@@ -7929,6 +7987,53 @@
         "proconfig": [
           "search_path=pg_catalog, app"
         ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_sso_operative_roles_decision",
+        "args": "actor uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "identity",
+        "relname": "lp6d_sso_grant_permit",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "identity",
+        "relname": "lp6d_sso_grant_permit_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "identity.lp6d_sso_grant_permit",
+        "data": []
       }
     }
   ],

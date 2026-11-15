@@ -7093,7 +7093,103 @@ DO $revoke$ DECLARE r record; BEGIN
  END LOOP;
 END $revoke$;
 
--- Latest body: packages/db/migrations/0549_contractor_feature_guards.sql; only the SSO feature call changes.
+-- LP-6d G4: private identity bootstrap capability, never a client-set GUC.
+-- Only sso_complete writes it after the exact operative_roles decision. The
+-- INVOKER trigger consumes the matching one-shot permit in the same transaction.
+-- Identity/control-plane exception: no login has table privileges; no retained data.
+CREATE TABLE identity.lp6d_sso_grant_permit (
+ tenant_id uuid NOT NULL, grant_id uuid NOT NULL, membership_id uuid NOT NULL,
+ backend_pid integer NOT NULL, transaction_id xid8 NOT NULL,
+ PRIMARY KEY (tenant_id,grant_id)
+);
+ALTER TABLE identity.lp6d_sso_grant_permit OWNER TO jobguard_migration;
+REVOKE ALL ON TABLE identity.lp6d_sso_grant_permit FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_shadow;
+DO $revoke$ DECLARE login record; BEGIN
+ FOR login IN SELECT rolname FROM pg_roles WHERE rolcanlogin LOOP
+  EXECUTE format('REVOKE ALL ON TABLE identity.lp6d_sso_grant_permit FROM %I',login.rolname);
+ END LOOP;
+END $revoke$;
+
+CREATE OR REPLACE FUNCTION app.lp6d_sso_operative_roles_decision(actor uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE feature constant text:='operative_roles'; purpose constant text:='new_work'; t uuid; assignment app.commercial_track_assignment; status app.contractor_agreement_status_revision;
+ agreement app.subscription_agreement_revision; entitlement text:='held'; reason text:='agreement_authority_held';
+ contractor_feature boolean; today date;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR current_setting('transaction_isolation')<>'read committed' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN t:=nullif(current_setting('app.tenant_id',true),'')::uuid; EXCEPTION WHEN invalid_text_representation THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END;
+ IF t IS NULL OR actor IS NULL OR feature IS NULL OR purpose IS NULL
+ OR feature NOT IN('watchdog','final_check','invoices','recovery_cases','pay_now','accounting_export','operative_roles','site_origin_capture','approval_chains','work_orders','sso')
+ OR purpose NOT IN('new_work','retained_read') THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ -- Organisation/status before subscription/lifecycle before business locks before audit.
+ contractor_feature:=feature IN('operative_roles','site_origin_capture','approval_chains','work_orders','sso');
+ PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
+ IF NOT contractor_feature AND purpose='new_work' THEN PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,184)); END IF;
+ -- Read after both waits. The actor belongs to this transaction's verified tenant.
+ IF NOT EXISTS(SELECT 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=actor AND m.revoked_at IS NULL
+ AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+ AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE r.tenant_id=t AND r.membership_id=m.id)) THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF purpose='retained_read' THEN
+  -- Availability only: each reader must still enforce its exact role/resource/export permissions.
+  entitlement:='included'; reason:='available';
+ ELSE
+  SELECT * INTO assignment FROM app.commercial_track_assignment WHERE tenant_id=t ORDER BY revision DESC LIMIT 1;
+  today:=(clock_timestamp() AT TIME ZONE 'Europe/London')::date;
+  IF NOT contractor_feature THEN SELECT * INTO agreement FROM app.subscription_agreement_revision WHERE tenant_id=t AND effective_date<=today ORDER BY effective_date DESC,revision DESC LIMIT 1; END IF;
+  IF assignment.commercial_track='contractor' THEN
+   IF contractor_feature THEN
+    SELECT * INTO status FROM app.contractor_agreement_status_revision WHERE tenant_id=t AND assignment_id=assignment.id ORDER BY revision DESC LIMIT 1;
+    IF status.status='active' THEN entitlement:='included'; reason:='available'; END IF;
+   ELSE entitlement:='excluded'; reason:='track_forbidden'; END IF;
+  ELSIF assignment.commercial_track='small_builder' OR (assignment.id IS NULL AND (agreement.id IS NOT NULL OR contractor_feature)) THEN
+   IF contractor_feature THEN entitlement:='excluded'; reason:='track_forbidden';
+   ELSIF agreement.id IS NOT NULL AND agreement.plan IN('Solo','Builder') THEN
+    entitlement:='included';
+    -- Live payment/accounting readiness and persisted MON-3 trial authority are not on main.
+    reason:=CASE WHEN feature IN('pay_now','accounting_export') THEN 'feature_disabled' ELSE 'available' END;
+   END IF;
+  END IF;
+ END IF;
+ RETURN jsonb_build_object('version','plan-entitlement-decision.v1','environment','synthetic_demo','feature',feature,
+  'entitlement',entitlement,'executable',reason='available','reason',reason);
+END $$;
+ALTER FUNCTION app.lp6d_sso_operative_roles_decision(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp6d_sso_operative_roles_decision(uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure,jobguard_shadow;
+DO $revoke$ DECLARE r record; BEGIN
+ FOR r IN SELECT rolname FROM pg_roles WHERE rolcanlogin LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION app.lp6d_sso_operative_roles_decision(uuid) FROM %I',r.rolname);
+ END LOOP;
+END $revoke$;
+
+CREATE OR REPLACE FUNCTION app.guard_contractor_grant() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+DECLARE bound_client uuid; BEGIN
+ IF NEW.role='operative' THEN
+  IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=NEW.tenant_id AND id=NEW.membership_id) THEN RAISE EXCEPTION 'foreign membership' USING ERRCODE='23503'; END IF;
+  -- Only a migration-owned SSO definer can have written this exact permit.
+  -- Keep the trigger INVOKER: runtime must never inherit marker-table access.
+  IF current_user='jobguard_migration' THEN
+   DELETE FROM identity.lp6d_sso_grant_permit
+    WHERE tenant_id=NEW.tenant_id AND grant_id=NEW.id AND membership_id=NEW.membership_id
+    AND backend_pid=pg_backend_pid() AND transaction_id=pg_current_xact_id();
+   IF NOT FOUND THEN PERFORM app.mon8_require_feature(NEW.membership_id,'operative_roles'); END IF;
+  ELSE
+   PERFORM app.mon8_require_feature(NEW.membership_id,'operative_roles');
+  END IF;
+ END IF;
+ IF (SELECT commercial_track FROM app.commercial_track_assignment WHERE tenant_id=NEW.tenant_id ORDER BY revision DESC LIMIT 1) IS DISTINCT FROM 'contractor' THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ SELECT client_id INTO bound_client FROM app.contractor_member WHERE tenant_id=NEW.tenant_id AND membership_id=NEW.membership_id;
+ IF NEW.role='client_approver' THEN
+  IF bound_client IS DISTINCT FROM NEW.scope_id OR bound_client IS NULL THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ ELSIF bound_client IS NOT NULL THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+ IF NEW.scope_kind='tenant' AND NEW.scope_id<>NEW.tenant_id
+ OR NEW.scope_kind IN('region','branch') AND NOT EXISTS(SELECT 1 FROM app.org_unit WHERE tenant_id=NEW.tenant_id AND id=NEW.scope_id AND kind=NEW.scope_kind)
+ OR NEW.scope_kind='team' AND NOT EXISTS(SELECT 1 FROM app.team WHERE tenant_id=NEW.tenant_id AND id=NEW.scope_id)
+ OR NEW.scope_kind='client' AND NOT EXISTS(SELECT 1 FROM app.client_organisation WHERE tenant_id=NEW.tenant_id AND id=NEW.scope_id)
+ THEN RAISE EXCEPTION 'NOT_FOUND' USING ERRCODE='23503'; END IF;
+ RETURN NEW; END $$;
+
+-- Latest body: packages/db/migrations/0549_contractor_feature_guards.sql; SSO feature calls
+-- use private decisions, with an exact one-shot permit for the operative grant trigger.
 CREATE OR REPLACE FUNCTION identity.sso_complete(c uuid,claims jsonb,state char(64),new_session uuid,token char(64),csrf text,expires timestamptz) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member uuid; account uuid; address text:=(claims->>'email'); email_domain text; group_row record; grant_id uuid; grants_count integer:=0; allow_new_grants boolean:=false; sh char(64):=(claims->>'subjectHash'); eh char(64):=(claims->>'emailHash'); link identity.session; binding jsonb; BEGIN
  binding:=identity.sso_load_connection(c); t:=nullif(current_setting('app.tenant_id',true),'')::uuid;
@@ -7174,6 +7270,11 @@ DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member
  FOR group_row IN SELECT * FROM (SELECT DISTINCT ON(idp_group) * FROM identity.idp_group_role_mapping WHERE tenant_id=t AND connection_id=c ORDER BY idp_group,revision DESC) g
   WHERE enabled AND allow_new_grants AND idp_group IN(SELECT jsonb_array_elements_text(claims->'groups')) LOOP
   grant_id:=gen_random_uuid();
+  IF group_row.role='operative' THEN
+   IF NOT (app.lp6d_sso_operative_roles_decision(member)->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+   INSERT INTO identity.lp6d_sso_grant_permit(tenant_id,grant_id,membership_id,backend_pid,transaction_id)
+    VALUES(t,grant_id,member,pg_backend_pid(),pg_current_xact_id());
+  END IF;
   INSERT INTO app.role_grant VALUES(t,grant_id,member,group_row.role,group_row.scope_kind,group_row.scope_id,NULL);
   INSERT INTO identity.sso_grant(tenant_id,connection_id,subject_hash,grant_id) VALUES(t,c,sh,grant_id);
  END LOOP;

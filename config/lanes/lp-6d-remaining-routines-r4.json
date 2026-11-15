@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-6d-remaining-routines-r4"
       ],
-      "note": "RED LP-6d repair 10 on origin/main e3dac41b (Claude builder, real PostgreSQL). NOT READY. NOPR.",
+      "note": "RED LP-6d repair R2: G4 SSO operative-role bootstrap; PostgreSQL CI and independent exact-head review required.",
       "allow": [
         "tools/commercial-integrity-boundary.unresolved.json",
         "tools/commercial-integrity-current-source-guard.unresolved.json",
@@ -204,7 +204,9 @@
         "packages/db/test/accounting-export-repository.test.ts",
         "packages/db/src/financial-reconciliation-queue-repository.ts",
         "packages/db/src/financial-reconciliation-queue-repository.test.ts",
-        "apps/web/e2e/m4-4-evidence-holds.spec.ts"
+        "apps/web/e2e/m4-4-evidence-holds.spec.ts",
+        "packages/db/test/scim-deactivation-access.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts"
       ]
     }
   }
