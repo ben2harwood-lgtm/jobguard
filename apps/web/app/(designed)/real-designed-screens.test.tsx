@@ -42,7 +42,7 @@ vi.mock("./designed-ui", async original => {
     useAttention: () => ({ items: actual.attentionJobs(state.jobs, state.decisions, state.facts), complete: state.decisions !== null && state.facts !== null && state.jobs.every(job => state.facts?.[job.id]?.checksAvailable), loading: state.facts === null && state.decisions === null, failed: state.facts !== null && (state.decisions === null || state.jobs.some(job => !state.facts?.[job.id]?.checksAvailable)) }) };
 });
 import { StateScreen, shortDate, quoteLine, agreedLine, attentionJobs, projectBillCheck, readJobFacts, unavailableFacts, jobValueV1, catchLabel, type JobFacts, type Decisions, type Workspace } from "./designed-ui";
-import { DesignedJob, JobsList, Overview, MoneyTab, useJobDetail } from "./jobs-screens";
+import { DesignedNewJob, DesignedJob, JobsList, Overview, MoneyTab, useJobDetail } from "./jobs-screens";
 import { Today } from "./home-screens";
 vi.stubGlobal("React", React);
 const job: JobSummary = { id: "10000000-0000-4000-8000-000000000001", tenantId: "20000000-0000-4000-8000-000000000001", title: "Practice extension", status: "draft", customerLabel: "Customer", siteLabel: "Site", updatedLabel: "", document: { kind: "none", reference: null, delivery: "not_sent" }, customerPayment: "unknown", pilotNoCharge: true };
@@ -417,4 +417,11 @@ it("obsolete fact reads are aborted when the workspace changes", async () => {
  expect(render("20000000-0000-4000-8000-000000000002")).toBeNull();
  expect(signals[0]?.aborted).toBe(true);
  expect(signals[1]?.aborted).toBe(false);
+});
+
+it("starts /jobs/new with empty own-job text and a separate example hint",()=>{
+  const html=renderToStaticMarkup(<DesignedNewJob/>);
+  expect(html).toMatch(/<textarea[^>]*placeholder=/);
+  expect(html).toMatch(/<textarea[^>]*><\/textarea>/);
+  expect(html).toContain("Describe your own job. The example is a hint only.");
 });
