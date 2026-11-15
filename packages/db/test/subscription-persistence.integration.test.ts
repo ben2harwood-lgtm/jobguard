@@ -60,7 +60,7 @@ describe("MON-2A-P persisted subscription", () => {
   const refusal = await command(f, a, { version: "subscription-command.v1", kind: "apply_change", changeId: changed.changeId, sourceId, expectedRevision: 1 });
   expect(refusal.outcome).toBe("refused_capacity"); expect((await readSubscription(f, a)).agreements).toHaveLength(1);
  });
- it.each(["expired session", "revoked session", "revoked membership"] as const)("due downgrade after %s rechecks the approving owner independently of the executing admin", async (invalidated) => {
+ it.each(["expired session", "revoked session", "revoked membership"] as const)("due downgrade after %s rechecks the approving owner independently of the executing owner", async (invalidated) => {
   const a = await meterCompany(f); await historicalAgreement(f, a);
   const changed = await command(f, a, { ...terms(a, "Solo", 1), kind: "change" });
   // Assert the actual scheduled authorization horizon before bringing the boundary forward.
@@ -71,12 +71,12 @@ describe("MON-2A-P persisted subscription", () => {
    JOIN identity.session s ON s.id=$2 WHERE c.tenant_id=$1 AND c.id=$3`, [a.tenantId, a.sessionId, changed.changeId])).rows[0];
   expect(horizon).toEqual({ boundary_expiry: true, survives_session: true });
   const sourceId = await storeMeter(f, a, calendarInput(a.tenantId, 5, 9));
-  // Separate current admin: revoking the approving owner must reach the durable
+  // Separate current owner: revoking the approving owner must reach the durable
   // authorization check, rather than fail authentication of the executor.
   const executor = await seedWorkJob(f, a.tenantId), sessionId = randomUUID();
   const digest = createHash("sha256").update(randomUUID()).digest("hex");
   await workTenant(f.admin, a.tenantId, async db => {
-   const user = (await db.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2 RETURNING identity_user_id", [a.tenantId, executor.actorId])).rows[0].identity_user_id;
+   const user = (await db.query("UPDATE app.membership SET role='owner' WHERE tenant_id=$1 AND id=$2 RETURNING identity_user_id", [a.tenantId, executor.actorId])).rows[0].identity_user_id;
    await db.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [`${randomUUID()}@meter.invalid`, user]);
    await db.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", [user, a.tenantId, executor.actorId]);
    await db.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')", [sessionId, user, digest, randomUUID()]);

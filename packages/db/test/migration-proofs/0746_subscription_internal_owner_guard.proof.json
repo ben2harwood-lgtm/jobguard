@@ -1,0 +1,6 @@
+{
+  "migration": "0746_subscription_internal_owner_guard.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

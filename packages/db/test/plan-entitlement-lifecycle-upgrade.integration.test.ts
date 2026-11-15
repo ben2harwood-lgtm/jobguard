@@ -166,7 +166,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
     ["ef_inputs", "t uuid, ag app.enterprise_agreement_version, p_period text", "0745_enterprise_fee_rejected_line.sql"],
+    ["mon2_command", "t uuid, digest text, command_id uuid, v jsonb", "0746_subscription_internal_owner_guard.sql"],
     ["ef_prepare_statement", "p_session uuid, p_command uuid, p_period text", "0704_enterprise_fee_period_order.sql"],
+    ["cb_derive", "p_session uuid, p_job uuid, p_command uuid, p_source text, p_invoice text, p_hash text, p_projection jsonb", "0748_billing_policy_hold_projection.sql"],
     ["ef_post_statement", "p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid", "0704_enterprise_fee_period_order.sql"],
     ["receipt_fact_invoice_line", "t uuid, j uuid, i uuid, l uuid, r uuid, k uuid, ch uuid", "0713_supplementary_after_combined_receipt.sql"],
     ["issue_practice_customer_invoice", "p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date", "0723_lp6c_money_binding.sql"],
@@ -175,7 +177,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["lp5_bind_effect", "p_command uuid, p_authorization uuid, p_adapter text, p_reference jsonb", "0724_lp6c_customer_portal_delegation.sql"],
     ["lp5b_contractor_result", "p_command uuid, p_outcome jsonb", "0722_abandoned_visit_authority.sql"],
     ["ent3b_closeout_guard", "", "0722_abandoned_visit_authority.sql"],
-    ["receipt_fact_proposal", "t uuid, j uuid, p jsonb", "0692_final_check_post_invoice_receipt_gate.sql"],
+    ["receipt_fact_proposal", "t uuid, j uuid, p jsonb", "0747_receipt_proposal_historical_capacity.sql"],
     ["read_final_check_manifest", "t uuid, j uuid, m uuid", "0698_final_check_post_invoice_rerun.sql"],
     ["evidence_pack_v3_material", "t uuid, c uuid, ordinary_only boolean", "0698_final_check_post_invoice_rerun.sql"],
     ["begin_final_check", "t uuid, j uuid, detector text, policy text", "0698_final_check_post_invoice_rerun.sql"],
