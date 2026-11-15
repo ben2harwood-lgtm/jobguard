@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-154": {
+      "branches": ["codex/sandbox/later-safety-154"],
+      "note": "LATER-SAFETY-154, RED: restore reference receipt reversal balances. Synthetic only; no migration.",
+      "allow": [
+        "packages/core/src/shadow-domain/success-fee.ts",
+        "packages/core/src/shadow-domain/success-fee.test.ts"
+      ]
+    }
+  }
+}

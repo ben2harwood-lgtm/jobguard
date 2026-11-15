@@ -1,0 +1,6 @@
+{
+  "migration": "0745_enterprise_fee_rejected_line.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
