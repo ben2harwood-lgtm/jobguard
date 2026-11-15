@@ -1,7 +1,7 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
-import { recoverShadowCapture, readShadowResults } from "./journey-launch";
+import { recoverCapture, recoverShadowCapture, readShadowResults } from "./journey-launch";
 import { JourneyResult } from "./journey-result";
 const runId = "d1500000-0000-4000-8000-000000000001";
 const jobId = "d1500000-0000-4000-8000-000000000002";
@@ -88,4 +88,70 @@ it("reports a lost capture reply as unconfirmed and replays the restored selecti
   expect(calls).toHaveLength(2); expect(calls[0]).toEqual(calls[1]);
   expect(JSON.parse(calls[1]![1].body).captureId).toBe(runId);
   expect(fetch.mock.calls.filter(call => call[0] === "/api/session" && call[1]?.method === "POST")).toHaveLength(0);
+});
+
+it.each([
+  [400, "NOT_FOUND"], [404, "NOT_FOUND"], [403, "TENANT_FORBIDDEN"],
+])("guides an inaccessible saved capture to explicit Reset selection for %s %s", async (status, code) => {
+  // The saved selection was captured in A; an expired cookie now starts B.
+  // The capture route can return its typed NOT_FOUND with HTTP 400.
+  const fetch = vi.fn().mockResolvedValueOnce(reply({ ...session, principal: { displayName: "Session A" } }))
+    .mockResolvedValueOnce(reply(capture))
+    .mockResolvedValueOnce(reply({}, 401)).mockResolvedValueOnce(reply({ ok: true }))
+    .mockResolvedValueOnce(reply({ ...session, principal: { displayName: "Session B" } }))
+    .mockResolvedValueOnce(reply({ code, originalInputRetained: true, message: "Private job details" }, status));
+  vi.stubGlobal("fetch", fetch);
+  expect(await recoverCapture(runId, "Fiction")).toBe(jobId);
+  await expect(recoverCapture(runId, "Fiction")).rejects.toEqual(new Error(
+    "This practice session cannot open the saved selection's job. Use Reset selection to start a new fictional job.",
+  ));
+  const calls = fetch.mock.calls.filter(call => call[0] === "/api/jobs/capture");
+  expect(calls).toHaveLength(2); expect(calls[0]).toEqual(calls[1]);
+  expect(JSON.parse(calls[1]![1].body).captureId).toBe(runId);
+  // Only the existing session bootstrap and exact capture replay occurred:
+  // no replacement selection/capture, adoption, reset or cross-session report read.
+  expect(fetch.mock.calls.map(call => [call[0], call[1]?.method ?? "GET"])).toEqual([
+    ["/api/session", "GET"], ["/api/jobs/capture", "POST"],
+    ["/api/session", "GET"], ["/api/session", "POST"],
+    ["/api/session", "GET"], ["/api/jobs/capture", "POST"],
+  ]);
+});
+
+it.each([
+  [503, { code: "DATABASE_UNAVAILABLE" }], [503, { code: "NOT_FOUND" }],
+  [500, { code: "UNAUTHENTICATED" }], [404, {}],
+  [400, { code: "UNKNOWN_CODE" }], [400, { code: ["NOT_FOUND"] }],
+  [400, null], [401, { code: "NOT_FOUND" }], [200, { code: "NOT_FOUND" }],
+])("retains unconfirmed guidance and exact capture identity for %s %j", async (status, body) => {
+  const fetch = vi.fn().mockResolvedValueOnce(reply(session)).mockResolvedValueOnce(reply(body, status))
+    .mockResolvedValueOnce(reply(session)).mockResolvedValueOnce(reply(capture));
+  vi.stubGlobal("fetch", fetch);
+  await expect(recoverCapture(runId, "Fiction")).rejects.toThrow(
+    "Capture outcome unconfirmed. Retry this selection to recover the same request.",
+  );
+  expect(await recoverCapture(runId, "Fiction")).toBe(jobId);
+  const calls = fetch.mock.calls.filter(call => call[0] === "/api/jobs/capture");
+  expect(calls).toHaveLength(2); expect(calls[0]).toEqual(calls[1]);
+  expect(JSON.parse(calls[1]![1].body).captureId).toBe(runId);
+  expect(fetch).toHaveBeenCalledTimes(4);
+});
+
+it.each([400, 200])("keeps an unreadable capture response unconfirmed at HTTP %s", async status => {
+  const fetch = vi.fn().mockResolvedValueOnce(reply(session))
+    .mockResolvedValueOnce(new Response("not JSON", { status }));
+  vi.stubGlobal("fetch", fetch);
+  await expect(recoverCapture(runId, "Fiction")).rejects.toThrow("Capture outcome unconfirmed. Retry this selection");
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(fetch.mock.calls[1]![1].body).captureId).toBe(runId);
+});
+
+it("asks for the appropriate session on authentication refusal without claiming reset recovers progress", async () => {
+  const fetch = vi.fn().mockResolvedValueOnce(reply(session))
+    .mockResolvedValueOnce(reply({ code: "UNAUTHENTICATED", message: "Private job details" }, 401));
+  vi.stubGlobal("fetch", fetch);
+  await expect(recoverCapture(runId, "Fiction")).rejects.toEqual(new Error(
+    "Restore or sign in to the appropriate practice session, then retry this selection to open its saved job.",
+  ));
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(fetch.mock.calls[1]![1].body).captureId).toBe(runId);
 });
