@@ -14,3 +14,9 @@ it("renders the existing screen in synthetic demo", async () => {
   expect(React.isValidElement(page)).toBe(true);
   expect(page.props.sourceJobId).toBe("fictional-job");
 });
+it.each(["fictional-company-B", ["B", "A"]])("passes the explicit selection unchanged for client validation: %j", async tenant => {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubGlobal("React", React);
+  const page = await Page({ params: Promise.resolve({ id: "fictional-job" }), searchParams: Promise.resolve({ tenant }) });
+  expect(page.props.tenant).toEqual(tenant);
+  expect(page.props.company).toBe(true);
+});
