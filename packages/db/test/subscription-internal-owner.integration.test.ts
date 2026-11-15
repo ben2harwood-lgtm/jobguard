@@ -8,7 +8,7 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { approvedSimulation, calendarInput, command, count, historicalAgreement, meterCompany, meterInput, readSubscription, storeMeter, terms, type SubscriptionCompany } from "./subscription-persistence-fixtures.js";
 import { rolledBack, snapshotRows } from "./upgrade-proof-utils.js";
 
-const stem = "0744_subscription_internal_owner_guard";
+const stem = "0746_subscription_internal_owner_guard";
 const signature = "app.mon2_command(uuid,text,uuid,jsonb)";
 const migration = readFileSync(new URL(`../migrations/${stem}.sql`, import.meta.url), "utf8");
 const oldGuard = " IF kind IN('accept','change','approve_simulation') AND NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=t AND id=actor AND role='owner' AND revoked_at IS NULL AND(expires_at IS NULL OR expires_at>clock_timestamp())) THEN RAISE EXCEPTION 'SUBSCRIPTION_FORBIDDEN' USING ERRCODE='42501'; END IF;\n";
