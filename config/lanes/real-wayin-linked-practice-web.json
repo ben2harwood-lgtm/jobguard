@@ -7,6 +7,7 @@
       ],
       "note": "M0-6L fictional linked practice web entry; RED, NOPR. r2 adds a read-only accessor for the existing private linked-credential marker.",
       "allow": [
+        "apps/web/app/(designed)/designed-ui.tsx",
         "apps/web/app/(designed)/jobs-screens.tsx",
         "apps/web/app/(designed)/real-designed-screens.test.tsx",
         "apps/web/app/api/auth/practice/route.integration.test.ts",

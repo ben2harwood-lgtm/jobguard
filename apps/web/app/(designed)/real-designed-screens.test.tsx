@@ -86,6 +86,47 @@ it("offers the blank practice firm first and keeps example sign-in as the second
   expect(html).toContain("Made-up jobs only. Nothing is sent or charged.");
 });
 
+
+it.each(["linked", "unlinked", "anonymous"])("opens the designed own-firm button for a %s browser", async kind => {
+  hooks.active = true;
+  const assign = vi.fn(), retry = vi.fn();
+  vi.stubGlobal("window", { location: { assign } });
+  const fetcher = vi.fn().mockResolvedValueOnce(kind === "anonymous"
+    ? { ok: false, status: 401 }
+    : { ok: true, json: async () => ({ version: 1, principal: { displayName: "Builder" }, tenants: [], linkedCompany: kind === "linked" }) });
+  if (kind === "linked") fetcher.mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "fictional-csrf" }) });
+  fetcher.mockResolvedValueOnce({ ok: true });
+  vi.stubGlobal("fetch", fetcher);
+  const tree = StateScreen({ load: { state: "signed-out" }, retry, title: "Today" });
+  function findButton(node: React.ReactNode): React.ReactElement<{ onClick: () => void }> | undefined {
+    for (const child of React.Children.toArray(node)) {
+      if (!React.isValidElement<{ children?: React.ReactNode; onClick: () => void }>(child)) continue;
+      if (child.type === "button" && child.props.children === "Start my own practice firm") return child;
+      const found = findButton(child.props.children);
+      if (found) return found;
+    }
+  }
+  findButton(tree)!.props.onClick();
+  await vi.waitFor(() => expect(kind === "linked" ? assign : retry).toHaveBeenCalledOnce());
+  expect(fetcher).toHaveBeenNthCalledWith(1, "/api/session", { cache: "no-store" });
+  if (kind === "linked") {
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual(["/api/session", "/api/auth/session", "/api/auth/practice"]);
+    expect(fetcher).toHaveBeenLastCalledWith("/api/auth/practice", {
+      method: "POST", headers: { "content-type": "application/json", "x-csrf-token": "fictional-csrf" },
+      body: JSON.stringify({ version: "linked-practice-company.v1", action: "enter" }),
+    });
+    expect(assign).toHaveBeenCalledWith("/practice-company");
+    expect(retry).not.toHaveBeenCalled();
+  } else {
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual(["/api/session", "/api/practice-company"]);
+    expect(fetcher).toHaveBeenLastCalledWith("/api/practice-company", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: "blank-practice-company.v1", action: "start" }),
+    });
+    expect(assign).not.toHaveBeenCalled();
+  }
+});
+
 const detailJob = { ...job, revision: 4, updatedAt: "2026-11-09T12:00:00Z", scopeIdentityIds: [] };
 it.each([{ scopeIdentityIds: [] }, { scopeIdentityIds: ["30000000-0000-4000-8000-000000000001"] }])("visibly discloses the Overview illustration beside saved job facts (%j)", ({ scopeIdentityIds }) => {
   const html = renderToStaticMarkup(<Overview site="Site" detail={{ job: { ...detailJob, scopeIdentityIds }, summary: job, value: null, checks: 0, photo: "/design/assets/reference-job-martin.jpg" }}/>);

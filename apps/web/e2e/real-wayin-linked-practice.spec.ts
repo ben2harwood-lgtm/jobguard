@@ -37,6 +37,10 @@ async function jobStatus(page:Page,id:string) {
 test("fictional sign-in opens the same own practice firm without the classic detour",async({page,browser})=>{
   test.setTimeout(180_000);
   await page.setViewportSize({width:390,height:844});
+  // Keep the designed chooser open while another tab signs in, as on a returning browser.
+  const designedEntry=await page.context().newPage();
+  await designedEntry.goto("/today");
+  await expect(designedEntry.getByRole("button",{name:"Start my own practice firm",exact:true})).toBeVisible();
   const email=`linked-${crypto.randomUUID()}@practice.invalid`;
   await signin(page,email);
   await expect(page.getByRole("heading",{name:"Ready for your first job",exact:true})).toBeVisible();
@@ -63,6 +67,15 @@ test("fictional sign-in opens the same own practice firm without the classic det
   await expect(page.locator(".proposal pre")).toHaveText(words);
   await page.getByRole("button",{name:"Check and edit my draft",exact:true}).click();await expect(page).toHaveURL(new RegExp(`/jobs/${id}$`));
   await page.reload();expect(await jobStatus(page,id)).toBe(200);
+  const entryPosts:string[]=[];
+  designedEntry.on("request",request=>{if(request.method()==="POST")entryPosts.push(new URL(request.url()).pathname);});
+  await designedEntry.getByRole("button",{name:"Start my own practice firm",exact:true}).click();
+  await expect(designedEntry).toHaveURL(/\/practice-company$/);
+  await expect(designedEntry.getByRole("heading",{name:"Fictional Linked Oak",exact:true})).toBeVisible();
+  await expect(designedEntry.getByRole("alert")).toHaveCount(0);
+  expect(await jobStatus(designedEntry,id)).toBe(200);
+  expect(entryPosts).toContain("/api/auth/practice");expect(entryPosts).not.toContain("/api/practice-company");
+  await designedEntry.close();
   await page.goto("/practice-company");await page.reload();
   await page.locator(`a[href="/jobs/${id}"]`).first().click();await expect(page).toHaveURL(new RegExp(`/jobs/${id}$`));
   await page.goto("/practice-company");await page.getByRole("button",{name:"Sign out",exact:true}).click();
