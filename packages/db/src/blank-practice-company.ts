@@ -9,10 +9,13 @@ export const blankPracticeCompanyCommandV1 = z.object({
   action: z.enum(["start", "reset"]),
 }).strict();
 
-export async function isBlankPracticeCompany(pool: Pool, digest: string, context?: VerifiedTenantContext): Promise<boolean> {
-  if (context) return withTenant(pool, context, async db =>
-    (await db.$client.query<{ blank: boolean }>("SELECT app.is_blank_practice_company($1) blank", [digest])).rows[0]?.blank === true);
+export async function isBlankPracticeCompany(pool: Pool, digest: string): Promise<boolean> {
   return (await pool.query<{ blank: boolean }>("SELECT app.is_blank_practice_company($1) blank", [digest])).rows[0]?.blank === true;
+}
+
+export async function isBlankPracticeCompanyForContext(pool: Pool, digest: string, context: VerifiedTenantContext): Promise<boolean> {
+  return withTenant(pool, context, async db =>
+    (await db.$client.query<{ blank: boolean }>("SELECT app.is_blank_practice_company($1) blank", [digest])).rows[0]?.blank === true);
 }
 
 /** Fresh opaque ownership namespace; reset revokes the old namespace atomically.

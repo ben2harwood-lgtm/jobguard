@@ -4,7 +4,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { cluster, seedHomeOwner, digestOf, type Cluster, startBeforeMigration } from "./contractor-practice-session-fixtures.js";
 import { jobDoorsActor } from "./lp-job-doors-fixtures.js";
-import { enterLinkedPracticeCompany, isBlankPracticeCompany, startBlankPracticeCompany } from "../src/blank-practice-company.js";
+import { enterLinkedPracticeCompany, isBlankPracticeCompany, isBlankPracticeCompanyForContext, startBlankPracticeCompany } from "../src/blank-practice-company.js";
 import { authenticatePracticeSession, authorizePracticeJob, issuePracticeSession } from "../src/practice-session.js";
 import { withTenant } from "../src/tenant-context.js";
 import { RequestBindingRefusedError } from "../src/request-binding-error.js";
@@ -82,7 +82,7 @@ it("two fictional identity sessions retain one practice owner with independent c
   await expect(authorizePracticeJob(c.runtime, second.token, id)).resolves.toBeDefined();
   expect(await isBlankPracticeCompany(c.runtime, digestOf(first.token))).toBe(true);
   expect(await isBlankPracticeCompany(c.runtime, first.auth.digest)).toBe(false);
-  expect(await isBlankPracticeCompany(c.runtime, first.auth.digest, first.auth.context)).toBe(true);
+  expect(await isBlankPracticeCompanyForContext(c.runtime, first.auth.digest, first.auth.context)).toBe(true);
   await withTenant(c.runtime, first.auth.context, async db => {
     expect((await db.$client.query("SELECT app.is_blank_practice_company($1) blank", [first.auth.digest])).rows[0].blank).toBe(true);
   });
