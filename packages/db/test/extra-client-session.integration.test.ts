@@ -233,14 +233,45 @@ it("mutation: removing the private binder breaks a real unbound customer decisio
   await expect(f.run(f.command,f.sd,db)).rejects.toMatchObject({code:'42501',message:'REQUEST_BINDING_REFUSED'});
  });expect(await unchangedFacts()).toEqual(before);
 });
-it("LP-6c catalogue identifies the approved binder and queue/view/history stay unbound",async()=>{
+it("LP-6c catalogue identifies the approved binder; queue/view bind read-only ClientViewExtra and history stays unbound",async()=>{
  w=await chainWorld(c);const f=await fixture();await f.use(f.signinDigest,'redeem');
  const source=(await c.admin.query("SELECT prosrc FROM pg_proc WHERE oid='identity.extra_customer_approval(uuid,uuid,uuid,text,jsonb)'::regprocedure")).rows[0].prosrc as string;
  expect(source.match(/PERFORM app\.lp6_bind_client_approver\(/gu)).toHaveLength(1);
+ // Checker r11 (option 1): the read-only queue/view binds exactly one ClientViewExtra request for this job.
+ expect(source.match(/PERFORM app\.lp6d_bind_client_viewer\(/gu)).toHaveLength(1);
  for(const action of ['queue','view','history']) await rollbackControl(async db=>{
   await f.bindIdentity(db);
   await f.run({version:'extra-customer.v1',jobId:f.s.jobId,action,...(action==='view'?{requestId:f.s.requestId}:{})},f.sd,db);
   await db.query('RESET ROLE');
-  expect((await db.query('SELECT count(*)::int n FROM control_plane.request_binding WHERE transaction_id=pg_current_xact_id()')).rows[0].n).toBe(0);
+  const rows=(await db.query('SELECT credential_kind,scope_command_type,scope_job_id,actor_id,expires_at<=clock_timestamp()+interval \'1 minute\' short FROM control_plane.request_binding WHERE transaction_id=pg_current_xact_id()')).rows;
+  expect(rows).toEqual(action==='history'?[]:[{credential_kind:'customer_portal_delegated',scope_command_type:'ClientViewExtra',scope_job_id:f.s.jobId,actor_id:f.actor,short:true}]);
  });
+});
+// Checker r11: ClientViewExtra reaches only the read-only status reader, for its own job and tenant, while live.
+async function delegated(db:PoolClient,tenant:string,job:string,actor:string,scope:string,expires="1 minute") {
+ await db.query("SELECT set_config('app.tenant_id',$1,true)",[w.p.tenantId]);
+ await db.query(`INSERT INTO control_plane.request_binding(environment_id,transaction_id,credential_kind,session_ref,tenant_id,actor_id,expires_at,scope_job_id,scope_command_type)
+  VALUES(extract(epoch FROM pg_postmaster_start_time())::text||':'||(SELECT d.oid::text FROM pg_catalog.pg_database d WHERE d.datname=current_database()),
+   pg_current_xact_id(),'customer_portal_delegated','lp6d-fixture',$1,$2,clock_timestamp()+$5::interval,$3,$4)`,[tenant,actor,job,scope,expires]);
+}
+const workStatus=(db:PoolClient,job:string)=>db.query("SELECT app.ent3_extra_work_status($1,$2) status",[job,randomUUID()]);
+it("ClientViewExtra reads extra work status only for its own job and tenant while live; it never decides",async()=>{
+ w=await chainWorld(c);const f=await fixture();
+ await rollbackControl(async db=>{await delegated(db,w.p.tenantId,f.s.jobId,f.actor,'ClientViewExtra');
+  expect((await workStatus(db,f.s.jobId)).rows).toEqual([{status:null}]);});
+ const refused={code:'42501',message:'REQUEST_BINDING_REFUSED'};
+ const cases:[string,(db:PoolClient)=>Promise<void>,string][]= [
+  ['wrong job',db=>delegated(db,w.p.tenantId,randomUUID(),f.actor,'ClientViewExtra'),f.s.jobId],
+  ['wrong scope',db=>delegated(db,w.p.tenantId,f.s.jobId,f.actor,'ClientDecideExtra'),f.s.jobId],
+  ['other tenant',db=>delegated(db,randomUUID(),f.s.jobId,f.actor,'ClientViewExtra'),f.s.jobId],
+ ];
+ for(const [name,bind,job] of cases) await rollbackControl(async db=>{await bind(db);
+  await expect(workStatus(db,job),name).rejects.toMatchObject(refused);});
+ // Expired: the binding row exists but is past its expiry.
+ await rollbackControl(async db=>{await delegated(db,w.p.tenantId,f.s.jobId,f.actor,'ClientViewExtra','-1 second');
+  await expect(workStatus(db,f.s.jobId),'expired').rejects.toMatchObject(refused);});
+ // No decide routine accepts ClientViewExtra: the decide-path guards refuse before any lookup.
+ for(const call of ["SELECT app.xa_covers($1,ARRAY['client_approver'],$2,'extra.approve')","SELECT app.xa_begin($2,gen_random_uuid(),ARRAY['ClientDecideExtra'],$1)"])
+  await rollbackControl(async db=>{await delegated(db,w.p.tenantId,f.s.jobId,f.actor,'ClientViewExtra');
+   await expect(db.query(call,[f.actor,f.s.jobId]),call).rejects.toMatchObject(refused);});
 });
