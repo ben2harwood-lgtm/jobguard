@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Pool } from "pg";
 import { WormBoundaryError, type WormStorage, type TimestampResult } from "@jobguard/storage";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { WormCommandRepository, wormCommandV1, type WormReceipt } from "./worm-command-repository.js";
 import type { VerifiedTenantContext } from "./tenant-context.js";
 
-const fake = vi.hoisted(() => ({ query: vi.fn(), audit: vi.fn(), transactions: 0, pools: [] as unknown[], commitError: null as unknown }));
+const fake = vi.hoisted(() => ({ query: vi.fn(), audit: vi.fn(), transactions: 0, pools: [] as unknown[], bindingError: null as unknown, commitError: null as unknown }));
 vi.mock("./tenant-context.js", () => ({ withTenant: async (_p: unknown, _c: unknown, fn: (db: unknown) => unknown) => {
+  if (fake.bindingError) throw fake.bindingError;
   fake.pools.push(_p);
   fake.transactions++;
   try { const result = await fn({ $client: { query: fake.query } }); if (fake.commitError) throw fake.commitError; return result; } finally { fake.transactions--; }
@@ -24,7 +26,7 @@ let row: WormReceipt;
 let attempts: number;
 let storage: WormStorage;
 beforeEach(() => {
-  fake.pools = []; fake.commitError = null;
+  fake.pools = []; fake.bindingError = null; fake.commitError = null;
   fake.query.mockReset(); fake.audit.mockReset(); attempts = 0;
   const c = command();
   row = { id: c.commandId, tenant_id: context.tenantId, actor_id: c.actorMembershipId, evidence_id: c.evidenceId,
@@ -52,6 +54,18 @@ describe("dark durable WORM application", () => {
     await expect(repo().submit(context, command())).rejects.toThrow("WORM_REFUSED");
     expect(fake.query).toHaveBeenCalledExactlyOnceWith("SELECT app.mon9_session($1,$2) actor", ["a".repeat(64), expect.any(String)]);
     expect(fake.audit).not.toHaveBeenCalled();
+  });
+
+  it("recognizes only protected pre-callback binding refusal and keeps commit failures unknown", async () => {
+    fake.bindingError = new RequestBindingRefusedError();
+    await expect(repo().submit(context, command())).rejects.toThrow("WORM_REFUSED");
+    expect(fake.query).not.toHaveBeenCalled();
+    expect(fake.audit).not.toHaveBeenCalled();
+    fake.bindingError = Object.assign(new Error("BEGIN private"), { code: "42501" });
+    await expect(repo().submit(context, command())).rejects.toThrow("WORM_UNCONFIRMED");
+    fake.bindingError = null;
+    fake.commitError = new RequestBindingRefusedError();
+    await expect(repo().submit(context, command())).rejects.toThrow("WORM_UNCONFIRMED");
   });
 
   it("defaults off before database access and refuses D07 deletion/expiry", async () => {

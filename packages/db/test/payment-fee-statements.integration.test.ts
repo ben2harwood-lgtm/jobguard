@@ -48,7 +48,7 @@ it.each(["revoked","expired"] as const)("a %s SV-6 review cannot authorize colle
   await db.query("ALTER TABLE app.action_authorization DISABLE TRIGGER USER");
   await db.query(`UPDATE app.action_authorization SET ${state==="revoked"?"revoked_at=clock_timestamp()":"expires_at=clock_timestamp()-interval '1 second'"} WHERE tenant_id=$1 AND recipient=$2 AND action_type='recovery.attribution_review'`,[x.context.tenantId,x.assessment.assessmentId]);
   await db.query("ALTER TABLE app.action_authorization ENABLE TRIGGER USER");
-  await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[x.auth.digest]);await db.query("SET LOCAL ROLE jobguard_runtime");
   await db.query("SELECT app.write_payment_fee($1,$2,$3::jsonb)",[x.jobId,x.auth.digest,approve(s)]);
  })).rejects.toThrow("PAYMENT_FEE_REVIEW_REQUIRED");
  await x.run(approve(s));
@@ -75,13 +75,13 @@ it("0561 upgrades the populated 0359 writer in place, preserves grants/data and 
   const metadata=async()=> (await db.query("SELECT oid,proowner,proacl FROM pg_proc WHERE oid='app.write_payment_fee(uuid,text,jsonb)'::regprocedure")).rows;
   const before=await metadata();
   await db.query("SAVEPOINT legacy_approval");
-  await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[x.auth.digest]);await db.query("SET LOCAL ROLE jobguard_runtime");
   await db.query("SELECT app.write_payment_fee($1,$2,$3::jsonb)",[x.jobId,x.auth.digest,approve(s)]);
   await db.query("ROLLBACK TO SAVEPOINT legacy_approval");
   await db.query(upgrade);await db.query(upgrade);
   expect(await metadata()).toEqual(before);
   expect((await db.query("SELECT document FROM app.payment_fee_statement WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,s.statementId])).rows).toEqual([{document:s}]);
-  await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[x.auth.digest]);await db.query("SET LOCAL ROLE jobguard_runtime");
   await db.query("SAVEPOINT guarded_approval");
   await expect(db.query("SELECT app.write_payment_fee($1,$2,$3::jsonb)",[x.jobId,x.auth.digest,approve(s)])).rejects.toThrow("PAYMENT_FEE_REVIEW_REQUIRED");
   await db.query("ROLLBACK TO SAVEPOINT guarded_approval");

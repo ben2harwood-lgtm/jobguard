@@ -8,7 +8,7 @@ import { RecoveryCaseRepository } from "../src/recovery-case-repository.js";
 import { recoveryFeeFixture } from "./success-fee-recovery-fixture.js";
 import { catchFeeFixture } from "./success-fee-catch-fixture.js";
 import { createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture } from "./final-check-fixture.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindOwnSession, testTenantContext } from "./tenant-context-test-utils.js";
 import { rolledBack } from "./upgrade-proof-utils.js";
 let f:FinalCheckFixture;
 const environment=process.env.JOBGUARD_ENV;
@@ -63,7 +63,7 @@ it("stale consent revisions, forged caps and amounts above this receipt fee fail
 it("expired authority stops dispatch with its own reason, even with a current session",async()=>{
  const x=await setup(),a=await x.authority(await x.authorityCommand());
  await rolledBack(f.admin,async db=>{
-  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]);
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[x.context.tenantId]); await bindOwnSession(db, x.auth.digest);
   // Negative control only: expiry of protected consent, rolled back, never used for positive fixtures.
   await db.query("ALTER TABLE app.payment_fee_authority DISABLE TRIGGER USER");
   await db.query("UPDATE app.payment_fee_authority SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND command_id=$2",[x.context.tenantId,a.authorityId]);

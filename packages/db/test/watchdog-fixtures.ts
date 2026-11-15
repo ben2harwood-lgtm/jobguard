@@ -8,7 +8,12 @@ export async function importWatchdogFixtureJob(admin: Pool, tenantId: string, jo
   loaded?: { db: typeof import("../src/index.js"); context: VerifiedTenantContext }) {
   // Browser fixtures supply their native ESM module/context so Playwright never loads the source gateway.
   const { AdoptInFlightJobMutation, UserCommandDispatcher, withTenant } = loaded?.db ?? await import("../src/index.js");
-  const userId = randomUUID(), accountId = randomUUID(), membershipId = randomUUID();
+  // LP-6d: the first fixture owner in a tenant is the synthetic default actor that
+  // testTenantContext(tenant) names, so that context binds to a real member instead of
+  // reaching guarded routines unbound. Later fixture jobs keep their own fresh owners.
+  const defaultActor = "40000000-0000-4000-8000-000000000004";
+  const defaultTaken = (await admin.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2", [tenantId, defaultActor])).rowCount;
+  const userId = randomUUID(), accountId = randomUUID(), membershipId = defaultTaken ? randomUUID() : defaultActor;
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [userId]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic watchdog fixture')", [accountId, tenantId]);
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [membershipId, tenantId, accountId, userId]);

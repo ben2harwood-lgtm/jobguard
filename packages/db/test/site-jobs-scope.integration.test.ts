@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { SiteVisitRepository, withTenant, type AuthenticatedMembership } from "../src/index.js";
+import { RequestBindingRefusedError, SiteVisitRepository, withTenant, type AuthenticatedMembership, type VerifiedTenantContext } from "../src/index.js";
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { assignedJobsQuery, assignedJobsByScopeQuery } from "../src/site-visit-repository.js";
 import { fixture } from "./extra-fixtures.js";
 import { cluster, visitFixture, invite, command, reviseOrder, extraOrder, ownerVisit, forbiddenRoles, type Cluster, type VisitFixture, type Actor } from "./site-visit-fixtures.js";
@@ -39,22 +40,42 @@ beforeAll(async () => {
 }, 120_000);
 afterAll(async () => { await c?.close(); });
 
+// Router ruling r14 (3): each REAL actor reads inside its own bound request and keeps its exact visibility.
+// A foreign, revoked or unknown identity is class (a): its request cannot bind, so the binding refusal is the
+// outcome and nothing becomes visible (an empty list, exactly the old "sees nothing" fact).
+async function ownContext(actor: AuthenticatedMembership) {
+ if (actor.tenantId !== f.p.tenantId) return undefined;
+ const member = (await c.admin.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2", [actor.tenantId, actor.membershipId])).rows[0];
+ return member ? testActorContext(c.admin, f.ctx, actor) : undefined;
+}
+const refusedBinding = (error: unknown) => error instanceof RequestBindingRefusedError
+ || ((error as { code?: string }).code === "42501" && (error as { message?: string }).message === "REQUEST_BINDING_REFUSED");
 async function compare(actor: AuthenticatedMembership) {
- return withTenant(c.runtime, f.ctx, async db => {
+ const context = await ownContext(actor);
+ const read = (ctx: VerifiedTenantContext) => withTenant(c.runtime, ctx, async db => {
   const args = [f.p.tenantId, actor.membershipId];
   const legacy = (await db.$client.query(assignedJobsQuery, args)).rows;
   const scoped = (await db.$client.query(assignedJobsByScopeQuery, args)).rows;
   expect(scoped).toEqual(legacy); // full rows, caller's own visit, and exact order
   return scoped;
  });
+ if (!context) {
+  // Class (a): under the owner's request the query names someone else. Either the binding check refuses the
+  // authority call, or (with no assignment to evaluate) nothing is returned; either way nothing becomes visible.
+  expect(await read(f.ctx).catch(error => { if (refusedBinding(error)) return []; throw error; })).toEqual([]);
+  return [];
+ }
+ return read(context).catch(error => { if (refusedBinding(error)) return []; throw error; });
 }
+const jobsFor = async (actor: AuthenticatedMembership, options?: { includeLastCompletedVisit?: boolean }) =>
+ new SiteVisitRepository(c.runtime).assignedJobs((await ownContext(actor)) ?? f.ctx, actor, options);
 
 it("matches the old list for own/other team, branch and region grants, every role, unassigned and foreign members", async () => {
  const sizes: Record<string, number> = {};
  for (const [label, actor] of Object.entries(actors)) {
   const rows = await compare(actor.member);
   sizes[label] = rows.length;
-  const actual = await new SiteVisitRepository(c.runtime).assignedJobs(f.ctx, actor.member, { includeLastCompletedVisit: true });
+  const actual = await jobsFor(actor.member, { includeLastCompletedVisit: true });
   expect(actual).toEqual({ truncated: false, jobs: rows.map(r => ({ jobId: r.job_id, workOrderId: r.work_order_id, reference: r.reference, priority: r.priority, issuedOn: r.issued_on, dueOn: r.due_on, openVisitId: r.open_visit, lastCompletedVisit: r.last_completed_visit })) });
  }
  expect(sizes.ownTeam).toBeGreaterThan(1);
@@ -64,7 +85,7 @@ it("matches the old list for own/other team, branch and region grants, every rol
  expect(sizes.tenant).toBeGreaterThan(sizes.region!);
  for (const role of forbiddenRoles) {
   expect(await compare(f.members[role].member)).toEqual([]);
-  await expect(new SiteVisitRepository(c.runtime).assignedJobs(f.ctx, f.members[role].member)).rejects.toMatchObject({ code: "VISIT_FORBIDDEN" });
+  await expect(jobsFor(f.members[role].member)).rejects.toMatchObject({ code: "VISIT_FORBIDDEN" });
  }
  expect(await compare(f.unassigned.member)).toEqual([]);
  const foreign = await fixture(c);
@@ -78,7 +99,7 @@ function authorityLoops(plan: Plan): number {
   + (plan.Plans ?? []).reduce((sum, child) => sum + authorityLoops(child), 0);
 }
 it("evaluates authority once per assigned team scope rather than once per order", async () => {
- await withTenant(c.runtime, f.ctx, async db => {
+ await withTenant(c.runtime, (await ownContext(actors.region!.member))!, async db => {
   const args = [f.p.tenantId, actors.region!.member.membershipId];
   const loops: number[] = [];
   for (const query of [assignedJobsQuery, assignedJobsByScopeQuery]) {
@@ -105,7 +126,7 @@ it("remains equivalent after grant revocation, team removal, reassignment, cance
  expect((await compare(actors.branch!.member)).some(r => r.job_id === f.jobId)).toBe(false);
  await command(c, f, { kind: "membership.revoke", membershipId: actors.region!.member.membershipId });
  expect(await compare(actors.region!.member)).toEqual([]);
- await expect(new SiteVisitRepository(c.runtime).assignedJobs(f.ctx, actors.region!.member)).rejects.toMatchObject({ code: "VISIT_FORBIDDEN" });
+ await expect(jobsFor(actors.region!.member)).rejects.toMatchObject({ code: "VISIT_FORBIDDEN" });
  // Unknown identities never acquire authority from the representative job.
  expect(await compare({ ...f.p, membershipId: randomUUID() })).toEqual([]);
 });
