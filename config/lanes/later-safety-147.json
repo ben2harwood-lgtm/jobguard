@@ -9,7 +9,9 @@
       "allow": [
         "packages/db/migrations/0744_recovery_history_no_truncate.sql",
         "packages/db/test/migration-proofs/0744_recovery_history_no_truncate.proof.json",
-        "packages/db/test/recovery-record-immutable.integration.test.ts"
+        "packages/db/test/recovery-record-immutable.integration.test.ts",
+        "packages/db/migrations/0740_recovery_history_no_truncate.sql",
+        "packages/db/test/migration-proofs/0740_recovery_history_no_truncate.proof.json"
       ]
     }
   }
