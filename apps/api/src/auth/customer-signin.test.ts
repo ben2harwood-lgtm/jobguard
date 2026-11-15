@@ -28,7 +28,7 @@ function fixture(environment = "synthetic_demo") {
   const identity = { allowedOrigin: origin, context, provider: { digest, repository: { pool: { query } } } } as unknown as IdentityApplication;
   return { query, context, digest, identity, app: new CustomerSigninApplication(identity, environment) };
 }
-const request = (body: unknown, h = headers) => new Request(`${origin}/api/customer-portal/read`, { method: "POST", headers: { ...h, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const request = (body: unknown, h: Record<string, string> = headers) => new Request(`${origin}/api/customer-portal/read`, { method: "POST", headers: { ...h, "Content-Type": "application/json" }, body: JSON.stringify(body) });
 describe("MON-5 customer credential boundary (transport tests; PostgreSQL authority is tested separately)", () => {
   it.each(["production", "pilot_no_charge", "unknown"])("refuses %s before querying", async mode => {
     const f = fixture(mode); await expect(f.app.run("read", { version: "customer-read.v1", jobId: job }, { headers })).rejects.toBeInstanceOf(CustomerRefused); expect(f.query).not.toHaveBeenCalled();
@@ -87,7 +87,10 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
     })().catch(e => e);
     if (!(error instanceof HttpException)) throw error;
     expect(error.getStatus()).toBe(401); expect(error.getResponse()).toEqual({ code: "CUSTOMER_REFUSED" });
-    expect(reply.cookie).not.toHaveBeenCalled(); if (action !== "read") expect(reply.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
+    if (action === "signout") expect(reply.cookie).toHaveBeenCalledExactlyOnceWith("jobguard_customer", "", { ...customerCookieOptions, maxAge: 0 });
+    else expect(reply.cookie).not.toHaveBeenCalled();
+    expect(response.headers.get("set-cookie")).toBe(action === "signout" ? "jobguard_customer=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" : null);
+    if (action !== "read") expect(reply.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
   });
   it("customer cookies refuse builder paths in both transports before the legacy cookie shortcut", async () => {
     const { proxy } = await import(fileURLToPath(new URL("../../../web/proxy.ts", import.meta.url)));
@@ -99,6 +102,64 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
       const context = { switchToHttp: () => ({ getRequest: () => ({ path: "/jobs", method: "GET", headers: { cookie } }) }) } as ExecutionContext;
       await expect(guard.canActivate(context)).rejects.toMatchObject({ status: 401 });
     }
+  });
+  it.each([
+    { name: "valid", status: 200, queries: 2 },
+    { name: "expired", status: 401, queries: 2 },
+    { name: "revoked", status: 401, queries: 2 },
+    { name: "malformed credential", status: 401, queries: 0 },
+    { name: "missing credential", status: 401, queries: 0 },
+    { name: "malformed body", status: 401, queries: 0 },
+    { name: "foreign origin", status: 401, queries: 0 },
+    { name: "missing origin", status: 401, queries: 0 },
+    { name: "tenant override", status: 401, queries: 0 },
+    { name: "live mode", status: 401, queries: 0 },
+    { name: "service failure", status: 503, queries: 2 },
+    { name: "composition failure", status: 503, queries: 0 },
+  ])("signout clears only the customer cookie in Next and Nest: $name", async ({ name, status, queries }) => {
+    const mode = name === "live mode" ? "production" : "synthetic_demo";
+    const f = fixture(mode);
+    if (name === "expired" || name === "revoked") f.query.mockRejectedValue({ code: "42501" });
+    if (name === "service failure") f.query.mockRejectedValue(new Error("private database failure"));
+    const h: Record<string, string> = { ...headers, cookie: `${headers.cookie}; jobguard_session=builder; jg_session=legacy` };
+    if (name === "malformed credential") h.cookie = "jobguard_customer=malformed; jobguard_session=builder";
+    if (name === "missing credential") h.cookie = "jobguard_session=builder";
+    if (name === "foreign origin") h.origin = "https://other.invalid";
+    if (name === "missing origin") delete h.origin;
+    if (name === "tenant override") h["x-tenant-id"] = tenant;
+    const body = { version: name === "malformed body" ? "wrong-version" : "customer-signout.v1" };
+    const expected = status === 200 ? { version: "customer-signed-out.v1" } : { code: status === 401 ? "CUSTOMER_REFUSED" : "CUSTOMER_UNAVAILABLE" };
+    // Execute the production Next route, including its lazy service composition.
+    routeIdentity.current = name === "composition failure" ? undefined : f.identity;
+    const previous = process.env.JOBGUARD_ENV; process.env.JOBGUARD_ENV = mode;
+    try {
+      const route = await import(fileURLToPath(new URL("../../../web/app/api/customer-portal/signout/route.ts", import.meta.url)));
+      const next = await route.POST(request(body, h));
+      expect(next.status).toBe(status); expect(await next.json()).toEqual(expected);
+      expect(next.headers.getSetCookie()).toEqual(["jobguard_customer=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0"]);
+      expect(next.headers.get("cache-control")).toBe("no-store");
+      expect(next.headers.get("referrer-policy")).toBe("no-referrer");
+      const controller = new CustomerSigninController(() => {
+        if (name === "composition failure") throw new Error("private configuration failure");
+        return f.app;
+      });
+      const reply = { cookie: vi.fn(), setHeader: vi.fn() };
+      const nest = await controller.signout(body, { headers: h }, reply).catch(error => error);
+      if (status === 200) expect(nest).toEqual(expected);
+      else {
+        expect(nest).toBeInstanceOf(HttpException);
+        expect((nest as HttpException).getStatus()).toBe(status);
+        expect((nest as HttpException).getResponse()).toEqual(expected);
+      }
+      expect(reply.cookie).toHaveBeenCalledExactlyOnceWith("jobguard_customer", "", { ...customerCookieOptions, maxAge: 0 });
+      expect(reply.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
+      expect(reply.setHeader).toHaveBeenCalledWith("Referrer-Policy", "no-referrer");
+      expect(f.query).toHaveBeenCalledTimes(queries);
+      for (const call of f.query.mock.calls) {
+        expect(call[0]).toContain("identity.customer_portal_use");
+        expect(call[1]).toEqual([tenant, job, customer, f.digest(`customer-session:${cookie}`), "signout"]);
+      }
+    } finally { if (previous === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previous; }
   });
   it.each(["issue", "revoke", "signin", "signout", "read", "messages", "quote", "quote-accept", "variations/read", "variation-approvals"])("delegates only exact POST %s to the customer boundary", async action => {
     const guard = new ApplicationAuthGuard(() => { throw new Error("builder authentication must not run"); });
@@ -152,10 +213,13 @@ describe("MON-5 customer credential boundary (transport tests; PostgreSQL author
     const unavailable=()=>{throw new Error("private connection configuration");};
     const next=await customerHttp(unavailable,"signin",request({}));
     expect(next.status).toBe(503);expect(await next.json()).toEqual({code:"CUSTOMER_UNAVAILABLE"});
+    expect(next.headers.get("set-cookie")).toBeNull();
     const controller=new CustomerSigninController(unavailable);
-    const error=await controller.signin({}, {headers}, {cookie:vi.fn(),setHeader:vi.fn()}).catch(e=>e);
+    const reply={cookie:vi.fn(),setHeader:vi.fn()};
+    const error=await controller.signin({}, {headers}, reply).catch(e=>e);
     if (!(error instanceof HttpException)) throw error;
     expect(error.getStatus()).toBe(503);expect(error.getResponse()).toEqual({code:"CUSTOMER_UNAVAILABLE"});
+    expect(reply.cookie).not.toHaveBeenCalled();
   });
 
   it("malformed cookie UUIDs fail before SQL, and issued UUID paths are canonical",async()=>{
