@@ -293,10 +293,6 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
-    if (prior.definition !== null && current?.source !== prior.source && lp6dBodies.get(`${prior.nspname}.${prior.proname}`)?.includes(current?.source)) {
-      // The header may change only in LANGUAGE (contractor_session's checked bridge moves from sql to plpgsql).
-      const header = (definition: string) => definition.replace(/^ LANGUAGE \w+$/mu, " LANGUAGE <checked>");
-      expect(header(current!.definition)).toEqual(header(prior.definition.replace(prior.source, () => current!.source)));
     // 0751 succeeds LP-6d for this exact dispatcher; pin it before generic LP-6d successor handling.
     if (prior.nspname === "app" && prior.proname === "accounting_export" &&
       prior.args === "t uuid, digest text, operation text, source text, v jsonb") {
@@ -304,7 +300,14 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       const body = sql.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toBe(body);
       expect(current?.source).toBe(body);
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
       expect(current?.definition).not.toEqual(prior.definition);
+      continue;
+    }
+    if (prior.definition !== null && current?.source !== prior.source && lp6dBodies.get(`${prior.nspname}.${prior.proname}`)?.includes(current?.source)) {
+      // The header may change only in LANGUAGE (contractor_session's checked bridge moves from sql to plpgsql).
+      const header = (definition: string) => definition.replace(/^ LANGUAGE \w+$/mu, " LANGUAGE <checked>");
+      expect(header(current!.definition)).toEqual(header(prior.definition.replace(prior.source, () => current!.source)));
       continue;
     }
     // 0733 changes these exact bodies; retain every routine's security metadata.
