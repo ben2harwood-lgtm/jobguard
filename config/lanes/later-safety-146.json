@@ -8,7 +8,9 @@
       "note": "LATER-SAFETY-146; RED; NOPR synthetic evidence integrity.",
       "allow": [
         "packages/db/migrations/0743_extra_pack_source_bijection.sql",
+        "packages/db/migrations/0744_extra_pack_source_bijection.sql",
         "packages/db/test/migration-proofs/0743_extra_pack_source_bijection.proof.json",
+        "packages/db/test/migration-proofs/0744_extra_pack_source_bijection.proof.json",
         "packages/db/test/extra-evidence-pack-writer.integration.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts"
       ]
