@@ -1,6 +1,0 @@
-{
-  "migration": "0745_builder_acceptance_sent_head.sql",
-  "lp0": [],
-  "upgrade": [],
-  "tenancy": []
-}

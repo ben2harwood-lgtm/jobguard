@@ -17,7 +17,7 @@ import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { snapshotRows } from "./upgrade-proof-utils.js";
 import { loadMigrationProofs } from "./migration-proof-loader.js";
 
-const own = "0745_builder_acceptance_sent_head.sql";
+const own = "0743_builder_acceptance_sent_head.sql";
 const sqlUrl = new URL(`../migrations/${own}`, import.meta.url);
 const predecessorUrl = new URL("../migrations/0723_lp6c_money_binding.sql", import.meta.url);
 const internal = "app.record_builder_attested_acceptance(uuid,uuid,uuid,uuid,uuid,integer,character,bigint,integer,uuid,character varying,character varying,timestamp with time zone,uuid)";
@@ -219,7 +219,7 @@ describe("builder attestation sent head: real PostgreSQL",()=>{
         // The whole command rolls back; no simulated billing facts escape this test.
         await d.$client.query("SET LOCAL session_replication_role=replica");
         await d.$client.query("INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark) VALUES($1,$2,$3,$4,$5,$6,'2026-10-01','{}','candidate_m1_standard_v1','GBP',100,20,120,$7,$7,'\\x00',true,'SYNTHETIC - NOT A REAL INVOICE')",
-          [invoice,T,kind==="invoice"?f.job:randomUUID(),randomUUID(),authorization,`SENT-HEAD-${randomUUID()}`,"a".repeat(64)]);
+          [invoice,T,kind==="invoice"?f.job:randomUUID(),randomUUID(),authorization,`SENT-HEAD-${randomUUID().slice(0,8)}`,"a".repeat(64)]);
         if(kind==="credit_note")await d.$client.query("INSERT INTO app.customer_credit_note(id,tenant_id,job_id,invoice_id,authorization_id,credit_number,amount_pence,currency,reason,net_pence,tax_pence,total_pence) VALUES($1,$2,$3,$4,$5,'SENT-HEAD-CN',120,'GBP','synthetic',-100,-20,-120)",[randomUUID(),T,f.job,invoice,authorization]);
         if(kind==="payment")await d.$client.query("INSERT INTO app.customer_payment(id,tenant_id,job_id,invoice_id,authorization_id,paid_on,amount_pence,currency,method,reference,builder_attested,provenance) VALUES($1,$2,$3,$4,$5,'2026-10-02',120,'GBP','cash','SENT-HEAD-PAY',true,'manual_builder_attestation')",[randomUUID(),T,f.job,invoice,authorization]);
         await d.$client.query("SET LOCAL session_replication_role=origin");

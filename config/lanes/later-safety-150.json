@@ -8,7 +8,11 @@
       "allow": [
         "packages/db/migrations/0745_builder_acceptance_sent_head.sql",
         "packages/db/test/migration-proofs/0745_builder_acceptance_sent_head.proof.json",
-        "packages/db/test/builder-acceptance-sent-head.integration.test.ts"
+        "packages/db/test/builder-acceptance-sent-head.integration.test.ts",
+        "packages/db/migrations/0743_builder_acceptance_sent_head.sql",
+        "packages/db/test/migration-proofs/0743_builder_acceptance_sent_head.proof.json",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }
