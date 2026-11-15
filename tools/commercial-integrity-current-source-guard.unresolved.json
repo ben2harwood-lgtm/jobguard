@@ -15,8 +15,8 @@
   },
   {
     "file": "packages/db/src/practice-session.ts",
-    "line": 63,
-    "fingerprint": "37cf6d1cbae38bc6b0f702c19be3bddf52c560f9c6c824a7415a8cbb0698ab37",
+    "line": 71,
+    "fingerprint": "e79d47cdaef4a9db55b982cdfedc5113d7f6fa9c867ad8300c75f6ccd4d99c37",
     "reason": "v1 adoption receipt read inside the recursive ownership CTE; non-advisory, definer-written command receipt required by the ACCEPT-V1-RECEIPT ruling; Ben approved 7 Nov",
     "code": "UNRESOLVED_COVERED_EDGE"
   },
