@@ -175,7 +175,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0733_real_customer_link_own_quote.sql"],
     ["identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)", "0733_real_customer_link_own_quote.sql"],
     ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0655_emergency_token_minted.sql"],
-    ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0708_fee_result_json_errors.sql"],
+    ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0742_fee_webhook_receipt_binding.sql"],
     ["app.ch6_integrity_authority(t uuid, j uuid, digest text)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.ch6_integrity_sources(t uuid, j uuid, d text)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.ch6_record_integrity_review(t uuid, j uuid, digest text, review jsonb, source_snapshot jsonb)", "0660_baseline_ancestry_audit_trust.sql"],
@@ -189,6 +189,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.work_order_commit(actor uuid, payload jsonb)", "0676_work_order_expected_revision.sql"],
     ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0699_sync_checkpoint_bound_reader.sql"],
     ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
+    ["app.ef_inputs(t uuid, ag app.enterprise_agreement_version, p_period text)", "0745_enterprise_fee_rejected_line.sql"],
     ["app.ef_prepare_statement(p_session uuid, p_command uuid, p_period text)", "0704_enterprise_fee_period_order.sql"],
     ["app.ef_post_statement(p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid)", "0704_enterprise_fee_period_order.sql"],
     ["app.accounting_export_route_read(t uuid, digest text, source text)", "0709_accounting_export_route_read_exported.sql"],
@@ -206,7 +207,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.post_plan_obligation(j uuid, b uuid, r uuid, i uuid, n bigint, c character, s character varying, pk character varying, pr character varying, h character, a uuid, au uuid)", "0723_lp6c_money_binding.sql"],
     ["app.post_plan_settlement(j uuid, b uuid, o uuid, cl uuid, r uuid, n bigint, c character, s character varying, pr character varying, h character, a uuid, au uuid)", "0723_lp6c_money_binding.sql"],
     ["app.reverse_journal(j uuid, b uuid, o uuid, s character varying, pr character varying, h character, a uuid, au uuid)", "0723_lp6c_money_binding.sql"],
-    ["app.record_builder_attested_acceptance(p_tenant uuid, p_acceptance uuid, p_event uuid, p_job uuid, p_document uuid, p_version integer, p_hash character, p_total bigint, p_expected integer, p_actor uuid, p_customer character varying, p_method character varying, p_accepted_at timestamp with time zone, p_evidence uuid)", "0723_lp6c_money_binding.sql"],
+    ["app.record_builder_attested_acceptance(p_tenant uuid, p_acceptance uuid, p_event uuid, p_job uuid, p_document uuid, p_version integer, p_hash character, p_total bigint, p_expected integer, p_actor uuid, p_customer character varying, p_method character varying, p_accepted_at timestamp with time zone, p_evidence uuid)", "0743_builder_acceptance_sent_head.sql"],
     ["app.record_quote_disposition(p_tenant uuid, p_event uuid, p_job uuid, p_document uuid, p_version integer, p_hash character, p_expected integer, p_actor uuid, p_kind character varying, p_occurred timestamp with time zone)", "0723_lp6c_money_binding.sql"],
     ["app.switch_job_live(p_tenant uuid, p_activation uuid, p_cap_snapshot uuid, p_obligation uuid, p_job uuid, p_document uuid, p_version integer, p_hash character, p_expected integer, p_net bigint, p_cap bigint, p_mode character varying, p_terms character varying, p_policy character varying, p_actor uuid, p_activated timestamp with time zone)", "0723_lp6c_money_binding.sql"],
     ["app.record_simulated_settlement(p_tenant uuid, p_id uuid, p_obligation uuid, p_provider_event character varying, p_amount bigint, p_simulated_at timestamp with time zone)", "0723_lp6c_money_binding.sql"],
@@ -249,6 +250,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.surface_shadow_signal_early(p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb)", "0735_per_firm_final_check_terms.sql"],
     ["app.accept_final_check_terms(p_tenant uuid, p_actor uuid, p_command uuid, p_version text)", "0735_per_firm_final_check_terms.sql"],
     ["app.guard_final_lock_disclosure_terms()", "0735_per_firm_final_check_terms.sql"],
+    ["app.store_extra_pack_artifact(p_command uuid, p_job uuid, p_extra uuid, p_digest text, p_artifact jsonb)", "0744_extra_pack_source_bijection.sql"],
   ] as readonly (readonly [string, string, number?])[]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {
