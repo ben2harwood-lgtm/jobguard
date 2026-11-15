@@ -5513,6 +5513,10 @@ END;
 END
 $$;
 
+-- WORM executor/operator steps remain actor-less: 0577/0578 already use the
+-- migration-only worm_audit port, with no guarded request helper downstream.
+-- Do not bind them as the submitting owner or grant them runtime authority.
+-- Request submissions below still bind the actual owner and exact session.
 -- Latest body: packages/db/migrations/0577_worm_durable_commands.sql
 CREATE OR REPLACE FUNCTION app.worm_submit(c jsonb) RETURNS app.worm_command
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$

@@ -25,7 +25,9 @@
         ],
         "tests": [
           "packages/db/test/lp6d-routines.test.ts",
-          "packages/db/test/lp6d-routines.integration.test.ts"
+          "packages/db/test/lp6d-routines.integration.test.ts",
+          "packages/db/test/worm-command.integration.test.ts",
+          "packages/db/test/worm-hold-screen.integration.test.ts"
         ],
         "gaps": [
           "Built on LP-6c c2ec9e98; PostgreSQL CI and independent RED review remain required."

@@ -1,5 +1,80 @@
 # LP-6d remaining routines — router-authorized repair 5 on final LP-6c c2ec9e98
 
+## 15 November 2026 — LP-6d repair R3: WORM binding hold (RED), READY for router commit
+
+Built on local HEAD and cached remote-tracking head `0777acb78` (R2), with a
+clean initial working tree. Git writes are prohibited in this sandbox, so no
+fetch, merge, reset, commit or push was attempted. GitHub read access also failed
+(connecting to api.github.com). The router must fetch and merge any newer remote
+head before committing; no claim is made that the cached ref is current online.
+
+Source inspection narrows the named WORM failures to the owner/session fixtures
+and pre-callback binding-error mapping. The accepted 0577/0578 worker chain is
+already actor-less: `worm_claim`, `worm_finish`, and `worm_reconcile` call only
+the migration-owned, PUBLIC-revoked `worm_audit` port, which seals through LP-4.
+It does not call a guarded LP-6d helper. Its existing private body and restricted
+caller list are now tested; no speculative private copy or executor/runtime
+membership is needed. 0740 records this boundary in comments only. The proof
+adds both WORM regression suites to its evidence paths; routine/ACL/catalogue
+allowances are unchanged.
+
+- Each successful second-owner submission now binds that owner's persisted
+  `secondDigest` session. The hold-screen's first owner also uses the exact
+  `sessionDigest` credential rather than an automatically minted fixture session.
+  Intentional mismatched-actor/credential refusals remain.
+- The revoked-session replay test submits and replays using its own exact
+  persisted session. `WormCommandRepository` maps only a typed protected binding
+  refusal before callback entry to `WORM_REFUSED`. Generic pre-callback SQLSTATE
+  failures and post-callback/commit failures remain `WORM_UNCONFIRMED`; units
+  explicitly distinguish these outcomes.
+- The raw alternate-membership attack still requires 42501 /
+  REQUEST_BINDING_REFUSED. A genuinely bound original owner separately reaches
+  the SQL same-person-release refusal (`WORM_REFUSED`). Existing duplicate,
+  storage, pending TSA, revoked queued authority, recovery, rollback, tenant and
+  role assertions remain; runtime executor probes additionally forge application
+  settings and still require 42501. No test is skipped.
+- All touched paths are in the existing task lane. No production rollout,
+  provider call, real customer data or money is involved.
+
+Local evidence (installed Vitest 4.1.12; at most two workers; at most three named
+files per invocation):
+
+- DB unit run: `./node_modules/.bin/vitest run --maxWorkers=2
+  test/lp6d-routines.test.ts test/lp-0-catalog.test.ts
+  src/worm-command-repository.test.ts` from `packages/db`: 3 files / 93 tests PASS
+  before the final binding-error mapping.
+- Proof/drift run from `packages/db`: `./node_modules/.bin/vitest run
+  --maxWorkers=2 test/lp6d-routines.test.ts test/migration-proof-loader.test.ts
+  test/worm-migration-proofs.test.ts`: 3 files / 108 tests PASS.
+- Final changed-repository run from `packages/db`: `./node_modules/.bin/vitest
+  run --maxWorkers=2 src/worm-command-repository.test.ts
+  test/lp6d-repository-context.test.ts`: 2 files / 62 tests PASS.
+- `node_modules/.bin/tsc -p packages/db/tsconfig.json --noEmit`: PASS, including
+  the final rerun after the binding-error mapping.
+- `vitest list --maxWorkers=2 test/worm-command.integration.test.ts
+  test/worm-hold-screen.integration.test.ts test/lp6d-routines.integration.test.ts
+  --json=/tmp/lp6d-worm-r3-collected.json`: PASS, 33 tests collected (16/2/15).
+  Collection does not execute PostgreSQL hooks or prove database behavior.
+- `git diff --check`: PASS.
+- `LANE_BASE_REF=595da0da2 node tools/agent-lane-boundary-lint.mjs`: PASS for the
+  inherited R2 changes plus this repair. Default main comparison reports 0740
+  below main's 0741. This task explicitly reserves 0740, so no renumbering or
+  check weakening was performed; the router must reconcile the landing order.
+- The pnpm shim's test/typecheck invocations stalled before runner output and
+  were interrupted; installed binaries were used directly, with no download.
+
+Required PostgreSQL CI after router push (NOT executed locally: sandbox cannot
+start PostgreSQL or bind localhost):
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/worm-command.integration.test.ts test/worm-hold-screen.integration.test.ts test/lp6d-routines.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp-0-catalog.test.ts test/lp-0-grant-freeze.integration.test.ts
+```
+
+All named holds still require green core-db CI and an independent RED review
+against the pushed exact head before LP-6d lands. This is source-inspected and
+unit-tested repair evidence, not a PostgreSQL pass or independent review.
+
 ## 10 November 2026 — SQLSTATE ruling repair: READY for router commit
 
 This ruling supersedes the repair 6 SQLSTATE stop recorded below. The router

@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-6d-remaining-routines-r4"
       ],
-      "note": "RED LP-6d repair R2: G4 SSO operative-role bootstrap; PostgreSQL CI and independent exact-head review required.",
+      "note": "RED LP-6d repair R3: WORM owner/session fixture bindings and actor-less worker audit path; PostgreSQL CI and independent exact-head review required.",
       "allow": [
         "tools/commercial-integrity-boundary.unresolved.json",
         "tools/commercial-integrity-current-source-guard.unresolved.json",
@@ -206,7 +206,10 @@
         "packages/db/src/financial-reconciliation-queue-repository.test.ts",
         "apps/web/e2e/m4-4-evidence-holds.spec.ts",
         "packages/db/test/scim-deactivation-access.integration.test.ts",
-        "packages/db/test/later-empty-tables.ts"
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/worm-hold-screen.integration.test.ts",
+        "packages/db/src/worm-command-repository.ts",
+        "packages/db/src/worm-command-repository.test.ts"
       ]
     }
   }

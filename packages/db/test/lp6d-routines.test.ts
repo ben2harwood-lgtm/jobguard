@@ -460,3 +460,23 @@ it("allows only the migration-owned SSO completion definer to mint an operative 
   expect(complete.indexOf("INSERT INTO identity.lp6d_sso_grant_permit")).toBeLessThan(complete.indexOf("INSERT INTO app.role_grant VALUES"));
   expect(read("../migrations/0120_enterprise_identity.sql")).toContain("WHERE n.nspname='identity' AND p.proname LIKE 'sso_%' LOOP\n  EXECUTE format('ALTER FUNCTION %s OWNER TO jobguard_migration',f);");
 });
+
+
+it("keeps WORM workers actor-less behind their existing private audit port", () => {
+  // These routines already have no binding prefix: do not invent an unguarded
+  // copy or grant request/runtime authority to the executor or operator.
+  const worker = read("../migrations/0577_worm_durable_commands.sql");
+  const recovery = read("../migrations/0578_worm_operator_recovery.sql");
+  const audit = definitions(worker).find(m => m[1] === "app.worm_audit")![3]!;
+  expect(audit).not.toContain("current_actor");
+  expect(worker).toContain("ALTER FUNCTION app.worm_audit(app.worm_command,text,text) OWNER TO jobguard_migration;");
+  expect(worker).toContain("REVOKE ALL ON FUNCTION app.worm_audit(app.worm_command,text,text) FROM PUBLIC;");
+  const callers = [...worker.matchAll(/CREATE FUNCTION ((?:app|worm_control)\.\w+)\([\s\S]*?AS \$\$([\s\S]*?)\$\$;/gu),
+    ...recovery.matchAll(/CREATE FUNCTION ((?:app|worm_control)\.\w+)\([\s\S]*?AS \$\$([\s\S]*?)\$\$;/gu)]
+    .filter(m => m[2]!.includes("app.worm_audit("));
+  expect(callers.map(m => m[1]).sort()).toEqual(["app.worm_claim", "app.worm_finish", "worm_control.worm_reconcile"]);
+  for (const caller of callers) expect(caller[2]).not.toMatch(/current_actor|bind_request/u);
+  // 0740 leaves these accepted bodies and their credential-only ACLs alone.
+  expect(sql).not.toMatch(/CREATE (?:OR REPLACE )?FUNCTION (?:app\.worm_(?:audit|claim|finish)|worm_control\.worm_\w+)\(/u);
+  expect(sql).not.toMatch(/GRANT [^;]*jobguard_worm_(?:executor|operator)[^;]*TO jobguard_runtime/u);
+});
