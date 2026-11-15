@@ -326,12 +326,13 @@ describe("0745 populated predecessor upgrade",()=>{
     const before=await snapshotRows(db.owner), acl=await catalog(db.owner);
     await migrate(db.owner);
     // LP-6d's later migration creates identity.lp6d_sso_grant_permit empty.
-    expect(await snapshotRows(db.owner)).toEqual({...before,"identity.lp6d_sso_grant_permit":[]});
+    const upgraded=await snapshotRows(db.owner);
+    expect(upgraded).toEqual({...before,"identity.lp6d_sso_grant_permit":[]});
     expect(await catalog(db.owner)).toEqual(acl);
     expect(acl.map(r=>r.runtime)).toEqual([false,true]);
     expect(acl.every(r=>r.owner==="jobguard_migration"&&r.prosecdef)).toBe(true);
     await expect(dispatch(db,context,a)).rejects.toMatchObject({code:"22023",message:"stale or unissued exact quote"});
-    expect(await snapshotRows(db.owner)).toEqual(before);
+    expect(await snapshotRows(db.owner)).toEqual(upgraded);
     await dispatch(db,context,await acceptance(db,f.job,newer));
     await dispatch(db,context,await acceptance(db,history.job,history.old));
   });
