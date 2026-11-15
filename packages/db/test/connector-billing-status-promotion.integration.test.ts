@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { ConnectorPromotionRepository, derivedUuid, withTenant } from "../src/index.js";
+import { ConnectorPromotionRepository, ContractorRepository, derivedUuid, requireContractorRequestContext, withTenant } from "../src/index.js";
 import { canonicalJson } from "../src/work-order-repository.js";
 import { cluster, world, type World } from "./contractor-billing-fixtures.js";
 import { promptSession } from "./enterprise-live-prompt-fixtures.js";
@@ -31,7 +31,9 @@ async function moneySnapshot(w: World) {
  return result;
 }
 async function direct(w: World, selection: {namespace:string;eventId:string}, result: unknown, session: string = w.session) {
- return withTenant(c.runtime,w.ctx,db => db.$client.query("SELECT app.connector_promotion($1,$2,$3,$4,$5::jsonb) value",
+ // LP-6d: another member's session calls as that member's own bound request (class (b): its refusal is unchanged).
+ const ctx = session === w.session ? w.ctx : requireContractorRequestContext(await new ContractorRepository(c.runtime).resolveSession(session));
+ return withTenant(c.runtime,ctx,db => db.$client.query("SELECT app.connector_promotion($1,$2,$3,$4,$5::jsonb) value",
  [session,selection.namespace,selection.eventId,derivedUuid(`${w.w.p.tenantId}:${selection.namespace}:${selection.eventId}`),JSON.stringify(result)]));
 }
 it("links a completed human ENT-6 paid import once, including concurrent replay, with no monetary writes", async () => {

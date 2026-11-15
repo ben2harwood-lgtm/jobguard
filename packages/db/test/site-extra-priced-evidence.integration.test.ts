@@ -107,25 +107,27 @@ it("work statements do not alter price, requirement, origin or timing; finished 
  }
  expect(rows[1]).toEqual(rows[0]); expect(rows[2]).toEqual(rows[0]);
  expect(requirements[1]).toEqual(requirements[0]); expect(requirements[2]).toEqual(requirements[0]);
- const read = await repo.supervisorQueries(w.ctx, w.members.supervisor.member, jobId);
+ // LP-6d: each supervisor reads in its own bound request.
+ const read = await repo.supervisorQueries(await testActorContext(c.admin, w.ctx, w.members.supervisor.member), w.members.supervisor.member, jobId);
  expect(read.workStatuses).toEqual(expect.arrayContaining([expect.objectContaining({ extraId: finished!.variationId, workStatus: "finished", source: "operative_statement", operativeMembershipId: actor.membershipId })]));
- await expect(repo.supervisorQueries(w.ctx, w.otherSupervisor.member, jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+ await expect(repo.supervisorQueries(await testActorContext(c.admin, w.ctx, w.otherSupervisor.member), w.otherSupervisor.member, jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
  const owner = await c.admin.connect();
  try {
   await owner.query("BEGIN"); await owner.query("SET LOCAL ROLE jobguard_migration");
   await owner.query("SELECT set_config('app.tenant_id',$1,true)", [w.p.tenantId]);
   await expect(owner.query("UPDATE app.site_extra_work_status SET work_status='not_started' WHERE tenant_id=$1 AND variation_id=$2", [w.p.tenantId, finished!.variationId])).rejects.toMatchObject({ code: "55000" });
  } finally { await owner.query("ROLLBACK"); owner.release(); }
- await expect(withTenant(c.runtime, w.ctx, db => db.$client.query("SELECT app.ent3_work_status($1,$2,$3,$4)", [jobId, actor.membershipId, finished!.variationId, "not_started"])) ).rejects.toMatchObject({ message: "INVALID_COMMAND" });
+ await expect(withTenant(c.runtime, await testActorContext(c.admin, w.ctx, actor), db => db.$client.query("SELECT app.ent3_work_status($1,$2,$3,$4)", [jobId, actor.membershipId, finished!.variationId, "not_started"])) ).rejects.toMatchObject({ message: "INVALID_COMMAND" });
 });
 
 it("server proceed comparison uses the bound rules: within, above and unpriced; cancelled logs remain not found", async () => {
  const { withTenant } = await import("../src/tenant-context.js");
  const { cancel } = await import("./site-extra-fixtures.js");
  const f = await siteFixture(c), actor = f.members.operative.member, repo = new SiteExtraRepository(c.runtime);
- const comparison = (quantity: string | null) => withTenant(c.runtime, f.ctx, async db => (await db.$client.query("SELECT app.ent3_proceed_comparison($1,$2,$3,$4) v", [f.jobId, actor.membershipId, "CLEAR-GUTTER", quantity])).rows[0].v);
+ // LP-6d: the operative compares in its own bound request.
+ const comparison = async (quantity: string | null) => withTenant(c.runtime, await testActorContext(c.admin, f.ctx, actor), async db => (await db.$client.query("SELECT app.ent3_proceed_comparison($1,$2,$3,$4) v", [f.jobId, actor.membershipId, "CLEAR-GUTTER", quantity])).rows[0].v);
  expect(await comparison("1")).toBe("within"); expect(await comparison("1000")).toBe("above"); expect(await comparison(null)).toBe("above");
- const checked = await repo.orderCheck(f.ctx, actor, f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "1000" });
+ const checked = await repo.orderCheck(await testActorContext(c.admin, f.ctx, actor), actor, f.jobId, { sorCode: "CLEAR-GUTTER", quantity: "1000" });
  expect(checked.proceedComparison).toBe("above");
  await cancel(c, f);
  await expect(repo.logSorSiteExtra(await testActorContext(c.admin, f.ctx, actor), actor, { version: "log-sor-site-extra.v2", commandId: randomUUID(), jobId: f.jobId, sorCode: "CLEAR-GUTTER", quantity: "100", workStatus: "finished", description: "Fictional", note: "Fictional", photoEvidenceId: randomUUID(), residentConfirmation: { shownContentSha256: "a".repeat(64) } })).rejects.toMatchObject({ code: "NOT_FOUND" });

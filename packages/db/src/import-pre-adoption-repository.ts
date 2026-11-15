@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { isRequestBindingRefusal } from "./request-binding-error.js";
 
 const uuid = z.string().uuid().transform(v => v.toLowerCase());
 const digest = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -15,6 +16,11 @@ export const importedCatchResult = z.object({ version: z.literal("import-catch-r
   fee: z.object({ pence: z.literal(0), currency: z.literal("GBP") }).strict(), reason: z.literal("pre_adoption_evidence"),
   explanation: z.literal("Evidence from before adoption is permanently excluded"), environment: z.literal("synthetic_demo"), realExternalActions: z.literal(0) }).strict();
 
+/** LP-6d: a request bound to another actor or company refuses at binding; keep the main FORBIDDEN refusal. */
+function bindingRefusal(error: unknown): never {
+  if (isRequestBindingRefusal(error)) throw Object.assign(new Error("FORBIDDEN"), { code: "42501" });
+  throw error;
+}
 function syntheticOnly() {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new ImportHistoryError("SYNTHETIC_MODE_REQUIRED");
 }
@@ -34,7 +40,7 @@ export class ImportPreAdoptionRepository {
         eventType: "job.imported_historical_evidence", subjectType: "job", subjectRef: job,
         payload: { references: { evidenceId: input.evidenceId, historyId: result.id, reason: "pre_adoption_evidence" }, classifications: { action: "operational" } } }]);
       return { historyId: result.id, classification: "pre_adoption_evidence" as const };
-    });
+    }).catch(bindingRefusal);
   }
   async assess(context: VerifiedTenantContext, sessionDigest: string, jobId: string, raw: unknown) {
     syntheticOnly(); const input = importedCatchCommand.parse(raw), job = uuid.parse(jobId), d = digest.parse(sessionDigest);
@@ -44,6 +50,6 @@ export class ImportPreAdoptionRepository {
       const result = importedCatchResult.parse(row?.result);
       if (result.jobId !== job || result.evidenceId !== input.evidenceId) throw new ImportHistoryError("IMPORT_HISTORY_BINDING_MISMATCH");
       return result;
-    });
+    }).catch(bindingRefusal);
   }
 }

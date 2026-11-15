@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { ZodError } from "zod";
-import { AuditExportError, AuditExportRepository, ContractorRepository, contractorSessionContext, type VerifiedTenantContext, AUDIT_EXPORT_NOTICE, AUDIT_EXPORT_SANDBOX } from "@jobguard/db";
+import { AuditExportError, AuditExportRepository, ContractorRepository, contractorSessionContext, requireContractorRefusalContext, type VerifiedTenantContext, AUDIT_EXPORT_NOTICE, AUDIT_EXPORT_SANDBOX } from "@jobguard/db";
 import { auditExportFailureV1, auditExportRequestV1, auditExportSessionV1 } from "./audit-export.contracts.js";
 
 export function assertAuditExportMode(): void {
@@ -17,7 +17,18 @@ export class AuditExportApplication {
     const session = auditExportSessionV1.safeParse(sessionId);
     if (!session.success) throw new AuditExportError("AUDIT_EXPORT_UNAUTHENTICATED");
     try {
-      const repository = new ContractorRepository(this.pool), member = await repository.resolveSession(session.data);
+      const repository = new ContractorRepository(this.pool);
+      let member: Awaited<ReturnType<ContractorRepository["resolveSession"]>>;
+      try { member = await repository.resolveSession(session.data); }
+      catch (error) {
+        // Router ruling (r8): contractor_session refuses a revoked base owner. That is still a 403,
+        // and the ENT-10b refusal audit is written BEFORE refusing (never a 503).
+        if ((error as { code?: string }).code !== "42501") throw error;
+        const refused = await repository.refusedSessionPrincipal(session.data);
+        if (!refused) throw new AuditExportError("AUDIT_EXPORT_UNAUTHENTICATED");
+        await this.repository.refuse(requireContractorRefusalContext(refused), { membershipId: refused.membershipId, identityUserId: refused.identityUserId }, action);
+        throw new AuditExportError("AUDIT_EXPORT_FORBIDDEN");
+      }
       // ENT-1's reviewed query verifies active membership before export access.
       // Its tenant-scoped projection is discarded; it supplies no export authority.
       try {

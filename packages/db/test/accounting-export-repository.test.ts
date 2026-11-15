@@ -74,3 +74,28 @@ it("session-derived actor mismatch rolls back a confirmation before commit", asy
  expect(query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
  expect(query.mock.calls.some(c=>c[0]==="COMMIT")).toBe(false);
 });
+
+it.each(["preview", "read", "approve", "claim", "reconcile"] as const)("binds the real request before %s and rolls back refused bindings", async operation => {
+ const context = testTenantContext(randomUUID()), digest = "b".repeat(64);
+ const query = vi.fn(async (sql: string) => {
+  if (sql.includes("app.bind_request")) throw Object.assign(new Error("REQUEST_BINDING_REFUSED"), { code: "42501" });
+  return { rows: [] };
+ });
+ const repo = new AccountingExportRepository({ connect: vi.fn(async () => ({ query, release: vi.fn() })) } as never);
+ const input = operation === "approve" ? { version: 1, decisionId: randomUUID(), previewHash: "a".repeat(64), expiresAt: new Date(Date.now()+60000).toISOString(), humanConfirmed: true }
+  : operation === "claim" || operation === "reconcile" ? { version: 1, attemptId: randomUUID() } : {};
+ await expect(repo.execute(context, digest, operation, "demo-next", input)).rejects.toThrow("EXPORT_FORBIDDEN");
+ expect(query).toHaveBeenCalledWith("SELECT app.bind_request($1, $2, $3)", ["real", digest, context.tenantId]);
+ expect(query.mock.calls.some(([sql]) => sql.includes("app.accounting_export("))).toBe(false);
+ expect(query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
+});
+
+it("commits an export preview only after binding its own company credential", async () => {
+ const context = testTenantContext(randomUUID()), digest = "b".repeat(64);
+ const result = { version: 1, artifact: { sourceId: "demo-next" }, previewHash: "a".repeat(64) };
+ const query = vi.fn(async (sql: string) => ({ rows: sql.includes("app.accounting_export(") ? [{ result }] : [] }));
+ const repo = new AccountingExportRepository({ connect: vi.fn(async () => ({ query, release: vi.fn() })) } as never);
+ expect(await repo.execute(context, digest, "preview", "demo-next")).toEqual(result);
+ expect(query.mock.calls.map(([sql]) => sql)).toEqual(["BEGIN", "SELECT set_config('app.tenant_id', $1, true)",
+  "SELECT app.bind_request($1, $2, $3)", "SELECT app.accounting_export($1,$2,$3,$4,$5::jsonb) result", "COMMIT"]);
+});
