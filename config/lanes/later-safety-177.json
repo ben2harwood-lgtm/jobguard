@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-177": {
+      "branches": [
+        "codex/sandbox/later-safety-177"
+      ],
+      "allow": [
+        "packages/db/src/proof-repository.ts",
+        "apps/api/src/proof/proof.application.test.ts",
+        "packages/db/test/proof-replay.integration.test.ts",
+        "packages/db/test/proof-application-records.integration.test.ts"
+      ]
+    }
+  }
+}
