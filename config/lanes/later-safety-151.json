@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-151": {
+      "branches": [
+        "codex/sandbox/later-safety-151"
+      ],
+      "allow": [
+        "packages/db/migrations/0746_enterprise_fee_rejected_line.sql",
+        "packages/db/test/migration-proofs/0746_enterprise_fee_rejected_line.proof.json",
+        "packages/db/migration-notes/0746_enterprise_fee_rejected_line.md",
+        "packages/db/test/enterprise-fee-rejected-line.integration.test.ts"
+      ]
+    }
+  }
+}
