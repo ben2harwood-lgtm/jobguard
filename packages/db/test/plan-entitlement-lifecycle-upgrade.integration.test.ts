@@ -129,7 +129,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(emergencyRoutines).toHaveLength(1);
   expect(emergencyRoutines[0]?.definition?.split("$function$")[1]).toEqual(emergencyBody);
   // 0709 replaces only this exact overload on 0656's body; pin its entire body, including all predecessor guards.
-  const feeResult = await readFile(new URL("../migrations/0708_fee_result_json_errors.sql", import.meta.url), "utf8");
+  const feeResult = await readFile(new URL("../migrations/0742_fee_webhook_receipt_binding.sql", import.meta.url), "utf8");
   const feeResultBody = feeResult.split("CREATE OR REPLACE FUNCTION app.replace_fee_reservation_book")[1]!.split("AS $$")[1]!.split("$$;")[0];
   expect(live.filter(row => row.nspname === "app" && row.proname === "replace_fee_reservation_book"
     && row.args === "p_tenant uuid, p_book jsonb, p_result jsonb")).toHaveLength(1);

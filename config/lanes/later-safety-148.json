@@ -13,9 +13,13 @@
         "apps/api/src/fee-collection/fake-gocardless.ts",
         "apps/api/src/fee-collection/fake-stripe.ts",
         "packages/db/migrations/0744_fee_webhook_receipt_binding.sql",
+        "packages/db/migrations/0742_fee_webhook_receipt_binding.sql",
         "packages/db/test/fee-reservation.integration.test.ts",
         "packages/db/test/fee-webhook-receipt-binding.integration.test.ts",
-        "packages/db/test/migration-proofs/0744_fee_webhook_receipt_binding.proof.json"
+        "packages/db/test/migration-proofs/0744_fee_webhook_receipt_binding.proof.json",
+        "packages/db/test/migration-proofs/0742_fee_webhook_receipt_binding.proof.json",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }

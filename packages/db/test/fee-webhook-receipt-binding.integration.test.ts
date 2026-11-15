@@ -14,10 +14,10 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeWorkFixture, createWorkFixture, type WorkFixture } from "./job-work-state-fixtures.js";
 import { proofSchema } from "./migration-proof-loader.js";
 
-const sql = readFileSync(new URL("../migrations/0744_fee_webhook_receipt_binding.sql", import.meta.url), "utf8");
+const sql = readFileSync(new URL("../migrations/0742_fee_webhook_receipt_binding.sql", import.meta.url), "utf8");
 const predecessor = readFileSync(new URL("../migrations/0708_fee_result_json_errors.sql", import.meta.url), "utf8");
 const bodyOnly = (value: string) => value.replace(/^BEGIN;$/m, "").replace(/^COMMIT;$/m, "");
-const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0744_fee_webhook_receipt_binding.proof.json", import.meta.url), "utf8")));
+const proof = proofSchema.parse(JSON.parse(readFileSync(new URL("./migration-proofs/0742_fee_webhook_receipt_binding.proof.json", import.meta.url), "utf8")));
 const replace = "SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)";
 const values = (tenant: string, book: CollectionBook, result?: SignedProviderResult) =>
   [tenant, JSON.stringify({ version: "fee-reservation-book.v1", ...book }), JSON.stringify(result ?? null)];

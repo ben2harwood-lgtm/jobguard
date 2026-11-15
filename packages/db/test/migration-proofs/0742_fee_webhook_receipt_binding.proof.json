@@ -1,5 +1,5 @@
 {
-  "migration": "0744_fee_webhook_receipt_binding.sql",
+  "migration": "0742_fee_webhook_receipt_binding.sql",
   "lp0": [],
   "upgrade": [
     {
