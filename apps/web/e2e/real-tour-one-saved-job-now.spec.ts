@@ -110,6 +110,7 @@ test("hand step 3 saves customer and site before sending", async ({ page }, info
   await page.getByRole("button", { name: "Confirm scope", exact: true }).click();
   await page.getByRole("button", { name: "Price the work", exact: true }).click();
   await page.getByRole("button", { name: "Save draft revision", exact: true }).click();
+  await expect(page.getByTestId("quote-revision")).toHaveText("1");
   await control(page, "Next").click();
   await expect(tour(page)).toContainText("Step 3 of 9");
   await expect(tour(page)).toContainText(/Save customer and site.*Preview immutable quote/);
