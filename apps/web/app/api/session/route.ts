@@ -16,5 +16,6 @@ export async function POST(request: Request) {
   try { token=await issuePracticeSession(syntheticPool()); } catch (practiceError){const denied=practiceFailure(practiceError);if(denied)return denied; return NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503 }); }
   const response = NextResponse.json({ ok: true });
   response.cookies.set("jg_session", token, { httpOnly: true, sameSite: "lax", secure: new URL(request.url).protocol === "https:", path: "/" });
+  response.cookies.delete("jg_decision_job");
   return response;
 }
