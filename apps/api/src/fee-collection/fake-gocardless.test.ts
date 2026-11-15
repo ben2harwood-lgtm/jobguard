@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { FakeGoCardlessRail } from "./fake-gocardless.js";
 import { DarkFeeCollectionExecutor } from "./executor.js";
@@ -27,6 +28,20 @@ function ddFixture(now = () => new Date("2026-10-29T00:00:00Z")) {
   return { ...f, stripe: f.rail, rail, executor, setup, mandate, intent, event, batch, start };
 }
 describe("M4-15 dark Direct Debit", () => {
+  it("binds each verified direct-debit result to its exact inbox identity", async () => {
+    const f = ddFixture(), sign = vi.spyOn(f.rail, "signStoreResult");
+    await f.start();
+    expect(JSON.parse(sign.mock.results[0]!.value.body).version).toBe("fake-fee-result.v1");
+    for (const [i, state] of ["submitted", "submitted", "confirmed", "paid_out", "late_failure", "late_failure"].entries()) {
+      const event = f.event(state, id(100 + i));
+      const body = JSON.stringify({ events: [event] });
+      const verified = f.rail.verifyWebhook(body, f.rail.sign(body));
+      expect(await f.batch([event])).toEqual([{ code: "processed" }]);
+      expect(JSON.parse(sign.mock.results.at(-1)!.value.body)).toEqual({ version: "fake-fee-result.v2",
+        environment: "synthetic_demo", tenantId: ctx.tenantId, attempt: f.book().attempts[0],
+        event: { key: `direct_debit:${event.eventId}`, hash: createHash("sha256").update(JSON.stringify(verified)).digest("hex") } });
+    }
+  });
   it("records signed provider events without a user session and cannot use that path to reserve, collect or refund", async () => {
     const f = ddFixture(); await f.start();
     // Provider delivery continues even after the approving user's session expires.

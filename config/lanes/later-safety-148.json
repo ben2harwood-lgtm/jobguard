@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-148": {
+      "branches": [
+        "codex/sandbox/later-safety-148"
+      ],
+      "allow": [
+        "apps/api/src/fee-collection/contracts.ts",
+        "apps/api/src/fee-collection/executor.test.ts",
+        "apps/api/src/fee-collection/executor.ts",
+        "apps/api/src/fee-collection/fake-gocardless.test.ts",
+        "apps/api/src/fee-collection/fake-gocardless.ts",
+        "apps/api/src/fee-collection/fake-stripe.ts",
+        "packages/db/migrations/0744_fee_webhook_receipt_binding.sql",
+        "packages/db/test/fee-reservation.integration.test.ts",
+        "packages/db/test/fee-webhook-receipt-binding.integration.test.ts",
+        "packages/db/test/migration-proofs/0744_fee_webhook_receipt_binding.proof.json"
+      ]
+    }
+  }
+}
