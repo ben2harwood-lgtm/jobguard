@@ -73,5 +73,7 @@ it('records pursuit and backfills missed starts on a differently named database,
  await c.admin.query(sql); await migrate(c.admin);
  expect((await markers()).rows).toEqual(replayed);
  expect((await c.admin.query("SELECT has_function_privilege('jobguard_runtime','app.mon9_elect(uuid,uuid,uuid,uuid,uuid,text,integer,text)','EXECUTE') allowed")).rows).toEqual([{allowed:false}]);
- expect((await c.admin.query('SELECT app.mon9_session($1,$2) actor', [f.sessionDigest,f.actor.membershipId])).rows).toEqual([{actor:null}]);
+ // Raw, class (a): an unbound call naming an actor (no company setting, no request) is refused by the binding
+ // check before the session is read; it is a read, so nothing is written.
+ await expect(c.admin.query('SELECT app.mon9_session($1,$2) actor', [f.sessionDigest,f.actor.membershipId])).rejects.toMatchObject({code:'42501',message:'REQUEST_BINDING_REFUSED'});
 }, 120000);

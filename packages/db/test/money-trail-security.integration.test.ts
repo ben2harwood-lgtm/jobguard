@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 // Reviewer/CI only: real PostgreSQL and actual runtime role. No source-backed run is claimed.
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,expect,it } from "vitest";
@@ -11,6 +12,8 @@ afterAll(async()=>{if(previous===undefined)delete process.env.JOBGUARD_ENV;else 
 async function read(job=a.p.jobId,digest=a.auth.digest,tenant:string|null=a.p.tenantId){
  const db=await f.runtime.connect();
  try{await db.query("BEGIN");if(tenant!==null)await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  // LP-6d: the named practice session binds its own request; a forged or foreign one stays unbound (and is refused).
+  if(tenant!==null)await bindOwnSession(db,digest);
   return (await db.query("SELECT app.read_money_trail_availability($1,$2) result",[job,digest])).rows[0].result;
  }finally{await db.query("ROLLBACK");db.release();}
 }
@@ -47,7 +50,10 @@ it("[MT-12] exactly one new narrow read-only EXECUTE; no new tables, run/review 
 it("[MT-14] reads no hidden shadow source (connection-scoped execution and routine dependency evidence)",async()=>{
  const statements:string[]=[];const db=await f.runtime.connect();
  try{const query=async(sql:string,values:unknown[]=[])=>{statements.push(sql);return db.query(sql,values);};
-  await query('BEGIN');await query("SELECT set_config('app.tenant_id',$1,true)",[a.p.tenantId]);await query('SELECT app.read_money_trail_availability($1,$2)',[a.p.jobId,a.auth.digest]);
+  await query('BEGIN');await query("SELECT set_config('app.tenant_id',$1,true)",[a.p.tenantId]);
+  // LP-6d: the practice owner's own request binding (outside the read ledger below, which lists only the read path).
+  await db.query("SELECT app.bind_request('practice',$1,$2)",[a.auth.digest,a.p.tenantId]);
+  await query('SELECT app.read_money_trail_availability($1,$2)',[a.p.jobId,a.auth.digest]);
  }finally{await db.query('ROLLBACK');db.release();}
  expect(statements).toEqual(['BEGIN',"SELECT set_config('app.tenant_id',$1,true)",'SELECT app.read_money_trail_availability($1,$2)']);
  const definitions=(await f.admin.query("SELECT pg_get_functiondef(oid) definition FROM pg_proc WHERE oid=ANY(ARRAY['app.read_money_trail_availability(uuid,text)'::regprocedure,'app.read_success_fee_v3(uuid,text)'::regprocedure])")).rows.map(r=>r.definition).join('\n');
@@ -60,7 +66,10 @@ it("[MT-12/13] mutation of the delegated access guard is detected by the missing
  const original=(await f.admin.query('SELECT pg_get_functiondef($1::regprocedure) definition',[signature])).rows[0].definition as string;
  const guard='PERFORM app.read_success_fee_v3(p_job,p_session);';expect(original).toContain(guard);
  await expect(read(randomUUID(),'bad',null)).rejects.toMatchObject({code:'42501'});
- const db=await f.admin.connect();try{await db.query('BEGIN');await db.query(original.replace(guard,''));await db.query('SET LOCAL ROLE jobguard_runtime');
+ const db=await f.admin.connect();try{await db.query('BEGIN');await db.query(original.replace(guard,''));
+  // LP-6d: the mutant runs inside a genuinely bound practice request, so only the removed guard is missing.
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.p.tenantId]);await db.query("SELECT app.bind_request('practice',$1,$2)",[a.auth.digest,a.p.tenantId]);
+  await db.query('SET LOCAL ROLE jobguard_runtime');
   // Deliberate unsafe mutation: status leaks without access; baseline oracle would fail.
   expect((await db.query('SELECT app.read_money_trail_availability($1,$2) result',[randomUUID(),'bad'])).rows[0].result.state).toBe('dependency_bound');
  }finally{await db.query('ROLLBACK');db.release();}

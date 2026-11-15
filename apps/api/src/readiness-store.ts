@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { appendAuditBatch, withTenant, type VerifiedTenantContext } from "@jobguard/db";
+import { appendAuditBatch, isRequestBindingRefusal, withTenant, type VerifiedTenantContext } from "@jobguard/db";
 import { assertAcyclicDependencies, MAX_MONEY_PENCE } from "@jobguard/core";
 import { calendarDate, ReadinessSeamError, scopeV1 } from "./readiness-adapters.js";
 import { scheduledPlanV1, type ReadinessProposal } from "./readiness-scheduler.js";
@@ -62,6 +62,10 @@ export class DurableReadinessStore {
         [scope.tenantId, scope.jobId, scope.taskId, plan.factRevision, planHash, plan, auditId]);
       await appendAuditBatch(db, [{ id: auditId, version: "audit.v1", actorRef: `membership:${actor.data.membershipId}`, eventType: "readiness.scheduled_plan_confirmed", subjectType: "job", subjectRef: scope.jobId,
         payload: { references: { taskId: scope.taskId }, hashes: { planHash }, classifications: { action: "operational" } } }]);
+    }).catch((error: unknown) => {
+      // LP-6d: a revoked, expired or foreign actor's request now refuses at binding; keep the store's own code.
+      if (isRequestBindingRefusal(error)) throw new ReadinessSeamError("READINESS_FORBIDDEN");
+      throw error;
     });
   }
   async load(context: VerifiedTenantContext, raw: unknown): Promise<unknown> {

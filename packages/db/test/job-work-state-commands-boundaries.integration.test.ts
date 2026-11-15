@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
 import { insertPhoto,boundaryLock,closeWorkFixture,createWorkFixture,workTenant,type WorkFixture } from "./job-work-state-fixtures.js";
-import { seedWorkPractice,commandCounts,practiceWorkJob,runWorkCommand,workCommand } from "./job-work-state-command-fixtures.js";
+import { bindWorkRequest, seedWorkPractice,commandCounts,practiceWorkJob,runWorkCommand,workCommand } from "./job-work-state-command-fixtures.js";
 describe("CH-4-C capacity, post-lock and hidden-state boundaries",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture()},120000);afterAll(async()=>closeWorkFixture(f));
  it("unavailable capacity admission fails closed for resume and unlocked reopen",async()=>{
@@ -56,7 +56,7 @@ describe("CH-4-C capacity, post-lock and hidden-state boundaries",()=>{
  });
  it("open result use retains existing lock and completed-check gates",async()=>{
   const p=await seedWorkPractice(f),query=()=>withTenant(f.runtime,p.auth.context,db=>db.$client.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,'final','fictional@example.invalid','2026-10-18',$6)",[p.auth.context.tenantId,p.jobId,randomUUID(),p.auth.membershipId,randomUUID(),"a".repeat(64)]));
-  expect((await workTenant(f.runtime,p.auth.context.tenantId,db=>db.query("SELECT * FROM app.reveal_shadow_signals($1,$2)",[p.auth.context.tenantId,p.jobId]))).rows).toEqual([]);
+  expect((await workTenant(f.runtime,p.auth.context.tenantId,async db=>{await bindWorkRequest(db,p);return db.query("SELECT * FROM app.reveal_shadow_signals($1,$2)",[p.auth.context.tenantId,p.jobId]);})).rows).toEqual([]);
   await expect(query()).rejects.toThrow("FINAL_ACCOUNT_LOCK_REQUIRED");await boundaryLock(f,await practiceWorkJob(f,p));await expect(query()).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");
  });
  it("closed completed-result use refused and new completed check cannot bypass closure",async()=>{
@@ -68,7 +68,7 @@ describe("CH-4-C capacity, post-lock and hidden-state boundaries",()=>{
   });
   const history=(await f.admin.query("SELECT row_to_json(c) row FROM app.final_account_lock_check c WHERE tenant_id=$1 AND job_id=$2",[p.auth.context.tenantId,p.jobId])).rows;
   await runWorkCommand(f.runtime,p,workCommand("close",{reason:"other",note:"Fictional closed job"}));const before=await commandCounts(f,p);
-  await expect(workTenant(f.runtime,p.auth.context.tenantId,db=>db.query("SELECT * FROM app.reveal_shadow_signals($1,$2)",[p.auth.context.tenantId,p.jobId]))).rejects.toThrow("JOB_WORK_CLOSED");
+  await expect(workTenant(f.runtime,p.auth.context.tenantId,async db=>{await bindWorkRequest(db,p);return db.query("SELECT * FROM app.reveal_shadow_signals($1,$2)",[p.auth.context.tenantId,p.jobId]);})).rejects.toThrow("JOB_WORK_CLOSED");
   await expect(withTenant(f.runtime,p.auth.context,db=>db.$client.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,'final','fictional@example.invalid','2026-10-18',$6)",[p.auth.context.tenantId,p.jobId,randomUUID(),p.auth.membershipId,randomUUID(),"a".repeat(64)]))).rejects.toThrow("JOB_WORK_CLOSED");
   for(const status of ["pending","completed"])await expect(workTenant(f.admin,p.auth.context.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,clock_timestamp(),$5)",[p.auth.context.tenantId,p.jobId,randomUUID(),randomUUID(),status]))).rejects.toThrow("JOB_WORK_CLOSED");
   expect(await commandCounts(f,p)).toEqual(before);

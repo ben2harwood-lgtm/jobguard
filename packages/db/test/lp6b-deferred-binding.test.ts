@@ -28,7 +28,7 @@ const approved = [
   'sso-required-repository.ts#command:"identity-sso-required"',
   'sso-required-repository.ts#detail:"identity-sso-required"',
   'sso-required-repository.ts#view:"identity-sso-required"',
-  'practice-worker-switch-repository.ts#switchOff:"practice-switch-off"',
+  // LP-6d closed practice-worker-switch-repository.ts#switchOff:"practice-switch-off"; switch-off now binds.
   'contractor-practice-session-repository.ts#revoke:"contractor-session-revoke"',
   'commercial-integrity-v3-repository.ts#read:"commercial-integrity-read"',
   'commercial-integrity-v3-repository.ts#readFamily:"commercial-integrity-read-family"',
