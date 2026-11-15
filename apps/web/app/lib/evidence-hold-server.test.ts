@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const f = vi.hoisted(() => ({ list: vi.fn(), submit: vi.fn(), session: vi.fn(), repository: vi.fn(), digest: vi.fn(), identityToken: "s".repeat(32), context: {}, token: "10000000-0000-4000-8000-000000000001" }));
+const f = vi.hoisted(() => ({ list: vi.fn(), submit: vi.fn(), session: vi.fn(), repository: vi.fn(), digest: vi.fn(), identitySession: vi.fn(), identityContext: vi.fn(), identityToken: "s".repeat(32), context: {}, token: "10000000-0000-4000-8000-000000000001" }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: f.token }) }) }));
 vi.mock("./synthetic-server", () => ({ syntheticPool: () => ({}) }));
 vi.mock("./identity-server", () => ({ identityCredentials: async () => ({ sessionToken: f.identityToken }),
-  identityApplication: () => ({ provider: { digest: f.digest } }) }));
+  identityApplication: () => ({ provider: { digest: f.digest }, session: f.identitySession, context: f.identityContext, allowedOrigin: "https://holds.invalid" }) }));
 vi.mock("@jobguard/db", () => ({
   ContractorRepository: class { resolveSession = f.session; },
   contractorSessionContext: async () => f.context,
@@ -23,7 +23,9 @@ const params = { params: Promise.resolve({ id: id(2) }) };
 beforeEach(() => {
   vi.clearAllMocks(); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://holds.invalid");
   f.identityToken = "s".repeat(32); f.digest.mockReturnValue("a".repeat(64));
-  f.token = id(1); f.session.mockResolvedValue({ membershipId: id(6) });
+  f.token = id(1); f.session.mockResolvedValue({ tenantId: id(8), membershipId: id(6) });
+  f.identitySession.mockResolvedValue({ csrfToken: "stored-csrf", memberships: [{ tenantId: id(8), id: id(6), role: "owner" }] });
+  f.identityContext.mockResolvedValue(f.context);
   f.list.mockResolvedValue([{ evidenceId: id(5), action: "apply_hold", status: "queued", held: false }]);
   f.submit.mockResolvedValue({ id: id(3), status: "queued", object_key: "secret", actor_id: "private", result: { private: true } });
 });
@@ -114,3 +116,16 @@ it.each([["WORM_REFUSED", 403], ["WORM_UNCONFIRMED", 503], ["WORM_REPLAY_CONFLIC
     expect(JSON.stringify(body)).not.toMatch(/SELECT|secret_key|private/);
     if (status === 503) expect(body).toEqual({ code: "UNAVAILABLE", message: "The server could not confirm this request. Retry the same request." });
   });
+
+it("binds the real identity request context and refuses a different identity owner", async () => {
+  const realContext = { tenantId: id(8) };
+  f.identityContext.mockResolvedValue(realContext);
+  expect((await POST(req(), params)).status).toBe(201);
+  expect(f.identityContext).toHaveBeenCalledExactlyOnceWith({ sessionToken: f.identityToken,
+    requestedTenantId: id(8), csrfToken: "stored-csrf", origin: "https://holds.invalid" });
+  expect(f.submit.mock.calls[0]?.[0]).toBe(realContext);
+  f.submit.mockClear(); f.identityContext.mockClear();
+  f.identitySession.mockResolvedValue({ csrfToken: "stored-csrf", memberships: [{ tenantId: id(8), id: id(9), role: "owner" }] });
+  expect((await POST(req(), params)).status).toBe(401);
+  expect(f.identityContext).not.toHaveBeenCalled(); expect(f.submit).not.toHaveBeenCalled();
+});

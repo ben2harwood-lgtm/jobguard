@@ -1,4 +1,4 @@
-import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext, bindTestClient } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -138,7 +138,9 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
     const triggers = await admin.query("SELECT c.relname FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE t.tgname='a_watchdog_live_before_insert'");
     expect(triggers.rows.map(r => r.relname).sort()).toEqual([...tables].sort());
     await expect(runtime.query("SELECT app.require_watchdog_live($1)", [legacy.draft!.jobId])).rejects.toMatchObject({ code: "42501" });
-    await expect(withTenant(runtime, testTenantContext(otherTenant), db => requireLiveJob(db, legacy.draft!.jobId))).rejects.toMatchObject({ code: "JOB_NOT_FOUND" });
+    // Raw, class (a): a context for another tenant with no member of its own binds no request, so the binding check
+    // refuses first (42501); nothing is read.
+    await expect(withTenant(runtime, testTenantContext(otherTenant), db => requireLiveJob(db, legacy.draft!.jobId))).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
     for (const lock of ["SHARE", "UPDATE"]) await expect(withTenant(runtime, context, db => db.$client.query(`SELECT id FROM app.job WHERE id=$1 FOR ${lock}`, [legacy.draft!.jobId]))).rejects.toMatchObject({ code: "42501" });
   });
   it("rejects forged cross-job source links, recovery exceptions, and direct finalisation", async () => {
@@ -203,6 +205,8 @@ describe("CH-2 actual PostgreSQL enforcement", () => {
       try {
         await a.query("BEGIN"); await b.query("BEGIN");
         await a.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]); await b.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+        // LP-6d: the runtime command side is the tenant's fixture owner's own bound request.
+        await bindTestClient(admin, a, tenant, "40000000-0000-4000-8000-000000000004");
         if (commandFirst) {
           await a.query("SELECT app.require_watchdog_live($1)", [jobId]);
           let finished = false;

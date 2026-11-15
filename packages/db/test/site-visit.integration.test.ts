@@ -1,4 +1,5 @@
 import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
 // Written before the repository. Real PostgreSQL (embedded) through merged cluster(); the runtime role is the application login.
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -67,7 +68,9 @@ describe("ENT-3b success paths", () => {
   const receipts = (await c.admin.query("SELECT command_type,status FROM app.command_receipt WHERE tenant_id=$1 AND command_type IN('StartSiteVisit','CompleteSiteVisit') ORDER BY command_type", [f.p.tenantId])).rows;
   expect(receipts).toEqual([{ command_type: "CompleteSiteVisit", status: "succeeded" }, { command_type: "StartSiteVisit", status: "succeeded" }]);
   await chain(c, f);
-  const shown = (await new JobSchedulingRepository(c.runtime).siteVisits(f.members.supervisor.member, f.jobId)).visits.find(v => v.id === started.visitId);
+  // LP-6d: the scheduling read runs in the supervisor's own signed-in session.
+  const supervisor = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.members.supervisor.member.membershipId);
+  const shown = (await new JobSchedulingRepository(c.runtime).siteVisits(supervisor, f.jobId)).visits.find(v => v.id === started.visitId);
   expect(shown).toMatchObject({ membershipId: a.member.membershipId, startedAt: expect.any(String), completedAt: expect.any(String) });
   expect(Date.parse(shown!.completedAt!)).toBeGreaterThanOrEqual(Date.parse(shown!.startedAt));
   // A "yes" with no extra logged is accepted (the prompt for it belongs to a later piece).
@@ -156,7 +159,7 @@ describe("ENT-3b the close-out answer", () => {
   const f = await visitFixture(c), operative = f.members.operative.member, visit = await ownerVisit(c, f, operative.membershipId);
   const before = await snapshot(c, f.p.tenantId);
   for (const answer of [null, "maybe", "", "Yes"]) {
-   await expect(withTenant(c.admin, f.ctx, async db => {
+   await expect(withTenant(c.admin, await testActorContext(c.admin, f.ctx, operative), async db => {
     const command = randomUUID();
     await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'CompleteSiteVisit',$3,$4,'processing',$5)", [f.p.tenantId, command, `direct:${command}`, "a".repeat(64), operative.membershipId]);
     await db.$client.query("SET LOCAL ROLE jobguard_runtime");
@@ -345,7 +348,8 @@ describe("ENT-3b repair round 2 authority races (real PostgreSQL)", () => {
    const open = kind === "complete" ? await start(f, a) : undefined;
    const raw = kind === "start" ? startInput(f) : completeInput(f, open!.visitId, "yes");
    let exerciseRevocation = false;
-   const actingContext = () => exerciseRevocation && change === "membership-revocation" ? testTenantContext(f.p.tenantId,{membershipId:a.member.membershipId,bindRequest:false}) : testActorContext(c.admin,f.ctx,a.member);
+   // LP-6d: the member always acts through its own bound request; once revoked, that request can no longer bind.
+   const actingContext = () => testActorContext(c.admin,f.ctx,a.member);
    const run = async () => kind === "start" ? repo.startVisit(await actingContext(), a.member, raw) : repo.completeVisit(await actingContext(), a.member, raw);
    const first = path === "replay" ? await run() : undefined;
    exerciseRevocation = true;
@@ -360,8 +364,10 @@ describe("ENT-3b repair round 2 authority races (real PostgreSQL)", () => {
      // The pre-check has COMMITted and released its connection. This is a separate real PostgreSQL command/COMMIT before the visit transaction starts.
      if (change === "membership-revocation") await command(c, f, { kind: "membership.revoke", membershipId: a.member.membershipId });
      else await reviseOrder(c, f, f.revision, [f.named.member.membershipId]);
-     const decision = await withTenant(c.runtime, f.ctx, async db => (await db.$client.query("SELECT decision,reason_code FROM app.ent3b_visit_authority($1,$2)", [a.member.membershipId, f.jobId])).rows);
-     expect(decision).toEqual(change === "membership-revocation" ? [{ decision: "forbidden", reason_code: "member_inactive" }] : [{ decision: "not_found", reason_code: "job_out_of_scope" }]);
+     // LP-6d: the decision is read in the member's own bound request; a revoked member cannot bind one at all.
+     const decision = withTenant(c.runtime, await testActorContext(c.admin, f.ctx, a.member), async db => (await db.$client.query("SELECT decision,reason_code FROM app.ent3b_visit_authority($1,$2)", [a.member.membershipId, f.jobId])).rows);
+     if (change === "membership-revocation") await expect(decision).rejects.toMatchObject({ code: "FORBIDDEN" });
+     else expect(await decision).toEqual([{ decision: "not_found", reason_code: "job_out_of_scope" }]);
      before = await snapshot(c, f.p.tenantId);
     }
     return authority;
@@ -407,7 +413,7 @@ describe("ENT-3b repair round 2 authority races (real PostgreSQL)", () => {
    return authority;
   });
   let error: SiteVisitError;
-  try { error = await errorOf(async () => kind === "start" ? repo.startVisit(testTenantContext(f.p.tenantId,{membershipId:a.member.membershipId,bindRequest:false}), a.member, raw) : repo.completeVisit(testTenantContext(f.p.tenantId,{membershipId:a.member.membershipId,bindRequest:false}), a.member, raw)); } finally { spy.mockRestore(); }
+  try { error = await errorOf(async () => kind === "start" ? repo.startVisit(await testActorContext(c.admin, f.ctx, a.member), a.member, raw) : repo.completeVisit(await testActorContext(c.admin, f.ctx, a.member), a.member, raw)); } finally { spy.mockRestore(); }
   expect(checks).toBe(2); expect(before).toBeDefined();
   expect(plain(error)).toEqual({ name: "SiteVisitError", message: "VISIT_FORBIDDEN", code: "VISIT_FORBIDDEN" });
   expect({ status: siteVisitHttpStatus(error.code), body: siteVisitFailureV1.parse({ version: "site-visit-error.v1", code: error.code }) }).toEqual({ status: 403, body: { version: "site-visit-error.v1", code: "VISIT_FORBIDDEN" } });
@@ -604,7 +610,8 @@ describe("ENT-3b the refusal record", () => {
    wrapped.add(client);
    const original = client.query.bind(client);
    vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => {
-    if (String(sql).includes("FROM app.append_audit(")) { reached++; throw new Error("injected failure"); }
+    // r9 ruling: the refusal audit is appended by the private refusal writer (app.lp6d_record_visit_refusal).
+    if (String(sql).includes("FROM app.append_audit(") || String(sql).includes("app.lp6d_record_visit_refusal(")) { reached++; throw new Error("injected failure"); }
     return original(sql, params);
    }) as any);
    return client;

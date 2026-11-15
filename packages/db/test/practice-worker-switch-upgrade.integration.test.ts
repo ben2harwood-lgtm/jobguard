@@ -88,6 +88,8 @@ it("[PW27] hardened rollback and separate feature-off preserve end and state", a
   expect((await db.query("SELECT * FROM app.contractor_session($1)", [f.session])).rows[0]!.membership_id).toBe(f.p.membershipId);
   await db.query(disableSwitchOn); await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); await db.query("SET LOCAL ROLE jobguard_runtime");
   await db.query("SAVEPOINT disabled"); await expect(db.query("SELECT app.practice_worker_switch_on($1,$2,$3)", [f.session, randomUUID(), f.members.operative])).rejects.toMatchObject({ code: "42501" }); await db.query("ROLLBACK TO SAVEPOINT disabled");
+  // The restored lookup resolves this credential to the recorded owner; bind after rollback on this connection.
+  await db.query("SELECT app.bind_request($1,$2,$3)", ["contractor_practice", f.session, f.p.tenantId]);
   expect((await db.query("SELECT app.practice_worker_switch_state($1) result", [f.session])).rows[0]!.result.state).toBe("unclosed");
   expect((await db.query("SELECT app.practice_worker_switch_off($1,$2) result", [f.session, randomUUID()])).rows[0]!.result.state).toBe("owner");
  });

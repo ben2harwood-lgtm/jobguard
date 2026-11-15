@@ -37,13 +37,23 @@ export async function evidenceHoldResponse(request: Request, jobId: string, muta
     if (!sessionId || !z.uuid().safeParse(sessionId).success) throw new HoldFailure("UNAUTHENTICATED", 401, "Sign in to synthetic practice first.");
     const pool = syntheticPool();
     const member = await new ContractorRepository(pool).resolveSession(sessionId);
-    const context: VerifiedTenantContext = await contractorSessionContext(pool, sessionId);
     if (!z.uuid().safeParse(jobId).success) throw notFound();
     let digest = "";
-    if (mutation) {
+    const mutationIdentity = mutation ? await (async () => {
       const credentials = await identityCredentials(request);
       if (!z.string().min(32).safeParse(credentials.sessionToken).success) throw new HoldFailure("UNAUTHENTICATED", 401, "Sign in to synthetic practice first.");
-      digest = identityApplication().provider.digest(`session:${credentials.sessionToken}`);
+      const identity = identityApplication();
+      const session = await identity.session(credentials.sessionToken);
+      // The identity credential must name the same owner as the practice session.
+      if (!session.memberships.some(m => m.tenantId === member.tenantId && m.id === member.membershipId && m.role === "owner"))
+        throw new HoldFailure("UNAUTHENTICATED", 401, "Sign in to synthetic practice first.");
+      return { identity, credentials, session };
+    })() : null;
+    const context: VerifiedTenantContext = mutationIdentity ? await mutationIdentity.identity.context({ sessionToken: mutationIdentity.credentials.sessionToken,
+      requestedTenantId: member.tenantId, csrfToken: mutationIdentity.session.csrfToken, origin: mutationIdentity.identity.allowedOrigin }) : await contractorSessionContext(pool, sessionId);
+    if (mutationIdentity) {
+      const { identity, credentials } = mutationIdentity;
+      digest = identity.provider.digest(`session:${credentials.sessionToken}`);
     }
     const repository = new WormCommandRepository(pool, true, undefined, undefined, digest);
     const items = await repository.listHolds(context, member.membershipId, jobId);
