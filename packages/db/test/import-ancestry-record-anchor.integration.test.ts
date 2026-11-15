@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -208,7 +209,7 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
       expect(weakened).not.toBe(original);
       await client.query(weakened);
       await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]);
-      await client.query("SET LOCAL ROLE jobguard_runtime");
+      await client.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[auth.digest]);await client.query("SET LOCAL ROLE jobguard_runtime");
       if (removed === "receipt") {
         await expect(client.query("SELECT app.ch4_read_work_facts($1,$2,$3)",
           [auth.context.tenantId, v1Job, auth.digest])).rejects.toThrow("WORK_STATE_FORBIDDEN");
@@ -235,7 +236,7 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
       const weakened = original.replace(anchor, "");
       expect(weakened).not.toBe(original);
       await client.query(weakened);
-      await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]);
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]); await bindOwnSession(client, auth.digest);
       await client.query("SET LOCAL ROLE jobguard_runtime");
       // Confirm this is a successful unauthorized read, rather than an unrelated
       // fixture/permission error that also trips the rejection assertion.

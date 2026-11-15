@@ -27,7 +27,7 @@ it("CH-6 published not-completed advice cites the exact verified original eviden
  const {finding,raw}=await save(x.a,"dismissed_not_completed_with_completion_evidence");
  expect(finding.sourceSnapshot.compared.lockId).toBe(x.lockId);expect(finding.sourceReferences.some(s=>s.sourceId===x.lockId)).toBe(true);
  const forged={...finding.sourceSnapshot,facts:finding.sourceSnapshot.facts.map(f=>"lockId" in f?{...f,lockId:randomUUID()}:f)};
- await expect(finalCheckTenant(f.runtime,x.a.tenantId,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[x.a.tenantId,x.a.jobId,x.a.digest,JSON.stringify({...raw,commandId:randomUUID()}),JSON.stringify(forged)]))).rejects.toThrow("INTEGRITY_SOURCE_CHANGED");
+ await expect(finalCheckTenant(f.runtime,x.a.tenantId,db=>db.query("SELECT app.ch6_record_integrity_review($1,$2,$3,$4::jsonb,$5::jsonb)",[x.a.tenantId,x.a.jobId,x.a.digest,JSON.stringify({...raw,commandId:randomUUID()}),JSON.stringify(forged)]),{practiceDigest:x.a.digest})).rejects.toThrow("INTEGRITY_SOURCE_CHANGED");
  const visible=await new CommercialIntegrityV3Repository(f.runtime).read(x.a.context,actor,x.a.digest,x.a.jobId);expect(visible.published).toBeNull();
 });
 // All financial parents use the real synthetic command writers with triggers and FKs enabled.
@@ -93,7 +93,7 @@ it("CH-6 explicit allocation port refuses quarantine facts rather than inventing
 it("CH-6 competing line mappings cannot overrun one credit and unsupported isolation refuses",async()=>{
  const x=await published(),ids=await financialParents(x);
  const insert=(ref:string)=>finalCheckTenant(f.admin,x.a.tenantId,db=>db.query(`INSERT INTO app.ch6_line_correction_source(tenant_id,job_id,id,session_digest,correction_kind,invoice_id,line_id,lock_id,credit_note_id,amount_pence,authority_ref)
- VALUES($1,$2,$3,$4,'credit',$5,$6,$7,$8,60,$9)`,[x.a.tenantId,x.a.jobId,randomUUID(),x.a.digest,ids.invoice,ids.line,x.lockId,ids.credit,`synthetic_fixture:${ref}`]));
+ VALUES($1,$2,$3,$4,'credit',$5,$6,$7,$8,60,$9)`,[x.a.tenantId,x.a.jobId,randomUUID(),x.a.digest,ids.invoice,ids.line,x.lockId,ids.credit,`synthetic_fixture:${ref}`]),{practiceDigest:x.a.digest});
  const outcomes=await Promise.allSettled([insert("race-a"),insert("race-b")]);expect(outcomes.filter(r=>r.status==="fulfilled")).toHaveLength(1);
  expect(outcomes.filter(r=>r.status==="rejected")).toHaveLength(1);
  const total=(await f.admin.query("SELECT sum(amount_pence)::text total FROM app.ch6_line_correction_source WHERE tenant_id=$1 AND credit_note_id=$2",[x.a.tenantId,ids.credit])).rows[0].total;expect(total).toBe("60");
@@ -160,7 +160,7 @@ it("CH-6 published catch on a real supplementary descendant cites its issued lin
   WHERE tenant_id=$1 AND job_id=$2 AND invoice_id=$3`,[a.tenantId,a.jobId,ids.invoice])).rows).toEqual([{invoice_kind:"supplementary",lock_id:x.lockId,revision_id:ids.descendant}]);
  const evidence=await insertFinalCheckEvidence(f,a,"writeoff_record","application/pdf",1);
  await finalCheckTenant(f.admin,a.tenantId,db=>db.query(`INSERT INTO app.ch6_line_correction_source(tenant_id,job_id,id,session_digest,correction_kind,invoice_id,line_id,lock_id,evidence_id,amount_pence,authority_ref)
-  VALUES($1,$2,$3,$4,'writeoff',$5,$6,$7,$8,1,'synthetic_fixture:supplementary-writeoff')`,[a.tenantId,a.jobId,randomUUID(),a.digest,ids.invoice,ids.line,x.lockId,evidence]));
+  VALUES($1,$2,$3,$4,'writeoff',$5,$6,$7,$8,1,'synthetic_fixture:supplementary-writeoff')`,[a.tenantId,a.jobId,randomUUID(),a.digest,ids.invoice,ids.line,x.lockId,evidence]),{practiceDigest:a.digest});
  const {finding}=await save(a,"catch_line_credit_or_writeoff");
  expect(finding.sourceSnapshot.compared).toMatchObject({lineId:ids.line,lockId:x.lockId,correctionKind:"writeoff"});
  expect(finding.sourceSnapshot.facts.find(f=>"catchId" in f)).toMatchObject({catchId:x.signal,invoiceLineId:ids.line,includedInLockedAccount:false,value:{pence:12000,basis:"gross"}});
