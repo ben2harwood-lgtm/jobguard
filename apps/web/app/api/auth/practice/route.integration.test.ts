@@ -41,7 +41,9 @@ async function entry(o:Awaited<ReturnType<typeof owner>>,body:unknown=enter) {
 async function linked(o:Awaited<ReturnType<typeof owner>>) {
   const response=await entry(o);expect(response.status).toBe(200);accept(response);
   const token=plumbing.jar.get("jg_session")!,jar=new Map(plumbing.jar);
-  return {token,jar,auth:await authenticatePracticeSession(c.runtime,token)};
+  const auth=await authenticatePracticeSession(c.runtime,token);
+  expect((await c.runtime.query("SELECT app.is_linked_practice_session($1) linked",[digest(token)])).rows[0].linked).toBe(true);
+  return {token,jar,auth};
 }
 function use(jar:Map<string,string>) {plumbing.jar=new Map(jar);}
 async function job(a:Awaited<ReturnType<typeof linked>>) {
@@ -152,10 +154,24 @@ it("explicit anonymous examples replace a linked receipt while preserving identi
   expect(plumbing.jar.get("jobguard_session")).toBe(o.parent);
   expect(plumbing.jar.has(pairingCookie)).toBe(false);
   const anonymous=await authenticatePracticeSession(c.runtime,plumbing.jar.get("jg_session"));
+  expect((await c.runtime.query("SELECT app.is_linked_practice_session($1) linked",[digest(plumbing.jar.get("jg_session")!)])).rows[0].linked).toBe(false);
   expect(anonymous.digest).not.toBe(a.auth.digest);
+  expect((await sessionRoute()).status).toBe(200);
+  // The SQL marker, rather than a leftover receipt, selects the anonymous path.
+  plumbing.jar.set(pairingCookie,"stale-linked-receipt");
   expect((await sessionRoute()).status).toBe(200);
   await expect(authorizePracticeJob(c.runtime,plumbing.jar.get("jg_session"),id)).rejects.toThrow("NOT_FOUND");
   const recovered=await linked(o);
   expect(recovered.auth.digest).toBe(a.auth.digest);
   await expect(authorizePracticeJob(c.runtime,recovered.token,id)).resolves.toBeDefined();
+});
+
+it("restricts the linked-marker accessor without exposing its private association table", async () => {
+  const acl=await c.admin.query(`SELECT pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
+    has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,
+    has_function_privilege('jobguard_identity',p.oid,'EXECUTE') identity_role,
+    has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure
+    FROM pg_proc p WHERE p.oid='app.is_linked_practice_session(text)'::regprocedure`);
+  expect(acl.rows[0]).toEqual({owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog"],runtime:true,identity_role:false,infrastructure:false});
+  await expect(c.runtime.query("SELECT * FROM control_plane.identity_practice_credential")).rejects.toThrow(/permission denied/);
 });

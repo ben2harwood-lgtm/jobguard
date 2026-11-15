@@ -44,9 +44,11 @@ export async function authenticateLinkedPractice(pool: Pool, token: string | und
     throw error;
   }
 }
-export async function enforcePracticePair(pool: Pool, token: string | undefined, auth: Awaited<ReturnType<typeof authenticatePracticeSession>>) {
-  const jar = await cookies();
-  // Linked authentication returns the canonical namespace digest, never the credential digest.
-  const linked = !!token && auth.digest !== createHash("sha256").update(token).digest("hex");
-  if (linked || jar.get(pairingCookie)) await authenticateLinkedPractice(pool, token);
+export async function enforcePracticePair(pool: Pool, token: string | undefined) {
+  if (!token || !z.string().uuid().safeParse(token).success) throw new PracticeAccessError("UNAUTHENTICATED");
+  // SQL reads the private marker written only by linked entry. Token spelling
+  // and ownership digests do not identify the authentication path.
+  const result = await pool.query("SELECT app.is_linked_practice_session($1) linked", [createHash("sha256").update(token).digest("hex")]);
+  const linked = z.boolean().parse(result.rows[0]?.linked);
+  if (linked) await authenticateLinkedPractice(pool, token);
 }

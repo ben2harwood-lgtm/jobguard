@@ -11,9 +11,9 @@ async function releaseSignIns() {
   try {await pool.query(`DELETE FROM identity.request_window w USING identity.challenge c
     WHERE c.email=ANY($1::text[]) AND w.requested_at=c.requested_at AND w.ip_digest=$2`,
     [emails,createHmac("sha256",E2E_AUTH_CODE_SECRET).update("ip:web-bootstrap").digest("hex")]);
-    // Advance only this test's consumed fictional challenges beyond resend cooldown.
+    // Advance only this test's consumed fictional challenges beyond the email window and resend cooldown.
     // Production throttling stays unchanged; fresh-device sign-ins need no minute-long sleeps.
-    await pool.query("UPDATE identity.challenge SET requested_at=requested_at-interval '61 seconds' WHERE email=ANY($1::text[]) AND consumed_at IS NOT NULL AND verified",[emails]);}
+    await pool.query("UPDATE identity.challenge SET requested_at=requested_at-interval '601 seconds' WHERE email=ANY($1::text[]) AND consumed_at IS NOT NULL AND verified",[emails]);}
   finally{await pool.end();emails.length=0;}
 }
 test.afterEach(releaseSignIns);

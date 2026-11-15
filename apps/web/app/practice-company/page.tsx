@@ -13,7 +13,10 @@ export default async function PracticeCompanyPage({ searchParams }: { searchPara
       const { session } = await authenticateLinkedPractice(syntheticPool(), token);
       return <><IdentitySignIn embedded/><JobGuardApp blankPractice linkedPractice practiceFirmLabel={session.memberships[0]!.name}/></>;
     }
-    if (token) await enforcePracticePair(syntheticPool(), token, await authenticatePracticeSession(syntheticPool(), token));
+    if (token) {
+      await authenticatePracticeSession(syntheticPool(), token);
+      await enforcePracticePair(syntheticPool(), token);
+    }
   } catch {
     return <><p role="alert">Your practice access could not be confirmed. Your previous jobs have not been deleted. Use Open my jobs after signing in to re-enter your current practice firm.</p><IdentitySignIn embedded/></>;
   }

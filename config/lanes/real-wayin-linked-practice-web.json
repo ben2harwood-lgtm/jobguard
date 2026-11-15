@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/real-wayin-linked-practice-web"
       ],
-      "note": "M0-6L fictional linked practice web entry; RED, NOPR. No database changes.",
+      "note": "M0-6L fictional linked practice web entry; RED, NOPR. r2 adds a read-only accessor for the existing private linked-credential marker.",
       "allow": [
         "apps/web/app/(designed)/jobs-screens.tsx",
         "apps/web/app/(designed)/real-designed-screens.test.tsx",
@@ -29,7 +29,10 @@
         "apps/web/e2e/M0-6L.spec.ts",
         "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
         "apps/web/app/api/session/route.ts",
-        "apps/web/app/api/session/route.test.ts"
+        "apps/web/app/api/session/route.test.ts",
+        "packages/db/migrations/0744_linked_practice_marker.sql",
+        "packages/db/test/migration-proofs/0744_linked_practice_marker.proof.json",
+        "packages/db/migration-notes/0744_linked_practice_marker.md"
       ]
     }
   }

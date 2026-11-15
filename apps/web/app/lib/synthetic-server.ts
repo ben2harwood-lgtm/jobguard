@@ -35,7 +35,7 @@ export async function syntheticWorkspace() {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw Object.assign(new Error("Synthetic session is unavailable"), {code:"UNAUTHENTICATED"});
   const token=(await cookies()).get("jg_session")?.value;
   const auth=await authenticatePracticeSession(syntheticPool(),token);
-  await enforcePracticePair(syntheticPool(), token, auth);
+  await enforcePracticePair(syntheticPool(), token);
   const blankCompany = await isBlankPracticeCompanyForContext(syntheticPool(), auth.digest, auth.context);
   const seeded = blankCompany ? { tenant: { id: auth.context.tenantId }, tenants: [{ id: auth.context.tenantId, name: "Builder's practice firm" }] } : await readSyntheticDemo(syntheticPool());
   const jobs=await withTenant(syntheticPool(),auth.context,async db=>(await db.$client.query<{id:string;title:string;status:string;revision:number;customerLabel?:string;siteLabel?:string}>("SELECT id,title,status,revision FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND practice_scenario='home' ORDER BY created_at,id",[auth.context.tenantId,auth.digest])).rows);
