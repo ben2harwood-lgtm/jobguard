@@ -140,7 +140,7 @@ it.each(["outcome_unknown", "failed"])("keeps %s saved execution unresolved",asy
  expect(all(render(),n=>n.type==="button"&&text(n)==="Record practice acceptance")).toHaveLength(0);
 });
 
-it.each(["saved", "manual", "focus", "unsaved"])("keeps quote history open on activation (%s), preserving its mounted contents",async kind=>{
+it.each(["saved", "manual", "focus", "unsaved"])("never folds quote history on activation (%s), keeping its mounted contents",async kind=>{
  accepted=acceptance();render();await settle();let tree=render();
  const history=all(tree,n=>n.type==="details"&&text(n).startsWith("Quote history"))[0]!;
  const details={open:true,contains:()=>kind==="focus"};history.props.ref.current=details;
