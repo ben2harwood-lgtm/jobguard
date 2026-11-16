@@ -20,7 +20,10 @@ beforeEach(()=>{
  vi.clearAllMocks();process.env.JOBGUARD_ENV="synthetic_demo";process.env.AUTH_ALLOWED_ORIGIN="http://example.invalid";process.env.JOBGUARD_ALLOWED_ORIGINS="http://example.invalid";
  f.jar.clear();f.jar.set("jg_session","practice-token");
  f.practice.mockResolvedValue({context:{tenantId:id(8)},digest:"practice-digest"});
- f.context.mockResolvedValue({tenantId:id(8)});f.session.mockResolvedValue({csrfToken:"csrf",memberships:[{tenantId:id(8),role:"owner"}]});
+ f.context.mockImplementation(async (_provider, credentials) => {
+  if (credentials.csrfToken !== "csrf") throw new Error("ORIGIN_FORBIDDEN");
+  return {tenantId:id(8)};
+ });f.session.mockResolvedValue({csrfToken:"csrf",memberships:[{tenantId:id(8),role:"owner"}]});
  f.read.mockResolvedValue({version:"recovery-billability-view.v1",caseId:id(2),caseRevision:2,lines:[],reviews:[]});f.command.mockResolvedValue({version:"recovery-billability-approval.v1",command:{commandId:id(1)},productionEnabled:false});
 });
 it("delegates unchanged strict commands using only the authenticated practice context",async()=>{
@@ -105,4 +108,57 @@ it("returns a reload conflict for an already-approved line", async () => {
 it("keeps unrelated database errors retryable without exposing details", () => {
  const error = Object.assign(new Error("private database detail"), {code:"23505",constraint:"another_unique_index"});
  expect(billabilityFailure(error)).toEqual({status:503,code:"BILLABILITY_UNAVAILABLE",message:"The server could not confirm the result. Retry the same request."});
+});
+
+const practiceCsrf = createHash("sha256").update("billability-csrf.v1:practice-digest").digest("hex");
+const approvalBody = () => {
+ const {claimedEligiblePrincipalPence:_amount,reasons:_reasons,...base}=body;
+ return {...base,action:"approve",reviewCommandId:id(6)};
+};
+const readRequest = (query="") => new Request(`http://example.invalid/api/review${query}`);
+it.each(["review", "approve"])("dual-cookie GET then POST uses only the %s authority", async action => {
+ f.jar.set("jobguard_session", "owner-token");
+ const view = await recoveryBillabilityRequest(readRequest(`?action=${action}`), id(9), id(2)) as {csrfToken:string};
+ expect(f.command).not.toHaveBeenCalled();
+ expect(view.csrfToken).toBe(action === "review" ? practiceCsrf : "csrf");
+ const req = request(action === "review" ? body : approvalBody());
+ req.headers.set("x-csrf-token", view.csrfToken);
+ await recoveryBillabilityRequest(req, id(9), id(2));
+ expect(f.command).toHaveBeenCalledWith({tenantId:id(8)},id(9),action === "review" ? "practice-digest" : "identity-digest",action === "review" ? body : approvalBody());
+ if (action === "review") expect(f.session).not.toHaveBeenCalled();
+ else expect(f.practice).not.toHaveBeenCalled();
+});
+it.each(["?action=unknown", "?action=", "?action=review&action=approve", "?action=review&action=review"])("refuses invalid read selection %s before authentication or repository access", async query => {
+ await expect(recoveryBillabilityRequest(readRequest(query),id(9),id(2))).rejects.toThrow("INVALID_BILLABILITY_INPUT");
+ expect(f.practice).not.toHaveBeenCalled(); expect(f.session).not.toHaveBeenCalled(); expect(f.read).not.toHaveBeenCalled(); expect(f.command).not.toHaveBeenCalled();
+});
+it("unspecified GET preserves identity-first and practice-only reads", async () => {
+ const practice = await recoveryBillabilityRequest(readRequest(),id(9),id(2)) as {csrfToken:string};
+ expect(practice.csrfToken).toBe(practiceCsrf);
+ f.jar.set("jobguard_session","owner-token");
+ const identity = await recoveryBillabilityRequest(readRequest(),id(9),id(2)) as {csrfToken:string};
+ expect(identity.csrfToken).toBe("csrf"); expect(f.command).not.toHaveBeenCalled();
+});
+it.each(["review", "approve"])("%s refuses wrong-action, missing and forged tokens with both cookies", async action => {
+ f.jar.set("jobguard_session","owner-token");
+ for (const token of [action === "review" ? "csrf" : practiceCsrf, "", "a".repeat(64)]) {
+  const req = request(action === "review" ? body : approvalBody()); req.headers.set("x-csrf-token",token);
+  await expect(recoveryBillabilityRequest(req,id(9),id(2))).rejects.toThrow("ORIGIN_FORBIDDEN");
+ }
+ expect(f.command).not.toHaveBeenCalled();
+});
+it.each([undefined, "expired-token"])("approval never falls back when identity is %s",async token => {
+ if(token) f.jar.set("jobguard_session",token);
+ f.session.mockRejectedValue(new Error("UNAUTHENTICATED"));
+ await expect(recoveryBillabilityRequest(readRequest("?action=approve"),id(9),id(2))).rejects.toThrow("UNAUTHENTICATED");
+ await expect(recoveryBillabilityRequest(request(approvalBody()),id(9),id(2))).rejects.toThrow("UNAUTHENTICATED");
+ expect(f.practice).not.toHaveBeenCalled();expect(f.command).not.toHaveBeenCalled();
+});
+it("identity-only approval keeps its owner policy",async()=>{
+ f.jar.delete("jg_session");f.jar.set("jobguard_session","owner-token");
+ const view=await recoveryBillabilityRequest(readRequest("?action=approve"),id(9),id(2)) as {csrfToken:string};
+ const req=request(approvalBody());req.headers.set("x-csrf-token",view.csrfToken);
+ await recoveryBillabilityRequest(req,id(9),id(2));expect(f.practice).not.toHaveBeenCalled();
+ f.session.mockResolvedValue({csrfToken:"csrf",memberships:[{tenantId:id(8),role:"member"}]});
+ await expect(recoveryBillabilityRequest(readRequest("?action=approve"),id(9),id(2))).rejects.toThrow("BILLABILITY_NOT_FOUND");
 });

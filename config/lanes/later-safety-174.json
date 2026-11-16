@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-174": {
+      "branches": ["codex/sandbox/later-safety-174"],
+      "note": "LATER-SAFETY-174 RED customer sign-out browser cleanup; no migration.",
+      "allow": [
+        "apps/api/src/auth/customer-signin.ts",
+        "apps/api/src/auth/customer-signin.controller.ts",
+        "apps/api/src/auth/customer-signin.test.ts",
+        "packages/db/test/customer-signin.integration.test.ts",
+        "apps/web/e2e/customer-signin.spec.ts"
+      ]
+    }
+  }
+}

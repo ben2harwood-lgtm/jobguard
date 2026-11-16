@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-180": {
+      "branches": ["codex/sandbox/later-safety-180"],
+      "allow": [
+        "apps/web/app/sign-in/sign-in.tsx",
+        "apps/web/app/sign-in/sign-in.test.tsx"
+      ]
+    }
+  }
+}

@@ -10,17 +10,25 @@ const storedReview=(commandId:string)=>({version:"recovery-billability-review.v1
  snapshot:{caseType:"missed_variation_final_account",builderCaptured:false,disclosedBeforeLock:false},
  assessment:{classification:"eligible_for_review",exclusions:[]}});
 
-test("human review, lost-answer replay, stored second-person approval and accessible controls",async({page})=>{
+test("dual-cookie human review, lost-answer replay, second-person approval and accessible controls",async({page,context,baseURL})=>{
  const requests:Record<string,unknown>[]=[];let loseFirst=true;let stored:ReturnType<typeof storedReview>|undefined;let approved=false;
- await page.route(api,async route=>{
-  if(route.request().method()==="GET")return route.fulfill({json:{version:"recovery-billability-view.v1",csrfToken:"fictional-csrf",caseId:id(2),caseRevision:2,lines:[line],reviews:stored?[{...line,review:stored,approved}]:[]}});
-  expect(route.request().headers()["x-csrf-token"]).toBe("fictional-csrf");
+ await context.addCookies([
+  {name:"jg_session",value:"fictional-practice",url:baseURL!},
+  {name:"jobguard_session",value:"fictional-first-person",url:baseURL!},
+ ]);
+ await page.route(`${api}*`,async route=>{
+  const cookie=route.request().headers()["cookie"] ?? "";
+  expect(cookie).toContain("jg_session=fictional-practice");
+  expect(cookie).toContain("jobguard_session=fictional-");
+  if(route.request().method()==="GET")return route.fulfill({json:{version:"recovery-billability-view.v1",csrfToken:new URL(route.request().url()).searchParams.get("action")==="review"?"practice-csrf":"identity-csrf",caseId:id(2),caseRevision:2,lines:[line],reviews:stored?[{...line,review:stored,approved}]:[]}});
   const body=route.request().postDataJSON() as Record<string,unknown>;requests.push(body);
+  expect(route.request().headers()["x-csrf-token"]).toBe(body.action==="review"?"practice-csrf":"identity-csrf");
   if(body.action==="review"){
    stored=storedReview(String(body.commandId));
    if(loseFirst){loseFirst=false;return route.abort("failed");}
    return route.fulfill({json:stored});
   }
+  expect(cookie).toContain("jobguard_session=fictional-second-person");
   approved=true;return route.fulfill({json:{version:"recovery-billability-approval.v1",productionEnabled:false,command:{commandId:body.commandId}}});
  });
  await page.goto(path);const main=page.getByRole("main");
@@ -34,6 +42,7 @@ test("human review, lost-answer replay, stored second-person approval and access
  await expect(main.getByRole("alert")).toContainText("A different person must approve");
  expect(requests).toHaveLength(2);expect(requests[1]).toEqual(requests[0]);
  await expect(main.getByText("Claimed eligible principal: 80000 pence")).toBeVisible();
+ await context.addCookies([{name:"jobguard_session",value:"fictional-second-person",url:baseURL!}]);
  await main.getByRole("button",{name:"Approve review",exact:true}).click();
  await expect(main.getByRole("alert")).toContainText("Simulation approval recorded");
  await expect(main.getByText(/Historical simulation approval recorded/)).toBeVisible();
@@ -57,7 +66,7 @@ test("human review, lost-answer replay, stored second-person approval and access
 
 for(const refusal of ["pending cash","ordinary customer payment","duplicate claim","unapplied credit","prevented spend","unverified manual receipt","builder-captured item","catch disclosed before lock"]){
  test(`shows the server refusal for ${refusal}`,async({page})=>{
-  await page.route(api,route=>route.fulfill({status:route.request().method()==="POST"?422:200,json:route.request().method()==="POST"
+  await page.route(`${api}*`,route=>route.fulfill({status:route.request().method()==="POST"?422:200,json:route.request().method()==="POST"
    ?{version:"recovery-billability-error.v1",code:"BILLABILITY_NOT_APPROVABLE",message:`Cannot approve: ${refusal}.`}
    :{version:"recovery-billability-view.v1",csrfToken:"fictional-csrf",caseId:id(2),caseRevision:2,lines:[line],reviews:[{...line,review:storedReview(id(5)),approved:false}]}}));
   await page.goto(path);const main=page.getByRole("main");await main.getByRole("button",{name:"Approve review",exact:true}).click();
