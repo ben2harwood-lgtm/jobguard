@@ -10,8 +10,7 @@
         "apps/api/src/contractor/site-extra.application.ts",
         "apps/api/src/contractor/site-extra-pricing.application.test.ts",
         "packages/db/src/extra-approval-chain-repository.ts",
-        "packages/db/test/site-extra-priced-submit-recovery.integration.test.ts",
-        "config/lanes/later-safety-184.json"
+        "packages/db/test/site-extra-priced-submit-recovery.integration.test.ts"
       ]
     }
   }
