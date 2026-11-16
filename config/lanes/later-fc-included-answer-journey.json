@@ -5,9 +5,9 @@
       "branches": [
         "codex/sandbox/later-fc-included-answer-journey"
       ],
-      "note": "LATER-FC-INCLUDED-ANSWER-JOURNEY: test-only journey for the 'No - included' Final Check answer; Work-account proposal (bundle 0580545821f88d49); NOPR.",
+      "note": "LATER-FC-INCLUDED-ANSWER-JOURNEY: ordinary-job exact locked-line inclusion, persistence and no commercial effects; RED; NOPR.",
       "allow": [
-        "apps/web/e2e/real-fc-included-answer.spec.ts"
+        "apps/web/e2e/later-fc-included-answer-journey.spec.ts"
       ]
     }
   }
