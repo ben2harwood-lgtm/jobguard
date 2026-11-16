@@ -273,7 +273,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const lp6dBodies = new Map<string, string>();
   for (const m of lp6dSql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu)) lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
   // LP6D-WORKER-PRESENCE: only these three definitions supersede historical bodies.
-  const presenceSql = await readFile(new URL("../migrations/0757_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
+  const presenceSql = await readFile(new URL("../migrations/0754_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
   for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu))
     lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
   const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;

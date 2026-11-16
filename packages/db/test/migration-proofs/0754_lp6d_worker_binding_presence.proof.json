@@ -1,5 +1,5 @@
 {
-  "migration": "0757_lp6d_worker_binding_presence.sql",
+  "migration": "0754_lp6d_worker_binding_presence.sql",
   "lp0": [
     {
       "section": "routines",
