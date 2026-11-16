@@ -289,6 +289,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     .matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)) {
     lp6dBodies.set(m[1]!, [...(lp6dBodies.get(m[1]!) ?? []), m[4]!]);
   }
+  // LATER-SAFETY-183 is xa_price's sole successor; retain the full LP-6d binding prefix.
+  const pricePermissionSql = await readFile(new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_price", [pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!]);
   // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
   lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);
   // LP6D-WORKER-PRESENCE: exact latest sources; historical 0749 assertions remain above.

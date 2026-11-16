@@ -272,6 +272,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const argNames = (args: string) => args.split(",").map(arg => arg.trim().split(/\s+/u)[0]!).filter(Boolean).join(",");
   const lp6dBodies = new Map<string, string>();
   for (const m of lp6dSql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu)) lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
+  // LATER-SAFETY-183 changes only xa_price after LP-6d, retaining its binding prefix.
+  const pricePermissionSql = await readFile(new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_price(p_job,p_variation,p_command,p_actor,p_net,p_revise)", pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!);
   // LP6D-WORKER-PRESENCE: only these three definitions supersede historical bodies.
   const presenceSql = await readFile(new URL("../migrations/0753_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
   for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu))
