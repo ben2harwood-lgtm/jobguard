@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-158": {
+      "branches": [
+        "codex/sandbox/later-safety-158"
+      ],
+      "allow": [
+        "packages/db/migrations/0754_subscription_attempt_reconciliation.sql",
+        "packages/db/test/migration-proofs/0754_subscription_attempt_reconciliation.proof.json",
+        "packages/db/migration-notes/0754_subscription_attempt_reconciliation.md",
+        "packages/db/test/subscription-attempt-reconciliation.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
