@@ -28,7 +28,7 @@ export class ValueV3Controller {
   try {
    if(request&&this.identity&&cookie?.split(";").some(v=>v.trim().startsWith("jobguard_session="))){
     const identity=this.identity();
-    return await new CompanyValueApplication(subscriptionAuthority(identity),new ValueBusinessReader(this.pool)).readJob({sessionToken:cookieToken(request),tenantHeader:request.headers["x-tenant-id"],origin:request.headers.origin??identity.allowedOrigin},id,query);
+    return await new CompanyValueApplication(subscriptionAuthority(identity),new ValueBusinessReader(this.pool)).readJob({sessionToken:cookieToken(request),tenantHeader:request.headers["x-tenant-id"],csrfToken:request.headers["x-csrf-token"],origin:request.headers.origin??identity.allowedOrigin},id,query);
    }
    const session = practiceCookie(cookie);
    const factory = this.readerFactory;
