@@ -9,7 +9,9 @@
         "packages/db/src/proof-repository.ts",
         "apps/api/src/proof/proof.application.test.ts",
         "packages/db/test/proof-replay.integration.test.ts",
-        "packages/db/test/proof-application-records.integration.test.ts"
+        "packages/db/test/proof-application-records.integration.test.ts",
+        "packages/db/test/serious-b4-evidence-proof.integration.test.ts",
+        "packages/db/test/job-work-state-post-lock.integration.test.ts"
       ]
     }
   }
