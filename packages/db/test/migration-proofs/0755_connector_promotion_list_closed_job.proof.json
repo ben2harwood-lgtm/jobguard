@@ -1,5 +1,5 @@
 {
-  "migration": "0758_connector_promotion_list_closed_job.sql",
+  "migration": "0755_connector_promotion_list_closed_job.sql",
   "lp0": [
     {
       "section": "routines",

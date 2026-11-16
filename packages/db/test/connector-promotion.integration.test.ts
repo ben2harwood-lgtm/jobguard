@@ -208,7 +208,7 @@ it("rethrows unrelated P0001, near-match messages and other SQLSTATEs from mater
 it("negative control: reverting only the exact JOB_NOT_LIVE skip breaks the closed-job list; rollback restores it",async()=>{
  const f=await promptFixture(c);await mixedBatch(f.p.tenantId);await moveOffLive(c,f);
  const before=await counts(f.p.tenantId);
- const latest=await readFile(new URL("../migrations/0758_connector_promotion_list_closed_job.sql",import.meta.url),"utf8");
+ const latest=await readFile(new URL("../migrations/0755_connector_promotion_list_closed_job.sql",import.meta.url),"utf8");
  const skip="     IF p_event IS NULL AND p_result IS NULL AND SQLERRM='JOB_NOT_LIVE' THEN CONTINUE; END IF;\n";
  expect(latest.split(skip)).toHaveLength(2);
  const scratch=latest.replace(skip,"");
