@@ -105,7 +105,12 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   expect(inventory.entries.some(e => e.key.startsWith("acl|col|app.action_authorization.") && e.key.includes("|jobguard_runtime|UPDATE|"))).toBe(false);
   // r8: the revocation routine, revoke-claim helper and seven runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each),
   // plus (r10) the command-writer-owned delegated-actor match check (owner + migration EXECUTE). LP-6c's accessor gains no grant.
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(30); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each) and the escalation worker (owner + runtime EXECUTE); LP-10 sink hold: + the actor-less recovery delivery worker (owner + runtime EXECUTE)
+  const presenceEntries = inventory.entries.filter(e => e.group === "a-lp6d-routine-binding" && e.key.includes("function:app.lp6e_request_binding_present()|"));
+  expect(presenceEntries.map(e => e.key).sort()).toEqual([
+    "acl|routine|function:app.lp6e_request_binding_present()|jobguard_migration|EXECUTE|-",
+    "owner|routine|function:app.lp6e_request_binding_present()|jobguard_binding_owner",
+  ]);
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding" && !presenceEntries.includes(e))).toHaveLength(30); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each) and the escalation worker (owner + runtime EXECUTE); LP-10 sink hold: + the actor-less recovery delivery worker (owner + runtime EXECUTE)
   expect(inventory.entries.some(e => e.key.startsWith("acl|routine|function:app.lp6_delegated_actor(") && e.key.includes("|jobguard_migration|"))).toBe(false);
 });
 

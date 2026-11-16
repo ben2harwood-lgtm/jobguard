@@ -1,0 +1,192 @@
+{
+  "migration": "0757_lp6d_worker_binding_presence.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp6d_escalate_overdue_worker()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "6c28fc2f5f7db4cc73e38a25a2c672a91d2aa38c3a9c0aa654bb5d45a0f4d8fa",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6d_request_bound",
+          "app.lp6d_xa_escalate"
+        ]
+      },
+      "after": {
+        "identity": "function:app.lp6d_escalate_overdue_worker()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "f0b77a5aa7e66efc052b660c6d408f29ca94969be60a3ebe5cc31b44281d3fd0",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6d_request_bound",
+          "app.lp6d_xa_escalate",
+          "app.lp6e_request_binding_present"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp6d_recovery_message_sink_worker(uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "ee8b5cb06058a39ebb00ca06fb967bac80bed6f85e00b8bc674004f7887cebf6",
+        "staticWrites": [
+          "app.recovery_message_sink"
+        ],
+        "staticCalls": [
+          "app.lp6d_request_bound"
+        ]
+      },
+      "after": {
+        "identity": "function:app.lp6d_recovery_message_sink_worker(uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "26da9510f3635dcd4ed77930cc008c0d24c016f455a5c21fcbb136bb999569ee",
+        "staticWrites": [
+          "app.recovery_message_sink"
+        ],
+        "staticCalls": [
+          "app.lp6d_request_bound",
+          "app.lp6e_request_binding_present"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp6e_request_binding_present()|jobguard_binding_owner",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp6e_request_binding_present()|jobguard_migration|EXECUTE|-",
+        "group": "a-lp6d-routine-binding"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6e_request_binding_present()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": "d1688666fd9de95a073bcc25591c86ab3154ce1df478042f74cf4c137de2a3fe",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "lp6d_escalate_overdue_worker",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_escalate_overdue_worker",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "lp6d_recovery_message_sink_worker",
+        "args": "p_outbox uuid, p_reference text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "lp6d_recovery_message_sink_worker",
+        "args": "p_outbox uuid, p_reference text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6e_request_binding_present",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}
