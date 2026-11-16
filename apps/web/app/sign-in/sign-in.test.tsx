@@ -3,14 +3,20 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { IdentitySignIn } from "./sign-in";
 
-const state = vi.hoisted(() => ({ values: [] as unknown[], effects: [] as Array<() => unknown>, writes: [] as unknown[] }));
+const state = vi.hoisted(() => ({ values: [] as unknown[], effects: [] as Array<() => unknown>, writes: [] as unknown[], live: false, cursor: 0 }));
 vi.mock("react", async original => ({
   ...await original<typeof import("react")>(),
-  useState: (initial: unknown) => [state.values.length ? state.values.shift() : initial, (value: unknown) => state.writes.push(value)],
+  useState: (initial: unknown) => {
+    const index = state.cursor++;
+    return [state.live ? state.values[index] : state.values.length ? state.values.shift() : initial, (value: unknown) => {
+      state.writes.push(value);
+      if (state.live) state.values[index] = value;
+    }];
+  },
+  useRef: (current: unknown) => ({ current }),
   useEffect: (effect: () => unknown) => state.effects.push(effect),
-  useRef: (initial:unknown) => ({current:initial}),
 }));
-beforeEach(() => { vi.stubGlobal("React", React); state.effects = []; state.writes = []; });
+beforeEach(() => { vi.stubGlobal("React", React); state.effects = []; state.writes = []; state.live = false; state.cursor = 0; });
 afterEach(() => vi.unstubAllGlobals());
 
 function render(session: unknown = null, fixtureCode = "", accepted: string | null = null, busy = false) {
@@ -113,6 +119,99 @@ it.each([401, 503, "network"])("rechecks on focus and clears the stale session a
   expect(state.writes).toHaveLength(writes);
 });
 
+// Retain hook state while invoking the real JSX form handlers, then render their visible result.
+function interactionTree() {
+  state.cursor = 0;
+  return IdentitySignIn({});
+}
+type Element = React.ReactElement<Record<string, unknown>>;
+function elements(node: React.ReactNode, type: string): Element[] {
+  if (Array.isArray(node)) return node.flatMap(child => elements(child, type));
+  if (!React.isValidElement<Record<string, unknown>>(node)) return [];
+  return [...(node.type === type ? [node] : []), ...elements(node.props.children as React.ReactNode, type)];
+}
+function startInteraction() {
+  state.live = true;
+  state.values = ["builder@practice.invalid", "invitation", "fictional-invitation", "12345678", "", false, false, "", null, false, false, null];
+}
+async function submitForm(index: number) {
+  const form = elements(interactionTree(), "form")[index]!;
+  (form.props.onSubmit as (event: { preventDefault(): void }) => void)({ preventDefault() {} });
+  expect(elements(interactionTree(), "button").every(button => button.props.disabled)).toBe(true);
+  await new Promise(resolve => setTimeout(resolve, 0));
+}
+const outage = "Identity storage is unavailable. Your sign-in has not completed.";
+const refusals = [
+  ["INVALID_AUTH_INPUT", "Check the email address and invitation reference, then submit again."],
+  ["ORIGIN_FORBIDDEN", "Your sign-in has not completed. Reload this page or close it and open JobGuard again."],
+  ["INVALID_CODE", "That code is invalid or expired. Request another code."],
+  ["RATE_LIMITED", "Please wait before requesting another code."],
+  ["IDENTITY_ROUTE_BLOCKED", "Use a supplied fictional .invalid address. Real identity email is blocked pending D04."],
+  ["UNKNOWN_FAILURE", outage],
+  ["toString", outage],
+  ["missing code", outage],
+  ["network", outage],
+  ["invalid JSON", outage],
+] as const;
+for (const verify of [false, true]) {
+  it.each(refusals)(`${verify ? "verify-code" : "request-code"} renders %s through submit without signing in or retrying`, async (reason, message) => {
+    startInteraction();
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    if (verify) {
+      fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ fixtureCode: "12345678" }) });
+      await submitForm(0);
+      expect(renderToStaticMarkup(interactionTree())).toContain('data-testid="fixture-code">12345678');
+      fetch.mockClear();
+    }
+    if (reason === "network") fetch.mockRejectedValueOnce(new Error("connection failed"));
+    else fetch.mockResolvedValueOnce({ ok: false, json: async () => {
+      if (reason === "invalid JSON") throw new SyntaxError("Invalid JSON");
+      return reason === "missing code" ? {} : { code: reason };
+    } });
+    await submitForm(verify ? 1 : 0);
+    const tree = interactionTree(), html = renderToStaticMarkup(tree);
+    expect(html).toContain(`<p role="alert" tabindex="-1">${message}</p>`);
+    if (message !== outage) expect(html).not.toContain(outage);
+    expect(html).not.toContain("Verified account");
+    expect(html).not.toContain("Invitation accepted.");
+    expect(html).not.toContain("You're signed in.");
+    expect(html).toContain("Do not enter real names or email addresses.");
+    expect(elements(tree, "button").every(button => !button.props.disabled)).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(`/api/auth/${verify ? "verify" : "request"}`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: verify ? "identity-verify.v1" : "identity-request.v1", email: "builder@practice.invalid", purpose: "invitation", invitationId: "fictional-invitation", ...(verify ? { code: "12345678" } : {}) }),
+    });
+  });
+}
+
+it("preserves successful verification, invitation acceptance and sign-out through the real handlers", async () => {
+  startInteraction();
+  const replaceState = vi.fn();
+  vi.stubGlobal("history", { replaceState });
+  const fetch = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ fixtureCode: "12345678" }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ ...session, csrfToken: "fictional-csrf" }) })
+    .mockResolvedValueOnce({ ok: true });
+  vi.stubGlobal("fetch", fetch);
+  await submitForm(0);
+  await submitForm(1);
+  let tree = interactionTree();
+  expect(renderToStaticMarkup(tree)).toContain("Invitation accepted. Your memberships above are current.");
+  expect(renderToStaticMarkup(tree)).not.toContain("Practice code:");
+  expect(replaceState).toHaveBeenCalledWith(null, "", "/sign-in");
+  const signout = elements(tree, "button").find(button => button.props.children === "Sign out")!;
+  (signout.props.onClick as () => void)();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  tree = interactionTree();
+  expect(fetch).toHaveBeenLastCalledWith("/api/auth/signout", { method: "POST", headers: { "x-csrf-token": "fictional-csrf" } });
+  expect(renderToStaticMarkup(tree)).not.toContain("Verified account");
+  expect(renderToStaticMarkup(tree)).not.toContain("Invitation accepted.");
+  expect(renderToStaticMarkup(tree)).toContain("Request code");
+});
+
 it("embedded account mode only refreshes identity on mount and never enters practice", async () => {
   vi.stubGlobal("location", {search:""});
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ok:true,json:async()=>owner}));
@@ -124,17 +223,13 @@ it("embedded account mode only refreshes identity on mount and never enters prac
   expect(fetch).toHaveBeenCalledWith("/api/auth/session",{cache:"no-store"});
 });
 
-function elements(node: React.ReactNode): React.ReactElement[] {
-  if(!React.isValidElement(node))return [];
-  return [node,...React.Children.toArray((node.props as {children?:React.ReactNode}).children).flatMap(elements)];
-}
 it.each([false,true])("ordinary verification automatically enters only an eligible owner (ambiguous=%s)",async ambiguous=>{
   const next={...session,csrfToken:"fictional-csrf",memberships:ambiguous?session.memberships:owner.memberships};
   const assign=vi.fn();vi.stubGlobal("location",{assign});
   const fetcher=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>({})}).mockResolvedValueOnce({ok:true,json:async()=>next}).mockResolvedValueOnce({ok:true,json:async()=>({ok:true})});
   vi.stubGlobal("fetch",fetcher);
   state.values=["builder@practice.invalid","signin","","12345678","12345678",true,false,"",null,false,false,null];
-  const forms=elements(IdentitySignIn({})).filter(node=>node.type==="form");
+  const forms=elements(IdentitySignIn({}), "form");
   (forms.at(-1)!.props as {onSubmit:(event:unknown)=>void}).onSubmit({preventDefault:vi.fn()});
   await new Promise(resolve=>setTimeout(resolve,0));
   if(ambiguous){expect(fetcher).toHaveBeenCalledTimes(2);expect(assign).not.toHaveBeenCalled();expect(state.writes).toContain("Your practice firm needs exactly one current owner membership. No business has been selected.");}

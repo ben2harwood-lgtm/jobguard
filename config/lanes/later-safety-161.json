@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-161": {
+      "branches": [
+        "codex/sandbox/later-safety-161"
+      ],
+      "allow": [
+        "apps/api/src/value/value-business.controller.ts",
+        "apps/api/src/value/value-business.controller.test.ts",
+        "apps/api/src/value/value-v3.controller.ts",
+        "apps/api/src/value/value-v3.controller.test.ts"
+      ]
+    }
+  }
+}
