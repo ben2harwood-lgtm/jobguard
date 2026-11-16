@@ -360,3 +360,20 @@ it("scrolls the focused Start control into view rather than focusing the quote a
  expect(target.focus).not.toHaveBeenCalled();
  expect(target.scrollIntoView).not.toHaveBeenCalled();
 });
+
+it("reveals the region before focusing and leaves the redirected Start control as the last scroll", () => {
+ const events:string[]=[];
+ const action={scrollIntoView:vi.fn(({block}:{block:string})=>events.push(`control:${block}`))};
+ const doc:{activeElement:unknown;body:object;getElementById?:()=>unknown}={activeElement:{},body:{}};
+ const target={contains:(node:unknown)=>node===action,
+  focus:vi.fn(()=>{events.push("focus");doc.activeElement=action;action.scrollIntoView({block:"center"});}),
+  scrollIntoView:vi.fn(({block}:{block:string})=>events.push(`region:${block}`))};
+ const root={contains:()=>true,querySelector:()=>target};
+ doc.getElementById=()=>root;vi.stubGlobal("document",doc);
+ workspace("accepted","#quote");state.effects[3]!();
+ expect(events[0]).toBe("region:start");
+ expect(events.at(-1)).toBe("control:center");
+ expect(doc.activeElement).toBe(action);
+ expect(target.focus).toHaveBeenCalledWith({preventScroll:true});
+ expect(target.scrollIntoView).toHaveBeenCalledExactlyOnceWith({block:"start"});
+});

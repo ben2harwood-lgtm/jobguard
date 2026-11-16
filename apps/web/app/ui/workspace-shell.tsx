@@ -87,7 +87,13 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
     const open=Array.from(root.querySelectorAll<HTMLButtonElement>(".confirmed-scope button")).find(button=>button.textContent==="Price the work");open?.click();
     if(open)return false;
    }
-   const target=source?document.getElementById(source):root.querySelector<HTMLElement>(selector);if(!target||!root.contains(target))return false;const focusRegion=target.matches?.("h1,h2,h3")?(target.closest?.("section")??target):target;if(target!==document.activeElement&&focusRegion.contains?.(document.activeElement)&&document.activeElement!==document.body){(document.activeElement as HTMLElement).scrollIntoView?.({block:"center"});observer?.disconnect();return true;}for(let parent=target.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;target.style&&(target.style.scrollMarginTop="96px");target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:"start"});observer?.disconnect();return true;};
+   const target=source?document.getElementById(source):root.querySelector<HTMLElement>(selector);if(!target||!root.contains(target))return false;const focusRegion=target.matches?.("h1,h2,h3")?(target.closest?.("section")??target):target;if(target!==document.activeElement&&focusRegion.contains?.(document.activeElement)&&document.activeElement!==document.body){(document.activeElement as HTMLElement).scrollIntoView?.({block:"center"});observer?.disconnect();return true;}for(let parent=target.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;target.style&&(target.style.scrollMarginTop="96px");target.tabIndex=-1;
+   // Reveal the region first: focusing it can redirect focus to a journey control.
+   // That control must be the final scroll destination, rather than the region.
+   target.scrollIntoView({block:"start"});target.focus({preventScroll:true});
+   const focused=document.activeElement as HTMLElement|null;
+   if(focused&&focused!==target&&focusRegion.contains?.(focused))focused.scrollIntoView?.({block:"center"});
+   observer?.disconnect();return true;};
   if(focus())return;
   observer=new MutationObserver(()=>{focus();});observer.observe(root,{childList:true,subtree:true});
   const timeout=window.setTimeout(()=>observer?.disconnect(),15000);
