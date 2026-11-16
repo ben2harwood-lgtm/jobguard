@@ -24,13 +24,16 @@
         "packages/db/migrations/0751_practice_firm_name.sql",
         "packages/db/migrations/0752_practice_firm_name.sql",
         "packages/db/migrations/0753_practice_firm_name.sql",
+        "packages/db/migrations/0752_practice_firm_name.sql",
         "packages/db/test/migration-proofs/0751_practice_firm_name.proof.json",
         "packages/db/test/migration-proofs/0752_practice_firm_name.proof.json",
         "packages/db/test/migration-proofs/0753_practice_firm_name.proof.json",
+        "packages/db/test/migration-proofs/0752_practice_firm_name.proof.json",
         "packages/db/migration-notes/0949_practice_firm_name.md",
         "packages/db/migration-notes/0751_practice_firm_name.md",
         "packages/db/migration-notes/0752_practice_firm_name.md",
         "packages/db/migration-notes/0753_practice_firm_name.md",
+        "packages/db/migration-notes/0752_practice_firm_name.md",
         "packages/db/test/lp6d-runtime-classification.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
