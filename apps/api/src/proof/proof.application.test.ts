@@ -14,8 +14,15 @@ const scopeId = "18000000-0000-4000-8000-000000000002";
 const pendingId = "18000000-0000-4000-8000-000000000003";
 const tenantId = "11111111-1111-4111-8111-111111111111";
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
-it.each(["owned pending upload", "foreign upload", "unknown evidence"])(
-  "proof complete preserves ownership and domain validation for %s", async scenario => {
+it.each([
+  ["owned pending upload", new ProofCommandError("PROOF_NOT_FINAL"), "PROOF_INVALID"],
+  ["owned completed stage", new ProofCommandError("PROOF_NOT_FINAL", "already_complete"), "PROOF_INVALID"],
+  ["owned changed command payload", new ProofCommandError("COMMAND_CONFLICT"), "IDEMPOTENCY_CONFLICT"],
+  ["owned revoked actor", new ProofCommandError("FORBIDDEN"), "FORBIDDEN"],
+  ["foreign upload", new ProofCommandError("PROOF_NOT_FINAL"), "NOT_FOUND"],
+  ["unknown evidence", new ProofCommandError("PROOF_NOT_FINAL"), "NOT_FOUND"],
+] as const)(
+  "proof complete preserves ownership and domain validation for %s", async (scenario, error, expected) => {
     vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
     const query = vi.fn(async (sql: string, values?: unknown[]) => {
       if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: jobId, tenant: tenantId }] };
@@ -24,18 +31,18 @@ it.each(["owned pending upload", "foreign upload", "unknown evidence"])(
       if (sql.startsWith("SELECT 1 FROM app.membership")) return { rows: [{}] };
       if (sql.includes("SELECT id FROM app.evidence")) {
         expect(values).toEqual([tenantId, jobId, pendingId]);
-        return { rows: scenario === "owned pending upload" && sql.includes("app.evidence_upload") ? [{ id: pendingId }] : [] };
+        return { rows: scenario.startsWith("owned") && sql.includes("app.evidence_upload") ? [{ id: pendingId }] : [] };
       }
       return { rows: [] };
     });
     const pool = { query, connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool;
     const app = new ProofApplication(pool, jobId);
     const get = vi.spyOn(app, "get").mockResolvedValue({ scopeItemId: scopeId, decisionId: null } as never);
-    const complete = vi.spyOn(ProofCommandService.prototype, "complete").mockRejectedValue(new ProofCommandError("PROOF_NOT_FINAL"));
+    const complete = vi.spyOn(ProofCommandService.prototype, "complete").mockRejectedValue(error);
     await expect(app.command(jobId, { version: "practice-proof-command.v1", action: "complete", commandId: jobId, scopeItemId: scopeId, evidenceId: pendingId })).rejects.toThrow(
-      scenario === "owned pending upload" ? "PROOF_INVALID" : "NOT_FOUND");
-    expect(complete).toHaveBeenCalledTimes(scenario === "owned pending upload" ? 1 : 0);
-    expect(get).toHaveBeenCalledTimes(scenario === "owned pending upload" ? 1 : 0);
+      expected);
+    expect(complete).toHaveBeenCalledTimes(scenario.startsWith("owned") ? 1 : 0);
+    expect(get).toHaveBeenCalledTimes(scenario.startsWith("owned") ? 1 : 0);
   });
 
 // Transaction-aware infrastructure double: run the real application, evidence service,

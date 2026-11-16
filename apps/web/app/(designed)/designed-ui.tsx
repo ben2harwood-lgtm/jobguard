@@ -386,6 +386,24 @@ export function StateScreen({ load, retry, title, active = "jobs" }: { load: Loa
     setBusy(true);
     setStartFailed(false);
     try {
+      if (ownFirm) {
+        const current = await fetch("/api/session", { cache: "no-store" });
+        if (current.status !== 401) {
+          if (!current.ok) throw new Error("PRACTICE_START_FAILED");
+          const session = sessionResponseV1.parse(await current.json());
+          if (session.linkedCompany) {
+            const identity = z.object({ csrfToken: z.string().min(1) }).parse(await readJson("/api/auth/session"));
+            const entered = await fetch("/api/auth/practice", {
+              method: "POST",
+              headers: { "content-type": "application/json", "x-csrf-token": identity.csrfToken },
+              body: JSON.stringify({ version: "linked-practice-company.v1", action: "enter" }),
+            });
+            if (!entered.ok) throw new Error("PRACTICE_START_FAILED");
+            window.location.assign("/practice-company");
+            return;
+          }
+        }
+      }
       const response = ownFirm
         ? await fetch("/api/practice-company", {
             method: "POST",

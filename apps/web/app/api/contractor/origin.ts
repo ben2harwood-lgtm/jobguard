@@ -4,8 +4,8 @@
 //  * JOBGUARD_ALLOWED_ORIGINS: comma-separated origins for custom domains or self-hosting (https://demo.example.org).
 //  * Vercel system variables VERCEL_URL, VERCEL_BRANCH_URL and VERCEL_PROJECT_PRODUCTION_URL (hostnames set by the platform).
 //  * CF_PAGES_URL: exact HTTPS deployment URL; Workers custom routes use JOBGUARD_ALLOWED_ORIGINS.
-//  * Local development and the production-build browser tests, only when NOT hosted: the loopback hosts on the port
-//    this server itself listens on (Next builds request.url from the server's own configuration, not from the Host header).
+//  * Explicit development/test mode, only when NOT hosted: loopback hosts on the server's own port.
+//    Production-build browser tests must explicitly list their origin in JOBGUARD_ALLOWED_ORIGINS.
 type Env = Record<string, string | undefined>;
 
 const originOf = (value: string): string | null => {
@@ -30,7 +30,7 @@ export function trustedOrigins(env: Env, serverUrl: string): string[] {
   const cloudflareUrl = env.CF_PAGES_URL?.trim();
   const cloudflareOrigin = cloudflareUrl ? originOf(cloudflareUrl) : null;
   if (cloudflareOrigin?.startsWith("https://") && cloudflareUrl?.replace(/\/+$/u, "") === cloudflareOrigin) origins.add(cloudflareOrigin);
-  if (!env.VERCEL && env.JOBGUARD_HOSTING !== "cloudflare" && !env.CF_PAGES && !env.CF_PAGES_URL) {
+  if ((env.NODE_ENV === "development" || env.NODE_ENV === "test") && !env.VERCEL && env.JOBGUARD_HOSTING !== "cloudflare" && !env.CF_PAGES && !env.CF_PAGES_URL) {
     const port = new URL(serverUrl).port;
     for (const host of ["127.0.0.1", "localhost", "[::1]"]) origins.add(`http://${host}${port ? `:${port}` : ""}`);
   }

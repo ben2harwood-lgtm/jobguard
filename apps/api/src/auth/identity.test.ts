@@ -86,15 +86,25 @@ describe("M0-6L route, cookie and server composition boundaries",()=>{
  it("keeps practice mode guards ahead of cookies, pools and authenticated workspace work",async()=>{
   const {runInNewContext}=await import("node:vm");
   const {transpileModule,ModuleKind}=await import("typescript");
-  const pool=vi.fn(), authenticate=vi.fn(), workspace=vi.fn(), cookie=vi.fn(async()=>({get:()=>({value:"b690f3c7-0d23-4c83-bca2-5f60ce9a0f19"})}));
+  const pool=vi.fn(), authenticate=vi.fn(), workspace=vi.fn(), identity=vi.fn(), cookie=vi.fn(async()=>({get:()=>({value:"b690f3c7-0d23-4c83-bca2-5f60ce9a0f19"})}));
   const adapters:Record<string,unknown>={"server-only":{},"next/headers":{cookies:cookie},"next/server":{NextResponse:{json:Response.json}},"@jobguard/db":{authenticatePracticeSession:authenticate},"@jobguard/api/workspace":{createWorkspaceApplication:workspace},"pg":{Pool:pool}};
   const environment:Record<string,string|undefined>={DATABASE_URL:"postgresql://fixture.invalid/synthetic"};
-  const load=async(path:string)=>{
+  const load=async(path:string,imports:Record<string,unknown>=adapters)=>{
    const exports:Record<string,any>={};
    const js=transpileModule(await readFile(sourceFixtureUrl(`../../../web/app/${path}`, import.meta.url),"utf8"),{compilerOptions:{module:ModuleKind.CommonJS}}).outputText;
-   runInNewContext(js,{exports,require:(id:string)=>{if(!(id in adapters))throw new Error(`Unexpected practice import: ${id}`);return adapters[id]},Response,process:{env:environment}});
+   runInNewContext(js,{exports,require:(id:string)=>{if(!(id in imports))throw new Error(`Unexpected practice import: ${id}`);return imports[id]},Response,process:{env:environment}});
    return exports;
   };
+  // Load the real linked entry and identity dependency: import-time effects must
+  // remain visible to the same cookie/pool spies as the original guard check.
+  const identityApi={...(await import("@jobguard/api/identity")),createIdentityApplication:identity};
+  const identityServer=await load("lib/identity-server.ts",{...adapters,"@jobguard/api/identity":identityApi});
+  const linked=await load("lib/linked-practice-entry.ts",{
+   ...adapters,"node:crypto":await import("node:crypto"),"zod":await import("zod"),
+   "@jobguard/api/identity":identityApi,"./identity-server":identityServer,
+  });
+  adapters["./linked-practice-entry"]=linked;
+  adapters["../../lib/linked-practice-entry"]=linked;
   const synthetic=await load("lib/synthetic-server.ts");
   adapters["./synthetic-server"]=synthetic;
   adapters["../../lib/synthetic-server"]=synthetic;
@@ -115,6 +125,7 @@ describe("M0-6L route, cookie and server composition boundaries",()=>{
    expect(pool).not.toHaveBeenCalled();
    expect(authenticate).not.toHaveBeenCalled();
    expect(workspace).not.toHaveBeenCalled();
+   expect(identity).not.toHaveBeenCalled();
   }
  });
  it("confines real identity context construction to the authenticated principal bridge",async()=>{

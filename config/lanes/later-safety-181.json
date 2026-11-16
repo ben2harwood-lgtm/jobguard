@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-181": {
+      "branches": ["codex/sandbox/later-safety-181"],
+      "note": "RED: stable fictional bank account per verified tenant/membership; SQL visibility and grants unchanged.",
+      "allow": [
+        "apps/api/src/practice-bank.application.ts",
+        "apps/api/src/practice-bank.application.test.ts",
+        "packages/db/test/practice-bank-member-accounts.integration.test.ts"
+      ]
+    }
+  }
+}

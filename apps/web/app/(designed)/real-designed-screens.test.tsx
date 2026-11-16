@@ -42,7 +42,7 @@ vi.mock("./designed-ui", async original => {
     useAttention: () => ({ items: actual.attentionJobs(state.jobs, state.decisions, state.facts), complete: state.decisions !== null && state.facts !== null && state.jobs.every(job => state.facts?.[job.id]?.checksAvailable), loading: state.facts === null && state.decisions === null, failed: state.facts !== null && (state.decisions === null || state.jobs.some(job => !state.facts?.[job.id]?.checksAvailable)) }) };
 });
 import { StateScreen, shortDate, quoteLine, agreedLine, attentionJobs, projectBillCheck, readJobFacts, unavailableFacts, jobValueV1, catchLabel, type JobFacts, type Decisions, type Workspace } from "./designed-ui";
-import { DesignedJob, JobsList, Overview, MoneyTab, useJobDetail } from "./jobs-screens";
+import { DesignedNewJob, DesignedJob, JobsList, Overview, MoneyTab, useJobDetail } from "./jobs-screens";
 import { Today } from "./home-screens";
 vi.stubGlobal("React", React);
 const job: JobSummary = { id: "10000000-0000-4000-8000-000000000001", tenantId: "20000000-0000-4000-8000-000000000001", title: "Practice extension", status: "draft", customerLabel: "Customer", siteLabel: "Site", updatedLabel: "", document: { kind: "none", reference: null, delivery: "not_sent" }, customerPayment: "unknown", pilotNoCharge: true };
@@ -84,6 +84,47 @@ it("offers the blank practice firm first and keeps example sign-in as the second
   expect(html).toContain('class="btn">Look around an example firm</button>');
   expect(html.indexOf("Start my own practice firm")).toBeLessThan(html.indexOf("Look around an example firm"));
   expect(html).toContain("Made-up jobs only. Nothing is sent or charged.");
+});
+
+
+it.each(["linked", "unlinked", "anonymous"])("opens the designed own-firm button for a %s browser", async kind => {
+  hooks.active = true;
+  const assign = vi.fn(), retry = vi.fn();
+  vi.stubGlobal("window", { location: { assign } });
+  const fetcher = vi.fn().mockResolvedValueOnce(kind === "anonymous"
+    ? { ok: false, status: 401 }
+    : { ok: true, json: async () => ({ version: 1, principal: { displayName: "Builder" }, tenants: [], linkedCompany: kind === "linked" }) });
+  if (kind === "linked") fetcher.mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "fictional-csrf" }) });
+  fetcher.mockResolvedValueOnce({ ok: true });
+  vi.stubGlobal("fetch", fetcher);
+  const tree = StateScreen({ load: { state: "signed-out" }, retry, title: "Today" });
+  function findButton(node: React.ReactNode): React.ReactElement<{ onClick: () => void }> | undefined {
+    for (const child of React.Children.toArray(node)) {
+      if (!React.isValidElement<{ children?: React.ReactNode; onClick: () => void }>(child)) continue;
+      if (child.type === "button" && child.props.children === "Start my own practice firm") return child;
+      const found = findButton(child.props.children);
+      if (found) return found;
+    }
+  }
+  findButton(tree)!.props.onClick();
+  await vi.waitFor(() => expect(kind === "linked" ? assign : retry).toHaveBeenCalledOnce());
+  expect(fetcher).toHaveBeenNthCalledWith(1, "/api/session", { cache: "no-store" });
+  if (kind === "linked") {
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual(["/api/session", "/api/auth/session", "/api/auth/practice"]);
+    expect(fetcher).toHaveBeenLastCalledWith("/api/auth/practice", {
+      method: "POST", headers: { "content-type": "application/json", "x-csrf-token": "fictional-csrf" },
+      body: JSON.stringify({ version: "linked-practice-company.v1", action: "enter" }),
+    });
+    expect(assign).toHaveBeenCalledWith("/practice-company");
+    expect(retry).not.toHaveBeenCalled();
+  } else {
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual(["/api/session", "/api/practice-company"]);
+    expect(fetcher).toHaveBeenLastCalledWith("/api/practice-company", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: "blank-practice-company.v1", action: "start" }),
+    });
+    expect(assign).not.toHaveBeenCalled();
+  }
 });
 
 const detailJob = { ...job, revision: 4, updatedAt: "2026-11-09T12:00:00Z", scopeIdentityIds: [] };
@@ -417,4 +458,11 @@ it("obsolete fact reads are aborted when the workspace changes", async () => {
  expect(render("20000000-0000-4000-8000-000000000002")).toBeNull();
  expect(signals[0]?.aborted).toBe(true);
  expect(signals[1]?.aborted).toBe(false);
+});
+
+it("starts /jobs/new with empty own-job text and a separate example hint",()=>{
+  const html=renderToStaticMarkup(<DesignedNewJob/>);
+  expect(html).toMatch(/<textarea[^>]*placeholder=/);
+  expect(html).toMatch(/<textarea[^>]*><\/textarea>/);
+  expect(html).toContain("Describe your own job. The example is a hint only.");
 });

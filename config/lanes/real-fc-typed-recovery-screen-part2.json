@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-fc-typed-recovery-screen-part2": {
+      "branches": [
+        "codex/sandbox/real-fc-typed-recovery-screen-part2"
+      ],
+      "allow": [
+        "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/app/ui/final-check-reveal.test.tsx",
+        "apps/web/app/ui/final-check-reveal-view.test.ts",
+        "apps/web/e2e/real-fc-ordinary-words-saved-estimate.spec.ts"
+      ]
+    }
+  }
+}
