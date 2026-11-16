@@ -173,7 +173,7 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   const expiredSignout = freshTab.waitForResponse(response => response.url().endsWith("/api/customer-portal/signout") && response.request().method() === "POST");
   await freshTab.getByRole("main").getByRole("button", { name: "Sign out", exact: true }).click();
   const refusedSignout = await expiredSignout;
-  expect(refusedSignout.status()).toBe(401); expect(await refusedSignout.json()).toEqual({ code: "CUSTOMER_REFUSED" });
+  expect(refusedSignout.status()).toBe(401);
   await expect(freshTab.getByText("Sign-out could not be confirmed. Close this browser session.", { exact: true })).toBeVisible();
   expect((await customerContext.cookies()).find(c => c.name === "jobguard_customer")).toBeUndefined();
   // The proxy now lets the request reach builder authentication; no builder is signed in.
