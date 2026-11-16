@@ -2,8 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { migrate } from "../src/migrate.js";
 import { startBeforeMigration, applyMigration, seedHomeOwner, startSession, type Cluster } from "./contractor-practice-session-fixtures.js";
-import { startBlankPracticeCompany } from "../src/blank-practice-company.js";
-import { authenticatePracticeSession } from "../src/practice-session.js";
+import { authenticatePracticeSession, issuePracticeSession } from "../src/practice-session.js";
 import { FirmProfileRepository, firmProfileV1 } from "../src/firm-profile-repository.js";
 import { verifiedTenantContextFromMembership, type AuthenticatedMembership, withTenant } from "../src/tenant-context.js";
 import { QuoteRepository } from "../src/quote-repository.js";
@@ -52,13 +51,13 @@ it("upserts one profile per company, audits without contact data, and rejects no
  expect((await repo.read(company.context)).profile?.tradingName).toBe("Fictional Oak Works");
  await expect(repo.save(company.context, { ...profile, tradingName: " ", tenantId: company.p.tenantId })).rejects.toMatchObject({ code: "INVALID_PROFILE" });
 });
-it("isolates companies and refuses every shared practice firm, including after reset", async () => {
+it("isolates companies and refuses every shared practice firm, including a replacement session", async () => {
  const repo = new FirmProfileRepository(c.runtime), company = await realCompany(), other = await realCompany();
  await repo.save(company.context, profile);
  expect((await repo.read(other.context)).profile).toBeNull();
  const key = company.context.tenantId;
- const start = { version: "blank-practice-company.v1", action: "start" };
- const token = await startBlankPracticeCompany(c.runtime, start), secondToken = await startBlankPracticeCompany(c.runtime, start);
+ // Blank private companies can save their own profile after 0752; shared samples cannot.
+ const token = await issuePracticeSession(c.runtime), secondToken = await issuePracticeSession(c.runtime);
  const first = await authenticatePracticeSession(c.runtime, token), second = await authenticatePracticeSession(c.runtime, secondToken);
  expect(first.context.tenantId).toBe(second.context.tenantId);
  for (const context of [first.context, second.context, other.context]) {
@@ -71,7 +70,7 @@ it("isolates companies and refuses every shared practice firm, including after r
   await expect(repo.save(context, profile)).rejects.toMatchObject({ code: "FORBIDDEN" });
   await expect(withTenant(c.runtime, context, db => db.$client.query("INSERT INTO app.firm_profile(tenant_id,company_key,trading_name) VALUES($1,$2,'Stolen')", [context.tenantId, context.tenantId]))).rejects.toThrow(/row-level security/);
  }
- const next = await startBlankPracticeCompany(c.runtime, { ...start, action: "reset" }, token);
+ const next = await issuePracticeSession(c.runtime);
  expect(await repo.read((await authenticatePracticeSession(c.runtime, next)).context)).toMatchObject({ profile: null, canSave: false, isPractice: true });
  expect((await c.admin.query("SELECT count(*)::int n FROM app.firm_profile WHERE tenant_id=$1", [first.context.tenantId])).rows[0].n).toBe(0);
  expect((await repo.read(company.context)).profile?.tradingName).toBe("Fictional Oak Works");

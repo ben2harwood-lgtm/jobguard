@@ -40,6 +40,8 @@ export class QuoteDeliveryRepository{
   const artifact=await withTenant(this.pool,context,async db=>(await db.$client.query<any>(`SELECT d.content_hash,d.document_version,d.snapshot,d.parties_snapshot->>'bindingId' AS binding_id,(SELECT x.binding_id::text FROM app.job_party_current x WHERE x.tenant_id=d.tenant_id AND x.job_id=d.job_id) AS current_binding_id FROM app.quote_document_version d WHERE d.id=$1 AND d.job_id=$2`,[input.documentId,jobId])).rows[0]);if(!artifact||!artifact.binding_id||artifact.binding_id!==artifact.current_binding_id)throw new Error("QUOTE_CHANGED");
   const authorizationId=randomUUID(),outboxActionId=randomUUID();const dispatcher=new UserCommandDispatcher(this.pool);
   const mutation=new IssueQuoteMutation({tenantId:context.tenantId,jobId,documentId:input.documentId,outboxActionId,recipients:[input.recipient],immutableContent:new TextDecoder().decode(renderQuotePdf(quoteDocumentV1.parse(artifact.snapshot)))});
+  const expectedIssuer=quoteDocumentV1.parse(artifact.snapshot).issuer;
+  let currentIssuer=expectedIssuer;
   await dispatcher.dispatch(context,{version:"command.v1",commandId:input.commandId,commandType:"quote.send",semanticKey:`quote-send:${input.documentId}`,actorMembershipId:DEMO_MEMBERSHIP_ID,subjectType:"quote_document",subjectRef:input.documentId,authorizationId,action:{actionType:"quote.send",recipient:JSON.stringify([input.recipient]),contentHash:input.contentHash,aggregateRevision:artifact.document_version,amountPence:null,currency:null,policyVersion:"free-quote-send.v1",expiresAt:new Date(Date.now()+3600_000)}},{
    lock:async(db,command)=>{
     await mutation.lock(db,command);
@@ -47,10 +49,14 @@ export class QuoteDeliveryRepository{
     const prior=(await db.$client.query<{content_hash:string;recipients:string[]}>(`SELECT content_hash,recipients FROM app.quote_send WHERE job_id=$1 AND document_id=$2`,[jobId,input.documentId])).rows[0];
     if(prior&&(prior.content_hash!==input.contentHash||JSON.stringify(prior.recipients)!==JSON.stringify([input.recipient])))throw new Error("COMMAND_CONFLICT");
     if(artifact.content_hash!==input.contentHash||artifact.snapshot.customer.email!==input.recipient)throw new Error("QUOTE_CHANGED");
-    // A matching issued send replays its immutable artifact even after a firm rename.
-    if(!prior&&JSON.stringify(quoteDocumentV1.parse(artifact.snapshot).issuer)!==JSON.stringify(await firmProfileIssuer(db,jobId)))throw new Error("QUOTE_CHANGED");
+    if(!prior)currentIssuer=await firmProfileIssuer(db,jobId,expectedIssuer);
    },
-   mutate:(db,command)=>mutation.mutate(db,command),
+   mutate:async(db,command)=>{
+    const result=await mutation.mutate(db,command);
+    // Preserve existing refusals first; a changed issuer rolls back every provisional send effect.
+    if(JSON.stringify(expectedIssuer)!==JSON.stringify(currentIssuer))throw new Error("QUOTE_CHANGED");
+    return result;
+   },
   });return this.view(context,jobId,input.documentId);
  }
  async view(context:VerifiedTenantContext,jobId:string,documentId?:string):Promise<QuoteDeliveryView|null>{

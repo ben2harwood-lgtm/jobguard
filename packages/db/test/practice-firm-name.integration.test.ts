@@ -76,7 +76,11 @@ it("blank practice owner saves a name for only its own quote and acceptance", as
  expect(new TextDecoder().decode(stale.pdf)).toContain(profile.tradingName);
  expect(createHash("sha256").update(stale.pdf).digest("hex")).toBe(stale.hash);
  await repo.save(a.auth.context,{...profile,tradingName:"Fictional Moonbrick Renamed"});
+ const beforeStaleSend = await preserved();
+ const outboxBefore = (await c.admin.query("SELECT count(*)::int n FROM app.action_outbox WHERE tenant_id=$1",[a.tenant])).rows;
  await expect(issue(stale)).rejects.toThrow(/QUOTE_CHANGED/);
+ expect(await preserved()).toEqual(beforeStaleSend);
+ expect((await c.admin.query("SELECT count(*)::int n FROM app.action_outbox WHERE tenant_id=$1",[a.tenant])).rows).toEqual(outboxBefore);
  const fresh = await preview(), command = randomUUID();
  expect(fresh.documentId).not.toBe(stale.documentId);
  expect(fresh.document.issuer.name).toBe("Fictional Moonbrick Renamed");
@@ -99,7 +103,7 @@ it("blank practice owner saves a name for only its own quote and acceptance", as
  expect(view.events.at(-1)?.actor).toBe("Fictional Moonbrick Renamed (builder)");
  expect(view.events[0]?.actor).toBe("A Builder Ltd (builder)");
  expect((await preview(b)).document.issuer.name).toBe("A Builder Ltd");
- await expect(delivery.preview(b.auth.context,a.job,recipient)).rejects.toThrow(/FORBIDDEN/);
+ await expect(delivery.preview(b.auth.context,a.job,recipient)).rejects.toThrow(/QUOTE_REFERENCE_REFUSED/);
  await expect(withTenant(c.runtime,b.auth.context,db => db.$client.query("SELECT app.job_saved_firm_name($1)",[a.job]))).rejects.toThrow(/FORBIDDEN/);
  for (const [tenant,companyKey] of [[a.tenant,key(a)],[otherTenant,otherTenant]]) {
   expect(await withTenant(c.runtime,b.auth.context,async db => (await db.$client.query("SELECT * FROM app.firm_profile WHERE tenant_id=$1 AND company_key=$2",[tenant,companyKey])).rows)).toEqual([]);
