@@ -1,3 +1,4 @@
+import { pairingCookie, practiceCookieOptions } from "../../lib/linked-practice-entry";
 import { practiceFailure } from "../../lib/synthetic-server";
 import { issuePracticeSession } from "@jobguard/db";
 import { cookies } from "next/headers";
@@ -7,7 +8,7 @@ import { syntheticPool, hasSyntheticSession, syntheticWorkspace } from "../../li
 export async function GET() {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});
   if (!hasSyntheticSession((await cookies()).get("jg_session")?.value)) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
-  try { const workspace = await syntheticWorkspace(); return NextResponse.json({ version: 1, principal: { displayName: workspace.blankCompany ? "Practice builder" : "Alex Builder" }, tenants: workspace.tenants, blankCompany: workspace.blankCompany }, { headers: { "Cache-Control": "no-store" } }); }
+  try { const workspace = await syntheticWorkspace(); return NextResponse.json({ version: 1, principal: { displayName: workspace.blankCompany ? "Practice builder" : "Alex Builder" }, tenants: workspace.tenants, blankCompany: workspace.blankCompany, linkedCompany: workspace.linkedCompany }, { headers: { "Cache-Control": "no-store" } }); }
   catch (practiceError){const denied=practiceFailure(practiceError);if(denied)return denied; return NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503 }); }
 }
 export async function POST(request: Request) {
@@ -16,5 +17,7 @@ export async function POST(request: Request) {
   try { token=await issuePracticeSession(syntheticPool()); } catch (practiceError){const denied=practiceFailure(practiceError);if(denied)return denied; return NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503 }); }
   const response = NextResponse.json({ ok: true });
   response.cookies.set("jg_session", token, { httpOnly: true, sameSite: "lax", secure: new URL(request.url).protocol === "https:", path: "/" });
+  // Explicit anonymous demo entry replaces the practice credential and its receipt together.
+  response.cookies.set(pairingCookie, "", { ...practiceCookieOptions(new URL(request.url).protocol === "https:"), maxAge: 0 });
   return response;
 }

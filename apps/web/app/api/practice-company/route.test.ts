@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { practiceFirmName } from "../../lib/contracts";
-const stub = vi.hoisted(() => ({ start: vi.fn(), pool: vi.fn(() => ({})) }));
-vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: "browser-session" }) }) }));
+const stub = vi.hoisted(() => ({ start: vi.fn(), pool: vi.fn(() => ({})), identity: "" }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: (key: string) => key === "jg_session" ? { value: "browser-session" } : key === "jobguard_session" && stub.identity ? {value:stub.identity} : undefined }) }));
 vi.mock("../../lib/synthetic-server", () => ({ syntheticPool: stub.pool, practiceFailure: () => null }));
 vi.mock("@jobguard/db", async importOriginal => ({ ...await importOriginal<typeof import("@jobguard/db")>(), startBlankPracticeCompany: stub.start }));
 import { POST } from "./route";
 const request = (origin = "http://127.0.0.1:3000", body: unknown = { version: "blank-practice-company.v1", action: "start" }) => new Request("http://localhost:3000/api/practice-company", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) });
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.clearAllMocks();stub.identity="";
   for (const key of ["VERCEL", "CF_PAGES", "CF_PAGES_URL", "JOBGUARD_HOSTING", "JOBGUARD_ALLOWED_ORIGINS", "VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL"]) vi.stubEnv(key, "");
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   stub.start.mockResolvedValue("replacement-session");
@@ -39,4 +39,10 @@ it.each(["production", "", "pilot_no_charge"])("refuses mode %s before touching 
 it("bounds display-only tester names and falls back for missing or ambiguous names", () => {
   expect(practiceFirmName(" Tommy ")).toBe("Tommy's practice firm");
   for (const name of [undefined, " ", "x".repeat(41), ["Tommy", "Sam"]]) expect(practiceFirmName(name)).toBe("Builder's practice firm");
+});
+
+it("never falls back to anonymous entry for an identity cookie, including an invalid one", async()=>{
+  stub.identity="invalid-identity";
+  expect((await POST(request())).status).toBe(401);
+  expect(stub.start).not.toHaveBeenCalled();
 });

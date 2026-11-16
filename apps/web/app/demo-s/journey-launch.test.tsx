@@ -11,6 +11,28 @@ const capture = { version: 1, environment: "synthetic_demo", captureId: runId, j
   proposal: { title: "Fiction", lines: [], questions: [] }, review: null, status: "draft" };
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 afterEach(() => vi.unstubAllGlobals());
+it("moves a chooser launch off a linked firm and reuses the anonymous credential on retry", async () => {
+  const fetch = vi.fn().mockResolvedValueOnce(reply({ ...session, linkedCompany: true }))
+    .mockResolvedValueOnce(reply({ ok: true })).mockResolvedValueOnce(reply(session)).mockResolvedValueOnce(reply(capture))
+    .mockResolvedValueOnce(reply(session)).mockResolvedValueOnce(reply(capture));
+  vi.stubGlobal("fetch", fetch);
+  expect(await recoverShadowCapture(runId)).toBe(jobId);
+  expect(await recoverShadowCapture(runId)).toBe(jobId);
+  expect(fetch.mock.calls.slice(0, 3)).toEqual([
+    ["/api/session", { cache: "no-store" }], ["/api/session", { method: "POST" }], ["/api/session", { cache: "no-store" }],
+  ]);
+  expect(fetch.mock.calls.filter(call => call[0] === "/api/session" && call[1]?.method === "POST")).toHaveLength(1);
+  const captures = fetch.mock.calls.filter(call => call[0] === "/api/jobs/capture");
+  expect(captures).toHaveLength(2); expect(captures[0]).toEqual(captures[1]);
+});
+it.each(["refused", "still-linked"])("never captures in the linked firm when the anonymous switch is %s", async state => {
+  const fetch = vi.fn().mockResolvedValueOnce(reply({ ...session, linkedCompany: true }))
+    .mockResolvedValueOnce(reply({ ok: state !== "refused" }, state === "refused" ? 503 : 200))
+    .mockResolvedValueOnce(reply({ ...session, linkedCompany: true }));
+  vi.stubGlobal("fetch", fetch);
+  await expect(recoverShadowCapture(runId)).rejects.toThrow(/practice workspace/);
+  expect(fetch.mock.calls.some(call => call[0] === "/api/jobs/capture")).toBe(false);
+});
 it("starts the practice workspace only when absent and replays the selection's exact capture identity", async () => {
   const fetch = vi.fn().mockResolvedValueOnce(reply({}, 401)).mockResolvedValueOnce(reply({ ok: true }))
     .mockResolvedValueOnce(reply(session)).mockResolvedValueOnce(reply(capture))

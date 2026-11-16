@@ -25,6 +25,11 @@ export function billabilityFailure(error: unknown) {
 export async function recoveryBillabilityRequest(request: Request, jobId: string, caseId: string): Promise<unknown> {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo" || !uuid.safeParse(jobId).success || !uuid.safeParse(caseId).success) throw missing();
   if (request.method === "POST" && !isTrustedBrowserOrigin(request)) throw missing();
+  // An explicit read prepares exactly one existing action authority. Omission keeps
+  // the historical identity-first read; a hint never changes POST authority.
+  const hints = request.method === "GET" ? new URL(request.url).searchParams.getAll("action") : [];
+  if (hints.length > 1 || (hints.length === 1 && !z.enum(["review", "approve"]).safeParse(hints[0]).success)) throw new Error("INVALID_BILLABILITY_INPUT");
+  const readAction = hints[0];
   const jar = await cookies();
   const repository = new RecoveryBillabilityRepository(syntheticPool());
   let input: ReturnType<typeof persistedBillabilityCommandV1.parse> | undefined;
@@ -35,7 +40,7 @@ export async function recoveryBillabilityRequest(request: Request, jobId: string
   }
   const identityToken = jar.get("jobguard_session")?.value;
   // Approval must use a real, separate synthetic owner identity session. No fallback.
-  if (input?.action === "approve" || (!input && identityToken)) {
+  if (input?.action === "approve" || (!input && (readAction === "approve" || (!readAction && identityToken)))) {
     const identity = identityApplication();
     const session = await identity.session(identityToken);
     if (session.memberships.length !== 1 || session.memberships[0]?.role !== "owner") throw missing();

@@ -78,6 +78,8 @@ it.each(["read", "schedule", "command"] as const)("Next %s maps practice failure
   let token: string | undefined;
   const business = { read: vi.fn(), schedule: vi.fn(), command: vi.fn(), failure: recoveryFollowUpFailure };
   const adapters: Record<string, unknown> = {
+    // These transport fixtures are unlinked; pairing adds no identity requirement.
+    "./linked-practice-entry": { enforcePracticePair: async () => false },
     "server-only": {}, "next/headers": { cookies: async () => ({ get: () => token ? { value: token } : undefined }) },
     "next/server": { NextResponse: { json: (body: unknown, options?: ResponseInit) => Response.json(body, options) } },
     "@jobguard/db": { PracticeAccessError, RequestBindingRefusedError }, "@jobguard/api/workspace": {}, "pg": {},
