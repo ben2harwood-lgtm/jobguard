@@ -127,6 +127,8 @@ it("Next quote delivery GET maps missing, invented and stranger practice session
  const deliveryView=vi.fn();
  const json=(body:unknown,options?:ResponseInit)=>Response.json(body,options);
  const adapters:Record<string,unknown>={
+  // These transport fixtures are unlinked; pairing adds no identity requirement.
+  "./linked-practice-entry": { enforcePracticePair: async () => false },
   "server-only":{},"next/headers":{cookies:async()=>({get:()=>token?{value:token}:undefined})},
   "next/server":{NextResponse:{json}},"@jobguard/db":{PracticeAccessError},"@jobguard/api/workspace":{},"pg":{},
  };

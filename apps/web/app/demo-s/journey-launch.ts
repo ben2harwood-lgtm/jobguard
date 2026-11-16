@@ -7,13 +7,15 @@ import { parseShadowReport, shadowCaptureText } from "./shadow-30000/journey-mod
 export const recoverShadowCapture = (runId: string) => recoverCapture(runId, shadowCaptureText);
 export async function recoverCapture(runId: string, text: string) {
   let response = await fetch("/api/session", { cache: "no-store" });
-  if (response.status === 401) {
+  let session = response.ok ? sessionResponseV1.parse(await response.json()) : null;
+  // Chooser examples use an anonymous namespace, separate from the builder's saved firm.
+  if (response.status === 401 || session?.linkedCompany) {
     const started = await fetch("/api/session", { method: "POST" });
     if (!started.ok) throw new Error("The practice workspace could not be started. Retry this selection.");
     response = await fetch("/api/session", { cache: "no-store" });
+    session = response.ok ? sessionResponseV1.parse(await response.json()) : null;
   }
-  if (!response.ok) throw new Error("The practice workspace is unavailable. Retry this selection.");
-  const session = sessionResponseV1.parse(await response.json());
+  if (!response.ok || !session || session.linkedCompany) throw new Error("The practice workspace is unavailable. Retry this selection.");
   const tenantId = session.tenants[0]?.id;
   if (!tenantId) throw new Error("No practice business is available.");
   const unconfirmed = "Capture outcome unconfirmed. Retry this selection to recover the same request.";
