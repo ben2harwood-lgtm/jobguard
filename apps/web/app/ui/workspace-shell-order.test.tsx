@@ -297,3 +297,14 @@ it("hides the old job immediately when the job prop changes before its load effe
  expect(html).toContain("Loading your job…");
  expect(html).not.toContain('data-testid="workspace-job-id"');
 });
+
+
+it.each(["", "#scope", "#quote", "#work-proof"])("passes explicit section navigation %s to the nested quote editor", fragment => {
+ function review(node: React.ReactNode): React.ReactElement<{ sectionNavigationKey: string }> | undefined {
+  if (Array.isArray(node)) return node.map(review).find(Boolean);
+  if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return;
+  if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node as ReturnType<typeof review>;
+  return review(node.props.children);
+ }
+ expect(review(workspace("accepted", fragment))!.props.sectionNavigationKey).toBe(fragment);
+});

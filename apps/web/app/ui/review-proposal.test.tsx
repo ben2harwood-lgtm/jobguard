@@ -330,3 +330,26 @@ it("keeps pricing open and reports a failed Scope read without publishing a snap
  expect(all(tree, n => typeof n.type === "function" && n.type.name === "QuoteEditor")).toHaveLength(1);
  expect(text(all(tree, n => n.props.role === "alert"))).toContain("The saved job status could not be loaded");
 });
+
+
+it.each(["accepted", "live"] as const)("reloads the saved %s quote on section navigation but preserves the editor on snapshots", status => {
+ const result = { ...validFixture(), status: "quoting" as const };
+ const p = panel(result);
+ const editor = (tree: React.ReactNode) => all(tree, n => typeof n.type === "function" && n.type.name === "QuoteEditor")[0]!;
+ // Open pricing locally, then receive acceptance without leaving this section.
+ p.button(p.render({ sectionNavigationKey: "" }), "Price the work").props.onClick();
+ const original = editor(p.render({ sectionNavigationKey: "" }));
+ const saved = { ...result, status };
+ const refreshed = editor(p.render({ result: saved, sectionNavigationKey: "" }));
+ expect(refreshed.type).toBe(original.type);
+ expect(refreshed.key).toBe(original.key);
+ // A fragment-only navigation must discard the preview so the editor reads Saved quote.
+ const navigated = editor(p.render({ result: saved, sectionNavigationKey: "#quote", sectionView: "pricing" }));
+ expect(navigated.key).not.toBe(original.key);
+ const snapshot = editor(p.render({ result: { ...saved }, sectionNavigationKey: "#quote", sectionView: "pricing" }));
+ expect(snapshot.type).toBe(navigated.type);
+ expect(snapshot.key).toBe(navigated.key);
+ // Both destinations use the pricing view; the fragment still changes editor identity.
+ const work = editor(p.render({ result: saved, sectionNavigationKey: "#work-proof", sectionView: "pricing" }));
+ expect(editor(p.render({ result: saved, sectionNavigationKey: "#quote", sectionView: "pricing" })).key).not.toBe(work.key);
+});
