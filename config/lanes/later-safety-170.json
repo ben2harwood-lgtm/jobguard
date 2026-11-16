@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-170": {
+      "branches": ["codex/sandbox/later-safety-170"],
+      "allow": [
+        "apps/api/src/decisions/decisions.controller.ts",
+        "apps/api/src/decisions/decisions.application.ts",
+        "apps/api/src/decisions/decisions-later.test.ts",
+        "apps/api/src/decisions/decisions-http.test.ts"
+      ]
+    }
+  }
+}
