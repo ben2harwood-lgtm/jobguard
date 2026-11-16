@@ -11,8 +11,10 @@ export const shadowCaptureV1 = z.object({ version: z.literal("shadow-capture.v1"
 export type ShadowCapture = z.infer<typeof shadowCaptureV1>;
 export const shadowMatchV1 = z.object({ version: z.literal("shadow-match.v1"), tenantId: shadowId, jobId: shadowId, scopeArea: shadowRef, description: z.string().min(1).max(4000), dateCompatibility: z.enum(["compatible", "incompatible", "unknown"]), valueCompatibility: z.enum(["compatible", "incompatible", "unknown"]), ruleVersion: z.literal("builder-favourable-match.v1") }).strict().readonly();
 // Reversible reference normalization: NFKC, lower case, punctuation to spaces, whitespace trim.
-// One common complete word is overlap. No score, date window, value tolerance or production threshold.
+// One common complete description word is overlap; paint/painted/painting share one token. No score, date window, value tolerance or production threshold.
 const normalize = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// This bounded description equivalence does not normalize scope areas or other trades.
+const descriptionWords = (value: string) => normalize(value).split(" ").map(word => word === "painted" || word === "painting" ? "paint" : word);
 export function matchBuilderCapture(raw: unknown, capturesRaw: unknown): Readonly<{
     outcome: "builder_captured" | "already_in_original_scope" | "unmatched";
     ruleVersion: "builder-favourable-match.v1";
@@ -21,7 +23,7 @@ export function matchBuilderCapture(raw: unknown, capturesRaw: unknown): Readonl
         sourceRef: string;
     }>[];
 }> {
-    const s = parseShadow(shadowMatchV1, raw), captures = parseShadow(z.array(shadowCaptureV1).readonly(), capturesRaw), words = new Set(normalize(s.description).split(" ").filter(Boolean));
-    const matches = captures.filter(c => c.tenantId === s.tenantId && c.jobId === s.jobId && c.recordedPhase === "pre_lock" && normalize(c.scopeArea) === normalize(s.scopeArea) && normalize(c.description).split(" ").some(w => w.length > 0 && words.has(w)) && s.dateCompatibility !== "incompatible" && s.valueCompatibility !== "incompatible");
+    const s = parseShadow(shadowMatchV1, raw), captures = parseShadow(z.array(shadowCaptureV1).readonly(), capturesRaw), words = new Set(descriptionWords(s.description).filter(Boolean));
+    const matches = captures.filter(c => c.tenantId === s.tenantId && c.jobId === s.jobId && c.recordedPhase === "pre_lock" && normalize(c.scopeArea) === normalize(s.scopeArea) && descriptionWords(c.description).some(w => w.length > 0 && words.has(w)) && s.dateCompatibility !== "incompatible" && s.valueCompatibility !== "incompatible");
     return freezeShadow({ outcome: matches.some(c => c.kind === "baseline") ? "already_in_original_scope" : matches.length ? "builder_captured" : "unmatched", ruleVersion: s.ruleVersion, references: matches.map(c => ({ id: c.id, sourceRef: c.sourceRef })).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0) });
 }

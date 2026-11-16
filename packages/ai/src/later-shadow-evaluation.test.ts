@@ -59,3 +59,31 @@ describe("LATER-B6 evaluates actual grouped identities", () => {
     await expect(runShadowEvaluation({ corpus: { ...corpus, cases: [corpus.cases[0], corpus.cases[0]] }, labels: labels([]) })).rejects.toThrow();
   });
 });
+
+
+describe("LATER-FC-PHOTO-MATCH-INFLECTION evaluation regression", () => {
+  it("reports painting as contracted work and an independent tap as a genuine extra", async () => {
+    const text = "Practice photo: painted walls";
+    const photo = parseObservation({ ...observation, kind: "completion_photo", text,
+      citations: [{ start: 0, end: text.length, quote: text }],
+      facts: { ...observation.facts, scopeArea: "job", workReference: "practice:painted-walls", description: "painted walls" } });
+    const baseline = { version: "shadow-capture.v1", tenantId: id, jobId: id, id, scopeItemId: id, revisionId: id,
+      serverRecordedAt: at, valuePence: null, kind: "baseline", state: null, scopeArea: "job",
+      description: "Paint the hall, stairs and landing", recordedPhase: "pre_lock", aiStructured: false, sourceRef: "fixture:quoted-painting" };
+    const tap = parseObservation({ ...observation, evidence: { ...observation.evidence, id: "10000000-0000-4000-8000-000000000002" },
+      facts: { ...observation.facts, scopeArea: "job" } });
+    const report = await runShadowEvaluation({
+      corpus: { version: "shadow-observation-corpus.v1", cases: [
+        { id: "quoted-painting", observations: [photo], captures: [baseline], responses: { [photo.evidence.id]: { output: { version: "shadow-ai-proposals.v1", proposals: [] }, citations: [] } } },
+        { id: "missing-tap", observations: [tap], captures: [baseline], responses: { [tap.evidence.id]: { output: { version: "shadow-ai-proposals.v1", proposals: [] }, citations: [] } } },
+      ] },
+      labels: { version: "shadow-labels.v2", cases: [
+        { id: "quoted-painting", class: "contracted_work", expectedWork: [] },
+        { id: "missing-tap", class: "genuine_extra", expectedWork: [{ ...identity, scopeArea: "job" }] },
+      ] },
+    });
+    expect(report.results.fixture).toMatchObject({ cases: 2, truePositive: 1, falsePositive: 0, falseNegative: 0,
+      recall: 1, falsePositivePrecision: 1 });
+    expect(report.results.live_model.status).toBe("not_run");
+  });
+});

@@ -86,3 +86,30 @@ it('SB-09: One extra found in three sources', () => {
  const all = [...observations, other];
  expect(groupShadowProposals(detectShadowObservations(all, [], at), all, [])).toHaveLength(2);
 });
+
+
+describe("LATER-FC-PHOTO-MATCH-INFLECTION detection", () => {
+  const text = "Practice photo: painted walls";
+  const photo = parseObservation({ ...observationFixture(), kind: "completion_photo", text,
+    citations: [{ start: 0, end: text.length, quote: text }],
+    facts: { ...observationFixture().facts, scopeArea: "job", workReference: "practice:painted-walls", description: "painted walls" } });
+  const baseline = shadowCaptureV1.parse({ ...capture("draft"), kind: "baseline", state: null,
+    scopeArea: "job", description: "Paint the hall, stairs and landing" });
+  it("excludes quoted painting but keeps a genuinely different completed trade", () => {
+    expect(detectShadowObservations([photo], [baseline], at)).toEqual([]);
+    const tap = parseObservation({ ...observationFixture(), facts: { ...observationFixture().facts, scopeArea: "job" } });
+    const proposals = detectShadowObservations([photo, tap], [baseline], at);
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]).toMatchObject({ description: "outside tap", estimatedValuePence: null, evidence: [expect.objectContaining({ evidenceId: tap.evidence.id, objectVersionId: tap.evidence.objectVersionId, sha256: tap.evidence.sha256, sourceReceivedAt: tap.evidence.serverReceivedAt })] });
+  });
+  it("a matched painting still produces a must-surface proposal and permanent fee exclusions", () => {
+    const safety = parseObservation({ ...photo, facts: { ...photo.facts, safetyImplication: true } });
+    const proposals = detectShadowObservations([safety], [baseline], at);
+    expect(proposals).toHaveLength(1);
+    const group = groupShadowProposals(proposals, [safety], [baseline])[0]!;
+    expect(group.match.outcome).toBe("already_in_original_scope");
+    expect(group.firings).toHaveLength(1);
+    expect(group.firings[0]).toMatchObject({ rule: "safety" });
+    expect(observationMustSurface(safety).ineligibility.map(e => e.reason)).toEqual(["surfaced_early", "disclosed_before_lock"]);
+  });
+});

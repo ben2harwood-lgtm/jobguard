@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-fc-photo-match-inflection": {
+      "branches": [
+        "codex/sandbox/later-fc-photo-match-inflection"
+      ],
+      "note": "LATER-FC-PHOTO-MATCH-INFLECTION: RED; bounded painting description equivalence, synthetic only; no migration. CI database/browser and independent review required.",
+      "allow": [
+        "packages/core/src/shadow-domain/capture.ts",
+        "packages/core/src/shadow-domain/capture.test.ts",
+        "packages/core/src/shadow-detection.test.ts",
+        "packages/ai/src/later-shadow-evaluation.test.ts",
+        "packages/db/test/later-fc-photo-match-inflection.integration.test.ts",
+        "apps/web/e2e/later-fc-photo-match-inflection.spec.ts"
+      ]
+    }
+  }
+}

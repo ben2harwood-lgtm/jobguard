@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyShadowSource, matchBuilderCapture, shadowCaptureV1 } from "./capture.js";
+import { captureStates, classifyShadowSource, matchBuilderCapture, shadowCaptureV1 } from "./capture.js";
 const id = "10000000-0000-4000-8000-000000000001";
 const capture = (kind = "log_extra", state = "draft") => ({ version: "shadow-capture.v1", tenantId: id, jobId: id, id, scopeItemId:id, revisionId:id, serverRecordedAt:"2026-10-01T00:00:00Z", valuePence:null, kind, state, scopeArea: "garden", description: "Outside tap fitted", recordedPhase: "pre_lock", aiStructured: true, sourceRef: "fixture://capture" });
 const candidate = { version: "shadow-match.v1", tenantId: id, jobId: id, scopeArea: "Garden", description: "Fitted outside tap", dateCompatibility: "unknown", valueCompatibility: "unknown", ruleVersion: "builder-favourable-match.v1" };
@@ -36,4 +36,38 @@ describe("SV-1 shadow domain", () => {
         expect(() => matchBuilderCapture({ ...candidate, valueTolerance: 20 }, [c])).toThrow();
     });
     it("O remains evidence and L timing exclusions cannot be relabelled as capture", () => { expect(matchBuilderCapture(candidate, []).outcome).toBe("unmatched"); expect(matchBuilderCapture(candidate, [{ ...capture("final_review"), state: null, recordedPhase: "post_lock" }]).outcome).toBe("unmatched"); });
+});
+
+
+describe("LATER-FC-PHOTO-MATCH-INFLECTION", () => {
+    const painting = { ...candidate, scopeArea: "job", description: "painted walls" };
+    const quoted = { ...capture("baseline"), state: null, scopeArea: "job", description: "Paint the hall, stairs and landing" };
+    it("matches the completion photo to the quoted painting with exact references", () => {
+        expect(matchBuilderCapture(painting, [quoted])).toEqual({ outcome: "already_in_original_scope",
+            ruleVersion: "builder-favourable-match.v1", references: [{ id, sourceRef: quoted.sourceRef }] });
+    });
+    it("bounds the equivalence to paint, painted and painting in both directions", () => {
+        for (const description of ["paint", "PAINTED!", "Painting"])
+            for (const captured of ["Paint", "painted", "painting"])
+                expect(matchBuilderCapture({ ...painting, description }, [{ ...quoted, description: captured }]).outcome).toBe("already_in_original_scope");
+        for (const description of ["painter", "repaint", "paintwork", "plastered brickwork", "walls"])
+            expect(matchBuilderCapture({ ...painting, description }, [quoted]).outcome).toBe("unmatched");
+    });
+    it("covers every builder capture state and final review without assigning a price", () => {
+        for (const state of captureStates) {
+            const c = { ...quoted, kind: "log_extra", state, valuePence: null };
+            expect(matchBuilderCapture(painting, [c])).toMatchObject({ outcome: "builder_captured", references: [{ id, sourceRef: c.sourceRef }] });
+            expect(c.valuePence).toBeNull();
+        }
+        expect(matchBuilderCapture(painting, [{ ...quoted, kind: "final_review" }]).outcome).toBe("builder_captured");
+    });
+    it("keeps area, tenant, job, pre-lock and compatibility refusals", () => {
+        for (const change of [{ scopeArea: "hall" }, { tenantId: "10000000-0000-4000-8000-000000000002" },
+            { jobId: "10000000-0000-4000-8000-000000000002" }, { recordedPhase: "post_lock" }])
+            expect(matchBuilderCapture(painting, [{ ...quoted, ...change }]).outcome).toBe("unmatched");
+        // Description inflections must never become an area relationship.
+        expect(matchBuilderCapture({ ...painting, scopeArea: "painting" }, [{ ...quoted, scopeArea: "paint" }]).outcome).toBe("unmatched");
+        for (const change of [{ dateCompatibility: "incompatible" }, { valueCompatibility: "incompatible" }])
+            expect(matchBuilderCapture({ ...painting, ...change }, [quoted]).outcome).toBe("unmatched");
+    });
 });
