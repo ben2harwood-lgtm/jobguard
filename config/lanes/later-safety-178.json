@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-178": {
+      "branches": [
+        "codex/sandbox/later-safety-178"
+      ],
+      "allow": [
+        "apps/web/app/ui/practice-run.tsx",
+        "apps/web/app/ui/practice-run.test.tsx"
+      ]
+    }
+  }
+}

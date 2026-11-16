@@ -1,19 +1,24 @@
 import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
+import { z } from "zod";
 import { sessionResponseV1 } from "../lib/contracts";
 import { parseShadowReport, shadowCaptureText } from "./shadow-30000/journey-model";
+
+const captureAccessFailureV1 = z.object({ code: z.enum(["NOT_FOUND", "TENANT_FORBIDDEN", "UNAUTHENTICATED"]) });
 
 /** A selection's server-issued identity is also its capture idempotency key.
  * Browser storage is never treated as evidence that a journey completed. */
 export const recoverShadowCapture = (runId: string) => recoverCapture(runId, shadowCaptureText);
 export async function recoverCapture(runId: string, text: string) {
   let response = await fetch("/api/session", { cache: "no-store" });
-  if (response.status === 401) {
+  let session = response.ok ? sessionResponseV1.parse(await response.json()) : null;
+  // Chooser examples use an anonymous namespace, separate from the builder's saved firm.
+  if (response.status === 401 || session?.linkedCompany) {
     const started = await fetch("/api/session", { method: "POST" });
     if (!started.ok) throw new Error("The practice workspace could not be started. Retry this selection.");
     response = await fetch("/api/session", { cache: "no-store" });
+    session = response.ok ? sessionResponseV1.parse(await response.json()) : null;
   }
-  if (!response.ok) throw new Error("The practice workspace is unavailable. Retry this selection.");
-  const session = sessionResponseV1.parse(await response.json());
+  if (!response.ok || !session || session.linkedCompany) throw new Error("The practice workspace is unavailable. Retry this selection.");
   const tenantId = session.tenants[0]?.id;
   if (!tenantId) throw new Error("No practice business is available.");
   const unconfirmed = "Capture outcome unconfirmed. Retry this selection to recover the same request.";
@@ -27,8 +32,24 @@ export async function recoverCapture(runId: string, text: string) {
     // identity so a reload/retry recovers the committed job rather than replacing it.
     throw new Error(unconfirmed);
   }
-  if (!captured.ok) throw new Error(unconfirmed);
-  const capture = captureWorkspaceResponseV1.parse(await captured.json());
+  const body: unknown = await captured.json().catch(() => null);
+  if (!captured.ok) {
+    const failure = captureAccessFailureV1.safeParse(body);
+    if (failure.success) {
+      const code = failure.data.code;
+      if ((code === "NOT_FOUND" && [400, 404].includes(captured.status)) ||
+          (code === "TENANT_FORBIDDEN" && captured.status === 403)) {
+        throw new Error("This practice session cannot open the saved selection's job. Use Reset selection to start a new fictional job.");
+      }
+      if (code === "UNAUTHENTICATED" && captured.status === 401) {
+        throw new Error("Restore or sign in to the appropriate practice session, then retry this selection to open its saved job.");
+      }
+    }
+    throw new Error(unconfirmed);
+  }
+  const parsed = captureWorkspaceResponseV1.safeParse(body);
+  if (!parsed.success) throw new Error(unconfirmed);
+  const capture = parsed.data;
   if (capture.captureId !== runId) throw new Error("The saved capture does not match this selection.");
   return capture.jobId;
 }

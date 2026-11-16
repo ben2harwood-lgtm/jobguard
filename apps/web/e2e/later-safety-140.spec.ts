@@ -1,12 +1,28 @@
 import { expect, test, type Page, type Request } from "@playwright/test";
-import { click, jsonResult, recordThroughUi } from "./helpers/customer-invoice-journey";
+import { click, recordThroughUi } from "./helpers/customer-invoice-journey";
 import { releaseChooserSignIns, signInForChooser } from "./helpers/chooser-sign-in";
 
 test.setTimeout(300_000);
 test.afterEach(releaseChooserSignIns);
 const names = ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"];
-async function read(page: Page, path: string) { return jsonResult(page.request.get(path), `Read ${path}`); }
-async function post(page: Page, path: string, data: unknown) { return jsonResult(page.request.post(path, { data }), `Post ${path}`); }
+// Use Chromium's cookie jar: APIRequestContext omits the Secure identity cookie on HTTP 127.0.0.1.
+async function request(page: Page, path: string, data?: unknown) {
+  const result = await page.evaluate(async ({ path, data }) => {
+    const response = await fetch(path, {
+      method: data === undefined ? "GET" : "POST", credentials: "same-origin", cache: "no-store",
+      ...(data === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(data) }),
+    });
+    return { ok: response.ok, status: response.status, text: await response.text() };
+  }, { path, data });
+  return { ok: () => result.ok, status: () => result.status, text: result.text };
+}
+async function json(page: Page, path: string, data?: unknown) {
+  const response = await request(page, path, data);
+  expect(response.ok(), `${data === undefined ? "Read" : "Post"} ${path}: HTTP ${response.status()} ${response.text}`).toBe(true);
+  return JSON.parse(response.text);
+}
+async function read(page: Page, path: string) { return json(page, path); }
+async function post(page: Page, path: string, data: unknown) { return json(page, path, data); }
 async function add(page: Page, description: string, price: string, direction: string) {
   const form = page.locator(".variation-entry");
   await form.getByLabel("Description", { exact: true }).fill(description);
@@ -104,14 +120,14 @@ test("LATER-SAFETY-140 email sign-in and core-1000 show found recovery with both
   await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   const locked = await read(page, `${root}/final-account/lock`);
   const issue = { version: "practice-customer-invoice.issue.v1", commandId: crypto.randomUUID(), finalAccountRevisionId: account.id, expectedSourceHash: account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-10-29" };
-  expect((await page.request.post(`${root}/customer-invoices`, { data: issue })).ok()).toBe(false);
+  expect((await request(page, `${root}/customer-invoices`, issue)).ok()).toBe(false);
   await page.reload();
   await click(page, "Run the final check (practice)");
   await expect.poll(async () => (await read(page, `${root}/final-check`)).state, { timeout: 180_000, intervals: [5_000] }).toBe("completed");
   await click(page, "Load the saved final check");
   await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
   // A fabricated source hash cannot substitute for the immutable locked bill.
-  expect((await page.request.post(`${root}/customer-invoices`, { data: { ...issue, commandId: crypto.randomUUID(), expectedSourceHash: "0".repeat(64) } })).ok()).toBe(false);
+  expect((await request(page, `${root}/customer-invoices`, { ...issue, commandId: crypto.randomUUID(), expectedSourceHash: "0".repeat(64) })).ok()).toBe(false);
   await page.goto(`${guidedUrl}#final-account-title`);
   await click(page, "Issue and simulate this invoice");
   await expect(page.getByTestId("invoice-gross")).toHaveText("GBP 1,320.00");
@@ -119,7 +135,7 @@ test("LATER-SAFETY-140 email sign-in and core-1000 show found recovery with both
   const receipts = `${root}/customer-invoices/${issued.id}/receipts`;
   // Negative, fractional, over-limit and invented allocation authority fail closed.
   const receipt = { version: "practice-customer-receipt.record.v1", commandId: crypto.randomUUID(), paidOn: "2026-10-29", amountPence: 50000, method: "bank_transfer", reference: "Fictional first payment" };
-  for (const extra of [{ amountPence: -1 }, { amountPence: 1.5 }, { amountPence: 1_000_000_000_001 }, { allocationPence: 50000 }]) expect((await page.request.post(receipts, { data: { ...receipt, ...extra } })).status()).toBe(400);
+  for (const extra of [{ amountPence: -1 }, { amountPence: 1.5 }, { amountPence: 1_000_000_000_001 }, { allocationPence: 50000 }]) expect((await request(page, receipts, { ...receipt, ...extra })).status()).toBe(400);
   await recordThroughUi(page, "500.00");
   await expect(page.getByTestId("invoice-balance")).toHaveText("GBP 820.00");
   // Replay the actual second UI intent; no extra payment is recorded.
@@ -128,7 +144,7 @@ test("LATER-SAFETY-140 email sign-in and core-1000 show found recovery with both
   const second = (await secondRequest).postDataJSON();
   await expect(page.getByTestId("invoice-balance")).toHaveText("GBP 0.00");
   expect((await post(page, receipts, second)).receipts).toHaveLength(2);
-  expect((await page.request.post(receipts, { data: { ...second, amountPence: 1 } })).ok()).toBe(false);
+  expect((await request(page, receipts, { ...second, amountPence: 1 })).ok()).toBe(false);
   await page.getByTestId("uiwire12-reversal-reason").fill("Duplicate fictional receipt corrected");
   const reversalRequest = page.waitForRequest(request => request.url().endsWith(`${receipts}/reversals`) && request.method() === "POST");
   await page.getByTestId("uiwire12-receipt-history").nth(1).getByRole("button", { name: "Reverse this receipt", exact: true }).click();
@@ -136,7 +152,7 @@ test("LATER-SAFETY-140 email sign-in and core-1000 show found recovery with both
   await expect(page.getByTestId("invoice-balance")).toHaveText("GBP 820.00");
   expect((await post(page, `${receipts}/reversals`, reversal)).invoice.balancePence).toBe(82000);
   const creditPath = `${root}/customer-invoices/${issued.id}/credit-notes`;
-  expect((await page.request.post(`${creditPath}/preview`, { data: { version: "practice-credit-note.preview.v1", netPence: 110001, reason: "Exceeds the original bill" } })).ok()).toBe(false);
+  expect((await request(page, `${creditPath}/preview`, { version: "practice-credit-note.preview.v1", netPence: 110001, reason: "Exceeds the original bill" })).ok()).toBe(false);
   await click(page, "Preview credit note");
   await expect(page.getByTestId("uiwire11-preview-gross")).toHaveText("−GBP 120.00");
   const creditRequest = page.waitForRequest(request => request.url().endsWith(creditPath) && request.method() === "POST");

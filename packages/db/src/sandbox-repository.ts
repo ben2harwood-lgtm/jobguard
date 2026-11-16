@@ -1,7 +1,7 @@
 import { authenticatePracticeSession } from "./practice-session.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { appendAuditBatch } from "./audit.js";
+import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { DEMO_TENANT_ID } from "./demo-seed.js";
 import { withTenant } from "./tenant-context.js";
 
@@ -21,13 +21,22 @@ export class SandboxRepository {
    const payloadHash=hash(`create|core-1000|${previousRunId??"none"}`);
    const replay=await db.$client.query<{subject_ref:string;payload_hash:string}>("SELECT subject_ref,payload_hash FROM app.audit_event WHERE tenant_id=$1 AND actor_ref=$2 AND id=$3",[DEMO_TENANT_ID,`${actor}:${hash(sessionId)}`,commandId]);
    if(replay.rowCount)return this.readIn(db.$client,sessionId,replay.rows[0]!.subject_ref);
-   if(previousRunId){const old=await this.lockRun(db.$client,sessionId,previousRunId);if(old.status==="Archived")return old;await this.event(db.$client,previousRunId,"archived",commandId,payloadHash,old.step+2);}
+   const audit:AuditEventInput[]=[];
+   if(previousRunId){
+    const old=await this.lockRun(db.$client,sessionId,previousRunId);
+    if(old.status==="Archived")return old;
+    // The public command remains the create receipt; reset's archive half has its own identity.
+    const archiveId=deterministicId(`${commandId}|archive-previous`);
+    await this.event(db.$client,previousRunId,"archived",archiveId,payloadHash,old.step+2);
+    audit.push({id:archiveId,version:"audit.v1",actorRef:`${actor}:${hash(sessionId)}`,eventType:"sandbox.run.archived",subjectType:"sandbox-run",subjectRef:previousRunId,payload:{references:{command:commandId},hashes:{payload:payloadHash},classifications:{sandbox:"operational"}}});
+   }
    const runId=randomUUID(),jobId=randomUUID();
    await db.$client.query("SELECT app.create_practice_sandbox_job($1,$2,$3,$4)",[DEMO_TENANT_ID,jobId,auth.membershipId,auth.digest]);
    await db.$client.query("INSERT INTO app.sandbox_run(id,tenant_id,job_id,session_id,scenario,environment,status) VALUES($1,$2,$3,$4,'core-1000','synthetic_demo','active')",[runId,DEMO_TENANT_ID,jobId,deterministicId(`practice-session:${hash(sessionId)}`)]);
    for(const [i,adapter,amount] of [[1,"fake_quote_review",100000],[2,"fake_job_progress",12500],[3,"fake_final_account",132000]] as const){const input=hash(`core-1000|${i}|${amount}|GBP`);await db.$client.query("INSERT INTO app.sandbox_work(id,tenant_id,run_id,step,adapter,input_hash,amount_pence,currency,environment,approved) VALUES($1,$2,$3,$4,$5,$6,$7,'GBP','synthetic_demo',true)",[deterministicId(`${runId}|work|${i}`),DEMO_TENANT_ID,runId,i,adapter,input,amount]);}
    await this.event(db.$client,runId,"created",commandId,payloadHash,1);
-   await appendAuditBatch(db,[{id:commandId,version:"audit.v1",actorRef:`${actor}:${hash(sessionId)}`,eventType:"sandbox.run.created",subjectType:"sandbox-run",subjectRef:runId,payload:{references:{command:commandId},hashes:{payload:payloadHash},classifications:{sandbox:"operational"}}}]);
+   audit.push({id:commandId,version:"audit.v1",actorRef:`${actor}:${hash(sessionId)}`,eventType:"sandbox.run.created",subjectType:"sandbox-run",subjectRef:runId,payload:{references:{command:commandId},hashes:{payload:payloadHash},classifications:{sandbox:"operational"}}});
+   await appendAuditBatch(db,audit);
    return this.readIn(db.$client,sessionId,runId);
   });
  }
