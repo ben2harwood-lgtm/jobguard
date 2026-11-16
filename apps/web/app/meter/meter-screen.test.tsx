@@ -1,9 +1,11 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
-import { loadMeter, loadMeterJobs, MeterJobs, JobsOnTheGoLine, MeterDetails, MeterScreen } from "./meter-screen";
+import { loadMeter, loadMeterJobs, MeterJobs, JobsOnTheGoLine, MeterDetails, MeterScreen, loadCompanyMeter } from "./meter-screen";
+import MeterPage from "./page";
+import { selectCompany } from "./company-selection";
 vi.stubGlobal("React", React);
-const session = { csrfToken: "csrf", memberships: [{ tenantId: "fictional-company" }] };
+const session = { csrfToken: "csrf", memberships: [{ tenantId: "a1500000-0000-4000-8000-000000000001" }] };
 const view = { version: "meter-today-read.v1" as const, hypothetical: true as const, date: "2026-10-28", plan: "Builder" as const, countedPlaces: 5, freeSmallPlaces: 2 };
 it("renders stored counts, allowance and the free grace place in plain words", () => {
   const html = renderToStaticMarkup(<MeterDetails view={view} />);
@@ -18,7 +20,7 @@ it.each([4, 5, 6, 7])("shows Solo included, extra, grace and beyond-grace counts
 it("loads only the session-authorized endpoint with no cache", async () => {
   const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json(view));
   expect(await loadMeter(fetcher)).toEqual(view);
-  expect(fetcher).toHaveBeenNthCalledWith(2, "/api/meter/current", { cache: "no-store", credentials: "same-origin", headers: { "x-csrf-token": "csrf", "x-tenant-id": "fictional-company" } });
+  expect(fetcher).toHaveBeenNthCalledWith(2, "/api/meter/current", { cache: "no-store", credentials: "same-origin", headers: { "x-csrf-token": "csrf", "x-tenant-id": "a1500000-0000-4000-8000-000000000001" } });
 });
 it("never substitutes zero for a missing session, missing ledger or malformed result", async () => {
   const missing = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({}, { status: 401 }));
@@ -94,4 +96,45 @@ it("reads the separate versioned drill-down and rejects inconsistent row counts 
 });
 it("has no invented jobs-list line before a company read succeeds", () => {
  expect(renderToStaticMarkup(<JobsOnTheGoLine />)).toBe("");
+});
+
+it("never requests figures for an arbitrary membership and keeps an explicit B after order reversal", async () => {
+ const b = { tenantId: "a1500000-0000-4000-8000-000000000002" };
+ for (const load of [loadMeter, loadMeterJobs]) {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({ ...session, memberships: [session.memberships[0], b] }));
+  await expect(load(fetcher)).rejects.toThrow("COMPANY_SELECTION_REQUIRED");
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  for (const memberships of [[session.memberships[0], b], [b, session.memberships[0]]]) {
+   const explicit = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({ ...session, memberships })).mockResolvedValueOnce(Response.json(load === loadMeter ? view : jobsView));
+   await load(explicit, b.tenantId);
+   expect(explicit.mock.calls[1]![1]?.headers).toMatchObject({ "x-tenant-id": b.tenantId });
+  }
+ }
+});
+it.each(["foreign", "", "a1500000-0000-4000-8000-000000000001?tenant=B"])("refuses explicit invalid selection %s before business reads", async tenant => {
+ for (const load of [loadMeter, loadMeterJobs]) {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session));
+  await expect(load(fetcher, tenant)).rejects.toThrow();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+ }
+});
+it("binds both meter responses to one selected tenant and CSRF context, including equal cross-company figures", async () => {
+ const companySession = { ...session, memberships: [{ tenantId: "a1500000-0000-4000-8000-000000000001" }, { tenantId: "a1500000-0000-4000-8000-000000000002" }] };
+ const fetcher = vi.fn<typeof fetch>().mockImplementation(async (_path, init) => {
+  const tenant = new Headers(init?.headers).get("x-tenant-id");
+  // Equal figures are deliberately not a tenant identity.
+  expect(["a1500000-0000-4000-8000-000000000001", "a1500000-0000-4000-8000-000000000002"]).toContain(tenant);
+  return Response.json(String(_path).endsWith("/jobs") ? jobsView : { ...view, freeSmallPlaces: 0 });
+ });
+ const [a, b] = await Promise.all([loadCompanyMeter(selectCompany(companySession, "a1500000-0000-4000-8000-000000000001")!, fetcher), loadCompanyMeter(selectCompany(companySession, "a1500000-0000-4000-8000-000000000002")!, fetcher)]);
+ expect(a.view).toEqual(b.view); expect(a.tenantId).not.toBe(b.tenantId);
+ expect(fetcher.mock.calls.map(([, init]) => new Headers(init?.headers).get("x-tenant-id"))).toEqual(["a1500000-0000-4000-8000-000000000001", "a1500000-0000-4000-8000-000000000001", "a1500000-0000-4000-8000-000000000002", "a1500000-0000-4000-8000-000000000002"]);
+ expect(fetcher.mock.calls.every(([, init]) => new Headers(init?.headers).get("x-csrf-token") === "csrf")).toBe(true);
+});
+
+it("carries an explicit meter URL selection without silently normalising repeated tenant parameters", async () => {
+ for (const tenant of ["a1500000-0000-4000-8000-000000000002", ["a1500000-0000-4000-8000-000000000001", "a1500000-0000-4000-8000-000000000002"]]) {
+  const page = await MeterPage({ searchParams: Promise.resolve({ tenant }) });
+  expect(page.props.tenant).toEqual(tenant);
+ }
 });
