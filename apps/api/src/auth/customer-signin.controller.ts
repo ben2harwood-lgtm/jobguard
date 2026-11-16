@@ -10,10 +10,11 @@ export class CustomerSigninController {
   constructor(@Inject(CUSTOMER_APPLICATION) private readonly application: () => CustomerSigninApplication) {}
   private async run(action: CustomerAction, body: unknown, request: IdentityHttpRequest, response: Reply) {
     response.setHeader("Cache-Control", "no-store"); response.setHeader("Referrer-Policy", "no-referrer");
+    // Clear only this browser's customer credential, even if revocation refuses.
+    if (action === "signout") response.cookie(customerCookieName, "", { ...customerCookieOptions, maxAge: 0 });
     try {
       const result = await this.application().run(action, body, request);
       if (result.cookie) response.cookie(customerCookieName, result.cookie, customerCookieOptions);
-      if (result.clearCookie) response.cookie(customerCookieName, "", { ...customerCookieOptions, maxAge: 0 });
       return result.body;
     } catch (error) { const failure = customerRefusal(error); throw new HttpException(failure.body, failure.status); }
   }

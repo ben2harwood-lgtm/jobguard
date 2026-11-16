@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { AisError, AisRepositoryError, aisHash, type DarkAisRepository, type FakeTrueLayerAisAdapter, type AisPage, type SyntheticAisTokenVault } from "@jobguard/db";
 import { resolveVerifiedTenantContext, type TenantRequestCredentials } from "./auth/principal-bridge.js";
+import { AuthError, type ActiveMembership, type AuthPrincipal } from "./auth/auth-provider.js";
 import { identityStatus } from "./auth/identity-http.js";
 import type { IdentityApplication } from "./auth/identity.application.js";
 
@@ -25,12 +26,41 @@ export class PracticeBankApplication {
   }
   async command(credentials: TenantRequestCredentials, raw: unknown) {
     this.assertMode();
-    const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
-    const digest = this.identity.provider.digest(`session:${credentials.sessionToken}`);
+    const provider = this.identity.provider;
+    let verified: { principal: AuthPrincipal; membership: ActiveMembership } | undefined;
+    const context = await resolveVerifiedTenantContext({
+      authenticate: token => provider.authenticate(token),
+      requestCode: input => provider.requestCode(input),
+      verifyCode: (...args) => provider.verifyCode(...args),
+      findMembership: async (principal, tenantId) => {
+        const membership = await provider.findMembership(principal, tenantId);
+        if (membership) {
+          if (membership.tenantId !== tenantId || membership.identityUserId !== principal.identityUserId || membership.revokedAt !== undefined)
+            throw new AuthError("TENANT_FORBIDDEN");
+          verified = { principal, membership: { ...membership } };
+        }
+        return membership;
+      },
+    }, credentials, this.identity.allowedOrigin);
+    const digest = provider.digest(`session:${credentials.sessionToken}`);
     const parsed = commandV1.safeParse(raw);
     if (!parsed.success) throw new AisError("AIS_INVALID");
     const input = parsed.data;
     if (input.operation === "start") {
+      // Bind fixture identity to the same membership used by the sole context bridge.
+      // Recheck before changing consent; SQL still independently checks current authority.
+      const principal = await provider.authenticate(credentials.sessionToken!);
+      if (!principal || !verified || principal.identityUserId !== verified.principal.identityUserId ||
+        principal.sessionId !== verified.principal.sessionId || principal.sessionCredential !== verified.principal.sessionCredential ||
+        principal.csrfToken !== verified.principal.csrfToken) throw new AuthError("UNAUTHENTICATED");
+      const membership = await provider.findMembership(principal, context.tenantId);
+      if (!membership || membership.revokedAt !== undefined || membership.id !== verified.membership.id ||
+        membership.tenantId !== context.tenantId || membership.identityUserId !== principal.identityUserId ||
+        membership.role !== verified.membership.role) throw new AuthError("TENANT_FORBIDDEN");
+      const accountRef = `fake_practice_${aisHash(JSON.stringify([context.tenantId, membership.id]))}`;
+      const pages = new Map([...this.memory.pages].map(([key, page]) => [key, {
+        ...page, observations: page.observations.map(observation => ({ ...observation, accountRef, amount: { ...observation.amount } })),
+      }]));
       const previous = await this.repository.movements(context, digest);
       if (previous.connection && ["linked", "awaiting_consent"].includes(previous.connection.status)) {
         await this.repository.stop(context, digest, previous.connection.connectionId, "unlinked");
@@ -38,7 +68,7 @@ export class PracticeBankApplication {
       }
       const consent = await this.repository.start(context, digest, { version: "ais-start.v1", connectionId: randomUUID(), expiresAt: new Date(Date.now() + 3_600_000).toISOString() });
       const code = this.memory.adapter.register({ version: "ais-binding.v1", tenantId: context.tenantId,
-        connectionId: consent.connectionId, stateHash: aisHash(consent.state) }, "fake_practice_account", this.memory.pages);
+        connectionId: consent.connectionId, stateHash: aisHash(consent.state) }, accountRef, pages);
       this.memory.pending.set(consent.connectionId, { digest, state: consent.state, code });
     } else if (input.operation === "approve-fake-consent") {
       // Authenticate ownership in SQL before accessing process-held consent material.

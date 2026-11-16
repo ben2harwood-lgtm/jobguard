@@ -68,13 +68,14 @@ export class CustomerSigninApplication {
 }
 export const customerRefusal = (error: unknown) => ({ status: error instanceof CustomerRefused || error instanceof SyntaxError ? 401 : 503, body: { code: error instanceof CustomerRefused || error instanceof SyntaxError ? "CUSTOMER_REFUSED" : "CUSTOMER_UNAVAILABLE" } });
 export async function customerHttp(application: CustomerSigninApplication | (() => CustomerSigninApplication), action: CustomerAction, request: Request): Promise<Response> {
-  const headers = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
+  const headers: Record<string, string> = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
+  // Browser cleanup is independent of whether server-side revocation succeeds.
+  if (action === "signout") headers["Set-Cookie"] = `${customerCookieName}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
   try {
     const service = typeof application === "function" ? application() : application;
     const result = await service.run(action, await request.json(), { headers: Object.fromEntries(request.headers.entries()) });
     const response = Response.json(result.body, { headers });
     if (result.cookie) response.headers.set("Set-Cookie", `${customerCookieName}=${result.cookie}; Path=/; HttpOnly; Secure; SameSite=Strict`);
-    if (result.clearCookie) response.headers.set("Set-Cookie", `${customerCookieName}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`);
     return response;
   } catch (error) { const failure = customerRefusal(error); return Response.json(failure.body, { status: failure.status, headers }); }
 }
