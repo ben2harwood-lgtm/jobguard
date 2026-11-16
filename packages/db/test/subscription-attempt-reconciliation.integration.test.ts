@@ -14,14 +14,14 @@ import { rolledBack, snapshotRows } from "./upgrade-proof-utils.js";
 const stem = "0754_subscription_attempt_reconciliation";
 const signature = "app.mon2_command(uuid,text,uuid,jsonb)";
 const migration = readFileSync(new URL(`../migrations/${stem}.sql`, import.meta.url), "utf8");
-const predecessor = readFileSync(new URL("../migrations/0746_subscription_internal_owner_guard.sql", import.meta.url), "utf8");
+const predecessor = readFileSync(new URL("../migrations/0752_subscription_pending_downgrade.sql", import.meta.url), "utf8");
 const oldGuard = "  IF work.id IS NULL OR work.agreement_revision<>current_revision OR NOT app.mon2_authorized(t,work.authorization_id,current_revision) THEN RAISE EXCEPTION 'SUBSCRIPTION_FORBIDDEN' USING ERRCODE='42501'; END IF;";
 const exceptionStart = migration.indexOf("  IF kind='reconcile_simulation' THEN\n   -- Recover");
 const exceptionEnd = migration.indexOf("\n  IF kind='execute_simulation' THEN", exceptionStart);
 const exception = migration.slice(exceptionStart, exceptionEnd);
 const body = (source: string) => source.slice(source.indexOf("CREATE OR REPLACE FUNCTION"), source.indexOf("\nCOMMIT;"));
 const effects = (f: WorkFixture) => snapshotRows(f.admin, [
- "app.subscription_agreement_revision", "app.platform_statement", "app.platform_statement_line", "app.subscription_period",
+ "app.subscription_agreement_revision", "app.subscription_plan_change", "app.subscription_change_outcome", "app.platform_statement", "app.platform_statement_line", "app.subscription_period",
  "app.subscription_simulated_work", "app.subscription_simulated_attempt", "app.subscription_simulated_result",
  "app.action_authorization", "app.decision", "app.decision_resolution", "app.command_receipt", "app.audit_event", "audit_control.audit_head",
 ]);
@@ -72,7 +72,7 @@ async function refuses(f: WorkFixture, a: SubscriptionCompany, input: Record<str
  expect(await effects(f)).toEqual(before);
 }
 
-it("replaces only the attempted reconciliation guard, retaining the 0746 owner-before-replay body and transaction", () => {
+it("replaces only the attempted reconciliation guard, retaining the 0752 pending-change/owner-before-replay body and transaction", () => {
  expect(exceptionStart).toBeGreaterThan(0); expect(exceptionEnd).toBeGreaterThan(exceptionStart);
  expect(body(migration).replace(exception, oldGuard)).toBe(body(predecessor));
  expect(migration).toMatch(/\nBEGIN;\n/); expect(migration.trimEnd()).toMatch(/COMMIT;$/);
@@ -84,6 +84,20 @@ describe.sequential("LATER-SAFETY-158 attempted subscription reconciliation (rea
  let f: WorkFixture;
  beforeAll(async () => { f = await createWorkFixture(); }, 60000);
  afterAll(async () => closeWorkFixture(f));
+ it("0754 preserves pending-change refusal and exact replay without new money/approval/audit effects", async () => {
+  const a = await meterCompany(f);
+  const acceptedTerms = terms(a);
+  await command(f, a, acceptedTerms);
+  const input = { ...terms(a, "Solo", 1, acceptedTerms.anchorDay), kind: "change" }, id = randomUUID();
+  const pending = await command(f, a, input, id);
+  expect(pending).toMatchObject({ status: "pending", revision: 1 });
+  expect(await definition(f)).toContain("SUBSCRIPTION_PENDING_CHANGE");
+  const before = await effects(f);
+  await expect(command(f, a, input)).rejects.toMatchObject({ message: "SUBSCRIPTION_PENDING_CHANGE", code: "23514" });
+  expect(await effects(f)).toEqual(before);
+  expect(await command(f, a, input, id)).toEqual(pending);
+  expect(await effects(f)).toEqual(before);
+ });
  for (const unknown of [false, true]) for (const change of ["expiry", "revision", "expiry and revision"]) {
   it(`${unknown ? "outcome_unknown" : "lost result"} reconciles after ${change} through the existing executor`, async () => {
    const { a, approved } = await attempted(f, unknown);

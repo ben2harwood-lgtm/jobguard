@@ -4,9 +4,9 @@ LATER-SAFETY-158; RED (subscription money-result authority). MON-2A only, fictio
 
 ## Change and invariants
 
-Replaces only `app.mon2_command(uuid,text,uuid,jsonb)`, from the effective 0746 body. The sole body delta is the authorization guard for `reconcile_simulation`: require an existing durable attempt and verify the original exact authorization against the immutable work's agreement revision, Decision and approved resolution, original actor's current owner membership, statement subject, action, amount, GBP currency, hash and policy. Natural authorization expiry and a newer agreement revision are allowed only here. Explicit authorization revocation, original approver revocation/expiry/demotion (including contractor revocation), current actor/session/tenant checks, current expected revision, owner-before-receipt replay, MON-3 billing validation, result finality and unknown-outcome rules remain enforced. Execute and record use their unchanged predicate. No attempt, approval renewal, agreement or statement rewrite, provider execution or financial posting is added.
+Replaces only `app.mon2_command(uuid,text,uuid,jsonb)`, from LS-162’s effective 0752 body. The sole body delta is the authorization guard for `reconcile_simulation`: require an existing durable attempt and verify the original exact authorization against the immutable work's agreement revision, Decision and approved resolution, original actor's current owner membership, statement subject, action, amount, GBP currency, hash and policy. Natural authorization expiry and a newer agreement revision are allowed only here. Explicit authorization revocation, original approver revocation/expiry/demotion (including contractor revocation), current actor/session/tenant checks, current expected revision, owner-before-receipt replay, MON-3 billing validation, result finality and unknown-outcome rules remain enforced. Execute and record use their unchanged predicate. No attempt, approval renewal, agreement or statement rewrite, provider execution or financial posting is added.
 
-`CREATE OR REPLACE` retains the signature, owner, SECURITY DEFINER, search path and grants. The migration has BEGIN/COMMIT and no table/data/ACL changes. No historical migration is edited. Both MIGFIX-7 and plan-entitlement successor-body expectations advance to 0754 and retain the LS-149 predecessor reference. 0749 does not replace this routine. LS-162's separately owned downgrade behavior must be preserved when integrating its earlier reserved migration: carry forward that reviewed delta if its final body changes `mon2_command`.
+`CREATE OR REPLACE` retains the signature, owner, SECURITY DEFINER, search path and grants. The migration has BEGIN/COMMIT and no table/data/ACL changes. No historical migration is edited. Both MIGFIX-7 and plan-entitlement successor-body expectations advance to 0754 and retain the LS-149 predecessor reference. 0749 does not replace this routine. Depends on PR #811 (LS-162) landing first: 0754 preserves its `SUBSCRIPTION_PENDING_CHANGE` refusal verbatim.
 
 The exact historical checks are local to the reconciliation branch because expiry must remain enforced everywhere else. They deliberately duplicate the relevant owner/resolution checks rather than relax `mon2_authorized` globally or add a second public authorization API.
 
@@ -18,7 +18,7 @@ Read current repository AGENTS, MON-2, SIMPLE_LOOP and the external simplicity r
 
 ## Authored coverage (not database execution evidence)
 
-`subscription-attempt-reconciliation.integration.test.ts` contains a pure exact-body delta test and 45 PostgreSQL cases. These cover lost and unknown results after expiry, revision change and both; the real `SubscriptionExecutor.reconcile` with execute forbidden; in-flight expiry after durable execution; unchanged work/agreement/authorization/statement/source bytes and current result envelope; stale revisions and fresh execution refusal; missing attempts; current/original authority and binding refusals; exact identity/hash/amount/action/policy checks; currency constraints; redirect/finality, result conflicts, replay and concurrent terminal effects; populated predecessor upgrade and metadata preservation. Three restored scratch mutations remove only this exception and demonstrate predecessor refusal for expiry/revision/both, followed by successful executor reconciliation after restoration. The mutation cases are authored, not executed locally.
+`subscription-attempt-reconciliation.integration.test.ts` contains a pure exact-body delta test and 46 PostgreSQL cases. These cover lost and unknown results after expiry, revision change and both; the real `SubscriptionExecutor.reconcile` with execute forbidden; in-flight expiry after durable execution; unchanged work/agreement/authorization/statement/source bytes and current result envelope; stale revisions and fresh execution refusal; missing attempts; current/original authority and binding refusals; exact identity/hash/amount/action/policy checks; currency constraints; redirect/finality, result conflicts, replay and concurrent terminal effects; populated predecessor upgrade and metadata preservation. Three restored scratch mutations remove only this exception and demonstrate predecessor refusal for expiry/revision/both, followed by successful executor reconciliation after restoration. The mutation cases are authored, not executed locally.
 
 ## Validation and handoff
 
@@ -41,3 +41,29 @@ The proof fragment uses the existing metadata-only format (`lp0`, `upgrade`, `te
 ## Deployment and recovery
 
 Apply once in the router's fixed reserved migration order; repeat migration discovery is idempotent. No backfill is needed. Upgrade tests compare populated rows and routine metadata. If reversal is required, use a reviewed forward migration restoring the prior guard, never modify 0754 or any historical migration. That rollback intentionally restores the result-recovery limitation; no results or audit history should be removed.
+
+## R2 — preserve LS-162 before landing (16 November 2026)
+
+Starting head `6d2993207`. The sandbox forbids git writes, including fetch, so the source is the existing `origin/codex/sandbox/later-safety-162` ref at `5f84ae5451b5da6d2fbdd273499181b60d42eb91`, read with `git show`. Reconstructed 0754 directly from its `0752_subscription_pending_downgrade.sql`, reapplying only LS-158’s reconciliation exception. Both successor lists still name 0754 as latest, now documenting the 0752 predecessor as well as 0746. The pure regression compares the entire body against 0752 after removing only the reconciliation exception. The new PostgreSQL regression creates a pending downgrade after the full migration chain, expects a fresh request to refuse with `SUBSCRIPTION_PENDING_CHANGE` / `23514` without new state, approval, receipt or audit effects, and verifies the original command still replays exactly. No other behavior changes.
+
+0752 is not in this branch yet. For the local pure test only, its exact cached-ref bytes were temporarily placed at the expected migration path, then moved back to `/tmp`; no dependency migration is included in this repair. After #811 lands, the checked-in test reads that actual predecessor normally. The existing temporary Vitest config supplies source aliases; no PostgreSQL hooks run with the pure test name filter. PostgreSQL and browser suites were not run in this sandbox.
+
+R2 local results: `git diff --check`, exact cached-0752 body comparison and existing-lane path verification passed. The installed Vitest command below passed **1 pure test**, with **46 PostgreSQL cases skipped**; the test-source TypeScript command passed. An initial attempt used the nonexistent root Vitest entry point and failed before collection; the corrected command uses the installed db package runner.
+
+```sh
+# From packages/db:
+node node_modules/vitest/vitest.mjs run --config /tmp/later-safety-158-vitest.config.mjs --maxWorkers=1 test/subscription-attempt-reconciliation.integration.test.ts -t 'replaces only the attempted reconciliation guard'
+# From repository root:
+node node_modules/typescript/bin/tsc -p /tmp/later-safety-158-tests-tsconfig.json
+```
+
+Required PostgreSQL checks after integrating #811, with installed Vitest 4 and one worker (run from the repository root):
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/subscription-attempt-reconciliation.integration.test.ts test/subscription-pending-downgrade.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/subscription-statements.integration.test.ts test/subscription-upgrade.integration.test.ts test/subscription-internal-owner.integration.test.ts
+pnpm test:migrations
+```
+
+Full required CI, the router’s proof-generator comparison and an independent exact-head RED review remain required. PR #811 must land first. No commit, push, PR, database, browser or provider action was performed here.

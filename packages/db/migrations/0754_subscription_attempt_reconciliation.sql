@@ -1,5 +1,5 @@
 -- LATER-SAFETY-158 (RED): reconcile attempted work against its original exact approval.
--- Replaces only mon2_command from 0746; execute/record and owner-before-replay stay intact.
+-- Replaces only mon2_command from 0752 (#811 first); pending-change and owner guards stay intact.
 BEGIN;
 CREATE OR REPLACE FUNCTION app.mon2_command(t uuid,digest text,command_id uuid,v jsonb) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 #variable_conflict use_variable
@@ -58,6 +58,10 @@ BEGIN
   IF current_revision>0 AND a.anchor_day<>(v->>'anchorDay')::integer THEN RAISE EXCEPTION 'SUBSCRIPTION_REANCHOR_POLICY_HOLD' USING ERRCODE='22023'; END IF;
   IF EXISTS(SELECT 1 FROM app.subscription_period WHERE tenant_id=t AND period_end>today) THEN RAISE EXCEPTION 'SUBSCRIPTION_PERIOD_ALREADY_ISSUED' USING ERRCODE='22023'; END IF;
   IF kind='change' AND a.plan='Builder' AND v->>'plan'='Solo' THEN
+   IF EXISTS(SELECT 1 FROM app.subscription_plan_change c WHERE c.tenant_id=t
+    AND NOT EXISTS(SELECT 1 FROM app.subscription_change_outcome o WHERE o.tenant_id=c.tenant_id AND o.change_id=c.id)) THEN
+    RAISE EXCEPTION 'SUBSCRIPTION_PENDING_CHANGE' USING ERRCODE='23514';
+   END IF;
    next_day:=app.mon2_boundary(today,a.anchor_day);
    IF next_day<=today THEN next_day:=app.mon2_boundary((date_trunc('month',today)+interval '1 month')::date,a.anchor_day); END IF;
    -- Single-use exact downgrade approval survives the login session through its first Solo period.
