@@ -21,17 +21,28 @@ test("real company saves and reloads its firm details", async ({ page }) => {
  await expect(page.getByLabel("Contact email")).toHaveValue("oak@fictional.invalid");
 });
 
-test("blank practice uses the sample name and refuses a forged save", async ({ page }) => {
+test("own practice firm starts from the sample name, can name itself, and a forged save without a session is refused", async ({ page, browser }) => {
  await page.goto("/practice-company");
  await expect(page.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
  await page.goto("/firm-details");
  await expect(page.getByLabel("Trading name")).toHaveValue("A Builder Ltd");
- await expect(page.getByRole("button", { name: "Practice firms use the sample name" })).toBeDisabled();
- const status = await page.evaluate(async () => (await fetch("/api/firm-profile", {
-  method: "POST", headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ version: "firm-profile.v1", tradingName: "Refused", addressLines: [], contactEmail: "", contactPhone: "" }),
- })).status);
- expect(status).toBe(403);
+ await expect(page.getByRole("button", { name: "Save firm details", exact: true })).toBeEnabled();
+ await expect(page.getByRole("button", { name: "Practice firms use the sample name" })).toHaveCount(0);
+ await page.getByLabel("Trading name").fill("Fictional Practice Works");
+ await page.getByRole("button", { name: "Save firm details", exact: true }).click();
+ await expect(page.getByRole("status")).toContainText("Firm details saved.");
  await page.reload();
- await expect(page.getByLabel("Trading name")).toHaveValue("A Builder Ltd");
+ await expect(page.getByLabel("Trading name")).toHaveValue("Fictional Practice Works");
+ const anonymous = await browser.newContext();
+ try {
+  expect(await anonymous.cookies()).toHaveLength(0);
+  const origin = new URL(page.url()).origin;
+  const forged = await anonymous.request.post(`${origin}/api/firm-profile`, {
+   headers: { origin },
+   data: { version: "firm-profile.v1", tradingName: "Refused", addressLines: [], contactEmail: "", contactPhone: "" },
+  });
+  expect([401, 403]).toContain(forged.status());
+ } finally { await anonymous.close(); }
+ await page.reload();
+ await expect(page.getByLabel("Trading name")).toHaveValue("Fictional Practice Works");
 });
