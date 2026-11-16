@@ -7,6 +7,7 @@
       ],
       "note": "LATER-SAFETY-173: RED authorised company selection for meter and company imports; no migration.",
       "allow": [
+        "apps/web/app/classic/page.test.tsx",
         "apps/web/app/meter/company-selection.tsx",
         "apps/web/app/meter/company-selection.test.ts",
         "apps/web/app/meter/meter-screen.tsx",

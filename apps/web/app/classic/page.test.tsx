@@ -45,11 +45,15 @@ it("still validates a present company cookie through the session endpoint", asyn
   const response = Response.json({}, { status: 401 });
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response);
   vi.stubGlobal("fetch", fetcher);
+  const addEventListener = vi.fn(), removeEventListener = vi.fn();
+  vi.stubGlobal("window", { addEventListener, removeEventListener });
   const page = await Home();
   expect(page.props.hasCompanySession).toBe(true);
   expect(renderToStaticMarkup(<JobsOnTheGoLine hasCompanySession={page.props.hasCompanySession} />)).toBe("");
   const cleanups = state.effects.map(effect => effect());
   await vi.waitFor(() => expect(response.bodyUsed).toBe(true));
   expect(fetcher).toHaveBeenCalledExactlyOnceWith("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
+  expect(addEventListener).toHaveBeenCalledExactlyOnceWith("focus", expect.any(Function));
   for (const cleanup of cleanups) cleanup?.();
+  expect(removeEventListener).toHaveBeenCalledExactlyOnceWith("focus", addEventListener.mock.calls[0]![1]);
 });
