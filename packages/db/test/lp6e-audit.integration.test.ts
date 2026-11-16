@@ -1,14 +1,20 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { EnterpriseIdentityRepository, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, prepareActivationFixtureV3, QuoteAcceptanceRepository, ActionExecutor, FakeRecoveryMessageAdapter, RecoveryMessageRepository, EvidencePackRepository, EvidenceService, FinalAccountLockRepository, PracticeInvoiceRepository, ProofCommandService, verifiedTenantContextFromMembership, verifiedTenantContextForQueuedJob, withTenant, type AuthenticatedMembership } from "../src/index.js";
+import { EnterpriseIdentityRepository, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, prepareActivationFixtureV3, QuoteAcceptanceRepository, ActionExecutor, FakeRecoveryMessageAdapter, RecoveryMessageRepository, EvidencePackRepository, EvidenceService, FinalAccountLockRepository, PracticeInvoiceRepository, ProofCommandService, verifiedTenantContextFromMembership, verifiedTenantContextForQueuedJob, withTenant, type AuthenticatedMembership } from "../src/index.js";
 import { LOCK_OWNER, LOCK_USER, seedAccount, publishFixtureCompletion } from "./sv5pre-fixtures.js";
-import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { installLegacySyntheticPartyFixtures as installLegacyFixtures } from "./pool-test-utils.js";
 import { MemoryStorage, pngBytes } from "./site-extra-evidence-fixtures.js";
 import { auditActorAttribution, verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
+// The legacy fixture creates a trigger, so install it at most once per database.
+const legacyFixtureDatabases = new WeakSet<Pool>();
+async function installLegacySyntheticPartyFixtures(owner: Pool) {
+  if (legacyFixtureDatabases.has(owner)) return;
+  await installLegacyFixtures(owner); legacyFixtureDatabases.add(owner);
+}
 import { createScimHarness, fixture as ssoFixture } from "./scim-fixtures.js";
 let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(); }, 300_000);
@@ -63,26 +69,30 @@ it("stamps A despite a claim naming B; verifier agrees", async () => {
   const p = await principal(), peer = await jobDoorsActor(db.owner,p.tenant);
   await transaction(db.runtime,p.tenant,async c => { await bind(c,p); await append(c,[input({actorRef:`membership:${peer.member}`})]); });
   const events = await chain(p.tenant); verifyAuditChain(events); expect(events).toHaveLength(1);
-  expect(events[0]!.actorRef).toBe(`membership:${p.member}`); expect(auditActorAttribution(events[0]!)).toBe("bound_member");
+  expect(events[0]!.payload.references?.auditActorRef).toBe(`membership:${p.member}`); expect(auditActorAttribution(events[0]!)).toBe("bound_member");
 });
-it("refuses unbound runtime despite caller-selected GUCs", async () => {
+it("keeps existing unbound statements lower-trust system work despite caller actor claims", async () => {
   const p = await principal();
-  await expect(transaction(db.runtime,p.tenant,c => append(c,[input()]))).rejects.toMatchObject({ code: "42501" });
+  await transaction(db.runtime,p.tenant,c => append(c,[input()]));
+  const events = await chain(p.tenant); verifyAuditChain(events);
+  expect(events).toHaveLength(1);
+  expect(events[0]!.payload.references).toMatchObject({auditTrust:"lower_trust",auditActorKind:"system",auditActorRef:"system:database:lp2_login"});
 });
-it("does not treat a NOINHERIT runtime member as an owner-side system writer", async () => {
+it("never attributes an unbound NOINHERIT runtime statement to a human", async () => {
   const p = await principal(), password = randomBytes(32).toString("hex");
   await db.owner.query(`CREATE ROLE lp6e_noinherit LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '${password}'`);
   await db.owner.query("GRANT jobguard_runtime TO lp6e_noinherit");
   const runtime = new Pool({ ...db.runtime.options, user: "lp6e_noinherit", password, max: 1 });
   try {
-    await expect(transaction(runtime,p.tenant,async c => {
+    await transaction(runtime,p.tenant,async c => {
       await c.query("SET LOCAL ROLE jobguard_runtime");
       await append(c,[input()]);
-    })).rejects.toMatchObject({code:"42501"});
-    expect(await chain(p.tenant)).toEqual([]);
+    });
+    const events = await chain(p.tenant); verifyAuditChain(events);
+    expect(events[0]!.payload.references).toMatchObject({auditActorKind:"system",auditActorRef:"system:database:lp6e_noinherit"});
   } finally { await runtime.end(); }
 });
-it.each(["actor", "tenant", "type", "actorRef", "auditActorKind"])("refuses collision %s across payload sections", async key => {
+it.each(["actor", "tenant", "type", "actorRef", "auditActorKind", "auditActorRef"])("refuses collision %s across payload sections", async key => {
   const p = await principal();
   for (const section of ["references", "hashes", "classifications"]) {
     await expect(transaction(db.runtime,p.tenant,async c => { await bind(c,p); await append(c,[input({ payload: { [section]: { [key]: "forged" } } })]); }))
@@ -114,7 +124,7 @@ it("owner-side checked writers record system work rather than a supplied person"
     await c.query("SELECT app.append_final_lock_audit($1,$2,$3,'final_account.locked',$4)",[randomUUID(),p.member,randomUUID(),JSON.stringify({revisionId:randomUUID()})]);
   });
   const events = await chain(p.tenant); expect(events).toHaveLength(2); verifyAuditChain(events);
-  for (const event of events) { expect(auditActorAttribution(event)).toBe("system"); expect(event.actorRef).toBe("system:database:postgres"); }
+  for (const event of events) { expect(auditActorAttribution(event)).toBe("system"); expect(event.payload.references?.auditActorRef).toBe("system:database:postgres"); }
 });
 it("rejects a GUC tenant substituted after binding", async () => {
   const p = await principal(), other = await jobDoorsActor(db.owner);
@@ -137,7 +147,7 @@ it("serializes concurrent bound appends with contiguous authenticated attributio
   })));
   const events = await chain(p.tenant);
   expect(events.map(event => event.sequence)).toEqual([1,2,3,4,5,6,7,8]);
-  expect(events.every(event => event.actorRef === `membership:${p.member}` && event.version === "audit.v3")).toBe(true);
+  expect(events.every(event => event.payload.references?.auditActorRef === `membership:${p.member}` && event.version === "audit.v3")).toBe(true);
   verifyAuditChain(events);
 });
 it("binding expiry cannot fall back to a system identity during append", async () => {
@@ -174,8 +184,10 @@ it("cannot reuse an authenticated append's binding in the next pooled transactio
   const p = await principal(), pool = db.freshRuntime();
   try {
     await transaction(pool,p.tenant,async c => { await bind(c,p); await append(c,[input()]); });
-    await expect(transaction(pool,p.tenant,c => append(c,[input()]))).rejects.toMatchObject({ code: "42501" });
-    const events = await chain(p.tenant); expect(events).toHaveLength(1); verifyAuditChain(events);
+    await transaction(pool,p.tenant,c => append(c,[input()]));
+    const events = await chain(p.tenant); expect(events).toHaveLength(2); verifyAuditChain(events);
+    expect(events[0]!.payload.references?.auditActorKind).toBe("bound_member");
+    expect(events[1]!.payload.references).toMatchObject({auditActorKind:"system",auditActorRef:"system:database:lp2_login"});
   } finally { await pool.end(); }
 });
 it("uses a protected binding even for an owner-side checked writer", async () => {
@@ -187,7 +199,7 @@ it("uses a protected binding even for an owner-side checked writer", async () =>
   });
   const events = await chain(p.tenant); verifyAuditChain(events);
   expect(events).toHaveLength(1);
-  expect(events[0]!.actorRef).toBe(`membership:${p.member}`);
+  expect(events[0]!.payload.references?.auditActorRef).toBe(`membership:${p.member}`);
   expect(auditActorAttribution(events[0]!)).toBe("bound_member");
 });
 it("refuses a binding that expires while waiting for the audit head", async () => {
@@ -223,14 +235,14 @@ it("refuses a binding that expires while waiting for the audit head", async () =
 });
 
 
-it("keeps product invoice, payment and proof writes compatible after 0755", async () => {
+it("keeps product invoice, payment and proof writes compatible after 0758", async () => {
   const practice = await jobDoorsDatabase(true);
   try {
-    expect((await practice.owner.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0756_lp6e_audit_attribution.sql'")).rowCount).toBe(1);
+    expect((await practice.owner.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0758_lp6e_audit_attribution.sql'")).rowCount).toBe(1);
     await installLegacySyntheticPartyFixtures(practice.owner);
     const a = await seedAccount(practice.owner), context = a.context;
     await transaction(practice.owner,a.tenantId,async c => {
-      await c.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture')",[a.tenantId,a.jobId]);
+      await c.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture') ON CONFLICT(tenant_id,job_id) DO NOTHING",[a.tenantId,a.jobId]);
       await c.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')",[a.tenantId,a.jobId,a.scopeItemId]);
     });
     const storage = new MemoryStorage(), bytes = pngBytes(6), evidence = new EvidenceService(practice.runtime,storage);
@@ -276,7 +288,7 @@ it.each(["PROOF.COMPLETED", "proof.completed.forged", "customer_payment.recorded
   expect(await chain(p.tenant)).toEqual([]);
 });
 
-it("records attachment approval through the product repository after 0755", async () => {
+it("records attachment approval through the product repository after 0758", async () => {
   await installLegacySyntheticPartyFixtures(db.owner);
   const fixture = await seedEvidencePackFixture(db.owner);
   const context = await testBoundTenantContext(db.owner,fixture.tenantId,fixture.memberId);
@@ -295,9 +307,14 @@ it("records attachment approval through the product repository after 0755", asyn
 });
 
 
-it.each(["approval", "outbox success"])("commits recovery message %s through the product path after 0755", async stage => {
+it.each(["approval", "outbox success"])("commits recovery message %s through the product path after 0758", async stage => {
   await installLegacySyntheticPartyFixtures(db.owner);
   const fixture = await seedEvidencePackFixture(db.owner);
+  // The fixture's merchant case has a claim; add the normal opening event (as lp6d-worker-presence does).
+  await transaction(db.owner,fixture.tenantId,c => c.query(`INSERT INTO app.recovery_case_event
+    (id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash)
+    VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)`,
+    [randomUUID(),fixture.tenantId,fixture.jobId,fixture.caseId,randomUUID(),createHash("sha256").update(fixture.caseId).digest("hex")]));
   const context = await testBoundTenantContext(db.owner,fixture.tenantId,fixture.memberId);
   const actor = { membershipId:fixture.memberId, actorRef:`membership:${fixture.memberId}` };
   const packs = new EvidencePackRepository(db.runtime), messages = new RecoveryMessageRepository(db.runtime);
@@ -352,7 +369,8 @@ it.each(["approval", "outbox success"])("commits recovery message %s through the
           // Owner fixture mutation avoids waiting and expires the actual protected row.
           await c.query("UPDATE control_plane.request_binding SET expires_at=clock_timestamp()-interval '1 second' WHERE transaction_id=$1::xid8",[xid]);
         } else if (state === "revoked") {
-          await db.owner.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[request.credential]);
+          // Same transaction: bind_request holds FOR SHARE on this session row.
+          await c.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[request.credential]);
         } else if (state === "delegated") {
           await c.query("UPDATE control_plane.request_binding SET credential_kind='customer_portal_delegated',scope_job_id=$2,scope_command_type='ClientDecideExtra' WHERE transaction_id=$1::xid8",[xid,fixture.jobId]);
         } else if (state === "wrong-tenant") {
@@ -371,8 +389,10 @@ it.each(["approval", "outbox success"])("commits recovery message %s through the
     const matching = events.filter(event => event.eventType === eventType);
     expect(matching).toHaveLength(1);
     expect(matching[0]).toMatchObject({version:"audit.v3",
-      actorRef:eventType === "outbox.succeeded" ? "system:database:lp2_login" : actor.actorRef,
-      payload:{references:{auditTrust:"lower_trust",auditActorKind:eventType === "outbox.succeeded" ? "system" : "bound_member"}}});
+      // actor_ref keeps the domain writer claim; the sealed auditActorRef names the authenticated session.
+      actorRef:eventType === "outbox.succeeded" ? "system:outbox" : eventType === "recovery.message.succeeded" ? "system:recovery-message-executor" : actor.actorRef,
+      payload:{references:{auditTrust:"lower_trust",auditActorKind:eventType === "outbox.succeeded" ? "system" : "bound_member",
+        ...(eventType === "outbox.succeeded" ? {} : {auditActorRef:actor.actorRef})}}});
   }
 });
 
@@ -382,7 +402,7 @@ it("records practice quote acceptance and cancellation through the product comma
   process.env.JOBGUARD_ENV = "synthetic_demo";
   try {
     await installLegacySyntheticPartyFixtures(practice.owner);
-    const person = randomUUID(), account = randomUUID(), credential = randomBytes(32).toString("hex");
+    const person = DEMO_IDENTITY_USER_ID, account = randomUUID(), credential = randomBytes(32).toString("hex");
     await practice.owner.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
     await practice.owner.query("INSERT INTO identity.identity_user(id) VALUES($1)", [person]);
     await practice.owner.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional practice builder')", [account,DEMO_TENANT_ID]);
@@ -431,7 +451,7 @@ it("completes enterprise SSO sign-in with lower-trust identity-bridge audits", a
       expect(matches).toHaveLength(1);
       expect(matches[0]!.payload.references).toMatchObject({auditTrust:"lower_trust",auditActorKind:"system"});
       // Bootstrap identity credentials do not authenticate the caller-supplied member actor.
-      expect(matches[0]!.actorRef).toBe("system:database:scim_fixture_identity");
+      expect(matches[0]!.payload.references?.auditActorRef).toBe("system:database:scim_fixture_identity");
     }
   } finally { await sso.close(); }
 },300_000);

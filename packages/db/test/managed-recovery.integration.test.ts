@@ -37,7 +37,7 @@ it("persists the exact election; concurrent replays produce one authorization an
  expect(preview.serviceChargeInvoice?.electionHash).toBe(results[0]!.election!.bindingHash);
  const audit=(await c.admin.query("SELECT version,actor_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='managed_recovery.elected'",[f.tenant,id])).rows;
  await assertV3AuditChain(c.admin, f.tenant);
- expect(audit).toEqual([{version:'audit.v3',actor_ref:`membership:${f.actor.membershipId}`,payload:{references:{jobId:f.job,commandId:input.commandId,auditTrust:'checked_operation',auditActorKind:'bound_member'},
+ expect(audit).toEqual([{version:'audit.v3',actor_ref:`membership:${f.actor.membershipId}`,payload:{references:{jobId:f.job,commandId:input.commandId,auditTrust:'checked_operation',auditActorKind:'bound_member',auditActorRef:`membership:${f.actor.membershipId}`},
   hashes:{election:results[0]!.election!.bindingHash},classifications:{action:'commercial'}}}]);
 });
 it("no election means no service-charge document, and the success fee stays identical", async () => {

@@ -33,12 +33,15 @@ export async function assertLp4SealedEvents(owner: Pool, tenant: string, eventTy
   expect(matching.length).toBeGreaterThan(0);
   // Historical LP-4 upgrade scenarios stop before LP-6e; full-schema product
   // scenarios install 0755. Establish that boundary before asserting one format.
-  const v3Installed = (await owner.query("SELECT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0756_lp6e_audit_attribution.sql') installed")).rows[0].installed;
+  const installedAt = (await owner.query("SELECT applied_at FROM public.jobguard_schema_migration WHERE migration_name='0758_lp6e_audit_attribution.sql'")).rows[0]?.applied_at as Date | undefined;
+  const v3Installed = installedAt !== undefined;
   for (const event of matching) {
-    expect(event.version).toBe(v3Installed ? "audit.v3" : "audit.v2");
+    // Events sealed before an upgrade applied 0758 keep their recorded v2 format; later ones are v3.
+    expect(event.version).toBe(installedAt !== undefined && new Date(event.occurredAt) >= installedAt ? "audit.v3" : "audit.v2");
     expect(auditEventTrust(event)).toBe("checked_operation");
   }
-  if (v3Installed) await assertV3AuditChain(owner, tenant);
+  // The v3 envelope applies when every event in the chain was sealed after 0758 was applied.
+  if (v3Installed && events.every(event => new Date(event.occurredAt) >= installedAt!)) await assertV3AuditChain(owner, tenant);
   verifyAuditChain(events);
 }
 
@@ -54,10 +57,11 @@ export async function assertV3AuditChain(owner: Pool, tenant: string) {
   for (const [index, event] of events.entries()) {
     expect(event).toEqual({
       id: uuid, version: "audit.v3", tenantId: tenant, sequence: index + 1,
-      actorRef: expect.stringMatching(/^(membership:[a-f0-9-]{36}|system:database:[A-Za-z0-9_]+)$/u),
+      actorRef: expect.any(String),
       eventType: expect.any(String), subjectType: expect.any(String), subjectRef: expect.any(String),
       occurredAt: expect.any(Date), payload: expect.objectContaining({ references: expect.objectContaining({
-        auditActorKind: event.actorRef.startsWith("membership:") ? "bound_member" : "system",
+        auditActorKind: event.payload.references?.auditActorRef?.startsWith("membership:") ? "bound_member" : "system",
+        auditActorRef: expect.stringMatching(/^(membership:[a-f0-9-]{36}|system:database:[A-Za-z0-9_]+)$/u),
         auditTrust: expect.stringMatching(/^(checked_operation|lower_trust)$/u),
       }) }),
       payloadHash: hash, previousHash: index === 0 ? null : events[index - 1]!.eventHash, eventHash: hash,

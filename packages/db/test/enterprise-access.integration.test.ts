@@ -127,9 +127,11 @@ describe('ENT-10-rest SCIM machine provisioning',()=>{
   await assertV3AuditChain(h.admin, m.f.principal.tenantId);
   for(const event of machineEvents) {
    expect(event.version).toBe('audit.v3');
-   expect(event.actor_ref).toBe('system:database:ent10_rest_machine');
+   // LP-6e 0758: actor_ref keeps the machine's domain claim; the sealed attribution is the database login.
+   expect(event.actor_ref).toBe(`machine:scim:${m.bindingId}`);
    expect(event.subject_ref).toBe(m.bindingId);
    expect(event.payload.references.auditActorKind).toBe('system');
+   expect(event.payload.references.auditActorRef).toBe('system:database:ent10_rest_machine');
    expect(event.payload.references.auditTrust).toBe('checked_operation');
   }
  });

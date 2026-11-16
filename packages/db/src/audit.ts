@@ -41,8 +41,10 @@ export function auditActorAttribution(event: Pick<AuditEvent, "version" | "actor
   if (event.version !== "audit.v3") return "legacy_claim";
   const refs = event.payload.references;
   const kind = refs && "auditActorKind" in refs ? refs.auditActorKind : undefined;
-  if (kind === "bound_member" && /^membership:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(event.actorRef)) return kind;
-  if (kind === "system" && /^system:database:[A-Za-z0-9_]+$/u.test(event.actorRef)) return kind;
+  const actorRef = refs && "auditActorRef" in refs ? refs.auditActorRef : undefined;
+  if (typeof actorRef !== "string") throw new AuditVerificationError("Invalid audit actor attribution");
+  if (kind === "bound_member" && /^membership:[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(actorRef)) return kind;
+  if (kind === "system" && /^system:database:[A-Za-z0-9_]+$/u.test(actorRef)) return kind;
   throw new AuditVerificationError("Invalid audit actor attribution");
 }
 export type AuditEventInput = z.infer<typeof auditEventInputV1Schema>;
@@ -130,7 +132,7 @@ export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: Aud
         const reserved = ["actor", "tenant", "type", "tenantId", "id", "version", "actorRef",
           "eventType", "subjectType", "subjectRef", "sequence", "occurredAt", "previousHash", "eventHash"];
         if (section && (reserved.some(key => key in section) ||
-            (section !== event.payload.references && ["auditTrust", "auditActorKind"].some(key => key in section)))) {
+            (section !== event.payload.references && ["auditTrust", "auditActorKind", "auditActorRef"].some(key => key in section)))) {
           throw new AuditVerificationError("Reserved audit payload field");
         }
       }
