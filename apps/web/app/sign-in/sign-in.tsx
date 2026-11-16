@@ -36,7 +36,17 @@ export function IdentitySignIn() {
       if(!response.ok)throw new Error(body.code??"IDENTITY_UNAVAILABLE");
       if(verify){const current=await fetch("/api/auth/session",{cache:"no-store"});if(!current.ok)throw new Error("IDENTITY_UNAVAILABLE");const next=await current.json() as Session;setSession(next);setCode("");setFixtureCode("");setRequested(false);if(purpose==="invitation"){setAccepted(!session?"new":session.principal.id===next.principal.id?"added":"switched");history.replaceState(null,"","/sign-in");}}
       else {setRequested(true);setFixtureCode(body.fixtureCode??"");}
-    }catch(e){const reason=(e as Error).message;setError(reason==="INVALID_CODE"?"That code is invalid or expired. Request another code.":reason==="RATE_LIMITED"?"Please wait before requesting another code.":reason==="IDENTITY_ROUTE_BLOCKED"?"Use a supplied fictional .invalid address. Real identity email is blocked pending D04.":"Identity storage is unavailable. Your sign-in has not completed.");}
+    }catch(e){
+      const reason=(e as Error).message;
+      const messages:Record<string,string>={
+        INVALID_CODE:"That code is invalid or expired. Request another code.",
+        RATE_LIMITED:"Please wait before requesting another code.",
+        IDENTITY_ROUTE_BLOCKED:"Use a supplied fictional .invalid address. Real identity email is blocked pending D04.",
+        INVALID_AUTH_INPUT:"Check the email address and invitation reference, then submit again.",
+        ORIGIN_FORBIDDEN:"Your sign-in has not completed. Reload this page or close it and open JobGuard again.",
+      };
+      setError(Object.hasOwn(messages,reason)?messages[reason]!:"Identity storage is unavailable. Your sign-in has not completed.");
+    }
     finally{setBusy(false);}
   }
   async function signout() {
