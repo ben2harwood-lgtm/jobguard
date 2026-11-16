@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-163": {
+      "branches": ["codex/sandbox/later-safety-163"],
+      "allow": [
+        "apps/web/app/api/session/route.ts",
+        "apps/web/app/api/session/route.test.ts",
+        "apps/web/app/api/decisions/route.ts",
+        "apps/web/app/api/decisions/route.test.ts"
+      ]
+    }
+  }
+}
