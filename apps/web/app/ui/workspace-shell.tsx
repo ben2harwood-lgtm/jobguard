@@ -62,7 +62,7 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
   finally{if(current===generation.current)setLoading(false);}
  },[jobId]);
  useEffect(()=>{void load();return()=>{generation.current++;activeRequest.current?.abort();}},[load]);
- useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load(true);};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
+ useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load();};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
  useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
  // Explicit in-workspace controls retain mounted editors and unsaved drafts.
  // Ordinary URL/hash navigation still reloads saved reads, as on main.
@@ -87,7 +87,7 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
     const open=Array.from(root.querySelectorAll<HTMLButtonElement>(".confirmed-scope button")).find(button=>button.textContent==="Price the work");open?.click();
     if(open)return false;
    }
-   const target=source?document.getElementById(source):root.querySelector<HTMLElement>(selector);if(!target||!root.contains(target))return false;const focusRegion=target.matches?.("h1,h2,h3")?(target.closest?.("section")??target):target;if(target!==document.activeElement&&focusRegion.contains?.(document.activeElement)&&document.activeElement!==document.body){observer?.disconnect();return true;}for(let parent=target.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;target.style&&(target.style.scrollMarginTop="96px");target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:"start"});observer?.disconnect();return true;};
+   const target=source?document.getElementById(source):root.querySelector<HTMLElement>(selector);if(!target||!root.contains(target))return false;const focusRegion=target.matches?.("h1,h2,h3")?(target.closest?.("section")??target):target;if(target!==document.activeElement&&focusRegion.contains?.(document.activeElement)&&document.activeElement!==document.body){(document.activeElement as HTMLElement).scrollIntoView?.({block:"center"});observer?.disconnect();return true;}for(let parent=target.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;target.style&&(target.style.scrollMarginTop="96px");target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:"start"});observer?.disconnect();return true;};
   if(focus())return;
   observer=new MutationObserver(()=>{focus();});observer.observe(root,{childList:true,subtree:true});
   const timeout=window.setTimeout(()=>observer?.disconnect(),15000);

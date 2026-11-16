@@ -178,7 +178,7 @@ it("does not put live job controls inside the quote fieldset or sidebar", () => 
  expect(activationFound).toBe(true);
 });
 
-it("revalidates fragment navigation without clearing the mounted workspace", () => {
+it("reloads saved projections on real hash navigation", () => {
  workspace("quoting");
  const listeners = new Map<string, () => void>();
  vi.stubGlobal("fetch", vi.fn(async()=>({ok:false,status:403})));
@@ -187,9 +187,9 @@ it("revalidates fragment navigation without clearing the mounted workspace", () 
  const cleanup=state.effects[1]!() as ()=>void;
  listeners.get("hashchange")!();
  expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/proposal`, expect.objectContaining({cache:"no-store"}));
- expect(state.setters[3]).not.toHaveBeenCalledWith(true);
- expect(state.setters[0]).not.toHaveBeenCalled();
- expect(state.setters[1]).not.toHaveBeenCalled();
+ expect(state.setters[3]).toHaveBeenCalledWith(true);
+ expect(state.setters[0]).toHaveBeenCalledWith(null);
+ expect(state.setters[1]).toHaveBeenCalledWith(null);
  cleanup();
 });
 it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"])("keeps the same job editor identity for %s navigation", fragment => {
@@ -273,7 +273,7 @@ it("a committed snapshot supersedes a pending section refresh even if fetch igno
  expect((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].signal!.aborted).toBe(true);
  complete({ ok: true, json: async () => editor.props.result });
  await new Promise<void>(resolve => setImmediate(resolve));
- expect(state.setters[1]!.mock.calls).toEqual([[committed]]);
+ expect(state.setters[1]!.mock.calls).toEqual([[null], [committed]]);
  cleanup();
 });
 it("a denied section refresh fails closed without disguising it as an absent capture", async () => {
@@ -348,4 +348,15 @@ it("does not steal recovery action focus when its capture revalidates", () => {
  vi.stubGlobal("document",{getElementById:()=>root});
  workspace("live","#recovery-cases");state.effects[3]!();
  expect(root.querySelector).not.toHaveBeenCalled();
+});
+
+it("scrolls the focused Start control into view rather than focusing the quote anchor", () => {
+ const action={scrollIntoView:vi.fn()};
+ const target={contains:(node:unknown)=>node===action,focus:vi.fn(),scrollIntoView:vi.fn()};
+ const root={contains:()=>true,querySelector:()=>target};
+ vi.stubGlobal("document",{activeElement:action,body:{},getElementById:()=>root});
+ workspace("accepted","#quote");state.effects[3]!();
+ expect(action.scrollIntoView).toHaveBeenCalledWith({block:"center"});
+ expect(target.focus).not.toHaveBeenCalled();
+ expect(target.scrollIntoView).not.toHaveBeenCalled();
 });

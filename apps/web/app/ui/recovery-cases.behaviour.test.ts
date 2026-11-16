@@ -1070,13 +1070,12 @@ it("refreshes recovery entry without disabling loaded actions or reloading the r
  const w=start();await w.settle();reads()[0]!.json(answerBody([]));await w.settle();
  const gate=holdLookups();const before=lookupRequests.length;
  events.dispatchEvent(new Event("hashchange"));await w.settle();
- expect(reads()).toHaveLength(2);
+ expect(reads()).toHaveLength(1);
  expect(lookupRequests).toHaveLength(before+1);
  for(const name of OPEN_BUTTONS)expect(w.screen().button(name).props.disabled).toBe(false);
- reads()[1]!.json(answerBody([]));await w.settle();
  gate.release();await w.settle();
- expect(reads()).toHaveLength(2);
+ expect(reads()).toHaveLength(1);
  for(const name of OPEN_BUTTONS)expect(w.screen().button(name).props.disabled).toBe(false);
  w.unmount();events.dispatchEvent(new Event("hashchange"));await w.settle();
- expect(reads()).toHaveLength(2);
+ expect(reads()).toHaveLength(1);
 });
