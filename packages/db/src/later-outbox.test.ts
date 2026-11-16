@@ -1,5 +1,5 @@
 import type { AuditEvent } from "./audit.js";
-import { fakeAuditAppend } from "./audit-protocol-test-fixture.js";
+import { fakeAuditAppend, fakeOutboxAuditProbe } from "./audit-protocol-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
@@ -7,7 +7,7 @@ import { ActionExecutor, operateOutbox, reconcileOutbox, type FakeDeliveryResult
 import { verifiedTenantContextForQueuedJob } from "./tenant-context.js";
 
 // Transaction protocol double; PostgreSQL predicates and concurrency are covered separately.
-function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succeeded", providerReference: "synthetic" }) {
+function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succeeded", providerReference: "synthetic" }, installed = false) {
   const tenant = randomUUID(), id = randomUUID();
   const context = verifiedTenantContextForQueuedJob(tenant);
   const row = { id, status, adapter: "fake_capture", authorization_id: randomUUID(),
@@ -31,9 +31,17 @@ function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succe
     if (sql.startsWith("SELECT count(*)")) return { rows: [{ n: 0 }], rowCount: 1 };
     if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [], rowCount: 1 };
     if (sql.startsWith("SELECT nullif")) return { rows: [{ tenant_id: tenant }], rowCount: 1 };
-    if (sql.includes("FROM app.append_audit(")) {
+    const probe = fakeOutboxAuditProbe(sql, installed);
+    if (probe) return probe;
+    const bridge = sql === "SELECT * FROM app.lp6e_append_outbox_audit($1::jsonb)";
+    if ((installed && bridge) || (!installed && sql.includes("FROM app.append_audit("))) {
       if (failAudit) throw new Error("synthetic audit failure");
-      const events = fakeAuditAppend(String(values[0]), tenant);
+      const events = fakeAuditAppend(bridge ? JSON.stringify([JSON.parse(String(values[0]))]) : String(values[0]), tenant);
+      if (bridge) for (const event of events) {
+        event.version = "audit.v3";
+        event.actorRef = "system:database:fixture_worker";
+        event.payload.references = { ...event.payload.references, auditActorKind: "system" };
+      }
       audit.push(...events);
       return { rows: events, rowCount: events.length };
     }
@@ -76,6 +84,14 @@ describe("LATER-B9 synthetic outcome protocol", () => {
     expect(f.row.status).toBe(result.kind); expect(f.audit()).toHaveLength(1);
     expect(f.audit()[0]!.eventType).toBe(`outbox.${result.kind}`);
   });
+  it("uses the installed worker bridge without the legacy generic append", async () => {
+    const f = fixture("pending", undefined, true); await f.execute();
+    expect(f.audit()).toHaveLength(1);
+    expect(f.audit()[0]).toMatchObject({ version: "audit.v3", actorRef: "system:database:fixture_worker",
+      eventType: "outbox.succeeded", payload: { references: { auditTrust: "lower_trust", auditActorKind: "system" } } });
+    expect(f.query).toHaveBeenCalledWith("SELECT * FROM app.lp6e_append_outbox_audit($1::jsonb)", [expect.any(String)]);
+    expect(f.query.mock.calls.some(([sql]) => sql.includes("FROM app.append_audit("))).toBe(false);
+  });
   it("L020 expired authorization refusal has one audit event", async () => {
     const f = fixture(); f.row.authorization_expires_at = new Date(0); await f.execute();
     expect(f.row.status).toBe("cancelled"); expect(f.audit()).toHaveLength(1); expect(f.adapter.deliver).not.toHaveBeenCalled();
@@ -83,8 +99,8 @@ describe("LATER-B9 synthetic outcome protocol", () => {
   it("L020 stale claim becomes unknown with one audit event", async () => {
     const f = fixture("executing"); await f.execute(); expect(f.row.status).toBe("outcome_unknown"); expect(f.audit()).toHaveLength(1);
   });
-  it("L020 audit failure rolls back outcome", async () => {
-    const f = fixture(); f.failAudit(); await expect(f.execute()).rejects.toThrow("synthetic audit failure");
+  it.each([false, true])("L020 audit failure rolls back outcome (bridge installed=%s)", async installed => {
+    const f = fixture("pending", undefined, installed); f.failAudit(); await expect(f.execute()).rejects.toThrow("synthetic audit failure");
     expect(f.row.status).toBe("executing"); expect(f.audit()).toHaveLength(0);
   });
   it.each(["retry", "cancel"] as const)("L020 operator %s commits one audit event", async command => {

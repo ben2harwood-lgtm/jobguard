@@ -1,3 +1,4 @@
+import { assertV3AuditChain } from "./lp4-writer-catchup-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -302,10 +303,11 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
       action: { ...f.approved.action, contentHash: preview.contentHash } })).rejects.toThrow("AUTHORIZATION_INVALID");
     expect(await effects(f.auth.context.tenantId)).toEqual(before);
     const valid = await f.repo.approve(f.auth.context, f.scope, f.approved);
+    await assertV3AuditChain(admin, f.auth.context.tenantId);
     expect(valid).toMatchObject({ environment: "synthetic_demo", realExternalActions: 0 });
-    expect((await admin.query(`SELECT version,payload->'references'->>'auditTrust' trust FROM app.audit_event
+    expect((await admin.query(`SELECT version,actor_ref,payload->'references'->>'auditActorKind' actor_kind,payload->'references'->>'auditTrust' trust FROM app.audit_event
       WHERE tenant_id=$1 AND event_type='command.succeeded' AND payload->'references'->>'commandId'=$2`,
-      [f.auth.context.tenantId, f.approved.commandId])).rows).toEqual([{ version: "audit.v2", trust: "checked_operation" }]);
+      [f.auth.context.tenantId, f.approved.commandId])).rows).toEqual([{ version: "audit.v3", actor_ref: `membership:${f.approved.actorMembershipId}`, actor_kind: "bound_member", trust: "checked_operation" }]);
   });
   it("changed quantity cancels the queued old authority before any fake delivery", async () => {
     const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);

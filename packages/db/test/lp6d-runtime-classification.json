@@ -1,4 +1,6 @@
 {
+  "app.lp6e_request_binding_present()": "Reviewed LP-6e zero-argument binding-owner boolean presence probe; ignores expiry, returns no identity or credential; sole SQL caller lp6e_append_outbox_audit; migration EXECUTE only (plus binding owner); runtime direct calls denied",
+  "app.lp6e_append_outbox_audit(jsonb)": "Reviewed LP-6e migration-owned lower-trust queued outbox audit port; refuses bound or binding-present requests; existing queue-tenant-trust hold until LP-10",
   "app.accept_final_check_terms(uuid,uuid,uuid,text)": "LP-6d",
   "app.accept_rate_suggestion(uuid,text,jsonb)": "Reviewed 0609_rate_suggestion_acceptance.sql: calls app.ch5_import_actor",
   "app.accounting_export(uuid,text,text,text,jsonb)": "LP-6d",

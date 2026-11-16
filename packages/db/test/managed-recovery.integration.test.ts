@@ -1,3 +1,4 @@
+import { assertV3AuditChain } from "./lp4-writer-catchup-fixture.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 // Real PostgreSQL regressions, executed in CI; builder sandbox cannot bind localhost.
 import { createHash, randomUUID } from "node:crypto";
@@ -34,8 +35,9 @@ it("persists the exact election; concurrent replays produce one authorization an
  const preview=await repo().preview(f.context,f.job,id,f.actor);
  expect(preview.serviceChargeInvoice?.points).toBe(5);
  expect(preview.serviceChargeInvoice?.electionHash).toBe(results[0]!.election!.bindingHash);
- const audit=(await c.admin.query("SELECT version,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='managed_recovery.elected'",[f.tenant,id])).rows;
- expect(audit).toEqual([{version:'audit.v2',payload:{references:{jobId:f.job,commandId:input.commandId,auditTrust:'checked_operation'},
+ const audit=(await c.admin.query("SELECT version,actor_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='managed_recovery.elected'",[f.tenant,id])).rows;
+ await assertV3AuditChain(c.admin, f.tenant);
+ expect(audit).toEqual([{version:'audit.v3',actor_ref:`membership:${f.actor.membershipId}`,payload:{references:{jobId:f.job,commandId:input.commandId,auditTrust:'checked_operation',auditActorKind:'bound_member'},
   hashes:{election:results[0]!.election!.bindingHash},classifications:{action:'commercial'}}}]);
 });
 it("no election means no service-charge document, and the success fee stays identical", async () => {

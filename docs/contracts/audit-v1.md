@@ -88,3 +88,79 @@ references. `append_final_check_audit` strips null references, including the
 unassigned allocation/revision IDs on stored-receipt and receipt-facts reviews.
 The existing stored-event reader remains compatible with the prior candidate's
 structured exclusion receipt; no writer can emit that shape through the sealer.
+
+LP-6e current-main integration candidate (0755, RED)
+--------------------------------------------------
+
+New seals use `audit.v3`. Its canonical envelope is v2's with the new version;
+its hash binds the event ID, tenant, sequence, actor, type, subject, wall-clock
+server time, canonical payload hash and previous hash. Historical v1/v2 bytes,
+including the special stored `final_check.sources_excluded` receipt, and historical
+checkpoints remain unchanged. Historical actors remain unverified claims.
+
+The private sealer reads actor and tenant from the protected binding and replaces
+caller actor text with `membership:<bound UUID>` and hashed
+`references.auditActorKind=bound_member`. It compares the bound tenant with the
+transaction context and rechecks binding expiry after the final audit-head lock.
+Unbound runtime logins, including NOINHERIT members, cannot use generic append.
+Owner-side work without a binding receives `system:database:<session_user>` and
+`auditActorKind=system`; this identifies an execution principal, not a human.
+Reserved envelope/trust/actor keys are refused in every payload section. Nested
+`payload` and `payloadHash` keys remain ordinary data, covered by the sealed hash.
+
+The verifier and export distinguish chain integrity, event trust and actor
+attribution. A bound member identifies who made a statement; it does not prove
+that statement true. The private checked-operation primitive remains unavailable
+to runtime. Completion retains the full 0521 result, actor, subject, command,
+checked-trust and required outbox checks, accepting v3 alongside historical v2.
+Neither replacement is defined by 0749; its remaining routines, binding prefixes
+and LP-10 recovery sink are unchanged.
+
+Exact legacy names remain lower-trust in both SQL and verification:
+`command.succeeded`, `contractor.extra.client_link_issued`,
+`contractor.extra.step_approved`, `contractor.prompt.command`,
+`contractor.visit.completed`, `customer_credit_note.synthetic_approved`,
+`customer_invoice.synthetic_issued`, `customer_payment.recorded`,
+`customer_payment.synthetic_recorded`, `customer_payment.synthetic_reversed`,
+`evidence_pack.attachment_approved`, `outbox.authorization_revoked`,
+`outbox.succeeded`, `proof.completed`, `quote.acceptance.attested`,
+`quote.acceptance_cancelled`, `recovery.eligibility.approve`,
+`recovery.follow_up.reminder_approved`, `recovery.message.approved`,
+`recovery.message.succeeded`, `recovery.payment_payer.mark_withdrawn`,
+`recovery.payment_payer.marked`, `recovery.terms.approved`,
+`sso.oidc.request.issued`, `sso.oidc.signin.completed`, `sso.request.issued`,
+`sso.signin.completed`, `synthetic_obligation.simulated_settlement`,
+`variation.approved`, `worm.authorized`.
+Case variants and suffixes do not inherit these exceptions. Other authority names
+are refused through generic append. LP-6e-LEGACY-WRITERS must convert these writers
+to checked domain operations with positive and forgery-refusal journeys before the
+aggregate no-false-approval/payment/completion assertion can be claimed.
+
+The narrow migration-owned outbox bridge checks tenant, subject and event type
+against a stored terminal/retry state and seals only lower-trust system statements.
+Its tenant comes from that queued row, within the existing queue-tenant-trust hold
+until LP-10. It refuses both a live binding and any protected binding row in the
+same environment/transaction, including expired, revoked and delegated bindings.
+The zero-argument binding-owner probe deliberately ignores expiry and returns only
+a boolean. Its keys exactly match bind_request; it discloses no identity or credential.
+
+Under the coordinator's 16 Nov ruling, only jobguard_migration (plus the
+jobguard_binding_owner owner) has EXECUTE on the probe. PUBLIC and runtime are
+explicitly revoked. The migration role is NOLOGIN NOINHERIT; runtime cannot assume
+it. Only the migration-owned outbox bridge calls this boolean helper. bind_request
+and binding-owner posture checks are unchanged. Catalog ACL, direct runtime denial,
+bound refusal cases and unbound worker/replay coverage are authored for PostgreSQL
+CI; they have not been run locally.
+
+The migration is forward-only and atomic, inside one BEGIN/COMMIT. No old migration
+is edited. Apply only 0755, never the unmerged 0785/0980 candidates. The migration
+proof updates the two recorded definitions and sealer static calls; the completion
+body changes only its version predicate. PostgreSQL fresh/upgrade and full database
+suites, browser CI and an exact-head independent RED check remain gates.
+LP-6e-LEGACY-WRITERS and authority-consumer closure remain named follow-ups.
+No production capability or public assurance is claimed.
+
+LATER / SIMPLICITY (initial review, retained): event-name classification in 0755
+and `packages/db/src/audit.ts` is duplicated across execution boundaries. A shared
+acceptance/refusal fixture would reduce policy drift while keeping the independent
+SQL and verifier checks.
