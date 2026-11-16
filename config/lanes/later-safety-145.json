@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-145": {
+      "branches": ["codex/sandbox/later-safety-145"],
+      "note": "RED: source-bound reversal validation in the illustrative v1 fee statement. NOPR build ahead; no migration or live collection.",
+      "allow": [
+        "packages/core/src/fee-statement.ts",
+        "packages/core/src/fee-statement.test.ts"
+      ]
+    }
+  }
+}
