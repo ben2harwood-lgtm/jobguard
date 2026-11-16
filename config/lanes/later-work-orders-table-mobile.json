@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-work-orders-table-mobile": {
+      "branches": ["codex/sandbox/later-work-orders-table-mobile"],
+      "allow": [
+        "apps/web/app/ui/work-orders.module.css",
+        "apps/web/app/ui/work-order-imports.tsx",
+        "apps/web/e2e/work-orders-mobile-layout.spec.ts"
+      ]
+    }
+  }
+}

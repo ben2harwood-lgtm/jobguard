@@ -1,4 +1,4 @@
-.main {max-width:960px;margin:24px auto;padding:16px;overflow-wrap:anywhere}
+.main {width:100%;max-width:960px;min-width:0;margin:24px auto;padding:16px;overflow-wrap:anywhere}
 .main section {margin:24px 0;padding:16px;border:1px solid #cbd5e1;border-radius:12px}
 .main h1,.main h2,.main h3 {margin:0 0 8px}
 .main fieldset {border:1px solid #cbd5e1;border-radius:8px;margin:12px 0;padding:12px}
@@ -10,7 +10,9 @@
 .main button:focus-visible,.main a:focus-visible,.main input:focus-visible {outline:3px solid #166534;outline-offset:3px}
 .main button:disabled {opacity:.5;cursor:not-allowed}
 .primary {background:#166534 !important;color:#fff !important;border-color:#166534 !important}
-.scroll {max-width:100%;overflow-x:auto}
+/* Wide tables must not contribute their intrinsic width to the containing page. */
+.scroll {max-width:100%;overflow-x:auto;contain:inline-size}
+.scroll:focus-visible {outline:3px solid #166534;outline-offset:3px}
 .main table {border-collapse:collapse;min-width:max-content;width:100%}
 .main th,.main td {text-align:left;padding:8px;border-bottom:1px solid #e2e8f0;vertical-align:top;overflow-wrap:normal;word-break:normal;white-space:nowrap}
 .main td.wrap {white-space:normal;min-width:16em;overflow-wrap:anywhere}

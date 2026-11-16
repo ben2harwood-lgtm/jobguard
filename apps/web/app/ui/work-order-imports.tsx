@@ -73,16 +73,16 @@ export function WorkOrderImports() {
       </section>
       {results && <section aria-labelledby="results-heading"><h2 id="results-heading" tabIndex={-1} ref={resultsHeading}>{results.title}</h2>
         <p data-testid="import-counts">{results.counts.created} created · {results.counts.revised} revised · {results.counts.unchanged} unchanged · {results.counts.rejected} refused (of {results.counts.rows} rows)</p>
-        <div className={styles.scroll}><table><thead><tr><th>Row</th><th>Order</th><th>Result</th><th>Reason</th></tr></thead><tbody>
+        <div className={styles.scroll} role="region" aria-labelledby="results-heading" tabIndex={0}><table><thead><tr><th>Row</th><th>Order</th><th>Result</th><th>Reason</th></tr></thead><tbody>
           {results.rows.map(row => <tr key={row.rowNumber} data-testid={`receipt-row-${row.rowNumber}`} className={row.outcome === "rejected" ? styles.rejected : undefined}>
             <td>{row.rowNumber}</td><td>{row.workOrderId ? <Link href={`/contractor/work-orders/${row.workOrderId}`}>{row.reference ?? "Order"}</Link> : row.reference ?? "-"}</td><td>{outcomeLabel[row.outcome]}</td>
             <td className={styles.wrap}>{row.errorCode ? <><code>{row.errorCode}</code> {reasons[row.errorCode] ?? ""}</> : ""}</td></tr>)}
         </tbody></table></div></section>}
       <section aria-labelledby="orders-heading"><h2 id="orders-heading">Orders</h2>
-        {overview.orders.length === 0 ? <p>No orders yet. Import the starter orders to begin.</p> : <div className={styles.scroll}><table data-testid="orders-table"><thead><tr><th>Order</th><th>Client</th><th>Status</th><th>Revision</th><th>Priority</th><th>Issued</th><th>Net</th><th>Job</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>
+        {overview.orders.length === 0 ? <p>No orders yet. Import the starter orders to begin.</p> : <><p id="orders-scroll-hint" className={styles.muted}>Scroll horizontally to see every column and Revisions. With the table focused, use the arrow keys to scroll.</p><div className={styles.scroll} role="region" aria-labelledby="orders-heading" aria-describedby="orders-scroll-hint" tabIndex={0}><table data-testid="orders-table"><thead><tr><th>Order</th><th>Client</th><th>Status</th><th>Revision</th><th>Priority</th><th>Issued</th><th>Net</th><th>Job</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>
           {overview.orders.map(order => <tr key={order.id} data-testid={`order-${order.reference}`}><td>{order.reference}</td><td>{order.clientName}</td><td>{order.status === "cancelled" ? <span className={`${styles.badge} ${styles.cancelled}`}>Cancelled</span> : "Ordered"}</td><td>{order.revision}</td><td>{order.priority}</td><td>{order.issuedOn}</td><td>{pounds(order.netTotalPence)}</td><td>{order.jobStatus === "live" ? "Live" : order.jobStatus}</td>
             <td><Link className={styles.action} href={`/contractor/work-orders/${order.id}`} aria-label={`Revisions of ${order.reference}`}>Revisions</Link></td></tr>)}
-        </tbody></table></div>}
+        </tbody></table></div></>}
         <p className={styles.muted}>Resident contact details are held separately and are not shown on this list.</p></section>
       <section aria-labelledby="history-heading"><h2 id="history-heading">Import history</h2>
         {overview.batches.length === 0 ? <p>Nothing imported yet.</p> : <ul>{overview.batches.map(batch => <li key={batch.id} data-testid="batch">{batch.sourceName} · {batch.counts.created} created · {batch.counts.revised} revised · {batch.counts.unchanged} unchanged · {batch.counts.rejected} refused <button type="button" disabled={busy} onClick={() => void showBatch(batch.id, batch.sourceName)} aria-label={`Show rows of ${batch.sourceName}`}>Show rows</button></li>)}</ul>}
