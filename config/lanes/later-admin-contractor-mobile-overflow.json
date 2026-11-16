@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-admin-contractor-mobile-overflow": {
+      "branches": [
+        "codex/sandbox/later-admin-contractor-mobile-overflow"
+      ],
+      "note": "LATER-ADMIN-CONTRACTOR-MOBILE-OVERFLOW: test-only diagnostic (measures /admin/contractor itself at both widths); Work-account proposal (bundle 987a3ddd407555b6); NOPR.",
+      "allow": [
+        "apps/web/e2e/contractor-contract-revision-preserves-terms.spec.ts"
+      ]
+    }
+  }
+}
