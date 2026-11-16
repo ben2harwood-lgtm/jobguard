@@ -82,7 +82,7 @@ it("extends the latest predecessor sealer and rechecks expiry after the final lo
   const predecessors = readdirSync(directory).filter(name => name.endsWith(".sql") && name < "0755")
     .sort().filter(name => definition.test(readFileSync(new URL(name,directory),"utf8")));
   expect(predecessors.at(-1)).toBe("0520_lp4_database_audit.sql");
-  const sql = readFileSync(new URL("0755_lp6e_audit_attribution.sql",directory),"utf8");
+  const sql = readFileSync(new URL("0756_lp6e_audit_attribution.sql",directory),"utf8");
   expect(sql.match(/CREATE (?:OR REPLACE )?FUNCTION /gu)).toHaveLength(4);
   expect(sql).toContain("GRANT EXECUTE ON FUNCTION app.current_actor(),app.current_tenant() TO jobguard_audit_writer");
   const lock = sql.indexOf("SELECT h.sequence,h.event_hash INTO seq,prev");
@@ -98,7 +98,7 @@ it.each(["payload", "payloadHash"])("accepts nested %s while still checking the 
   expect(() => verifyAuditChain([{ ...event, payloadHash: "b".repeat(64) }])).toThrow("Invalid audit chain");
 });
 it.each(["command.succeeded", "contractor.extra.client_link_issued", "contractor.extra.step_approved", "contractor.prompt.command", "contractor.visit.completed", "customer_credit_note.synthetic_approved", "customer_invoice.synthetic_issued", "customer_payment.recorded", "customer_payment.synthetic_recorded", "customer_payment.synthetic_reversed", "evidence_pack.attachment_approved", "outbox.authorization_revoked", "outbox.succeeded", "proof.completed", "quote.acceptance.attested", "quote.acceptance_cancelled", "recovery.eligibility.approve", "recovery.follow_up.reminder_approved", "recovery.message.approved", "recovery.message.succeeded", "recovery.payment_payer.mark_withdrawn", "recovery.payment_payer.marked", "recovery.terms.approved", "sso.oidc.request.issued", "sso.oidc.signin.completed", "sso.request.issued", "sso.signin.completed", "synthetic_obligation.simulated_settlement", "variation.approved", "worm.authorized"])("keeps exact legacy %s lower trust with matching SQL policy", eventType => {
-  const sql = readFileSync(new URL("../migrations/0755_lp6e_audit_attribution.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../migrations/0756_lp6e_audit_attribution.sql", import.meta.url), "utf8");
   expect(sql).toContain(`'${eventType}'`);
   const event = sealed({ eventType });
   verifyAuditChain([event]);
@@ -109,7 +109,7 @@ it.each(["command.succeeded", "contractor.extra.client_link_issued", "contractor
 });
 
 it("uses exactly the same legacy exceptions in SQL and the verifier", () => {
-  const sql = readFileSync(new URL("../migrations/0755_lp6e_audit_attribution.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../migrations/0756_lp6e_audit_attribution.sql", import.meta.url), "utf8");
   const source = readFileSync(new URL("./audit.ts", import.meta.url), "utf8");
   const sqlNames = [...sql.match(/eventType'\) NOT IN \(([\s\S]*?)\) AND lower/u)![1]!.matchAll(/'([^']+)'/gu)].map(match => match[1]);
   const verifierNames = [...source.match(/legacyLowerTrustEventTypes = new Set\(\[([\s\S]*?)\]\)/u)![1]!.matchAll(/"([^"]+)"/gu)].map(match => match[1]);
@@ -122,7 +122,7 @@ it("accepts v3 command completion without weakening the predecessor's authority 
   const predecessors = readdirSync(directory).filter(name => name.endsWith(".sql") && name < "0755")
     .sort().filter(name => definition.test(readFileSync(new URL(name, directory), "utf8")));
   const previous = readFileSync(new URL(predecessors.at(-1)!, directory), "utf8").match(definition)![1]!;
-  const current = readFileSync(new URL("0755_lp6e_audit_attribution.sql", directory), "utf8").match(definition)![1]!;
+  const current = readFileSync(new URL("0756_lp6e_audit_attribution.sql", directory), "utf8").match(definition)![1]!;
   expect(previous).toContain("e.version='audit.v2'");
   expect(current).toBe(previous.replace("e.version='audit.v2'", "e.version IN ('audit.v2','audit.v3')"));
 });
@@ -136,17 +136,17 @@ it.each([true, false])("answers only the exact outbox capability probe (installe
 });
 
 it("binds the proof to these migration bytes and the issued main predecessor", () => {
-  const migration = readFileSync(new URL("../migrations/0755_lp6e_audit_attribution.sql", import.meta.url));
-  const proof = JSON.parse(readFileSync(new URL("../test/migration-proofs/0755_lp6e_audit_attribution.proof.json", import.meta.url), "utf8"));
-  expect(proof.migration).toBe("0755_lp6e_audit_attribution.sql");
+  const migration = readFileSync(new URL("../migrations/0756_lp6e_audit_attribution.sql", import.meta.url));
+  const proof = JSON.parse(readFileSync(new URL("../test/migration-proofs/0756_lp6e_audit_attribution.proof.json", import.meta.url), "utf8"));
+  expect(proof.migration).toBe("0756_lp6e_audit_attribution.sql");
   const gaps = proof.lp0.find((change: { section: string }) => change.section === "groups").after.gaps;
   expect(gaps).toContain("Migration SHA-256: " + createHash("sha256").update(migration).digest("hex"));
   expect(gaps.some((gap: string) => gap.startsWith("Main predecessor 8e5e90c3f994e722779e3bc23950da7358a3436f includes LP-6d 0749."))).toBe(true);
 });
 
 it("records exact PostgreSQL definitions for the sealer and version-only completion change", () => {
-  const sql = readFileSync(new URL("../migrations/0755_lp6e_audit_attribution.sql", import.meta.url), "utf8");
-  const proof = JSON.parse(readFileSync(new URL("../test/migration-proofs/0755_lp6e_audit_attribution.proof.json", import.meta.url), "utf8"));
+  const sql = readFileSync(new URL("../migrations/0756_lp6e_audit_attribution.sql", import.meta.url), "utf8");
+  const proof = JSON.parse(readFileSync(new URL("../test/migration-proofs/0756_lp6e_audit_attribution.proof.json", import.meta.url), "utf8"));
   for (const [name, args, identityArgs, returns] of [
     ["lp4_seal_audit", "p_events jsonb, p_trust text", "jsonb,text", "SETOF app.audit_event"],
     ["lp5_check_command_completion", "", "", "trigger"],

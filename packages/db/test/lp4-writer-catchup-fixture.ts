@@ -33,7 +33,7 @@ export async function assertLp4SealedEvents(owner: Pool, tenant: string, eventTy
   expect(matching.length).toBeGreaterThan(0);
   // Historical LP-4 upgrade scenarios stop before LP-6e; full-schema product
   // scenarios install 0755. Establish that boundary before asserting one format.
-  const v3Installed = (await owner.query("SELECT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0755_lp6e_audit_attribution.sql') installed")).rows[0].installed;
+  const v3Installed = (await owner.query("SELECT EXISTS(SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0756_lp6e_audit_attribution.sql') installed")).rows[0].installed;
   for (const event of matching) {
     expect(event.version).toBe(v3Installed ? "audit.v3" : "audit.v2");
     expect(auditEventTrust(event)).toBe("checked_operation");

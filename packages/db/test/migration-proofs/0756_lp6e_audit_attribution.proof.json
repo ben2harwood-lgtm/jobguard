@@ -1,5 +1,5 @@
 {
-  "migration": "0755_lp6e_audit_attribution.sql",
+  "migration": "0756_lp6e_audit_attribution.sql",
   "lp0": [
     {
       "section": "authorityPaths",
@@ -19,7 +19,7 @@
           "LP-12": "Review private audit owner custody."
         },
         "sources": [
-          "packages/db/migrations/0755_lp6e_audit_attribution.sql"
+          "packages/db/migrations/0756_lp6e_audit_attribution.sql"
         ],
         "tests": [
           "packages/db/src/lp6e-audit.test.ts",
@@ -73,7 +73,7 @@
         },
         "downstream": "Owner-only actor and tenant lookups. Runtime cannot select checked trust. Protected sealer pin refresh remains held for its authorized owner.",
         "sources": [
-          "packages/db/migrations/0755_lp6e_audit_attribution.sql"
+          "packages/db/migrations/0756_lp6e_audit_attribution.sql"
         ],
         "tests": [
           "packages/db/src/lp6e-audit.test.ts",

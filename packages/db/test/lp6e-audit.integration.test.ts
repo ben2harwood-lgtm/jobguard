@@ -226,7 +226,7 @@ it("refuses a binding that expires while waiting for the audit head", async () =
 it("keeps product invoice, payment and proof writes compatible after 0755", async () => {
   const practice = await jobDoorsDatabase(true);
   try {
-    expect((await practice.owner.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0755_lp6e_audit_attribution.sql'")).rowCount).toBe(1);
+    expect((await practice.owner.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name='0756_lp6e_audit_attribution.sql'")).rowCount).toBe(1);
     await installLegacySyntheticPartyFixtures(practice.owner);
     const a = await seedAccount(practice.owner), context = a.context;
     await transaction(practice.owner,a.tenantId,async c => {

@@ -537,7 +537,7 @@ it("keeps the recovery worker trigger invoker-owned and the delivery port migrat
 });
 
 it("pins the LP-6e presence-only probe, exact binder keys and sole caller", () => {
-  const candidate = read("../migrations/0755_lp6e_audit_attribution.sql");
+  const candidate = read("../migrations/0756_lp6e_audit_attribution.sql");
   const binder = definitions(read("../migrations/0562_lp6a_request_binding.sql")).find(m => m[1] === "app.bind_request")![3]!;
   const environment = binder.match(/environment_key text:=(.*?); request_xid/u)![1]!;
   const xid = binder.match(/request_xid xid8:=(.*?);/u)![1]!;

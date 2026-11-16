@@ -128,8 +128,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
-    ["app.lp4_seal_audit(p_events jsonb, p_trust text)", "0755_lp6e_audit_attribution.sql"],
-    ["app.lp5_check_command_completion()", "0755_lp6e_audit_attribution.sql"],
+    ["app.lp4_seal_audit(p_events jsonb, p_trust text)", "0756_lp6e_audit_attribution.sql"],
+    ["app.lp5_check_command_completion()", "0756_lp6e_audit_attribution.sql"],
     // LP-6d LP-10 sink hold: the latest body is the 4th "FUNCTION app.guard_recovery_message_sink(" in 0749 (after the earlier CREATE, ALTER and REVOKE).
     ["app.guard_recovery_message_sink()", "0749_lp6d_remaining_routines.sql", 3],
     // 0741 recreates these exact bodies; never pin their pre-linked predecessors.

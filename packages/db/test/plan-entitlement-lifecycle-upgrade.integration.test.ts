@@ -242,8 +242,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const routineKey = (identity: string) => identity.replace(/,\s*/gu, ",");
   const ent5Bodies = new Map<string, string>();
   const ent5Replacements = [
-    ["app.lp4_seal_audit(p_events jsonb,p_trust text)", "0755_lp6e_audit_attribution.sql"],
-    ["app.lp5_check_command_completion()", "0755_lp6e_audit_attribution.sql"],
+    ["app.lp4_seal_audit(p_events jsonb,p_trust text)", "0756_lp6e_audit_attribution.sql"],
+    ["app.lp5_check_command_completion()", "0756_lp6e_audit_attribution.sql"],
     // Linked-practice successors retain metadata and replace these seven bodies.
     ["app.issue_practice_session(digest text)", "0741_identity_linked_practice.sql"],
     ["app.start_blank_practice_company(digest text,previous_digest text)", "0741_identity_linked_practice.sql"],
