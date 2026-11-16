@@ -6,7 +6,7 @@ type Session={csrfToken:string;principal:{id:string};memberships:{id:string;tena
 // account that was already signed in ("added"), or verification signed this browser in as a different account ("switched").
 type Accepted="new"|"added"|"switched";
 const field={display:"block",width:"100%",minHeight:44,marginBottom:16,boxSizing:"border-box" as const};
-export function IdentitySignIn() {
+export function IdentitySignIn({ embedded = false }: { embedded?: boolean }) {
   const[email,setEmail]=useState("builder@practice.invalid"),[purpose,setPurpose]=useState("signup"),[invitationId,setInvitationId]=useState(""),[code,setCode]=useState(""),[fixtureCode,setFixtureCode]=useState(""),[requested,setRequested]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[session,setSession]=useState<Session|null>(null),[checking,setChecking]=useState(true),[invitationLink,setInvitationLink]=useState(false),[accepted,setAccepted]=useState<Accepted|null>(null);
   const errorRef=useRef<HTMLParagraphElement>(null);
   useEffect(()=>{const id=new URLSearchParams(location.search).get("invitationId");if(id){setInvitationId(id);setPurpose("invitation");setInvitationLink(true);}void fetch("/api/auth/session",{cache:"no-store"}).then(async r=>{if(r.ok)setSession(await r.json() as Session);else if(r.status!==401)setError("Identity storage is unavailable. Try again.");}).catch(()=>setError("Identity storage is unavailable. Try again.")).finally(()=>setChecking(false));},[]);
@@ -28,15 +28,28 @@ export function IdentitySignIn() {
     window.addEventListener("focus",refresh);document.addEventListener("visibilitychange",refresh);
     return ()=>{active=false;window.removeEventListener("focus",refresh);document.removeEventListener("visibilitychange",refresh);};
   },[session?.csrfToken]);
+  async function enterPractice(current: Session) {
+    if(current.memberships.length!==1||current.memberships[0]!.role!=="owner") {
+      setError("Your practice firm needs exactly one current owner membership. No business has been selected.");return;
+    }
+    const response=await fetch("/api/auth/practice",{method:"POST",headers:{"content-type":"application/json","x-csrf-token":current.csrfToken},body:JSON.stringify({version:"linked-practice-company.v1",action:"enter"})});
+    if(!response.ok)throw new Error("PRACTICE_ENTRY_REFUSED");
+    location.assign("/practice-company");
+  }
+  async function openJobs() {
+    setBusy(true);setError("");
+    try {await enterPractice(session!);}catch{setError("Your jobs could not be opened. Sign in again or use Open my jobs to re-enter your current practice firm. Your previous jobs have not been deleted.");}
+    finally{setBusy(false);}
+  }
   async function submit(event:FormEvent,verify:boolean) {
     event.preventDefault();setBusy(true);setError("");
     try {
       const response=await fetch(`/api/auth/${verify?"verify":"request"}`,{method:"POST",headers:{"content-type":"application/json",...(session?{"x-csrf-token":session.csrfToken}:{})},body:JSON.stringify({version:verify?"identity-verify.v1":"identity-request.v1",email,purpose,...(invitationId?{invitationId}:{}),...(verify?{code}:{})})});
       const body=await response.json() as {code?:string;fixtureCode?:string};
       if(!response.ok)throw new Error(body.code??"IDENTITY_UNAVAILABLE");
-      if(verify){const current=await fetch("/api/auth/session",{cache:"no-store"});if(!current.ok)throw new Error("IDENTITY_UNAVAILABLE");const next=await current.json() as Session;setSession(next);setCode("");setFixtureCode("");setRequested(false);if(purpose==="invitation"){setAccepted(!session?"new":session.principal.id===next.principal.id?"added":"switched");history.replaceState(null,"","/sign-in");}}
+      if(verify){const current=await fetch("/api/auth/session",{cache:"no-store"});if(!current.ok)throw new Error("IDENTITY_UNAVAILABLE");const next=await current.json() as Session;setSession(next);setCode("");setFixtureCode("");setRequested(false);if(purpose==="invitation"){setAccepted(!session?"new":session.principal.id===next.principal.id?"added":"switched");history.replaceState(null,"","/sign-in");}else if(!embedded){await enterPractice(next);}}
       else {setRequested(true);setFixtureCode(body.fixtureCode??"");}
-    }catch(e){const reason=(e as Error).message;setError(reason==="INVALID_CODE"?"That code is invalid or expired. Request another code.":reason==="RATE_LIMITED"?"Please wait before requesting another code.":reason==="IDENTITY_ROUTE_BLOCKED"?"Use a supplied fictional .invalid address. Real identity email is blocked pending D04.":"Identity storage is unavailable. Your sign-in has not completed.");}
+    }catch(e){const reason=(e as Error).message;setError(reason==="PRACTICE_ENTRY_REFUSED"?"Your account is verified, but practice entry could not be confirmed. Use Open my jobs to recover your current firm. Your previous jobs have not been deleted.":reason==="INVALID_CODE"?"That code is invalid or expired. Request another code.":reason==="RATE_LIMITED"?"Please wait before requesting another code.":reason==="IDENTITY_ROUTE_BLOCKED"?"Use a supplied fictional .invalid address. Real identity email is blocked pending D04.":"Identity storage is unavailable. Your sign-in has not completed.");}
     finally{setBusy(false);}
   }
   async function signout() {
@@ -44,7 +57,7 @@ export function IdentitySignIn() {
     try {
       const response=await fetch("/api/auth/signout",{method:"POST",headers:{"x-csrf-token":session!.csrfToken}});
       if(!response.ok)throw new Error("Sign out failed");
-      setSession(null);setAccepted(null);setInvitationLink(false);setInvitationId("");setPurpose("signin");setRequested(false);setCode("");setFixtureCode("");
+      setSession(null);setAccepted(null);setInvitationLink(false);setInvitationId("");setPurpose("signin");setRequested(false);setCode("");setFixtureCode("");if(embedded)location.assign("/sign-in");
     }catch{setError("Sign out could not complete. Try again.");}
     finally{setBusy(false);}
   }
@@ -56,7 +69,7 @@ export function IdentitySignIn() {
         <h2>Name your practice business</h2><p>Use made-up business details only. The trading name does not rename your sign-in business or membership.</p>
         <style>{`.practice-firm-profile fieldset{min-width:0;margin:0}.practice-firm-profile label{display:block;margin-bottom:12px}.practice-firm-profile input{display:block;box-sizing:border-box;width:100%;min-height:44px}.practice-firm-profile button,.practice-firm-profile a{min-height:44px}.practice-firm-profile a{display:inline-flex;align-items:center}`}</style>
         <FirmDetailsScreen key={`${session.principal.id}:${session.memberships[0]!.id}`}/>
-      </section>}<p><a href="/classic">Open my jobs</a></p><p><a href="/plans">See plans and prices</a></p><button type="button" disabled={busy} onClick={()=>void signout()}>Sign out</button></section>}
+      </section>}<p>{session.memberships.length===1&&session.memberships[0]!.role==="owner"?<button type="button" style={{minHeight:44}} disabled={busy} onClick={()=>void openJobs()}>Open my jobs</button>:<span>Your practice firm needs exactly one current owner membership. No business has been selected.</span>}</p><p><a href="/plans">See plans and prices</a></p><button type="button" style={{minHeight:44}} disabled={busy} onClick={()=>void signout()}>Sign out</button></section>}
       {(!session||(invitationLink&&!accepted))&&<section aria-label={session?"Accept an invitation":"Sign in"}>
       {session&&<><h2>Accept an invitation</h2><p>You are signed in. Verifying signs this browser in as the address the invitation was sent to. If that is the address you are signed in with, the invited business is added to this account. If it is a different address, this browser switches to that other account and signs this one out here.</p><p>Enter the address the invitation was sent to and the code sent to it.</p></>}
       <form onSubmit={e=>void submit(e,false)}>

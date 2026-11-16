@@ -1,6 +1,6 @@
 import { PracticeAccess } from "../practice-access.js";
 import type{Pool}from"pg";
-import { DEMO_TENANT_ID, UserCommandDispatcher, evaluateDecisionChecks, listDecisionInbox, withTenant } from "@jobguard/db";
+import { CommandError, DEMO_TENANT_ID, UserCommandDispatcher, evaluateDecisionChecks, listDecisionInbox, withTenant } from "@jobguard/db";
 import{decisionQueryV1,decisionResolutionWebCommandV1,findingEvaluationCommandV1}from"./contracts.js";
 
 export class DecisionsError extends Error{constructor(readonly code:"FORBIDDEN"|"NOT_FOUND"|"INVALID_COMMAND"|"CONFLICT"){super(code)}}
@@ -17,10 +17,30 @@ export class DecisionsApplication{ private readonly access: PracticeAccess; cons
    return await withTenant(this.pool, practice.context, db =>
     evaluateDecisionChecks(db, parsed.data, practice.digest, view));
   } catch (error) {
-   if (error instanceof Error && error.message === "IDEMPOTENCY_CONFLICT") throw new DecisionsError("CONFLICT");
-   if (error instanceof Error && error.message === "NOT_FOUND") throw new DecisionsError("NOT_FOUND");
+   if (error instanceof Error && "code" in error && error.code === "23505" && error.message === "IDEMPOTENCY_CONFLICT") throw new DecisionsError("CONFLICT");
+   if (error instanceof Error && "code" in error && error.code === "42501" && error.message === "NOT_FOUND") throw new DecisionsError("NOT_FOUND");
+   if (error instanceof Error && "code" in error && error.code === "22023" && error.message === "INVALID_COMMAND") throw new DecisionsError("INVALID_COMMAND");
    throw error;
   }
  }
- async dismiss(raw:unknown){const practice = await this.access.command(raw, "dismiss");const parsed=decisionResolutionWebCommandV1.safeParse(raw);if(!parsed.success)throw new DecisionsError("INVALID_COMMAND");const membershipId=practice.membershipId;if(!membershipId)throw new DecisionsError("FORBIDDEN");const {tenantId:_,...command}=parsed.data;const result=await new UserCommandDispatcher(this.pool).dismissDecision(practice.context,{...command,semanticKey:`dismiss:${parsed.data.findingFingerprint}`,actorMembershipId:membershipId});return{version:"decision-resolution-result.v1",...result,label:"Dismissed — no action authorized"};}
+ async dismiss(raw: unknown) {
+  const practice = await this.access.command(raw, "dismiss");
+  const parsed = decisionResolutionWebCommandV1.safeParse(raw);
+  if (!parsed.success) throw new DecisionsError("INVALID_COMMAND");
+  const membershipId = practice.membershipId;
+  if (!membershipId) throw new DecisionsError("FORBIDDEN");
+  const { tenantId: _, ...command } = parsed.data;
+  try {
+   const result = await new UserCommandDispatcher(this.pool).dismissDecision(practice.context, {
+    ...command, semanticKey: `dismiss:${parsed.data.findingFingerprint}`, actorMembershipId: membershipId,
+   });
+   return { version: "decision-resolution-result.v1", ...result, label: "Dismissed — no action authorized" };
+  } catch (error) {
+   if (error instanceof CommandError) {
+    if (error.code === "COMMAND_CONFLICT") throw new DecisionsError("CONFLICT");
+    if (error.code === "FORBIDDEN" || error.code === "AUTHORIZATION_INVALID") throw new DecisionsError("FORBIDDEN");
+   }
+   throw error;
+  }
+ }
 }

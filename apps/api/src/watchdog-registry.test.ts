@@ -607,6 +607,8 @@ vi.mock("../../web/app/lib/synthetic-server", async () => {
   const db = await import("@jobguard/db");
   const exports: Record<string, unknown> = {};
   const adapters: Record<string, unknown> = {
+    // These transport fixtures are unlinked; pairing adds no identity requirement.
+    "./linked-practice-entry": { enforcePracticePair: async () => false },
     "server-only": {}, "next/headers": {}, "next/server": { NextResponse: { json: Response.json } },
     "@jobguard/db": db, "@jobguard/api/workspace": {}, "pg": {},
   };
