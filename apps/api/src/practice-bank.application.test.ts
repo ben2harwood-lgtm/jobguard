@@ -1,9 +1,15 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
-import { DarkAisRepository, FakeTrueLayerAisAdapter, SyntheticAisTokenVault } from "@jobguard/db";
+import { DarkAisRepository, FakeTrueLayerAisAdapter, SyntheticAisTokenVault, aisHash, type AisPage } from "@jobguard/db";
 import { PracticeBankApplication, practiceBankFailure } from "./practice-bank.application.js";
 const tenant = "00000000-0000-4000-8000-000000000001", connectionId = "00000000-0000-4000-8000-000000000002";
 const credentials = { sessionToken: "s".repeat(32), csrfToken: "c".repeat(24), tenantHeader: tenant, origin: "https://company.invalid" };
+function practicePages(): Map<string, AisPage> {
+  const observation = { version: "ais-observation.v1" as const, accountRef: "fake_practice_account", movementRef: "fake_cash",
+    providerRef: "fake_provider", revision: 1, status: "settled" as const, amount: { pence: 32000, currency: "GBP" as const }, bookedOn: "2026-10-02" };
+  return new Map([["first", { version: "ais-page.v1", nextCursor: "fake_next", observations: [observation] }],
+    ["fake_next", { version: "ais-page.v1", nextCursor: null, observations: [{ ...observation, movementRef: "fake_pending", status: "pending" }] }]]);
+}
 function fixture() {
   let current: null | { connectionId: string; status: "awaiting_consent" | "linked" | "token_revoked" } = null;
   const repository = { movements: vi.fn(async () => ({ version: "ais-practice-view.v1" as const, connection: current, movements: [] })),
@@ -13,7 +19,7 @@ function fixture() {
   const identity = { allowedOrigin: credentials.origin, provider: { digest: () => "a".repeat(64),
     authenticate: vi.fn(async (token: string) => token === credentials.sessionToken ? Object.defineProperty({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken }, "sessionCredential", { value: "a".repeat(64), enumerable: false }) : undefined),
     findMembership: vi.fn(async (_p, id: string) => id === tenant ? { id: tenant, tenantId: tenant, identityUserId: tenant, role: "owner", email: "fictional@company.invalid" } : undefined) } };
-  const memory = { pending: new Map(), adapter: new FakeTrueLayerAisAdapter(), vault: new SyntheticAisTokenVault(), pages: new Map() };
+  const memory = { pending: new Map(), adapter: new FakeTrueLayerAisAdapter(), vault: new SyntheticAisTokenVault(), pages: practicePages() };
   const app = new PracticeBankApplication(identity as never, repository, memory);
   return { app, repository, memory, identity };
 }
@@ -46,7 +52,7 @@ it("refuses swapped, session-swapped or restart-lost consent and unknown fields"
   await expect(s.app.command(credentials, command("approve-fake-consent", view.connection!.connectionId))).rejects.toThrow("AIS_CALLBACK_INVALID");
   s.memory.pending.clear();
   await expect(s.app.command(credentials, command("approve-fake-consent", view.connection!.connectionId))).rejects.toThrow("AIS_CALLBACK_INVALID");
-  for (const extra of [{ state: connectionId }, { code: "fake_forged" }, { tenantId: tenant }, { landed: true }])
+  for (const extra of [{ state: connectionId }, { code: "fake_forged" }, { tenantId: tenant }, { accountRef: "fake_forged" }, { membershipId: tenant }, { actorId: tenant }, { landed: true }])
     await expect(s.app.command(credentials, { ...command("start"), ...extra })).rejects.toThrow("AIS_INVALID");
   expect(s.repository.callback).not.toHaveBeenCalled();
 });
@@ -139,4 +145,59 @@ it("passes another company's verified session to its own empty view and cannot s
   await expect(s.app.command(request, command("pull", connectionId))).rejects.toThrow("AIS_NOT_FOUND");
   expect(s.client.query).toHaveBeenCalledWith("SELECT app.ais_movement_read($1,$2,$3) AS result", [other, "a".repeat(64), null]);
   expect(s.stop).not.toHaveBeenCalled(); expect(s.exchange).not.toHaveBeenCalled(); expect(s.pull).not.toHaveBeenCalled();
+});
+
+it("registers isolated page copies and stable membership accounts across reconnects and renewed credentials", async () => {
+  const s = fixture(), original = structuredClone(s.memory.pages);
+  const register = vi.spyOn(s.memory.adapter, "register");
+  const window = { version: "ais-window.v1" as const, from: "2026-10-01", to: "2026-10-31", cursor: null };
+  async function connect(request = credentials) {
+    const view = await s.app.command(request, command("start"));
+    const id = view.connection!.connectionId, pending = s.memory.pending.get(id)!;
+    const [binding, account, pages] = register.mock.calls.at(-1)!;
+    const grant = await s.memory.adapter.exchange(binding, pending.code);
+    expect(grant.accountRef).toBe(account);
+    const first = await s.memory.adapter.pull(grant.token, account, window);
+    const next = await s.memory.adapter.pull(grant.token, account, { ...window, cursor: first.nextCursor });
+    for (const [key, page] of pages) {
+      expect(page).not.toBe(s.memory.pages.get(key));
+      expect(page.observations[0]).not.toBe(s.memory.pages.get(key)!.observations[0]);
+      expect(page.observations[0]!.amount).not.toBe(s.memory.pages.get(key)!.observations[0]!.amount);
+      expect(page).toEqual({ ...original.get(key), observations: original.get(key)!.observations.map(o => ({ ...o, accountRef: account })) });
+    }
+    await s.app.command(request, command("approve-fake-consent", id));
+    return { account, pages, grant, first, next };
+  }
+  const first = await connect(), second = await connect();
+  expect(second.account).toBe(first.account);
+  expect(second.pages).not.toBe(first.pages);
+  expect(first.account).toBe(`fake_practice_${aisHash(JSON.stringify([tenant, tenant]))}`);
+  expect(first.account).toMatch(/^fake_practice_[a-f0-9]{64}$/u);
+  const renewed = { ...credentials, sessionToken: "n".repeat(32), csrfToken: "r".repeat(24) };
+  s.identity.provider.digest = () => "b".repeat(64);
+  s.identity.provider.authenticate.mockResolvedValue(Object.defineProperty({ identityUserId: tenant, sessionId: connectionId, csrfToken: renewed.csrfToken }, "sessionCredential", { value: "b".repeat(64) }));
+  expect((await connect(renewed)).account).toBe(first.account);
+  s.identity.provider.authenticate.mockResolvedValue(Object.defineProperty({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken }, "sessionCredential", { value: "b".repeat(64) }));
+  s.identity.provider.findMembership.mockResolvedValue({ id: connectionId, tenantId: tenant, identityUserId: tenant, role: "owner", email: "other@company.invalid" });
+  const otherMember = await connect();
+  expect(otherMember.account).not.toBe(first.account);
+  s.identity.provider.findMembership.mockResolvedValue({ id: tenant, tenantId: connectionId, identityUserId: tenant, role: "owner", email: "other@company.invalid" });
+  expect((await connect({ ...credentials, tenantHeader: connectionId })).account).not.toBe(first.account);
+  expect(await s.memory.adapter.pull(first.grant.token, first.account, window)).toEqual(first.first);
+  expect(s.memory.pages).toEqual(original);
+});
+it("refuses disappeared, changed, revoked or inconsistent membership before any consent mutation", async () => {
+  const valid = { id: tenant, tenantId: tenant, identityUserId: tenant, role: "owner", email: "fictional@company.invalid" };
+  for (const changed of [undefined, { ...valid, id: connectionId }, { ...valid, tenantId: connectionId },
+    { ...valid, identityUserId: connectionId }, { ...valid, role: "admin" }, { ...valid, revokedAt: 0 }]) {
+    const s = fixture(), register = vi.spyOn(s.memory.adapter, "register");
+    s.identity.provider.findMembership.mockResolvedValueOnce(valid).mockResolvedValueOnce(changed);
+    await expect(s.app.command(credentials, command("start"))).rejects.toThrow("TENANT_FORBIDDEN");
+    expect(s.repository.movements).not.toHaveBeenCalled(); expect(s.repository.start).not.toHaveBeenCalled();
+    expect(s.repository.stop).not.toHaveBeenCalled(); expect(register).not.toHaveBeenCalled();
+  }
+  const s = fixture();
+  s.identity.provider.authenticate.mockResolvedValueOnce(Object.defineProperty({ identityUserId: tenant, sessionId: tenant, csrfToken: credentials.csrfToken }, "sessionCredential", { value: "a".repeat(64) })).mockResolvedValueOnce(undefined);
+  await expect(s.app.command(credentials, command("start"))).rejects.toThrow("UNAUTHENTICATED");
+  expect(s.repository.start).not.toHaveBeenCalled();
 });
