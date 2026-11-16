@@ -16,8 +16,7 @@
         "apps/web/app/meter/jobs/[id]/imports/page.test.tsx",
         "apps/web/app/ui/job-import-v3.tsx",
         "apps/web/app/ui/job-import-v3-company.test.tsx",
-        "apps/web/e2e/LATER-SAFETY-173.spec.ts",
-        "config/lanes/later-safety-173.json"
+        "apps/web/e2e/LATER-SAFETY-173.spec.ts"
       ]
     }
   }
