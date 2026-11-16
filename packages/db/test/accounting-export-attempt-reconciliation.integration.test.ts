@@ -106,7 +106,7 @@ it.each(["session_expired", "session_revoked", "member_revoked", "member_expired
  if (reason === "session_revoked") await c.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [next.other.sessionId]);
  if (reason === "member_revoked") await c.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1", [next.other.actorId]);
  if (reason === "member_expired") await c.admin.query("UPDATE app.membership SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [next.other.actorId]);
- if (reason === "member_role") await c.admin.query("UPDATE app.membership SET role='operative' WHERE id=$1", [next.other.actorId]);
+ if (reason === "member_role") await c.admin.query("UPDATE app.membership SET role='member' WHERE id=$1", [next.other.actorId]);
  const call = reason === "other_tenant" ? async (op: "read" | "reconcile", input: unknown = {}) => {
   const other = await meterCompany(c as unknown as WorkFixture);
   return f.repo.execute(other.context, next.other.digest, op, source.sourceId, input);
