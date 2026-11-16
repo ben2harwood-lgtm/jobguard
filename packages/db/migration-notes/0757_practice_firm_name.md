@@ -5,7 +5,7 @@ Catch-up only against origin/main f4016e96798c5c18b23a0d5ba2d1bf431500d963;
 the router prepared this merge from PASS head 9b610d867. No new product behavior.
 
 0750 is reserved for real-wayin-linked-practice-web #791; 0751 was free.
-Renamed the migration and proof by exact stem to 0752_practice_firm_name.
+Renamed the migration and proof by exact stem to 0757_practice_firm_name.
 No pre-existing migration note was present; this is its landing note.
 The SQL is byte-identical to HEAD's placeholder migration (SHA-256
 3efdb8c33c3965fabff57fc4f5409b6cd06425d552f2545600f4d0e25526dce6).
