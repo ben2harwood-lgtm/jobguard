@@ -2,11 +2,15 @@
   "version": 2,
   "lanes": {
     "later-safety-187": {
-      "branches": ["codex/sandbox/later-safety-187"],
+      "branches": [
+        "codex/sandbox/later-safety-187"
+      ],
       "allow": [
         "packages/db/src/extra-approval-chain-repository.ts",
         "packages/db/test/extra-client-send-permission-order.integration.test.ts",
-        "packages/db/test/extra-client-send-permission-order.test.ts"
+        "packages/db/test/extra-client-send-permission-order.test.ts",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }
