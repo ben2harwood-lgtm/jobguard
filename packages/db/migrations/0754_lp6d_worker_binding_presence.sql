@@ -2,6 +2,7 @@
 -- Shared LP-6e r3 boolean helper; LP-10 queue authority remains a separate hold.
 BEGIN;
 
+GRANT CREATE ON SCHEMA app TO jobguard_binding_owner;
 CREATE OR REPLACE FUNCTION app.lp6e_request_binding_present() RETURNS boolean
  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
  SELECT EXISTS(SELECT 1 FROM control_plane.request_binding b
@@ -9,6 +10,7 @@ CREATE OR REPLACE FUNCTION app.lp6e_request_binding_present() RETURNS boolean
    AND b.transaction_id=pg_current_xact_id())
 $$;
 ALTER FUNCTION app.lp6e_request_binding_present() OWNER TO jobguard_binding_owner;
+REVOKE CREATE ON SCHEMA app FROM jobguard_binding_owner;
 REVOKE ALL ON FUNCTION app.lp6e_request_binding_present() FROM PUBLIC,jobguard_runtime;
 GRANT EXECUTE ON FUNCTION app.lp6e_request_binding_present() TO jobguard_migration;
 
