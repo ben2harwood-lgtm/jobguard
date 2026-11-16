@@ -10,9 +10,9 @@ import type { Cluster } from "./extra-fixtures.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
-import proof from "./migration-proofs/0754_lp6d_worker_binding_presence.proof.json" with { type: "json" };
+import proof from "./migration-proofs/0753_lp6d_worker_binding_presence.proof.json" with { type: "json" };
 
-const migration = "0754_lp6d_worker_binding_presence.sql";
+const migration = "0753_lp6d_worker_binding_presence.sql";
 const environment = "extract(epoch FROM pg_postmaster_start_time())::text||':'||(SELECT d.oid::text FROM pg_catalog.pg_database d WHERE d.datname=current_database())";
 const refused = { code: "42501", message: "REQUEST_BINDING_REFUSED" };
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
