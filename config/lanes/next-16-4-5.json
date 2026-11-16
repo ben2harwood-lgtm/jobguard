@@ -2,12 +2,15 @@
   "version": 2,
   "lanes": {
     "next-16-4-5": {
-      "branches": ["codex/sandbox/next-16-4-5"],
-      "note": "NEXT-16-4-5: security bump next 16.4.2 -> 16.4.5 for GHSA-mfr8-8qww-v76h (Ben: \"Yes, separate fix\"). Version and lockfile only; no migration.",
+      "branches": [
+        "codex/sandbox/next-16-4-5"
+      ],
+      "note": "NEXT-16-4-5: security bump next 16.4.2 -> 16.4.5 for GHSA-mfr8-8qww-v76h (Ben: \"Yes, separate fix\"). Version and lockfile only; no migration. Also carries MAIN-FIX-DECISIONS-ROUTE-TIMEOUT (#831, 90c31a11): main red since #808; each fix alone fails the other's required check.",
       "allow": [
         "package.json",
         "apps/web/package.json",
-        "pnpm-lock.yaml"
+        "pnpm-lock.yaml",
+        "apps/web/app/api/decisions/route.ts"
       ]
     }
   }
