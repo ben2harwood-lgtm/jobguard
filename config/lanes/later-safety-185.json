@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-185": {
+      "branches": ["codex/sandbox/later-safety-185"],
+      "allow": [
+        "packages/db/src/northside-demo.ts",
+        "packages/db/src/work-order-fixtures.ts",
+        "packages/db/test/seed-transaction-locks.integration.test.ts"
+      ]
+    }
+  }
+}
