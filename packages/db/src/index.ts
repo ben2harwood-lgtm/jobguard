@@ -1,4 +1,4 @@
-export { RequestBindingRefusedError } from "./request-binding-error.js";
+export { RequestBindingRefusedError, isRequestBindingRefusal } from "./request-binding-error.js";
 export { migrate, INITIAL_MIGRATION_URL, MIGRATION_URLS } from "./migrate.js";
 export * from "./audit.js";
 export { findAccountById, listAccounts } from "./account-repository.js";
@@ -227,3 +227,6 @@ export * from "./blank-practice-company.js";
 export * from "./extra-evidence-pack-writer.js";
 export * from "./company-final-check-repository.js";
 export * from "./northside-photo-storage.js";
+export * from "./firm-profile-repository.js";
+
+export * from "./job-proof-statement.js";

@@ -32,7 +32,7 @@ async function setup(){
  await postgres.initialise();await postgres.start();admin=pool("postgres");await migrate(admin);await seed();
  for(const [login,role] of [["sv3_runtime","jobguard_runtime"],["sv3_shadow","jobguard_shadow"],["sv3_emergency","jobguard_shadow_emergency_access"]]){await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT ${role} TO ${login}`);}
  runtime=pool("sv3_runtime");shadow=pool("sv3_shadow");emergency=pool("sv3_emergency");
- await withTenant(runtime,testTenantContext(T),db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[T,M,randomUUID(),"synthetic_final_check_terms.v1"]));
+ await withTenant(runtime,testTenantContext(T,{membershipId:M}),db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[T,M,randomUUID(),"synthetic_final_check_terms.v1"]));
 }
 async function evidence(o:Observation,p:Pool=admin){
  await fixtureContext(p,o.tenantId,async db=>{
@@ -250,8 +250,11 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
    }finally{await db.query("ROLLBACK");db.release()}
   }
   const reader=new ShadowObservationReader(runtime,new FixtureObservationSources([]));await reader.assertTermsRelation();
-  expect(await reader.hasAcceptedTerms(testTenantContext(T))).toBe(true);
-  expect(await reader.hasAcceptedTerms(testTenantContext(O))).toBe(false);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T),J)).toBe(true);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T),K)).toBe(true);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T),L)).toBe(false);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T),randomUUID())).toBe(false);
+  expect(await reader.hasAcceptedTerms(testTenantContext(O),L)).toBe(false);
   await expect(withTenant(runtime,testTenantContext(T),db=>db.$client.query("INSERT INTO app.final_check_terms_acceptance(tenant_id) VALUES($1)",[T]))).rejects.toMatchObject({code:"42501"});
   await withTenant(shadow,testTenantContext(T),db=>db.$client.query(routine,args));
   expect((await admin.query("SELECT rule FROM app.shadow_must_surface_firing WHERE id=$1",[args[3]])).rows).toEqual([{rule:"safety"}]);

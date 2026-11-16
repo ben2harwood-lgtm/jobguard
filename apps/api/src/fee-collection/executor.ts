@@ -2,11 +2,11 @@ import { createHash } from "node:crypto";
 import { checkSyntheticSubscriptionAgreement } from "@jobguard/core";
 import { rolePermits, type AuthProvider } from "../auth/auth-provider.js";
 import { collectionIntentV1, collectionSourcesV1, creditSourcesV1, FeeCollectionError, parse, refundIntentV1,
-  type Attempt, type CollectionBook, type CollectionIntent, type CollectionSources, type ReservationStore,
+  type FeeWebhookReceiptEvent, type Attempt, type CollectionBook, type CollectionIntent, type CollectionSources, type ReservationStore,
   type SignedProviderResult, type LockedCollectionSources, type CollectionSessionContext, type DirectDebitWebhookContext, type DirectDebitPaymentState } from "./contracts.js";
 import { pauseSuccessFee, validateSuccessFee } from "./success-fee-direct-debit.js";
 export interface CollectionRail {
-  signStoreResult?(tenantId: string, attempt: Readonly<Attempt>): SignedProviderResult;
+  signStoreResult?(tenantId: string, attempt: Readonly<Attempt>, event?: FeeWebhookReceiptEvent): SignedProviderResult;
   readonly name: "stripe_card" | "direct_debit";
   readonly environment: "synthetic_demo";
   collectionPauseReason?(tenantId: string): "MANDATE_REVOKED" | "MANDATE_NOT_ACTIVE" | undefined;
@@ -183,12 +183,12 @@ export class DarkFeeCollectionExecutor {
         || (attempt.providerObjectId !== null && attempt.providerObjectId !== event.objectId)) return refuse();
       if (railName === "direct_debit") {
         this.directDebitEvent(book, attempt, event);
-        proof = rail.signStoreResult?.(ctx.tenantId, attempt);
+        proof = rail.signStoreResult?.(ctx.tenantId, attempt, { key: eventKey, hash });
         book.events[eventKey] = hash;
         return;
       }
       if (attempt.state === "released" && event.state === "definite_failure" && attempt.providerObjectId === event.objectId) {
-        proof = rail.signStoreResult?.(ctx.tenantId, attempt);
+        proof = rail.signStoreResult?.(ctx.tenantId, attempt, { key: eventKey, hash });
         book.events[eventKey] = hash; return;
       }
       if ((attempt.state === "released" && event.state === "settled")
@@ -196,7 +196,7 @@ export class DarkFeeCollectionExecutor {
         // Persist the contradictory fact and reserve its balance until explicit reconciliation.
         attempt.providerObjectId = event.objectId;
         if (attempt.state !== "reconciliation_required") transition(book, attempt, "reconciliation_required");
-        proof = rail.signStoreResult?.(ctx.tenantId, attempt);
+        proof = rail.signStoreResult?.(ctx.tenantId, attempt, { key: eventKey, hash });
         book.events[eventKey] = hash;
         return;
       }
@@ -204,7 +204,7 @@ export class DarkFeeCollectionExecutor {
       attempt.providerObjectId = event.objectId;
       if (attempt.state !== "settled") transition(book, attempt, event.state === "settled" ? "settled" : "released");
       book.events[eventKey] = hash;
-      proof = rail.signStoreResult?.(ctx.tenantId, attempt);
+      proof = rail.signStoreResult?.(ctx.tenantId, attempt, { key: eventKey, hash });
     }, () => proof);
   }
   private directDebitEvent(book: CollectionBook, attempt: Attempt, event: RailEvent) {

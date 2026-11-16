@@ -35,7 +35,7 @@ export class SmallBuilderDemoRepository {
    return result;
   } catch(error) {
    const message=error instanceof Error ? error.message : "";
-   if(message==="METER_FORBIDDEN") throw new SmallBuilderDemoError("DEMO_FORBIDDEN");
+   if(message==="METER_FORBIDDEN" || (error instanceof Error && "code" in error && error.code === "42501" && message === "REQUEST_BINDING_REFUSED")) throw new SmallBuilderDemoError("DEMO_FORBIDDEN");
    const codes=["DEMO_NOT_FOUND","DEMO_COMMAND_CONFLICT","DEMO_STALE_REVISION","DEMO_ARCHIVED","DEMO_SYNTHETIC_ONLY","INVALID_DEMO_INPUT"] as const;
    for(const code of codes) if(message===code) throw new SmallBuilderDemoError(code);
    throw new SmallBuilderDemoError("DEMO_UNAVAILABLE");

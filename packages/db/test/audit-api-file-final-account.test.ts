@@ -88,6 +88,8 @@ class FinalAccountSql {
     if (sql.startsWith("INSERT INTO app.evidence_invalidation")) { this.invalidations.push({ id: values[0], evidence_id: values[2] }); return rows([{ id: values[0] }]); }
     if (sql.startsWith("SELECT e.job_id,e.scope_item_id")) return rows([]);
     if (sql.includes("FROM app.append_audit(")) return rows(fakeAuditAppend(values[0] as string, tenantId));
+    // Job-proof statement objects are absent from this double: the presence probe finds none.
+    if (sql.includes("pg_catalog.to_regclass(name)") || sql.includes("pg_catalog.to_regprocedure(name)")) return rows([]);
     if (sql.includes("AS tenant_id")) return rows([{ tenant_id: tenantId }]);
     if (sql.includes("lock_audit_head")) return rows([]);
     if (sql.includes("clock_timestamp() AS occurred_at")) return rows([{ occurred_at: new Date() }]);

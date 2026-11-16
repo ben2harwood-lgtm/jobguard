@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-overview-paid-status": {
+      "branches": [
+        "codex/sandbox/real-overview-paid-status"
+      ],
+      "note": "Own-job overview payment facts from tenant-scoped saved practice invoices. RED; no migration.",
+      "allow": [
+        "apps/api/src/customer-invoice.application.ts",
+        "apps/api/src/real-overview-paid-status.test.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/web/app/api/jobs/route.test.ts",
+        "apps/web/app/api/jobs/route.ts",
+        "apps/web/e2e/real-overview-paid-status.spec.ts",
+        "packages/db/src/guarded-practice-invoice-repository.ts",
+        "packages/db/src/practice-invoice-repository.test.ts",
+        "packages/db/src/practice-invoice-repository.ts",
+        "packages/db/test/real-overview-paid-status.integration.test.ts"
+      ]
+    }
+  }
+}

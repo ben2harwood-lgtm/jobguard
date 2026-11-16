@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-plans-billing-day": {
+      "branches": [
+        "codex/sandbox/real-plans-billing-day"
+      ],
+      "allow": [
+        "apps/web/app/plans/plan-screen.tsx",
+        "apps/web/app/plans/plan-screen.test.tsx",
+        "apps/web/e2e/real-gap-plan-preview.spec.ts"
+      ]
+    }
+  }
+}

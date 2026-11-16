@@ -47,7 +47,7 @@ beforeAll(async () => {
   expect(companyProof).toBeDefined();
   expect(companyProof!.lp0.filter(change => change.section === "routines")).toHaveLength(7);
   expect(inventory.recorded.routines.find(r => r.identity === "function:app.company_final_check_request_run(uuid)")?.staticCalls)
-    .toEqual(["app.bound_context_reader", "app.ch4_require_open", "app.company_final_check_authority", "app.require_final_check_rerun"]);
+    .toEqual(["app.admit_final_check_cycle", "app.bound_context_reader", "app.company_final_check_authority"]);
   reviewedSourcesBefore = proofSourceDigests([new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url).pathname, ...loadMigrationProofs().sources]);
   db = await startLp0Database(58600);
   // Catalogue of the migrated base BEFORE any test-only login posture is applied.

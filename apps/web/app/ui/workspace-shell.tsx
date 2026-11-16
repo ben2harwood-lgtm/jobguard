@@ -29,7 +29,8 @@ import { JobWorkState } from "./job-work-state";
 import { FinalCheckReveal } from "./final-check-reveal";
 const stages=["Scope","Quote","Work","Final account","Payment"];
 
-export function WorkspaceShell({jobId}:{jobId:string}){
+// Tours can open pricing directly without triggering ordinary fragment navigation.
+export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initialPricing?:boolean}){
  const[job,setJob]=useState<JobWorkspaceResponse["job"]|null>(null);
  const[capture,setCapture]=useState<CaptureWorkspaceResponse|null>(null);
  const[error,setError]=useState<"forbidden"|"unavailable"|null>(null);
@@ -41,32 +42,31 @@ export function WorkspaceShell({jobId}:{jobId:string}){
   // A newer post-command read supersedes any pre-command navigation request.
   generation.current++;activeRequest.current?.abort();setCapture(snapshot);setJob(null);setError(null);setLoading(false);
  },[]);
- const load=useCallback(async()=>{
+ const load=useCallback(async(preserveView=false)=>{
   const current=++generation.current;activeRequest.current?.abort();const controller=new AbortController();activeRequest.current=controller;
-  setLoading(true);setError(null);setJob(null);setCapture(null);
+  // Section navigation revalidates saved facts without tearing down local edits.
+  if(!preserveView){setLoading(true);setJob(null);setCapture(null);}setError(null);
   try{
    const proposalResponse=await fetch(`/api/jobs/${encodeURIComponent(jobId)}/proposal`,{cache:"no-store",signal:controller.signal});
    if(current!==generation.current)return;
-   if(proposalResponse.ok){const parsed=captureWorkspaceResponseV1.parse(await proposalResponse.json());if(current===generation.current)setCapture(parsed);return;}
+   if(proposalResponse.ok){const parsed=captureWorkspaceResponseV1.parse(await proposalResponse.json());if(current===generation.current){setCapture(parsed);setJob(null);}return;}
    // Only an absent capture permits the non-capture workspace. A failed capture
    // service must not be disguised as an apparently healthy partial workspace.
    if(proposalResponse.status!==404){setError(proposalResponse.status===401||proposalResponse.status===403?"forbidden":"unavailable");return;}
    const response=await fetch(`/api/jobs/${encodeURIComponent(jobId)}`,{cache:"no-store",signal:controller.signal});
    if(current!==generation.current)return;
    if(!response.ok){setError([401,403,404].includes(response.status)?"forbidden":"unavailable");return;}
-   const parsed=jobWorkspaceResponseV1.parse(await response.json());if(current===generation.current)setJob(parsed.job);
+   const parsed=jobWorkspaceResponseV1.parse(await response.json());if(current===generation.current){setCapture(null);setJob(parsed.job);}
   }catch{if(current===generation.current&&!controller.signal.aborted)setError("unavailable");}
   finally{if(current===generation.current)setLoading(false);}
  },[jobId]);
  useEffect(()=>{void load();return()=>{generation.current++;activeRequest.current?.abort();}},[load]);
- useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load();};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
+ useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load(true);};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
  useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
  const section=capture?requestedWorkspaceSection(capture.status,fragment==="#variations-title"?"#work-proof":fragment):"scope";
  // Plain saved-job URLs retain the confirmed-scope step. Explicit job anchors
  // open the editor, including diary/customer panels nested inside the live journey.
- // This is an initial view only: keep the review keyed by job so snapshots cannot
- // remount it and discard pricing opened with "Price the work".
- const pricing=section!=="scope"||Boolean(capture&&hasStartedWork(capture.status)&&fragment&&fragment!=="#scope");
+ const pricing=initialPricing||section!=="scope"||Boolean(capture&&hasStartedWork(capture.status)&&fragment&&fragment!=="#scope");
  useEffect(()=>{
   if(loading||!capture||!fragment)return;
   const root=document.getElementById("captured-job-workspace");if(!root)return;
@@ -79,16 +79,18 @@ export function WorkspaceShell({jobId}:{jobId:string}){
   const timeout=window.setTimeout(()=>observer?.disconnect(),15000);
   return()=>{observer?.disconnect();window.clearTimeout(timeout);};
  },[capture,loading,section,fragment]);
- if(loading)return <main className="workspace-page" aria-live="polite"><p>Loading your job…</p></main>;
+ if(loading||(capture&&capture.jobId!==jobId)||(job&&job.id!==jobId))return <main className="workspace-page" aria-live="polite"><p>Loading your job…</p></main>;
  if(error)return <main className="workspace-page"><section className="workspace-error" role="alert"><h1 ref={errorRef} tabIndex={-1}>{error==="forbidden"?"You cannot open this job":"Your job could not load"}</h1><p>{error==="forbidden"?"Use a job available to this practice session.":"Nothing was changed. Try loading the saved job again."}</p>{error==="unavailable"&&<button className="primary" onClick={()=>void load()}>Try again</button>}<Link href="/classic">Back to Jobs</Link></section></main>;
  if(capture)return <WatchdogStatusProvider jobId={jobId} initialStatus={capture.status}>
   <main className="workspace-page" id="captured-job-workspace" data-testid="workspace-job-id" data-job-id={jobId}>
    <header><h1>{capture.proposal.title}</h1><p className="status">{jobStatusLabels[capture.status]}</p></header>
+   {!hasStartedWork(capture.status)&&<WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>}
+   {/* Put stable section links before panels that load asynchronously. */}
+   <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope">Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote">Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof">Work and proof</a><a href="#final-account-title">Final account and invoices</a></>}</nav>
    <PracticeJourney jobId={jobId} status={capture.status}/>
    <JobParties jobId={jobId}/>
-   <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope">Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote">Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof">Work and proof</a><a href="#final-account-title">Final account and invoices</a></>}</nav>
-   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={jobId} result={capture} initialPricing={pricing} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId}/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
-   {!hasStartedWork(capture.status)&&<WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>}
+   {/* The same saved status removes pre-live proof and enables the editor proof slot. */}
+   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={jobId} result={capture} initialPricing={pricing} sectionView={fragment==="#scope"?"scope":pricing?"pricing":undefined} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId} extrasHref="#variations-title"/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
    <hr/>
    <h2 id="practice-tools">Practice tools — demo only, not part of your job</h2>
    <p>These tools use fictional examples to explore JobGuard; they are separate from your job’s next steps.</p>

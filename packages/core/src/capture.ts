@@ -36,3 +36,26 @@ export const captureRequestV1 = z.object({
   fixtureId: z.string().min(1).max(100),
 });
 export type JobRecordProposal = z.infer<typeof jobRecordProposalV1>;
+
+/** Text suggestions only: no identity, permission or registry lookup. Offsets are
+ * UTF-16 indices into the original source. Ambiguous clauses fail closed. */
+export function suggestCapturePartyClause(text: string): {
+  start: number; end: number;
+  customer: { text: string; start: number; end: number };
+  site: { text: string; start: number; end: number };
+} | null {
+  const clauses = [...text.matchAll(/\bfor\s+([^,;!?\r\n]+?)\s+at\s+/giu)];
+  if (clauses.length !== 1) return null;
+  const clause = clauses[0]!;
+  const name = clause[1]!;
+  // A deliberately narrow name and numbered street, never an email or a price.
+  if (!/^(?:(?:Mr|Mrs|Ms|Dr)\.?\s+)?\p{Lu}[\p{L}'’-]*(?:\s+\p{Lu}[\p{L}'’-]*){0,3}$/u.test(name)) return null;
+  const siteStart = clause.index + clause[0].length;
+  const tail = text.slice(siteStart).split(/[,.;!?\r\n]|\s+(?:and\s+)?(?:two coats|\w+\s+coats|woodwork|in gloss|should|about|around|roughly|approximately|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:pounds|quid|days?|weeks?)|£|rip|remove|fit|tile|paint|install|new)\b/iu)[0]!.trimEnd();
+  if (!/^\d+[A-Za-z]?\s+\p{Lu}[\p{L}\p{N}'’ -]{1,100}$/u.test(tail)
+    || /\b(?:for|at|and|or)\b/iu.test(tail)) return null;
+  const customerStart = clause.index + clause[0].indexOf(name);
+  return { start: clause.index, end: siteStart + tail.length,
+    customer: { text: name, start: customerStart, end: customerStart + name.length },
+    site: { text: tail, start: siteStart, end: siteStart + tail.length } };
+}

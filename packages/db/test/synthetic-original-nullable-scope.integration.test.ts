@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { ContractorBundleCheckApplication } from "../../../apps/api/src/evidence-bundle.application.js";
@@ -25,11 +26,11 @@ it("a job-level Northside photo survives a fresh store and yields an intact appr
   const w0 = await chainWorld(c), w = { ...w0, jobId: await newJob(c, w0) }, p = await attach(w);
   const original = (await c.admin.query("SELECT scope_item_id FROM app.synthetic_evidence_original WHERE tenant_id=$1 AND upload_id=$2", [p.context.tenantId, p.upload.id])).rows[0];
   expect(original).toEqual({ scope_item_id: null });
-  const raised = await new SiteExtraRepository(c.runtime).logSiteExtra(p.context, w.members.operative.member, v3(w, { photoEvidenceId: p.upload.id }));
+  const raised = await new SiteExtraRepository(c.runtime).logSiteExtra(await testActorContext(c.admin, p.context, w.members.operative.member), w.members.operative.member, v3(w, { photoEvidenceId: p.upload.id }));
   const approvals = new ExtraApprovalRepository(c.runtime), extraId = raised.variationId;
-  await approvals.priceExtra(p.context, w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.jobId, extraId, netPence: 40000 });
-  const request = await approvals.submitExtra(p.context, w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.jobId, extraId });
-  await approvals.approveExtraStep(p.context, w.members.supervisor.member, approveInput({ jobId: w.jobId, requestId: request.requestId as string, hash: request.revisionHash as string, net: 40000 }, 0));
+  await approvals.priceExtra(await testActorContext(c.admin, p.context, w.members.surveyor.member), w.members.surveyor.member, { version: "price-extra.v1", commandId: randomUUID(), jobId: w.jobId, extraId, netPence: 40000 });
+  const request = await approvals.submitExtra(await testActorContext(c.admin, p.context, w.members.supervisor.member), w.members.supervisor.member, { version: "submit-extra.v1", commandId: randomUUID(), jobId: w.jobId, extraId });
+  await approvals.approveExtraStep(await testActorContext(c.admin, p.context, w.members.supervisor.member), w.members.supervisor.member, approveInput({ jobId: w.jobId, requestId: request.requestId as string, hash: request.revisionHash as string, net: 40000 }, 0));
   // No process-level registry is passed from capture: only PostgreSQL can supply this original.
   const fresh = NorthsidePhotoStorage.forTenant(c.runtime, p.context, w.jobId);
   expect((await fresh.readExactVersion(p.upload.objectKey, "v1")).bytes).toEqual(p.bytes);

@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { runJobChecks, type JobFactSnapshot } from "@jobguard/core";
 import { UserCommandDispatcher, migrate, persistFindings, withTenant } from "../src/index.js";
-import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres | undefined, admin: Pool, runtime: Pool, dir: string | undefined;
@@ -44,9 +44,7 @@ async function fixture() {
   await admin.query("INSERT INTO app.job(id,tenant_id,title,status,revision) VALUES($1,$2,'Synthetic expiry regression','live',12)", [jobId, tenantId]);
   const active = (await admin.query("SELECT identity_user_id,tenant_id,id FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND expires_at>clock_timestamp()", [tenantId, memberId])).rows[0];
   expect(active).toBeDefined();
-  const context = verifiedTenantContextFromMembership({
-    identityUserId: active.identity_user_id, tenantId: active.tenant_id, membershipId: active.id,
-  } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+  const context = await testBoundTenantContext(admin,active.tenant_id,active.id);
   const snapshot: JobFactSnapshot = {
     version: "job-fact-snapshot.v1", tenantId, jobId, revision: 12,
     unresolvedQuestions: [{ id: "price", text: "Confirm synthetic price", commercialBlocker: true }], scopes: [],

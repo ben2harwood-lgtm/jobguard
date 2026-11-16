@@ -8,7 +8,7 @@ export class ShadowWorkerError extends Error {
 }
 export interface ShadowWorkerPorts {
   assertTermsRelation(): Promise<void>;
-  hasAcceptedTerms(context: VerifiedTenantContext): Promise<boolean>;
+  hasAcceptedTerms(context: VerifiedTenantContext, jobId: string): Promise<boolean>;
   read(context: VerifiedTenantContext, request: { version: "shadow-observation-read.v1"; jobId: string }): Promise<{ observations: readonly Observation[]; captures: readonly ShadowCapture[] }>;
   propose(observation: Observation, fixtureId: string, at: string): Promise<{ proposals: readonly ShadowProposal[] }>;
   persist(context: VerifiedTenantContext, request: { version: "shadow-detection-batch.v1"; jobId: string; observations: readonly Observation[]; captures: readonly ShadowCapture[]; proposals: readonly ShadowProposal[] }): Promise<unknown>;
@@ -24,7 +24,7 @@ export class ShadowDetectionWorker {
     const parsed = taskV1.safeParse(payload); if (!parsed.success) throw new ShadowWorkerError("INVALID_SHADOW_TASK");
     if (parsed.data.tenantId !== context.tenantId) throw new ShadowWorkerError("SHADOW_TASK_TENANT_MISMATCH");
     if (this.environment !== "synthetic_demo") throw new ShadowWorkerError("SHADOW_SYNTHETIC_ONLY");
-    if (!await this.ports.hasAcceptedTerms(context)) throw new ShadowWorkerError("SHADOW_TERMS_NOT_ACCEPTED");
+    if (!await this.ports.hasAcceptedTerms(context, parsed.data.jobId)) throw new ShadowWorkerError("SHADOW_TERMS_NOT_ACCEPTED");
     const { observations, captures } = await this.ports.read(context, { version: "shadow-observation-read.v1", jobId: parsed.data.jobId });
     const at = this.now(), proposals = [...detectShadowObservations(observations, captures, at)];
     let aiFailure: AiGatewayError | undefined;

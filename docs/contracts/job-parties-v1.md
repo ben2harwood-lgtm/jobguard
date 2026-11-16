@@ -180,3 +180,40 @@ imports from that session. Unowned legacy jobs and other sessions remain refused
 SBOX's direct quote/evidence-pack test supplies explicit generated party fixtures
 and tenant context before constructing its old quote snapshot; no assertion or
 runtime guard is relaxed.
+
+The `save_form` action on the existing `job-parties-command.v1` boundary validates
+customer and site together and saves them in one `withTenant` transaction. It
+carries the complete editable form, expected job revision and binding, selected
+customer identity/revision and observed latest revision, saved site revision or
+explicit reuse identity/latest revision and same-place confirmation, payer
+revision and observed latest payer revision, and correction flag/reason. An
+unchanged bound customer or payer keeps its immutable saved revision even when
+the registry is newer; an edit cannot silently overwrite a newer revision.
+
+Creation/revision/site operations share that transaction with the unchanged
+controlled `bind_job_parties` routine. Business locks precede the audit head;
+creation and binding audits, completed receipts and state commit together.
+Validation, reuse, stale state, payer, authorization, binding, database and audit
+failures roll back all effects. Existing commands and receipt envelopes remain
+supported. The form's binding receipt retains its legacy binding input, with the
+complete validated form included in the same significant input. Deterministic
+child command/identity IDs bind the children to that form command. An authorized
+identical retry returns the original binding before checking stale state; changed
+input with the same ID conflicts. Access to the job and referenced registry
+identities is checked before reading a receipt.
+
+After persisted session and job ownership checks, both HTTP adapters return
+`INVALID_PARTIES` with at most twelve deduplicated allowlisted field identifiers
+and fixed messages. No values, SQL, request bodies or other parties are included.
+For an invalid UK postcode the message is: “Check UK postcode. Use a valid-format
+practice postcode, such as SW1A 1AA. Nothing was saved.” The panel keeps the code
+after the explanation, retains the draft and focuses the first invalid control.
+Practice customer email addresses still require `.invalid`.
+
+An untouched, unsaved panel reads `source.text` only from its authorized, validated
+proposal response and uses the existing natural-words suggestion helper. Names
+and addresses are labelled “Suggested from your words — check before saving”.
+Missing town, postcode and contacts remain empty. Saved parties, explicit customer
+choices and edits take precedence over late responses. No record exists until
+Save customer and site; absent a suggestion the editable practice example remains
+labelled. These changes approve no real-data processing, external action or release.

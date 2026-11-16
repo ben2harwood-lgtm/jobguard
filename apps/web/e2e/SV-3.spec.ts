@@ -97,6 +97,10 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
  const testStarted=Date.now();
  await page.addInitScript(installIntervalBarrier);
  await openLiveWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
+ // Per-firm terms: the job's own practice firm accepts, then the page re-reads so its
+ // Final Check disputes read answers 200 (before acceptance it is FINAL_CHECK_FORBIDDEN).
+ const firmTerms=await page.request.post(`/api/jobs/${jobId}/final-account/terms`,{data:{version:"final-check-terms.accept.v1",commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"}});expect(firmTerms.status()).toBe(200);
+ await Promise.all([page.waitForResponse(response=>response.url().endsWith(`/api/jobs/${jobId}/final-check`)&&response.status()===200),page.reload()]);
  const credential=process.env.SV3_E2E_OWNER_CREDENTIAL??["sbox","e2e","owner"].join('-');
  const admin=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:"postgres",password:credential,max:1});
  const login=`sv3_q_browser_${randomUUID().replaceAll('-','')}`,value=randomUUID(),evidence=randomUUID(),upload=randomUUID();let shadow:Pool|undefined;
@@ -217,7 +221,13 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
      expect(destination!.url(),'Q destination response is the requested page').toBe(new URL(route,page.url()).href);
     }finally{navigation=undefined}
     if(route==='/classic'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
-    else{const price=page.getByRole('button',{name:'Price the work',exact:true});await expect(price).toBeVisible();await price.click();await expect(page.locator('.quote-editor')).toBeVisible()} // a fresh load of the job shows the scope summary first; the quote editor opens from this button, as in startWatchdogJob
+    else{
+     const price=page.getByRole('button',{name:'Price the work',exact:true});await expect(price).toBeVisible();
+     // Opening the editor remounts FinalCheckReveal and aborts its scope-view read.
+     // Capture that response completely before changing views, just as before navigation.
+     await drain();
+     await price.click();await expect(page.locator('.quote-editor')).toBeVisible();
+    } // a fresh load of the job shows the scope summary first; the quote editor opens from this button, as in startWatchdogJob
     await drain();
     const view=await page.evaluate(()=>{
      const read=(selector:string)=>[...document.querySelectorAll(selector)].map(n=>n.textContent);

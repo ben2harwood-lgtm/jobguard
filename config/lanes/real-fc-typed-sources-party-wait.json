@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-fc-typed-sources-party-wait": {
+      "branches": [
+        "codex/sandbox/real-fc-typed-sources-party-wait"
+      ],
+      "allow": [
+        "apps/web/e2e/real-fc-typed-sources.spec.ts"
+      ]
+    }
+  }
+}

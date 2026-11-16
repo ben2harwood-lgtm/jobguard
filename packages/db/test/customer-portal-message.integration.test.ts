@@ -1,3 +1,5 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
+import { practiceMaterialPool } from "../src/practice-session.js";
 import { currentCommandRegistryRows } from "./lp5-command-catalog.js";
 import { laterEmptyTables } from "./later-empty-tables.js";
 // CI only: real PostgreSQL. Messages are always submitted through the checked intake.
@@ -26,8 +28,8 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
   shadow=new Pool({...f.admin.options,user:login,password,max:2});
  },120000);
  afterAll(async()=>{await shadow?.end();await closeWorkFixture(f);});
- async function identityQuery(sql:string,args:unknown[]){
-  const db=await f.admin.connect();try{await db.query("BEGIN");await db.query("SET LOCAL ROLE jobguard_identity");const r=await db.query(sql,args);await db.query("COMMIT");return r;}catch(e){await db.query("ROLLBACK");throw e;}finally{db.release();}
+ async function identityQuery(sql:string,args:unknown[],binding?:{tenantId:string;digest:string}){
+  const db=await f.admin.connect();try{await db.query("BEGIN");if(binding) await db.query("SELECT app.bind_request('real',$1,$2)",[binding.digest,binding.tenantId]);await db.query("SET LOCAL ROLE jobguard_identity");const r=await db.query(sql,args);await db.query("COMMIT");return r;}catch(e){await db.query("ROLLBACK");throw e;}finally{db.release();}
  }
  async function customer(practice=f.practice){
   const {auth,jobId}=practice,t=auth.context.tenantId,digest=hash(randomUUID());
@@ -39,7 +41,7 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
   const reference=`customer-signin-reference.v1:${t}/${jobId}/${c}/${"a".repeat(43)}`,linkDigest=hash(randomUUID()),sessionDigest=hash(randomUUID());
   const grant=(await identityQuery("SELECT identity.customer_portal_issue($1,$2,$3,$4,$5,$6) id",[t,digest,jobId,c,linkDigest,reference])).rows[0].id;
   await identityQuery("SELECT identity.customer_portal_use($1,$2,$3,$4,$5,'redeem')",[t,jobId,c,linkDigest,sessionDigest]);
-  return {t,j:jobId,c,digest:sessionDigest,grant,practice};
+  return {t,j:jobId,c,digest:sessionDigest,sponsorDigest:digest,grant,practice};
  }
  type Customer=Awaited<ReturnType<typeof customer>>;
  const send=async(w:Customer,raw=input(w.j))=>(await identityQuery("SELECT identity.customer_portal_message($1,$2,$3,$4,$5::jsonb) result",[w.t,w.j,w.c,w.digest,JSON.stringify(raw)])).rows[0].result;
@@ -86,12 +88,12 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
   const w=await fresh(),raw=input(w.j),saved=await send(w,raw),a=w.practice.auth;
   const before=await f.repository.read(a.context,w.j,a.digest,"customer_message");
   const reader=new ShadowObservationReader(f.runtime,new FixtureObservationSources([])),sink=new ShadowDetectionRepository(shadow);
-  const worker=new ShadowDetectionWorker({assertTermsRelation:()=>reader.assertTermsRelation(),hasAcceptedTerms:c=>reader.hasAcceptedTerms(c),read:(c,r)=>reader.read(c,r),propose:async()=>({proposals:[]}),persist:(c,r)=>sink.persist(c,r)},"synthetic_demo",()=>new Date().toISOString());
-  await withTenant(f.runtime,a.context,db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[w.t,a.membershipId,randomUUID(),"synthetic_final_check_terms.v1"]));
-  const task={version:"shadow-detection-task.v1",tenantId:w.t,jobId:w.j};await worker.start();await worker.execute(a.context,task);
+  const worker=new ShadowDetectionWorker({assertTermsRelation:()=>reader.assertTermsRelation(),hasAcceptedTerms:(c,j)=>reader.hasAcceptedTerms(c,j),read:(c,r)=>reader.read(c,r),propose:async()=>({proposals:[]}),persist:(c,r)=>sink.persist(c,r)},"synthetic_demo",()=>new Date().toISOString());
+  await withTenant(practiceMaterialPool(f.runtime,a.digest),a.practiceContext,db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[w.t,a.membershipId,randomUUID(),"synthetic_final_check_terms.v1"]));
+  const task={version:"shadow-detection-task.v1",tenantId:w.t,jobId:w.j};await worker.start();await worker.execute(verifiedTenantContextForQueuedJob(w.t),task);
   expect((await f.admin.query("SELECT state FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND coalesced_into_signal_id IS NULL",[w.t,w.j])).rows).toEqual([{state:"held_for_final_check"}]);
   expect(await send(w,raw)).toEqual(saved);expect(await f.repository.read(a.context,w.j,a.digest,"customer_message")).toEqual(before);
-  const safety=await send(w,input(w.j,CUSTOMER_MESSAGE_SAFETY_TEXT));await worker.execute(a.context,task);await worker.execute(a.context,task);
+  const safety=await send(w,input(w.j,CUSTOMER_MESSAGE_SAFETY_TEXT));await worker.execute(verifiedTenantContextForQueuedJob(w.t),task);await worker.execute(verifiedTenantContextForQueuedJob(w.t),task);
   const firings=(await f.admin.query("SELECT signal_id,decision_id,rule FROM app.shadow_must_surface_firing WHERE source_ref=$1",[safety.record.evidence.id])).rows;
   expect(firings).toHaveLength(1);expect(firings[0].rule).toBe("safety");
   expect((await f.admin.query("SELECT state,disclosed_before_lock FROM app.shadow_commercial_signal WHERE id=$1",[firings[0].signal_id])).rows).toEqual([{state:"surfaced_early",disclosed_before_lock:true}]);

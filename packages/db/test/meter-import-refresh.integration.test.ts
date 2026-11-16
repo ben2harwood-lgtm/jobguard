@@ -29,7 +29,7 @@ it("a real term-less adoption cannot roll back subscribe, upgrade, finish, close
  const upgraded=await subscription(f,a,{...terms(a,"Builder",1,acceptedTerms.anchorDay),kind:"change"}); expect(upgraded.revision).toBe(2);
  expect((await f.admin.query("SELECT plan FROM app.subscription_agreement_revision WHERE tenant_id=$1 ORDER BY revision",[a.tenantId])).rows).toEqual([{plan:"Solo"},{plan:"Builder"}]);
  const importedScope=randomUUID();
- await workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[importedScope,a.tenantId,imported]));
+ await workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[importedScope,a.tenantId,imported]), { membershipId: a.actorId });
  const importedJob={...a,jobId:imported,scopeId:importedScope};
  await insertPhoto(f,importedJob,new Date().toISOString());
  await insertPhoto(f,importedJob,new Date().toISOString()); // term-less imported activity is recordable too
@@ -51,7 +51,7 @@ it("a real term-less adoption cannot roll back subscribe, upgrade, finish, close
  await lock.disposition(a.context,{jobId:a.jobId,actorMembershipId:a.actorId,commandId:randomUUID(),scopeItemId:a.scopeId,disposition:"done"});
  // Deliberately bypass withTenant: the checked SQL entrypoint must acquire 184
  // before any business lock for callers that use only transaction-local context.
- const locked=await workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.lock_final_account($1,$2,$3,$4,$5,1,'final_account_declaration.v1')",[a.tenantId,a.jobId,a.actorId,randomUUID(),account.revisionId]));
+ const locked=await workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.lock_final_account($1,$2,$3,$4,$5,1,'final_account_declaration.v1')",[a.tenantId,a.jobId,a.actorId,randomUUID(),account.revisionId]), { membershipId: a.actorId });
  const definition=(await f.admin.query("SELECT pg_get_functiondef('app.lock_final_account(uuid,uuid,uuid,uuid,uuid,integer,text)'::regprocedure) definition")).rows[0].definition;
  expect(definition.indexOf("pg_advisory_xact_lock")).toBeLessThan(definition.indexOf("FOR UPDATE"));
  expect(locked).toBeDefined();
@@ -60,5 +60,5 @@ it("a real term-less adoption cannot roll back subscribe, upgrade, finish, close
  await expect(work.command(foreign.context,imported,foreign.actorId,finish)).rejects.toThrow("WORK_STATE_FORBIDDEN");
  expect(await workTenant(f.admin,a.tenantId,async db=>{
   await db.query("SET LOCAL ROLE jobguard_migration"); return (await db.query("SELECT (app.mon1_refresh_work_ledger($1)).source_hash hash",[a.tenantId])).rows[0].hash;
- })).toMatch(/^[a-f0-9]{64}$/u);
+ }, { membershipId: a.actorId })).toMatch(/^[a-f0-9]{64}$/u);
 });

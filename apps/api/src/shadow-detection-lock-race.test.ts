@@ -33,7 +33,7 @@ it("completes a pending mandatory firing when final-account locking races detect
   const persisted = barrier(), resume = barrier();
   const runtimeQuery = vi.fn(async (sql: string) => {
     if (sql.includes("to_regclass")) return { rows: [{ available: true }], rowCount: 1 };
-    if (sql.includes("FROM app.final_check_terms_acceptance")) return { rows: [{}], rowCount: 1 };
+    if (sql.includes("app.final_check_runtime_job_terms")) return { rows: [{ accepted: true }], rowCount: 1 };
     if (sql.includes("FROM app.job j JOIN app.job_commercial_track")) return { rows: [{ id: jobId }], rowCount: 1 };
     if (sql.includes("FROM app.final_account_lock")) return { rows: locked ? [{}] : [], rowCount: locked ? 1 : 0 };
     if (sql.includes("FROM app.evidence_object e")) return { rows: [{
@@ -77,7 +77,7 @@ it("completes a pending mandatory firing when final-account locking races detect
   const sink = new ShadowDetectionRepository(shadow);
   const worker = new ShadowDetectionWorker({
     assertTermsRelation: () => reader.assertTermsRelation(),
-    hasAcceptedTerms: context => reader.hasAcceptedTerms(context),
+    hasAcceptedTerms: (context,jobId) => reader.hasAcceptedTerms(context,jobId),
     read: (context, request) => reader.read(context, request),
     propose: async () => ({ proposals: [] }),
     persist: (context, request) => sink.persist(context, request),

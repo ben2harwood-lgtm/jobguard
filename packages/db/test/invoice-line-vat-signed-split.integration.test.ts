@@ -1,3 +1,4 @@
+import { withTenant } from "../src/tenant-context.js";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -61,7 +62,8 @@ describe("LATER-SAFETY-90 real PostgreSQL signed invoice VAT", () => {
     await repo.lock(a.context, a.input);
     await publishEmptyCompletion(f, a);
     const command = randomUUID();
-    const invoice = await asFixtureTenant(f.runtime, a.tenantId, async db => {
+    const invoice = await withTenant(f.runtime, a.context, async tx => {
+      const db = tx.$client;
       const args = [a.tenantId, a.jobId, a.revisionId, LOCK_OWNER, command, "practice-customer@example.invalid", "2026-11-06"];
       const first = (await db.query("SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", args)).rows[0]!;
       expect((await db.query("SELECT * FROM app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)", args)).rows[0]).toEqual(first);

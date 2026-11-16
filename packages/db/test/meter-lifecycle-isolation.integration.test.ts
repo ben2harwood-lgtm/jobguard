@@ -8,13 +8,13 @@ describe('MON1-S local privilege boundary, CI PostgreSQL only',()=>{
  beforeAll(async()=>{f=await createWorkFixture();const admin=await f.admin.connect();try{await finalizeMeterLifecycleOwnership(admin)}finally{admin.release()}},60000);afterAll(async()=>closeWorkFixture(f));
  it('M1S-07 normal API rejects shared practice, malformed/expired/revoked sessions and admin mutations before lookup',async()=>{
   const a=await meterCompany(f);
-  const read=(tenant=a.tenantId,digest=a.digest)=>workTenant(f.runtime,tenant,db=>db.query('SELECT app.mon1_lifecycle_read($1,$2,$3)',[tenant,digest,randomUUID()]));
+  const read=(tenant=a.tenantId,digest=a.digest)=>workTenant(f.runtime,tenant,db=>db.query('SELECT app.mon1_lifecycle_read($1,$2,$3)',[tenant,digest,randomUUID()]), { membershipId: a.actorId, bindRequest: false });
   await expect(read('11111111-1111-4111-8111-111111111111')).rejects.toThrow('METER_FORBIDDEN');
   await expect(read(a.tenantId,'invalid')).rejects.toThrow('METER_FORBIDDEN');
   await f.admin.query('UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1',[a.sessionId]);
   await expect(read()).rejects.toThrow('METER_FORBIDDEN');
   const b=await meterCompany(f);await f.admin.query("UPDATE app.membership SET role='admin' WHERE tenant_id=$1 AND id=$2",[b.tenantId,b.actorId]);
-  await expect(workTenant(f.runtime,b.tenantId,db=>db.query('SELECT app.mon1_lifecycle_capture($1,$2,$3,$4::date,0)',[b.tenantId,b.digest,randomUUID(),'2026-09-01']))).rejects.toThrow('METER_FORBIDDEN');
+  await expect(workTenant(f.runtime,b.tenantId,db=>db.query('SELECT app.mon1_lifecycle_capture($1,$2,$3,$4::date,0)',[b.tenantId,b.digest,randomUUID(),'2026-09-01']), { membershipId: b.actorId, bindRequest: false })).rejects.toThrow('METER_FORBIDDEN');
  });
  it('M1S-08 role cannot assume roles/read shadow or write business rows; new tables FORCE RLS',async()=>{
   const role=(await f.admin.query("SELECT rolcanlogin,rolinherit,rolsuper,rolbypassrls,rolcreaterole FROM pg_roles WHERE rolname='jobguard_meter'")).rows[0];
@@ -100,6 +100,6 @@ describe('MON1-S local privilege boundary, CI PostgreSQL only',()=>{
  });
  it('direct cross-tenant source insert is unavailable to runtime, even under a valid context',async()=>{
   const a=await meterCompany(f);
-  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("INSERT INTO app.meter_lifecycle_scope(tenant_id,id,kind) VALUES($1,$2,'normal_company')",[randomUUID(),randomUUID()]))).rejects.toThrow('permission denied');
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("INSERT INTO app.meter_lifecycle_scope(tenant_id,id,kind) VALUES($1,$2,'normal_company')",[randomUUID(),randomUUID()]), { membershipId: a.actorId })).rejects.toThrow('permission denied');
  });
 });

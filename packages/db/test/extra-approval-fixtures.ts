@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 // ENT-5 owner specimens are structural checks only; there is no issued approval writer.
 import { randomUUID } from "node:crypto";
 import { SiteExtraRepository, withTenant, type VerifiedTenantContext } from "../src/index.js";
@@ -10,9 +11,9 @@ export async function approvalFixture(c: Cluster) {
   const f = await siteFixture(c);
   const context: VerifiedTenantContext = await f.ctx;
   const repo = new SiteExtraRepository(c.runtime);
-  const priced = await repo.logSorSiteExtra(context, f.members.supervisor.member, { commandId: randomUUID(), jobId: f.jobId, sorCode: "CLEAR-GUTTER", quantity: "100", note: "Fictional ENT5 SoR" });
+  const priced = await repo.logSorSiteExtra(await testActorContext(c.admin, context, f.members.supervisor.member), f.members.supervisor.member, { commandId: randomUUID(), jobId: f.jobId, sorCode: "CLEAR-GUTTER", quantity: "100", note: "Fictional ENT5 SoR" });
   const original = await photo(c, { ctx: f.ctx, jobId: f.jobId });
-  const captured = await repo.logSiteExtra(context, f.members.supervisor.member, v3(f, { photoEvidenceId: original.id, shownContentSha256: shownFor(f, original.sha256) }));
+  const captured = await repo.logSiteExtra(await testActorContext(c.admin, context, f.members.supervisor.member), f.members.supervisor.member, v3(f, { photoEvidenceId: original.id, shownContentSha256: shownFor(f, original.sha256) }));
   const source = (await c.admin.query("SELECT id,content_hash,command_id,raising_membership_id,net_pence FROM app.extra_sor_revision WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, priced.variationId])).rows[0]!;
   return { ...f, priced, captured, source, original };
 }

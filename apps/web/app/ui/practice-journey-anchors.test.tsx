@@ -10,7 +10,7 @@ import { CustomerInvoices } from "./customer-invoices";
 
 const hooks = vi.hoisted(() => ({ values: [] as unknown[] }));
 vi.mock("react", async original => ({
- ...await original<typeof React>(),
+ ...await original<typeof React>(), useContext: () => 0,
  useState: (initial: unknown) => [hooks.values.length ? hooks.values.shift() : typeof initial === "function" ? initial() : initial, vi.fn()],
  useRef: (current: unknown) => ({ current }),
  useCallback: (fn: unknown) => fn,
@@ -42,7 +42,7 @@ it("uses the existing proof section for incomplete live work", () => {
 });
 it("uses the existing variations heading for extras", () => {
  const id = target(card("live", { variationsApproved: false }));
- hooks.values = [{ variations: [], approvedAdditionsPence: 0, approvedOmissionsPence: 0, pendingExtrasPence: 0, baselinePence: 0 }];
+ hooks.values = [{ jobId, variations: [], approvedAdditionsPence: 0, approvedOmissionsPence: 0, pendingExtrasPence: 0, baselinePence: 0 }];
  expect(renderToStaticMarkup(<JobVariations jobId={jobId}/>)).toContain(` id="${id}"`);
 });
 it("uses the final-account heading without inventing a job total", () => {

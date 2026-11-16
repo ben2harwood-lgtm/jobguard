@@ -12,6 +12,7 @@ describe("SV-3 worker boundary and terms gate", () => {
   it("passes each stamped context whole per call; repeated invocations never retain it", async () => {
     const p=ports(),worker=new ShadowDetectionWorker(p,"synthetic_demo",()=>at),context=testTenantContext(tenantId);
     await worker.start();await worker.execute(context,task);await worker.execute(context,task);
+    expect(p.hasAcceptedTerms).toHaveBeenCalledWith(context,jobId);
     expect(p.read).toHaveBeenCalledWith(context,{version:"shadow-observation-read.v1",jobId});
     expect(p.persist).toHaveBeenCalledTimes(2);expect(vi.mocked(p.persist).mock.calls[0]![1]).toEqual(vi.mocked(p.persist).mock.calls[1]![1]);
   });
@@ -66,17 +67,18 @@ describe("SV-3 / SV-4 accepted terms integration port",()=>{
     const {ShadowObservationReader}=await import(new URL("../../../packages/db/src/shadow-observation-reader.ts",import.meta.url).href);
     const query=vi.fn(async(sql:string,values?:unknown[])=>{
       if(sql.includes("to_regclass"))return {rows:[{available:true}]};
-      if(sql.includes("FROM app.final_check_terms_acceptance"))return {rows:[],rowCount:0};
+      if(sql.includes("app.final_check_runtime_job_terms"))return {rows:[{accepted:false}]};
       return {rows:[]};
     });
     const pool={query,connect:vi.fn(async()=>({query,release:vi.fn()}))} as unknown as import("pg").Pool;
     const reader=new ShadowObservationReader(pool,{decode:async()=>null}),p=ports();
-    p.assertTermsRelation=()=>reader.assertTermsRelation();p.hasAcceptedTerms=c=>reader.hasAcceptedTerms(c);
+    p.assertTermsRelation=()=>reader.assertTermsRelation();p.hasAcceptedTerms=(c,j)=>reader.hasAcceptedTerms(c,j);
     const worker=new ShadowDetectionWorker(p,"synthetic_demo");await worker.start();
     await expect(worker.execute(testTenantContext(tenantId),task)).rejects.toThrow("SHADOW_TERMS_NOT_ACCEPTED");
-    const terms=query.mock.calls.filter(([sql])=>sql.includes("FROM app.final_check_terms_acceptance"));
-    expect(terms).toHaveLength(1);expect(terms[0]![0]).toContain("terms_version=$2");
-    expect(terms[0]![1]).toEqual([tenantId,"synthetic_final_check_terms.v1"]);
+    const terms=query.mock.calls.filter(([sql])=>sql.includes("app.final_check_runtime_job_terms"));
+    expect(terms).toHaveLength(1);expect(terms[0]![0]).toContain("app.final_check_runtime_job_terms($1,$2)");
+    expect(terms[0]![1]).toEqual([jobId,"synthetic_final_check_terms.v1"]);
+    expect(query).toHaveBeenCalledWith("SELECT set_config('app.tenant_id', $1, true)",[tenantId]);
     expect(p.read).not.toHaveBeenCalled();expect(p.propose).not.toHaveBeenCalled();expect(p.persist).not.toHaveBeenCalled();
   });
 });

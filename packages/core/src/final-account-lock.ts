@@ -11,6 +11,7 @@ export const FINAL_ACCOUNT_REVIEW_PROMPT = "Anything else to add before you fini
 export const FINAL_CHECK_RUNNING_TEXT = "Running JobGuard's final check" as const;
 /** BUILD_PLAN §10.2.10: closed synthetic wording, pending D12/D13 approval. */
 export const FINAL_CHECK_TERMS_STATEMENTS = Object.freeze([
+    "Practice wording only — this records this practice firm's choice to try Final Check with made-up job records. It is not legal terms, authorisation to charge, or permission to use real customer data.",
     "analyses job records;",
     "may identify possible unrecorded extras;",
     "compares them independently with the completed final account;",

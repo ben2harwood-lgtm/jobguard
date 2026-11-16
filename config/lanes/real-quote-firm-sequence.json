@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-quote-firm-sequence": {
+      "branches": [
+        "codex/sandbox/real-quote-firm-sequence"
+      ],
+      "note": "RED runtime quote firm allocator integration; inherited allocator files remain outside this lane.",
+      "allow": [
+        "packages/db/src/quote-delivery-repository.ts",
+        "packages/db/test/real-quote-firm-sequence.integration.test.ts",
+        "packages/db/test/real-quote-firm-sequence-db.integration.test.ts",
+        "apps/web/e2e/real-quote-firm-sequence-server.spec.ts",
+        "packages/db/src/demo-seed.ts",
+        "packages/db/test/firm-profile.integration.test.ts",
+        "packages/db/test/quote-reacceptance.integration.test.ts",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
+        "packages/db/src/demo-seed.ownership.test.ts",
+        "packages/db/migrations/0739_quote_company_sequence.sql",
+        "packages/db/migration-notes/0739_quote_company_sequence.md",
+        "packages/db/test/migration-proofs/0739_quote_company_sequence.proof.json",
+        "packages/db/test/lp-legacy-sandbox-fixture.ts",
+        "packages/db/test/stored-receipt-case-fixture.ts",
+        "packages/db/test/lp3-upgrade.integration.test.ts",
+        "packages/db/test/job-activation-terms.integration.test.ts",
+        "packages/db/test/recovery-case-terms-upgrade.integration.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts",
+        "packages/db/test/fee-illustration-later.integration.test.ts",
+        "packages/db/test/j3-landing-allocation.integration.test.ts"
+      ]
+    }
+  }
+}

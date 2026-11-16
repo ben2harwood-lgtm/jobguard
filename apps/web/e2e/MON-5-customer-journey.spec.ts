@@ -21,6 +21,9 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
     }
     const practice = (await page.context().cookies()).find(c => c.name === "jg_session")!;
     const digest = createHash("sha256").update(practice.value).digest("hex");
+    // 0735: the job's own practice firm accepts the Final Check terms through the app, before the builder signs in.
+    const terms = await page.request.post(`/api/jobs/${job}/final-account/terms`, { data: { version: "final-check-terms.accept.v1", commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" } });
+    expect(terms.ok()).toBe(true);
     await signInForChooser(page);
     const issuer = await linkIssuer(admin,page);
     const parties = await page.request.get(`/api/jobs/${job}/parties`);
@@ -150,8 +153,8 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
     await home.getByLabel("Message",{exact:true}).fill(safetyText);
     await home.getByRole("button",{name:"Save message",exact:true}).click();
     await expect(home.getByLabel("Message",{exact:true})).toHaveValue("");
-    await detectMessages(admin,job,issuer.member,issuer.user);
-    await detectMessages(admin,job,issuer.member,issuer.user);
+    await detectMessages(admin,job,issuer.member,issuer.user,issuer.credential);
+    await detectMessages(admin,job,issuer.member,issuer.user,issuer.credential);
     const firings = (await admin.query(`SELECT f.rule,s.state,s.disclosed_before_lock FROM app.shadow_must_surface_firing f
       JOIN app.shadow_commercial_signal s ON(s.tenant_id,s.id)=(f.tenant_id,f.signal_id) WHERE f.tenant_id=$1 AND f.job_id=$2`,[portalTenant,job])).rows;
     expect(firings).toEqual([{rule:"safety",state:"surfaced_early",disclosed_before_lock:true}]);

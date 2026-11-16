@@ -8,7 +8,7 @@ import {
   withTenant, type ConsequentialCommand,
 } from "../src/index.js";
 import { clusterBefore } from "./site-extra-pricing-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 
 const own = "0153_quote_supersession_guard.sql";
 let c: Awaited<ReturnType<typeof clusterBefore>>;
@@ -20,7 +20,7 @@ async function issued() {
   await c.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
   await c.admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional MIGFIX builder')", [tenant, account]);
   await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [tenant, member, account, user]);
-  const context = testTenantContext(tenant);
+  const context = testTenantContext(tenant, { membershipId: member });
   await withTenant(c.runtime, context, async db => {
     await db.$client.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional quote','quoting')", [tenant, job]);
     await db.$client.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')", [tenant, scope, job]);
@@ -80,7 +80,7 @@ async function state(f: Fixture) {
     FROM app.job WHERE tenant_id=$1 AND id=$2`, [f.tenant, f.job])).rows[0]!;
 }
 async function execute(f: Fixture, action: ReturnType<typeof acceptance> | ReturnType<typeof disposition>) {
-  return f.dispatcher.dispatch(f.context, action.command, action.mutation);
+  return f.dispatcher.dispatch(await testActorContext(c.admin, f.context, { tenantId: f.tenant, membershipId: f.member }), action.command, action.mutation);
 }
 
 import { proofBefore, proofColumns, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";

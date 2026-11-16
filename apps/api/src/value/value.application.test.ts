@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, practiceOwnedJobsSql } from "@jobguard/db";
 import { ValueApplication } from "./value.application.js";
 
-type Revision = { id: string; revision_id: string; revision: number; description: string; signed_delta_pence: string; approved: boolean; rejected: boolean; current: boolean };
+type Revision = { id: string; revision_id: string; revision: number; description: string; signed_delta_pence: string; approved: boolean; rejected: boolean; current: boolean; invoiced?: boolean };
 
 // This double models the two variation joins, not PostgreSQL itself. The companion
 // integration suite exercises the real query and variation commands with RLS.
@@ -142,4 +142,46 @@ it("removes a rejected extra while retaining another pending extra on the same j
  revisions.push(other);
  const pending = await app.read(jobId);
  expect(pending).toEqual({ ...rejected, pendingExtras: [{ id: other.revision_id, revision: 1, description: other.description, pence: 12500, status: "awaiting_approval", href: `/jobs/${jobId}#variation-${other.id}` }] });
+});
+
+it("paid main bill still flags an approved unbilled catch", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const found = catchRow();
+ const first: Revision = { id: found.id, revision_id: found.revision_id!, revision: 2, description: found.description, signed_delta_pence: "15000", approved: true, rejected: false, current: true, invoiced: false };
+ const { app, jobId, query } = fixture([first], [found]);
+ const value = await app.read(jobId);
+ expect(value.catchAttention).toEqual([{ id: found.id, description: found.description, revisionId: first.revision_id, revision: 2, pence: 15000, status: "ready_to_invoice", href: `/jobs/${jobId}/work#variation-${found.id}` }]);
+ const sql = query.mock.calls.map(([sql]) => sql).find(sql => sql.includes("invoiced FROM app.variation"))!;
+ expect(sql).toContain("app.final_account_invoiced_line");
+ expect(sql).toContain("NOT EXISTS(SELECT 1 FROM app.final_account_invoice_binding");
+ expect(sql).toContain("l.source_id=r.id AND l.commercial_revision_id=r.id AND l.scope_item_id=r.scope_item_id");
+ expect(sql).not.toContain("customer_credit_note");
+});
+it("removes only the exact invoiced catch, retaining persisted history and an equal-priced catch", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const catches = [catchRow(), catchRow()];
+ const revisions: Revision[] = catches.map(row => ({ id: row.id, description: row.description, revision_id: row.revision_id!, revision: row.revision!, signed_delta_pence: "15000", approved: true, rejected: false, current: true, invoiced: false }));
+ const { app, jobId } = fixture(revisions, catches);
+ expect((await app.read(jobId)).catchAttention).toHaveLength(2);
+ revisions[0]!.invoiced = true;
+ const billed = await app.read(jobId);
+ expect(billed.foundAfterLock).toHaveLength(2);
+ expect(billed.catchAttention.map(row => row.id)).toEqual([catches[1]!.id]);
+});
+it("keeps an unbilled approval and newer proposed price separate, including after rejection", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const found = catchRow();
+ const prior: Revision = { id: found.id, revision_id: randomUUID(), revision: 1, description: found.description, signed_delta_pence: "15000", approved: true, rejected: false, current: false, invoiced: false };
+ const proposal: Revision = { ...prior, revision_id: found.revision_id!, revision: 2, approved: false, current: true, signed_delta_pence: "20000" };
+ const { app, jobId } = fixture([proposal, prior], [found]);
+ expect((await app.read(jobId)).catchAttention.map(row => [row.status, row.pence])).toEqual([["ready_to_invoice", 15000], ["needs_approval", 20000]]);
+ proposal.rejected = true;
+ expect((await app.read(jobId)).catchAttention.map(row => [row.status, row.pence])).toEqual([["ready_to_invoice", 15000]]);
+ prior.invoiced = true;
+ expect((await app.read(jobId)).catchAttention).toEqual([]);
+});
+it("an unpriced confirmed draft needs a price, never a zero approved amount", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const { app, jobId } = fixture([], [{ ...catchRow(), revision_id: null, revision: null, signed_delta_pence: null }]);
+ expect((await app.read(jobId)).catchAttention).toEqual([expect.objectContaining({ status: "needs_price", pence: null, revisionId: null })]);
 });

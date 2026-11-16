@@ -1,4 +1,5 @@
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { claimCommandIdentity,withTenant } from "../src/index.js";
 import { Pool } from "pg";
@@ -45,7 +46,8 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
   await expect(runWorkCommand(f.runtime,p,workCommand(),job)).rejects.toThrow("JOB_NOT_LIVE");
   // Authority first, then live state, then expected revision (including normal owners).
   await expect(runWorkCommand(f.runtime,p,workCommand("finish",{expectedRevision:99}),job,p.auth.membershipId)).rejects.toThrow("JOB_NOT_LIVE");
-  await expect(runWorkCommand(f.runtime,p,workCommand("finish",{expectedRevision:99}),job,randomUUID())).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  // Raw direct SQL, class (a): a digest/actor naming someone the request is not bound to (forged or foreign) is refused by the binding check first.
+  await expect(runWorkCommand(f.runtime,p,workCommand("finish",{expectedRevision:99}),job,randomUUID())).rejects.toThrow("REQUEST_BINDING_REFUSED");
   const closed=await runWorkCommand(f.runtime,p,workCommand("close",{reason:"other",note:"Fictional customer cancelled before site work"}),job);
   expect(closed.events.at(-1)?.kind).toBe("closed");expect((await f.admin.query("SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2",[p.auth.context.tenantId,job])).rows[0].status).toBe("quoting");
  });
@@ -67,10 +69,15 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
  it("pre-live administration rejects foreign owner, invalid session, unknown job and revoked owner without writes",async()=>{
   const p=await seedWorkPractice(f),other=await seedWorkJob(f),job=(await f.admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='quoting' LIMIT 1",[p.auth.context.tenantId,p.auth.digest])).rows[0].id as string;
   const input=workCommand("close",{reason:"other",note:"Fictional close"}),before=await commandCounts(f,p);
-  for(const digest of [other.actorId,"0".repeat(64)])await expect(runWorkCommand(f.runtime,p,input,job,digest)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  // Raw direct SQL, class (a): a digest/actor naming someone the request is not bound to (forged or foreign) is refused by the binding check first.
+  // Class (a): another tenant's membership id names an actor this request is not bound to, so the binding check
+  // refuses first; an unknown session digest still reaches the routine's own refusal.
+  await expect(runWorkCommand(f.runtime,p,input,job,other.actorId)).rejects.toThrow("REQUEST_BINDING_REFUSED");
+  await expect(runWorkCommand(f.runtime,p,input,job,"0".repeat(64))).rejects.toThrow("WORK_STATE_FORBIDDEN");
   await expect(runWorkCommand(f.runtime,p,input,randomUUID())).rejects.toThrow("WORK_STATE_FORBIDDEN");
   await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[p.auth.context.tenantId,p.auth.membershipId]);
-  try{await expect(runWorkCommand(f.runtime,p,input,job)).rejects.toThrow("WORK_STATE_FORBIDDEN");}
+  // WORK_STATE_PRELIVE_REVOKED_SQL: the raw command helper binds before invoking CH-4.
+  try{await expect(runWorkCommand(f.runtime,p,input,job)).rejects.toThrow("REQUEST_BINDING_REFUSED");}
   finally{await f.admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[p.auth.context.tenantId,p.auth.membershipId]);}
   expect(await commandCounts(f,p)).toEqual(before);
  });
@@ -145,15 +152,24 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
  });
  it("normal owner in a random tenant succeeds; foreign, revoked, expired and non-owner memberships cannot append or replay",async()=>{
   const job=await seedWorkJob(f),other=await seedWorkJob(f),input=workCommand();
-  const run=(actor=job.actorId,body=input)=>workTenant(f.runtime,job.tenantId,async db=>(await db.query("SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result",[job.tenantId,job.jobId,actor,JSON.stringify(body)])).rows[0].result);
+  // WORK_STATE_NORMAL_OWNER_SQL: positive raw SQL binds the exact persisted owner.
+  const credential=randomUUID().replaceAll("-","").repeat(2);
+  await testBoundTenantContext(f.admin,job.tenantId,job.actorId,credential);
+  const run=(actor=job.actorId,body=input)=>workTenant(f.runtime,job.tenantId,async db=>{
+   await db.query("SELECT app.bind_request('real',$1,$2)",[credential,job.tenantId]);
+   return (await db.query("SELECT app.ch4_record_work_state($1,$2,$3,$4::jsonb) result",[job.tenantId,job.jobId,actor,JSON.stringify(body)])).rows[0].result;
+  }, { membershipId: actor, bindRequest: false });
   const first=await run();expect(first.events.at(-1).kind).toBe("finished_on_site");expect(await run()).toEqual(first);
   const {JobWorkStateRepository}=await import("../src/job-work-state-repository.js");
   expect(await new JobWorkStateRepository(f.runtime).command(job.context,job.jobId,job.actorId,input)).toEqual(first);
-  await expect(run(other.actorId)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+  // Raw direct SQL, class (a): a digest/actor naming someone the request is not bound to (forged or foreign) is refused by the binding check first.
+  await expect(run(other.actorId)).rejects.toThrow("REQUEST_BINDING_REFUSED");
   for(const change of ["role='admin'","role='finance'","revoked_at=clock_timestamp()","expires_at=clock_timestamp()-interval '1 second'"]){
    await f.admin.query(`UPDATE app.membership SET ${change} WHERE tenant_id=$1 AND id=$2`,[job.tenantId,job.actorId]);
-   await expect(run()).rejects.toThrow("WORK_STATE_FORBIDDEN");
-   await expect(run(job.actorId,workCommand("close",{expectedRevision:1,reason:"other",note:"Fictional"}))).rejects.toThrow("WORK_STATE_FORBIDDEN");
+   // WORK_STATE_NORMAL_OWNER_SQL: revoked/expired owners fail raw binding; active non-owners still reach permission checks.
+   const refusal=change.startsWith("role=")?"WORK_STATE_FORBIDDEN":"REQUEST_BINDING_REFUSED";
+   await expect(run()).rejects.toThrow(refusal);
+   await expect(run(job.actorId,workCommand("close",{expectedRevision:1,reason:"other",note:"Fictional"}))).rejects.toThrow(refusal);
    await f.admin.query("UPDATE app.membership SET role='owner',revoked_at=NULL,expires_at=NULL WHERE tenant_id=$1 AND id=$2",[job.tenantId,job.actorId]);
   }
   expect(await run()).toEqual(first);
@@ -224,7 +240,8 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
    const db=await f.admin.connect();try{
     await db.query("BEGIN");await db.query(`UPDATE app.membership SET ${field}=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2`,[p.auth.context.tenantId,p.auth.membershipId]);
     await db.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);await db.query("SET LOCAL ROLE jobguard_runtime");
-    const {commandOn}=await import("./job-work-state-command-fixtures.js");await expect(commandOn(db,p,input)).rejects.toThrow("WORK_STATE_FORBIDDEN");
+    // WORK_STATE_REVOKED_EXPIRED_SQL: direct membership attack refuses before append/replay.
+    const {commandOn}=await import("./job-work-state-command-fixtures.js");await expect(commandOn(db,p,input)).rejects.toThrow("REQUEST_BINDING_REFUSED");
    }finally{await db.query("ROLLBACK");db.release()}
   }
  });

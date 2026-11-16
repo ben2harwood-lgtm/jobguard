@@ -1,16 +1,21 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { describe, expect, it } from "vitest";
 import * as database from "../src/index.js";
 import { runSyntheticRestoreRehearsal } from "../tools/synthetic-restore.mjs";
+const fixtureDatabase = { ...database,
+  verifiedTenantContextFromMembership: (membership: Parameters<typeof database.verifiedTenantContextFromMembership>[0]) =>
+    testTenantContext(membership.tenantId, { membershipId: membership.membershipId }),
+};
 
 describe("disposable synthetic restore rehearsal", () => {
   it.each(["production", "pilot_no_charge", "provider_sandbox", "", undefined])("refuses non-synthetic explicit mode %s", async mode => {
-    await expect(runSyntheticRestoreRehearsal({ environment: mode }, database)).rejects.toThrow("SYNTHETIC_REHEARSAL_ONLY");
+    await expect(runSyntheticRestoreRehearsal({ environment: mode }, fixtureDatabase)).rejects.toThrow("SYNTHETIC_REHEARSAL_ONLY");
   });
   it.each([{ databaseUrl: "postgresql://example.invalid/existing" }, { directory: "/existing" }, null, []])("refuses connection/path/invalid options %j", async options => {
-    await expect(runSyntheticRestoreRehearsal(options, database)).rejects.toThrow("REHEARSAL_OPTIONS_REFUSED");
+    await expect(runSyntheticRestoreRehearsal(options, fixtureDatabase)).rejects.toThrow("REHEARSAL_OPTIONS_REFUSED");
   });
   it("restores all rows/evidence/roles/audit and safely handles pending and unknown fake work", async () => {
-    const receipt = await runSyntheticRestoreRehearsal({ environment: "synthetic_demo" }, database);
+    const receipt = await runSyntheticRestoreRehearsal({ environment: "synthetic_demo" }, fixtureDatabase);
     expect(receipt.result).toBe("PASS");
     expect(receipt.checks).toHaveLength(12);
     expect(receipt.checks.every((check: { status: string }) => check.status === "PASS")).toBe(true);

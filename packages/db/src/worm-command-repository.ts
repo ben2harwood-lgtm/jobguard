@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { WormBoundaryError, type WormStorage, type TimestampResult, type TimestampRequest } from "@jobguard/storage";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -56,12 +57,16 @@ export class WormCommandRepository {
   private async transaction<T>(pool: Pool, context: VerifiedTenantContext,
     work: (db: TenantTransaction) => Promise<T>): Promise<T> {
     let rejected: WormCommandError | undefined;
+    let entered = false;
     try {
       return await withTenant(pool, context, async db => {
+        entered = true;
         try { return await work(db); }
         catch (error) { rejected = refusal(error); throw rejected; }
       });
     } catch (error) {
+      // The protected binder may refuse before the callback (including revoked replay).
+      if (!entered && error instanceof RequestBindingRefusedError) throw new WormCommandError("WORM_REFUSED");
       // BEGIN/connect, COMMIT, rollback and release failures cannot prove refusal.
       if (rejected && error === rejected) throw rejected;
       throw new WormCommandError("WORM_UNCONFIRMED");

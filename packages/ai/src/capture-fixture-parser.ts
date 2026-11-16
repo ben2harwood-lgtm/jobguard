@@ -1,4 +1,4 @@
-import type { JobRecordProposal } from "@jobguard/core";
+import { suggestCapturePartyClause, type JobRecordProposal } from "@jobguard/core";
 
 export const CAPTURE_FIXTURE_PARSER_VERSION = "structured-capture-fixture/2" as const;
 const MAX_PENCE = 1_000_000_000_000n;
@@ -8,7 +8,7 @@ export class CaptureFixtureError extends Error {
     super(code); this.code = code; this.name = "CaptureFixtureError";
   }
 }
-type Cell = { value: string; start: number };
+type Cell = { value: string; start: number; inferred?: boolean; originalValue?: string };
 function cells(raw: string, start: number): Cell[] {
   let offset = 5;
   return raw.slice(5).split("|").map(part => {
@@ -34,7 +34,9 @@ function explicit(candidates: Cell[], prefix: string): Cell | null {
 }
 
 const workWord = /^(?:rip|remove|strip|take|clear|fit|install|supply|new|replace|tile|paint|plaster|skim|board|lay|hang|build|make|fix|repair|wire|plumb|test|prepare|protect|clean|seal|fill|sand|prime|connect|move|cut)\b/iu;
-const timing = /^(?:should take|will take|takes?|timing)\b/iu;
+const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
+const overallPrice = /^(?:(?:should|will) be\s+)?(?:about|around|roughly|approximately)\s+(?:£?\d)/iu;
+const workClause = (value: string) => workWord.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
 const total = /\b(?:in total|altogether|all in)\b/iu;
 const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?\s+(?:pounds|quid))(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
 
@@ -48,8 +50,10 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
     const raw = text.slice(start, end), value = raw.trim();
     if (value) chunks.push({ value, start: start + raw.length - raw.trimStart().length });
   };
+  const party = suggestCapturePartyClause(text);
   let start = 0;
   for (let i = 0; i < text.length; i++) {
+    if (party && i === party.start) { i = party.end - 1; continue; }
     const char = text[i]!;
     // A decimal point or thousands separator belongs to the amount.
     if (/[.!?;\r\n]/u.test(char) && !(char === "." && /\d/u.test(text[i - 1] ?? "") && /\d/u.test(text[i + 1] ?? ""))) {
@@ -60,7 +64,7 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
       const next = text.slice(i + separator.length).trimStart();
       // Keep the disposal phrase attached to the removal it describes.
       if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) continue;
-      if (workWord.test(next) || timing.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!)) {
+      if (workClause(next) || timing.test(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!)) {
         add(start, i); start = i + separator.length; i = start - 1;
       }
     }
@@ -71,20 +75,28 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
   const title = first && titleText ? { value: titleText, start: first.start } : null;
   const work = chunks.filter((chunk, index) => {
     if (timing.test(chunk.value)) { notes.push(`Confirm timing: ${chunk.value.slice(0, 450)}`); return false; }
-    if (!workWord.test(chunk.value) && total.test(chunk.value)) {
+    if (!workClause(chunk.value) && (total.test(chunk.value) || overallPrice.test(chunk.value))) {
       notes.push(`You said “${chunk.value.slice(0, 400)}”. Add a price to each line, or put it on one line.`); return false;
     }
-    return !/^JOB:/u.test(chunk.value) && !(index === 0 && !workWord.test(chunk.value));
+    return !/^JOB:/u.test(chunk.value) && !(index === 0 && !workClause(chunk.value));
   });
   if (work.length > 100) throw new CaptureFixtureError("FIXTURE_STRUCTURE_REQUIRED");
-  return { chunks: work, notes, title };
+  const cleaned = work.map(chunk => {
+    if (!party || party.start < chunk.start || party.end > chunk.start + chunk.value.length) return chunk;
+    const before = text.slice(chunk.start, party.start).trimEnd();
+    const after = text.slice(party.end, chunk.start + chunk.value.length);
+    return { value: before + after, start: chunk.start, inferred: !!after.trim(), originalValue: chunk.value };
+  });
+  return { chunks: cleaned, notes, title };
 }
 
 function plainPrice(chunk: Cell): Cell | null {
   const matches = [...chunk.value.matchAll(priceLiteral)];
-  if (matches.length !== 1 || matches[0]![0] === chunk.value || /\b(?:about|around|roughly|approximately)\b/iu.test(chunk.value)) return null;
+  if (matches.length !== 1 || matches[0]![0] === chunk.value || total.test(chunk.value) || /\b(?:about|around|roughly|approximately)\b/iu.test(chunk.value)) return null;
   const match = matches[0]!;
-  return { value: match[0], start: chunk.start + match.index };
+  const originals = [...(chunk.originalValue ?? chunk.value).matchAll(priceLiteral)];
+  if (originals.length !== 1 || originals[0]![0] !== match[0]) return null;
+  return { value: match[0], start: chunk.start + originals[0]!.index };
 }
 
 /** Structured synthetic recipe parser, NOT a live model or natural-language
@@ -115,26 +127,28 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
     value, provenance: { kind: "inferred" as const, note: "A human must resolve the source ambiguity" },
   } });
   const questions: JobRecordProposal["questions"] = [question(items.length
-    ? "Confirm disposal and waste allowance" : "Please turn these words into work items")];
+    ? "Confirm disposal and waste allowance" : "Check this line. Use Split to make separate work items, then edit and accept each one.")];
   if (titles.length > 1) questions.push(question("Confirm which stated job title applies"));
   let lines: JobRecordProposal["lines"];
   let plainTitle: Cell | null = null;
   if (!items.length) {
     const draft = plainDraft(text);
+    if (draft.chunks.length && workClause(text.trimStart())) plainTitle = draft.title;
     if (draft.chunks.length >= 2) {
       plainTitle = draft.title;
       questions[0] = question("Confirm disposal and waste allowance");
       questions.push(...draft.notes.map(question));
       lines = draft.chunks.map(chunk => {
         const rate = plainPrice(chunk);
+        if (!rate && [...chunk.value.matchAll(priceLiteral)].length) questions.push(question(`Confirm price: ${chunk.value.slice(0, 450)}`));
         const rateValue = rate ? exactRate(`£${rate.value.replace(/£|,|\s*(?:pounds|quid)/giu, "")}`) : null;
         // A trailing stated price is separate from the work description.
-        const description = rate && rate.start + rate.value.length === chunk.start + chunk.value.length
-          ? chunk.value.slice(0, rate.start - chunk.start).trimEnd() : chunk.value;
+        const description = rate && chunk.value.endsWith(rate.value)
+          ? chunk.value.slice(0, -rate.value.length).trimEnd() : chunk.value;
         const kept = description.slice(0, 500);
         if (kept.length < description.length) questions.push(question(`Confirm the description for ${kept.slice(0, 160)}; it is longer than one description and was shortened`));
         return {
-          description: { value: kept, provenance: extracted(chunk.start, kept.length) },
+          description: { value: kept, provenance: chunk.inferred ? { kind: "inferred", note: "Work description assembled around the customer and site clause; check the original source" } : extracted(chunk.start, kept.length) },
           quantity: { value: "1", provenance: defaulted("One item per draft line; confirm before quoting") },
           unit: { value: "item", provenance: defaulted("Draft work item; confirm before quoting") },
           unitPricePence: { value: rateValue, provenance: rateValue !== null && rate

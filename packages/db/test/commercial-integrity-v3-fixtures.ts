@@ -6,7 +6,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
-import { issuePracticeSession, authenticatePracticeSession } from "../src/practice-session.js";
+import { issuePracticeSession, authenticatePracticeSession, practiceMaterialPool } from "../src/practice-session.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { CommercialIntegrityV3Repository } from "../src/commercial-integrity-v3-repository.js";
 import { canonicalCommercialIntegritySnapshot } from "../../core/src/commercial-integrity-v3.js";
@@ -42,8 +42,9 @@ export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF
  return {admin,runtime,repo,auth,other,logs,login,runtimeConfig:{host:"127.0.0.1",port,user:login,password,database:"jobguard_synthetic_demo"},async close(){if(previous===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous;await closeTestPools(runtime,admin);await pg.stop();await rm(dir,{recursive:true,force:true});}};
 }
 export type IntegrityFixture=Awaited<ReturnType<typeof createIntegrityFixture>>;
-export async function transaction<T>(pool:Pool,work:(db:PoolClient)=>Promise<T>) {
- const db=await pool.connect();try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);const result=await work(db);await db.query("COMMIT");return result;}catch(error){await db.query("ROLLBACK");throw error;}finally{db.release();}
+/** `practiceDigest` binds this raw transaction to that practice session's own request (LP-6d). */
+export async function transaction<T>(pool:Pool,work:(db:PoolClient)=>Promise<T>,practiceDigest?:string) {
+ const db=await pool.connect();try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);if(practiceDigest)await db.query("SELECT app.bind_request('practice',$1,$2)",[practiceDigest,tenant]);const result=await work(db);await db.query("COMMIT");return result;}catch(error){await db.query("ROLLBACK");throw error;}finally{db.release();}
 }
 export async function seedIntegrityJob(f:IntegrityFixture,invoice=true) {
  const job=randomUUID(),quote=randomUUID(),draft=randomUUID(),revision=randomUUID();
@@ -99,7 +100,8 @@ export async function addIntegrityPayment(f:IntegrityFixture,job:string) {
 export async function addIntegrityLock(f:IntegrityFixture,x:Awaited<ReturnType<typeof seedIntegrityJob>>) {
  const {withTenant}=await import("../src/tenant-context.js"),{appendAuditBatch}=await import("../src/audit.js");
  const id=randomUUID(),command=randomUUID(),event=randomUUID();
- await withTenant(f.admin,f.auth.context,async db=>{
+ const scoped=(await f.admin.query("SELECT to_regprocedure('app.final_check_request_scope(uuid)') IS NOT NULL installed")).rows[0].installed;
+ await withTenant(scoped?practiceMaterialPool(f.admin,f.auth.digest):f.admin,f.auth.context,async db=>{
   await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
    VALUES($1,$2,'synthetic.ch6.lock-fixture',$1::uuid::text,repeat('a',64),'succeeded','{}',$3,clock_timestamp())`,[command,tenant,member]);
   await db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[tenant,member,randomUUID(),"synthetic_final_check_terms.v1"]);
