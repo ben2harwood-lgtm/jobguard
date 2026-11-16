@@ -33,6 +33,17 @@ test("own practice firm starts from the sample name, can name itself, and a forg
  await expect(page.getByRole("status")).toContainText("Firm details saved.");
  await page.reload();
  await expect(page.getByLabel("Trading name")).toHaveValue("Fictional Practice Works");
+ const separate = await browser.newContext();
+ try {
+  expect(await separate.cookies()).toHaveLength(0);
+  const other = await separate.newPage();
+  const origin = new URL(page.url()).origin;
+  await other.goto(`${origin}/practice-company`);
+  await expect(other.getByRole("heading", { name: "Ready for your first job" })).toBeVisible();
+  await other.goto(`${origin}/firm-details`);
+  await expect(other.getByLabel("Trading name")).toHaveValue("A Builder Ltd");
+  await expect(other.getByLabel("Trading name")).not.toHaveValue("Fictional Practice Works");
+ } finally { await separate.close(); }
  const anonymous = await browser.newContext();
  try {
   expect(await anonymous.cookies()).toHaveLength(0);
