@@ -50,8 +50,17 @@ test("blank firm saves its name and issues an ordinary-words quote", async ({ pa
  const bytes = await readFile(path!);
  expect(bytes.toString("utf8")).toContain(name);
  expect(createHash("sha256").update(bytes).digest("hex")).toBe(hash);
- await click(page,"Simulate sending this quote"); await click(page,"Continue fake worker");
+ // Own blank firms complete the fake send in the issue request on current main.
+ const sending = page.waitForResponse(response => response.url().endsWith(`/jobs/${job}/quotes/delivery`) && response.request().method() === "POST");
+ await click(page,"Simulate sending this quote");
+ const sent = await sending;
+ expect(sent.status(), await sent.text()).toBe(200);
+ const approved = sent.request().postDataJSON();
+ expect(approved.contentHash).toBe(hash);
+ expect(await sent.json()).toMatchObject({ documentId: approved.documentId, contentHash: hash, recipient: approved.recipient,
+  status: "simulated_delivery", attempts: 1, receiptCount: 1, effects: { platformDebt: 0, chargeAttempts: 0, realExternalActions: 0 } });
  await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
+ await expect(page.getByRole("button", { name: "Continue fake worker", exact: true })).toHaveCount(0);
  const recording = page.waitForResponse(response => response.url().endsWith(`/jobs/${job}/quotes/acceptance`) && response.request().method() === "POST");
  await click(page,"Record practice acceptance");
  const recorded = await recording;
