@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-184": {
+      "branches": [
+        "codex/sandbox/later-safety-184"
+      ],
+      "note": "LATER-SAFETY-184 RED: scoped priced-submit retry recovery; no migration.",
+      "allow": [
+        "apps/api/src/contractor/site-extra.application.ts",
+        "apps/api/src/contractor/site-extra-pricing.application.test.ts",
+        "packages/db/src/extra-approval-chain-repository.ts",
+        "packages/db/test/site-extra-priced-submit-recovery.integration.test.ts",
+        "config/lanes/later-safety-184.json"
+      ]
+    }
+  }
+}
