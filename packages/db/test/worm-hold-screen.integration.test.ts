@@ -10,13 +10,14 @@ import { migrate } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
 import { verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { WormCommandRepository } from "../src/index.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), evidence = randomUUID();
 const actor = randomUUID(), second = randomUUID(), samePerson = randomUUID(), user = randomUUID();
-const context = testTenantContext(tenant, { membershipId: actor });
+let context = testTenantContext(tenant, { membershipId: actor });
+let secondContext = testTenantContext(tenant, { membershipId: second });
 const sessionDigest = "a".repeat(64), secondDigest = "b".repeat(64);
 const unregistered = randomUUID(), foreignJob = randomUUID(), foreignEvidence = randomUUID();
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, dir: string, repo: WormCommandRepository, secondRepo: WormCommandRepository;
@@ -53,6 +54,8 @@ beforeAll(async () => {
     await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [uid, tenant, member]);
     await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`worm-${uid}@fictional.invalid`, uid]);
   }
+  context = await testBoundTenantContext(admin, tenant, actor, sessionDigest);
+  secondContext = await testBoundTenantContext(admin, tenant, second, secondDigest);
   await importWatchdogFixtureJob(admin, tenant, job, "Synthetic retention");
   expect((await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2", [tenant, job])).rows).toEqual([{ id: job }]);
   await importWatchdogFixtureJob(admin, other, foreignJob);
@@ -106,7 +109,7 @@ it("projects real requested/applied/released commands, races, permissions and id
   }
   expect((await repo.listHolds(context, second, job))![0]!.canRelease).toBe(true);
   const release = command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second });
-  await secondRepo.submit(context, release);
+  await secondRepo.submit(secondContext, release);
   expect((await list())![0]).toMatchObject({ status: "queued", action: "release_hold", held: true, canApply: false, canRelease: false });
   await repo.execute(verifiedTenantContextForQueuedJob(tenant), release.commandId, storage, tsa);
   expect(held).toBe(false);

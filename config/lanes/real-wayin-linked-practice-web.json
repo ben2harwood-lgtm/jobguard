@@ -1,0 +1,62 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-wayin-linked-practice-web": {
+      "branches": [
+        "codex/sandbox/real-wayin-linked-practice-web"
+      ],
+      "note": "M0-6L fictional linked practice web entry; RED, NOPR. r2 adds a read-only accessor for the existing private linked-credential marker.",
+      "allow": [
+        "apps/web/e2e/WALK-2.spec.ts",
+        "apps/web/e2e/UI-DESIGN-JOBS.spec.ts",
+        "apps/web/e2e/MON-5-customer-journey.spec.ts",
+        "apps/api/src/auth/identity.test.ts",
+        "apps/api/src/practice-transports.test.ts",
+        "apps/api/src/recovery-follow-up.controller.test.ts",
+        "apps/api/src/recovery-message.controller.test.ts",
+        "apps/api/src/watchdog-registry.test.ts",
+        "apps/web/app/(designed)/designed-ui.tsx",
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/real-designed-screens.test.tsx",
+        "apps/web/app/api/auth/practice/route.integration.test.ts",
+        "apps/web/app/api/auth/practice/route.test.ts",
+        "apps/web/app/api/auth/practice/route.ts",
+        "apps/web/app/api/auth/signout/route.test.ts",
+        "apps/web/app/api/auth/signout/route.ts",
+        "apps/web/app/api/practice-company/route.test.ts",
+        "apps/web/app/api/practice-company/route.ts",
+        "apps/web/app/lib/linked-practice-entry.test.ts",
+        "apps/web/app/lib/linked-practice-entry.ts",
+        "apps/web/app/lib/synthetic-server.ts",
+        "apps/web/app/lib/synthetic-server.test.ts",
+        "apps/web/app/lib/contracts.ts",
+        "apps/web/app/demo-s/journey-launch.ts",
+        "apps/web/app/demo-s/journey-launch.test.tsx",
+        "apps/web/app/practice-company/page.tsx",
+        "apps/web/app/sign-in/sign-in.test.tsx",
+        "apps/web/app/sign-in/sign-in.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/jobguard-linked-entry.test.tsx",
+        "apps/web/e2e/real-gap-firm-onboarding.spec.ts",
+        "apps/web/e2e/real-wayin-linked-practice.spec.ts",
+        "apps/web/e2e/later-safety-140.spec.ts",
+        "apps/web/e2e/M0-6L.spec.ts",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/api/session/route.ts",
+        "apps/web/app/api/session/route.test.ts",
+        "packages/db/migrations/0744_linked_practice_marker.sql",
+        "packages/db/migrations/0750_linked_practice_marker.sql",
+        "packages/db/migrations/0749_linked_practice_marker.sql",
+        "packages/db/migrations/0750_linked_practice_marker.sql",
+        "packages/db/test/migration-proofs/0744_linked_practice_marker.proof.json",
+        "packages/db/test/migration-proofs/0750_linked_practice_marker.proof.json",
+        "packages/db/test/migration-proofs/0749_linked_practice_marker.proof.json",
+        "packages/db/test/migration-proofs/0750_linked_practice_marker.proof.json",
+        "packages/db/migration-notes/0744_linked_practice_marker.md",
+        "packages/db/migration-notes/0750_linked_practice_marker.md",
+        "packages/db/migration-notes/0749_linked_practice_marker.md",
+        "packages/db/migration-notes/0750_linked_practice_marker.md"
+      ]
+    }
+  }
+}

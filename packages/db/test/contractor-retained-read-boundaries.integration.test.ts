@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll,beforeAll,expect,it } from "vitest";
-import { ContractorPracticeSessionRepository,ContractorRetainedReadRepository } from "../src/index.js";
+import { ContractorPracticeSessionRepository,ContractorRetainedReadRepository,withTenant,verifiedTenantContextFromMembership } from "../src/index.js";
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { company,start } from "./practice-worker-switch-fixtures.js";
 import { cluster,startSession,resume,read,query,raw,track,unchanged,makeSessionExpired,type Cluster } from "./contractor-retained-read-fixtures.js";
 let c:Cluster;
@@ -40,9 +41,15 @@ it("reads leave all business rows receipts and audit heads unchanged",async()=>{
  const f=await company(c);await track(c,f);await unchanged(c,async()=>{await read(c,f);await resume(c,f);await raw(c,f.p.tenantId,f.session,query(f));});
 });
 it("retained reads grant no write capability",async()=>{
- const f=await startSession(c);await track(c,f);await unchanged(c,async()=>{
+ const f=await startSession(c);await track(c,f);
+ const context=await testActorContext(c.admin,verifiedTenantContextFromMembership(f.p),f.p);
+ await unchanged(c,async()=>{
   await read(c,f);await expect(raw(c,f.p.tenantId,f.session,{...query(f),kind:"grant.create"})).rejects.toThrow("INVALID_COMMAND");
   for(const sql of ["INSERT INTO app.role_grant DEFAULT VALUES","UPDATE app.role_grant SET role='owner'","DELETE FROM app.role_grant","TRUNCATE app.role_grant"]){await expect(c.runtime.query(sql)).rejects.toMatchObject({code:"42501"});}
-  const client=await c.runtime.connect();try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true)",[f.p.tenantId]);expect((await client.query("SELECT app.contractor_allowed($1,'organisation.manage',$2) AND (app.mon8_feature_decision($1,'operative_roles')->>'executable')::boolean allowed",[f.p.membershipId,f.p.tenantId])).rows[0].allowed).toBe(false);}finally{await client.query("ROLLBACK");client.release();}
+  const client=await c.runtime.connect();try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true)",[f.p.tenantId]);// LP-6d refuses the unbound feature lookup before returning a decision.
+   await expect(client.query("SELECT app.contractor_allowed($1,'organisation.manage',$2) AND (app.mon8_feature_decision($1,'operative_roles')->>'executable')::boolean allowed",[f.p.membershipId,f.p.tenantId])).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});}finally{await client.query("ROLLBACK");client.release();}
+  await withTenant(c.runtime,context,async db=>{
+   expect((await db.$client.query("SELECT app.contractor_allowed($1,'organisation.manage',$2) AND (app.mon8_feature_decision($1,'operative_roles')->>'executable')::boolean allowed",[f.p.membershipId,f.p.tenantId])).rows[0].allowed).toBe(false);
+  });
  });
 });

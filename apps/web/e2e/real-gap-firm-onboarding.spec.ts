@@ -18,6 +18,7 @@ async function releaseSignIns() {
 test.afterEach(releaseSignIns);
 
 async function enterCode(page: Page, email: string) {
+  const invitation = new URL(page.url()).searchParams.has("invitationId");
   emails.push(email.trim().toLowerCase());
   await page.getByLabel("Fictional email address").fill(email);
   await page.getByRole("button", { name: "Request code", exact: true }).click();
@@ -26,6 +27,7 @@ async function enterCode(page: Page, email: string) {
   await page.getByLabel("Eight-digit code").fill(code!);
   await page.getByRole("button", { name: "Verify code", exact: true }).click();
   await expect(page.getByRole("heading", { name: "You're signed in.", exact: true })).toBeVisible();
+  if (!invitation) await expect(page).toHaveURL(/\/practice-company$/);
   await releaseSignIns();
 }
 
@@ -44,6 +46,7 @@ async function api(page: Page, path: string, data?: unknown, csrfToken?: string)
 test("verified owner names the fictional firm before opening jobs", async ({ page }) => {
   await page.goto("/sign-in");
   await enterCode(page, `onboarding-${crypto.randomUUID()}@practice.invalid`);
+  await expect(page).toHaveURL(/\/practice-company$/);
   const step = page.getByRole("region", { name: "Name your practice business", exact: true });
   // Before the fix, verification succeeds but this trading-name field never appears.
   await expect(step.getByLabel("Trading name", { exact: true })).toBeVisible();
@@ -82,7 +85,7 @@ test("verified owner names the fictional firm before opening jobs", async ({ pag
   await expect(page.getByLabel("Trading name", { exact: true })).toHaveValue("Fictional Oak Works");
   await page.goto("/sign-in");
   await expect(step.getByLabel("Trading name", { exact: true })).toHaveValue("Fictional Oak Works");
-  await page.getByRole("link", { name: "Open my jobs", exact: true }).click();
+  await page.getByRole("button", { name: "Open my jobs", exact: true }).click();
   await expect(page).not.toHaveURL(/\/sign-in/);
   await page.setViewportSize(originalViewport);
   await page.goto("/sign-in");

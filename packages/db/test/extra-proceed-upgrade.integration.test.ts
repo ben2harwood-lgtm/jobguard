@@ -44,5 +44,5 @@ it("0905 upgrades populated approval requests without changing any earlier row, 
   [JSON.stringify([...replayedRegistryRows, abandonedSiteVisitRegistryRow, duplicateDispositionLifecycleRegistryRow])])).rows[0].data;
  await migrate(c.admin); await migrate(c.admin); expect(await snapshot(c.admin)).toEqual({ ...after, "app.connector_promotion": [], "control_plane.blank_practice_session": [],
   "control_plane.identity_practice_namespace": [], "control_plane.identity_practice_company": [], "control_plane.identity_practice_credential": [],
-  "app.extra_client_command_session": [], "app.extra_client_session": [], "app.extra_client_signin": [], "app.extra_pack_artifact": [], "app.commercial_grant_use": [], "app.job_proof_statement": [], "app.final_account_proof_statement": [], "app.firm_profile": [], "app.quote_firm_counter": [], "app.quote_job_reference": [], "app.command_type_registry": replayedRegistry });
+  "app.extra_client_command_session": [], "app.extra_client_session": [], "app.extra_client_signin": [], "app.extra_pack_artifact": [], "app.commercial_grant_use": [], "app.job_proof_statement": [], "app.final_account_proof_statement": [], "app.firm_profile": [], "app.quote_firm_counter": [], "app.quote_job_reference": [], "identity.lp6d_sso_grant_permit": [], "app.command_type_registry": replayedRegistry });
 }, 240_000);
