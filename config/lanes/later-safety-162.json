@@ -16,11 +16,13 @@
         "packages/db/migrations/0753_subscription_pending_downgrade.sql",
         "packages/db/migrations/0752_subscription_pending_downgrade.sql",
         "packages/db/migrations/0756_subscription_pending_downgrade.sql",
+        "packages/db/migrations/0755_subscription_pending_downgrade.sql",
         "packages/db/src/subscription-repository.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0753_subscription_pending_downgrade.proof.json",
         "packages/db/test/migration-proofs/0752_subscription_pending_downgrade.proof.json",
         "packages/db/test/migration-proofs/0756_subscription_pending_downgrade.proof.json",
+        "packages/db/test/migration-proofs/0755_subscription_pending_downgrade.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/test/subscription-pending-downgrade.integration.test.ts"
       ]

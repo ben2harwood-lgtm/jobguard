@@ -11,7 +11,7 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { calendarInput, command, count, historicalAgreement, meterCompany, readSubscription, storeMeter, terms, type SubscriptionCompany } from "./subscription-persistence-fixtures.js";
 import { snapshotRows } from "./upgrade-proof-utils.js";
 
-const stem = "0756_subscription_pending_downgrade";
+const stem = "0755_subscription_pending_downgrade";
 const migration = readFileSync(new URL(`../migrations/${stem}.sql`, import.meta.url), "utf8");
 const guard = `   IF EXISTS(SELECT 1 FROM app.subscription_plan_change c WHERE c.tenant_id=t
     AND NOT EXISTS(SELECT 1 FROM app.subscription_change_outcome o WHERE o.tenant_id=c.tenant_id AND o.change_id=c.id)) THEN
