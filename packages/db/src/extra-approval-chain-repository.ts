@@ -162,8 +162,15 @@ export class ExtraApprovalRepository {
     const i = this.parse(issueClientApprovalV1, raw), member = this.checkActor(context, owner), tenant = lc(context.tenantId);
     const linkId = derivedUuid(`extra-client-link:${tenant}:${i.commandId}`), outboxId = derivedUuid(`extra-client-outbox:${tenant}:${i.commandId}`);
     try {
-      const request = await withTenant(this.pool, context, async db => (await db.$client.query<{ request_revision: number; revision_hash: string; net_pence: string | null; variation_id: string }>(
-        "SELECT request_revision,revision_hash,net_pence::text,variation_id FROM app.extra_approval_request WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenant, i.jobId, i.requestId])).rows[0]);
+      const request = await withTenant(this.pool, context, async db => {
+        // Refuse before disclosing target existence; dispatch and the writer recheck execution authority.
+        const authority = (await db.$client.query<{ allowed: boolean }>(
+          "SELECT app.xa_covers($1,ARRAY['surveyor','commercial_manager'],$2,'job.read') IS NOT NULL AS allowed",
+          [member, i.jobId])).rows[0];
+        if (!authority?.allowed) throw new ExtraApprovalError("PERMISSION_DENIED");
+        return (await db.$client.query<{ request_revision: number; revision_hash: string; net_pence: string | null; variation_id: string }>(
+          "SELECT request_revision,revision_hash,net_pence::text,variation_id FROM app.extra_approval_request WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenant, i.jobId, i.requestId])).rows[0];
+      });
       if (!request || request.net_pence === null) throw new ExtraApprovalError("NOT_FOUND");
       const tokenHash = sha256Hex(i.linkToken), net = Number(request.net_pence);
       // The exact message the owner approves (practice only: the fake_email adapter delivers nothing; the .invalid recipient cannot receive anything).
