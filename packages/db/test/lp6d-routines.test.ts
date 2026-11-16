@@ -66,6 +66,19 @@ it("keeps every predecessor body and permission rule behind an early binding che
     if (routine.tenant) expect(changed).toContain(`${routine.tenant} IS DISTINCT FROM app.current_tenant()`);
   }
 });
+it("retains the landed accounting-export binding prefix in its 0751 successor", () => {
+  const routine = routines.find(r => r.name === "app.accounting_export")!;
+  const successor = read("../migrations/0751_accounting_export_attempt_reconciliation.sql");
+  // This successor replaces only the exact dispatcher overload; 0749 remains the historical proof source.
+  expect(definitions(successor).map(m => [m[1], argumentsKey(m[2]!)])).toEqual([
+    [routine.name, argumentsKey(routine.arguments)],
+  ]);
+  const prefix = /^BEGIN\n -- LP6D_BOUND[^\n]*\n PERFORM app\.current_actor\(\);\n.*?\n END IF;\n/su;
+  const landedPrefix = body(sql, routine).match(prefix)?.[0];
+  expect(landedPrefix).toBeDefined();
+  expect(body(successor, routine).match(prefix)?.[0]).toBe(landedPrefix);
+});
+
 it("assigns every snapshot runtime definer without claiming the sibling money work is implemented", () => {
   const inventory = JSON.parse(read("../../../docs/contracts/lp-0-effective-privileges-v1.json"));
   const assigned: Record<string, string> = classification;
