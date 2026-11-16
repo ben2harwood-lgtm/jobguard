@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-fc-included-answer-journey": {
+      "branches": [
+        "codex/sandbox/later-fc-included-answer-journey"
+      ],
+      "note": "LATER-FC-INCLUDED-ANSWER-JOURNEY: test-only journey for the 'No - included' Final Check answer; Work-account proposal (bundle 0580545821f88d49); NOPR.",
+      "allow": [
+        "apps/web/e2e/real-fc-included-answer.spec.ts"
+      ]
+    }
+  }
+}
