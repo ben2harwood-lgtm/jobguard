@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "next-16-4-5": {
+      "branches": ["codex/sandbox/next-16-4-5"],
+      "note": "NEXT-16-4-5: security bump next 16.4.2 -> 16.4.5 for GHSA-mfr8-8qww-v76h (Ben: \"Yes, separate fix\"). Version and lockfile only; no migration.",
+      "allow": [
+        "package.json",
+        "apps/web/package.json",
+        "pnpm-lock.yaml"
+      ]
+    }
+  }
+}
