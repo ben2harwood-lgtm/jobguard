@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-171": {
+      "branches": ["codex/sandbox/later-safety-171"],
+      "allow": [
+        "apps/web/app/demo-s/journey-launch.ts",
+        "apps/web/app/demo-s/journey-launch.test.tsx"
+      ]
+    }
+  }
+}
