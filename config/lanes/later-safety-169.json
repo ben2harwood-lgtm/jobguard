@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-169": {
+      "branches": ["codex/sandbox/later-safety-169"],
+      "note": "LATER-SAFETY-169 RED bounded contractor pricing and revision form validation/preview; no migration.",
+      "allow": [
+        "apps/web/app/approvals/extras/extra-approvals.tsx",
+        "apps/web/app/approvals/extras/extra-approvals.test.tsx"
+      ]
+    }
+  }
+}

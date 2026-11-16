@@ -47,7 +47,7 @@ it("issues new sends minutes inside the database cap even with the app clock two
   const databaseNow = new Date("2026-11-06T12:00:00Z").getTime();
   const sevenDays = 7 * 24 * 60 * 60_000;
   expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
-  expect(expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + sevenDays - 5 * 60_000);
+  expect(expiresAt.getTime()).toBe(Date.now() + 10075 * 60_000);
   expect(expiresAt.getTime()).toBeLessThanOrEqual(databaseNow + sevenDays - 3 * 60_000);
 });
 
@@ -57,6 +57,11 @@ it("reuses the stored expiry on retries rather than extending or shortening it",
     approverMembershipId: extra.clientApproverMembershipId,
     artifact: { requestId: extra.requestId, netPence: extra.netPence, recipient: extra.clientApproverEmail,
       token: "a".repeat(43), expiresAt } });
-  expect((await send()).status).toBe(200);
-  expect(h.issue.mock.calls[0]![2].expiresAt).toEqual(new Date(expiresAt));
+  for (const now of ["2026-11-06T12:02:00Z", "2026-11-07T15:00:00Z"]) {
+    vi.setSystemTime(new Date(now));
+    const response = await send();
+    expect(response.status).toBe(200);
+    expect((await response.json()).path).toContain("a".repeat(43));
+    expect(h.issue.mock.lastCall![2]).toMatchObject({ expiresAt: new Date(expiresAt), linkToken: "a".repeat(43) });
+  }
 });
