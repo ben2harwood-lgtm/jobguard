@@ -34,6 +34,7 @@ const complete = (job: string, actor: string, commandId = randomUUID(), extra: R
 const rows = async (job: string) => ({
   receipts: Number((await h.admin.query("SELECT count(*) n FROM app.command_receipt WHERE command_type='proof.complete' AND semantic_key LIKE $1", [`${job}:%`])).rows[0].n),
   completions: Number((await h.admin.query("SELECT count(*) n FROM app.stage_completion WHERE job_id=$1", [job])).rows[0].n),
+  audits: Number((await h.admin.query("SELECT count(*) n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='proof.completed'", [h.tenant, h.st(job).scope])).rows[0].n),
   identities: Number((await h.admin.query("SELECT count(*) n FROM app.watchdog_command_identity WHERE job_id=$1 AND command_type='proof.complete'", [job])).rows[0].n),
 });
 const revoke = (id: string) => h.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [h.tenant, id]);
@@ -65,7 +66,7 @@ describe("proof completion re-checks the actor's membership before every replay"
     for (const state of [{ revoked: true }, { expired: true }]) {
       const job = await h.live(); await h.pre.evidence(job);
       await expect(completeProof(complete(job, await newMember(state)))).rejects.toMatchObject(FORBIDDEN);
-      expect(await rows(job)).toEqual({ receipts: 0, completions: 0, identities: 0 });
+      expect(await rows(job)).toEqual({ receipts: 0, completions: 0, identities: 0, audits: 0 });
     }
   });
   it("a revoked member's replay is refused for the id of a command whose payload changed too: the membership is checked first", async () => {
@@ -103,5 +104,50 @@ describe("a Decision the server derives is recorded with the first result", () =
     expect(await completeProof(command)).toEqual(first);
     // A changed request, and the same id on another stage, still conflict.
     await expect(completeProof({ ...command, stage: "electrical-stage-3" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+  });
+});
+
+describe("already completed proof is a semantic refusal, not command identity reuse", () => {
+  it("still refuses foreign-job evidence and changed original bytes before completion eligibility", async () => {
+    const job = await h.live(), other = await h.live(), actor = await newMember();
+    await h.pre.evidence(job);
+    await completeProof(complete(job, actor));
+    const foreignEvidence = await h.pre.evidence(other);
+    await expect(completeProof(complete(job, actor, randomUUID(), { evidenceId: foreignEvidence }))).rejects.toMatchObject({ code: "PROOF_NOT_FINAL" });
+    delete h.st(job).upload; delete h.st(job).evidence;
+    await h.pre.evidence(job);
+    const command = complete(job, actor), before = await rows(job), key = h.st(job).upload.objectKey;
+    const original = await h.storage.readExactVersion(key, "v1");
+    h.storage.put(key, "v1", Buffer.from("changed fictional original"));
+    try {
+      await expect(completeProof(command)).rejects.toMatchObject({ code: "PROOF_NOT_FINAL", message: "original_mismatch" });
+      expect(await rows(job)).toEqual(before);
+    } finally {
+      h.storage.put(key, "v1", original.bytes);
+    }
+  });
+
+  it("refuses a fresh command without effects, preserves replays and conflicts, and permits authorized replacement", async () => {
+    const job = await h.live(), actor = await newMember();
+    await h.pre.evidence(job);
+    const c1 = complete(job, actor), first = await completeProof(c1);
+    delete h.st(job).upload; delete h.st(job).evidence;
+    await h.pre.evidence(job);
+    const c2 = complete(job, actor), before = await rows(job);
+    expect(c2.commandId).not.toBe(c1.commandId);
+    expect(c2.evidenceId).not.toBe(c1.evidenceId);
+    await expect(completeProof(c2)).rejects.toMatchObject({ code: "PROOF_NOT_FINAL", message: "already_complete" });
+    expect(await completeProof(c1)).toEqual(first);
+    await expect(completeProof({ ...c1, evidenceId: c2.evidenceId })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+    expect(await rows(job)).toEqual(before);
+    expect((await h.admin.query("SELECT id FROM app.stage_completion WHERE job_id=$1", [job])).rows).toEqual([{ id: first.completionId }]);
+
+    await invalidateProof({ version: "proof.invalidate.v1", commandId: randomUUID(), actorMembershipId: actor, evidenceId: c1.evidenceId, reasonCode: "verification_invalid" });
+    const replacement = await completeProof(c2);
+    expect(replacement).toMatchObject({ state: "complete", evidenceId: c2.evidenceId });
+    expect(replacement.completionId).not.toBe(first.completionId);
+    expect((await h.admin.query("SELECT supersedes_completion_id FROM app.stage_completion WHERE id=$1", [replacement.completionId])).rows).toEqual([{ supersedes_completion_id: first.completionId }]);
+    expect(await completeProof(c1)).toEqual(first);
+    expect(await completeProof(c2)).toEqual(replacement);
   });
 });
