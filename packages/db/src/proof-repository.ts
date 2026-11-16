@@ -44,7 +44,7 @@ const replay=await beginProof(db,context.tenantId,c,shape);if(replay.kind==="rep
 const current=(await db.$client.query<{id:string;invalidated:boolean}>(`SELECT s.id,EXISTS(SELECT 1 FROM app.evidence_link l JOIN app.evidence_invalidation i ON(i.tenant_id,i.evidence_id)=(l.tenant_id,l.evidence_id) WHERE (l.tenant_id,l.id)=(s.tenant_id,s.evidence_link_id)) invalidated
  FROM app.stage_completion s WHERE s.tenant_id=$1 AND s.job_id=$2 AND s.scope_item_id=$3 AND s.stage=$4
  AND NOT EXISTS(SELECT 1 FROM app.stage_completion next WHERE (next.tenant_id,next.supersedes_completion_id)=(s.tenant_id,s.id))`,[context.tenantId,c.jobId,c.scopeItemId,c.stage])).rows[0];
-if(current&&!current.invalidated)throw new ProofCommandError("COMMAND_CONFLICT");
+if(current&&!current.invalidated)throw new ProofCommandError("PROOF_NOT_FINAL","already_complete");
 const semanticKey=`${c.jobId}:${c.scopeItemId}:${c.stage}${current?`:${current.id}`:""}`;
 const receipt=await beginProof(db,context.tenantId,c,shape,semanticKey);
 if(receipt.kind==="replay")return receipt.result;
