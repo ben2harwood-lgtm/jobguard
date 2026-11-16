@@ -1,0 +1,6 @@
+{
+  "migration": "0754_extra_price_permission_order.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
