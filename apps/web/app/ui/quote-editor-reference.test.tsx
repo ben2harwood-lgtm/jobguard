@@ -42,7 +42,7 @@ const props = {jobId, source: [], questions: [], back() {}, beforeProof: <p>Befo
 const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 let delivery: any, accepted: any, preview: any, activation: any;
 const response = (value: unknown) => ({ok:true, json:async()=>value});
-function render(id=jobId) { hooks.render(); const tree=QuoteEditor({...props,jobId:id}); hooks.effects(); return tree; }
+function render(id=jobId, extra: Partial<React.ComponentProps<typeof QuoteEditor>> = {}) { hooks.render(); const tree=QuoteEditor({...props,jobId:id,...extra}); hooks.effects(); return tree; }
 function button(tree: React.ReactNode, name: string) { return all(tree,n=>n.type==="button"&&text(n)===name)[0]!; }
 beforeEach(()=>{
  hooks.reset(); vi.stubGlobal("React",React); vi.stubGlobal("window",new EventTarget()); vi.stubGlobal("document",new EventTarget());
@@ -178,4 +178,27 @@ it("keeps a lost send response unresolved and exposes reconciliation",async()=>{
  await button(render(),"Simulate sending this quote").props.onClick();await settle();
  expect(text(render())).toContain("Delivery outcome unknown");expect(button(render(),"Reconcile fake receipt")).toBeDefined();
  expect(all(render(),n=>n.type==="button"&&text(n)==="Record practice acceptance")).toHaveLength(0);
+});
+
+it("shows Saved quote on section return while retaining unsaved recipient and job panels", async () => {
+ render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ let tree=render();
+ expect(all(tree,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(1);
+ all(tree,n=>n.props["aria-label"]==="Confirmed recipient")[0]!.props.onChange({target:{value:"unfinished@example.invalid"}});
+ render(jobId,{sectionNavigationKey:"#work-proof"});
+ expect(all(render(jobId,{sectionNavigationKey:"#work-proof"}),n=>n.props["aria-label"]==="Quote preview")).toHaveLength(1);
+ render(jobId,{sectionNavigationKey:"#quote"});await settle();
+ tree=render(jobId,{sectionNavigationKey:"#quote"});
+ expect(all(tree,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(0);
+ expect(all(tree,n=>n.props["aria-label"]==="Saved quote")).toHaveLength(1);
+ expect(all(tree,n=>n.props["aria-label"]==="Confirmed recipient")[0]!.props.value).toBe("unfinished@example.invalid");
+ expect(tree.props["data-job-id"]).toBe(jobId);
+});
+it("retains visible audit history inside disabled closed-job quote controls", async () => {
+ const original=vi.mocked(fetch).getMockImplementation()!;
+ vi.mocked(fetch).mockImplementation(async(url,init)=>String(url).endsWith("/acceptance")?response({activeAcceptance:null,events:[{kind:"declined",documentVersion:3}],effects:{platformObligations:0,settlements:0,recoveryFees:0}}) as Response:original(url,init));
+ render();await settle();const tree=render(jobId,{readOnly:true});
+ expect(text(all(tree,n=>n.props["aria-label"]==="Acceptance audit history"))).toContain("Declined document v3");
+ expect(all(tree,n=>n.type==="fieldset"&&n.props.disabled===true).length).toBeGreaterThan(0);
+ expect(tree.props.hidden).toBe(false);
 });

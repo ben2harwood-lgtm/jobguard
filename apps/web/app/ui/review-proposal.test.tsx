@@ -308,7 +308,7 @@ it("returns from pricing through a saved Scope review without remounting", async
  expect(onScope).toHaveBeenCalledWith(captureWorkspaceResponseV1.parse(result));
  expect(p.button(p.render(), "Price the work")).toBeDefined();
 });
-it.each(["draft", "lost"] as const)("closes pricing on a genuine %s lifecycle transition", status => {
+it.each(["draft"] as const)("closes pricing on a genuine %s lifecycle transition", status => {
  const result = { ...validFixture(), status: "quoting" as const };
  const p = panel(result);
  p.button(p.render(), "Price the work").props.onClick();
@@ -343,13 +343,40 @@ it.each(["accepted", "live"] as const)("reloads the saved %s quote on section na
  const refreshed = editor(p.render({ result: saved, sectionNavigationKey: "" }));
  expect(refreshed.type).toBe(original.type);
  expect(refreshed.key).toBe(original.key);
- // A fragment-only navigation must discard the preview so the editor reads Saved quote.
+ // A fragment-only navigation selects Saved quote without discarding the editor.
  const navigated = editor(p.render({ result: saved, sectionNavigationKey: "#quote", sectionView: "pricing" }));
- expect(navigated.key).not.toBe(original.key);
+ expect(navigated.key).toBe(original.key);
+ expect(navigated.props.sectionNavigationKey).toBe("#quote");
  const snapshot = editor(p.render({ result: { ...saved }, sectionNavigationKey: "#quote", sectionView: "pricing" }));
  expect(snapshot.type).toBe(navigated.type);
  expect(snapshot.key).toBe(navigated.key);
  // Both destinations use the pricing view; the fragment still changes editor identity.
  const work = editor(p.render({ result: saved, sectionNavigationKey: "#work-proof", sectionView: "pricing" }));
- expect(editor(p.render({ result: saved, sectionNavigationKey: "#quote", sectionView: "pricing" })).key).not.toBe(work.key);
+ expect(editor(p.render({ result: saved, sectionNavigationKey: "#quote", sectionView: "pricing" })).key).toBe(work.key);
+});
+
+it("retains decline history in the mounted editor and disables closed-job editing", () => {
+ const result = { ...validFixture(), status: "quoting" as const };
+ const p = panel(result);
+ p.button(p.render(), "Price the work").props.onClick();
+ const props = { result: { ...result, status: "lost" as const } };
+ p.render(props);
+ const editor = all(p.render(props), n => typeof n.type === "function" && n.type.name === "QuoteEditor")[0]!;
+ expect(editor).toBeDefined();
+ expect(editor.props.readOnly).toBe(true);
+});
+it("retains the nested editor when showing Scope and restores its identity on return", () => {
+ const p = panel({ ...validFixture(), status: "live" as const });
+ p.button(p.render(), "Price the work").props.onClick();
+ const editor = (tree: React.ReactNode) => all(tree, n => typeof n.type === "function" && n.type.name === "QuoteEditor")[0]!;
+ const original = editor(p.render());
+ p.render({ sectionView: "scope" });
+ const scope = p.render({ sectionView: "scope" });
+ expect(editor(scope).key).toBe(original.key);
+ expect(editor(scope).props.hidden).toBe(true);
+ expect(p.button(scope, "Price the work")).toBeDefined();
+ p.render({ sectionView: "pricing" });
+ const pricing = p.render({ sectionView: "pricing" });
+ expect(editor(pricing).key).toBe(original.key);
+ expect(editor(pricing).props.hidden).toBe(false);
 });

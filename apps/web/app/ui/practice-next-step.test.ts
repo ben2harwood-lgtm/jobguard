@@ -125,3 +125,20 @@ describe("saved practice next step", () => {
     // There is deliberately no feePrepared or fee-illustration input.
   });
 });
+
+it("collects and settles an issued bill while its excluded pending extra remains unchanged", () => {
+ const variations = { jobId: "job-1", variations: [variation("priced", "current")] };
+ expect(next(locked({ variations }))).toBe("resolve_extras");
+ for (const [fact, nextStep, completion] of [
+  [invoice(), "record_payment", "incomplete"],
+  [invoice({ balancePence: 54000, paidPence: 54000 }), "record_payment", "incomplete"],
+  [invoice({ balancePence: 0, paidPence: 108000 }), "complete", "paid"],
+ ] as const) {
+  expect(derivePracticeNextStep(locked({ variations, invoices: { jobId: "job-1", invoices: [fact] } })))
+   .toMatchObject({nextStep, completion});
+ }
+ expect(variations.variations[0]).toEqual(variation("priced", "current"));
+ // Issuance does not waive failed check or proof, wrong-job or malformed money gates.
+ expect(next(locked({ variations, check: {state:"pending",lockId:"lock-1"}, invoices: {jobId:"job-1",invoices:[invoice()]} }))).toBe("final_check");
+ expect(next(locked({ variations, proof:{jobId:"job-1",completion:null}, invoices: {jobId:"job-1",invoices:[invoice()]} }))).toBe("complete_proof");
+});

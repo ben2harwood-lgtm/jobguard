@@ -1017,7 +1017,7 @@ it.each(["constructor", "toString", "__proto__"])("renders the refusal message %
  for(const name of OPEN_BUTTONS)expect(w.screen().button(name).props.disabled,name).toBe(false);
 });
 it.each(["RECOVERY_STALE_REVISION", "ELIGIBILITY_STALE_REVISION"])("a held %s retry offers a working page reload without settling the unknown command", async code => {
- const reload=vi.fn(); vi.stubGlobal("window",{location:{reload}});
+ const reload=vi.fn(); vi.stubGlobal("window",Object.assign(new EventTarget(),{location:{reload}}));
  const w=start(); await w.settle(); reads()[0]!.json(answerBody([caseView()])); await w.settle();
  w.click(code==="RECOVERY_STALE_REVISION"?"Evidence assembled":"Review evidence-backed claim"); await w.settle();
  const original=writes()[0]!; original.reject(); await w.settle();
@@ -1061,4 +1061,22 @@ it("M4-1 prevention on the existing identity leaves no landing or further preven
  expect(w.screen().button("Prevent before payment").props.disabled).toBe(true);
  expect(w.screen().button("Record a landed recovery").props.disabled).toBe(true);
  expect(w.screen().testId("case-landed-net")).toBe("£0.00");
+});
+
+it("refreshes recovery entry without disabling loaded actions or reloading the register after supplier reads", async () => {
+ const events = new EventTarget();
+ Object.assign(events,{location:{hash:"#recovery-cases"}});
+ vi.stubGlobal("window",events);
+ const w=start();await w.settle();reads()[0]!.json(answerBody([]));await w.settle();
+ const gate=holdLookups();const before=lookupRequests.length;
+ events.dispatchEvent(new Event("hashchange"));await w.settle();
+ expect(reads()).toHaveLength(2);
+ expect(lookupRequests).toHaveLength(before+1);
+ for(const name of OPEN_BUTTONS)expect(w.screen().button(name).props.disabled).toBe(false);
+ reads()[1]!.json(answerBody([]));await w.settle();
+ gate.release();await w.settle();
+ expect(reads()).toHaveLength(2);
+ for(const name of OPEN_BUTTONS)expect(w.screen().button(name).props.disabled).toBe(false);
+ w.unmount();events.dispatchEvent(new Event("hashchange"));await w.settle();
+ expect(reads()).toHaveLength(2);
 });

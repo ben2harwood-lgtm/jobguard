@@ -174,6 +174,26 @@ describe("generated certificate result binding (unit doubles, not PostgreSQL pro
     await f.ports.reconcile(f.context, f.manifest);
     expect(reconcile.mock.calls[0]?.[3]).toMatchObject([{ outcome: "already_in_original_scope" }]);
   });
+  it.each([
+    ["Paint the hall, stairs and landing, two coats", false, "reveal"],
+    ["Paint walls", false, "already_in_original_scope"],
+    ["Paint the hall, stairs and landing, two coats", true, "builder_captured"],
+  ] as const)("completion photo against %s with inclusion capture %s yields %s", async (description, included, outcome) => {
+    const f = certificate(description, false, "blank");
+    f.source.sourceKind = "completion_photo";
+    if (included) f.manifest.comparisons.captures = [{ version: "shadow-capture.v1", tenantId: f.context.tenantId,
+      jobId: f.manifest.comparisons.jobId, id: f.source.id, scopeItemId: f.source.id, revisionId: f.source.id,
+      serverRecordedAt: f.manifest.cutoff, valuePence: 0, kind: "final_review", state: null, scopeArea: "job",
+      description: "Painted walls included in the £900 baseline; no additional charge", recordedPhase: "pre_lock",
+      aiStructured: false, sourceRef: f.source.id }];
+    expect(await f.ports.process(f.context, f.manifest, f.source)).toMatchObject({ status: "detected", signalIds: [f.signalId] });
+    expect(f.persist.mock.calls[0]?.[1]).toMatchObject({ observations: [{ facts: { description: "painted walls" } }] });
+    f.manifest.signals = [{ signalId: f.signalId, revision: 0, description: "painted walls", scopeItemId: null,
+      coalescedIntoSignalId: null, permanentExclusion: false, evidenceIds: [f.source.evidenceId!] }];
+    const reconcile = vi.spyOn(FinalCheckRepository.prototype, "reconcile").mockResolvedValue({});
+    await f.ports.reconcile(f.context, f.manifest);
+    expect(reconcile.mock.calls[0]?.[3]).toMatchObject([{ outcome }]);
+  });
   it.each(["blank", "company"] as const)("keeps the %s firm's certificate zero even with a matching Paint walls baseline", async firm => {
     const f = certificate("Paint walls", false, firm);
     expect(await f.ports.process(f.context, f.manifest, f.source)).toMatchObject({ status: "zero_result", signalIds: [] });
