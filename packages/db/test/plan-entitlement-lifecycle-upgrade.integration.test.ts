@@ -242,8 +242,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const routineKey = (identity: string) => identity.replace(/,\s*/gu, ",");
   const ent5Bodies = new Map<string, string>();
   const ent5Replacements = [
-    ["app.current_firm_profile_key()", "0752_practice_firm_name.sql"],
-    ["app.job_saved_firm_name(j uuid)", "0752_practice_firm_name.sql"],
+    ["app.current_firm_profile_key()", "0753_practice_firm_name.sql"],
+    ["app.job_saved_firm_name(j uuid)", "0753_practice_firm_name.sql"],
     // Linked-practice successors retain metadata and replace these seven bodies.
     ["app.issue_practice_session(digest text)", "0741_identity_linked_practice.sql"],
     ["app.start_blank_practice_company(digest text,previous_digest text)", "0741_identity_linked_practice.sql"],

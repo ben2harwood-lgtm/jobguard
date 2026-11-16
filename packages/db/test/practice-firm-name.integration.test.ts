@@ -11,7 +11,7 @@ import { QuoteAcceptanceRepository } from "../src/acceptance-repository.js";
 import { withTenant, verifiedTenantContextForQueuedJob, verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 
-const own = "0752_practice_firm_name.sql";
+const own = "0753_practice_firm_name.sql";
 const start = { version: "blank-practice-company.v1", action: "start" };
 const profile = { version: "firm-profile.v1", tradingName: "Fictional Moonbrick Works", addressLines: [], contactEmail: "", contactPhone: "" };
 const recipient = "customer@fictional.invalid";
