@@ -56,7 +56,7 @@ it("rechecks revocation after preflight before capture", async () => {
   await status(c, { p: h.f.p } as Parameters<typeof status>[1], "suspended");
   return log.call(this, context, actor, raw);
  });
- await expect(h.run()).rejects.toMatchObject({ code: "SITE_PRICING_UNAVAILABLE" });
+ await expect(h.run()).rejects.toMatchObject({ code: "TRACK_FORBIDDEN" });
  expect(await counts(h.actor.tenantId)).toEqual(before);
 });
 
@@ -93,8 +93,15 @@ it("recovers the operative's exact retry after log commit, competing supervisor 
  await expect(h.run()).rejects.toThrow();
  expect(await counts(h.actor.tenantId)).toEqual(afterRevocation);
  // Even the original raiser loses read/recovery when the session expires.
- await c.admin.query("UPDATE control_plane.contractor_practice_session SET expires_at=clock_timestamp()-interval '1 second' WHERE session_id=$1", [h.sessionId]);
- await expect(h.run()).rejects.toThrow();
+ // Like lp6a-practice-restore, let a short-lived session expire on the PG clock.
+ const expiringSessionId = randomUUID();
+ await c.admin.query(`INSERT INTO control_plane.contractor_practice_session
+  (session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at)
+  VALUES($1,$2,$3,$4,$5,clock_timestamp(),clock_timestamp()+interval '150ms')`,
+  [expiringSessionId, h.actor.tenantId, h.actor.membershipId, h.actor.identityUserId, digestOf(expiringSessionId)]);
+ await c.admin.query("SELECT pg_sleep(0.2)");
+ await expect(new ContractorRepository(c.runtime).resolveSession(expiringSessionId)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+ await expect(h.app.logSor({ ...h.principal, sessionId: expiringSessionId }, h.f.jobId, h.raw)).rejects.toThrow();
  expect(await counts(h.actor.tenantId)).toEqual(afterRevocation);
 });
 
