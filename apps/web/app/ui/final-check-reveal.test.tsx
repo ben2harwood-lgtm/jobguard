@@ -258,3 +258,64 @@ it.each(["unmount", "job change"])("%s aborts nothing, discards outstanding and 
  expect(signals[0]!.aborted).toBe(false); expect(signals[1]!.aborted).toBe(false);
  expect(fetch).toHaveBeenCalledTimes(departure === "unmount" ? 2 : 3);
 });
+
+
+const finding = { signalId: "18000000-0000-4000-8000-000000000003", signalRevision: 1,
+ description: "heated towel rail", evidence: [], comparisons: { lockedLineIds: [], baselineItemIds: [] }, disposition: null, answer: null };
+const reveal = (estimate: unknown = 18000, state = "completed") => ({ ...saved(state),
+ runId: "18000000-0000-4000-8000-000000000004", items: [{ ...finding, estimatedValuePence: estimate }] });
+// Execute the finding component too: the parent hook harness otherwise stops at its element.
+function screen(id = jobId) {
+ const tree = render(id);
+ const cards = nodes(tree).filter(node => typeof node.type === "function" && node.props.revealed)
+  .map(node => (node.type as (props: Record<string, unknown>) => React.ReactNode)(node.props));
+ return text([tree, cards]);
+}
+function serveReveal(body: unknown) {
+ const fetch = server();
+ fetch.mockImplementation(async input => response(input.endsWith("/disputes") ? [] : body));
+ return fetch;
+}
+it.each([[18000, "£180.00"], [15000, "£150.00"], [18007, "£180.07"], [0, "£0.00"]])(
+ "displays saved estimate %s as a proposal without writing", async (estimate, label) => {
+ const fetch = serveReveal(reveal(estimate)); render(); await tick();
+ const view = screen(); expect(view).toContain(`Estimated extra: ${label}`);
+ expect(view).toContain("Proposal only"); expect(view).toContain("price and approve");
+ expect(fetch.mock.calls.every(call => !call[1]?.method)).toBe(true);
+ click(render(), "Load the saved final check"); await tick(); expect(screen()).toContain(`Estimated extra: ${label}`);
+});
+it.each(["absent", "null"])("uses Needs a price only for %s estimates", async kind => {
+ const body = reveal(null); if (kind === "absent") delete (body.items[0] as { estimatedValuePence?: unknown }).estimatedValuePence;
+ serveReveal(body); render(); await tick();
+ expect(screen()).toContain("Needs a price"); expect(screen()).not.toContain("£0.00");
+});
+it.each([-1, 18000.5, Number.MAX_SAFE_INTEGER + 1, 1_000_000_000_001, "18000", NaN, Infinity, -Infinity])(
+ "refuses malformed estimate %s and clears the previous price", async estimate => {
+ const fetch = serveReveal(reveal()); render(); await tick(); expect(screen()).toContain("Estimated extra: £180.00");
+ fetch.mockResolvedValue(response(reveal(estimate))); click(render(), "Load the saved final check"); await tick();
+ const view = screen(); expect(view).toContain("unavailable"); expect(view).not.toContain("heated towel rail");
+ expect(view).not.toContain("Estimated extra"); expect(view).not.toContain("Needs a price");
+});
+it.each(["unlocked", "pending", "failed"])("never displays findings or prices in %s even if items are supplied", async state => {
+ serveReveal(reveal(18000, state)); render(); await tick();
+ const view = screen(); expect(view).not.toContain("heated towel rail"); expect(view).not.toContain("Estimated extra");
+});
+it.each([401, 403, 500, "disputes revoked"] as const)("removes an existing finding and price after %s", async failure => {
+ const fetch = serveReveal(reveal()); render(); await tick(); expect(screen()).toContain("Estimated extra: £180.00");
+ fetch.mockImplementation(async input => failure === "disputes revoked"
+  ? input.endsWith("/disputes") ? response({}, false, 403) : response(reveal())
+  : response({}, false, failure));
+ click(render(), "Load the saved final check"); await tick();
+ const view = screen(); expect(view).toContain("unavailable"); expect(view).not.toContain("heated towel rail"); expect(view).not.toContain("Estimated extra");
+});
+it("hides the old job immediately and discards its late priced reply after navigation", async () => {
+ const fetch = serveReveal(reveal()); render(); await tick(); expect(screen()).toContain("Estimated extra: £180.00");
+ let finish!: (value: ReturnType<typeof response>) => void;
+ fetch.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+ click(render(), "Load the saved final check");
+ fetch.mockImplementation(async () => response(saved("unlocked")));
+ const nextJob = "18000000-0000-4000-8000-000000000099";
+ expect(screen(nextJob)).not.toContain("Estimated extra"); await tick();
+ finish(response(reveal(99999))); await tick();
+ expect(screen(nextJob)).not.toContain("heated towel rail"); expect(screen(nextJob)).not.toContain("Estimated extra");
+});

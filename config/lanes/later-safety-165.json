@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-165": {
+      "branches": [
+        "codex/sandbox/later-safety-165"
+      ],
+      "note": "LATER-SAFETY-165 bounded quote command transport ordering and malformed JSON errors; no domain policy changes.",
+      "allow": [
+        "apps/web/app/api/jobs/[id]/quotes/acceptance/disposition/route.test.ts",
+        "apps/web/app/api/jobs/[id]/quotes/acceptance/disposition/route.ts",
+        "apps/web/app/api/jobs/[id]/quotes/acceptance/route.test.ts",
+        "apps/web/app/api/jobs/[id]/quotes/acceptance/route.ts",
+        "apps/web/app/api/jobs/[id]/quotes/delivery/[action]/route.test.ts",
+        "apps/web/app/api/jobs/[id]/quotes/delivery/[action]/route.ts"
+      ]
+    }
+  }
+}

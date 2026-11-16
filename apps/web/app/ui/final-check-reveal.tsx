@@ -3,6 +3,7 @@ import { JOB_SAVED_EVENT, jobPageFetch as fetch } from "./job-page-fetch";
 import {lateSourceReceiptV1} from "@jobguard/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { answerLabels, catchCommand, dispositionCommand, dispositionLabels, finalCheckReadV1, referenceChoices, revealStatus, type FinalCheckRead, type RevealAnswer, type RevealItem, FINAL_CHECK_CHANGED_EVENT } from "./final-check-reveal-view";
+import { pounds } from "../lib/pounds";
 import styles from "./practice-receipts.module.css";
 
 const when = (value: string) => new Date(value).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" });
@@ -134,7 +135,7 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
     {requested && <span data-testid="final-check-run-requested"> Asked for. The saved final check will update here.</span>}
    </p>}
    {read.lockId && <HistoricalEvidence key={jobId} jobId={jobId} onSaved={load}/>}
-   {read.items.map(revealed => <Item key={revealed.signalId} revealed={revealed} read={read} busy={busy} onAnswer={answer}/>)}
+   {read.state === "completed" && read.items.map(revealed => <Item key={revealed.signalId} revealed={revealed} read={read} busy={busy} onAnswer={answer}/>)}
    {(read.postLockItems ?? []).length > 0 && <>
     <h3>Found after the lock</h3>
     <p>Evidence that arrived after you completed the final account. You can use it, but it never earns JobGuard a fee.</p>
@@ -155,6 +156,8 @@ function Item({ revealed, read, busy, onAnswer }: { revealed: RevealItem; read: 
  const select = `answer-${revealed.signalId}`, ref = `reference-${revealed.signalId}`;
  return <article className={styles.movement} data-testid="final-check-item" data-signal-id={revealed.signalId}>
   <h3>{revealed.description}</h3>
+  <p data-testid="final-check-estimate">{revealed.estimatedValuePence == null ? "Needs a price" : `Estimated extra: ${pounds(revealed.estimatedValuePence)}`}</p>
+  <p>Proposal only — price and approve this extra before billing. This is not charged, recovered or invoiced money.</p>
   <ul aria-label="Evidence and dates">{(revealed.evidence ?? []).map(e => <li key={e.id}>{e.source ?? "Evidence"} received {when(e.receivedAt)}{e.evidenceAfterLock ? " (after the lock: not fee-eligible)" : ""}</li>)}</ul>
   <p>Checked against {revealed.comparisons.lockedLineIds.length} locked lines and {revealed.comparisons.baselineItemIds.length} original quote items: no match found.</p>
   {revealed.disposition ? <p data-testid="final-check-disposition">Your answer: {dispositionLabels[revealed.disposition] ?? revealed.disposition}</p> : <>

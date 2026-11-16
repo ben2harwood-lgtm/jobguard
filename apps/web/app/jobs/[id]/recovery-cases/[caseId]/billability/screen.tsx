@@ -16,6 +16,15 @@ export const billabilityView = z.object({
 });
 type View = z.infer<typeof billabilityView>;
 type Attempt = { body: Record<string, unknown>; uncertain: boolean };
+// Fetch a fresh token through the authority of the action, including exact retries.
+// Only the command body is persisted by the caller; tokens remain in memory.
+export async function billabilityActionRequest(endpoint: string, caseId: string, body: Record<string, unknown>) {
+  const action = z.enum(["review", "approve"]).parse(body.action);
+  const response = await fetch(`${endpoint}?action=${action}`, { cache: "no-store", credentials: "same-origin" });
+  const prepared = billabilityView.safeParse(await response.json());
+  if (!response.ok || !prepared.success || prepared.data.caseId !== caseId) throw new Error("BILLABILITY_UNAVAILABLE");
+  return fetch(endpoint, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "x-csrf-token": prepared.data.csrfToken }, body: JSON.stringify(body), cache: "no-store" });
+}
 const unknownAnswer = "The server has not confirmed the result. Retry the same request; it may already be saved.";
 export function billabilityAnswer(status: number, body: unknown, commandId: unknown): boolean {
   const saved = z.union([
@@ -70,7 +79,7 @@ export function BillabilityScreen({ jobId, caseId }: { jobId: string; caseId: st
       // Write before sending. A reload or lost response must retain the same ID and payload.
       sessionStorage.setItem(storageKey, JSON.stringify(body));
       setPending({ body, uncertain: true });
-      const response = await fetch(endpoint, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "x-csrf-token": view?.csrfToken ?? "" }, body: JSON.stringify(body), cache: "no-store" });
+      const response = await billabilityActionRequest(endpoint, caseId, body);
       const answer: unknown = await response.json();
       if (billabilityAnswer(response.status, answer, body.commandId)) {
         sessionStorage.removeItem(storageKey); setPending(null);

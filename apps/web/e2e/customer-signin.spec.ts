@@ -152,6 +152,40 @@ test("emailed fictional link signs into exactly one job with a browser-session c
   expect((await customerContext.cookies()).find(c => c.name === "jobguard_customer")).toBeUndefined();
   await customerContext.addCookies([cookie]);
   expect((await api(tab, "read", { version: "customer-read.v1", jobId: fixture.job })).status).toBe(401);
+  // A refused revocation also removes the stale browser credential.
+  expect(await api(tab, "signout", { version: "customer-signout.v1" })).toEqual({ status: 401, body: { code: "CUSTOMER_REFUSED" } });
+  expect((await customerContext.cookies()).find(c => c.name === "jobguard_customer")).toBeUndefined();
+  // Issue another fictional credential to exercise expiry independently of revocation.
+  await admin.query("UPDATE app.customer_portal_grant SET issued_at=issued_at-interval '2 minutes',expires_at=expires_at-interval '2 minutes' WHERE tenant_id=$1 AND id=$2", [tenant, issued.body.grantId]);
+  const freshGrant = await api(page, "issue", { version: "customer-link-issue.v1", tenantId: tenant, jobId: fixture.job, customerId: fixture.customer }, session.csrfToken);
+  expect(freshGrant.status).toBe(200);
+  const freshReference = (await admin.query("SELECT o.immutable_content FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [tenant, freshGrant.body.grantId])).rows[0].immutable_content;
+  // A new page mounts the sign-in form with the fresh link fragment.
+  const freshTab = await customerContext.newPage();
+  await freshTab.goto(`${baseURL}${customerSigninLink(freshReference, digest)}`);
+  await freshTab.getByRole("main").getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(freshTab.getByText("You are signed in to this job.", { exact: true })).toBeVisible();
+  expect((await api(freshTab, "read", { version: "customer-read.v1", jobId: fixture.job })).status).toBe(200);
+  expect((await admin.query("UPDATE app.customer_portal_session SET issued_at=issued_at-interval '2 hours',expires_at=expires_at-interval '2 hours' WHERE tenant_id=$1 AND grant_id=$2", [tenant, freshGrant.body.grantId])).rowCount).toBe(1);
+  expect((await customerContext.cookies()).find(c => c.name === "jobguard_customer")).toBeDefined();
+  expect((await api(freshTab, "read", { version: "customer-read.v1", jobId: fixture.job })).status).toBe(401);
+  expect(await freshTab.evaluate(async () => (await fetch("/api/auth/session")).json())).toEqual({ code: "UNAUTHENTICATED" });
+  const expiredSignout = freshTab.waitForResponse(response => response.url().endsWith("/api/customer-portal/signout") && response.request().method() === "POST");
+  await freshTab.getByRole("main").getByRole("button", { name: "Sign out", exact: true }).click();
+  const refusedSignout = await expiredSignout;
+  expect(refusedSignout.status()).toBe(401);
+  await expect(freshTab.getByText("Sign-out could not be confirmed. Close this browser session.", { exact: true })).toBeVisible();
+  expect((await customerContext.cookies()).find(c => c.name === "jobguard_customer")).toBeUndefined();
+  // The proxy now lets the request reach builder authentication; no builder is signed in.
+  expect(await freshTab.evaluate(async () => {
+    const response = await fetch("/api/auth/session");
+    return { status: response.status, body: await response.json() };
+  })).toEqual({ status: 401, body: { code: "UNAUTHENTICATED" } });
+  expect(await freshTab.evaluate(async () => {
+    const response = await fetch("/api/auth/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    return { status: response.status, body: await response.json() };
+  })).toEqual({ status: 400, body: { code: "INVALID_AUTH_INPUT" } });
+  expect((await customerContext.cookies()).some(c => ["jobguard_session", "jg_session"].includes(c.name))).toBe(false);
  } finally { await customerContext.close(); await runtime.end(); await admin.end(); }
  const fresh = await browser.newContext();
  try { const tab = await fresh.newPage(); await tab.goto("/customer/sign-in"); expect((await api(tab, "read", { version: "customer-read.v1", jobId: randomUUID() })).status).toBe(401); }
