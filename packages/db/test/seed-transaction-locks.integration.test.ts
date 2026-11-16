@@ -47,7 +47,7 @@ describe("PostgreSQL seed serialization", () => {
   let c: Cluster;
   beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await cluster(); }, 240_000);
   afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
-  const poolForRequest = () => new Pool({ ...c.runtime.options, max: 3, maxUses: 1, connectionTimeoutMillis: 10_000 });
+  const poolForRequest = () => new Pool({ ...c.runtime.options, password: c.runtime.options.password, max: 3, maxUses: 1, connectionTimeoutMillis: 10_000 });
 
   // Wrap only the dedicated first checkout. Repository transactions still use
   // the real pool, including the two nested coordinator checkouts in Northside.
