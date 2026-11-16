@@ -169,24 +169,40 @@ it("does not put live job controls inside the quote fieldset or sidebar", () => 
  expect(activationFound).toBe(true);
 });
 
-it("does not fetch, reset loading or clear the job and capture on fragment navigation", () => {
- workspace("quoting");
+it("reloads saved projections for ordinary URL/hash navigation", () => {
+ workspace("live");
  const listeners = new Map<string, () => void>();
- const fetch = vi.fn(()=>new Promise(()=>{}));
- vi.stubGlobal("fetch", fetch);
- vi.stubGlobal("window", {
-  location: {hash:"#quote"},
-  addEventListener: (name:string, fn:()=>void) => listeners.set(name, fn),
-  removeEventListener: vi.fn(),
- });
- // The second shell effect installs navigation; the initial-load effect is separate.
- const cleanup = state.effects[1]!() as () => void;
+ vi.stubGlobal("fetch", vi.fn(async()=>({ok:false,status:403})));
+ vi.stubGlobal("window", { location:{hash:"#final-account-title"},
+  addEventListener:(name:string,fn:()=>void)=>listeners.set(name,fn), removeEventListener:vi.fn() });
+ const cleanup=state.effects[1]!() as ()=>void;
  listeners.get("hashchange")!();
- expect(fetch).not.toHaveBeenCalled();
- expect(state.setters[3]).not.toHaveBeenCalled();
- expect(state.setters[0]).not.toHaveBeenCalled();
- expect(state.setters[1]).not.toHaveBeenCalled();
+ expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/proposal`,expect.objectContaining({cache:"no-store"}));
+ expect(state.setters[3]).toHaveBeenCalledWith(true);
+ expect(state.setters[1]).toHaveBeenCalledWith(null);
  cleanup();
+});
+it("keeps section clicks and Continue mounted while ordinary URL navigation refreshes", () => {
+ const tree=workspace("live");
+ function find(node:React.ReactNode, predicate:(element:React.ReactElement<Record<string,unknown>>)=>boolean):React.ReactElement<Record<string,unknown>>|undefined {
+  if(Array.isArray(node))return node.map(child=>find(child,predicate)).find(Boolean);
+  if(!React.isValidElement<Record<string,unknown>>(node))return;
+  if(predicate(node))return node;
+  return find(node.props.children as React.ReactNode,predicate);
+ }
+ vi.stubGlobal("fetch",vi.fn());vi.stubGlobal("history",{replaceState:vi.fn()});
+ vi.stubGlobal("location",{pathname:`/jobs/${jobId}`,search:""});
+ const link=find(tree,node=>node.type==="a"&&node.props.href==="#final-account-title")!;
+ const preventDefault=vi.fn();
+ (link.props.onClick as (event:{preventDefault:()=>void})=>void)({preventDefault});
+ expect(preventDefault).toHaveBeenCalled();
+ const journey=find(tree,node=>typeof node.type==="function"&&node.type.name==="PracticeJourney")!;
+ (journey.props.onNavigate as (target:string)=>void)("#quote");
+ expect(state.setters[4]).toHaveBeenCalledWith("#final-account-title");
+ expect(state.setters[4]).toHaveBeenCalledWith("#quote");
+ expect(history.replaceState).toHaveBeenLastCalledWith(null,"",`/jobs/${jobId}#quote`);
+ expect(fetch).not.toHaveBeenCalled();
+ expect(state.setters[1]).not.toHaveBeenCalled();expect(state.setters[3]).not.toHaveBeenCalled();
 });
 it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"])("keeps the mounted editor identity stable for %s navigation", fragment => {
  function review(node:React.ReactNode):React.ReactElement | undefined {

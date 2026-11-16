@@ -2,6 +2,7 @@
 import type * as React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
+import { feeIllustrationResponseV1 } from "@jobguard/api/fee-illustration-contracts";
 import { practiceInvoiceResponseV1 } from "@jobguard/api/customer-invoice-contracts";
 import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
 import { quoteWorkspaceResponseV1 } from "@jobguard/api/quote-contracts";
@@ -33,7 +34,7 @@ async function readJson(path: string, signal: AbortSignal, absent?: { status: nu
 }
 
 /** Persisted read models decide the next step; this component never advances a job locally. */
-export function PracticeJourney({ jobId, status, onSavedLabel }: { jobId: string; status: string; onSavedLabel?: (label: string | null) => void }) {
+export function PracticeJourney({ jobId, status, onSavedLabel, onNavigate }: { jobId: string; status: string; onSavedLabel?: (label: string | null) => void; onNavigate?: (target: string) => void }) {
  const [state, setState] = useState<ReadState>({ jobId, status, phase: "loading" });
  const navigationCleanup = useRef<(() => void) | null>(null);
  const generation = useRef(0), activeRequest = useRef<AbortController | null>(null);
@@ -47,7 +48,7 @@ export function PracticeJourney({ jobId, status, onSavedLabel }: { jobId: string
   setState({ jobId, status, phase: "loading" });
   try {
    const path = `/api/jobs/${jobId}`, beforeActivation = ["draft", "quoting", "accepted", "lost"].includes(status);
-   const [proposalRaw, quoteRaw, deliveryRaw, proofRaw, variationsRaw, accountRaw, lockRaw, checkRaw, invoicesRaw] = await Promise.all([
+   const [proposalRaw, quoteRaw, deliveryRaw, proofRaw, variationsRaw, accountRaw, lockRaw, checkRaw, invoicesRaw, feeRaw] = await Promise.all([
     readJson(`${path}/proposal`, controller.signal),
     readJson(`${path}/quotes`, controller.signal, status === "draft" ? { status: 404, code: "NOT_FOUND" } : undefined),
     readJson(`${path}/quotes/delivery`, controller.signal),
@@ -57,6 +58,7 @@ export function PracticeJourney({ jobId, status, onSavedLabel }: { jobId: string
     readJson(`${path}/final-account/lock`, controller.signal),
     readJson(`${path}/final-check`, controller.signal, beforeActivation ? { status: 403, code: "FINAL_CHECK_FORBIDDEN" } : undefined),
     readJson(`${path}/customer-invoices`, controller.signal),
+    readJson(`${path}/fee-illustration`, controller.signal, { status: 404, code: "NOT_FOUND" }),
    ]);
    const proposal = captureWorkspaceResponseV1.parse(proposalRaw);
    if ((variationsRaw === undefined && !["draft", "quoting", "accepted", "lost"].includes(proposal.status)) || (proofRaw === undefined && !["draft", "quoting", "accepted", "lost"].includes(proposal.status)) || (quoteRaw === undefined && proposal.status !== "draft")) throw new Error("Unexpected projection absence");
@@ -68,6 +70,8 @@ export function PracticeJourney({ jobId, status, onSavedLabel }: { jobId: string
    const lock = lockView.parse(lockRaw);
    const check = checkRaw === undefined ? undefined : finalCheckReadV1.parse(checkRaw);
    const invoices = practiceInvoiceResponseV1.parse(invoicesRaw);
+   // Preserve the existing read-health check; an illustration never decides payment completion.
+   if (feeRaw !== undefined) feeIllustrationResponseV1.parse(feeRaw);
    if (proposal.jobId !== jobId || [quote, proof, variations, account, lock, invoices].some(view => view.jobId !== jobId)) throw new Error("Wrong job projection");
    const facts: Facts = {
     job: { id: proposal.jobId, status: proposal.status, scopeIdentityIds: proposal.review?.lines.filter(line => line.disposition === "accepted").map(line => line.scopeItemId) ?? [] },
@@ -139,8 +143,11 @@ export function PracticeJourney({ jobId, status, onSavedLabel }: { jobId: string
   // Mount the account first when its saved invoice is not rendered yet. Do not
   // pretend a different invoice's receipt input belongs to this debt.
   const firstTarget = step === "record_payment" && !document.getElementById(target.slice(1)) ? "#final-account-title" : target;
-  history.replaceState(null, "", `${location.pathname}${location.search}${firstTarget}`);
-  window.dispatchEvent(new HashChangeEvent("hashchange"));
+  if (onNavigate) onNavigate(firstTarget);
+  else {
+   history.replaceState(null, "", `${location.pathname}${location.search}${firstTarget}`);
+   window.dispatchEvent(new HashChangeEvent("hashchange"));
+  }
   const root = document.getElementById("captured-job-workspace");
   if (!root) return;
   let observer: MutationObserver | undefined, timer: number | undefined;

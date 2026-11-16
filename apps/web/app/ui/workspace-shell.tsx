@@ -61,8 +61,14 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
   finally{if(current===generation.current)setLoading(false);}
  },[jobId]);
  useEffect(()=>{void load();return()=>{generation.current++;activeRequest.current?.abort();}},[load]);
- useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
+ useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load();};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
  useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
+ // Explicit in-workspace controls retain mounted editors and unsaved drafts.
+ // Ordinary URL/hash navigation still reloads saved reads, as on main.
+ const navigateSection=(target:string)=>{
+  history.replaceState(null,"",`${location.pathname}${location.search}${target}`);
+  setFragment(target);
+ };
  const section=capture?requestedWorkspaceSection(capture.status,fragment==="#variations-title"?"#work-proof":fragment):"scope";
  // Plain saved-job URLs retain the confirmed-scope step. Explicit job anchors
  // open the editor, including diary/customer panels nested inside the live journey.
@@ -93,8 +99,8 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
    <header><h1>{capture.proposal.title}</h1><p className="status">{completionLabel??jobStatusLabels[capture.status]}</p></header>
    {!hasStartedWork(capture.status)&&<WatchdogPanel disableControls={false}><ProofStage jobId={jobId}/></WatchdogPanel>}
    {/* Put stable section links before panels that load asynchronously. */}
-   <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope">Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote">Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof">Work and proof</a><a href="#final-account-title">Final account and invoices</a></>}</nav>
-   <PracticeJourney jobId={jobId} status={capture.status} onSavedLabel={setCompletionLabel}/>
+   <nav className="workspace-stages" aria-label="Saved job sections"><a href="#scope" onClick={event=>{event.preventDefault();navigateSection("#scope");}}>Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote" onClick={event=>{event.preventDefault();navigateSection("#quote");}}>Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof" onClick={event=>{event.preventDefault();navigateSection("#work-proof");}}>Work and proof</a><a href="#final-account-title" onClick={event=>{event.preventDefault();navigateSection("#final-account-title");}}>Final account and invoices</a></>}</nav>
+   <PracticeJourney jobId={jobId} status={capture.status} onSavedLabel={setCompletionLabel} onNavigate={navigateSection}/>
    <JobParties jobId={jobId}/>
    {/* The same saved status removes pre-live proof and enables the editor proof slot. */}
    <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={jobId} result={capture} initialPricing={pricing} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId} extrasHref="#variations-title"/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>

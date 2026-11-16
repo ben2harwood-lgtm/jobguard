@@ -10,6 +10,8 @@
         "apps/web/app/ui/practice-journey-anchors.test.tsx",
         "apps/web/app/ui/practice-journey.test.tsx",
         "apps/web/app/ui/practice-journey.tsx",
+        "apps/web/app/ui/practice-next-step.ts",
+        "apps/web/app/ui/practice-next-step.test.ts",
         "apps/web/app/ui/workspace-lifecycle.test.ts",
         "apps/web/app/ui/workspace-lifecycle.ts",
         "apps/web/app/ui/workspace-shell-order.test.tsx",

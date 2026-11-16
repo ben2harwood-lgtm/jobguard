@@ -49,6 +49,7 @@ async function journey(status: string, variationStatus = 400, variationCode = "A
     if (path.endsWith("/customer-invoices")) return response({ version: 1, environment: "synthetic_demo", jobId: invoiceJobId, invoices: [] });
     if (path.endsWith("/proposal")) return response({ version: 1, environment: "synthetic_demo", jobId, captureId: jobId, proposalId: jobId, reviewId: jobId, status, source: { text: "Fictional", kind: "text", version: 1, acquisition: null, audioByteLength: 0 }, proposal: { title: "Fictional", lines: [], questions: [] }, review: null });
     if (path.endsWith("/quotes")) return response({ version: 1, environment: "synthetic_demo", jobId, scope: [], draft: null, revisions: [] });
+    if (path.endsWith("/fee-illustration")) return response({ code: "NOT_FOUND" }, 404);
     if (path.endsWith("/delivery")) return response(null);
     if (path.endsWith("/final-account")) return response({ version: 1, environment: "synthetic_demo", jobId, account: null });
     if (path.endsWith("/lock")) return response({ version: "final-account-lock.view.v1", jobId, lock: null });
@@ -67,7 +68,7 @@ it.each(["draft", "quoting", "accepted", "lost"])("allows documented activation 
   expect(html).toContain("Continue this job");
   expect(html).not.toContain("could not be checked");
   expect(html).not.toContain("Checking saved progress");
-  expect(fetch).toHaveBeenCalledTimes(9);
+  expect(fetch).toHaveBeenCalledTimes(10);
   expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/variations`, expect.objectContaining({ cache: "no-store" }));
 });
 
@@ -93,15 +94,15 @@ function events() {
 const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 it("refreshes only matching saved-change events and focus, with string lifecycle details",async()=>{
  const window=events();const {fetch,render}=await journey("accepted");
- expect(fetch).toHaveBeenCalledTimes(9);
+ expect(fetch).toHaveBeenCalledTimes(10);
  for(const name of ["job-saved","jobguard:invoice-changed","jobguard:final-check-changed"]){
-  window.dispatchEvent(new CustomEvent(name,{detail:{jobId:otherJobId}}));expect(fetch).toHaveBeenCalledTimes(9);
+  window.dispatchEvent(new CustomEvent(name,{detail:{jobId:otherJobId}}));expect(fetch).toHaveBeenCalledTimes(10);
  }
- window.dispatchEvent(new CustomEvent("job-lifecycle-changed",{detail:{jobId}}));expect(fetch).toHaveBeenCalledTimes(9);
+ window.dispatchEvent(new CustomEvent("job-lifecycle-changed",{detail:{jobId}}));expect(fetch).toHaveBeenCalledTimes(10);
  const notifications=vi.fn();window.addEventListener("job-saved",notifications);
  for(const [index,name] of ["job-saved","job-lifecycle-changed","jobguard:invoice-changed","jobguard:final-check-changed","focus"].entries()){
   window.dispatchEvent(name==="focus"?new Event(name):new CustomEvent(name,{detail:name==="job-lifecycle-changed"?jobId:{jobId}}));
-  await settle();expect(render()).toContain("Continue this job");expect(fetch).toHaveBeenCalledTimes(9*(index+2));
+  await settle();expect(render()).toContain("Continue this job");expect(fetch).toHaveBeenCalledTimes(10*(index+2));
  }
  expect(notifications).toHaveBeenCalledTimes(1); // Only the explicit test event; reads publish nothing.
 });
@@ -122,7 +123,7 @@ it("clears previous-job facts immediately and ignores late other-job replies",as
  fetch.mockImplementation(path=>new Promise(resolve=>{releases.push(()=>{void original(path).then(resolve);});}));
  window.dispatchEvent(new Event("focus"));
  expect(render(otherJobId)).toContain("Checking saved progress");
- for(const release of releases.slice(0,9))release();await settle();
+ for(const release of releases.slice(0,10))release();await settle();
  const html=render(otherJobId);expect(html).not.toContain("journey-customer-balance");expect(html).not.toContain("You finished this practice job");
 });
 
@@ -165,4 +166,13 @@ it.each(["draft", "quoting", "accepted", "lost"])("allows the combined pre-activ
   });
   expect(html).toContain("Continue this job");
   expect(html).not.toContain("could not be checked");
+});
+
+it.each([
+ [404, {code:"DATABASE_UNAVAILABLE"}], [400, {code:"NOT_FOUND"}],
+ [200, null], [200, {version:1}],
+])("preserves fee illustration read-health failures without claiming progress: %s / %j", async (status, body) => {
+ const {html}=await journey("draft",400,"ACTIVATION_REQUIRED",jobId,{"fee-illustration":{status,body}});
+ expect(html).toContain("Saved progress could not be checked");
+ expect(html).not.toContain("journey-customer-balance");
 });

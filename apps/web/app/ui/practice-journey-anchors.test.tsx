@@ -48,7 +48,7 @@ it("uses the existing proof section for incomplete live work", () => {
  expect(renderToStaticMarkup(<ProofStage jobId={jobId}/>)).toContain(` id="${id}"`);
 });
 it("uses the existing variations heading for extras", () => {
- const id = target(card("live", { variations: { jobId, variations: [{ id: invoiceId, state: "draft", currentRevisionId: null, revisions: [] }] } }));
+ const id = target(card("live", { invoices: {jobId, invoices: []}, variations: { jobId, variations: [{ id: invoiceId, state: "draft", currentRevisionId: null, revisions: [] }] } }));
  hooks.values = [{ jobId, variations: [], approvedAdditionsPence: 0, approvedOmissionsPence: 0, pendingExtrasPence: 0, baselinePence: 0 }];
  expect(id).toBe(`variation-${invoiceId}`);
  hooks.values = [{ jobId, variations: [{ id: invoiceId, description: "Fictional extra", scopeItemId: jobId, currentRevisionId: null, revisions: [] }], approvedAdditionsPence: 0, approvedOmissionsPence: 0, pendingExtrasPence: 0, baselinePence: 0 }];
@@ -89,9 +89,9 @@ it("distinguishes zero-value completion from payment",()=>{
  expect(html).toContain("Zero-value job complete");expect(html).not.toContain("Customer paid");
 });
 
-function continueAction(status: string, changes: object) {
+function continueAction(status: string, changes: object, onNavigate?: (target: string) => void) {
  hooks.values=[{jobId,status,phase:"ready",snapshot:{facts:facts(status,changes),realExternalActions:0}}];
- const tree=PracticeJourney({jobId,status});
+ const tree=PracticeJourney({jobId,status,...(onNavigate ? {onNavigate} : {})});
  function find(node:React.ReactNode):React.ReactElement<{onClick:(event:{preventDefault:()=>void})=>void}>|undefined{
   if(Array.isArray(node))return node.map(find).find(Boolean);
   if(!React.isValidElement<{children?:React.ReactNode;"data-testid"?:string}>(node))return;
@@ -117,7 +117,7 @@ function navigationDom(targetId:string, actionName:string) {
 }
 it.each(["Approve exact revision","Change price"])("opens ancestors and repeatedly focuses the exact pending extra's %s",name=>{
  const dom=navigationDom(`variation-${invoiceId}`,name);
- const onClick=continueAction("live",{variations:{jobId,variations:[{id:invoiceId,state:"draft",currentRevisionId:name==="Change price"?null:jobId,revisions:name==="Change price"?[]:[{id:jobId,approved:false,rejected:false}]}]}});
+ const onClick=continueAction("live",{invoices:{jobId,invoices:[]},variations:{jobId,variations:[{id:invoiceId,state:"draft",currentRevisionId:name==="Change price"?null:jobId,revisions:name==="Change price"?[]:[{id:jobId,approved:false,rejected:false}]}]}});
  for(let i=0;i<2;i++){dom.details.open=false;onClick({preventDefault:vi.fn()});expect(dom.details.open).toBe(true);}
  expect(dom.action.focus).toHaveBeenCalledTimes(2);expect(dom.placeholder.focus).not.toHaveBeenCalled();
  expect(dom.action.scrollIntoView).toHaveBeenCalledWith({block:"center"});
@@ -136,4 +136,12 @@ it("opens the account without navigating to an absent earlier invoice or another
  expect(history.replaceState).toHaveBeenCalledWith(null,"",`/jobs/${jobId}#final-account-title`);
  expect(history.replaceState).not.toHaveBeenCalledWith(null,"",`/jobs/${jobId}#invoice-${invoiceId}`);
  expect(dom.action.focus).not.toHaveBeenCalled();
+});
+
+it("uses the shell navigation callback while retaining exact Continue focus", () => {
+ const dom=navigationDom("quote","Start this practice job"), onNavigate=vi.fn();
+ continueAction("accepted",{},onNavigate)({preventDefault:vi.fn()});
+ expect(onNavigate).toHaveBeenCalledExactlyOnceWith("#quote");
+ expect(window.dispatchEvent).not.toHaveBeenCalled();
+ expect(dom.action.focus).toHaveBeenCalledWith({preventScroll:true});
 });
