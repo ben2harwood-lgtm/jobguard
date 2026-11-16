@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-164": {
+      "branches": ["codex/sandbox/later-safety-164"],
+      "note": "LATER-SAFETY-164 RED: independently load currently authorized client decision history when the approval queue is stale.",
+      "allow": [
+        "apps/web/app/customer/extra-approvals/approvals.tsx",
+        "apps/web/app/customer/extra-approvals/approvals.test.tsx"
+      ]
+    }
+  }
+}
