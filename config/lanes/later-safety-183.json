@@ -7,8 +7,11 @@
       ],
       "allow": [
         "packages/db/migrations/0779_extra_price_permission_order.sql",
+        "packages/db/migrations/0756_extra_price_permission_order.sql",
         "packages/db/test/migration-proofs/0779_extra_price_permission_order.proof.json",
+        "packages/db/test/migration-proofs/0756_extra_price_permission_order.proof.json",
         "packages/db/migration-notes/0779_extra_price_permission_order.md",
+        "packages/db/migration-notes/0756_extra_price_permission_order.md",
         "packages/db/test/extra-price-permission-order.integration.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
