@@ -12,6 +12,9 @@ export async function POST(request: Request) {
   const parsed = blankPracticeCompanyCommandV1.safeParse(await request.json().catch(() => null));
   if (!parsed.success || new URL(request.url).search) return NextResponse.json({ code: "INVALID_PRACTICE_COMMAND" }, { status: 400, headers });
   try {
+    const jar = await cookies();
+    // Identity-linked browsers must use the explicit identity-CSRF entry/reset boundary.
+    if (jar.get("jobguard_session") || jar.get("jg_practice_pair")) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401, headers });
     const token = await startBlankPracticeCompany(syntheticPool(), parsed.data, (await cookies()).get("jg_session")?.value);
     const response = NextResponse.json({ version: "blank-practice-company.v1", ok: true }, { headers });
     response.cookies.set("jg_session", token, { httpOnly: true, sameSite: "lax", secure: new URL(request.url).protocol === "https:", path: "/" });
