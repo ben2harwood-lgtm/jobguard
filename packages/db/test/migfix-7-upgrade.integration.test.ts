@@ -275,6 +275,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // LATER-SAFETY-183 changes only xa_price after LP-6d, retaining its binding prefix.
   const pricePermissionSql = await readFile(new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.xa_price(p_job,p_variation,p_command,p_actor,p_net,p_revise)", pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!);
+  // LATER-SAFETY-189: xa_proceed's latest body preserves covered reads and requires the raiser for writes.
+  const proceedRaiserSql = await readFile(new URL("../migrations/0760_extra_proceed_raiser_authority.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_proceed(p_job,p_extra,p_actor,p_body)", proceedRaiserSql.split("AS $$")[1]!.split("$$;")[0]!);
   const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;
   const namedAdditions = [
     "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",

@@ -292,6 +292,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // LATER-SAFETY-183 is xa_price's sole successor; retain the full LP-6d binding prefix.
   const pricePermissionSql = await readFile(new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.xa_price", [pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!]);
+  // LATER-SAFETY-189: pin the complete own-extra writer without changing owner/ACL checks.
+  const proceedRaiserSql = await readFile(new URL("../migrations/0760_extra_proceed_raiser_authority.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_proceed", [proceedRaiserSql.split("AS $$")[1]!.split("$$;")[0]!]);
   // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
   lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);
   for (const prior of security) {
