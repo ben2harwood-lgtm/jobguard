@@ -98,7 +98,7 @@ it("preserves scope, tenant, revoked-grant and revoked-member exclusions", async
   const w = await chainWorld(c), other = await chainWorld(c), s = await submitted(c, w, 60000);
   expect(await queue(w, w.otherSupervisor.member, s)).toEqual([]);
   expect(await queue(other, other.members.supervisor.member, s)).toEqual([]);
-  expect(await queue(w, other.members.supervisor.member, s)).toEqual([]);
+  await expect(queue(w, other.members.supervisor.member, s)).rejects.toMatchObject({ code: "PERMISSION_DENIED" });
   const a = w.members.supervisor.member;
   expect(await queue(w, a, s)).toHaveLength(1);
   await command(c, w, { kind: "grant.revoke", grantId: w.members.supervisor.grant });
