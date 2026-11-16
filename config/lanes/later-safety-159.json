@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-159": {
+      "branches": ["codex/sandbox/later-safety-159"],
+      "note": "LATER-SAFETY-159: RED immutable contractor terms preservation; no migration; NOPR.",
+      "allow": [
+        "apps/web/app/admin/contractor/contractor-admin.tsx",
+        "apps/web/app/admin/contractor/contractor-admin.test.tsx",
+        "apps/web/e2e/contractor-contract-revision-preserves-terms.spec.ts"
+      ]
+    }
+  }
+}
