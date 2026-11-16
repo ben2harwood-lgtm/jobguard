@@ -88,13 +88,19 @@ async function refreshDocumentReferences(){
   const response=await fetch(`/api/jobs/${jobId}/quotes/delivery`,{cache:"no-store"});
   if(!response.ok||!currentJob())return;
   const saved=await response.json();if(!currentJob())return;
-  setSavedDocument(saved);
+  setSavedDocument(saved);return saved;
  }catch{ /* A failed read cannot invent an artifact reference. */ }
 }
-// Returning to Quote shows the persisted artifact without resetting draft prices or job panels.
+// Preserve a preview of this saved artifact: removing it after Continue focuses
+// Start would shrink quote history and move the focused control off-screen.
 useEffect(()=>{
  if(sectionNavigationKey!=="#quote")return;
- setPreview(null);void refreshDocumentReferences();
+ let active=true;const navigatedPreview=preview;
+ void refreshDocumentReferences().then(saved=>{
+  if(!active||!currentJob()||!saved)return;
+  setPreview(current=>current===navigatedPreview&&current&&(current.documentId!==saved.documentId||current.version!==saved.documentVersion)?null:current);
+ });
+ return()=>{active=false;};
 },[jobId,sectionNavigationKey]);
 async function getPracticeCustomerLink(){
  if(linkBusyRef.current||savingRef.current||previewingRef.current)return;

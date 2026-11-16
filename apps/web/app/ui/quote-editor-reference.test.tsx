@@ -181,12 +181,14 @@ it("keeps a lost send response unresolved and exposes reconciliation",async()=>{
 });
 
 it("shows Saved quote on section return while retaining unsaved recipient and job panels", async () => {
+ // A different saved artifact must still replace the old transient preview.
  render();await settle();await button(render(),"Preview immutable quote").props.onClick();
  let tree=render();
  expect(all(tree,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(1);
  all(tree,n=>n.props["aria-label"]==="Confirmed recipient")[0]!.props.onChange({target:{value:"unfinished@example.invalid"}});
  render(jobId,{sectionNavigationKey:"#work-proof"});
  expect(all(render(jobId,{sectionNavigationKey:"#work-proof"}),n=>n.props["aria-label"]==="Quote preview")).toHaveLength(1);
+ delivery={...delivery,documentId:"replacement-document",reference:"Q-0043",documentVersion:4};
  render(jobId,{sectionNavigationKey:"#quote"});await settle();
  tree=render(jobId,{sectionNavigationKey:"#quote"});
  expect(all(tree,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(0);
@@ -201,4 +203,45 @@ it("retains visible audit history inside disabled closed-job quote controls", as
  expect(text(all(tree,n=>n.props["aria-label"]==="Acceptance audit history"))).toContain("Declined document v3");
  expect(all(tree,n=>n.type==="fieldset"&&n.props.disabled===true).length).toBeGreaterThan(0);
  expect(tree.props.hidden).toBe(false);
+});
+
+it("preserves the matching job/document preview when returning to Quote after focus", async () => {
+ render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ render(jobId,{sectionNavigationKey:"#work-proof"});
+ const before=render(jobId,{sectionNavigationKey:"#work-proof"});
+ expect(all(before,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(1);
+ render(jobId,{sectionNavigationKey:"#quote"});await settle();
+ const after=render(jobId,{sectionNavigationKey:"#quote"});
+ expect(all(after,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(1);
+ expect(all(after,n=>n.props["aria-label"]==="Saved quote")).toHaveLength(0);
+ expect(after.props["data-job-id"]).toBe(jobId);
+});
+
+it("ignores a previous job's late section-navigation document read", async () => {
+ render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ let finish!:(value:any)=>void;
+ vi.mocked(fetch).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+ render(jobId,{sectionNavigationKey:"#quote"});
+ const old={...delivery,reference:"Q-PREVIOUS-JOB"};
+ delivery=null;accepted=null;
+ const nextId="11111111-1111-4111-8111-111111111113";
+ render(nextId,{sectionNavigationKey:"#quote"});await settle();render(nextId,{sectionNavigationKey:"#quote"});
+ finish(response(old));await settle();
+ const tree=render(nextId,{sectionNavigationKey:"#quote"});
+ expect(tree.props["data-job-id"]).toBe(nextId);
+ expect(text(tree)).not.toContain("Q-PREVIOUS-JOB");
+ expect(all(tree,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(0);
+});
+it("does not clear a newer preview when an older navigation read finishes", async () => {
+ render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ let finish!:(value:any)=>void;
+ vi.mocked(fetch).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+ render(jobId,{sectionNavigationKey:"#quote"});
+ const old={...delivery};
+ preview={view:{...delivery,documentId:"latest-preview",documentVersion:4,contentHash:"new-hash"},document:{reference:"Q-0044",documentVersion:4}};
+ await button(render(jobId,{sectionNavigationKey:"#quote"}),"Preview immutable quote").props.onClick();
+ finish(response(old));await settle();
+ const tree=render(jobId,{sectionNavigationKey:"#quote"});
+ expect(all(tree,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(1);
+ expect(text(tree)).toContain("Quote Q-0044");
 });
