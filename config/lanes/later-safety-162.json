@@ -6,6 +6,8 @@
         "codex/sandbox/later-safety-162"
       ],
       "allow": [
+        "apps/web/e2e/approval-error-display.spec.ts",
+        "apps/web/e2e/subscription-onboarding.spec.ts",
         "apps/web/app/plans/plan-screen-headers.test.ts",
         "apps/web/app/plans/plan-screen.test.tsx",
         "apps/web/app/plans/plan-screen.tsx",

@@ -116,6 +116,15 @@ it("C2 preserves the exact statement approval binding and rejects a malformed ha
 
 const pending = { tenant_id: id(1), id: id(30), expected_revision: 1, plan: "Solo", effective_date: "2026-05-01" };
 const outcome = { tenant_id: id(1), change_id: id(30), source_id: id(40), outcome: "refused_capacity" };
+it("requires explicit change history arrays rather than treating an incomplete read as no pending downgrade", () => {
+  for (const field of ["changes", "changeOutcomes"] as const) {
+    const raw: Record<string, unknown> = fixture();
+    delete raw[field];
+    expect(() => view(raw)).toThrow("INVALID_SUBSCRIPTION_INPUT");
+    expect(() => view({ ...fixture(), [field]: null })).toThrow("INVALID_SUBSCRIPTION_INPUT");
+  }
+  expect(view(fixture()).pendingDowngrade).toBeNull();
+});
 it("reload projects the stored pending boundary, even after it is due; every recorded outcome clears it", () => {
   const raw = { ...fixture(), changes: [pending] };
   expect(subscriptionPlanView(raw, "2026-06-01").pendingDowngrade).toEqual({ changeId: id(30), plan: "Solo", effectiveDate: "2026-05-01" });
