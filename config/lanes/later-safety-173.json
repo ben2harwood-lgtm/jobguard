@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-173": {
+      "branches": [
+        "codex/sandbox/later-safety-173"
+      ],
+      "note": "LATER-SAFETY-173: RED authorised company selection for meter and company imports; no migration.",
+      "allow": [
+        "apps/web/app/classic/page.test.tsx",
+        "apps/web/app/meter/company-selection.tsx",
+        "apps/web/app/meter/company-selection.test.ts",
+        "apps/web/app/meter/meter-screen.tsx",
+        "apps/web/app/meter/meter-screen.test.tsx",
+        "apps/web/app/meter/page.tsx",
+        "apps/web/app/meter/jobs/[id]/imports/page.tsx",
+        "apps/web/app/meter/jobs/[id]/imports/page.test.tsx",
+        "apps/web/app/ui/job-import-v3.tsx",
+        "apps/web/app/ui/job-import-v3-company.test.tsx",
+        "apps/web/e2e/LATER-SAFETY-173.spec.ts"
+      ]
+    }
+  }
+}
