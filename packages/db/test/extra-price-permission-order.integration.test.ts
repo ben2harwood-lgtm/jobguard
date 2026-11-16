@@ -7,7 +7,7 @@ import { chainWorld, cluster, newJob, raiseOn, submitted, approveInput, command,
 import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 
 let c: Cluster, w: ChainWorld, repo: ExtraApprovalRepository;
-const migration = new URL("../migrations/0753_extra_price_permission_order.sql", import.meta.url);
+const migration = new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url);
 const methods = [["priceExtra", "price-extra.v1"], ["reviseExtra", "revise-extra.v1"]] as const;
 const code = (p: Promise<unknown>) => p.then(() => "ok", (e: { code?: string }) => e.code ?? String(e));
 const actorContext = (actor: AuthenticatedMembership) => testActorContext(c.admin, w.ctx, actor);
