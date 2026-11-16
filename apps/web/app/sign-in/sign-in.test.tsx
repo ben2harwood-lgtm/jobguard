@@ -49,7 +49,9 @@ it("keeps identity, business and membership ids inside one closed details elemen
   expect(visible).toContain("<h3>Fictional builders</h3><p>Owner</p>");
   expect(visible).toContain("<h3>Second fictional business</h3><p>Read only</p>");
   expect(visible).toContain("This is a practice version: made-up jobs only, nothing is sent or charged.");
-  expect(visible).toContain('<a href="/classic">Open my jobs</a>');
+  expect(visible).toContain("Your practice firm needs exactly one current owner membership. No business has been selected.");
+  expect(visible).not.toContain("Open my jobs");
+  expect(visible).not.toContain('href="/classic"');
   expect(visible).toContain('<a href="/plans">See plans and prices</a>');
 });
 
@@ -74,6 +76,7 @@ const owner = { ...session, memberships: [session.memberships[0]] };
 it("offers the existing firm screen only to a verified single owner", () => {
   const html = render(owner);
   expect(html).toContain("Name your practice business");
+  expect(html).toMatch(/<button[^>]*>Open my jobs<\/button>/);
   expect(html).toContain("Use made-up business details only.");
   expect(html).toContain("Trading name");
   // The existing screen keeps fields disabled until its own authorized profile read completes.
@@ -119,7 +122,7 @@ it.each([401, 503, "network"])("rechecks on focus and clears the stale session a
 // Retain hook state while invoking the real JSX form handlers, then render their visible result.
 function interactionTree() {
   state.cursor = 0;
-  return IdentitySignIn();
+  return IdentitySignIn({});
 }
 type Element = React.ReactElement<Record<string, unknown>>;
 function elements(node: React.ReactNode, type: string): Element[] {
@@ -207,4 +210,28 @@ it("preserves successful verification, invitation acceptance and sign-out throug
   expect(renderToStaticMarkup(tree)).not.toContain("Verified account");
   expect(renderToStaticMarkup(tree)).not.toContain("Invitation accepted.");
   expect(renderToStaticMarkup(tree)).toContain("Request code");
+});
+
+it("embedded account mode only refreshes identity on mount and never enters practice", async () => {
+  vi.stubGlobal("location", {search:""});
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ok:true,json:async()=>owner}));
+  state.values=["builder@practice.invalid","signup","","","",false,false,"",owner,false,false,null];
+  renderToStaticMarkup(<IdentitySignIn embedded/>);
+  state.effects[0]!();
+  await new Promise(resolve=>setTimeout(resolve,0));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch).toHaveBeenCalledWith("/api/auth/session",{cache:"no-store"});
+});
+
+it.each([false,true])("ordinary verification automatically enters only an eligible owner (ambiguous=%s)",async ambiguous=>{
+  const next={...session,csrfToken:"fictional-csrf",memberships:ambiguous?session.memberships:owner.memberships};
+  const assign=vi.fn();vi.stubGlobal("location",{assign});
+  const fetcher=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>({})}).mockResolvedValueOnce({ok:true,json:async()=>next}).mockResolvedValueOnce({ok:true,json:async()=>({ok:true})});
+  vi.stubGlobal("fetch",fetcher);
+  state.values=["builder@practice.invalid","signin","","12345678","12345678",true,false,"",null,false,false,null];
+  const forms=elements(IdentitySignIn({}), "form");
+  (forms.at(-1)!.props as {onSubmit:(event:unknown)=>void}).onSubmit({preventDefault:vi.fn()});
+  await new Promise(resolve=>setTimeout(resolve,0));
+  if(ambiguous){expect(fetcher).toHaveBeenCalledTimes(2);expect(assign).not.toHaveBeenCalled();expect(state.writes).toContain("Your practice firm needs exactly one current owner membership. No business has been selected.");}
+  else{expect(fetcher).toHaveBeenNthCalledWith(3,"/api/auth/practice",{method:"POST",headers:{"content-type":"application/json","x-csrf-token":"fictional-csrf"},body:JSON.stringify({version:"linked-practice-company.v1",action:"enter"})});expect(assign).toHaveBeenCalledWith("/practice-company");}
 });
