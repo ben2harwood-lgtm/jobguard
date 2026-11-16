@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-182": {
+      "branches": ["codex/sandbox/later-safety-182"],
+      "note": "RED: client-only selected company and practice consent command routing. No migration.",
+      "allow": [
+        "apps/web/app/practice-bank/screen.tsx",
+        "apps/web/app/practice-bank/screen.test.tsx",
+        "apps/web/e2e/LATER-SAFETY-182.spec.ts"
+      ]
+    }
+  }
+}

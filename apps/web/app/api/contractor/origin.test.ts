@@ -29,9 +29,38 @@ describe("trusted browser origins come from server configuration only", () => {
     expect(trustedOrigins({ ...vercel, JOBGUARD_ALLOWED_ORIGINS: "https://demo.example.org, not a url ,ftp://x.example,https://demo.example.org/path" }, "https://app.example.com/api/contractor").sort())
       .toEqual(["https://app-abc123.vercel.app", "https://app-git-branch.vercel.app", "https://app.example.com", "https://demo.example.org"].sort());
   });
-  it("adds loopback origins on the server's own port only when not on Vercel", () => {
-    expect(trustedOrigins({}, "http://localhost:3000/api/contractor").sort()).toEqual(["http://127.0.0.1:3000", "http://[::1]:3000", "http://localhost:3000"].sort());
-    expect(trustedOrigins({ VERCEL: "1" }, "http://localhost:3000/api/contractor")).toEqual([]);
+  it.each(["development", "test"])("adds loopback origins on the server's own port only when unhosted in %s", NODE_ENV => {
+    expect(trustedOrigins({ NODE_ENV }, "http://localhost:3000/api/contractor").sort()).toEqual(["http://127.0.0.1:3000", "http://[::1]:3000", "http://localhost:3000"].sort());
+    expect(trustedOrigins({ NODE_ENV, VERCEL: "1" }, "http://localhost:3000/api/contractor")).toEqual([]);
+  });
+  it.each(["production", undefined, "", "preview"])("refuses implicit loopback origins in mode %s", NODE_ENV => {
+    const serverUrl = "http://localhost:3000/api/contractor";
+    for (const JOBGUARD_ALLOWED_ORIGINS of [undefined, "https://practice.example.invalid"]) {
+      const env = { NODE_ENV, JOBGUARD_ALLOWED_ORIGINS };
+      expect(trustedOrigins(env, serverUrl)).toEqual(JOBGUARD_ALLOWED_ORIGINS ? [JOBGUARD_ALLOWED_ORIGINS] : []);
+      expect(isTrustedBrowserOrigin(request("https://practice.example.invalid", serverUrl), env)).toBe(Boolean(JOBGUARD_ALLOWED_ORIGINS));
+      for (const origin of ["http://localhost:3000", "http://127.0.0.1:3000", "http://[::1]:3000"]) {
+        expect(isTrustedBrowserOrigin(request(origin, serverUrl, { host: "localhost:3000", "x-forwarded-host": "localhost:3000", "x-forwarded-proto": "http" }), env)).toBe(false);
+      }
+    }
+  });
+  it.each(["development", "test"])("never adds implicit loopbacks on hosted processes in %s", NODE_ENV => {
+    for (const hosting of [vercel, cloudflare, { JOBGUARD_HOSTING: "cloudflare" }, { CF_PAGES: "1" }, { CF_PAGES_URL: "invalid" }]) {
+      const env = { ...hosting, NODE_ENV };
+      for (const origin of ["http://localhost:3000", "http://127.0.0.1:3000", "http://[::1]:3000"]) {
+        expect(trustedOrigins(env, "http://localhost:3000/api/contractor")).not.toContain(origin);
+        expect(isTrustedBrowserOrigin(request(origin, "http://localhost:3000/api/contractor"), env)).toBe(false);
+      }
+    }
+  });
+  it("accepts only the explicitly configured loopback origin in production", () => {
+    const env = { NODE_ENV: "production", JOBGUARD_ALLOWED_ORIGINS: "https://practice.example.invalid, http://127.0.0.1:3000" };
+    const serverUrl = "http://localhost:3000/api/contractor";
+    expect(trustedOrigins(env, serverUrl)).toEqual(["https://practice.example.invalid", "http://127.0.0.1:3000"]);
+    expect(isTrustedBrowserOrigin(request("http://127.0.0.1:3000", serverUrl), env)).toBe(true);
+    for (const origin of ["http://localhost:3000", "http://[::1]:3000", "http://127.0.0.1:3001", "https://127.0.0.1:3000"]) {
+      expect(isTrustedBrowserOrigin(request(origin, serverUrl), env)).toBe(false);
+    }
   });
   it.each([
     ["a foreign Origin with a matching supplied X-Forwarded-Host", "https://evil.example", { "x-forwarded-host": "evil.example", "x-forwarded-proto": "https" }],
@@ -46,13 +75,16 @@ describe("trusted browser origins come from server configuration only", () => {
   it.each(["https://app.example.com", "https://app-abc123.vercel.app", "https://app-git-branch.vercel.app"])("accepts %s on Vercel whatever forwarded headers say", origin => {
     expect(isTrustedBrowserOrigin(request(origin, "https://app.example.com/api/contractor", { "x-forwarded-host": "evil.example", "x-forwarded-proto": "http" }), vercel)).toBe(true);
   });
-  it("accepts the local development origins the browser really uses, and no other port or host", () => {
-    const local = (origin: string, port = "3000") => isTrustedBrowserOrigin(request(origin, `http://localhost:${port}/api/contractor`), {});
+  it.each(["development", "test"])("accepts the local %s origins the browser really uses, and no other port or host", NODE_ENV => {
+    const local = (origin: string | null, port = "3000") => isTrustedBrowserOrigin(request(origin, `http://localhost:${port}/api/contractor`), { NODE_ENV });
     expect(local("http://127.0.0.1:3000")).toBe(true);
     expect(local("http://localhost:3000")).toBe(true);
+    expect(local("http://[::1]:3000")).toBe(true);
+    expect(local("null")).toBe(false);
+    expect(local(null)).toBe(false);
     expect(local("http://127.0.0.1:3001")).toBe(false);
     expect(local("https://127.0.0.1:3000")).toBe(false);
     expect(local("http://evil.example:3000")).toBe(false);
-    expect(isTrustedBrowserOrigin(request("http://127.0.0.1:3000", "http://localhost:3000/api/contractor"), { VERCEL: "1" })).toBe(false);
+    expect(isTrustedBrowserOrigin(request("http://127.0.0.1:3000", "http://localhost:3000/api/contractor"), { NODE_ENV, VERCEL: "1" })).toBe(false);
   });
 });
