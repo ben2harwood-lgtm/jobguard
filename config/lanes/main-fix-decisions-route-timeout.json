@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "lanes": {
+    "main-fix-decisions-route-timeout": {
+      "branches": ["codex/sandbox/main-fix-decisions-route-timeout"],
+      "allow": ["apps/web/app/api/decisions/route.ts"]
+    }
+  }
+}

@@ -1,4 +1,3 @@
-import { PracticeAccessError } from "@jobguard/db";
 import { routeErrorCode } from "../../lib/route-error-code";
 import { practiceFailure } from "../../lib/synthetic-server";
 import{cookies}from"next/headers";import{NextRequest,NextResponse}from"next/server";import{hasSyntheticSession}from"../../lib/synthetic-server";import{workspaceApplication}from"../../lib/workspace-server";
@@ -18,7 +17,8 @@ export async function GET(request: NextRequest) {
     } catch (error) {
       // Only an implicit filter's ownership refusal can recover. The same service
       // rechecks the session and tenant before listing its allowed inbox.
-      if (explicitJob !== null || !requestedJob || !(error instanceof PracticeAccessError) || error.code !== "NOT_FOUND") throw error;
+      // practiceFailure returns 404 only for a typed PracticeAccessError NOT_FOUND.
+      if (explicitJob !== null || !requestedJob || practiceFailure(error)?.status !== 404) throw error;
       result = await decisions.list({ tenantId });
       staleFilter = true;
     }
