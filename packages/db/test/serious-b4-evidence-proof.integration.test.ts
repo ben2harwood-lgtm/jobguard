@@ -45,7 +45,7 @@ describe("SERIOUS-B4 real PostgreSQL evidence and proof regressions (CI)", () =>
     expect(a).toMatchObject({ evidenceId: evidence, state: "complete", decisionId: decision });
     expect(await h.repos.proof.complete(h.ctx, originalCommand)).toEqual(first);
     expect(await h.repos.proof.complete(h.ctx, replacement)).toEqual(a);
-    await expect(h.repos.proof.complete(h.ctx, { ...replacement, commandId: randomUUID() })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
+    await expect(h.repos.proof.complete(h.ctx, { ...replacement, commandId: randomUUID() })).rejects.toMatchObject({ code: "PROOF_NOT_FINAL", message: "already_complete" });
     await expect(h.repos.proof.complete(h.ctx, { ...replacement, evidenceId: oldEvidence })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
     const history = (await h.admin.query("SELECT id,supersedes_completion_id FROM app.stage_completion WHERE tenant_id=$1 AND job_id=$2", [h.tenant, job])).rows;
     expect(history).toEqual(expect.arrayContaining([{ id: first.completionId, supersedes_completion_id: null }, { id: saved.completionId, supersedes_completion_id: first.completionId }]));
