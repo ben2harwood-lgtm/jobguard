@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-186": {
+      "branches": [
+        "codex/sandbox/later-safety-186"
+      ],
+      "allow": [
+        "packages/db/migrations/0758_connector_promotion_list_closed_job.sql",
+        "packages/db/test/migration-proofs/0758_connector_promotion_list_closed_job.proof.json",
+        "packages/db/test/connector-promotion.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
