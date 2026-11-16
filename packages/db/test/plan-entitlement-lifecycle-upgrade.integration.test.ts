@@ -289,10 +289,24 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     .matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)) {
     lp6dBodies.set(m[1]!, [...(lp6dBodies.get(m[1]!) ?? []), m[4]!]);
   }
+  // LATER-SAFETY-183 is xa_price's sole successor; retain the full LP-6d binding prefix.
+  const pricePermissionSql = await readFile(new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_price", [pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!]);
   // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
   lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    // 0751 succeeds LP-6d for this exact dispatcher; pin it before generic LP-6d successor handling.
+    if (prior.nspname === "app" && prior.proname === "accounting_export" &&
+      prior.args === "t uuid, digest text, operation text, source text, v jsonb") {
+      const sql = await readFile(new URL("../migrations/0751_accounting_export_attempt_reconciliation.sql", import.meta.url), "utf8");
+      const body = sql.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toBe(body);
+      expect(current?.source).toBe(body);
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
+      expect(current?.definition).not.toEqual(prior.definition);
+      continue;
+    }
     if (prior.definition !== null && current?.source !== prior.source && lp6dBodies.get(`${prior.nspname}.${prior.proname}`)?.includes(current?.source)) {
       // The header may change only in LANGUAGE (contractor_session's checked bridge moves from sql to plpgsql).
       const header = (definition: string) => definition.replace(/^ LANGUAGE \w+$/mu, " LANGUAGE <checked>");
@@ -392,11 +406,6 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       const body = sql.split(`CREATE OR REPLACE FUNCTION app.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
       expect(current?.source).toBe(body);
-    } else
-    // 0599_accounting_export_route_change changes only this checked synthetic dispatcher; dedicated route upgrade tests bind the body.
-    if (prior.nspname === "app" && prior.proname === "accounting_export" &&
-      prior.args === "t uuid, digest text, operation text, source text, v jsonb") {
-      expect(current?.definition).not.toEqual(prior.definition);
     } else
     // 0808 changes only this exact authority body, preserving all routine metadata and grants.
     if (prior.nspname === "app" && prior.proname === "lp_authority" && prior.args === "p_session uuid, p_job uuid, p_action text") {

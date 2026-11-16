@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-167": {
+      "branches": [
+        "codex/sandbox/later-safety-167"
+      ],
+      "note": "LATER-SAFETY-167 RED: show the existing client invitation lifetime; preserve stored snapshots and replay credentials. No migration.",
+      "allow": [
+        "apps/web/app/api/northside/extras/[extraId]/[action]/route.ts",
+        "apps/web/app/api/northside/extras/[extraId]/[action]/send-expiry.test.ts",
+        "apps/web/app/lib/northside-client-link-policy.ts",
+        "apps/web/app/northside/northside-practice.test.tsx",
+        "apps/web/app/northside/northside-practice.tsx"
+      ]
+    }
+  }
+}

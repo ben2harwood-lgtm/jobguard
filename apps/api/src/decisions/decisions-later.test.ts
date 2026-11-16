@@ -24,7 +24,7 @@ it("L065 same check ID replays the entire original response without rebuilding t
   expect(mocks.list).not.toHaveBeenCalled();
 });
 it("L065 changed job/payload conflicts are typed", async () => {
-  mocks.evaluate.mockRejectedValue(new Error("IDEMPOTENCY_CONFLICT"));
+  mocks.evaluate.mockRejectedValue(Object.assign(new Error("IDEMPOTENCY_CONFLICT"), { code: "23505" }));
   await expect(new DecisionsApplication({} as Pool).evaluate(command)).rejects.toMatchObject({ code: "CONFLICT" });
 });
 it("L065 authority is checked before parsing or replay", async () => {

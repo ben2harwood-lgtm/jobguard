@@ -1,23 +1,34 @@
 "use client";
 import { jobPageFetch as fetch } from "./job-page-fetch";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { z } from "zod";
 import { adoptJobV3, jobImportResultV3, jobImportSourceV1, type AdoptJobV3, type JobImportResultV3 } from "@jobguard/core";
+
+import { CompanyWorkspace, companyRequest, CompanyAuthorityError, type SelectedCompany } from "../meter/company-selection";
 
 const capacityAdmission = z.object({ outcome: z.enum(["admitted", "grace_place", "track_review_due"]), sourceHash: z.string().regex(/^[a-f0-9]{64}$/u) }).strict();
 type Preview = { snapshot: AdoptJobV3; previewHash: string };
 const liveHold = "Company live imports reserve capacity through the ordinary start rule. Shared practice live imports are unavailable.";
-export function JobImport({ sourceJobId, company = false }: { sourceJobId: string; company?: boolean }) {
+export function JobImport({ sourceJobId, company = false, tenant }: { sourceJobId: string; company?: boolean; tenant?: string | string[] | undefined }) {
+  if (!company) return <ImportWorkspace sourceJobId={sourceJobId} />;
+  return <CompanyWorkspace key={JSON.stringify(tenant) ?? "default"} initialTenant={tenant}>{selected =>
+    <ImportWorkspace key={sourceJobId} sourceJobId={sourceJobId} selected={selected} />}</CompanyWorkspace>;
+}
+function ImportWorkspace({ sourceJobId, selected }: { sourceJobId: string; selected?: SelectedCompany }) {
+  const company = !!selected;
+  const lifetime = useRef<AbortController | null>(null);
   const url = (jobId: string, action: string) => company ? `/api/meter/jobs/${jobId}/import-v3/${action}`
     : `/api/jobs/${jobId}/parties/import-v3${action === "read" || action === "adopt" ? "" : `/${action}`}`;
   async function request(path: string, init?: RequestInit) {
-    if (!company) return fetch(path, init);
-    const response = await fetch("/api/auth/session", { cache: "no-store" });
-    if (!response.ok) throw new Error("Sign in to your company before importing.");
-    const session = await response.json() as { csrfToken?: string; memberships?: { tenantId: string }[] };
-    const tenant = session.memberships?.[0]?.tenantId;
-    if (!session.csrfToken || !tenant) throw new Error("Sign in to your company before importing.");
-    return fetch(path, { ...init, headers: { ...init?.headers, "x-csrf-token": session.csrfToken, "x-tenant-id": tenant } });
+    if (!selected) return fetch(path, init);
+    try {
+      return await companyRequest(fetch, selected, path, { ...init, signal: lifetime.current?.signal ?? null });
+    } catch (reason) {
+      if (reason instanceof CompanyAuthorityError && !lifetime.current?.signal.aborted) {
+        setBindingId(null); setPreview(null); setAttest(false); setCommandId(""); setResult(null); setAdmission(null);
+      }
+      throw reason;
+    }
   }
   const [bindingId, setBindingId] = useState<string | null>(null);
   const [stage, setStage] = useState<"live" | "invoiced">(company ? "live" : "invoiced");
@@ -28,20 +39,26 @@ export function JobImport({ sourceJobId, company = false }: { sourceJobId: strin
   const [busy, setBusy] = useState(false), [commandId, setCommandId] = useState("");
   useEffect(() => {
     let active = true;
-    void Promise.all([
+    const controller = new AbortController(); lifetime.current = controller;
+    void Promise.allSettled([
       request(url(sourceJobId, "source"), { cache: "no-store" }),
       request(url(sourceJobId, "read"), { cache: "no-store" }),
-    ]).then(async ([response, imported]) => {
-      if (!response.ok) throw new Error("Customer and site could not load.");
+    ]).then(async ([sourceRead, savedRead]) => {
+      if (sourceRead.status === "rejected" || savedRead.status === "rejected") {
+        for (const read of [sourceRead, savedRead]) if (read.status === "fulfilled") await read.value.text().catch(() => "");
+        throw sourceRead.status === "rejected" ? sourceRead.reason : savedRead.status === "rejected" ? savedRead.reason : new Error("Import unavailable");
+      }
+      const response = sourceRead.value, imported = savedRead.value;
+      if (!response.ok) { await response.text().catch(() => ""); await imported.text().catch(() => ""); throw new Error("Customer and site could not load."); }
       const view = jobImportSourceV1.parse(await response.json());
       if (active) setBindingId(view.bindingId);
       if (imported.ok) {
         const stored = await imported.json();
         const saved = jobImportResultV3.parse(stored.result);
         if (active) { setResult(saved); setAdmission(stored.meter?.admission ? capacityAdmission.parse(stored.meter.admission) : null); }
-      } else if (imported.status !== 404) throw new Error("Stored import could not load.");
+      } else { await imported.text().catch(() => ""); if (imported.status !== 404) throw new Error("Stored import could not load."); }
     }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, [sourceJobId, company]);
   async function post(action: "preview" | "adopt") {
     setBusy(true); setError("");
@@ -52,18 +69,20 @@ export function JobImport({ sourceJobId, company = false }: { sourceJobId: strin
           : { version: "job-parties-import.v3", commandId, expectedBindingId: bindingId, fixtureId: "fictional-extension-v3", lifecyclePoint: stage, previewHash: preview?.previewHash, attest }),
       });
       const data = await response.json();
+      if (company && lifetime.current?.signal.aborted) return;
       if (!response.ok) throw new Error(data.code === "METER_PLACE_SOURCE_HANDOFF_HELD" ? `${liveHold} No job has been imported.` : data.code === "PLAN_LIMIT_REACHED" ? "Your Solo plan and grace place are full. Move to Builder before importing another site." : data.reason ?? data.code ?? "Import unavailable");
       if (action === "preview") { setPreview({ snapshot: adoptJobV3.parse(data.snapshot), previewHash: data.previewHash }); setCommandId(crypto.randomUUID()); }
       else {
         const saved = jobImportResultV3.parse(data);
         setResult(saved);
         const stored = await request(url(saved.jobId, "read"), { cache: "no-store" });
-        if (!stored.ok) throw new Error("Import saved; its capacity notice could not load. Open the saved import to retry.");
+        if (!stored.ok) { await stored.text().catch(() => ""); throw new Error("Import saved; its capacity notice could not load. Open the saved import to retry."); }
         const view = await stored.json();
+        if (company && lifetime.current?.signal.aborted) return;
         setAdmission(view.meter?.admission ? capacityAdmission.parse(view.meter.admission) : null);
       }
-    } catch (e) { setError(e instanceof Error ? e.message : "Import unavailable"); }
-    finally { setBusy(false); }
+    } catch (e) { if (!company || !lifetime.current?.signal.aborted) setError(e instanceof Error ? e.message : "Import unavailable"); }
+    finally { if (!company || !lifetime.current?.signal.aborted) setBusy(false); }
   }
   async function assessCatch() {
     if (!result) return;
@@ -74,9 +93,10 @@ export function JobImport({ sourceJobId, company = false }: { sourceJobId: strin
         body: JSON.stringify({ version: "import-catch-command.v1", commandId: crypto.randomUUID(), baselineId: result.baselineId }),
       });
       const data = await response.json();
+      if (company && lifetime.current?.signal.aborted) return;
       if (!response.ok) throw new Error(data.reason ?? data.code ?? "Catch assessment unavailable");
-    } catch (e) { setError(e instanceof Error ? e.message : "Catch assessment unavailable"); }
-    finally { setBusy(false); }
+    } catch (e) { if (!company || !lifetime.current?.signal.aborted) setError(e instanceof Error ? e.message : "Catch assessment unavailable"); }
+    finally { if (!company || !lifetime.current?.signal.aborted) setBusy(false); }
   }
   return <main className="workspace-page">
     <a href={`/jobs/${sourceJobId}`}>← Source job</a><h1>Import a fictional job under v3 terms</h1>
@@ -100,7 +120,7 @@ export function JobImport({ sourceJobId, company = false }: { sourceJobId: strin
       <p>Pre-adoption evidence: £0.00 recovery fee — evidence from before adoption is permanently excluded (pre_adoption_evidence). This import contains no historical evidence or catches.</p>
       <p>The imported catch cannot be assessed until SV-6 attribution is connected. No catch, allocation or fee has been created.</p>
       <button disabled={busy} onClick={() => void assessCatch()}>Check imported catch</button>
-      <a href={company ? `/meter/jobs/${result.jobId}/imports` : `/jobs/${result.jobId}/imports`}>Open saved import</a></section>}
+      <a href={company ? `/meter/jobs/${result.jobId}/imports?tenant=${encodeURIComponent(selected!.tenantId)}` : `/jobs/${result.jobId}/imports`}>Open saved import</a></section>}
     {error && <p role="alert">{error}</p>}
   </main>;
 }

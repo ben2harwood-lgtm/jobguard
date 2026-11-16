@@ -136,3 +136,38 @@ it("renders a reconciled document with the practice-session cookie as a PDF", as
   expect(pdf).toContain("SYNTHETIC DATA");
   expect(renderQuotePdf).toHaveBeenCalledOnce();
 });
+
+it.each(["Q-001", "Quote_2026.11-15", "AZaz09._-"])("keeps the safe ASCII reference %s in the filename", async reference => {
+  const response = await POST(request({ ...fixture(), reference, documentVersion: 7 }));
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-disposition")).toBe(`attachment; filename="${reference}-v7.pdf"`);
+});
+
+it.each([
+  "Q\rInjected: value",
+  "Q\nInjected: value",
+  "Q\r\nInjected: value",
+  'Q"; filename="injected',
+  "Q\\injected",
+  "Q/injected",
+  "Q—PRACTICE",
+  "Ｑ-PRACTICE",
+  "Q-PRACTICE\n",
+])("uses a fixed safe filename for reference %j without changing the rendered document", async reference => {
+  const document = { ...fixture(), reference, documentVersion: 7 };
+  const response = await POST(request(document));
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-disposition")).toBe('attachment; filename="quote-v7.pdf"');
+  expect(response.headers.get("content-type")).toBe("application/pdf");
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(response.headers.get("x-jobguard-processing-region")).toBe("supported-runtime");
+  expect(response.headers.has("injected")).toBe(false);
+  expect(authenticatePracticeSession).toHaveBeenCalledExactlyOnceWith(pool, session);
+  expect(renderQuotePdf).toHaveBeenCalledExactlyOnceWith(document);
+  const pdf = await response.text();
+  expect(pdf).toMatch(/^%PDF-1.4/);
+  expect(pdf).toContain("TOTAL GBP 3.60");
+  // The existing renderer normalizes fullwidth letters and replaces an em dash with '?'.
+  if (reference === "Ｑ-PRACTICE") expect(pdf).toContain("Quote Q-PRACTICE | Document version 7");
+  if (reference === "Q—PRACTICE") expect(pdf).toContain("Quote Q?PRACTICE | Document version 7");
+});

@@ -186,7 +186,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0665_interim_read_authority.sql"],
     ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0721_interim_draft_rules.sql"],
     ["app.ch5_history_actor(t uuid, j uuid, d text)", "0668_import_company_owner_history.sql"],
-    ["app.accounting_export(t uuid, digest text, operation text, source text, v jsonb)", "0693_accounting_export_credit_invoice_route.sql"],
+    ["app.accounting_export(t uuid, digest text, operation text, source text, v jsonb)", "0751_accounting_export_attempt_reconciliation.sql"],
     ["app.configure_recovery_demo(p_job uuid, p_command uuid, p_scenario character varying)", "0670_recovery_demo_replay_job.sql"],
     ["app.ent4b_fact_guard()", "0673_duplicate_unlink_command_binding.sql"],
     ["app.work_order_commit(actor uuid, payload jsonb)", "0676_work_order_expected_revision.sql"],
@@ -272,6 +272,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const argNames = (args: string) => args.split(",").map(arg => arg.trim().split(/\s+/u)[0]!).filter(Boolean).join(",");
   const lp6dBodies = new Map<string, string>();
   for (const m of lp6dSql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu)) lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
+  // LATER-SAFETY-183 changes only xa_price after LP-6d, retaining its binding prefix.
+  const pricePermissionSql = await readFile(new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_price(p_job,p_variation,p_command,p_actor,p_net,p_revise)", pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!);
   const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;
   const namedAdditions = [
     "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",
@@ -291,6 +294,13 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);
+    // 0751 succeeds LP-6d for this exact overload; check it before LP-6d's generic body handling.
+    if (identity === "app.accounting_export(t uuid, digest text, operation text, source text, v jsonb)") {
+      const parts = prior!.definition.split("$function$");
+      parts[1] = fullBodies.get(identity)!;
+      expect(row.definition).toBe(parts.join("$function$"));
+      continue;
+    }
     if (prior) {
       let definition = prior.definition;
       const lp6dBody = lp6dBodies.get(lp6dKey(row));

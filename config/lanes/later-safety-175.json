@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-175": {
+      "branches": ["codex/sandbox/later-safety-175"],
+      "note": "LATER-SAFETY-175 RED: preserve both reset event/audit facts. C1: repairs existing repository history; no web workflow or migration.",
+      "allow": [
+        "packages/db/src/sandbox-repository.ts",
+        "packages/db/test/sandbox.integration.test.ts"
+      ]
+    }
+  }
+}

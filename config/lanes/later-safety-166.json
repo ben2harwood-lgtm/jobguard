@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-166": {
+      "branches": ["codex/sandbox/later-safety-166"],
+      "note": "LATER-SAFETY-166 RED bounded transactional outbox discovery rotation; no schema, privilege, executor or scheduler change.",
+      "allow": [
+        "apps/api/src/worker.ts",
+        "apps/api/src/outbox-discovery-task.ts",
+        "apps/api/src/outbox-discovery-task.test.ts",
+        "packages/db/test/outbox-discovery.integration.test.ts"
+      ]
+    }
+  }
+}
