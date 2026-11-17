@@ -90,6 +90,37 @@ it("refuses a wrong-job invoice projection instead of showing progress", async (
   expect(html).not.toContain("journey-customer-balance");
 });
 
+it("still prompts to resolve a found extra before the final customer invoice", async () => {
+  const { html, fetch } = await journey("live", 200, "", jobId, {
+    proposal: { status: 200, body: {
+      version: 1, environment: "synthetic_demo", jobId, captureId: jobId, proposalId: jobId, reviewId: jobId, status: "live",
+      source: { text: "Fictional work", kind: "text", version: 1, acquisition: null, audioByteLength: 0 },
+      proposal: { title: "Fictional job", lines: [], questions: [] },
+      review: { version: "proposal_review_v1", reviewId: jobId, proposalId: jobId, jobId, revision: 1, questions: [], lines: [{
+        id: jobId, scopeItemId: jobId, origin: "human", description: "Fictional work", room: "Kitchen", category: "Work",
+        quantity: "1", unit: "item", unitPricePence: 1000, disposition: "accepted", dismissalReason: null,
+        parentScopeItemIds: [], sourceExcerpt: null,
+      }] },
+    } },
+    proof: { status: 200, body: { version: "practice-proof-view.v1", environment: "synthetic_demo", jobId,
+      completion: { id: jobId, reviewRequired: false }, realExternalActions: 0 } },
+    variations: { status: 200, body: { version: 1, environment: "synthetic_demo", jobId,
+      baselinePence: 1000, capPence: 0, parentScopeItemId: jobId,
+      approvedAdditionsPence: 0, approvedOmissionsPence: 0, pendingExtrasPence: 0,
+      variations: [{ id: otherJobId, scopeItemId: otherJobId, existingScopeItemId: null, lineageParentScopeItemId: jobId,
+        description: "Found extra", captureText: "Fictional extra work", state: "draft", currentRevisionId: null, revisions: [] }],
+    } },
+  });
+  // /customer-invoices contains final bills and supplements. Interim records
+  // belong to /interim-drafts, whose issue path is disabled; they are not fed to the guide.
+  expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/customer-invoices`, expect.anything());
+  expect(fetch).not.toHaveBeenCalledWith(`/api/jobs/${jobId}/interim-drafts`, expect.anything());
+  expect(html).toContain(`href="#variation-${otherJobId}"`);
+  expect(html).toContain("Resolve the pending extra");
+  expect(html).not.toContain("Issue the customer invoice");
+  expect(html).not.toContain("You finished this practice job");
+});
+
 function events() {
  const window = new EventTarget(); vi.stubGlobal("window",window); return window;
 }
