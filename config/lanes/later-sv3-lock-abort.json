@@ -13,8 +13,7 @@
         "apps/web/app/ui/practice-journey.tsx",
         "apps/web/app/ui/practice-journey.test.tsx",
         "apps/web/app/ui/final-account-lock.tsx",
-        "apps/web/app/ui/final-account-lock.test.tsx",
-        "config/lanes/later-sv3-lock-abort.json"
+        "apps/web/app/ui/final-account-lock.test.tsx"
       ]
     }
   }
