@@ -543,7 +543,7 @@ it("keeps the recovery worker trigger invoker-owned and the delivery port migrat
 
 it("reuses the prerequisite's migration-only presence probe and preserves the worker refusal", () => {
   const candidate = read("../migrations/0758_lp6e_audit_attribution.sql");
-  const prerequisite = read("../migrations/0754_lp6d_worker_binding_presence.sql");
+  const prerequisite = read("../migrations/0753_lp6d_worker_binding_presence.sql");
   expect(definitions(candidate).some(m => m[1] === "app.lp6e_request_binding_present")).toBe(false);
   expect(prerequisite).toContain("REVOKE ALL ON FUNCTION app.lp6e_request_binding_present() FROM PUBLIC,jobguard_runtime;");
   expect(prerequisite).toContain("GRANT EXECUTE ON FUNCTION app.lp6e_request_binding_present() TO jobguard_migration;");
