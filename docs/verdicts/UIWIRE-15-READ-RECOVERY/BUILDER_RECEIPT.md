@@ -189,3 +189,25 @@ Session continuation delta: source_pin now eab541e8973939161c6a7014ea8930941e788
 
 
 Parent verification 2026-10-27: exact repair child claim78236-077a7c81 EXIT0/group78246 gone, parent exec74126 EXIT0 verified. Gated pinned web semantic typecheck completed EXIT0 after actual child terminal. Existing M4/UIWIRE15/VALUE1 tests and package/lock bytes match eab541e8. Browser recovery and unchanged regression results remain pending required CI; no acceptance, integration or release.
+
+## CI repair try 1 — 2026-10-30
+
+PR #341; supplied failure head `a43bcbff`; current worktree HEAD `7cadf902`
+includes the router's merge of origin/main. The issued brief and its saved copy
+`~/.local/share/full-steam/codex-briefs/ci-uiwire-15-read-recovery-20261030T225601.md`
+list job `122563495540` without any error lines. Attempting to retrieve that job's
+log with `gh api repos/ben2harwood-lgtm/jobguard/actions/jobs/122563495540/logs`
+failed with `error connecting to api.github.com`. No current-job failure log or
+artifact was available in this worktree. Root cause remains unknown; no source,
+test, expectation, migration or lane changes were made speculatively.
+
+Relevant local checks actually run, using installed Node v24.17.0 and the pinned
+pnpm 10.28.1 entrypoint (no dependency downloads):
+
+- `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --filter @jobguard/web typecheck` — exit 0.
+- `node /Users/benharwood/.cache/node/corepack/v1/pnpm/10.28.1/bin/pnpm.cjs --filter @jobguard/web exec playwright test --list UIWIRE-15-READ-RECOVERY.spec.ts --project=mobile-360 --project=desktop` — exit 0; six cases discovered, no browser execution.
+
+Browser/PostgreSQL execution remains reserved for GitHub CI. Router handoff:
+provide the full failing log for job `122563495540` (or current-head failing
+job/artifact) before a focused repair can be prepared. This is an evidence hold,
+not a CI pass or a ready repair. No additional simplicity observation on recheck.
