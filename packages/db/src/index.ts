@@ -117,18 +117,60 @@ export * from "./meter-persistence.js";
 export * from "./meter-repository.js";
 export * from "./northside-settings.js";
 export * from "./northside-run.js";
+export { OidcRepository, type StoredOidcRequest } from "./oidc-repository.js";
+
 export * from "./subscription-repository.js";
 export * from "./subscription-meter-source.js";
 export * from "./platform-statement-repository.js";
 export * from "./subscription-simulated-payment-adapter.js";
+export * from "./subscription-stripe-sandbox-adapter.js";
 export * from "./subscription-executor.js";
 
 export * from "./enterprise-live-prompt-repository.js";
 
 export * from "./contractor-entitlement-authority-repository.js";
 
+export * from "./free-first-job-repository.js";
+export * from "./free-first-job-card-repository.js";
+export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
+export * from "./free-first-job-eligibility-repository.js";
+
+export * from "./free-first-job-lifecycle-repository.js";
 export * from "./recovery-attribution-repository.js";
+export * from "./success-fee-repository.js";
 export * from "./final-check-repository.js";
 export * from "./final-check-source-reader.js";
 
-export { ContractorRetainedReadRepository } from "./contractor-retained-read-repository.js";
+export { StoredReceiptCaseAllocationRepository, StoredReceiptCaseAllocationError, storedReceiptCaseCommandV1, storedReceiptCaseResultV1 } from "./stored-receipt-case-allocation-repository.js";
+export { RecoveryLineAllocationRepository, ReceiptLineAllocationError, neutralReceiptFactCommandV1, type NeutralReceiptFactResult } from "./receipt-line-allocation-repository.js";
+export * from "./evidence-pack-v3-repository.js";
+
+export * from "./meter-today-repository.js";
+export { MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
+
+export * from "./value-v3-reader.js";
+export * from "./enterprise-baseline-repository.js";
+export { IMPORT_CATCH_HOLD_REASON, JobImportV3Repository, JobImportV3Error } from "./job-import-v3-repository.js";
+export * from "./import-pre-adoption-repository.js";
+
+export * from "./payment-fee-repository.js";
+export * from "./small-builder-demo-repository.js";
+export { reviewOfflineCommercialIntent } from "./offline-upload.js";
+export * from "./subscription-mandate-repository.js";
+export * from "./recovery-billability-repository.js";
+export * from "./managed-recovery-repository.js";
+export * from "./mobile-auth-store.js";
+
+export * from "./evidence-bundle.js";
+export * from "./evidence-bundle-sources.js";
+export * from "./practice-photo-observation.js";
+export * from "./practice-proof-image.js";
+export * from "./value-business-reader.js";
+export * from "./small-builder-trial-demo-repository.js";
+export * from "./simulation-fee-statement-repository.js";
+export * from "./simulation-fee-collection-repository.js";
+export * from "./simulation-money-run-repository.js";
+export { ShadowDemoApprovalReader } from "./shadow-demo-approval-reader.js";
+export { AccountingExportRepository, StoredAccountingExportError, storedAccountingExportV1, type StoredAccountingExport } from "./accounting-export-repository.js";
+export { DunningRepository } from "./dunning-repository.js";
+export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";

@@ -2,7 +2,7 @@ import * as React from "react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { BillingView, advanceCommand, contractorBillingReadV1, deliveryCommand, exactPounds, exportCommand, importCommand } from "./contractor-billing";
+import { BillingView, billingLineState, advanceCommand, contractorBillingReadV1, deliveryCommand, exactPounds, exportCommand, importCommand } from "./contractor-billing";
 
 vi.stubGlobal("React", React);
 
@@ -27,6 +27,16 @@ const read = {
 };
 
 describe("ENT-6 billing and reconciliation screen", () => {
+  it("labels the status format separately from its option text", () => {
+    const html = renderToStaticMarkup(createElement(BillingView, { jobId: "job-1", view: contractorBillingReadV1.parse(read), send: () => undefined }));
+    expect(html).toContain('<label for="billing-status-format">Format</label>');
+    expect(html).toContain('<select id="billing-status-format">');
+  });
+  it("keeps the status data label separate from the textarea contents for repeated imports", () => {
+    const html = renderToStaticMarkup(createElement(BillingView, { jobId: "job-1", view: contractorBillingReadV1.parse(read), send: () => undefined }));
+    expect(html).toContain('<label for="billing-status-data">Status data</label>');
+    expect(html).toContain('<textarea id="billing-status-data" rows="6">');
+  });
   it("shows whole pence as pounds and keeps fractional allocations exact", () => {
     expect(exactPounds(p("8064516", "100"))).toBe("8064516/100 pence");
     expect(exactPounds(p("250000", "2"))).toBe("£1,250.00");
@@ -83,4 +93,15 @@ describe("ENT-6 billing and reconciliation screen", () => {
     const none = renderToStaticMarkup(createElement(BillingView, { jobId: "job-1", view: { ...view, clientContractIds: [] }, send: () => undefined }));
     expect(none).toContain("This job has no client contract to export to.");
   });
+});
+
+it("ENT-11b derives billed, part-paid and paid from exact balances, preserving credits and reversals", () => {
+  const line = { lineId: "extra", billedNet: p("100"), creditedNet: p("0"), paidNet: p("0"), rejected: false };
+  expect(billingLineState(line)).toBe("Billed");
+  expect(billingLineState({ ...line, paidNet: p("299", "3") })).toBe("Part-paid");
+  expect(billingLineState({ ...line, paidNet: p("300", "3") })).toBe("Paid");
+  expect(billingLineState({ ...line, paidNet: p("50"), creditedNet: p("50") })).toBe("Paid");
+  expect(billingLineState({ ...line, creditedNet: p("100") })).toBe("Credited");
+  expect(billingLineState({ ...line, rejected: true, paidNet: p("100") })).toBe("Rejected");
+  expect(billingLineState({ ...line, paidNet: p("-1") })).toBe("Billed");
 });

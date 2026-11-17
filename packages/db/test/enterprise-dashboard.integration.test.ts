@@ -1,9 +1,12 @@
 // Real PostgreSQL acceptance. NOT RUN in the builder sandbox: localhost/PostgreSQL unavailable.
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { dashboardFactsV1, projectEnterpriseDashboard } from "@jobguard/core";
 import { ExtraApprovalRepository, ExtraRepository, SiteExtraRepository, SiteVisitRepository, contractorSessionContext, withTenant } from "../src/index.js";
 import { EnterpriseDashboardRepository } from "../src/enterprise-dashboard-repository.js";
+import { enterpriseDashboardSourceSql, enterpriseDashboardScopeLockSql } from "../src/enterprise-dashboard-queries.js";
 import { chainWorld, submitted, approveInput, cluster, command, type Cluster } from "./extra-approval-chain-fixtures.js";
+import { world as billingWorld } from "./contractor-billing-fixtures.js";
 import { direct } from "./site-extra-fixtures.js";
 vi.setConfig({ testTimeout: 120000, hookTimeout: 240000 });
 let c: Cluster;
@@ -86,6 +89,25 @@ describe("ENT-9B scoped persisted reads", () => {
     expect((await read(s)).report.closeoutRate).toMatchObject({ status: "computed", numerator: 1, denominator: 1 });
     expect((await c.admin.query("SELECT status FROM app.job WHERE tenant_id=$1 AND id=$2", [w.p.tenantId, w.jobId])).rows).toEqual(before);
   });
+  it("[E9D] close-out observations cite only covered visits, are replay-stable and disappear after reassignment", async () => {
+    const w = await chainWorld(c), other = await chainWorld(c), s = await session(w), visits = new SiteVisitRepository(c.runtime);
+    for (const subject of [w, other]) for (let i = 0; i < 5; i++) {
+      const actor = subject.members.operative.member;
+      const started = await visits.startVisit(subject.ctx, actor, { commandId: randomUUID(), jobId: subject.jobId });
+      await visits.completeVisit(subject.ctx, actor, { commandId: randomUUID(), jobId: subject.jobId, visitId: started.visitId, closeoutAnswer: "no" });
+    }
+    const first = (await read(s)).signals;
+    expect(first.observations.filter(o => o.kind === "no_closeout_observation")).toHaveLength(1);
+    expect(first.observations[0]!.jobId).toBe(w.jobId);
+    const sources = (await c.admin.query("SELECT id FROM app.closeout_answer WHERE tenant_id=$1 ORDER BY id", [w.p.tenantId])).rows.map(r => r.id);
+    expect(first.observations[0]!.sourceIds).toEqual(sources);
+    expect(JSON.stringify(first)).not.toContain(other.jobId);
+    expect((await read(s)).signals).toEqual(first);
+    await command(c, w, { kind: "team.move", membershipId: w.members.operative.member.membershipId, fromTeamId: w.demo.teamId, toTeamId: w.otherDemo.teamId });
+    const after = (await read(s)).signals;
+    expect(after.observations).toEqual([]);
+    for (const source of sources) expect(JSON.stringify(after)).not.toContain(source);
+  });
   it("[E9-14 E9-26 E9-28 E9-31] reads and observations preserve canonical business rows and give runtime no new privilege", async () => {
     const w = await chainWorld(c), s = await session(w);
     await new SiteExtraRepository(c.runtime).logSorSiteExtra(w.ctx, w.members.operative.member, { commandId: randomUUID(), jobId: w.jobId, sorCode: "REPAIR-DOOR", quantity: "3", note: "Fictional ENT3A note canary" });
@@ -112,4 +134,69 @@ describe("ENT-9B scoped persisted reads", () => {
     const role = (await c.runtime.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user")).rows[0];
     expect(role).toEqual({ rolsuper: false, rolbypassrls: false });
   });
+});
+
+// ENT-9E: real command-created stored facts, not owner-inserted billing rows. Runs in CI.
+it("[E9E] a billed variation matched to a JobGuard extra has no missing-extra advisory", async () => {
+  const own = await billingWorld(c), s = await session(own.w);
+  await own.repo.import(own.ctx, own.session, own.s.jobId, own.importInput([await own.invoice()]));
+  const context = await contractorSessionContext(c.runtime, s), repo = new EnterpriseDashboardRepository(c.runtime);
+  const before = await repo.readBilling(context, s, query);
+  expect(before.totals.billed.known.pence).toBe(24000);
+  const activity = await read(s);
+  expect(activity.signals.billing.status).toBe("supplied_stored_facts");
+  expect(activity.signals.observations.filter(o => o.kind === "billed_variation_without_extra")).toEqual([]);
+  expect(await repo.readBilling(context, s, query)).toEqual(before);
+});
+it("[E9E] unmatched other invoice lines are advisory, scoped, replay-stable and removed by current credits/rejections", async () => {
+  const a = await billingWorld(c), b = await billingWorld(c);
+  const sa = await session(a.w), sb = await session(b.w);
+  const imported: { own: typeof a; invoice: Record<string, unknown> }[] = [];
+  for (const own of [a, b]) {
+    const raw = await own.invoice();
+    const composition = raw.composition as { declared: { netPence: number; vatPence: number; grossPence: number }; lines: unknown[] };
+    const amount = { netPence: 124100, vatPence: 24820, grossPence: 148920 };
+    const invoice = { ...raw, amount, composition: { declared: amount, lines: [...composition.lines,
+      { externalInvoiceLineId: "unmatched-other", kind: "other", existedAt: "2026-10-01T00:00:00Z", netPence: 100, vatPence: 20, grossPence: 120, match: null }] } };
+    await own.repo.import(own.ctx, own.session, own.s.jobId, own.importInput([invoice]));
+    imported.push({ own, invoice });
+  }
+  const first = (await read(sa)).signals;
+  const missingExtras = first.observations.filter(o => o.kind === "billed_variation_without_extra");
+  expect(missingExtras).toHaveLength(1);
+  const observation = missingExtras[0]!;
+  expect(observation).toMatchObject({ jobId: a.s.jobId, extraIds: [] });
+  expect(observation.sourceIds).toHaveLength(2);
+  expect(JSON.stringify(first)).not.toContain(b.s.jobId);
+  expect(JSON.stringify((await read(sb)).signals)).not.toContain(a.s.jobId);
+  await a.repo.import(a.ctx, a.session, a.s.jobId, a.importInput([imported[0]!.invoice]));
+  expect((await read(sa)).signals.observations).toEqual(first.observations);
+  // The advisory never changes the authoritative matched-extra billing, fee base or job state.
+  const authoritative = await a.repo.read(a.ctx, a.session, a.s.jobId);
+  const context = await contractorSessionContext(c.runtime, sa), repo = new EnterpriseDashboardRepository(c.runtime);
+  const activityFacts = await withTenant(c.runtime, context, async db => {
+    await db.$client.query(enterpriseDashboardScopeLockSql, [context.tenantId]);
+    const row = (await db.$client.query(enterpriseDashboardSourceSql, [sa, context.tenantId])).rows[0];
+    expect(row.authorized).toBe(true);
+    return dashboardFactsV1.parse(row.facts);
+  });
+  const billed = await repo.readBilling(context, sa, query), activity = await read(sa);
+  expect(billed.totals.billed.known.pence).toBe(24000); // The unmatched 100p never enters this total.
+  expect(billed.contributions.filter(row => row.stage === "billed").map(row => row.extraId)).toEqual([a.s.extraId]);
+  expect(await repo.readBilling(context, sa, query)).toEqual(billed);
+  // Each SELECT has a fresh cutoff, which legitimately changes both report hashes.
+  // Compare every field against the original facts at that read's cutoff instead.
+  for (const report of [activity.report, (await read(sa)).report])
+    expect(report).toEqual(projectEnterpriseDashboard({ ...activityFacts, cutoff: report.cutoff }, query));
+  expect(await a.repo.read(a.ctx, a.session, a.s.jobId)).toEqual(authoritative);
+  for (const [i, type] of ["credited", "rejected"].entries()) {
+    const { own, invoice } = imported[i]!;
+    const adjustment = own.event(type, { effectiveAt: "2026-10-03T12:00:00Z", originalEventId: invoice.sourceEventId,
+      amount: { netPence: 100, vatPence: 20, grossPence: 120 },
+      lineAdjustments: [{ externalInvoiceLineId: "unmatched-other", netPence: 100, vatPence: 20, grossPence: 120 }] });
+    await own.repo.import(own.ctx, own.session, own.s.jobId, own.importInput([adjustment]));
+    expect((await read(i === 0 ? sa : sb)).signals.observations.some(o => o.kind === "billed_variation_without_extra")).toBe(false);
+  }
+  await command(c, a.w, { kind: "grant.revoke", grantId: a.w.members.supervisor.grant });
+  await expect(read(sa)).rejects.toMatchObject({ code: "NOT_FOUND" });
 });

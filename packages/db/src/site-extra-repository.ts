@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { z } from "zod";
-import { ExtraPersistenceError, WorkOrderError, SiteExtraError, siteExtraContentSha256V1, type SiteExtraErrorCode } from "@jobguard/core";
+import { offlineClientMetadataV1, parseOfflineIntentV1, ExtraPersistenceError, WorkOrderError, SiteExtraError, siteExtraContentSha256V1, type SiteExtraErrorCode } from "@jobguard/core";
 import { ExtraRepository, type ExtraTransactionSeam, type RaisedExtra } from "./extra-repository.js";
 import { appendAuditBatch } from "./audit.js";
 import { assertContractorGate, derivedUuid } from "./work-order-repository.js";
@@ -14,7 +14,7 @@ export type StoredSorExtra = Pick<StoredPriced, "variationId" | "jobId" | "cover
 const commandType = "LogSiteExtra";
 const inputV1 = z.object({ commandId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }), note: z.string().min(1).max(5000).refine(value => /\S/u.test(value)), description: z.string().min(1).max(500).refine(value => /\S/u.test(value)), siteVisitId: z.guid({ error: "Invalid uuid" }).optional() }).strict();
 type Input = z.infer<typeof inputV1>;
-const inputV3 = inputV1.extend({ photoEvidenceId: z.guid({ error: "Invalid uuid" }).optional(), shownContentSha256: z.string().regex(/^[0-9a-f]{64}$/u).optional() }).strict();
+const inputV3 = inputV1.extend({ photoEvidenceId: z.guid({ error: "Invalid uuid" }).optional(), shownContentSha256: z.string().regex(/^[0-9a-f]{64}$/u).optional(), clientMetadata: offlineClientMetadataV1.optional() }).strict();
 type InputV3 = z.infer<typeof inputV3>;
 type EvidenceRefusal = { code: "PHOTO_NOT_ACCEPTED" | "CONFIRMATION_MISMATCH"; reason: "photo_not_accepted" | "confirmation_mismatch" };
 export type EvidenceFacts = { photoEvidenceId: string | null; residentConfirmationEvidenceId: string | null; contentSha256: string };
@@ -145,6 +145,12 @@ export class SiteExtraRepository {
   }
   return { raise, evidence: { photoEvidenceId: photo, residentConfirmationEvidenceId: confirmation, contentSha256: check.content } };
  }
+ /** Dark ENT-12 transport: identity is resolved by the caller, never taken from the device. */
+ async logOfflineSiteExtra(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<LoggedSiteExtra> {
+  let intent;
+  try { intent = parseOfflineIntentV1(raw); } catch { throw new SiteExtraError("INVALID_COMMAND"); }
+  return this.logSiteExtra(context, actor, { jobId: intent.jobId, commandId: intent.body.commandId, note: intent.body.note, description: intent.body.description, clientMetadata: intent.clientMetadata });
+ }
  async logSiteExtra(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<LoggedSiteExtra> {
   const parsed = inputV3.safeParse(raw); if (!parsed.success) throw new SiteExtraError("INVALID_COMMAND");
   const input = parsed.data;
@@ -160,7 +166,7 @@ export class SiteExtraRepository {
      const gate = await this.evidenceGate(context, actor, input);
      if ("code" in gate) refusal = gate; else
      try {
-      return await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: input.description, ...(input.siteVisitId ? { siteVisitId: input.siteVisitId } : {}), ...gate.raise }, async (db, fact) => {
+      return await new ExtraRepository(this.pool).raiseExtra(context, { version: "raise-extra.v1", commandId: input.commandId, commandType, jobId: input.jobId, actorMembershipId: actor.membershipId, grantId: authority.grant, note: input.note, description: input.description, ...(input.siteVisitId ? { siteVisitId: input.siteVisitId } : {}), ...gate.raise, ...(input.clientMetadata ? { deviceCapturedAt: input.clientMetadata.capturedAt, deviceId: input.clientMetadata.hlc.nodeId } : {}) }, async (db, fact) => {
        try {
         if (gate.evidence) await siteExtraAuthoritySeam(db, fact);
         else await siteExtraBaseAuthoritySeam(db, fact);

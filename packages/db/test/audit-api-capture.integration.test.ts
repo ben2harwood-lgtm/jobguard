@@ -21,8 +21,8 @@ beforeAll(async () => {
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic",
     persistent: false, createPostgresUser: process.getuid?.() === 0,
     initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" , database: "jobguard_synthetic_demo"});
   await migrate(admin);
   await installLegacySyntheticPartyFixtures(admin);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -32,7 +32,7 @@ beforeAll(async () => {
     [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
   // Disposable test login inherits only the existing runtime role; no table privileges are added.
   await admin.query("CREATE ROLE audit_capture_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO audit_capture_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "audit_capture_login", password: "synthetic" });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "audit_capture_login", password: "synthetic" });
   process.env.JOBGUARD_ENV = "synthetic_demo";
 }, 60000);
 afterEach(() => vi.restoreAllMocks());

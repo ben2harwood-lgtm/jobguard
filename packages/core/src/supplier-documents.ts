@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-export const supplierFixtureIds = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice", "practice-credit-300", "practice-later-invoice-1440"] as const;
+export const supplierFixtureIds = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice", "practice-credit-300", "practice-later-invoice-1440", "merchant-changed-invoice", "merchant-schema-drift", "merchant-identity-drift", "merchant-invalid-amount", "merchant-changed-delivery"] as const;
 export const supplierDocumentIntakeV1 = z.object({
   version: z.literal("supplier-document-intake.v1"),
   commandId: z.guid({ error: "Invalid uuid" }).optional(),
   fixtureId: z.enum(supplierFixtureIds),
-  channel: z.enum(["picker", "fixture_mail"]),
+  channel: z.enum(["picker", "fixture_mail", "fixture_portal"]),
   alias: z.string().max(200).optional(),
   expectedRevision: z.number().int().nonnegative(),
   remoteUrl: z.never().optional(), attachmentPath: z.never().optional(), partial: z.literal(false).optional(),
@@ -41,6 +41,11 @@ export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),co
 export type SupplierDocumentIntake=z.infer<typeof supplierDocumentIntakeV1>;
 
 export const supplierFixtures = {
+  "merchant-changed-invoice": {type:"invoice",number:"INV-MB-001",media:"text/plain",bytes:"FICTIONAL SUPPLIER INVOICE INV-MB-001\n10 each @ GBP 99.00\nNET GBP 990.00",pages:1},
+  "merchant-schema-drift": {type:"invoice",number:"INV-DRIFT-001",media:"text/plain",bytes:"FICTIONAL FEED v2 changed price semantics",sourceVersion:"merchant-feed.v2",pages:1,hold:"Merchant review: schema_drift"},
+  "merchant-identity-drift": {type:"invoice",number:"INV-IDENTITY-001",media:"text/plain",bytes:"FICTIONAL FEED claims a different supplier account",supplierAccount:"unrecognised-account",pages:1,hold:"Merchant review: supplier_identity"},
+  "merchant-invalid-amount": {type:"invoice",number:"INV-AMOUNT-001",media:"text/plain",bytes:"FICTIONAL SUPPLIER INVOICE INV-AMOUNT-001\n10 each @ GBP 25.00\nNET GBP 1.00",pages:1},
+  "merchant-changed-delivery": {type:"delivery",number:"DEL-MB-001",media:"application/pdf",bytes:"%PDF-1.4\nSynthetic CHANGED delivery: 999 each\n%%EOF",pages:1},
   "materials-B-delivery": {type:"delivery",number:"DEL-MB-001",media:"application/pdf",bytes:"%PDF-1.4\nSynthetic delivery: 10 each\n%%EOF",pages:1},
   "materials-B-invoice": {type:"invoice",number:"INV-MB-001",media:"text/plain",bytes:"FICTIONAL SUPPLIER INVOICE INV-MB-001\n10 each @ GBP 25.00\nNET GBP 250.00",pages:1},
   "materials-B-revised-invoice": {type:"invoice",number:"INV-MB-001-R",media:"text/plain",bytes:"FICTIONAL REVISED SUPPLIER INVOICE INV-MB-001-R\n8 each @ GBP 20.00\nNET GBP 160.00",pages:1},

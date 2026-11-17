@@ -78,3 +78,14 @@ describe("MON-2A explicit supplied periods", () => {
     const before = JSON.stringify(input); computeSubscriptionPeriod(input); expect(JSON.stringify(input)).toBe(before);
   });
 });
+
+it('SB-19: Signals or findings move the meter, a plan or a bill', () => {
+ const input = period(8), before = JSON.stringify(input), bill = computeSubscriptionPeriod(input);
+ expect(bill.principal.pence).toBe(8900);
+ for (const key of ["hiddenSignals", "findings", "shadowSignals"]) {
+  expect(() => computeSubscriptionPeriod({ ...input, [key]: [] })).toThrow();
+  expect(() => computeSubscriptionPeriod({ ...input, meter: { ...input.meter, [key]: ["synthetic"] } })).toThrow();
+ }
+ expect(computeSubscriptionPeriod(input)).toEqual(bill);
+ expect(JSON.stringify(input)).toBe(before);
+});

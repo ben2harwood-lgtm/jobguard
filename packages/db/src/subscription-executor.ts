@@ -5,7 +5,7 @@ import { subscriptionSimulatedResultV1, subscriptionSimulatedWorkV1, type Subscr
 /** Request-scoped narrow executor. SQL claims existing exact owner-approved work; adapters run after commit. */
 export class SubscriptionExecutor {
  constructor(private readonly repository:SubscriptionRepositoryPort,private readonly adapter:SubscriptionPaymentAdapter){}
- async execute(context:VerifiedTenantContext,digest:string,commandId:string,workId:string,expectedRevision:number){
+ async executeApprovedSimulation(context:VerifiedTenantContext,digest:string,commandId:string,workId:string,expectedRevision:number){
   const before=await this.repository.read(context,digest);
   if(before.attempts.some(row=>row.work_id===workId))throw new SubscriptionPersistenceError("SUBSCRIPTION_UNAVAILABLE");
   const claim=await this.repository.command(context,digest,commandId,{version:"subscription-command.v1",kind:"execute_simulation",workId,expectedRevision});
@@ -15,6 +15,10 @@ export class SubscriptionExecutor {
   catch{result={version:"subscription-simulated-result.v1" as const,synthetic:true as const,workId,resultId:randomUUID(),outcome:"outcome_unknown" as const};}
   if(result.workId!==workId)throw new SubscriptionPersistenceError("SUBSCRIPTION_PROJECTION_MISMATCH");
   return this.repository.command(context,digest,result.resultId,{version:"subscription-command.v1",kind:"record_simulation",workId,resultId:result.resultId,outcome:result.outcome,expectedRevision});
+ }
+ /** Compatibility for existing internal callers; this is domain work, not a SQL execute primitive. */
+ async execute(context:VerifiedTenantContext,digest:string,commandId:string,workId:string,expectedRevision:number){
+  return this.executeApprovedSimulation(context,digest,commandId,workId,expectedRevision);
  }
  async reconcile(context:VerifiedTenantContext,digest:string,workId:string,expectedRevision:number){
   const snapshot=await this.repository.read(context,digest);

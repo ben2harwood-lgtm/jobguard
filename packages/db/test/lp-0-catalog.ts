@@ -1,3 +1,4 @@
+import { combineLp0, loadMigrationProofs } from "./migration-proof-loader.js";
 /**
  * LP-0 grant freeze guard: test-only catalogue reader, fact model, strict reviewed-inventory boundary and comparator.
  *
@@ -652,7 +653,8 @@ export const RUNTIME_TEST_PASSWORD = "synthetic-lp0-runtime-only";
 /** Reads the committed reviewed inventory from disk. Missing or malformed files throw: there is no fallback. */
 export async function loadReviewedInventory(): Promise<{ raw: unknown; inventory: Inventory }> {
   const raw = JSON.parse(await readFile(INVENTORY_PATH, "utf8")) as unknown;
-  return { raw, inventory: parseInventory(raw) };
+  const combined = combineLp0(parseInventory(raw), loadMigrationProofs().proofs);
+  return { raw: combined, inventory: parseInventory(combined) };
 }
 
 export type Lp0Database = {

@@ -45,8 +45,8 @@ function requestFor(snapshot: SorSuggestionInput, fixtureId: string): AiGatewayR
   const catalogue = JSON.stringify([...snapshot.schedule.items].sort((a, b) => a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
   return { contractVersion: "ai_gateway_request_v1", fixtureId, operation: "sor_candidate_suggestions",
     promptVersion: SOR_SUGGESTION_PROMPT_VERSION, schemaVersion: "sor-suggestions.v1",
-    sources: [{ id: snapshot.extra.id, content: snapshot.extra.captureText, sha256: snapshot.extra.sha256 },
-      { id: `sor:${snapshot.schedule.versionId}`, content: catalogue, sha256: sha256(catalogue) }],
+    sources: [{ tenantId: snapshot.extra.tenantId, visibility: "public", id: snapshot.extra.id, content: snapshot.extra.captureText, sha256: snapshot.extra.sha256 },
+      { tenantId: snapshot.schedule.tenantId, visibility: "public", id: `sor:${snapshot.schedule.versionId}`, content: catalogue, sha256: sha256(catalogue) }],
     timeoutMs: 1000, maxOutputTokens: 2048 };
 }
 
@@ -54,9 +54,9 @@ function requestFor(snapshot: SorSuggestionInput, fixtureId: string): AiGatewayR
  * fixed operation/prompt/schema controls cannot be supplied by the source or model.
  * Produces candidates only: no repository, callback, command, writer or network client. */
 export class SorSuggestionFixtureProposer {
-  private readonly gateway: AiGateway;
+  private readonly provider: FixtureAiProvider;
   constructor(fixtures: Readonly<Record<string, RecordedFixture>>) {
-    this.gateway = new AiGateway(new FixtureAiProvider(fixtures));
+    this.provider = new FixtureAiProvider(fixtures);
   }
 
   async propose(raw: unknown, fixtureId: string, options: unknown = { provider: "fixture" }) {
@@ -67,7 +67,7 @@ export class SorSuggestionFixtureProposer {
     if (!parsed.success) throw new AiGatewayError("invalid_request", "Invalid fictional SoR snapshot");
     const snapshot = parsed.data;
     // Deliberately no repair: zero attempts is within the gateway's at-most-one limit.
-    const result = await this.gateway.generate(requestFor(snapshot, fixtureId), sorSuggestionOutputV1);
+    const result = await new AiGateway(this.provider, () => ({ tenantId: snapshot.job.tenantId })).generate(requestFor(snapshot, fixtureId), sorSuggestionOutputV1);
     const allowedCodes = new Set(snapshot.schedule.items.map(item => item.code));
     for (const suggestion of result.output.suggestions) {
       if (!allowedCodes.has(suggestion.sorCode)) throw new AiGatewayError("invalid_output", "Item is outside the job's SoR");

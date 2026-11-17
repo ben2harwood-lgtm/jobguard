@@ -157,6 +157,33 @@ describe("SV-2 real PostgreSQL persistence (DW3–DW7)",()=>{
   expect((await admin.query("SELECT * FROM app.audit_event WHERE id=$1",[event])).rowCount).toBe(0);
   expect((await admin.query("SELECT disclosed_before_lock FROM app.shadow_commercial_signal WHERE id=$1",[id])).rows[0].disclosed_before_lock).toBe(false);
  });
+
+it('SB-03: Disclosure through support, export, a data-subject access response or a defect before lock', async () => {
+ for (const route of ["support_conversation", "export", "data_subject_access", "defect"]) {
+  const id = await signal();
+  expect((await admin.query("SELECT disclosed_before_lock FROM app.shadow_commercial_signal WHERE id=$1", [id])).rows[0].disclosed_before_lock).toBe(false);
+  await withTenant(route === "support_conversation" ? emergency : shadow, context(), db => db.$client.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,$5)", [T,J,id,randomUUID(),route]));
+  expect((await admin.query("SELECT disclosed_before_lock FROM app.shadow_commercial_signal WHERE id=$1", [id])).rows[0].disclosed_before_lock).toBe(true);
+  expect((await admin.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE signal_id=$1", [id])).rows).toContainEqual({ reason: "disclosed_before_lock" });
+  await expect(admin.query("UPDATE app.shadow_commercial_signal SET disclosed_before_lock=false WHERE id=$1", [id])).rejects.toMatchObject({ code: "55000" });
+ }
+});
+
+it('SB-26: Links across tenants or jobs on signals, locks, allocations, attributions or periods', async () => {
+ const id=await signal(),run=randomUUID();
+ await withTenant(shadow,context(),db=>db.$client.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic:SB26',clock_timestamp())",[T,J,run]));
+ const classify=(tenant:string,job:string)=>admin.query("INSERT INTO app.shadow_signal_classification(tenant_id,job_id,id,run_id,signal_id,outcome) VALUES($1,$2,$3,$4,$5,'not_enough_evidence')",[tenant,job,randomUUID(),run,id]);
+ for(const [tenant,job] of [[T,K],[O,L]]) await expect(classify(tenant!,job!)).rejects.toMatchObject({code:'23503'});
+ await classify(T,J);
+ expect((await admin.query('SELECT signal_id FROM app.shadow_signal_classification WHERE run_id=$1',[run])).rows).toEqual([{signal_id:id}]);
+ // Check the installed schema, including the separately owned allocation/attribution/period families.
+ const families=['shadow_signal_classification','final_account_lock','recovery_case_allocation','receipt_line_allocation','stored_receipt_case_allocation','recovery_attribution_revision','subscription_period_line'];
+ for(const table of families) {
+  const keys=(await admin.query("SELECT pg_get_constraintdef(oid) def,convalidated FROM pg_constraint WHERE conrelid=to_regclass($1) AND contype='f'",[`app.${table}`])).rows;
+  expect(keys.length,table).toBeGreaterThan(0);
+  for(const key of keys) { expect(key.def,table).toContain('tenant_id'); expect(key.convalidated,table).toBe(true); }
+ }
+});
 });
 
 it("rejects malformed versioned shadow inputs before opening a database transaction",async()=>{

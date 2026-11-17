@@ -58,7 +58,7 @@ export function deriveRecoveryFeeIllustration(input: RecoveryFeeIllustrationInpu
     const parsed = recoveryFeeIllustrationInputV1.safeParse(input);
     if (!parsed.success) return fail();
     const f = parsed.data;
-    const allocations = new Set<string>(), works = new Set<string>(), assessments = new Set<string>(), reviews = new Set<string>();
+    const lines = new Set<string>(), allocations = new Set<string>(), works = new Set<string>(), assessments = new Set<string>(), reviews = new Set<string>();
     const unique = (set: Set<string>, key: string) => { if (set.has(key)) fail(); set.add(key); };
     const principals = f.sources.map(entry => {
       const q = entry.qualification, a = entry.assessment;
@@ -75,7 +75,7 @@ export function deriveRecoveryFeeIllustration(input: RecoveryFeeIllustrationInpu
       const remaining = parseExactPence(s.exactRemainingPrincipal);
       if (compareExactPence(remaining, parseExactPence(a.remainingPrincipal)) !== 0) return fail();
       // One coalesced work identity, one current assessment/review and one allocation consumption.
-      unique(works, s.workId); unique(assessments, s.assessmentId); unique(reviews, s.reviewId);
+      unique(lines, s.lineId); unique(works, s.workId); unique(assessments, s.assessmentId); unique(reviews, s.reviewId);
       for (const allocationId of s.lineAllocationIds) {
         unique(allocations, allocationId);
         if (!a.sourceManifest.some(ref => ref.sourceId === allocationId && ref.kind === "line_allocation")) return fail();

@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon1-ledger": {
+      "branches": [
+        "codex/sandbox/mon1-ledger"
+      ],
+      "note": "RED: MON-1 remainder part 2, immutable London-day persistence on part 1 PR #363.",
+      "allow": [
+        "packages/db/migrations/0300_meter_counted_day_ledger.sql",
+        "packages/db/migration-notes/0300_meter_counted_day_ledger.md",
+        "packages/db/src/meter-day-ledger.ts",
+        "packages/db/src/meter-day-ledger.test.ts",
+        "packages/db/test/meter-day-ledger.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

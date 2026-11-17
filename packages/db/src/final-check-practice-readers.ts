@@ -8,10 +8,10 @@ import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 const sha = z.string().regex(/^[a-f0-9]{64}$/u);
 const supplier = z.object({ content_hash: sha }).passthrough();
-const order = z.object({ quantity_decimal: z.literal("10"), unit_price_pence: z.union([z.literal(2000), z.literal(2500)]),
-  order_net_pence: z.number().int(), agreed_net_pence: z.literal(20000), recipient: z.string().endsWith(".invalid"),
+const order = z.object({ quantity_decimal: z.enum(["10", "40"]), unit_price_pence: z.union([z.literal(2000), z.literal(2500)]),
+  order_net_pence: z.number().int(), agreed_net_pence: z.union([z.literal(20000), z.literal(80000)]), recipient: z.string().endsWith(".invalid"),
   required_date: z.string().date(), revision: z.number().int().positive(), authority_hash: sha }).passthrough();
-const materialFixtures = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice"] as const;
+const materialFixtures = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit"] as const;
 
 /** These exact fictional material documents describe quantities/prices, with no extra-work assertion.
  * This is a deliberately bounded practice decoder, not inference that an arbitrary supplier bill has no extras.
@@ -21,10 +21,11 @@ export function decodePracticeStructuredSource(kind: string, input: unknown, doc
     const parsed = order.safeParse(input);
     if (!parsed.success) return null;
     const r = parsed.data;
-    if (purchaseOrderNet(r.quantity_decimal, r.unit_price_pence) !== r.order_net_pence || hash(purchaseOrderAuthorityContent({
+    if (purchaseOrderNet(r.quantity_decimal, 2000) !== r.agreed_net_pence ||
+      purchaseOrderNet(r.quantity_decimal, r.unit_price_pence) !== r.order_net_pence || hash(purchaseOrderAuthorityContent({
       quantity: r.quantity_decimal, unitPricePence: r.unit_price_pence, recipient: r.recipient,
       requiredDate: r.required_date, revision: r.revision })) !== r.authority_hash) return null;
-    // DR-02's generated material order has quantity, price and recipient, no assertion of extra customer work.
+    // Generated DR-02 and merchant-recovery orders contain material quantities/prices, not extra customer work.
     return { text: purchaseOrderAuthorityContent({ quantity: r.quantity_decimal, unitPricePence: r.unit_price_pence,
       recipient: r.recipient, requiredDate: r.required_date, revision: r.revision }) };
   }

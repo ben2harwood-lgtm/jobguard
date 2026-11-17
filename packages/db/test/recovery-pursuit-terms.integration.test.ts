@@ -77,3 +77,24 @@ it("CaseConcurrency: new v1 pursuit waits for the existing case key, then refuse
     expect(await counts()).toEqual(before);
   } finally { await lock.query("ROLLBACK"); lock.release(); await pending; }
 });
+
+it('SB-14: A receipt from before the case opened, or pursuit before terms', async () => {
+ const f=await seedEvidencePackFixture(admin),ctx=testTenantContext(f.tenantId);
+ await opened(f,f.customerCaseId);
+ const actor={membershipId:f.memberId,actorRef:`membership:${f.memberId}`},packs=new EvidencePackRepository(runtime),repo=new RecoveryMessageRepository(runtime);
+ const pack=await packs.generate(ctx,f.customerCaseId,{commandId:randomUUID()},actor.actorRef);
+ await packs.approveAttachment(ctx,f.customerCaseId,pack.id,{commandId:randomUUID(),expectedManifestHash:pack.manifestHash,expectedContentHash:pack.contentHash},actor.actorRef);
+ const ready=await repo.read(ctx,f.customerCaseId),input={version:'recovery-message-preview.v1',commandId:randomUUID(),expectedCaseRevision:ready.readiness.caseRevision,packId:pack.id};
+ const before=await counts();
+ await expect(repo.preview(ctx,f.customerCaseId,input,actor)).rejects.toMatchObject({code:'RECOVERY_TERMS_NOT_APPROVED'});
+ expect(await counts()).toEqual(before);
+ // A positive merchant case on the same job does not require withheld-payment terms.
+ await opened(f,f.caseId);const supplier=await packs.generate(ctx,f.caseId,{commandId:randomUUID()},actor.actorRef);
+ await packs.approveAttachment(ctx,f.caseId,supplier.id,{commandId:randomUUID(),expectedManifestHash:supplier.manifestHash,expectedContentHash:supplier.contentHash},actor.actorRef);
+ const merchant=await repo.read(ctx,f.caseId);
+ expect((await repo.preview(ctx,f.caseId,{...input,commandId:randomUUID(),expectedCaseRevision:merchant.readiness.caseRevision,packId:supplier.id},actor)).latest!.status).toBe('previewed');
+ const { evaluateRecoveryEligibilityV3 } = await import('@jobguard/core');
+ const facts={version:'recovery-eligibility-facts.v3',environment:'synthetic_demo',tenantId:f.tenantId,jobId:f.jobId,caseId:f.customerCaseId,fixture:'F20',payer:'not_insurer',settlement:'settled',paymentTiming:'before_opening',sourceRef:f.customerCaseId};
+ expect(evaluateRecoveryEligibilityV3(facts).qualifyingPrincipal.pence).toBe(0);
+ expect(evaluateRecoveryEligibilityV3({...facts,fixture:'F19',paymentTiming:'after_opening'}).qualifyingPrincipal.pence).toBe(250000);
+});

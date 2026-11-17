@@ -1,17 +1,18 @@
 // CI ONLY. These tests start real PostgreSQL; deliberately not run in the builder sandbox.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { createWorkFixture, closeWorkFixture, seedWorkPractice, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
+import { seedWorkPractice, workTenant } from "./job-work-state-fixtures.js";
 import { RecoveryLineAllocationRepository } from "../src/receipt-line-allocation-repository.js";
-let f: WorkFixture, practice: Awaited<ReturnType<typeof seedWorkPractice>>;
+import { createLockFixture, closeLockFixture, type LockFixture } from "./recovery-attribution-fixture.js";
+let f: LockFixture, practice: Awaited<ReturnType<typeof seedWorkPractice>>;
 const prior = process.env.JOBGUARD_ENV;
-beforeAll(async () => { f = await createWorkFixture(); practice = await seedWorkPractice(f); }, 120_000);
-afterAll(async () => { await closeWorkFixture(f); if (prior === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = prior; });
-it("A2: current owner reaches an explicit source handoff hold, never a fabricated success", async () => {
+beforeAll(async () => { f = await createLockFixture(); practice = await seedWorkPractice(f); }, 120_000);
+afterAll(async () => { await closeLockFixture(f); if (prior === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = prior; });
+it("A2: current owner reads an authoritative empty snapshot; unknown payments stay refused", async () => {
  const { auth, jobId } = practice;
  const repository = new RecoveryLineAllocationRepository(f.runtime, "synthetic_demo");
- await expect(repository.view(auth.context, auth, auth.digest, jobId)).rejects.toMatchObject({ code: "RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED" });
- await expect(repository.command(auth.context, auth, auth.digest, jobId, { version: "receipt-line-allocation-command.v1", action: "review", commandId: randomUUID(), paymentId: randomUUID(), expectedSourceRevision: 1 })).rejects.toMatchObject({ code: "RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED" });
+ await expect(repository.view(auth.context, auth, auth.digest, jobId)).resolves.toMatchObject({revision:1,rows:[],holds:[]});
+ await expect(repository.command(auth.context, auth, auth.digest, jobId, { version: "receipt-line-allocation-command.v1", action: "review", commandId: randomUUID(), paymentId: randomUUID(), expectedSourceRevision: 1 })).rejects.toMatchObject({ code: "42501", message: "RECEIPT_LINE_FORBIDDEN" });
 });
 it("A2/A7: wrong-session and wrong-job return the same denial before source lookup", async () => {
  const other = await seedWorkPractice(f), { auth, jobId } = practice;
@@ -48,7 +49,7 @@ it("A1/A2/A5/A6: direct controlled calls refuse forged artifacts and all four ef
    await db.query("SELECT app.write_receipt_allocation_facts($1,$2,$3,$4,$5)", [auth.context.tenantId, jobId, auth.digest,
     { version: "receipt-line-allocation-command.v1", action, commandId: randomUUID(), expectedSourceRevision: 1 },
     { version: "receipt-line-allocation-artifact.v1", eligibilityApproved: true, gross: { numerator: "1", denominator: "3" }, approvalHash: "a".repeat(64) }]);
-  })).rejects.toThrow("RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED");
+  })).rejects.toThrow("INVALID_RECEIPT_LINE_COMMAND");
  }
 });
 

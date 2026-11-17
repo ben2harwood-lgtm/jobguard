@@ -37,6 +37,7 @@ it("SV6-21 runtime cannot bypass the checked attribution writer",async()=>{
  for(const table of tables)for(const sql of [`INSERT INTO app.${table} DEFAULT VALUES`,`UPDATE app.${table} SET tenant_id=tenant_id`,`DELETE FROM app.${table}`,`TRUNCATE app.${table}`]) await expect(f.runtime.query(sql)).rejects.toThrow(/permission denied/u);
  await expect(f.runtime.query("SET ROLE jobguard_migration")).rejects.toThrow(/permission denied/u);
  await expect(f.runtime.query("SELECT app.append_recovery_attribution('{}',null,null,null,null)")).rejects.toThrow(/permission denied/u);
+ await expect(f.runtime.query("SELECT app.recovery_attribution_sources($1,$2,$3,$4)",[randomUUID(),randomUUID(),{},randomUUID()])).rejects.toThrow(/permission denied/u);
  await expect(f.runtime.query("SELECT app.assess_recovery_attribution($1,'forged',$2)",[randomUUID(),{tenantId:randomUUID(),fee:8000}])).rejects.toThrow("DEPENDENCY_BOUND");
 });
 it("storage mutation controls reject owner changes and detect removal of each immutability trigger",async()=>{

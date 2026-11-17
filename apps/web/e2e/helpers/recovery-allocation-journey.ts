@@ -35,7 +35,7 @@ export async function readyAllocations(page: Page) {
 /** Synthetic source setup uses real quote, proof, invoice, eligibility and feed commands.
  * No success response or allocation output is mocked. All workbench allocations use its public routes.
  */
-export async function recovery18800(page: Page) {
+export async function recovery18800(page: Page, matchingCustomer = false) {
   const { parsePoundsToPence } = await loadCore();
   await openQuotingWatchdogJob(page);
   for (const input of await page.getByLabel(/Unit rate/u).all()) await input.fill("1.00");
@@ -45,6 +45,7 @@ export async function recovery18800(page: Page) {
   await clean.fill(pounds(1880000 - otherLines).slice(1).replaceAll(",", ""));
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 18,800.00");
   for (const name of ["Save draft revision", "Preview immutable quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) {
+    if (matchingCustomer && name === "Record practice acceptance") await page.getByLabel("Stated customer", { exact: true }).fill("Fictional customer");
     await page.getByRole("button", { name, exact: true }).click();
     if (name === "Save draft revision") await expect(page.getByTestId("quote-revision")).toHaveText("1");
   }

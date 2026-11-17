@@ -1,8 +1,10 @@
 # MON-3 free first job reference contract v1
 
-Status: synthetic preview plus private MON-3-P-A key storage (see `free-first-job-keys-v1.md`); card remains open. No charging, activation,
-runtime entitlement consumption, statement, payment, card storage or setup session is
-implemented. The proposed D09 policy is not approved by this change.
+Status: synthetic preview, A's private key storage (actual migration 0194), and B's
+fictional verification/card persistence (0235). B admission is unconditionally disabled
+pending C; MON-3 remains incomplete. No production provider, charge, trial conversion,
+statement or settlement is authorized. The proposed D09 policy is not approved.
+The historical preview delivery and later supersessions are recorded below.
 
 The 16 October build-ahead order overrides the 13 October draft's whole-piece
 hold. BUILD_PLAN.md §§10.1.3–10.1.12 and the MON-3 card at lines 2175–2194
@@ -97,3 +99,14 @@ or flag here disables Final Check or changes existing success-fee processing.
 preview delivery. MON-3-P-A adds migration 0192 and private dual-key storage only,
 under Ben’s issued authority; it does not enable admission or settle B/C interfaces.
 The old elapsed-day clock remains preview-only, never persisted billing authority.
+
+20 October supersession — MON-3-P-B adds disabled fictional verification/card persistence
+in actual migration `0372_free_first_job_admission.sql`; A's merged migration is
+`0194_free_first_job_keys.sql` (historical 0192 references above are superseded).
+See `free-first-job-persistence-v1.md` for strict request/result boundaries, immutable
+business bindings, owner/session replay checks and the disabled activation seam.
+The stateless preview and fixture remain proposals, never stored authority.
+The new setup path does not accept browser completion. No runtime verification or
+provider integration is installed. Admission always refuses pending C's authoritative
+London deadline/end/conversion work; no provisional unknown-identity trial is admitted.
+C's CLOCK/END/BILL/FINAL acceptance and MON-3 as a whole remain incomplete.

@@ -37,6 +37,8 @@ export function JobWorkState({ jobId }: { jobId: string }) {
     if (!current(requestEpoch)) return;
     pending.current = null;
     if (body.code === "POST_LOCK_WORK_REQUIRES_LINKED_JOB") setOffer(true);
+    else if (body.code === "METER_PROJECTION_MISMATCH") setError("The jobs-on-the-go meter could not be verified. Nothing was changed.");
+    else if (body.code === "METER_UPGRADE_REQUIRED") setError("Your Solo plan and grace place are full. Move to Builder before starting this site work.");
     else if (body.code === "CAPACITY_ADMISSION_UNAVAILABLE") setError("Resuming site work waits for the jobs-on-the-go meter. Nothing was changed.");
     else if (response.status === 409) setError("This job changed or the action is not available now. The saved state has been reloaded; check it before trying again.");
     else setError("The action was refused. Nothing was changed.");

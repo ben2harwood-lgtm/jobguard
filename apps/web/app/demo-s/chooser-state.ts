@@ -1,0 +1,30 @@
+import { smallBuilderDemoHttpCommandV1, type SmallBuilderDemoHttpCommand } from "@jobguard/core";
+// Only lifecycle intent is stored. The server checks current company membership before any replay.
+export function pendingKey(tenantId: string, membershipId: string) { return `demo-s.pending.v1:${tenantId}:${membershipId}`; }
+export function readPending(value: string | null): SmallBuilderDemoHttpCommand | null {
+  try { const parsed = smallBuilderDemoHttpCommandV1.safeParse(JSON.parse(value ?? "null")); return parsed.success ? parsed.data : null; }
+  catch { return null; }
+}
+export function demoLink(tenantId: string, runId: string, snapshotId?: string) {
+  return `/demo-s?${new URLSearchParams({ tenantId, runId, ...(snapshotId ? { snapshotId } : {}) })}`;
+}
+export const journeyChoices = [
+  { scenario: "core-1000", journey: "DEMO-J1", title: "Core £1,000 job", reason: "Launch a fresh fictional job from this selection, finish it through the real job screens, then read its saved report." },
+  { scenario: "recovery-18800", journey: "DEMO-J2", title: "Recovery £18,800 job", reason: "Open the guided journey to start a fresh job, then follow its guide to the saved money check. Independent review and builder observations are not ready yet." },
+  { scenario: "shadow-30000", journey: "DEMO-J3", title: "Final Check £30,000 job", reason: "All nine steps run on saved records by clicking through the job and its practice guide, and the report says complete only when every one is saved." },
+  { scenario: "meter", journey: "DEMO-J4", title: "Jobs-on-the-go meter", reason: "Reference previews reproduce the MON-2 figures after saving. Your company's saved count and account review show on Jobs on the go." },
+  { scenario: "trial", journey: "DEMO-J5", title: "First-job trial", reason: "The guide runs real saved trial commands on two accepted company jobs. Those jobs and the reference identity have no public screen yet, so they must be prepared beforehand." },
+] as const;
+export const meterProfiles = [
+  "DM-01 · Solo across twelve months", "DM-02 · Builder across twelve months",
+  "DM-03 · Builder eight places", "DM-04 · Eighth place for half a month",
+  "DM-05 · Builder twelve places", "DM-06 · Solo five places", "DM-07 · Solo grace place",
+  "DM-08 · Upgrade during the month", "DM-09 · Eighth place for one day",
+  "DM-10 · Builder 13–17 places and track review", "DM-11 · Sustained use above seven",
+  "DM-12 · Lifecycle and grouping", "DM-13 · Capacity and concurrent admissions",
+] as const;
+
+// Enable only journeys whose real guide and result reader exist in this checkout.
+const availability: Record<string, string> = { "core-1000": "Available end to end", "recovery-18800": "Journey available", "shadow-30000": "Available", trial: "Available with prepared company jobs", meter: "Previews and your saved meter available" };
+export function journeyAvailable(scenario: string) { return scenario in availability; }
+export function journeyAvailability(scenario: string) { return availability[scenario] ?? "Not ready yet"; }

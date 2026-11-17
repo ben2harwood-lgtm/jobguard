@@ -23,13 +23,13 @@ export async function northsideRun(pool: Pool, member: AuthenticatedMembership, 
     return row ? runV1.parse(row) : null;
   });
 }
-/** Only the four named fictional journey targets, for the owner-controlled practice switch. No wider organisation read. */
+/** Only the named fictional journey targets, for the owner-controlled practice switch. No wider organisation read. */
 export async function northsideSwitchTargets(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext) {
   return withTenant(pool, context, async db => (await db.$client.query<{ membershipId: string; role: string }>(
     `SELECT m.id "membershipId",m.role FROM app.membership m JOIN app.contractor_member c ON(c.tenant_id,c.membership_id)=(m.tenant_id,m.id)
      WHERE m.tenant_id=$1 AND app.contractor_member_active(m.id) AND (m.role,c.email) IN
      (('operative','demo.operative@fictional.invalid'),('surveyor','surveyor@northside-fictional.invalid'),
-      ('supervisor','supervisor@northside-fictional.invalid'),('client_approver','client.approver@northside-fictional.invalid')) ORDER BY m.role`, [member.tenantId])).rows);
+      ('supervisor','supervisor@northside-fictional.invalid'),('finance','finance@northside-fictional.invalid'),('client_approver','client.approver@northside-fictional.invalid')) ORDER BY m.role`, [member.tenantId])).rows);
 }
 /** The actor's own attribution references only; this reveals no other client's extra or commercial content. */
 export async function northsideOwnActions(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext) {

@@ -23,8 +23,8 @@ const oldJob=randomUUID(),oldCase=randomUUID();
 let upgradeProof: { proof: Awaited<ReturnType<typeof mo4Proof.proofBefore>>; ownRegistry: string[]; ownRows: unknown[]; controls: Array<{ table: string; microsecond: unknown; missing: unknown; retype: unknown; listRetype: unknown; nullable: unknown; replaced: unknown; inserted: unknown; after: unknown; columns: unknown }>; afterControls: Awaited<ReturnType<typeof mo4Proof.proofDifferences>> };
 beforeAll(async()=>{
  process.env.JOBGUARD_ENV="synthetic_demo";directory=await mkdtemp(join(tmpdir(),"jg-ch7-"));const port=await freePort(60500,150);
- postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start();
- admin=new Pool({host:"127.0.0.1",port,database:"postgres",user:"postgres",password:"synthetic"});
+ postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await postgres.initialise();await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+ admin=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"postgres",password:"synthetic"});
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  const index=MIGRATION_URLS.findIndex(u=>basename(fileURLToPath(u))==="0119_recovery_eligibility_v3.sql");expect(index).toBeGreaterThan(MIGRATION_URLS.findIndex(u=>basename(fileURLToPath(u))==="0112_recovery_follow_up.sql"));
  const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u)));expect(names).toEqual([...names].sort());
@@ -83,7 +83,7 @@ beforeAll(async()=>{
  }
  upgradeProof = { proof, ownRegistry, ownRows, controls, afterControls: await mo4Proof.proofDifferences(admin, proof) };
  await migrate(admin);await migrate(admin);
- await admin.query("CREATE ROLE ch7_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch7_login");runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"ch7_login",password:"synthetic"});
+ await admin.query("CREATE ROLE ch7_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO ch7_login");runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"ch7_login",password:"synthetic"});
 });
 afterAll(async()=>{if(previousEnvironment===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previousEnvironment;await closeTestPools(runtime,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});});
 async function fixture(type="withheld_customer_payment",before=false){

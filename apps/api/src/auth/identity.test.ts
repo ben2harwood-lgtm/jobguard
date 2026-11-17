@@ -5,10 +5,21 @@ import { syntheticSessionAllowed } from "./synthetic-session.js";
 import { FixtureIdentityEmail } from "./identity-email.js";
 import { ApplicationAuthGuard } from "./application-auth.guard.js";
 import { identityCookieOptions, identityStatus } from "./identity-http.js";
-import { identityRequestV1, identityVerifyV1 } from "./identity.application.js";
+import { createIdentityApplication, identityRequestV1, identityVerifyV1 } from "./identity.application.js";
 import { parseIdentityEnvironment } from "@jobguard/config";
 
 describe("M0-6L route, cookie and server composition boundaries",()=>{
+ it("keeps identity credentials separate with single-use Worker connections",async()=>{
+  const environment={JOBGUARD_ENV:"synthetic_demo",IDENTITY_DATABASE_URL:"postgresql://jobguard_identity:fictional@db.invalid/jobguard_synthetic_demo",AUTH_CODE_SECRET:"fictional".repeat(8),AUTH_ALLOWED_ORIGIN:"https://jobguard.invalid"};
+  const worker=createIdentityApplication(environment,{max:1,maxUses:1});
+  const node=createIdentityApplication(environment);
+  try {
+   expect(worker.provider.repository.pool.options).toMatchObject({connectionString:environment.IDENTITY_DATABASE_URL,max:1,maxUses:1});
+   expect(node.provider.repository.pool.options.max).toBe(4);
+   expect(()=>createIdentityApplication({...environment,IDENTITY_DATABASE_URL:environment.IDENTITY_DATABASE_URL.replace("jobguard_identity","jobguard_runtime")},{max:1,maxUses:1})).toThrow("separate jobguard_identity");
+  } finally { await Promise.all([worker.provider.repository.pool.end(),node.provider.repository.pool.end()]); }
+ });
+
  it("blocks every real recipient and every non-synthetic email route pending D04",async()=>{
   const adapter=new FixtureIdentityEmail();
   for(const mode of ["synthetic_demo","pilot_no_charge","production"])expect(()=>adapter.assertRecipient("person@example.com",mode)).toThrow("D04");

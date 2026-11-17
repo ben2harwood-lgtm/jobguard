@@ -56,3 +56,16 @@ describe("SV-1 shadow domain", () => {
     });
     it("prevention is terminal and always zero", () => { const out = eligible({ ...base, category: "prevention" }); expect(out).toMatchObject({ eligible: false, terminal: true, qualifyingPrincipal: { numerator: "0", denominator: "1" } }); });
 });
+
+it('SB-15: Fixed compensation, unconsumed credit, credit under £250 or insurer money in Q', () => {
+ expect(eligible(withheld()).eligible).toBe(true);
+ for (const changes of [{ component: "fixed_compensation" }, { proceeds: "insurer" }]) {
+  expect(eligible(withheld(changes))).toMatchObject({ eligible: false, qualifyingPrincipal: { numerator: "0", denominator: "1" } });
+ }
+ for (const consumedNetPence of [0, 24999, 25000]) {
+  const result = eligible(merchant("applied_credit", { principalNet: { numerator: String(consumedNetPence), denominator: "1" },
+   credit: { consumedNetPence, laterInvoiceId: id(9), laterInvoicePayment: "full", sourceRef: "fixture://credit" } }));
+  expect(result.eligible).toBe(consumedNetPence === 25000);
+  if (consumedNetPence < 25000) expect(result.qualifyingPrincipal.numerator).toBe("0");
+ }
+});

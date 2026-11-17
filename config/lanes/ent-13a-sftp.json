@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-13a-sftp": {
+      "branches": ["codex/sandbox/ent-13a-sftp"],
+      "note": "RED ENT-13a slice 2: dark in-memory SFTP transport only; no live endpoint, machine authority, domain writes or migration. Lane file itself is implicitly permitted.",
+      "allow": [
+        "apps/api/src/contractor/billing.adapters.ts",
+        "apps/api/src/connectors/sftp.synthetic.ts",
+        "apps/api/src/connectors/sftp.synthetic.test.ts",
+        "docs/operations/connector-sftp-synthetic.md"
+      ]
+    }
+  }
+}

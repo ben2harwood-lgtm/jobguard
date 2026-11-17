@@ -40,6 +40,31 @@ it.each(["shadow-30000", "recovery-18800"] as const)("processes %s supplier/PO s
   expect(await worker().execute(a.context,{version:"final-check.task.v1",jobId:a.jobId,manifestId:manifest.id})).toMatchObject({runId:result.runId});
 });
 
+it("processes the merchant recovery inventory before allowing an invoice and preserves it on replay", async () => {
+  const a = await seedFinalCheckJob(f), pool = practiceMaterialPool(f.runtime, a.digest);
+  const materials = new MaterialRepository(pool), orders = new PurchaseOrderRepository(pool), supplier = new SupplierDocumentRepository(f.runtime);
+  const rate = await materials.addRate(a.context, {merchantName:`Fictional ${randomUUID()}`,sku:"merchant-40",description:"Fictional material",
+    pricePence:2000,priceUnit:"each",taxBasis:"net",effectiveFrom:"2026-09-01",sourceLabel:"fictional",expectedVersion:0});
+  const requirement = await materials.addRequirement(a.context, {jobId:a.jobId,scopeItemId:a.scopeItemId,skuId:rate.skuId,quantity:"40",unit:"each",expectedRevision:0});
+  await orders.revise(a.context,a.jobId,{version:"purchase-order-draft.v1",commandId:randomUUID(),requirementId:requirement.id,quantity:"40",
+    unitPricePence:2000,recipient:"orders@fictional-merchant.invalid",requiredDate:"2026-10-01",expectedRevision:0},"2026-10-01");
+  for (const [expectedRevision,fixtureId] of (["materials-B-delivery","materials-320-invoice","materials-B-credit"] as const).entries())
+    await supplier.intake(a.context,a.jobId,{version:"supplier-document-intake.v1",commandId:randomUUID(),fixtureId,channel:"picker",expectedRevision});
+  await a.lock();
+  await expect(finalCheckTenant(f.admin,a.tenantId,db=>db.query("SELECT * FROM app.require_authoritative_final_check($1,$2)",[a.tenantId,a.jobId]))).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");
+  const repo = new FinalCheckRepository(f.shadow), manifest = await repo.begin(a.context,a.jobId);
+  expect(manifest.sources.filter(s=>s.sourceKind==="unlinked_supplier_version")).toHaveLength(3);
+  expect(manifest.sources.filter(s=>s.sourceKind==="unlinked_purchase_order")).toHaveLength(1);
+  const result = await worker().execute(a.context,{version:"final-check.task.v1",jobId:a.jobId,manifestId:manifest.id}) as {runId:string};
+  expect((await repo.manifest(a.context,a.jobId,manifest.id)).sources.every(s=>s.status==="zero_result")).toBe(true);
+  const checkId = randomUUID(), completion = new FinalCheckCompletionRepository(f.shadow);
+  for (let replay=0;replay<2;replay++)
+    await completion.publish(a.context,{version:"final-check-publication.v1",jobId:a.jobId,runId:result.runId,checkId});
+  expect((await finalCheckTenant(f.admin,a.tenantId,db=>db.query("SELECT * FROM app.require_authoritative_final_check($1,$2)",[a.tenantId,a.jobId]))).rows)
+    .toEqual([{complete:true,check_id:checkId,run_id:result.runId,lock_id:manifest.lockId}]);
+  expect(await worker().execute(a.context,{version:"final-check.task.v1",jobId:a.jobId,manifestId:manifest.id})).toMatchObject({runId:result.runId});
+});
+
 it("unversioned known material originals are read, but held and unknown sources keep the check incomplete", async () => {
   const { supplierFixtures } = await import("@jobguard/core"), { createHash } = await import("node:crypto");
   const a=await seedFinalCheckJob(f), fixture=supplierFixtures["materials-320-invoice"];

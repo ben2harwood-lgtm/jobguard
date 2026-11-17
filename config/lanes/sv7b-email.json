@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7b-email": {
+      "branches": ["codex/sandbox/sv7b-email"],
+      "note": "RED SV-7B email forwarding DARK fixture adapter through observation.v1; no live route, database changes or shadow capability. Own lane file is implicitly permitted by lane policy.",
+      "allow": [
+        "apps/api/src/email-forwarding.connector.ts",
+        "apps/api/src/email-forwarding.connector.test.ts",
+        "docs/operations/email-forwarding-data-flow.md"
+      ]
+    }
+  }
+}

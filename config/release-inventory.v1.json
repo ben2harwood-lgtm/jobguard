@@ -1,0 +1,188 @@
+{
+  "version": "release-inventory.v1",
+  "policies": [
+    {
+      "id": "D01",
+      "record": "docs/decisions/d01-commercial-fees-cap.md",
+      "policyVersion": "reference_fee_policy_v3",
+      "status": "proposed",
+      "gate": "G4-S; fee_posting requires D01 through requireApprovedDecision",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D02",
+      "record": "docs/decisions/d02-vat-rounding-invoicing.md",
+      "policyVersion": "reference_tax_invoice_policy_v1",
+      "status": "proposed",
+      "gate": "G1 and the applicable track gate (G4-C or G4-S); tax_invoice requires D02 through requireApprovedDecision",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D03",
+      "record": "docs/decisions/d03-eligible-recovery-reversals.md",
+      "policyVersion": "reference_recovery_eligibility_policy_v3",
+      "status": "proposed",
+      "gate": "G4-S; recovery_eligibility and positive_fee_posting require D03 (and D01/D02, plus D13 for missed_variation_final_account)",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D04",
+      "record": "docs/decisions/d04-providers-residency.md",
+      "policyVersion": "provider_residency_policy_v1",
+      "status": "proposed",
+      "gate": "G1, G3, the applicable track gate (G4-C or G4-S) and G5 as applicable; provider_dispatch requires D04 through requireApprovedDecision",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D05",
+      "record": "docs/decisions/d05-authority-standing-consent.md",
+      "policyVersion": "standing_authority_policy_v3",
+      "status": "proposed",
+      "gate": "the applicable track gate (G4-C or G4-S); standing_authorization_execution and payment_retry require D05",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D06",
+      "record": "docs/decisions/d06-builder-invoices-customer-approval-jurisdiction.md",
+      "policyVersion": "customer_approval_jurisdiction_policy_v2",
+      "status": "proposed",
+      "gate": "G1; real_customer_invoice_issue requires D06 and D02",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D07",
+      "record": "docs/decisions/d07-retention-recovery-operations.md",
+      "policyVersion": "pilot_data_operations_policy_v1",
+      "status": "proposed",
+      "gate": "G1; real_data_activation requires D07; worm_retention requires a later explicit D07 approval",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D08",
+      "record": "docs/decisions/d08-offline-security-conflicts.md",
+      "policyVersion": "offline_security_policy_v1",
+      "status": "proposed",
+      "gate": "G3; native_real_data_distribution requires D08",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D09",
+      "record": "docs/decisions/d09-plan-tiers-metering.md",
+      "policyVersion": "subscription_pricing_policy_v4",
+      "status": "proposed",
+      "gate": "G4-S; paid_subscription and metering_execution require D09 (plus D02/D05)",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D10",
+      "record": "docs/decisions/d10-pursuit-banking-route.md",
+      "policyVersion": "pursuit_banking_policy_v2",
+      "status": "proposed",
+      "gate": "G4-S; real_pursuit and bank_feed_activation require D10 (and D04/D12)",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D11",
+      "record": "docs/decisions/d11-commercial-integrity-anti-gaming.md",
+      "policyVersion": "commercial_integrity_policy_v3",
+      "status": "proposed",
+      "gate": "the applicable track gate (G4-C or G4-S); production_integrity_signals/thresholds require D11; no signal may authorize an automatic charge or account action",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D12",
+      "record": "docs/decisions/d12-data-protection-role-third-party-transparency.md",
+      "policyVersion": "third_party_data_protection_policy_v4",
+      "status": "proposed",
+      "gate": "G1 and the applicable track gate (G4-C or G4-S); third_party_personal_data_processing requires D12 (plus D04 and task-specific gates)",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D13",
+      "record": "docs/decisions/d13-shadow-attribution-delayed-disclosure.md",
+      "policyVersion": "shadow_attribution_policy_v3",
+      "status": "proposed",
+      "gate": "G1 for real-data shadow processing; G4-S for missed_variation_final_account fees; both require D13 (plus D12)",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D14",
+      "record": "docs/decisions/d14-paid-data-services.md",
+      "policyVersion": "paid_data_services_policy_v1",
+      "status": "proposed",
+      "gate": "G4-S; paid_counterparty_checks and title_checks require D14 (plus D04, D07, D12)",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D15",
+      "record": "docs/decisions/d15-partner-commissions-introductions.md",
+      "policyVersion": "partner_commission_policy_v1",
+      "status": "proposed",
+      "gate": "the applicable track gate (G4-C or G4-S); partner_commission and regulated_introduction require D15 (plus D02, D12)",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "D16",
+      "record": "docs/decisions/d16-enterprise-commercial-terms.md",
+      "policyVersion": "enterprise_site_capture_policy_v1",
+      "status": "proposed",
+      "gate": "G1 plus a signed pilot agreement and DPA for real contractor data; G4-C for enterprise_fee_posting and enterprise_fee_collection; both require D16 (plus D02, D12)",
+      "enabled": false,
+      "releaseRecordId": null
+    }
+  ],
+  "rails": [
+    {
+      "id": "subscription_stripe",
+      "gate": "G4-S",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "success_fee_stripe",
+      "gate": "G4-S",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "success_fee_gocardless",
+      "gate": "G4-S",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "contractor_fee_stripe",
+      "gate": "G4-C",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "contractor_fee_gocardless",
+      "gate": "G4-C",
+      "enabled": false,
+      "releaseRecordId": null
+    },
+    {
+      "id": "customer_pay_now",
+      "gate": "G4-S",
+      "enabled": false,
+      "releaseRecordId": null
+    }
+  ],
+  "releaseRecords": []
+}

@@ -45,3 +45,18 @@ describe("SV-1 shadow domain", () => {
         expect(origin).not.toHaveProperty("feeBearing");
     });
 });
+
+it('SB-10: Detector or AI output creates a variation, case, attribution or fee input', () => {
+ const proposal = shadowProposalV1.parse(proposalRaw);
+ expect(proposal.detectorKind).toBe("ai_proposal");
+ for (const parse of [createAttributionFacts, createEligibilityFacts, createSuccessFeeInput, parseShadowOrigin])
+  expect(() => parse(proposal)).toThrow();
+ for (const field of ["variation", "recoveryCase", "attribution", "fee", "approvedCase"])
+  expect(shadowProposalV1.safeParse({ ...proposalRaw, [field]: {} }).success).toBe(false);
+ // The legitimate server-origin envelope is accepted separately from detector output.
+ const origin = parseShadowOrigin({ version: "extra-origin.v1", tenantId: id, jobId: id, variationId: id,
+  origin: { version: "variation-origin.v1", jobTrack: "small_builder", kind: "jobguard_catch" }, commandId: id,
+  raisingMembershipId: id, raisingRole: "builder", serverRecordedAt: "2026-10-03T00:00:00Z",
+  deviceId: null, deviceCapturedAt: null, evidenceHash: null });
+ expect(Object.isFrozen(origin)).toBe(true);
+});

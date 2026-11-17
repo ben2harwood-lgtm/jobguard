@@ -1,8 +1,9 @@
+import { RecordBuilderAcceptanceMutation, RecordQuoteDispositionMutation } from "./lp3-legacy-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   QuoteRepository, QuoteDocumentRepository, IssueQuoteMutation,
-  RecordBuilderAcceptanceMutation, RecordQuoteDispositionMutation, UserCommandDispatcher,
+  UserCommandDispatcher,
   withTenant, type ConsequentialCommand,
 } from "../src/index.js";
 import { clusterBefore } from "./site-extra-pricing-fixtures.js";
@@ -21,8 +22,10 @@ async function issued() {
   await c.admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional MIGFIX builder')", [tenant, account]);
   await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [tenant, member, account, user]);
   const context = testTenantContext(tenant);
-  await withTenant(c.runtime, context, async db => {
+  await withTenant(c.admin, context, async db => {
     await db.$client.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional quote','quoting')", [tenant, job]);
+  });
+  await withTenant(c.runtime, context, async db => {
     await db.$client.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')", [tenant, scope, job]);
     await db.$client.query("INSERT INTO app.scope_revision(tenant_id,id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Fit cabinet','1','each',10000,10000)", [tenant, revisionId, job, scope]);
   });
@@ -42,7 +45,7 @@ async function issued() {
       lines: [{ scopeItemId: scope, description: "Fit cabinet", quantity: "1", unit: "each", netPence: 10000 }],
       exclusions: [], qualifications: ["Synthetic only"], subtotalPence: 10000, discountPence: 0, netPence: 10000, taxPence: 2000, totalPence: 12000 },
   });
-  const hash = artifact.content_hash, dispatcher = new UserCommandDispatcher(c.runtime);
+  const hash = artifact.content_hash, dispatcher = new UserCommandDispatcher(c.admin);
   await dispatcher.dispatch(context, {
     version: "command.v1", commandId: randomUUID(), commandType: "quote.issue", semanticKey: `issue:${document}`,
     actorMembershipId: member, subjectType: "quote_document", subjectRef: document, authorizationId: randomUUID(),

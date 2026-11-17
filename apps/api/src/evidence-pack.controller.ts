@@ -16,15 +16,19 @@ export class EvidencePackController {
     catch (error) { const { status, code } = evidencePackFailure(error); throw new HttpException({ code }, status); }
   }
   @Get()
+  @Header("cache-control", "no-store")
   @ApiOperation({ summary: "List immutable mapped, inspectable evidence packs" })
-  get(@Req() request: Request, @Param("id") id: string) { return this.invoke(() => this.app.list(this.session(request), id)); }
+  get(@Req() request: Request, @Param("id") id: string, @Query("version") version?: string) { return this.invoke(async () => version === "3" ? this.app.listV3(this.session(request), id) : this.app.list(this.session(request), id)); }
   @Post()
+  @Header("cache-control", "no-store")
   @ApiOperation({ summary: "Generate an immutable text evidence-pack revision" })
   post(@Req() request: Request, @Param("id") id: string, @Body() body: unknown) { return this.invoke(() => this.app.generate(this.session(request), id, body)); }
   @Post(":packId/attachment-approval")
+  @Header("cache-control", "no-store")
   @ApiOperation({ summary: "Record approval bound to the current evidence pack hashes" })
   approve(@Req() request: Request, @Param("id") id: string, @Param("packId") packId: string, @Body() body: unknown) { return this.invoke(() => this.app.approveAttachment(this.session(request), id, packId, body)); }
   @Get(":packId/inspect")
+  @Header("cache-control", "no-store")
   @ApiOperation({ summary: "Inspect persisted pack or an explicitly synthetic malformed scenario on the server" })
   inspect(@Req() request: Request, @Param("id") id: string, @Param("packId") packId: string, @Query() query: unknown) { return this.invoke(() => this.app.inspect(this.session(request), id, packId, query)); }
   @Get(":packId/download")

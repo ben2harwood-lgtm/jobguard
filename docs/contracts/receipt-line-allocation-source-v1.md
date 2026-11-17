@@ -1,5 +1,9 @@
 # Receipt-line allocation contracts v1 — M48-C0
 
+Current synthetic status: 0398 enables both v1 command protocols through the
+0335 neutral producer described in the final sections. Earlier held-status statements below describe 0258 and its
+superseded build-ahead command protocol, which remains refused.
+
 Build-only, synthetic contracts at base `dc5721230fd8aedbf2d9d0457789074b66b48765`.
 This document is not source-design acceptance, persistence evidence, a policy approval or permission to release. Source-design acceptance and M48-B1 still gate merge under the issued 23 October order. No production route, external action, case landing, fee or posting is introduced.
 
@@ -43,3 +47,64 @@ Status precedence, enforced on parse and exposed as `deriveReceiptLineAllocation
 The 23 October safest-choice rule is applied by refusing malformed/unknown fields, unverifiable source bindings, incomplete/oversized compositions and stale ready-review watermarks. Require evidence rather than permitting evidence-free saved facts. Reviews supply no approved saved facts and parsers grant no settlement, fee or human authority. No production policy, expiry, role/permission grant or provider behavior is invented.
 
 H-M48-SOURCE-DESIGN/Q2, Q6, deposit-source rebind, SV5, predecessor acceptance and persisted B1/F5/F7 proofs remain with their owners. Shared lock order, actor permissions, exact review expiry/revocation and cross-representation deduplication require an accepted server handoff. Independent Claude A/B exact-head verdicts, separate acceptance and Ben's merge remain outstanding. These pure tests cannot close parent PostgreSQL or browser gates.
+
+## 0335 repair — enabled neutral synthetic producer
+
+The earlier held deployment status above is historical for 0258. Migration 0335
+now enables a no-amount protocol, `receipt-line-facts-command.v1`, behind the
+existing read/write SQL signatures and `RecoveryLineAllocationRepository`:
+
+- `review`: command ID, expected source revision, payment ID, optional persisted
+  remittance evidence ID.
+- `approve`: command ID, expected source revision, review ID and approval hash.
+- `review_reverse`: command ID, expected source revision, original allocation
+  revision ID and reversal source `{kind, sourceId}`. No reversal amount.
+- `reverse`: command ID, expected source revision, review ID and approval hash.
+
+The original `receipt-line-allocation-command.v1` build-ahead protocol remains
+refused; it cannot be used to supply reversal money. Reads return the existing
+strict source snapshot shape. Commands return `receipt-line-facts-result.v1`,
+with the immutable review, SH-1 input/proposal and saved revision ID. SQL derives
+all money from stored matched settled practice events and issued line snapshots;
+SH-1 checks the result again before commit. The source command/authorization,
+invoice, line, movement and exact original lock ancestry are independently bound.
+Original-bill lines use the locked revision; post-lock catches use an actual
+supplementary descendant and cannot also occur on the locked bill. A guessed
+JSON source/approval brand or a quarantined storage row does not qualify.
+
+This activates only the synthetic/practice neutral producer and its case
+consumer. It does not approve a fee policy, clear fee holds, enable production,
+compose an HTTP route or claim an independently verified DB run. See the 0335
+migration note for writer-driven F5/F7 and adversarial CI proofs.
+
+The case consumer additionally binds every catch to its own server-originated
+catch variation and exact commercial revision in the case's `variation:` and
+`revision:` references. The catch must use an actual supplementary binding to
+this lock and its completed check. A generic invoice reference cannot borrow
+another case's catch or turn an original-bill line into a catch.
+
+## 0398 — v1 command producer
+
+`receipt-line-allocation-command.v1` now uses the same synthetic producer, saved
+review, exact authorization, SH-1 validation and immutable fact tables as
+`receipt-line-facts-command.v1`. The earlier statements that the allocation
+protocol remains refused describe the historical 0258/0335 deployment.
+
+Both protocols return `receipt-line-facts-result.v1` through the repository;
+this change does not implement the proposed view or command-result projection
+above. SV-6 continues to consume the same source snapshot reader.
+
+The allocation protocol keeps its strict existing core schema. For
+`review_reverse`, `grossPence` must equal the complete available reversal
+derived from a persisted refund or credit. A smaller or larger requested amount
+is refused; client money never sizes a distribution. Optional remittance
+evidence must match the existing persisted, verified source. The no-amount
+protocol is unchanged. Approvals must use the protocol of their saved review;
+command identity/payload conflicts across protocols remain errors.
+
+0398 replaces the latest writer and source-approval validator from 0335 only.
+It adds no tables, routines, grants, policies, provider calls or fee eligibility.
+Existing no-amount commands retain their stored results and replay behavior.
+Forward fix by a later migration; do not rewrite immutable saved rows or reverse
+the schema to remove facts. PostgreSQL integration and populated-upgrade tests
+are CI gates, followed by the independent RED review.

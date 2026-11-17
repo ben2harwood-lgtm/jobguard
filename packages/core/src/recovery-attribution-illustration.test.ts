@@ -144,3 +144,11 @@ describe("SV6-06/07 pure proof guards (persisted-source acceptance dependency-bo
     expect(() => derive(mixedCase)).toThrow(AttributionBillingPaymentProofError);
   });
 });
+
+it("#356 saved allocation net cannot exceed the invoice line net, including rational fractions",()=>{
+ const raw=fixture();raw.payment.allocation.net={numerator:"160001",denominator:"2"};
+ expect(derive(raw).paymentReasons).toContain("allocation.exceeds_line_net");
+ expect(derive(raw).supportedPaidPrincipal).toEqual({numerator:"0",denominator:"1"});
+ raw.payment.allocation.net={numerator:"160000",denominator:"2"};
+ expect(derive(raw).customerPaymentSettledAndAllocatedToThatLine).toBe(true);
+});

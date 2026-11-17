@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "sb-rows-named": {
+      "branches": [
+        "codex/sandbox/sb-rows-named"
+      ],
+      "note": "RED: tests for merged small-builder shadow, isolation and money boundaries; no production change.",
+      "allow": [
+        "docs/testing/sb-named-regressions.md",
+        "packages/core/src/free-first-job-keys.test.ts",
+        "packages/core/src/meter-counting.test.ts",
+        "packages/core/src/shadow-detection.test.ts",
+        "packages/core/src/shadow-domain/eligibility.test.ts",
+        "packages/core/src/shadow-domain/must-surface.test.ts",
+        "packages/core/src/shadow-domain/type-contracts.test.ts",
+        "packages/core/src/subscription-allocation.test.ts",
+        "packages/core/src/subscription-period.test.ts",
+        "packages/core/src/subscription.test.ts",
+        "packages/db/test/final-check-disposition.integration.test.ts",
+        "packages/db/test/final-check-manifest.integration.test.ts",
+        "packages/db/test/meter-persistence.integration.test.ts",
+        "packages/db/test/recovery-pursuit-terms.integration.test.ts",
+        "packages/db/test/shadow-catalog.integration.test.ts",
+        "packages/db/test/shadow-isolation-query-log.integration.test.ts",
+        "packages/db/test/shadow-persistence.integration.test.ts"
+      ]
+    }
+  }
+}

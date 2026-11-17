@@ -53,3 +53,13 @@ describe("subscription attribution", () => {
     });
   });
 });
+
+it('SB-20: A period exceeds its monthly maximum', () => {
+ const correctionId = id(1);
+ const fitting = disposeSubscriptionCorrections({ principalPence: 4800, maximumPence: 4900, corrections: [{ correctionId, pence: 100 }] });
+ expect(fitting.issuedPence).toBe(4900);
+ expect(fitting.dispositions[0]).toMatchObject({ appliedPence: 100, uncollectedPence: 0, requiresAlert: false });
+ const excess = disposeSubscriptionCorrections({ principalPence: 4800, maximumPence: 4900, corrections: [{ correctionId, pence: 101 }] });
+ expect(excess.issuedPence).toBe(4900);
+ expect(excess.dispositions[0]).toMatchObject({ appliedPence: 100, uncollectedPence: 1, requiresAlert: true });
+});

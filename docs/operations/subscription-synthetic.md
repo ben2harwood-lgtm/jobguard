@@ -22,3 +22,33 @@ CI handoff must run PostgreSQL and populated upgrade tests with migration 0190 (
 Installation is one transaction and rolls back on failure. After installation retain all accepted history and issued facts; repair additively. No data backfill or deletion is part of this migration.
 
 A durable claimed attempt with no result (process interruption or lost result persistence) is also reconciled without another execution. A completed redirect alone is not a settlement or an unknown-outcome retry permission.
+
+## MON-2B dark provider adapter
+
+`SubscriptionStripeSandboxAdapter` implements the existing `SubscriptionPaymentAdapter` port;
+it is not installed in any HTTP route or live provider factory. Supply an exact MON-2A approved
+work claim, tenant and synthetic D05 collection bound from trusted fixture setup, then use the
+existing `SubscriptionExecutor`. Construction and every call refuse live environments and extra
+fields. The adapter never recomputes prices. Provider proration, retries and emails are fixed off.
+No migration, dependency, environment variable, provider key or network endpoint is added.
+
+Fake submission returns `outcome_unknown`; a checkout event does not settle it. The fixture helper
+`signSubscriptionSandboxEvent` produces HMAC envelopes using public, explicitly synthetic signing
+material. This tests tamper detection and binding, **not Stripe protocol compatibility or real
+provider sandbox integration**. Webhooks bind tenant, work, statement, exact amount, currency and
+content hash. Identical deliveries and distinct event IDs for the same payment yield the same
+result ID. The existing SQL receipt and work constraints own the durable business effects.
+
+The fake's payment/event history is in memory. Keep the same fake instance during a sandbox journey;
+recreating it cannot prove provider recovery after restart. Refunds and contradictory terminal
+events produce `SANDBOX_REVERSAL_REQUIRES_REVIEW` regardless of arrival order. They cannot authorize
+another charge or resurrect settlement. This slice does not compensate a previously recorded
+settlement; a real reversal requires the separately approved refund/accounting path. No fee,
+allocation, final-account lock or hidden-data interface is exposed.
+
+Evidence is deterministic fake sandbox evidence only. G4-S, approved D05, D09 v4 and D02, live
+M4-10/M4-13, durable real webhook ingestion, real provider protocol verification, approved VAT,
+restart recovery and live reversal compensation remain required before production. CI must run
+`test/subscription-stripe-sandbox.integration.test.ts` and existing subscription PostgreSQL suites;
+the restricted builder sandbox cannot run PostgreSQL. One independent exact-head Claude RED
+review and green required CI remain merge gates under the current simple loop.

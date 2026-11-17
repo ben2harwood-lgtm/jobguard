@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "next-16-upgrade": {
+      "branches": ["codex/sandbox/next-16-upgrade"],
+      "note": "NEXT-16-UPGRADE RED: framework upgrade with unchanged customer-cookie boundary. Router regenerates pnpm-lock.yaml using pnpm 10.28.1 outside the offline sandbox before CI and independent review.",
+      "allow": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "apps/web/package.json",
+        "apps/web/middleware.ts",
+        "apps/web/proxy.ts",
+        "apps/web/proxy.test.ts",
+        "apps/web/tsconfig.json",
+        "apps/web/next-env.d.ts",
+        "apps/api/src/auth/customer-signin.test.ts",
+        "apps/api/src/auth/customer-variation.test.ts"
+      ]
+    }
+  }
+}

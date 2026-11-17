@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
-// Test-only source loading avoids requiring coordinator-owned package exports.
-// Production code must wait for that integration; this is not a replacement barrel.
+// Source loading keeps these boundary tests independent of package build order.
+// The neutral producer is exported by the database package; no HTTP route is composed.
 type HeldRepository = {
  view(context: unknown, actor: unknown, digest: string, jobId: string, query?: unknown): Promise<never>;
  command(context: unknown, actor: unknown, digest: string, jobId: string, raw: unknown): Promise<never>;
@@ -21,7 +21,7 @@ function fixture(environment = "synthetic_demo") {
  const pool = { connect: vi.fn() };
  return { pool, repository: new RecoveryLineAllocationRepository(pool as unknown as Pool, environment) };
 }
-describe("M48-B1 held source boundary (no persistence proof)", () => {
+describe("M4-8-S source and legacy-protocol boundary (no mock persistence proof)", () => {
  it.each(["production", "pilot_no_charge", "unconfigured", "development"])("A2/A6: refuses %s before database access", async environment => {
   const { repository, pool } = fixture(environment);
   await expect(repository.view(context, actor, digest, jobId)).rejects.toMatchObject({ code: "RECEIPT_LINE_SYNTHETIC_ONLY" });
@@ -47,12 +47,12 @@ describe("M48-B1 held source boundary (no persistence proof)", () => {
  });
 });
 
-describe("M48-B1 caller-owned transaction boundary", () => {
+describe("M4-8-S caller-owned transaction boundary", () => {
  it("A3/A6: uses only the supplied transaction and refuses even fabricated database success", async () => {
   const { repository, pool } = fixture();
   const query = vi.fn().mockResolvedValueOnce({ rowCount: 1 }).mockResolvedValueOnce({}).mockResolvedValueOnce({ rows: [{ result: { revision: 1, rows: [] } }] });
   await expect(repository.readCurrentInTransaction({ $client: { query } }, context, actor, digest, { jobId }, { revision: 2, sourceHash: "b".repeat(64) }))
-   .rejects.toMatchObject({ code: "RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED" });
+   .rejects.toMatchObject({ code: "INVALID_RECEIPT_LINE_RESULT" });
   expect(pool.connect).not.toHaveBeenCalled();
   expect(query).toHaveBeenCalledTimes(3);
   expect(query.mock.calls[2]?.[1]).toEqual([context.tenantId, jobId, digest, JSON.stringify({ jobId }), JSON.stringify({ revision: 2, sourceHash: "b".repeat(64) })]);

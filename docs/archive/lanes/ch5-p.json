@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch5-p": {
+      "branches": [
+        "codex/sandbox/ch5-p"
+      ],
+      "receipt": "docs/verdicts/CH5-P/BUILDER_RECEIPT.md",
+      "note": "Issued CH5-P build only. Partial held boundary: MON1-A exposes no executable admission. C1: no route/page/browser workflow. Shared integrations and full adoption remain STOP.",
+      "allow": [
+        "packages/db/src/job-import-v3-repository.ts",
+        "packages/db/src/job-import-v3-fixtures.ts",
+        "packages/db/test/job-import-v3.integration.test.ts",
+        "packages/db/test/job-import-v3-races.integration.test.ts",
+        "packages/db/test/job-import-v3-upgrade.integration.test.ts",
+        "packages/db/test/job-import-v3-fixtures.ts",
+        "packages/db/migrations/0224_job_import_v3.sql",
+        "packages/db/migration-notes/0224_job_import_v3.md",
+        "docs/verdicts/CH5-P/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

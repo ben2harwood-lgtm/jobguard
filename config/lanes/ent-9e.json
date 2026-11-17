@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-9e": {
+      "branches": [
+        "codex/sandbox/ent-9e"
+      ],
+      "note": "ENT-9 deferred advisory signal, RED. Pure adapter over scoped stored unmatched other invoice lines; no pricing, fees or meter input. No migration. Serial follow-on to ent-9d (#384), sharing dashboard paths. Caught up with main through #385 (highest migration 0301); migration SQL and shared expectation lists match main. This lane file is implicitly editable.",
+      "allow": [
+        "apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts",
+        "apps/web/app/ui/enterprise-dashboard.test.tsx",
+        "apps/web/app/ui/enterprise-dashboard.tsx",
+        "apps/web/e2e/ENT-9.spec.ts",
+        "docs/contracts/enterprise-dashboard-http-v1.md",
+        "packages/core/src/enterprise-signal.ts",
+        "packages/db/src/enterprise-dashboard-queries.ts",
+        "packages/db/src/enterprise-dashboard-repository.ts",
+        "packages/db/src/enterprise-dashboard-signals.ts",
+        "packages/db/test/enterprise-dashboard-signals.test.ts",
+        "packages/db/test/enterprise-dashboard.integration.test.ts"
+      ]
+    }
+  }
+}

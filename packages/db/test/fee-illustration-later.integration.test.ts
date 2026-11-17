@@ -9,7 +9,7 @@ let f: WorkFixture, owner: Awaited<ReturnType<typeof seedWorkPractice>>, repo: F
 const previousEnvironment = process.env.JOBGUARD_ENV;
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
-  f = await createWorkFixture(); owner = await seedWorkPractice(f); repo = new FeeIllustrationRepository(f.runtime);
+  f = await createWorkFixture(true, "jobguard_synthetic_demo"); owner = await seedWorkPractice(f); repo = new FeeIllustrationRepository(f.runtime);
 }, 120000);
 afterAll(async () => {
   if (previousEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previousEnvironment;

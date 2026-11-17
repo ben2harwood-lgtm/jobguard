@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch9-e2e-import-fix": {
+      "branches": ["codex/sandbox/ch9-e2e-import-fix"],
+      "note": "CH9-E2E-IMPORT-FIX: test-only Playwright import repair; assertions unchanged.",
+      "allow": ["apps/web/e2e/CH-9-mapped.spec.ts"]
+    }
+  }
+}

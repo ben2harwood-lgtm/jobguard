@@ -1,3 +1,4 @@
+import { GOLDEN_TARGETS } from "./golden-run-record.js";
 import type { JobRecordProposal } from "@jobguard/core";
 
 export interface WalkaroundSource { id: string; tags: string[]; text: string }
@@ -142,7 +143,7 @@ export function evaluateCapture(
   const recall = { numerator: matchedIntents, denominator: expectedIntentIds.length };
   // The plan's proposed 95% target is also required per case: omissions in a
   // small case cannot be hidden by pooling it with many easy cases.
-  const thresholdMet = recall.denominator > 0 && recall.numerator * 100 >= recall.denominator * 95;
+  const thresholdMet = recall.denominator > 0 && recall.numerator * 100 >= recall.denominator * GOLDEN_TARGETS.scopeIntentRecallPercent;
   return {
     id: source.id, passed: errors.length === 0 && thresholdMet && unsupportedMonetaryFacts === 0 &&
       totalCitations > 0 && totalCitations === validCitations && ambiguityPassed === ambiguityTotal,

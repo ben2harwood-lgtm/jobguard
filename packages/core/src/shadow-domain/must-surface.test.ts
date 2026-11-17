@@ -42,3 +42,14 @@ describe("SV-1 shadow domain", () => {
     it("supplier/order evidence alone fires nothing and absent policy predicates refuse", () => { expect(evaluateMustSurface(base).firedRules).toEqual([]); for (const significantWork of [undefined, null, { ...base.significantWork, basis: "production_threshold" }, { ...base.significantWork, version: "v0" }])
         expect(() => evaluateMustSurface({ ...base, significantWork, customerClearlyRequested: true, needsPriorWrittenAgreement: true })).toThrow(); });
 });
+
+it('SB-04: A must-surface rule fires, but a model score says hold', () => {
+ const ordinary = evaluateMustSurface(base);
+ expect(ordinary.firedRules).toEqual([]);
+ expect(ordinary.ineligibility).toEqual([]);
+ const mandatory = evaluateMustSurface({ ...base, safetyImplication: true });
+ expect(mandatory.firedRules).toContainEqual(expect.objectContaining({ rule: "safety" }));
+ expect(mandatory.ineligibility.map(r => r.reason)).toContain("disclosed_before_lock");
+ // A model cannot inject an instruction that suppresses the mandatory rule.
+ expect(() => evaluateMustSurface({ ...base, safetyImplication: true, mustSurfaceNow: false, confidenceBand: "low" })).toThrow();
+});

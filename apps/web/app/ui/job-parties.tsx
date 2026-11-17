@@ -126,6 +126,7 @@ export function JobParties({ jobId }: { jobId: string }) {
   }
   return <section className={`review ${styles.panel}`} aria-labelledby={`parties-${jobId}`} style={{ minWidth: 0 }}>
     <h2 id={`parties-${jobId}`}>Customer and site</h2>
+    <a href={`/jobs/${jobId}/imports`}>Import a job under v3 terms</a>
     <p>Use the supplied fictional details only. Do not enter real names, addresses or contact details.</p>
     {view?.current ? <dl data-testid="job-party-details"><dt>Customer</dt><dd data-testid="party-customer">{view.current.customer.name}</dd><dt>Site</dt><dd data-testid="party-site">{[view.current.site.unit, ...view.current.site.addressLines, view.current.site.town, view.current.site.postcode].filter(Boolean).join(", ")}</dd><dt>Who pays?</dt><dd data-testid="party-payer">{view.current.payingParty.name}</dd><dt>Saved binding</dt><dd style={{ overflowWrap: "anywhere" }} data-testid="party-binding-id">{view.current.bindingId}</dd></dl> : <p>{view ? "Details needed — add a customer and site before previewing a quote or switching live." : "Loading customer and site…"}</p>}
     <p>The supplied fictional underway job can be imported with these saved parties. Its £1,000.00 baseline is builder-attested; it creates no historic billing.</p>

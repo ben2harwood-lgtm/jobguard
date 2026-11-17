@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "evidence-pack-canon": {
+      "branches": ["codex/sandbox/evidence-pack-canon"],
+      "note": "RED: CH-8 before-live canonical byte parity, activation isolation and unreachable cutoff fallback.",
+      "allow": [
+        "packages/core/src/evidence-pack-v3.ts",
+        "packages/core/src/evidence-pack-v3.test.ts",
+        "packages/db/test/evidence-pack-v3-post-lock.integration.test.ts",
+        "packages/db/test/evidence-pack-v3-isolation.integration.test.ts"
+      ]
+    }
+  }
+}

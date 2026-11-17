@@ -1,3 +1,6 @@
+import type { Pool } from "pg";
+import { contractorSessionContext, EnterpriseBaselineRepository } from "@jobguard/db";
+import { EnterpriseDashboardError } from "@jobguard/core";
 import { z } from "zod";
 import {
   baselineCohortsV1, BaselineError, deriveBaseline, exportBaseline, importBaselineBatch, type BaselineBatch,
@@ -30,4 +33,26 @@ export function prepareEnterpriseBaseline(deploymentMode: string, raw: unknown, 
   const report = deriveBaseline(imported.batch.history, input.cohorts, input.methodVersion);
   const content = exportBaseline(imported.batch.history, input.cohorts, input.outputFormat);
   return Object.freeze({ imported, report, content, format: input.outputFormat });
+}
+
+/** Internal stored-history application. No routes or customer data; the session chooses tenant/actor. */
+export class EnterpriseBaselineApplication {
+  constructor(private readonly pool: Pool) {}
+  async import(principal: unknown, input: unknown) { return this.execute(principal, input, "import"); }
+  async read(principal: unknown, input: unknown) { return this.execute(principal, input, "read"); }
+  private execute(principal: unknown, input: unknown, operation: "import"): ReturnType<EnterpriseBaselineRepository["import"]>;
+  private execute(principal: unknown, input: unknown, operation: "read"): ReturnType<EnterpriseBaselineRepository["read"]>;
+  private async execute(principal: unknown, input: unknown, operation: "import" | "read") {
+    if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new EnterpriseDashboardError("MODE_FORBIDDEN");
+    const parsed = z.object({ sessionId: z.guid() }).strict().safeParse(principal);
+    if (!parsed.success) throw new EnterpriseDashboardError("NOT_FOUND");
+    try {
+      const context = await contractorSessionContext(this.pool, parsed.data.sessionId);
+      return await new EnterpriseBaselineRepository(this.pool)[operation](context, parsed.data.sessionId, input);
+    } catch (error) {
+      if (error instanceof EnterpriseDashboardError || error instanceof BaselineError) throw error;
+      if ((error as { code?: string }).code === "UNAUTHENTICATED") throw new EnterpriseDashboardError("NOT_FOUND");
+      throw new EnterpriseDashboardError("DASHBOARD_UNAVAILABLE");
+    }
+  }
 }

@@ -131,4 +131,21 @@ describe("MON-1B real PostgreSQL synthetic persistence",()=>{
   const shadow=(await f.admin.query("SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname LIKE 'shadow_%' AND c.relkind='r'")).rows;
   expect(shadow.length).toBeGreaterThan(0);for(const row of shadow)expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime',$1::oid,'SELECT,INSERT,UPDATE,DELETE') allowed",[row.oid])).rows[0].allowed).toBe(false);
  });
+
+it('SB-17: A cached or mutated count changes a charge', async () => {
+ const a=await meterCompany(f), input=meterInput(a.tenantId,7);
+ await storeMeter(f,a,input);const id=await refreshMeter(f,a);
+ expect((await readMeter(f,a,id)).result.principal.pence).toBe(6900);
+ await f.admin.query('ALTER TABLE app.meter_day_ledger DISABLE TRIGGER immutable');
+ try { await f.admin.query("UPDATE app.meter_day_ledger SET day=jsonb_set(day,'{countedPlaces}','99') WHERE tenant_id=$1",[a.tenantId]); }
+ finally { await f.admin.query('ALTER TABLE app.meter_day_ledger ENABLE TRIGGER immutable'); }
+ expect(await refreshMeter(f,a)).toBe(id);
+ expect((await readMeter(f,a,id)).result.principal.pence).toBe(6900);
+ expect((await f.admin.query('SELECT count(*)::int n FROM app.meter_projection_alert WHERE tenant_id=$1',[a.tenantId])).rows[0].n).toBe(1);
+ // A genuine late source change is recorded as a later correction, never an edited bill.
+ input.days.forEach(day=>day.jobs.push({tenantId:a.tenantId,jobId:randomUUID(),customerId:randomUUID(),siteId:randomUUID(),small:false}));
+ await storeMeter(f,a,input);await refreshMeter(f,a);
+ expect((await f.admin.query('SELECT delta_pence::int,apply_start::text FROM app.meter_correction WHERE tenant_id=$1',[a.tenantId])).rows).toEqual([{delta_pence:2000,apply_start:'2026-10-01'}]);
+ expect((await readMeter(f,a,id)).result.principal.pence).toBe(6900);
+});
 });

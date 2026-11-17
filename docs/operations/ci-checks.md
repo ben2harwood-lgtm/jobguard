@@ -43,7 +43,7 @@ Plan piece: **CI-SPEED**, branch `codex/sandbox/ci-speed`. **RED**: this changes
 | --- | --- |
 | `core-checks` | Frozen install, `pnpm typecheck`, `pnpm lint`, root Node tool tests, then every non-DB workspace test via Turbo. This retains the API OpenAPI check and AI fixture tests. |
 | `core-db` (four shards) | Frozen install, API/dependency builds (the same six build tasks as the original root test graph, including DB and AI), then the existing DB test script with Vitest's `--shard=N/4`. One worker per runner, separate embedded PostgreSQL instances. |
-| `web-shards` (four shards) | Frozen install, full `pnpm build`, Chromium installation, then `pnpm test:e2e --shard=N/4` against the production build. Each shard retains both projects, one worker, zero retries and its own synthetic database. |
+| `web-shards` (six shards; CI-WEB-SHARD-BALANCE below) | Frozen install, full `pnpm build`, Chromium installation, then `pnpm test:e2e --shard=N/6` against the production build. The complete matrix retains both projects, one worker per runner, zero retries and its own synthetic database per runner. |
 | `secrets` | Existing gitleaks scan, unchanged. |
 | `dependency-review` | Existing audit across all dependency scopes, unchanged. |
 
@@ -62,3 +62,86 @@ Today's six green runs (`~/.local/share/full-steam/ci-timings-2026-10-28.txt`) m
 Local validation: workflow regression tests exercise the actual shell of all three gates with success, failure, cancelled, skipped and missing results; retain setup, SHA, timeout and artifact assertions; and verify complete matrix definitions and test-script composition. YAML parsing and Turbo dry-run inspection validate structure and workspace inclusion. Regression tests assert install/build/test ordering in every DB and browser shard and compare the DB build tasks, commands and dependency edges with the original root test graph; browser builds retain that entire graph plus the production web build. Discovery-only inventory checks compare the DB file set via the installed Vitest sequencer and the browser test set via Playwright `--list`, proving exact shard unions without duplicates, including both projects. Discovery is not test execution.
 
 Database/browser execution and actual speed measurements require GitHub CI after the router pushes: this sandbox cannot start PostgreSQL or bind localhost. Full CI on current main and independent RED review remain required. This piece overlaps `.github/workflows/ci.yml`, `tools/ci-workflow.test.mjs` and this document with other CI work; serialize conflicting changes.
+
+## Browser shard balance (ci-web-shard-balance, 2 November 2026)
+
+Repair of PR #515, measured head `f7260cc2`. The supplied hosted measurement was
+60 minutes overall versus 47 before: ten of twelve browser shards took 4–10 minutes,
+while shards 2 and 8 took 36 minutes each, with up to 20 minutes waiting for runners.
+Shard 2 reported mobile J3 at 18 minutes, A1 at 5.9 minutes and the J3 approval-read
+test alone at 6 minutes. Twelve shards did not fix the repeated journey work.
+
+### Exact spec changes
+
+- `DEMO-J3-shadow.spec.ts`: the three tests previously each called `completeJ3`,
+  replaying all nine journey steps three times per viewport. Now one test runs that
+  complete fresh journey once, then runs the existing value and approval-read
+  assertions as named `test.step` groups over its saved result. Both groups only
+  read that result; the value group also visits the value screen. Every distinct
+  assertion and every journey action remains. The original value and approval-read
+  names remain in the step report. Final Check polling uses Playwright's default
+  intervals instead of five seconds, retaining its 180-second deadline.
+- `DEMO-A1-rest.spec.ts`: all seven independent fresh-job scenarios and their
+  assertions remain. Final Check polling uses default intervals instead of five
+  seconds, retaining the same 180-second deadline and 300-second test timeout.
+  Comments explain why those setups cannot safely share a mutable job. There are
+  no fixed sleeps or serial-mode suites in either spec, and `fullyParallel` already
+  splits individual tests. A1 waits for actual minute-scheduled worker discovery;
+  the practice run control uses the same discovery queue, so adding it would not
+  remove that delay. No worker, queue, provider or application behavior changes.
+
+J3 now executes two full journeys across both widths instead of six, removing
+four redundant executions. This is a structural consolidation, so discovery has
+four fewer test/project identities; the retained steps contain the same distinct
+checks. At the measured six minutes per journey, the saving is approximately
+12 minutes on each formerly slow shard, before redistribution. That is an estimate,
+not a new hosted measurement. Faster polling only reduces observation latency;
+it does not remove the worker's minute-based schedule.
+
+Use six native browser shards to reduce runner demand and queueing. Both projects,
+one worker per runner, zero retries, all existing skips and every timeout remain
+unchanged. `web` still always requires exact success from the entire matrix;
+failures, cancellations, skips and missing results fail the gate. DB stays at four
+shards. No product code, migration, commercial policy or release change. Retain
+RED review of the exact head because this piece changes CI gating configuration
+and the structure of shadow-journey coverage.
+
+### Validation and hosted follow-up
+
+Local validation is discovery/static checking only; this sandbox cannot start
+PostgreSQL or a browser server. The router must push and obtain green CI on the
+current candidate, plus the independent review. Target maximum browser job duration
+is about 20–25 minutes; six shards are a candidate, not a timing guarantee.
+
+For the hosted comparison, record run ID, SHA and attempt, all six browser job and
+test-step durations, queue wait separately, full workflow time, build/install time,
+and the slowest core/DB job. Confirm both widths pass the full J3 journey and its
+value/approval steps and all seven A1 scenarios. Account for the four consolidated
+identities when comparing totals. Inspect retained HTML reports and traces if the
+long tail remains; do not add retries, skips or timeouts to meet the target.
+
+This repair overlaps `.github/workflows/ci.yml`, `tools/ci-workflow.test.mjs`, the
+lane, this receipt and the two named specs; serialize conflicting edits.
+
+Local results for this repair:
+
+- `node --check tools/ci-workflow.test.mjs` passed.
+- `node --test --test-concurrency=2 tools/ci-workflow.test.mjs` passed all nine
+  tests, including actual aggregate shell behavior for failed, cancelled, skipped
+  and missing dependency results, full shard membership and build prerequisites.
+- `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit --incremental false`
+  passed. This is also the web package's lint check; full workspace checks stay in CI.
+- From `apps/web`, installed Playwright `test --list --reporter=json` in CI mode
+  and the same discovery command with each `--shard=N/6` proved an exact union of
+  518 identities: 259 per width, no omissions or duplicates. Shard counts were
+  87, 87, 86, 86, 86, 86. The affected specs contribute 16 identities: one J3 and
+  seven A1 scenarios per width. Discovery starts neither PostgreSQL nor browsers.
+- A one-off TypeScript AST comparison against HEAD confirmed the same 90 J3 and
+  81 A1 assertion expressions, normalizing only the changed poll interval option.
+- Direct use of the existing lane policy loader, selector and path validator
+  accepted all six changed paths. This checks working-tree paths, not a committed
+  range. `git diff --check` passed.
+
+No packages were downloaded and no git mutation or fetch was run. Browser/database
+execution, whole-workspace checks, independent RED review and hosted timing remain
+with CI and the router. No hosted speedup is claimed from local discovery.

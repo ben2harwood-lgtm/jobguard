@@ -6,7 +6,7 @@ import { MaterialApplication } from "../../../apps/api/src/material.application.
 import { issuePracticeSession, withTenant } from "../src/index.js";
 import { createWorkFixture, closeWorkFixture, seedWorkPractice, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 let f: WorkFixture;
-beforeAll(async () => { f = await createWorkFixture(); }, 120000);
+beforeAll(async () => { f = await createWorkFixture(true, "jobguard_synthetic_demo"); }, 120000);
 afterAll(async () => closeWorkFixture(f));
 
 it("S14 adopted jobs finalize generated originals and accept only their source owner's materials; S13 application rework clears on the same stage", async () => {

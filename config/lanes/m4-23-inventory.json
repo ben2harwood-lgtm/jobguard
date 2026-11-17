@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-23-inventory": {
+      "branches": ["codex/sandbox/m4-23-inventory"],
+      "note": "RED M4-23 offline policy/payment rail inventory and release-record format only; enables nothing; no migration. Built ahead for router handoff.",
+      "allow": [
+        "config/release-inventory.v1.json",
+        "docs/operations/release-inventory.md",
+        "packages/config/src/release-inventory.ts",
+        "packages/config/src/release-inventory.test.ts",
+        "tools/release-inventory.test.mjs"
+      ]
+    }
+  }
+}

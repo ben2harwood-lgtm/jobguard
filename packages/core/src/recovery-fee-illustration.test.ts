@@ -515,3 +515,12 @@ describe("SV6-12/16 pure dependency-bound scenarios", () => {
     }
   });
 });
+it("#356 distinct work items cannot consume the same invoice line",()=>{
+ const raw=rawInput("50000"),other=independentEntry("30000");
+ other.lineId=raw.sources[0]!.lineId;
+ other.assessment.lineId=other.lineId;other.assessment.facts.lineId=other.lineId;
+ for(const fact of Object.values(other.assessment.facts.facts))fact.lineId=other.lineId;
+ other.qualification.source.lineId=other.lineId;
+ raw.sources.push(other);
+ expect(()=>derive(raw)).toThrow(RecoveryFeeIllustrationError);
+});

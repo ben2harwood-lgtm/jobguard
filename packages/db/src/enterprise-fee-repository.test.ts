@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EnterpriseFeeError } from "@jobguard/core";
-import { EnterpriseFeeRepository, enterpriseFeeApproveStatementV1, enterpriseFeeDatabaseFailure, enterpriseFeeDeriveCommandV1, enterpriseFeeDisputeStatementV1 } from "./enterprise-fee-repository.js";
+import { EnterpriseFeeRepository, enterpriseReconcileExportedDuplicateV1, enterpriseFeeApproveStatementV1, enterpriseFeeDatabaseFailure, enterpriseFeeDeriveCommandV1, enterpriseFeeDisputeStatementV1 } from "./enterprise-fee-repository.js";
 
 describe("ENT-7a enterprise fee repository boundary", () => {
   const id = "11111111-1111-4111-8111-111111111111";
@@ -9,6 +9,14 @@ describe("ENT-7a enterprise fee repository boundary", () => {
     expect(enterpriseFeeDeriveCommandV1.safeParse(ok).success).toBe(true);
     for (const extra of [{ cumulativeFeePence: 1 }, { rate: "1/10" }, { contributions: [] }]) expect(enterpriseFeeDeriveCommandV1.safeParse({ ...ok, ...extra }).success).toBe(false);
     for (const period of ["2026-13", "1999-12", "2026-1", "26-10"]) expect(enterpriseFeeDeriveCommandV1.safeParse({ ...ok, period }).success).toBe(false);
+  });
+  it("ReconcileExportedDuplicate accepts identities only, never an app-supplied amount", async () => {
+    const command = { version: "enterprise-reconcile-exported-duplicate.v1", commandId: id, jobId: id, duplicateId: id, canonicalId: "22222222-2222-4222-8222-222222222222" };
+    expect(enterpriseReconcileExportedDuplicateV1.safeParse(command).success).toBe(true);
+    for (const extra of [{ amountPence: 1 }, { corrections: [] }, { tenantId: id }, { canonicalId: id }])
+      expect(enterpriseReconcileExportedDuplicateV1.safeParse({ ...command, ...extra }).success).toBe(false);
+    const repo = new EnterpriseFeeRepository({ connect: () => { throw new Error("must not connect"); } } as never);
+    await expect(repo.reconcileExportedDuplicate({} as never, id, { ...command, amountPence: 1 })).rejects.toMatchObject({ code: "INVALID_FEE_INPUT" });
   });
   it("maps database refusals to public codes and treats anything else as an unknown outcome", () => {
     const code = (e: unknown) => { try { enterpriseFeeDatabaseFailure(e); } catch (x) { return (x as EnterpriseFeeError).code; } };

@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, VariationRepository, practiceOwnedJobsSql } from "@jobguard/db";
 import { createHash } from "node:crypto";
 import { VariationApplication } from "./variation.application.js";
+import { variationCommandV1 } from "./contracts.js";
 
 const session = "18000000-0000-4000-8000-000000000001";
 const job = "18000000-0000-4000-8000-000000000002";
@@ -72,4 +73,19 @@ it.each(["missing", "invented", "stranger"])("%s session is refused before captu
  expect(f.read).not.toHaveBeenCalled();
  expect(f.transact).not.toHaveBeenCalled();
  if (scenario !== "stranger") expect(f.connect).not.toHaveBeenCalled();
+});
+
+
+it("approval command distinguishes written customer evidence from the existing builder attestation", () => {
+ const approval = { version: "variation-command.v1", action: "approve", variationId: input.proposalId,
+  revisionId: input.scopeItemId, approvalId: job };
+ const customer = { ...approval, method: "customer_evidence", evidenceId: session };
+ const builder = { ...approval, attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" };
+ expect(variationCommandV1.parse(customer)).toEqual(customer);
+ expect(variationCommandV1.parse(builder)).toEqual(builder);
+ for (const bad of [approval, { ...customer, evidenceId: undefined }, { ...approval, evidenceId: session },
+  { ...customer, attestation: builder.attestation }, { ...builder, evidenceId: session },
+  { ...approval, method: "customer_evidence", evidenceId: "not-an-id" }]) {
+  expect(variationCommandV1.safeParse(bad).success).toBe(false);
+ }
 });

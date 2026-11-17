@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7b-accounting": {
+      "branches": ["codex/sandbox/sv7b-accounting"],
+      "note": "RED SV-7B: disabled process-local accounting evidence fake; shared SV-7A observation contract, no migration or live provider. Built ahead; router handles PR and independent Claude review.",
+      "allow": [
+        "apps/api/src/accounting-observation-connector.ts",
+        "apps/api/src/accounting-observation-connector.test.ts",
+        "docs/operations/accounting-observation-data-flow.md"
+      ]
+    }
+  }
+}

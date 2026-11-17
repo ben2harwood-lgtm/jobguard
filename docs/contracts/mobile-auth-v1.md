@@ -1,15 +1,14 @@
 # M3-2 mobile authentication contract — named partial
 
-Status: synthetic contract and pure lifecycle decisions only; check lane AMBER.
-No mobile credential is issued, authenticated, rotated, stored or revoked here.
-Aggregate M3-2, G3 and the existing downstream dependency edges remain HELD.
+Status: pure contracts plus a DARK synthetic server seam with optional PostgreSQL persistence. Aggregate M3-2,
+D08 and G3 remain incomplete. No native app, public route or live provider is enabled.
 
-The inspected main is 87805c86681609273872621ce913c0d6a0b1ebb6, including
-M3-1's `offline-contract-v1.md`. That contract freezes an offline intent, not a
-native authentication protocol, device attestation or a device identifier format.
-The issued no-migration limit and Q6 keep the repository/provider/application
-portion HELD. Existing persisted authentication and its sole principal bridge
-remain authoritative and unchanged.
+The server slice was checked against main/base
+`32411c4e45a094cbe65ae90ee1d5debd1f266e2a`. Main already contained the pure schemas
+and lifecycle decisions below, but no exchange issuer, rotation or device records.
+The current brief authorizes this synthetic server slice. Auth.js (`@auth/core`)
+is absent from installed dependencies; the permitted synthetic seam uses the
+existing `MemoryAuthProvider`, without adding packages or changing persisted auth.
 
 ## Boundaries and definitions
 
@@ -34,8 +33,8 @@ remain authoritative and unchanged.
   `fictional_mobile_auth_policy_v1`, with explicit positive safe-integer
   millisecond bounds for access, refresh, session and reading. Every subordinate
   bound must fit the session bound. There are no defaults and no production policy.
-- All times are explicit nonnegative safe-integer milliseconds. No wall clock,
-  network, filesystem, key storage, database or native SDK is consulted here.
+- All pure-contract times are explicit nonnegative safe-integer milliseconds. The
+  pure evaluator consults no clock, filesystem, database or native SDK.
 - Local metadata means a strict `mobile-local-metadata.v1` partition and positive
   integer local schema version. Only specimen version 1 is understood. A different
   version requires recovery; no migration or physical cold start is claimed.
@@ -44,7 +43,7 @@ All object boundaries are strict Zod schemas. `MobileAuthContractError` exposes
 only `MOBILE_AUTH_INVALID_INPUT` or `MOBILE_AUTH_POLICY_REQUIRED`; it carries no
 Zod issues, raw input, credentials or provider details. Successful credential
 parsing returns its input to the explicit internal caller only. Callers must not
-log it. No persistence or delivery adapter is introduced.
+log it. The optional persistence adapter is described below; no delivery adapter is introduced.
 
 ## Pure read evaluation
 
@@ -78,17 +77,112 @@ policy review. Server revocation scope remains `policy_required` in every plan.
 No unsynced-work disposal rule is selected. Invalid cleanup input yields the
 bounded contract error and no plan.
 
-## Held implementation
+## DARK server seam
 
-Durable exchange, access/membership revalidation, source/SSO preservation,
-atomic refresh and rollback, lost-response/reuse policy, revocation and lease
-issuance require the checked persistence path and reviewed capability inventory.
-No in-memory substitute is supplied. No new database object, grant, route,
-AuthProvider, application factory, context constructor or external action exists.
-Owner creation/removal/recovery authority is unchanged.
+`SyntheticMobileAuthApplication` in the API identity entrypoint is an opt-in fake,
+not an implementation of a public native transport. It is not composed in Nest,
+Next, workers, sync or the principal bridge. Every operation refuses unless server
+options explicitly set both `enabled: true` and `environment: synthetic_demo`,
+and the source is the existing memory AuthProvider. Missing options default off;
+production and pilot remain refused even with the switch on. Options are copied
+and frozen. D08 has no approved branch or fallback policy.
 
-D08 is proposed. Real-data lease/session durations, clock policy, rotation
-recovery/reuse, revocation scope and unsynced-work handling remain HELD.
-Native transport, secure storage, encryption, actual local migration/cleanup,
-device builds, PowerSync and G3 require separate evidence. A disconnected device
-cannot discover a new revocation instantly; no immediate remote erasure is promised.
+The internal caller supplies source-session credentials on **every** operation.
+The existing principal bridge checks session, current membership, origin and CSRF;
+mobile tokens do not replace that bridge or authorize business commands. This is
+intentionally a stricter fixture seam, not a proposed native wire protocol. The
+persisted provider's SSO/session authority remains unchanged and cannot be used
+by this fake. Live session/SSO integration needs its own persistence/transport work.
+
+Strict server inputs extend, rather than change, the existing pure selectors:
+
+- Exchange: `mobile-exchange.v1`, requested tenant, command UUID and opaque device
+  instance ID. The envelope and selector must agree. It registers the scoped
+  device and returns distinct access/refresh specimens, partition and read lease.
+- Rotation: `mobile-rotation.v1`, command UUID, device instance and a
+  `mobile-refresh.v1` specimen. A successful rotation consumes the previous
+  refresh, replaces access/refresh credentials, and renews the lease. Reusing a
+  consumed refresh revokes its entire family, including replacement access,
+  refresh and server lease. Concurrent duplicates have at most one success and
+  leave its family revoked. A lost response requires fresh exchange; replacement
+  plaintext is not cached or recoverable. These are fictional fixture semantics,
+  subject to D08 approval before any real transport is built.
+- Reconnect: `mobile-reconnect.v1`, device instance and a `mobile-access.v1`
+  specimen. Rechecks source session, current membership, partition and family
+  expiry/revocation before renewing the lease. Refresh cannot stand in for access.
+- Device action: `mobile-device-command.v1`, command UUID, device instance,
+  requested tenant and `logout`, `revoke` or `tenant_switch`. Only switching
+  requires `nextTenantId`, which must differ and pass current membership checks.
+  Switching returns a new target partition and revokes all old-tenant families
+  for that user's device. Failure to authorize the target leaves the old family
+  intact. Logout/revoke ends every tenant family for that user/device and records
+  an all-tenant tombstone, including tenants not yet registered. Other users and
+  devices are preserved. A caller cannot select a tenant they cannot access.
+
+Commands are scoped to the authenticated user and keyed by UUID. An identical
+repeat returns `MOBILE_REPLAY`; a changed payload returns
+`MOBILE_COMMAND_CONFLICT`. Neither returns cached bearer credentials. Refresh
+reuse is detected before the command replay check and always revokes the family.
+Device revocation/logout records are tombstones even when they arrive before
+registration; later exchange cannot resurrect that user/tenant/device instance.
+A new synthetic device instance is required after logout or switching back.
+The real re-enrolment and unsynced-work policy is still D08 work.
+
+Maps contain device metadata, token **digests**, consumed-refresh digests, command
+hashes, family expiry/revocation and bounded lease metadata. They never retain
+source-session tokens, CSRF tokens or plaintext mobile tokens. State and source
+references use ECMAScript private fields so serializing the service reveals no
+credentials. Fixture inspection exposes partition/expiry/revocation metadata,
+not token digests or bearer credentials; it must not be logged as an audit event.
+There are no logs, sync writes, audit payloads or external actions in this seam.
+All errors expose only bounded classifications and discard raw input/provider
+errors. Credentials are returned only to the direct internal caller on issuance.
+
+Without a store, transitions serialize within one fake instance. With the optional
+PostgreSQL store they serialize across instances under a database row lock. Expiry uses exact safe-integer
+milliseconds, is exclusive at the boundary, and rotation cannot extend the
+original session deadline. Lease renewal is capped by that same deadline.
+Revocation cuts off the server-side lease. A disconnected copy remains readable
+only according to its previously issued bound; instant remote erasure is not
+promised. The existing pure evaluator still requires reconnect after untrusted
+clock observations and refuses at exact lease expiry.
+
+## Remaining implementation and release gates
+
+M3-2-store adds `PostgresSyntheticMobileAuthStore` and migration 0520. The
+optional internal adapter persists versioned device records/tombstones, family
+and lease metadata, current/consumed credential digests and command claims in
+`identity.mobile_auth_fixture_state`. It is a restricted identity control-plane
+exception: only the identity role has SELECT/INSERT/UPDATE, with no business or
+worker access. The synthetic MemoryAuthProvider identities intentionally have
+no foreign keys to real persisted users. This is not a business-data/RLS store.
+The strict Zod snapshot rejects incompatible stored versions; failure denies
+access without resetting state. No bearer credential is persisted or recovered.
+
+One coarse row lock serializes the entire synthetic state while source checks,
+rotation and revocation run. A whole snapshot is deliberate for this unregistered
+fixture seam: it reuses the existing transition engine and keeps claims, consumed
+history and tombstones atomic without duplicating security logic in SQL. It is
+not a scalable or approved production identity design. A denied replay commits
+its revocation before returning the error; other failed operations restore the
+pre-command state. Lost commit acknowledgements return no credentials; retrying
+a possibly consumed refresh revokes its family. No plaintext response is cached.
+Fresh instances reload the same committed state and cannot resurrect consumed
+credentials or revoked devices. The memory-only default still loses its state.
+Fixture inspection is asynchronous and reloads committed state through the same
+serialized store transaction; returned records are detached and never an authority.
+The global synthetic snapshot has no tenant/user row key, so it retains the
+identity control-plane no-RLS exception (like identity.session). LP-0 inventories
+that exact posture. Catalogue tests deny every table and column privilege to
+runtime/infrastructure, including inherited or PUBLIC access.
+
+PostgreSQL concurrency, upgrade and privilege tests are provided for CI; they
+were not executed in the builder sandbox. Native cold start/cache inheritance
+and extracted-file encryption still need physical-device evidence. There is no
+persisted source provider integration, audit chain or production token storage.
+
+D08 is proposed. Real-data durations, clock policy, rotation recovery/reuse,
+revocation scope, re-enrolment and unsynced-work handling remain unapproved.
+Auth.js integration, persisted source/SSO preservation, production refresh/device/lease
+records with audit, native transport, secure storage, encryption, actual local
+migration/cleanup, device builds, PowerSync and G3 require separate evidence.

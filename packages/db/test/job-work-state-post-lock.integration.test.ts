@@ -129,6 +129,9 @@ describe("r10 scripted source projections",()=>{
    const rows=(items:unknown[]=[])=>({rows:items,rowCount:items.length});
    if(sql.startsWith("SELECT role FROM app.membership"))return rows([{role:"owner"}]);
    if(sql.includes("require_watchdog_live")&&notLive)throw new Error("JOB_NOT_LIVE");
+   if (sql === "SELECT name FROM unnest(ARRAY['app.job_diary_entry','app.customer_message_source']) AS source(name) WHERE pg_catalog.to_regclass(name) IS NOT NULL") return rows([{ name: "app.job_diary_entry" }, { name: "app.customer_message_source" }]);
+   if (sql === "SELECT 'JobSource.diary' AS kind, job_id FROM app.job_diary_entry WHERE tenant_id=$1 AND command_id=$2" ||
+     sql === "SELECT 'JobSource.customer_message' AS kind, job_id FROM app.customer_message_source WHERE tenant_id=$1 AND command_id=$2") return rows([]);
    if(sql.startsWith("INSERT INTO app.watchdog_command_identity"))return rows([{command_id:values[1]}]);
    if(sql.includes("ch4_locked_offer")){
     if(sql.startsWith("SELECT request_hash,status,result"))return rows([{status:"ch4_locked",result:offer}]);

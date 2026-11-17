@@ -55,6 +55,12 @@ test("opens and manages evidence-linked recovery cases without inventing recover
  await V(page,"case-state","Needs evidence");await expect(button(page,"Record dispute")).toBeDisabled();
  await button(page,"Evidence assembled").click();
  await V(page,"case-state","Evidence assembled");await expect(button(page,"Record dispute")).toBeEnabled();
+ // M4-1 dark workbench: internal lifecycle actions send no external messages.
+ await button(page,"Start pursuit").click();await V(page,"case-state","Being chased");
+ await button(page,"Start negotiation").click();await V(page,"case-state","In dispute / negotiation");
+ await button(page,"Resume pursuit").click();await V(page,"case-state","Being chased");
+ await expect(page.getByRole("heading",{name:"Append-only history",exact:true})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Unresolved ambiguity",exact:true})).toBeVisible();
  // Negative paths: each rejected command is announced in an alert that takes focus, and nothing is recorded.
  // (a) a receipt larger than the claim is refused by the server; (b) float-style input such as 1e3 is refused before any command is sent.
  await page.getByLabel("Received (£)",{exact:true}).fill("2500.01");await button(page,"Record a landed recovery").click();
