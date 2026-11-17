@@ -1,5 +1,6 @@
 import * as React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
 import { ReviewProposal, type ReviewCaptureResult } from "./review-proposal";
 
 // Exercise event handlers with the existing job-sources hook-harness pattern.
@@ -46,9 +47,9 @@ beforeEach(() => { hooks.reset(); vi.stubGlobal("React", React); });
 afterEach(() => vi.unstubAllGlobals());
 function panel(result = fixture) {
   const focus = vi.fn(), scroll = vi.fn();
-  const render = () => {
+  const render = (props: Partial<React.ComponentProps<typeof ReviewProposal>> = {}) => {
     hooks.render();
-    const tree = ReviewProposal({ result, back: vi.fn() });
+    const tree = ReviewProposal({ result, back: vi.fn(), ...props });
     for (const article of all(tree, node => node.type === "article")) article.props.ref({ querySelector: (selector: string) => selector === "strong" ? { scrollIntoView: scroll } : { focus: () => focus(article.key) } });
     hooks.effects();
     return tree;
@@ -278,4 +279,104 @@ it.each(["conflict", "network"])("releases the guard after a %s so a new save ca
   p.button(tree, "Save review").props.onClick(); await settle();
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(text(all(p.render(), n => n.props.role === "alert"))).toContain("Review saved.");
+});
+
+it("keeps pricing open across incidental snapshots and acceptance, then obeys explicit Scope navigation", () => {
+ const result = { ...validFixture(), status: "quoting" as const };
+ const p = panel(result);
+ p.button(p.render({ sectionView: "scope" }), "Price the work").props.onClick();
+ const editor = (tree: React.ReactNode) => all(tree, n => typeof n.type === "function" && n.type.name === "QuoteEditor");
+ expect(editor(p.render({ sectionView: "scope" }))).toHaveLength(1);
+ for (const status of ["quoting", "accepted", "live"] as const) {
+  const props = { result: { ...result, status }, sectionView: "scope" as const };
+  p.render(props);
+  expect(editor(p.render(props))).toHaveLength(1);
+ }
+ p.render({ sectionView: "pricing" });
+ expect(editor(p.render({ sectionView: "pricing" }))).toHaveLength(1);
+ p.render({ sectionView: "scope" });
+ expect(p.button(p.render({ sectionView: "scope" }), "Price the work")).toBeDefined();
+});
+it("returns from pricing through a saved Scope review without remounting", async () => {
+ const result = { ...validFixture(), status: "quoting" as const };
+ const onScope = vi.fn();
+ vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => result })));
+ const p = panel(result);
+ p.button(p.render(), "Price the work").props.onClick();
+ const editor = all(p.render({ onScope }), n => typeof n.type === "function" && n.type.name === "QuoteEditor")[0]!;
+ editor.props.back(); await settle();
+ expect(onScope).toHaveBeenCalledWith(captureWorkspaceResponseV1.parse(result));
+ expect(p.button(p.render(), "Price the work")).toBeDefined();
+});
+it.each(["draft"] as const)("closes pricing on a genuine %s lifecycle transition", status => {
+ const result = { ...validFixture(), status: "quoting" as const };
+ const p = panel(result);
+ p.button(p.render(), "Price the work").props.onClick();
+ const props = { result: { ...result, status } };
+ p.render(props);
+ expect(all(p.render(props), n => typeof n.type === "function" && n.type.name === "QuoteEditor")).toHaveLength(0);
+});
+
+it("keeps pricing open and reports a failed Scope read without publishing a snapshot", async () => {
+ const result = { ...validFixture(), status: "quoting" as const };
+ const onScope = vi.fn();
+ vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 503 })));
+ const p = panel(result);
+ p.button(p.render(), "Price the work").props.onClick();
+ const editor = all(p.render({ onScope }), n => typeof n.type === "function" && n.type.name === "QuoteEditor")[0]!;
+ editor.props.back(); await settle();
+ const tree = p.render();
+ expect(onScope).not.toHaveBeenCalled();
+ expect(all(tree, n => typeof n.type === "function" && n.type.name === "QuoteEditor")).toHaveLength(1);
+ expect(text(all(tree, n => n.props.role === "alert"))).toContain("The saved job status could not be loaded");
+});
+
+
+it.each(["accepted", "live"] as const)("reloads the saved %s quote on section navigation but preserves the editor on snapshots", status => {
+ const result = { ...validFixture(), status: "quoting" as const };
+ const p = panel(result);
+ const editor = (tree: React.ReactNode) => all(tree, n => typeof n.type === "function" && n.type.name === "QuoteEditor")[0]!;
+ // Open pricing locally, then receive acceptance without leaving this section.
+ p.button(p.render({ sectionNavigationKey: "" }), "Price the work").props.onClick();
+ const original = editor(p.render({ sectionNavigationKey: "" }));
+ const saved = { ...result, status };
+ const refreshed = editor(p.render({ result: saved, sectionNavigationKey: "" }));
+ expect(refreshed.type).toBe(original.type);
+ expect(refreshed.key).toBe(original.key);
+ // A fragment-only navigation selects Saved quote without discarding the editor.
+ const navigated = editor(p.render({ result: saved, sectionNavigationKey: "#quote", sectionView: "pricing" }));
+ expect(navigated.key).toBe(original.key);
+ expect(navigated.props.sectionNavigationKey).toBe("#quote");
+ const snapshot = editor(p.render({ result: { ...saved }, sectionNavigationKey: "#quote", sectionView: "pricing" }));
+ expect(snapshot.type).toBe(navigated.type);
+ expect(snapshot.key).toBe(navigated.key);
+ // Both destinations use the pricing view; the fragment still changes editor identity.
+ const work = editor(p.render({ result: saved, sectionNavigationKey: "#work-proof", sectionView: "pricing" }));
+ expect(editor(p.render({ result: saved, sectionNavigationKey: "#quote", sectionView: "pricing" })).key).toBe(work.key);
+});
+
+it("retains decline history in the mounted editor and disables closed-job editing", () => {
+ const result = { ...validFixture(), status: "quoting" as const };
+ const p = panel(result);
+ p.button(p.render(), "Price the work").props.onClick();
+ const props = { result: { ...result, status: "lost" as const } };
+ p.render(props);
+ const editor = all(p.render(props), n => typeof n.type === "function" && n.type.name === "QuoteEditor")[0]!;
+ expect(editor).toBeDefined();
+ expect(editor.props.readOnly).toBe(true);
+});
+it("retains the nested editor when showing Scope and restores its identity on return", () => {
+ const p = panel({ ...validFixture(), status: "live" as const });
+ p.button(p.render(), "Price the work").props.onClick();
+ const editor = (tree: React.ReactNode) => all(tree, n => typeof n.type === "function" && n.type.name === "QuoteEditor")[0]!;
+ const original = editor(p.render());
+ p.render({ sectionView: "scope" });
+ const scope = p.render({ sectionView: "scope" });
+ expect(editor(scope).key).toBe(original.key);
+ expect(editor(scope).props.hidden).toBe(true);
+ expect(p.button(scope, "Price the work")).toBeDefined();
+ p.render({ sectionView: "pricing" });
+ const pricing = p.render({ sectionView: "pricing" });
+ expect(editor(pricing).key).toBe(original.key);
+ expect(editor(pricing).props.hidden).toBe(false);
 });
