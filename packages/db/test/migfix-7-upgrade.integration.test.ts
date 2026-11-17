@@ -198,7 +198,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0699_sync_checkpoint_bound_reader.sql"],
     ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
     ["app.ef_inputs(t uuid, ag app.enterprise_agreement_version, p_period text)", "0745_enterprise_fee_rejected_line.sql"],
-    ["app.mon2_command(t uuid, digest text, command_id uuid, v jsonb)", "0746_subscription_internal_owner_guard.sql"],
+    // 0756 retains LS-149 owner-before-replay and LS-162 pending-change refusal from 0755.
+    ["app.mon2_command(t uuid, digest text, command_id uuid, v jsonb)", "0756_subscription_attempt_reconciliation.sql"],
     ["app.ef_prepare_statement(p_session uuid, p_command uuid, p_period text)", "0704_enterprise_fee_period_order.sql"],
     ["app.ef_post_statement(p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid)", "0704_enterprise_fee_period_order.sql"],
     ["app.accounting_export_route_read(t uuid, digest text, source text)", "0709_accounting_export_route_read_exported.sql"],
@@ -259,6 +260,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.surface_shadow_signal_early(p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb)", "0735_per_firm_final_check_terms.sql"],
     ["app.accept_final_check_terms(p_tenant uuid, p_actor uuid, p_command uuid, p_version text)", "0735_per_firm_final_check_terms.sql"],
     ["app.guard_final_lock_disclosure_terms()", "0735_per_firm_final_check_terms.sql"],
+    ["app.current_firm_profile_key()", "0757_practice_firm_name.sql"],
+    ["app.job_saved_firm_name(j uuid)", "0757_practice_firm_name.sql"],
     ["app.store_extra_pack_artifact(p_command uuid, p_job uuid, p_extra uuid, p_digest text, p_artifact jsonb)", "0744_extra_pack_source_bijection.sql"],
   ] as readonly (readonly [string, string, number?])[]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");

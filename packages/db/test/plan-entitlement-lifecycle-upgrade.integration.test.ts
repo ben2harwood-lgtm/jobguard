@@ -166,7 +166,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
     ["ef_inputs", "t uuid, ag app.enterprise_agreement_version, p_period text", "0745_enterprise_fee_rejected_line.sql"],
-    ["mon2_command", "t uuid, digest text, command_id uuid, v jsonb", "0746_subscription_internal_owner_guard.sql"],
+    // 0756 retains LS-149 owner-before-replay and LS-162 pending-change refusal from 0755.
+    ["mon2_command", "t uuid, digest text, command_id uuid, v jsonb", "0756_subscription_attempt_reconciliation.sql"],
     ["ef_prepare_statement", "p_session uuid, p_command uuid, p_period text", "0704_enterprise_fee_period_order.sql"],
     ["cb_derive", "p_session uuid, p_job uuid, p_command uuid, p_source text, p_invoice text, p_hash text, p_projection jsonb", "0748_billing_policy_hold_projection.sql"],
     ["ef_post_statement", "p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid", "0704_enterprise_fee_period_order.sql"],
@@ -243,6 +244,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const routineKey = (identity: string) => identity.replace(/,\s*/gu, ",");
   const ent5Bodies = new Map<string, string>();
   const ent5Replacements = [
+    ["app.current_firm_profile_key()", "0757_practice_firm_name.sql"],
+    ["app.job_saved_firm_name(j uuid)", "0757_practice_firm_name.sql"],
     ["app.lp4_seal_audit(p_events jsonb,p_trust text)", "0758_lp6e_audit_attribution.sql"],
     ["app.lp5_check_command_completion()", "0758_lp6e_audit_attribution.sql"],
     ["app.validate_job_proof_receipt(t uuid,cid uuid)", "0758_lp6e_audit_attribution.sql"],
