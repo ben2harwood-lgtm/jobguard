@@ -96,21 +96,21 @@ export async function priceFoundExtra(_: HTMLElement, signal: AbortSignal) {
     await until(() => !!screen()?.querySelector('[data-testid="final-check-disposition"]'), signal);
   }
   document.getElementById("walk-refresh")?.click();
-  let row: HTMLElement | undefined;
-  await until(() => {
-    row = [...screen().querySelectorAll<HTMLElement>(".variation-list article")].find(item => item.textContent?.includes("fitted loft hatch"));
-    return !!row;
-  }, signal);
+  const currentRow = () => [...screen().querySelectorAll<HTMLElement>(".variation-list article")].find(item => item.textContent?.includes("fitted loft hatch"));
+  await until(() => !!currentRow(), signal);
   async function press(name: string) {
-    let button: HTMLButtonElement | undefined;
+    let row: HTMLElement | undefined, button: HTMLButtonElement | undefined;
     await until(() => {
-      button = [...row!.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === name && !item.disabled);
+      // Refresh can replace an already visible catch. Use the mounted row for
+      // each action rather than clicking a detached article from before it.
+      row = currentRow();
+      button = [...(row?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(item => item.textContent === name && !item.disabled);
       return !!button;
     }, signal);
     row!.scrollIntoView({ block: "center", behavior: "instant" });
     signal.throwIfAborted(); button!.click();
   }
-  const latest = row!.querySelectorAll(".variation-revision");
+  const latest = currentRow()!.querySelectorAll(".variation-revision");
   if (latest[latest.length - 1]?.querySelector("strong")?.textContent?.endsWith("· £300.00")) return;
   await press("Change price");
   await until(() => !!screen().querySelector('[aria-label="New price fitted loft hatch"]'), signal);

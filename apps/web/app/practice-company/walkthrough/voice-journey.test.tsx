@@ -580,3 +580,34 @@ it.each([0, 1])("default step 3 waits for the prepared editor and saves only an 
     click.mockRestore();
   }
 });
+
+it("prices the mounted catch when refreshing replaces an already visible draft article", async () => {
+ let editing = false, refreshed = false;
+ const presses: string[] = [];
+ const row = (mounted: boolean) => ({
+  textContent: "fitted loft hatch", scrollIntoView: vi.fn(),
+  querySelectorAll: (selector: string) => selector === ".variation-revision" ? [] :
+   ["Change price", "Save new proposed revision"].map(name => ({
+    textContent: name, disabled: false, click: () => {
+     expect(mounted, "actions must target the refreshed article").toBe(true);
+     presses.push(name); editing = name === "Change price";
+    },
+   })),
+ });
+ const oldRow = row(false), mountedRow = row(true);
+ vi.stubGlobal("document", { getElementById: (id: string) => id === "walk-refresh" ? {
+  // React commits the refresh after the caller's first synchronous DOM read.
+  click: () => { queueMicrotask(() => { refreshed = true; }); },
+ } : {
+  querySelector: (selector: string) => selector.includes("final-check-item") ? {
+   textContent: "fitted loft hatch", querySelector: () => ({}),
+  } : selector.includes("New price") ? editing ? {} : null : null,
+  querySelectorAll: () => [refreshed ? mountedRow : oldRow],
+ } });
+ const fill = vi.spyOn(screenActions, "fill").mockResolvedValue();
+ try {
+  await priceFoundExtra({} as HTMLElement, new AbortController().signal);
+  expect(presses).toEqual(["Change price", "Save new proposed revision"]);
+  expect(fill).toHaveBeenCalledWith('[aria-label="New price fitted loft hatch"]', "300.00");
+ } finally { vi.restoreAllMocks(); }
+});
