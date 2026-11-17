@@ -99,6 +99,25 @@ describe("MON1-L specified foundation; clock-dependent intervals remain held", (
     expect(() => projectMeterJobTimeline({ ...raw, events: [first, { ...upper, recordedAt: at("30") }] })).toThrow("WORK_FACT_IDENTITY_CONFLICT");
     expect(() => projectMeterJobTimeline({ ...raw, lock: { id: upper.id, at: at("20") } })).toThrow("INVALID_METER_LIFECYCLE_INPUT");
   });
+  it("normalizes event jobId before binding and canonical replay", () => {
+    const jobId = "abcdefab-0000-4000-8000-000000000002";
+    const first = { ...event(10), jobId };
+    const raw = { ...input(), jobId, events: [first] };
+    expect(projectMeterJobTimeline({ ...raw, events: [first, { ...first, jobId: jobId.toUpperCase() }] }))
+      .toEqual(projectMeterJobTimeline(raw));
+    expect(projectMeterJobTimeline({ ...raw, jobId: jobId.toUpperCase() }).jobId).toBe(jobId);
+  });
+  it("normalizes predecessorId before cancellation validation and canonical replay", () => {
+    const marker = { ...event(10, "finished_on_site"), id: "abcdefab-0000-4000-8000-000000000010",
+      commandId: id(210), sourceReceiptId: null };
+    const cancellation = { ...event(11, "finished_cancelled", at("20")), predecessorId: marker.id,
+      commandId: id(211), sourceReceiptId: null };
+    const raw = { ...input(), events: [marker, cancellation] };
+    expect(projectMeterJobTimeline({ ...raw, events: [marker,
+      { ...cancellation, predecessorId: marker.id.toUpperCase() }] })).toEqual(projectMeterJobTimeline(raw));
+    expect(projectMeterJobTimeline({ ...raw, events: [marker, cancellation,
+      { ...cancellation, predecessorId: marker.id.toUpperCase() }] })).toEqual(projectMeterJobTimeline(raw));
+  });
   it("M1L-02/03 unresolved timer, cancellation and restart rules produce holds", () => {
     const raw = input(); raw.events = [{ ...event(10, "finished_on_site"), commandId: id(210), sourceReceiptId: null },
       { ...event(11, "finished_cancelled", at("20")), predecessorId: id(10), commandId: id(211), sourceReceiptId: null }];

@@ -1,0 +1,14 @@
+{
+  "purpose": "Candidate preservation only; no livewrites. Archive-only normal commit mustprecede any oldSQL/note removal. Renumber preserves SQLbytes; note/stemreferences only.",
+  "originals": [
+    {
+      "path": "packages/db/migrations/0209_meter_lifecycle_source.sql",
+      "sha256": "807d99fd25bcf4cadab35a4077dd4f378d25510fbab7ae596811d1b9f7b46a58"
+    },
+    {
+      "path": "packages/db/migration-notes/0209_meter_lifecycle_source.md",
+      "sha256": "350dae84483bedd5bb2cc49ab86cd6f9894631b33d7722b1afc06e23a8e80b20"
+    }
+  ],
+  "zip_sha256": "b0091e7103bfc66d136fccc07808bd22e2172c11f8ad8af142d7894dab158300"
+}

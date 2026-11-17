@@ -542,3 +542,47 @@ Source prepared for parent publication and actual existing-reviewer delta/curren
 
 
 Parent gate completion 2026-10-27: exact original01a178c2 task completed22:37:33; managedclaim95699 EXIT0 and processgroup95708gone, parentexec29598 EXIT0 verified. Normal heavy-slot actual Vitest test/lp-0-catalog.test.ts --maxWorkers=2 EXIT0, 26/26 tests including comparator negative controls, 958ms. Existing parser/discovery/sourceunion/SQLbyteidentity evidence preserved. No DB/browser execution or independent review/acceptance claimed. Exact3path catchup is for publication and same original RED reviewer delta; currentmainfullCI/separateacceptance/C282 mandatory. Preserve339->341->342 landing priority; this migration is not released.
+
+## Actual-main merge conflict repair — 27 October 2026 — working resolution complete
+
+Same issued leaf `MON-3-P-B-CATCHUP-CURRENT-MAIN-20261026`, exact original Gmail LOCAL CLI saved UUID `01a178c2-94ec-7851-b87c-28066d4733f0`, gpt-6.1-sol medium requested, cwd-only original roots, no new worker/helper/session/output root. Preserved source ownership and original provenance `01a173c3-1af3-7791-bcec-984d2b202f16`. Parent prepared the actual active merge: HEAD `4c6ef20e4e67db1897c072292b030403679624b6`, MERGE_HEAD `dda5680cd834b9ff11016a4088d8b625bbbec3a4`, merge base `a6778b4ae923ec15ba39377ee0c4ca2006f31040`. Read-only preflight confirmed exactly two unmerged paths, precisely the catalogue and contractor test. No builder Git mutation or merge command was executed.
+
+Read the actual same-reviewer ACK `MON-3-P-B-CATCHUP-4c6ef20e-REPAIR` at `2026-10-27T22:45:07Z` and following `MON-3-P-B-CATCHUP-4c6ef20e-RED-DELTA-ACK` in existing ACKS.tsv. The checker accepted source union content but required a REAL merge commit because one-parent 4c6ef20e left main outside ancestry, GitHub DIRTY, and no merge-ref CI. This repair resolves the parent-prepared actual merge; it does not claim that a merge commit or CI now exists. ACK `pr-339` records the C282 main advance to dda5680c. Preserve 339 → 341 → 342 landing priority; do not merge #335 ahead of that order.
+
+Retained current repository AGENTS/BUILD_PLAN C1–C8/MON-3, C280/C261, session policy/working agreement, current rules/KIS, prior source/helper readings and actual receipt evidence. Current governing identities remain AGENTS `ae66c7ba5465ec9cd34d69af2085ab3f4c2a882f7580c7cae4a1ed68061ffba1`, BUILD_PLAN `16b262d2f465868f5d5b349cb4d6830eae34b48162166343747200898bac0aa0`, BUILD_RULES `1c951ba6fe2c611f65db4b6cbf6be496a6e4c82c00e95bfac1fd26ec536c5ca6`, KIS `6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`. Inherited exact-label managed admission path is `claim-11696-09db90757afd4bb6953ee4a9d840d3aa.json`; parent owns actual admission/process clearance and finalization. No ceremonial nested run or process workaround.
+
+Before edits, hashed the actual index and all 2,725 tracked working paths outside the three authorised paths. Baseline index SHA-256 `2b7a049bd97cb9f2dc5ec97919629626fbff1c3d0362e9c1a96d52be22a5297b`; full stage-list SHA-256 `f1eebc91fcbeb7dd1a7630eecdb53e52cadfc8bfed641d7d81640e9a602cdd46`; outside-path working-content aggregate `ab35d69271145d9b0824f31f76bb5e76a61fb55497100beddcc13a25ba35298f` (SHA-256 of compact JSON sorted `[path, content_sha256_or_null]` pairs). Existing receipt pre-append SHA-256 `c31a73d1a69901362cfb1864b0cad8dc253bcf8936e52a8d8a4f6f0fde9aab2e`. Parent's automatically merged working files and all index stages remain owned by the parent.
+
+Resolved only the two authorised source files, with explicit content checks before writing:
+
+- Catalogue: verified dda5680c's catalogue equals previous main 25a3cb76 exactly, so #339 introduces no catalogue delta. Verified pinned 4c6ef20e contains all main values and exactly the 13 byte-identical MON3 object lines (one group, six entries, one authority path, five routine records). Removing those lines reconstructs actual pinned main byte-for-byte. Selected that independently verified correct union, not an unexamined whole-side preference. Result is byte-identical to pinned HEAD, with 64 groups / 1,293 entries / 38 authority paths / 406 routines; main has 63 / 1,287 / 37 / 401. No duplicate ID/key/identity, removed parent addition, rewritten fingerprint or grant change.
+- Contractor upgrade: reconstructed from ACTUAL pinned main, inserting only the original four complete MON3 `app.trial_admission`, `app.trial_business_verification`, `app.trial_card_attempt`, `app.trial_card_result` empty-array lines immediately before the existing final-check spread. Removing these four lines reconstructs actual main byte-for-byte. All eight meter rows, C239 comment, expanded final-check table list, MON1 routine expectations and every main assertion remain exact. No weakening, timeout, skip, regex or allowance change.
+- For both files, split the active conflicted source around marker blocks and checked that every automatically merged non-conflict segment survives unchanged and in order in the selected output. No other manual semantic choice needed.
+
+Final resolved source hashes:
+
+| Path | SHA-256 |
+| --- | --- |
+| `docs/contracts/lp-0-effective-privileges-v1.json` | `76064d1ad5a8111b9aa2b651ac9bedd3b7c78d7c280ab958126b45214c7936b1` |
+| `packages/db/test/contractor-entitlement-upgrade.integration.test.ts` | `ae19682eb9ef42878ad5c635bd3bceb91cca778e901cf555ca938cb422408fa9` |
+
+Actual checks:
+
+- Exact HEAD/MERGE_HEAD/base and two-path unmerged preflight, pinned JSON union/count/value/uniqueness comparisons, byte-exact test reconstruction and nonconflict-segment preservation: PASS, exit 0.
+- Anchored conflict-marker scan of both resolved working files: PASS, zero markers. Index remains unmerged pending the parent's authorised staging.
+- TypeScript 5.8.3 syntax through pinned Node24.15.0 `createSourceFile`: PASS, exit 0.
+- Source-scoped `git diff --check`: PASS, exit 0. SQL0240 equals HEAD and SHA-256 remains `c9243b5c64a557efd143e7bf9693fdde7e1b14f5a36556d4fd094c555e3309f8`: PASS, exit 0.
+- Existing receipt records parent heavy-slot LP-0 actual Vitest runner 26/26 PASS after the previous exact correct catalogue content. Catalogue is byte-identical, so that passing suite was retained and not repeated. No new behavior or negative-control failure justifies another run here.
+- Attempted existing inventory parser/path completeness using pinned Node and installed tsx from `apps/api`: exit 1 BEFORE parser execution. Actual main's newly auto-merged `packages/db/src/final-check-repository.ts` imports `FinalCheckError` from `@jobguard/core`, but the existing local package runtime does not export it (`SyntaxError: The requested module '@jobguard/core' does not provide an export named 'FinalCheckError'`). This is a local dependency-output limitation, not a parser result or catalogue change. JSON parsing/counts independently passed; no build/output regeneration, dependency install, alias workaround or other source change was attempted. Full current-main CI must validate the clean build/import path.
+
+Parent commands after positive child terminal, in the existing worktree (normal hooks/policies apply; builder did NOT run these):
+
+```sh
+git add -- docs/contracts/lp-0-effective-privileges-v1.json packages/db/test/contractor-entitlement-upgrade.integration.test.ts docs/verdicts/MON-3-P-B/BUILDER_RECEIPT.md
+git commit --no-edit
+git rev-list --parents -n 1 HEAD
+```
+
+Parent must verify the real merge commit has first parent `4c6ef20e4e67db1897c072292b030403679624b6` and second parent `dda5680cd834b9ff11016a4088d8b625bbbec3a4`, retain the pre-existing stage-0 entries, and publish through its existing normal lane/commit/push path. Do not rerun the earlier heavy suite merely to replace the now-retained 26/26 evidence. The import limitation requires the existing clean-build/current-main CI path; no local DB/browser command is authorised.
+
+Only this receipt was appended beyond the two conflict working-file resolutions. No Git/index mutation, unrelated file change, replayed migration/metadata/archive operation, new report/helper/timer/root, review or acceptance. Actual same-reviewer RED delta must bind the eventual real merge commit; full CURRENT-main CI, separate accepting actor and C282 main merge still required. This is source resolution only, not committed/pushed/integrated/released work. Existing commercial/C/real-data/release gates persist. Final receipt-inclusive whitespace, index and outside-path baseline checks follow; receipt SHA-256 returned after append.

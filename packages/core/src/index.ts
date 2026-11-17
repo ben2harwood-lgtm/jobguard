@@ -100,6 +100,9 @@ export * from "./enterprise-live-prompt-persistence.js";
 export * from "./job-work-timing.js";
 
 export * from "./contractor-entitlement-authority.js";
+export * from "./final-check.js";
 
 export * from "./free-first-job-persistence.js";
 export { utcDatetimeV1 } from "./datetime.js";
+
+export * from "./meter-lifecycle.js";
