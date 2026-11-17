@@ -5,7 +5,7 @@
 - **Policy version:** `pilot_data_operations_policy_v1`
 - **Dated approver evidence:** None — proposed on 2026-09-13. Approval is founder-reserved; a future approval must identify approver, date, evidence URI/reference, and the exact policy version.
 - **Applicable environment / jurisdiction:** pilot_no_charge and production_billing; United Kingdom with approved EU/UK service boundary
-- **Source / supporting review:** BUILD_PLAN.md §§2, 5.7, 5.8, 5.11; data/operations review and restore evidence required
+- **Source / supporting review:** `BUILD_PLAN.md` §§4 and 11.1; `AGENTS.md` §§5.7, 5.8 and 5.11 (rev 3.0); data/operations review and restore evidence required
 - **Executable feature gate:** `G1; real_data_activation requires D07; worm_retention requires a later explicit D07 approval`
 
 ## Exact proposed policy

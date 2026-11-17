@@ -1,0 +1,27 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/core, @jobguard/db, @jobguard/storage
+   • Running build in 3 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/storage:build: cache hit, replaying logs 136ce135c748e4b7
+@jobguard/storage:build: 
+@jobguard/storage:build: > @jobguard/storage@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-deploy-cc7e1cc89/packages/storage
+@jobguard/storage:build: > tsc -p tsconfig.json
+@jobguard/storage:build: 
+@jobguard/core:build: cache hit, replaying logs 7c37da4e96808026
+@jobguard/core:build: 
+@jobguard/core:build: > @jobguard/core@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-deploy-c2766620d/packages/core
+@jobguard/core:build: > tsc -p tsconfig.json
+@jobguard/core:build: 
+@jobguard/db:build: cache miss, executing f7d3b000f5330e7f
+@jobguard/db:build: 
+@jobguard/db:build: > @jobguard/db@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ui-design-jobs/packages/db
+@jobguard/db:build: > tsc -p tsconfig.json
+@jobguard/db:build: 
+
+ Tasks:    3 successful, 3 total
+Cached:    2 cached, 3 total
+  Time:    5.908s 
+

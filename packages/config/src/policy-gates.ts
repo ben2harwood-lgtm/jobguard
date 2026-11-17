@@ -1,7 +1,7 @@
 export const deploymentModes = ["synthetic_demo", "pilot_no_charge", "provider_sandbox", "production_billing"] as const;
 export type DeploymentMode = (typeof deploymentModes)[number];
 
-export type DecisionId = `D${"01" | "02" | "03" | "04" | "05" | "06" | "07" | "08" | "09" | "10" | "11" | "12"}`;
+export type DecisionId = `D${"01" | "02" | "03" | "04" | "05" | "06" | "07" | "08" | "09" | "10" | "11" | "12" | "13" | "14" | "15" | "16"}`;
 export type DecisionStatus = "proposed" | "approved" | "superseded";
 export type DecisionRecord = Readonly<{ id: DecisionId; policyVersion: string; status: DecisionStatus }>;
 

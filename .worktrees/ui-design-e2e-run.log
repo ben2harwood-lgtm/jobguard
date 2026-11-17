@@ -1,0 +1,1319 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+> @jobguard/api@0.0.0 start:worker /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ui-design-jobs/apps/api
+> tsx src/worker.ts
+
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+
+Running 456 tests using 2 workers
+
+  ✓    1 [mobile-360] › e2e/capture.spec.ts:3:5 › walk-it shows source beside five-plus cited suggestions and an unknown rate (1.0s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓    3 [mobile-360] › e2e/capture.spec.ts:4:5 › invalid provider output preserves original for retry (665ms)
+  ✓    2 [mobile-360] › e2e/AUDIT-FIX-API-VARIATION.spec.ts:7:5 › captured extras can be priced, and stale edits and rejections preserve approved terms (3.6s)
+  ✓    4 [mobile-360] › e2e/CH-1.spec.ts:9:5 › CH-1 new job persists v3 terms across reload, Jobs and a second context (3.5s)
+  ✓    5 [mobile-360] › e2e/CH-1.spec.ts:21:5 › CH-1 saved v1 sample retains labelled historic pricing (1.9s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓    6 [mobile-360] › e2e/CH-1.spec.ts:27:5 › CH-1 copy audit covers issued customer documents and stored projections (4.0s)
+  ✓    8 [mobile-360] › e2e/CH-2.spec.ts:126:7 › Kitchen extension reopens through its Jobs link and the persisted live state decides the watchdog (982ms)
+  ✓    7 [mobile-360] › e2e/CH-2.spec.ts:20:5 › watchdog panels require the persisted live state and retain authoritative inputs across clients (5.2s)
+  ✓    9 [mobile-360] › e2e/CH-2.spec.ts:126:7 › Loft conversion reopens through its Jobs link and the persisted quoting state decides the watchdog (930ms)
+  ✓   11 [mobile-360] › e2e/CH-3a.spec.ts:5:5 › CH-3a a new practice session cannot read, change, import or list another session's parties; reused storageState retains access (1.6s)
+  ✓   10 [mobile-360] › e2e/CH-2.spec.ts:161:5 › proof commands replay the response they first gave, after later finalisation, completion and invalidation (2.3s)
+  ✓   13 [mobile-360] › e2e/CH-3a.spec.ts:117:5 › CH-3a makes reuse explicit, leaves different flats separate, and rejects stale bindings (2.3s)
+  ✓   12 [mobile-360] › e2e/CH-3a.spec.ts:83:5 › CH-3a captures structured parties, gates live, and preserves authoritative identity across browsers (2.7s)
+  ✓   15 [mobile-360] › e2e/CH-3a.spec.ts:175:5 › CH-3a refuses a save against customer details another writer revised (1.6s)
+  ✓   14 [mobile-360] › e2e/CH-3a.spec.ts:155:5 › CH-3a refuses a save from a panel another writer has already superseded, and writes nothing (2.0s)
+  ✓   16 [mobile-360] › e2e/CH-3a.spec.ts:192:5 › CH-3a gives two writers on one revision one success and one typed conflict through the UI (1.9s)
+  ✓   17 [mobile-360] › e2e/CH-3a.spec.ts:212:5 › CH-3a tells a stale panel the job went live instead of showing a raw code (2.6s)
+  ✓   18 [mobile-360] › e2e/CH-3a.spec.ts:233:5 › CH-3a quote preview shows its frozen customer and a changed binding needs a new preview (1.9s)
+  ✓   19 [mobile-360] › e2e/CH-3a.spec.ts:262:5 › CH-3a a lifecycle refresh cannot carry a stale draft over another writer's customer revision (1.7s)
+  ✓   20 [mobile-360] › e2e/CH-3a.spec.ts:306:7 › CH-3a editing Town after confirming reuse persists the edit as a separate site (1.5s)
+  ✓   21 [mobile-360] › e2e/CH-3a.spec.ts:306:7 › CH-3a editing UK postcode after confirming reuse persists the edit as a separate site (1.5s)
+  ✓   22 [mobile-360] › e2e/CH-3a.spec.ts:306:7 › CH-3a editing UPRN (optional) after confirming reuse persists the edit as a separate site (1.5s)
+  ✓   23 [mobile-360] › e2e/CH-3a.spec.ts:330:5 › CH-3a rejects embedded address-line CR/LF before persistence and preserves the saved site on reopen and unchanged save (1.5s)
+  ✓   24 [mobile-360] › e2e/CH-3a.spec.ts:354:5 › CH-3a reopening shows the saved details, and saving them unchanged creates no new customer or site (1.4s)
+  ✓   25 [mobile-360] › e2e/CH-3a.spec.ts:383:5 › CH-3a a changed customer revises the same customer and a changed site is a new site; nothing else is created (1.2s)
+  ✓   26 [mobile-360] › e2e/CH-3a.spec.ts:402:7 › CH-3a keeps all 2 address lines when another detail changes, and edits them only deliberately (1.4s)
+  ✓   27 [mobile-360] › e2e/CH-3a.spec.ts:402:7 › CH-3a keeps all 3 address lines when another detail changes, and edits them only deliberately (1.4s)
+  ✓   28 [mobile-360] › e2e/CH-3a.spec.ts:402:7 › CH-3a keeps all 4 address lines when another detail changes, and edits them only deliberately (1.3s)
+  ✓   29 [mobile-360] › e2e/CH-3a.spec.ts:424:5 › CH-3a refuses a fifth address line in words before anything is written (872ms)
+  ✓   30 [mobile-360] › e2e/CH-3a.spec.ts:436:7 › CH-3a reopening and unchanged save keep the bound customer revision after a second job revises it (2.2s)
+  ✓   31 [mobile-360] › e2e/CH-3a.spec.ts:436:7 › CH-3a reopening and unchanged save keep the bound payer revision after a second job revises it (2.3s)
+  ✓   33 [mobile-360] › e2e/CH-4.spec.ts:166:5 › close requires an allowed reason, displays it, and replay preserves the exact event sequence (3.0s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓   32 [mobile-360] › e2e/CH-4.spec.ts:42:5 › resume and unlocked reopen persist, retry exactly after an unknown outcome, and refuse the Solo cap (6.1s)
+  ✓   34 [mobile-360] › e2e/CH-4.spec.ts:206:5 › locked close can reopen for invoicing while new site work still requires a linked job (4.1s)
+  ✓   35 [mobile-360] › e2e/CH-5.spec.ts:5:5 › CH-5 previews, attests and reloads an invoiced v3 import without a count or an invented lock (2.5s)
+  ✓   36 [mobile-360] › e2e/CH-7.spec.ts:16:6 › F15 persists candidate Q, exact available reason and source across contexts (2.4s)
+  ✓   37 [mobile-360] › e2e/CH-7.spec.ts:16:6 › F17 persists candidate Q, exact available reason and source across contexts (2.4s)
+  ✓   38 [mobile-360] › e2e/CH-7.spec.ts:16:6 › F18 persists candidate Q, exact available reason and source across contexts (2.5s)
+  ✓   39 [mobile-360] › e2e/CH-7.spec.ts:16:6 › F19 persists candidate Q, exact available reason and source across contexts (2.4s)
+  ✓   40 [mobile-360] › e2e/CH-7.spec.ts:16:6 › F20 persists candidate Q, exact available reason and source across contexts (2.4s)
+  ✓   41 [mobile-360] › e2e/CH-7.spec.ts:16:6 › F21 persists candidate Q, exact available reason and source across contexts (2.5s)
+  ✓   42 [mobile-360] › e2e/CH-7.spec.ts:16:6 › F22 persists candidate Q, exact available reason and source across contexts (2.4s)
+  ✓   43 [mobile-360] › e2e/CH-7.spec.ts:51:5 › v3 refuses injected authority, missing settlement, and changed replay payload (1.5s)
+  ✓   44 [mobile-360] › e2e/CH-7.spec.ts:64:5 › a duplicate-payment case offers no v1 review controls and refuses a v1 command (1.4s)
+  ✓   45 [mobile-360] › e2e/CH-7.spec.ts:78:5 › F17 refund settled before opening shows the existing timing exclusion through Review v3 F17 (1.5s)
+  ✓   46 [mobile-360] › e2e/CH-7.spec.ts:90:5 › [A1 A6 Browser] insurer-paid F18 uses its own exclusion reason and survives reload (1.7s)
+  ✓   47 [mobile-360] › e2e/CH-7.spec.ts:107:6 › F14 supplier credit persists across reload and a second browser context (3.5s)
+  ✓   49 [mobile-360] › e2e/CH-9-business.spec.ts:5:5 › CH9-B10 held business view survives reload, preserves job access and exposes no money (661ms)
+  ✓   50 [mobile-360] › e2e/CH-9-business.spec.ts:40:5 › CH-9 composed job v3 read authenticates each session and never discloses producer money (148ms)
+  ✓   48 [mobile-360] › e2e/CH-7.spec.ts:107:6 › F16 supplier credit persists across reload and a second browser context (4.0s)
+  ✓   51 [mobile-360] › e2e/ch6-integrity-v3.spec.ts:5:5 › CH-6 saved v1 keeps its own pricing and recorded checks through family-first composition (1.7s)
+  ✓   53 [mobile-360] › e2e/customer-invoice.spec.ts:2:5 › issues one synthetic invoice and projects partial, paid, reversed and credited history (609ms)
+  ✓   52 [mobile-360] › e2e/ch6-integrity-v3.spec.ts:33:5 › CH-6 fresh v3 shows saved advisory sources without v1 pricing or pre-lock hidden output (2.7s)
+  ✓   54 [mobile-360] › e2e/decision-inbox.spec.ts:3:5 › Decision Inbox lists, details, and dismisses an advisory without authorization (1.2s)
+  ✓   55 [mobile-360] › e2e/DEMO-A1-scenarios.spec.ts:39:5 › DEMO-S no proof: a pending original cannot complete work or authorize an invoice (2.4s)
+  ✓   56 [mobile-360] › e2e/DEMO-A1-scenarios.spec.ts:61:5 › DEMO-S prevention: advisory checks and prevented spend never become recovered cash (2.4s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓   57 [mobile-360] › e2e/DEMO-A1-scenarios.spec.ts:92:5 › DEMO-S corrupted evidence: wrong immutable version fails verification and cannot complete (2.5s)
+  ✓   59 [mobile-360] › e2e/DEMO-A1-scenarios.spec.ts:187:5 › DEMO-S tenant isolation: foreign session and same-session foreign job cannot read or attach evidence (6.2s)
+  ✓   60 [mobile-360] › e2e/DEMO-A1-scenarios.spec.ts:226:5 › DEMO-S stale authority: revoked session cannot replay a successful command or create new work (2.2s)
+  ✓   61 [mobile-360] › e2e/DEMO-A1-scenarios.spec.ts:245:5 › DEMO-S stale authority: a superseded approval target cannot be replayed onto a newer price (2.3s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓   58 [mobile-360] › e2e/DEMO-A1-scenarios.spec.ts:108:5 › DEMO-S disclosure before lock: real detection and support disclosure remain ineligible after lock (1.1m)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓   62 [mobile-360] › e2e/DEMO-J3-integrity.spec.ts:195:5 › DEMO-J3-INTEGRITY: database-backed checks and demo-only helper refusals across the full journey (4.9m)
+  ✓   64 [mobile-360] › e2e/deploy-smoke.spec.ts:3:5 › seeded demo sign-in reaches the first M1 journey step (382ms)
+  ✓   65 [mobile-360] › e2e/ENT-2.spec.ts:21:5 › the office imports generated files, sees a typed error on a refused row, revises orders, and the persisted state is the same after reload and in a second browser (2.0s)
+  ✓   66 [mobile-360] › e2e/ENT-2.spec.ts:115:5 › without a generated contractor practice the register asks you to start one, and a refused request never looks saved (131ms)
+  ✓   67 [mobile-360] › e2e/fee-statement.spec.ts:3:5 › shows a non-collectible transparent per-job fee illustration (2.1s)
+  ✓   68 [mobile-360] › e2e/final-account-double-click.spec.ts:7:5 › double-click builds one final account without a false sources-changed notice (2.2s)
+  ✓   69 [mobile-360] › e2e/final-account-double-click.spec.ts:46:7 › handles STALE_FINAL_ACCOUNT_REVISION and allows a later build (2.7s)
+  ✓   70 [mobile-360] › e2e/final-account-double-click.spec.ts:46:7 › handles STALE_APPROVED_SOURCES and allows a later build (2.7s)
+  ✓   71 [mobile-360] › e2e/final-account-double-click.spec.ts:78:5 › releases the build guard after a network failure (2.3s)
+  ✓   72 [mobile-360] › e2e/final-account.spec.ts:3:5 › shows an unissued draft final account with exact totals and a synthetic issue action (359ms)
+  ✓   73 [mobile-360] › e2e/m1-15-complete-journey.spec.ts:6:5 › M1-15 complete synthetic journey retains the job spine and accepted scope (5.9s)
+  ✓   74 [mobile-360] › e2e/M1-16-S.spec.ts:4:5 › a draft job shows no frozen cap and no integrity findings (777ms)
+  ✓   75 [mobile-360] › e2e/M1-16-S.spec.ts:5:5 › an activated job shows its own frozen cap and the findings its real facts produce (2.1s)
+  ✓   76 [mobile-360] › e2e/M2-1-order-screen.spec.ts:15:5 › reviews a cited above-rate order and confirms exactly one practice effect (3.5s)
+  ✓   77 [mobile-360] › e2e/M2-1A-S.spec.ts:1:122 › records exact persisted synthetic material prices (1.8s)
+  ✓   78 [mobile-360] › e2e/M2-1B-S.spec.ts:3:5 › checks and exactly authorizes one synthetic purchase order effect (3.5s)
+  ✓   79 [mobile-360] › e2e/M2-2-S.spec.ts:2:5 › ingests generated materials-B documents and appends actual receipts (3.3s)
+  ✓   80 [mobile-360] › e2e/M2-2-S.spec.ts:5:5 › refuses over-delivery with rejected stock and keeps a normal later delivery (2.6s)
+  ✓   81 [mobile-360] › e2e/M2-3-S.spec.ts:2:5 › extracts cited supplier facts and preserves human correction (2.5s)
+  ✓   82 [mobile-360] › e2e/M2-4-S.spec.ts:2:5 › matches materials-B sources and appends correction history (3.5s)
+  ✓   83 [mobile-360] › e2e/M2-5-S.spec.ts:2:5 › turns confirmed materials-B overcharges into cited reviewable checks (3.6s)
+  ✓   84 [mobile-360] › e2e/M2-5-S.spec.ts:3:5 › held-out report renders its actual frozen output (73ms)
+  ✓   85 [mobile-360] › e2e/M2-6-S.spec.ts:1:358 › shows readiness risks and requires an explicit revised plan (2.6s)
+  ✓   86 [mobile-360] › e2e/m2-7-dashboard.spec.ts:13:5 › owner sees content-free outcomes, honest unknowns and uncapped mandatory blockers (2.6s)
+  ✓   87 [mobile-360] › e2e/M2-7-S.spec.ts:1:358 › keeps mandatory work visible and explains advisory relevance (2.4s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓   88 [mobile-360] › e2e/M4-1-S.spec.ts:11:5 › opens and manages evidence-linked recovery cases without inventing recovered money (4.4s)
+  ✓   89 [mobile-360] › e2e/M4-1-S.spec.ts:101:5 › amends a claim to what was received, closes it as recovered and reverses it to reopen, always on the case the user chose (4.0s)
+  ✓   90 [mobile-360] › e2e/M4-1-S.spec.ts:179:5 › a written-off case that is reversed and re-landed ends closed, and a fully received case closes again after a dispute (4.0s)
+  ✓   91 [mobile-360] › e2e/M4-1-S.spec.ts:225:5 › two browsers opening cases at the same time each select the case they opened (1.8s)
+  ✓   92 [mobile-360] › e2e/M4-1-S.spec.ts:243:5 › an unread case list is shown as loading or failed, never as empty, and the failure can be retried (2.2s)
+  ✓   93 [mobile-360] › e2e/M4-1-S.spec.ts:278:5 › a lost save answer cannot be turned into a duplicate case: the only retry re-sends the same command id (1.5s)
+  ✓   94 [mobile-360] › e2e/M4-1-S.spec.ts:313:5 › approved £2,500 plus overlapping manual £1,000 remains received in full after recording and reversing the manual record (2.3s)
+  ✓   95 [mobile-360] › e2e/M4-1-S.spec.ts:368:5 › repair 17: a below-settled retry keeps a delayed £900 amendment held across an approved reversal and late execution (2.0s)
+  ✓   96 [mobile-360] › e2e/M4-2-S.spec.ts:66:5 › approves exact cited eligibility without creating landing or fee (2.5s)
+  ✓   97 [mobile-360] › e2e/M4-2-S.spec.ts:67:5 › shows every D03 exclusion and keeps posting unavailable (3.7s)
+  ✓   98 [mobile-360] › e2e/M4-2-S.spec.ts:81:5 › re-reviews and approves at the later policy revision after the policy is superseded (2.2s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓   99 [mobile-360] › e2e/M4-3-S.spec.ts:76:5 › maps immutable customer sources, verifies exports server-side and invalidates recorded attachment approval (4.8s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  100 [mobile-360] › e2e/M4-3-S.spec.ts:158:5 › includes only the merchant case's recorded supplier versions (3.1s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  101 [mobile-360] › e2e/M4-5-S.spec.ts:82:5 › previews, approves and simulates one factual customer message that is delivered exactly once (6.7s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  102 [mobile-360] › e2e/M4-5-S.spec.ts:180:5 › uses supplier wording and recipient, shows an unknown outcome as unknown, and checks rather than resends (7.5s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  103 [mobile-360] › e2e/M4-5-S.spec.ts:268:5 › revocation and changed evidence both block execution and nothing is sent (6.9s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓   63 [mobile-360] › e2e/DEMO-J3-shadow.spec.ts:249:5 › DEMO-J3 fresh shadow-30000 completes customer approvals, one paid invoice, £800 Q and verified packs (6.0m)
+  ✓  104 [mobile-360] › e2e/M4-5-S.spec.ts:316:5 › two browser contexts approving the same revision yield one approval and a typed stale conflict (5.5s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  106 [mobile-360] › e2e/M4-5-S.spec.ts:374:5 › a new practice session cannot see or act on another session's recovery messages (3.4s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  107 [mobile-360] › e2e/M4-5-S.spec.ts:416:5 › once the register has loaded, the delivery lookup and the evidence-pack tick never disable the Open buttons or move focus (3.0s)
+  ✓  105 [mobile-360] › e2e/M4-5-S.spec.ts:343:5 › an interrupted claim becomes uncertain after its lease and can be checked without resending (9.3s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  108 [mobile-360] › e2e/M4-6-S.spec.ts:68:5 › passing practice time only makes the reminder ready to review; only approving the exact reminder sends it, once, and a revoked approval needs approving again (6.6s)
+  ✓  110 [mobile-360] › e2e/M4-7-S.spec.ts:85:5 › a NEW stranger session cannot snapshot or connect a captured job before its creator touches the feed (914ms)
+  ✓  109 [mobile-360] › e2e/M4-6-S.spec.ts:182:5 › a cancellation, a dispute and a settlement each show Stopped and create no due Decision; a reopened case needs a new reviewed follow-up (6.8s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  112 [mobile-360] › e2e/M4-7-S.spec.ts:235:5 › holds an unknown duplicate for review, then shows every fixed generated movement in exact pounds (3.0s)
+  ✓  113 [mobile-360] › e2e/M4-7-S.spec.ts:284:5 › refuses forged, unauthorised and conflicting requests, and persists nothing from them (1.9s)
+  ✓  114 [mobile-360] › e2e/M4-7-S.spec.ts:346:5 › pauses further changes until the saved state is read after an unknown transport result (1.9s)
+  ✓  111 [mobile-360] › e2e/M4-7-S.spec.ts:116:5 › £384: pending cannot qualify, settled stays unallocated, only a matched receipt qualifies, disconnect keeps history (7.6s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  115 [mobile-360] › e2e/M4-8-S.spec.ts:19:5 › M4-8 suggested matches prefill the form but require evidence, review and exact approval (2.8s)
+  ✓  116 [mobile-360] › e2e/M4-8-S.spec.ts:40:5 › DW1 persists exact approved allocations and source identities across reload, Jobs navigation and a second context (4.1s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  117 [mobile-360] › e2e/M4-8-S.spec.ts:89:5 › DW4 appends an approved reversal, reopens case 2 and keeps the original source facts (3.6s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  118 [mobile-360] › e2e/M4-8-S.spec.ts:114:5 › DW5 invalidates only claim 2 proof without changing receipts, allocated rows or invoice balance (3.2s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  119 [mobile-360] › e2e/M4-8-S.spec.ts:128:5 › DW3 refuses unavailable cash with a focused error; concurrent alternate approvals and replay conserve the receipt (2.8s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  120 [mobile-360] › e2e/M4-8-S.spec.ts:171:5 › pauses after unknown command and failed refresh until a successful saved-state read (2.9s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  121 [mobile-360] › e2e/M4-8-S.spec.ts:194:5 › B2/B6 selects an issued credit note and preserves its source through exact reversal approval (3.4s)
+  ✓  123 [mobile-360] › e2e/MON-7.spec.ts:8:5 › MON-7a cited property facts persist for a homeowner across reload, Jobs and a returning browser (2.3s)
+  ✓  122 [mobile-360] › e2e/MON-5-customer-journey.spec.ts:10:5 › MON-5 customer link through quote, extras, stage and builder message evidence (4.7s)
+  ✓  124 [mobile-360] › e2e/MON-7.spec.ts:43:5 › MON-7a free company and opted-in feeds remain advisory, stale and missing remain unknown (2.7s)
+  ✓  125 [mobile-360] › e2e/MON-7.spec.ts:65:5 › MON-7a leaves VALUE-1 and saved fee illustration figures unchanged (2.5s)
+  ✓  127 [mobile-360] › e2e/MON1-J.spec.mts:24:1 › MON1-J: Builder's five distinct started jobs show the next job included after reload (1.5s)
+  ✓  126 [mobile-360] › e2e/MON-7.spec.ts:124:5 › MON-7 curve uses this job's saved stage forecasts, with cited unknowns and no cross-session access (1.9s)
+  ✓  129 [mobile-360] › e2e/MON1-J.spec.mts:280:1 › MON1-J: practice and failed meter reads leave the jobs page usable without a figure (308ms)
+  ✓  130 [mobile-360] › e2e/payment-fee-statements.spec.ts:5:5 › payment screen keeps exact approvals, persists opt-in/revoke and pauses during dispute (2.3s)
+  ✓  128 [mobile-360] › e2e/MON1-J.spec.mts:102:1 › MON1-J: real starts, finish tail, London stop, restart, Solo grace and cap (3.4s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  131 [mobile-360] › e2e/PRACTICE-FACTS-1.spec.ts:7:5 › six extra facts persist, keep the merged panel separate, and show supplier invoice fully paid (3.9s)
+  ✓  133 [mobile-360] › e2e/proof-capture.spec.ts:2:5 › capture upload verify and gated completion have distinct states (802ms)
+  ✓  134 [mobile-360] › e2e/proof-capture.spec.ts:3:5 › rejected upload never appears complete (764ms)
+  ✓  132 [mobile-360] › e2e/PRACTICE-FACTS-1.spec.ts:34:5 › both F5 receipts match on screen only after settlement and are absent from the merged panel (4.9s)
+  ✓  136 [mobile-360] › e2e/quote-acceptance.spec.ts:7:5 › [MIGFIX-4.2] superseded document cannot be accepted with a fresh revision through the persisted browser journey (1.8s)
+  ✓  135 [mobile-360] › e2e/quote-acceptance.spec.ts:4:5 › builder attests exact terms honestly, then cancellation and decline preserve history (2.2s)
+  ✓  137 [mobile-360] › e2e/quote-editor.spec.ts:3:5 › builder prices a synthetic quote and sees exact live coverage (1.6s)
+  ✓  138 [mobile-360] › e2e/quote-send.spec.ts:4:5 › preview binds exact recipient and version before free fake delivery (2.0s)
+  ✓  139 [mobile-360] › e2e/review-confirm.spec.ts:3:5 › builder reconciles cited lines and confirms synthetic scope (1.4s)
+  ✓  140 [mobile-360] › e2e/SBOX-1.spec.ts:11:5 › persistent workspace survives reload and a second authorized context (886ms)
+  ✓  141 [mobile-360] › e2e/SBOX-1.spec.ts:22:5 › tenant selection and foreign jobs fail closed without disclosure (437ms)
+  ✓  142 [mobile-360] › e2e/SBOX-1.spec.ts:29:5 › an unavailable read is recoverable and never replaced with fixture success (571ms)
+  ✓  143 [mobile-360] › e2e/SBOX-2.spec.ts:5:5 › builder advances a persisted deterministic synthetic run (908ms)
+  ✓  145 [mobile-360] › e2e/SBOX-2.spec.ts:7:5 › server rejects forged environments without creating work (268ms)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  144 [mobile-360] › e2e/SBOX-2.spec.ts:6:5 › reset creates a new run and keeps the previous archive private (905ms)
+  ✓  146 [mobile-360] › e2e/SBOX-resume.spec.ts:36:5 › opens a saved quote directly and preserves source identity after reload and a second context (2.2s)
+  ✓  147 [mobile-360] › e2e/SBOX-resume.spec.ts:66:5 › reopens accepted and active work without rewriting lifecycle or scope (2.5s)
+  ✓  148 [mobile-360] › e2e/SBOX-resume.spec.ts:106:5 › does not expose saved job controls for missing jobs, unauthenticated requests or a foreign tenant selection (1.6s)
+  ✓  150 [mobile-360] › e2e/shell.spec.ts:11:5 › first visit explains the journey and the help button reopens it (436ms)
+  ✓  149 [mobile-360] › e2e/SBOX-SESSION-1.spec.ts:5:5 › creation binds ownership before another session's first read or write (1.9s)
+  ✓  151 [mobile-360] › e2e/shell.spec.ts:29:5 › sign-in opens the accessible shell without horizontal overflow (364ms)
+  ✓  152 [mobile-360] › e2e/shell.spec.ts:44:5 › live job has exact document, payment and pilot provenance (270ms)
+  ✓  153 [mobile-360] › e2e/shell.spec.ts:54:5 › tenant switching re-keys data and shows the empty state (273ms)
+  ✓  155 [mobile-360] › e2e/shell.spec.ts:78:5 › server boundary hides unauthorized tenant and cross-tenant job IDs (276ms)
+  ✓  154 [mobile-360] › e2e/shell.spec.ts:62:5 › typed failure retries in place without creating anything (565ms)
+  ✓  157 [mobile-360] › e2e/simulation-fee-statements.spec.ts:6:5 › immutable statement download and linked reversal correction retain exact hashes without automatic writes (1.7s)
+  ✓  156 [mobile-360] › e2e/simulation-fee-collection.spec.ts:6:5 › fake collection stays pending through redirects and unknown outcomes, then refunds £250 and retains £32 (2.0s)
+  ✓  159 [mobile-360] › e2e/SV-3.spec.ts:35:5 › SV-3-BARRIER-1: departure waits for the outstanding drain (135ms)
+  ✓  160 [mobile-360] › e2e/SV-3.spec.ts:43:5 › SV-3-BARRIER-2: the departure boundary clears timers and blocks late registrations (44ms)
+  ✓  161 [mobile-360] › e2e/SV-3.spec.ts:53:5 › SV-3-BARRIER-3: each destination starts a fresh interval registry (46ms)
+  ✓  162 [mobile-360] › e2e/SV-3.spec.ts:60:5 › SV-3-BARRIER-4: drain failures retain the original route and error (36ms)
+  ✓  158 [mobile-360] › e2e/simulation-money-check.spec.ts:5:5 › money review keeps the three books and unresolved source rows visible; restore stays paused (1.7s)
+  ✓  163 [mobile-360] › e2e/SV-3.spec.ts:68:5 › I: mandatory must-surface Decision survives reload and return through Jobs (2.6s)
+  ✓  165 [mobile-360] › e2e/SV-4.spec.ts:5:5 › DW2/DW4/DW9: persisted completion survives reload, Jobs and a second browser (4.1s)
+  ✓  164 [mobile-360] › e2e/SV-3.spec.ts:96:5 › Q: every visible count/badge/error, cache key, storage and notification surface ignores 25 linked held signals (6.2s)
+  ✓  166 [mobile-360] › e2e/SV-4.spec.ts:57:40 › DW8: fixed completion view with 0 held signals (3.1s)
+  ✓  167 [mobile-360] › e2e/SV-4.spec.ts:57:40 › DW8: fixed completion view with 25 held signals (3.1s)
+  ✓  168 [mobile-360] › e2e/SV-4.spec.ts:68:5 › DW7: pending and failed reconciliation refuse both invoice kinds in commands and UI (3.4s)
+  ✓  170 [mobile-360] › e2e/SV-5.spec.ts:10:5 › before lock nothing is revealed; after lock the check shows as running and survives reload (2.1s)
+  ✓  171 [mobile-360] › e2e/SV-5.spec.ts:21:5 › after lock the check is running, shows no items and keeps that state after reload (3.1s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  172 [mobile-360] › e2e/SV-5.spec.ts:63:5 › E (existing proposal, real run): a revealed item answered Not done keeps that answer after reload (37.9s)
+  ✓  169 [mobile-360] › e2e/SV-4.spec.ts:97:5 › DW7: another lock or cutoff cannot complete this job's check in commands or UI (46.1s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  173 [mobile-360] › e2e/SV-5.spec.ts:81:5 › K (existing proposal, real run): Already included must name a locked line and leaves the lock unchanged (57.8s)
+  ✓  174 [mobile-360] › e2e/SV-5.spec.ts:139:5 › D (practice run): a photo of work in the original quote is reconciled, never revealed (57.5s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  175 [mobile-360] › e2e/SV-5.spec.ts:155:5 › B (real run): a held extra captured for £800 at final review is never revealed (1.0m)
+  ✓  176 [mobile-360] › e2e/SV-5.spec.ts:177:5 › O (real run): zero-result wording survives reload and replay creates no duplicate classification (1.1m)
+  ✓  178 [mobile-360] › e2e/SV-5.spec.ts:305:5 › L source leg: an old message received after lock is shown at once and never fee eligible (2.6s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  179 [mobile-360] › e2e/SV-5.spec.ts:326:5 › L: import old evidence through the locked-job control; worker replay preserves one fee-free signal (58.0s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  177 [mobile-360] › e2e/SV-5.spec.ts:231:5 › I (practice journey): a £8,000 request fires D13 before lock and stays permanently fee-free (2.0m)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  180 [mobile-360] › e2e/SV-5.spec.ts:364:5 › J: three fictional sources produce one coalesced catch, one recovery and one fee (59.9s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  181 [mobile-360] › e2e/SV-6.spec.ts:103:5 › SV-6 G: half a catch settles, then a second settlement appends a cumulative revision (58.6s)
+  ✓  182 [mobile-360] › e2e/SV-6.spec.ts:128:5 › SV-6 M: partial blended receipt allocates only its exact quarter catch share (58.5s)
+  ✓  184 [mobile-360] › e2e/SV-7A.spec.ts:45:5 › unknown saves retry the exact command; refused saves preserve the draft (2.6s)
+  ✓  183 [mobile-360] › e2e/SV-7A.spec.ts:11:5 › a diary note and a fictional customer message persist; the diary shows only the standing notice (2.9s)
+  ✓  186 [mobile-360] › e2e/switch-live.spec.ts:4:5 › switch live freezes the accepted baseline in the no-charge pilot (1.8s)
+  ✓  185 [mobile-360] › e2e/SV-7A.spec.ts:88:5 › on-site diary work records one site event, exact replay adds none, and off-site work adds none (2.6s)
+  ✓  188 [mobile-360] › e2e/UI-DESIGN-JOBS.spec.ts:29:5 › UI-DESIGN-JOBS a job started from the design opens in its designed Work tab (614ms)
+  ✓  187 [mobile-360] › e2e/UI-DESIGN-JOBS.spec.ts:12:5 › UI-DESIGN-JOBS main screens and job tabs open in the design (1.8s)
+  ✓  189 [mobile-360] › e2e/UIWIRE-1.spec.ts:6:5 › Walk, review and confirm the exact core-1000 baseline on the same job (1.7s)
+  ✓  190 [mobile-360] › e2e/UIWIRE-1.spec.ts:7:5 › an edited description persists without changing the money fixture (1.0s)
+  ✓  191 [mobile-360] › e2e/UIWIRE-1.spec.ts:8:5 › a human omitted line persists without inheriting a rate (1.1s)
+  ✓  192 [mobile-360] › e2e/UIWIRE-1.spec.ts:9:5 › split and merge retain explicit review lineage (1.2s)
+  ✓  193 [mobile-360] › e2e/UIWIRE-1.spec.ts:10:5 › unknown source remains raw and cannot execute or authorise an action (696ms)
+  ✓  194 [mobile-360] › e2e/UIWIRE-1.spec.ts:11:5 › a stale second tab gets the exact conflict and concurrent confirmation is idempotent (1.6s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  195 [mobile-360] › e2e/UIWIRE-10.spec.ts:1:2866 › issues one immutable numbered synthetic customer invoice (4.5s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  196 [mobile-360] › e2e/UIWIRE-11.spec.ts:1:2866 › corrects an immutable synthetic customer invoice with an approved credit note (4.7s)
+  ✓  197 [mobile-360] › e2e/UIWIRE-13.spec.ts:4:5 › missing proof stays at zero and cannot be approved (2.3s)
+  ✓  198 [mobile-360] › e2e/UIWIRE-13.spec.ts:5:5 › complete generated sources permit one exact simulated approval (2.4s)
+  ✓  199 [mobile-360] › e2e/UIWIRE-14.spec.ts:4:5 › persisted statement and isolated exact what-if calculations (3.0s)
+  ✓  200 [mobile-360] › e2e/UIWIRE-15-READ-RECOVERY.spec.ts:60:5 › initial pending and faulty reads never publish a zero projection; real GET recovery persists (3.1s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  202 [mobile-360] › e2e/UIWIRE-15-READ-RECOVERY.spec.ts:246:5 › late background and abandoned requested checks preserve workbench focus (2.0s)
+  ✓  201 [mobile-360] › e2e/UIWIRE-15-READ-RECOVERY.spec.ts:144:5 › refresh failure hides a previously completed real practice job and recovers with GETs (6.5s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  204 [mobile-360] › e2e/UIWIRE-2.spec.ts:6:5 › prices and revises core-1000 without losing the old quote (1.9s)
+  ✓  203 [mobile-360] › e2e/UIWIRE-15.spec.ts:1:3136 › continues one persisted practice job through the complete synthetic core loop (5.1s)
+  ✓  205 [mobile-360] › e2e/UIWIRE-2.spec.ts:7:5 › blocks incomplete and unsupported drafts while retaining input (1.2s)
+  ✓  206 [mobile-360] › e2e/UIWIRE-2.spec.ts:8:5 › a stale browser conflicts instead of overwriting revision two (1.6s)
+  ✓  208 [mobile-360] › e2e/UIWIRE-3.spec.ts:6:5 › invalidates preview on recipient change and reconciles unknown outcome (1.9s)
+  ✓  207 [mobile-360] › e2e/UIWIRE-3.spec.ts:5:5 › previews immutable v2 and delivers only through the fake executor (2.4s)
+  ✓  210 [mobile-360] › e2e/UIWIRE-5.spec.ts:8:5 › starts the same practice job once with a frozen no-charge baseline (2.6s)
+  ✓  209 [mobile-360] › e2e/UIWIRE-4.spec.ts:4:5 › records exact v2 provenance once and preserves it through cancellation and v3 (2.6s)
+  ✓  212 [mobile-360] › e2e/UIWIRE-5.spec.ts:10:5 › does not offer activation for an unaccepted quote (1.1s)
+  ✓  211 [mobile-360] › e2e/UIWIRE-5.spec.ts:9:5 › labels the optional isolated base obligation as simulated and unpaid (2.4s)
+  ✓  213 [mobile-360] › e2e/UIWIRE-6.spec.ts:7:5 › persists deterministic job findings, exposes their real rules, and dismisses without authority (1.6s)
+  ✓  215 [mobile-360] › e2e/UIWIRE-7.spec.ts:4:5 › fails closed for malformed, live-mode, wrong-scope and unfinalized proof requests (2.6s)
+  ✓  214 [mobile-360] › e2e/UIWIRE-7.spec.ts:3:5 › attaches finalized generated proof, completes once, reloads, and appends rework on invalidation (3.9s)
+  ✓  216 [mobile-360] › e2e/UIWIRE-8.spec.ts:5:5 › prices and approves immutable extras and omissions (3.4s)
+  ✓  217 [mobile-360] › e2e/UIWIRE-8.spec.ts:6:5 › blocks missing prices and retains rejected revisions (2.6s)
+  ✓  219 [mobile-360] › e2e/VALUE-1-READ-RECOVERY.spec.ts:143:5 › initial pending, transport/HTTP/JSON/schema failures and GET-only recovery keep facts honest (3.0s)
+  ✓  218 [mobile-360] › e2e/UIWIRE-9.spec.ts:1:2712 › assembles immutable accepted history, approved changes and exact proof manifest (4.0s)
+  ✓  220 [mobile-360] › e2e/VALUE-1-READ-RECOVERY.spec.ts:188:5 › refresh hides old figures; only the latest real read or failure may publish (3.2s)
+  ✓  221 [mobile-360] › e2e/VALUE-1-READ-RECOVERY.spec.ts:237:5 › a delayed real job A read cannot replace job B after client navigation (2.8s)
+  ✓  223 [mobile-360] › e2e/variations.spec.ts:1:47 › log extra creates, prices and approves an exact synthetic variation revision (516ms)
+  ✓  224 [mobile-360] › e2e/VOICE-1.spec.ts:20:5 › local-only dictation is reviewed, persisted once, and confirmed (1.9s)
+  ✓  225 [mobile-360] › e2e/VOICE-1.spec.ts:29:5 › unsupported browser keeps typed fallback usable (383ms)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  226 [mobile-360] › e2e/VOICE-1.spec.ts:31:55 › denied stops local recognition and preserves typed work (427ms)
+  ✓  227 [mobile-360] › e2e/VOICE-1.spec.ts:31:55 › no-speech stops local recognition and preserves typed work (446ms)
+  ✓  228 [mobile-360] › e2e/VOICE-1.spec.ts:33:5 › cancel and navigation clear provisional words and stop recognition (509ms)
+  ✓  222 [mobile-360] › e2e/VALUE-1.spec.ts:1:3136 › explains the completed core job from persisted facts and follows receipt reversal (6.0s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  230 [desktop] › e2e/capture.spec.ts:3:5 › walk-it shows source beside five-plus cited suggestions and an unknown rate (514ms)
+  ✓  231 [desktop] › e2e/capture.spec.ts:4:5 › invalid provider output preserves original for retry (466ms)
+  ✓  229 [desktop] › e2e/AUDIT-FIX-API-VARIATION.spec.ts:7:5 › captured extras can be priced, and stale edits and rejections preserve approved terms (3.1s)
+  ✓  233 [desktop] › e2e/CH-1.spec.ts:21:5 › CH-1 saved v1 sample retains labelled historic pricing (1.8s)
+  ✓  232 [desktop] › e2e/CH-1.spec.ts:9:5 › CH-1 new job persists v3 terms across reload, Jobs and a second context (3.4s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  234 [desktop] › e2e/CH-1.spec.ts:27:5 › CH-1 copy audit covers issued customer documents and stored projections (3.7s)
+  ✓  236 [desktop] › e2e/CH-2.spec.ts:126:7 › Kitchen extension reopens through its Jobs link and the persisted live state decides the watchdog (939ms)
+  ✓  235 [desktop] › e2e/CH-2.spec.ts:20:5 › watchdog panels require the persisted live state and retain authoritative inputs across clients (4.9s)
+  ✓  237 [desktop] › e2e/CH-2.spec.ts:126:7 › Loft conversion reopens through its Jobs link and the persisted quoting state decides the watchdog (890ms)
+  ✓  239 [desktop] › e2e/CH-3a.spec.ts:5:5 › CH-3a a new practice session cannot read, change, import or list another session's parties; reused storageState retains access (1.5s)
+  ✓  238 [desktop] › e2e/CH-2.spec.ts:161:5 › proof commands replay the response they first gave, after later finalisation, completion and invalidation (2.1s)
+  ✓  241 [desktop] › e2e/CH-3a.spec.ts:117:5 › CH-3a makes reuse explicit, leaves different flats separate, and rejects stale bindings (2.2s)
+  ✓  240 [desktop] › e2e/CH-3a.spec.ts:83:5 › CH-3a captures structured parties, gates live, and preserves authoritative identity across browsers (2.5s)
+  ✓  243 [desktop] › e2e/CH-3a.spec.ts:175:5 › CH-3a refuses a save against customer details another writer revised (1.5s)
+  ✓  242 [desktop] › e2e/CH-3a.spec.ts:155:5 › CH-3a refuses a save from a panel another writer has already superseded, and writes nothing (1.9s)
+  ✓  244 [desktop] › e2e/CH-3a.spec.ts:192:5 › CH-3a gives two writers on one revision one success and one typed conflict through the UI (1.6s)
+  ✓  245 [desktop] › e2e/CH-3a.spec.ts:212:5 › CH-3a tells a stale panel the job went live instead of showing a raw code (2.3s)
+  ✓  246 [desktop] › e2e/CH-3a.spec.ts:233:5 › CH-3a quote preview shows its frozen customer and a changed binding needs a new preview (1.7s)
+  ✓  247 [desktop] › e2e/CH-3a.spec.ts:262:5 › CH-3a a lifecycle refresh cannot carry a stale draft over another writer's customer revision (1.6s)
+  ✓  248 [desktop] › e2e/CH-3a.spec.ts:306:7 › CH-3a editing Town after confirming reuse persists the edit as a separate site (1.3s)
+  ✓  249 [desktop] › e2e/CH-3a.spec.ts:306:7 › CH-3a editing UK postcode after confirming reuse persists the edit as a separate site (1.4s)
+  ✓  250 [desktop] › e2e/CH-3a.spec.ts:306:7 › CH-3a editing UPRN (optional) after confirming reuse persists the edit as a separate site (1.4s)
+  ✓  251 [desktop] › e2e/CH-3a.spec.ts:330:5 › CH-3a rejects embedded address-line CR/LF before persistence and preserves the saved site on reopen and unchanged save (1.4s)
+  ✓  252 [desktop] › e2e/CH-3a.spec.ts:354:5 › CH-3a reopening shows the saved details, and saving them unchanged creates no new customer or site (1.3s)
+  ✓  253 [desktop] › e2e/CH-3a.spec.ts:383:5 › CH-3a a changed customer revises the same customer and a changed site is a new site; nothing else is created (1.1s)
+  ✓  254 [desktop] › e2e/CH-3a.spec.ts:402:7 › CH-3a keeps all 2 address lines when another detail changes, and edits them only deliberately (1.3s)
+  ✓  255 [desktop] › e2e/CH-3a.spec.ts:402:7 › CH-3a keeps all 3 address lines when another detail changes, and edits them only deliberately (1.3s)
+  ✓  256 [desktop] › e2e/CH-3a.spec.ts:402:7 › CH-3a keeps all 4 address lines when another detail changes, and edits them only deliberately (1.3s)
+  ✓  257 [desktop] › e2e/CH-3a.spec.ts:424:5 › CH-3a refuses a fifth address line in words before anything is written (787ms)
+  ✓  258 [desktop] › e2e/CH-3a.spec.ts:436:7 › CH-3a reopening and unchanged save keep the bound customer revision after a second job revises it (2.1s)
+  ✓  259 [desktop] › e2e/CH-3a.spec.ts:436:7 › CH-3a reopening and unchanged save keep the bound payer revision after a second job revises it (2.3s)
+  ✓  261 [desktop] › e2e/CH-4.spec.ts:166:5 › close requires an allowed reason, displays it, and replay preserves the exact event sequence (2.8s)
+  ✓  260 [desktop] › e2e/CH-4.spec.ts:42:5 › resume and unlocked reopen persist, retry exactly after an unknown outcome, and refuse the Solo cap (4.6s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  262 [desktop] › e2e/CH-4.spec.ts:206:5 › locked close can reopen for invoicing while new site work still requires a linked job (3.4s)
+  ✓  263 [desktop] › e2e/CH-5.spec.ts:5:5 › CH-5 previews, attests and reloads an invoiced v3 import without a count or an invented lock (2.5s)
+  ✓  264 [desktop] › e2e/CH-7.spec.ts:16:6 › F15 persists candidate Q, exact available reason and source across contexts (2.2s)
+  ✓  265 [desktop] › e2e/CH-7.spec.ts:16:6 › F17 persists candidate Q, exact available reason and source across contexts (2.2s)
+  ✓  266 [desktop] › e2e/CH-7.spec.ts:16:6 › F18 persists candidate Q, exact available reason and source across contexts (2.5s)
+  ✓  267 [desktop] › e2e/CH-7.spec.ts:16:6 › F19 persists candidate Q, exact available reason and source across contexts (2.3s)
+  ✓  268 [desktop] › e2e/CH-7.spec.ts:16:6 › F20 persists candidate Q, exact available reason and source across contexts (2.2s)
+  ✓  269 [desktop] › e2e/CH-7.spec.ts:16:6 › F21 persists candidate Q, exact available reason and source across contexts (2.2s)
+  ✓  271 [desktop] › e2e/CH-7.spec.ts:51:5 › v3 refuses injected authority, missing settlement, and changed replay payload (1.3s)
+  ✓  270 [desktop] › e2e/CH-7.spec.ts:16:6 › F22 persists candidate Q, exact available reason and source across contexts (2.2s)
+  ✓  272 [desktop] › e2e/CH-7.spec.ts:64:5 › a duplicate-payment case offers no v1 review controls and refuses a v1 command (1.3s)
+  ✓  273 [desktop] › e2e/CH-7.spec.ts:78:5 › F17 refund settled before opening shows the existing timing exclusion through Review v3 F17 (1.4s)
+  ✓  274 [desktop] › e2e/CH-7.spec.ts:90:5 › [A1 A6 Browser] insurer-paid F18 uses its own exclusion reason and survives reload (1.6s)
+  ✓  275 [desktop] › e2e/CH-7.spec.ts:107:6 › F14 supplier credit persists across reload and a second browser context (3.1s)
+  ✓  277 [desktop] › e2e/CH-9-business.spec.ts:5:5 › CH9-B10 held business view survives reload, preserves job access and exposes no money (513ms)
+  ✓  278 [desktop] › e2e/CH-9-business.spec.ts:40:5 › CH-9 composed job v3 read authenticates each session and never discloses producer money (105ms)
+  ✓  276 [desktop] › e2e/CH-7.spec.ts:107:6 › F16 supplier credit persists across reload and a second browser context (3.7s)
+  ✓  279 [desktop] › e2e/ch6-integrity-v3.spec.ts:5:5 › CH-6 saved v1 keeps its own pricing and recorded checks through family-first composition (1.7s)
+  ✓  281 [desktop] › e2e/customer-invoice.spec.ts:2:5 › issues one synthetic invoice and projects partial, paid, reversed and credited history (509ms)
+  ✓  282 [desktop] › e2e/decision-inbox.spec.ts:3:5 › Decision Inbox lists, details, and dismisses an advisory without authorization (1.2s)
+  ✓  280 [desktop] › e2e/ch6-integrity-v3.spec.ts:33:5 › CH-6 fresh v3 shows saved advisory sources without v1 pricing or pre-lock hidden output (2.6s)
+  ✓  283 [desktop] › e2e/DEMO-A1-scenarios.spec.ts:39:5 › DEMO-S no proof: a pending original cannot complete work or authorize an invoice (2.2s)
+  ✓  284 [desktop] › e2e/DEMO-A1-scenarios.spec.ts:61:5 › DEMO-S prevention: advisory checks and prevented spend never become recovered cash (2.2s)
+  ✓  285 [desktop] › e2e/DEMO-A1-scenarios.spec.ts:92:5 › DEMO-S corrupted evidence: wrong immutable version fails verification and cannot complete (2.1s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  287 [desktop] › e2e/DEMO-A1-scenarios.spec.ts:187:5 › DEMO-S tenant isolation: foreign session and same-session foreign job cannot read or attach evidence (5.8s)
+  ✓  286 [desktop] › e2e/DEMO-A1-scenarios.spec.ts:108:5 › DEMO-S disclosure before lock: real detection and support disclosure remain ineligible after lock (8.7s)
+  ✓  288 [desktop] › e2e/DEMO-A1-scenarios.spec.ts:226:5 › DEMO-S stale authority: revoked session cannot replay a successful command or create new work (1.9s)
+  ✓  289 [desktop] › e2e/DEMO-A1-scenarios.spec.ts:245:5 › DEMO-S stale authority: a superseded approval target cannot be replayed onto a newer price (2.2s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  290 [desktop] › e2e/DEMO-J3-integrity.spec.ts:195:5 › DEMO-J3-INTEGRITY: database-backed checks and demo-only helper refusals across the full journey (5.0m)
+  ✓  292 [desktop] › e2e/deploy-smoke.spec.ts:3:5 › seeded demo sign-in reaches the first M1 journey step (314ms)
+  ✓  293 [desktop] › e2e/ENT-2.spec.ts:21:5 › the office imports generated files, sees a typed error on a refused row, revises orders, and the persisted state is the same after reload and in a second browser (2.0s)
+  ✓  294 [desktop] › e2e/ENT-2.spec.ts:115:5 › without a generated contractor practice the register asks you to start one, and a refused request never looks saved (120ms)
+  ✓  295 [desktop] › e2e/fee-statement.spec.ts:3:5 › shows a non-collectible transparent per-job fee illustration (2.4s)
+  ✓  296 [desktop] › e2e/final-account-double-click.spec.ts:7:5 › double-click builds one final account without a false sources-changed notice (2.1s)
+  ✓  297 [desktop] › e2e/final-account-double-click.spec.ts:46:7 › handles STALE_FINAL_ACCOUNT_REVISION and allows a later build (2.5s)
+  ✓  298 [desktop] › e2e/final-account-double-click.spec.ts:46:7 › handles STALE_APPROVED_SOURCES and allows a later build (2.6s)
+  ✓  299 [desktop] › e2e/final-account-double-click.spec.ts:78:5 › releases the build guard after a network failure (2.2s)
+  ✓  300 [desktop] › e2e/final-account.spec.ts:3:5 › shows an unissued draft final account with exact totals and a synthetic issue action (370ms)
+  ✓  301 [desktop] › e2e/m1-15-complete-journey.spec.ts:6:5 › M1-15 complete synthetic journey retains the job spine and accepted scope (5.7s)
+  ✓  302 [desktop] › e2e/M1-16-S.spec.ts:4:5 › a draft job shows no frozen cap and no integrity findings (738ms)
+  ✓  303 [desktop] › e2e/M1-16-S.spec.ts:5:5 › an activated job shows its own frozen cap and the findings its real facts produce (2.2s)
+  ✓  304 [desktop] › e2e/M2-1-order-screen.spec.ts:15:5 › reviews a cited above-rate order and confirms exactly one practice effect (3.6s)
+  ✓  305 [desktop] › e2e/M2-1A-S.spec.ts:1:122 › records exact persisted synthetic material prices (1.8s)
+  ✓  306 [desktop] › e2e/M2-1B-S.spec.ts:3:5 › checks and exactly authorizes one synthetic purchase order effect (3.5s)
+  ✓  307 [desktop] › e2e/M2-2-S.spec.ts:2:5 › ingests generated materials-B documents and appends actual receipts (3.4s)
+  ✓  308 [desktop] › e2e/M2-2-S.spec.ts:5:5 › refuses over-delivery with rejected stock and keeps a normal later delivery (2.5s)
+  ✓  309 [desktop] › e2e/M2-3-S.spec.ts:2:5 › extracts cited supplier facts and preserves human correction (2.8s)
+  ✓  310 [desktop] › e2e/M2-4-S.spec.ts:2:5 › matches materials-B sources and appends correction history (3.3s)
+  ✓  311 [desktop] › e2e/M2-5-S.spec.ts:2:5 › turns confirmed materials-B overcharges into cited reviewable checks (3.6s)
+  ✓  312 [desktop] › e2e/M2-5-S.spec.ts:3:5 › held-out report renders its actual frozen output (73ms)
+  ✓  313 [desktop] › e2e/M2-6-S.spec.ts:1:358 › shows readiness risks and requires an explicit revised plan (2.7s)
+  ✓  314 [desktop] › e2e/m2-7-dashboard.spec.ts:13:5 › owner sees content-free outcomes, honest unknowns and uncapped mandatory blockers (2.6s)
+  ✓  315 [desktop] › e2e/M2-7-S.spec.ts:1:358 › keeps mandatory work visible and explains advisory relevance (2.6s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  316 [desktop] › e2e/M4-1-S.spec.ts:11:5 › opens and manages evidence-linked recovery cases without inventing recovered money (4.4s)
+  ✓  291 [desktop] › e2e/DEMO-J3-shadow.spec.ts:249:5 › DEMO-J3 fresh shadow-30000 completes customer approvals, one paid invoice, £800 Q and verified packs (6.0m)
+  ✓  317 [desktop] › e2e/M4-1-S.spec.ts:101:5 › amends a claim to what was received, closes it as recovered and reverses it to reopen, always on the case the user chose (3.9s)
+  ✓  318 [desktop] › e2e/M4-1-S.spec.ts:179:5 › a written-off case that is reversed and re-landed ends closed, and a fully received case closes again after a dispute (4.1s)
+  ✓  319 [desktop] › e2e/M4-1-S.spec.ts:225:5 › two browsers opening cases at the same time each select the case they opened (1.7s)
+  ✓  321 [desktop] › e2e/M4-1-S.spec.ts:278:5 › a lost save answer cannot be turned into a duplicate case: the only retry re-sends the same command id (1.4s)
+  ✓  320 [desktop] › e2e/M4-1-S.spec.ts:243:5 › an unread case list is shown as loading or failed, never as empty, and the failure can be retried (2.1s)
+  ✓  323 [desktop] › e2e/M4-1-S.spec.ts:368:5 › repair 17: a below-settled retry keeps a delayed £900 amendment held across an approved reversal and late execution (1.9s)
+  ✓  322 [desktop] › e2e/M4-1-S.spec.ts:313:5 › approved £2,500 plus overlapping manual £1,000 remains received in full after recording and reversing the manual record (2.4s)
+  ✓  324 [desktop] › e2e/M4-2-S.spec.ts:66:5 › approves exact cited eligibility without creating landing or fee (2.6s)
+  ✓  325 [desktop] › e2e/M4-2-S.spec.ts:67:5 › shows every D03 exclusion and keeps posting unavailable (3.8s)
+  ✓  326 [desktop] › e2e/M4-2-S.spec.ts:81:5 › re-reviews and approves at the later policy revision after the policy is superseded (2.3s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  328 [desktop] › e2e/M4-3-S.spec.ts:158:5 › includes only the merchant case's recorded supplier versions (3.1s)
+  ✓  327 [desktop] › e2e/M4-3-S.spec.ts:76:5 › maps immutable customer sources, verifies exports server-side and invalidates recorded attachment approval (5.2s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  329 [desktop] › e2e/M4-5-S.spec.ts:82:5 › previews, approves and simulates one factual customer message that is delivered exactly once (8.5s)
+  ✓  330 [desktop] › e2e/M4-5-S.spec.ts:180:5 › uses supplier wording and recipient, shows an unknown outcome as unknown, and checks rather than resends (8.5s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  332 [desktop] › e2e/M4-5-S.spec.ts:316:5 › two browser contexts approving the same revision yield one approval and a typed stale conflict (5.8s)
+  ✓  331 [desktop] › e2e/M4-5-S.spec.ts:268:5 › revocation and changed evidence both block execution and nothing is sent (8.3s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  334 [desktop] › e2e/M4-5-S.spec.ts:374:5 › a new practice session cannot see or act on another session's recovery messages (3.3s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  335 [desktop] › e2e/M4-5-S.spec.ts:416:5 › once the register has loaded, the delivery lookup and the evidence-pack tick never disable the Open buttons or move focus (3.4s)
+  ✓  333 [desktop] › e2e/M4-5-S.spec.ts:343:5 › an interrupted claim becomes uncertain after its lease and can be checked without resending (8.3s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  336 [desktop] › e2e/M4-6-S.spec.ts:68:5 › passing practice time only makes the reminder ready to review; only approving the exact reminder sends it, once, and a revoked approval needs approving again (7.0s)
+  ✓  337 [desktop] › e2e/M4-6-S.spec.ts:182:5 › a cancellation, a dispute and a settlement each show Stopped and create no due Decision; a reopened case needs a new reviewed follow-up (7.2s)
+  ✓  338 [desktop] › e2e/M4-7-S.spec.ts:85:5 › a NEW stranger session cannot snapshot or connect a captured job before its creator touches the feed (1.1s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  340 [desktop] › e2e/M4-7-S.spec.ts:235:5 › holds an unknown duplicate for review, then shows every fixed generated movement in exact pounds (3.2s)
+  ✓  341 [desktop] › e2e/M4-7-S.spec.ts:284:5 › refuses forged, unauthorised and conflicting requests, and persists nothing from them (1.9s)
+  ✓  342 [desktop] › e2e/M4-7-S.spec.ts:346:5 › pauses further changes until the saved state is read after an unknown transport result (2.0s)
+  ✓  339 [desktop] › e2e/M4-7-S.spec.ts:116:5 › £384: pending cannot qualify, settled stays unallocated, only a matched receipt qualifies, disconnect keeps history (8.0s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  343 [desktop] › e2e/M4-8-S.spec.ts:19:5 › M4-8 suggested matches prefill the form but require evidence, review and exact approval (2.7s)
+  ✓  344 [desktop] › e2e/M4-8-S.spec.ts:40:5 › DW1 persists exact approved allocations and source identities across reload, Jobs navigation and a second context (4.3s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  345 [desktop] › e2e/M4-8-S.spec.ts:89:5 › DW4 appends an approved reversal, reopens case 2 and keeps the original source facts (3.9s)
+  ✓  346 [desktop] › e2e/M4-8-S.spec.ts:114:5 › DW5 invalidates only claim 2 proof without changing receipts, allocated rows or invoice balance (3.1s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  347 [desktop] › e2e/M4-8-S.spec.ts:128:5 › DW3 refuses unavailable cash with a focused error; concurrent alternate approvals and replay conserve the receipt (3.1s)
+  ✓  348 [desktop] › e2e/M4-8-S.spec.ts:171:5 › pauses after unknown command and failed refresh until a successful saved-state read (2.8s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  349 [desktop] › e2e/M4-8-S.spec.ts:194:5 › B2/B6 selects an issued credit note and preserves its source through exact reversal approval (3.5s)
+  ✓  350 [desktop] › e2e/MON-5-customer-journey.spec.ts:10:5 › MON-5 customer link through quote, extras, stage and builder message evidence (5.1s)
+  ✓  351 [desktop] › e2e/MON-7.spec.ts:8:5 › MON-7a cited property facts persist for a homeowner across reload, Jobs and a returning browser (2.4s)
+  ✓  353 [desktop] › e2e/MON-7.spec.ts:65:5 › MON-7a leaves VALUE-1 and saved fee illustration figures unchanged (3.2s)
+  ✓  352 [desktop] › e2e/MON-7.spec.ts:43:5 › MON-7a free company and opted-in feeds remain advisory, stale and missing remain unknown (3.3s)
+  ✓  355 [desktop] › e2e/MON1-J.spec.mts:24:1 › MON1-J: Builder's five distinct started jobs show the next job included after reload (1.5s)
+  ✓  354 [desktop] › e2e/MON-7.spec.ts:124:5 › MON-7 curve uses this job's saved stage forecasts, with cited unknowns and no cross-session access (2.1s)
+  ✓  357 [desktop] › e2e/MON1-J.spec.mts:280:1 › MON1-J: practice and failed meter reads leave the jobs page usable without a figure (324ms)
+  ✓  358 [desktop] › e2e/payment-fee-statements.spec.ts:5:5 › payment screen keeps exact approvals, persists opt-in/revoke and pauses during dispute (2.6s)
+  ✓  356 [desktop] › e2e/MON1-J.spec.mts:102:1 › MON1-J: real starts, finish tail, London stop, restart, Solo grace and cap (3.5s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  359 [desktop] › e2e/PRACTICE-FACTS-1.spec.ts:7:5 › six extra facts persist, keep the merged panel separate, and show supplier invoice fully paid (4.1s)
+  ✓  361 [desktop] › e2e/proof-capture.spec.ts:2:5 › capture upload verify and gated completion have distinct states (696ms)
+  ✓  360 [desktop] › e2e/PRACTICE-FACTS-1.spec.ts:34:5 › both F5 receipts match on screen only after settlement and are absent from the merged panel (4.8s)
+  ✓  362 [desktop] › e2e/proof-capture.spec.ts:3:5 › rejected upload never appears complete (694ms)
+  ✓  363 [desktop] › e2e/quote-acceptance.spec.ts:4:5 › builder attests exact terms honestly, then cancellation and decline preserve history (2.4s)
+  ✓  364 [desktop] › e2e/quote-acceptance.spec.ts:7:5 › [MIGFIX-4.2] superseded document cannot be accepted with a fresh revision through the persisted browser journey (2.0s)
+  ✓  365 [desktop] › e2e/quote-editor.spec.ts:3:5 › builder prices a synthetic quote and sees exact live coverage (1.4s)
+  ✓  366 [desktop] › e2e/quote-send.spec.ts:4:5 › preview binds exact recipient and version before free fake delivery (2.2s)
+  ✓  367 [desktop] › e2e/review-confirm.spec.ts:3:5 › builder reconciles cited lines and confirms synthetic scope (1.3s)
+  ✓  369 [desktop] › e2e/SBOX-1.spec.ts:22:5 › tenant selection and foreign jobs fail closed without disclosure (454ms)
+  ✓  368 [desktop] › e2e/SBOX-1.spec.ts:11:5 › persistent workspace survives reload and a second authorized context (865ms)
+  ✓  370 [desktop] › e2e/SBOX-1.spec.ts:29:5 › an unavailable read is recoverable and never replaced with fixture success (583ms)
+  ✓  371 [desktop] › e2e/SBOX-2.spec.ts:5:5 › builder advances a persisted deterministic synthetic run (892ms)
+  ✓  373 [desktop] › e2e/SBOX-2.spec.ts:7:5 › server rejects forged environments without creating work (276ms)
+  ✓  372 [desktop] › e2e/SBOX-2.spec.ts:6:5 › reset creates a new run and keeps the previous archive private (840ms)
+  ✓  374 [desktop] › e2e/SBOX-resume.spec.ts:36:5 › opens a saved quote directly and preserves source identity after reload and a second context (2.7s)
+  ✓  375 [desktop] › e2e/SBOX-resume.spec.ts:66:5 › reopens accepted and active work without rewriting lifecycle or scope (3.0s)
+  ✓  376 [desktop] › e2e/SBOX-resume.spec.ts:106:5 › does not expose saved job controls for missing jobs, unauthenticated requests or a foreign tenant selection (1.8s)
+  ✓  378 [desktop] › e2e/shell.spec.ts:11:5 › first visit explains the journey and the help button reopens it (413ms)
+  ✓  379 [desktop] › e2e/shell.spec.ts:29:5 › sign-in opens the accessible shell without horizontal overflow (367ms)
+  ✓  377 [desktop] › e2e/SBOX-SESSION-1.spec.ts:5:5 › creation binds ownership before another session's first read or write (2.2s)
+  ✓  380 [desktop] › e2e/shell.spec.ts:44:5 › live job has exact document, payment and pilot provenance (286ms)
+  ✓  381 [desktop] › e2e/shell.spec.ts:54:5 › tenant switching re-keys data and shows the empty state (398ms)
+  ✓  383 [desktop] › e2e/shell.spec.ts:78:5 › server boundary hides unauthorized tenant and cross-tenant job IDs (296ms)
+  ✓  382 [desktop] › e2e/shell.spec.ts:62:5 › typed failure retries in place without creating anything (569ms)
+  ✓  384 [desktop] › e2e/simulation-fee-collection.spec.ts:6:5 › fake collection stays pending through redirects and unknown outcomes, then refunds £250 and retains £32 (2.2s)
+  ✓  385 [desktop] › e2e/simulation-fee-statements.spec.ts:6:5 › immutable statement download and linked reversal correction retain exact hashes without automatic writes (2.1s)
+  ✓  387 [desktop] › e2e/SV-3.spec.ts:35:5 › SV-3-BARRIER-1: departure waits for the outstanding drain (149ms)
+  ✓  388 [desktop] › e2e/SV-3.spec.ts:43:5 › SV-3-BARRIER-2: the departure boundary clears timers and blocks late registrations (45ms)
+  ✓  389 [desktop] › e2e/SV-3.spec.ts:53:5 › SV-3-BARRIER-3: each destination starts a fresh interval registry (46ms)
+  ✓  390 [desktop] › e2e/SV-3.spec.ts:60:5 › SV-3-BARRIER-4: drain failures retain the original route and error (34ms)
+  ✓  386 [desktop] › e2e/simulation-money-check.spec.ts:5:5 › money review keeps the three books and unresolved source rows visible; restore stays paused (2.0s)
+  ✓  391 [desktop] › e2e/SV-3.spec.ts:68:5 › I: mandatory must-surface Decision survives reload and return through Jobs (2.9s)
+  ✓  393 [desktop] › e2e/SV-4.spec.ts:5:5 › DW2/DW4/DW9: persisted completion survives reload, Jobs and a second browser (4.0s)
+  ✓  392 [desktop] › e2e/SV-3.spec.ts:96:5 › Q: every visible count/badge/error, cache key, storage and notification surface ignores 25 linked held signals (6.6s)
+  ✓  394 [desktop] › e2e/SV-4.spec.ts:57:40 › DW8: fixed completion view with 0 held signals (3.4s)
+  ✓  395 [desktop] › e2e/SV-4.spec.ts:57:40 › DW8: fixed completion view with 25 held signals (3.4s)
+  ✓  396 [desktop] › e2e/SV-4.spec.ts:68:5 › DW7: pending and failed reconciliation refuse both invoice kinds in commands and UI (3.6s)
+  ✓  398 [desktop] › e2e/SV-5.spec.ts:10:5 › before lock nothing is revealed; after lock the check shows as running and survives reload (2.3s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+  ✓  399 [desktop] › e2e/SV-5.spec.ts:21:5 › after lock the check is running, shows no items and keeps that state after reload (3.3s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  397 [desktop] › e2e/SV-4.spec.ts:97:5 › DW7: another lock or cutoff cannot complete this job's check in commands or UI (1.1m)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+  ✓  400 [desktop] › e2e/SV-5.spec.ts:63:5 › E (existing proposal, real run): a revealed item answered Not done keeps that answer after reload (1.0m)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  402 [desktop] › e2e/SV-5.spec.ts:139:5 › D (practice run): a photo of work in the original quote is reconciled, never revealed (57.7s)
+  ✓  401 [desktop] › e2e/SV-5.spec.ts:81:5 › K (existing proposal, real run): Already included must name a locked line and leaves the lock unchanged (1.1m)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  403 [desktop] › e2e/SV-5.spec.ts:155:5 › B (real run): a held extra captured for £800 at final review is never revealed (58.3s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  404 [desktop] › e2e/SV-5.spec.ts:177:5 › O (real run): zero-result wording survives reload and replay creates no duplicate classification (58.6s)
+  ✓  406 [desktop] › e2e/SV-5.spec.ts:305:5 › L source leg: an old message received after lock is shown at once and never fee eligible (2.9s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  407 [desktop] › e2e/SV-5.spec.ts:326:5 › L: import old evidence through the locked-job control; worker replay preserves one fee-free signal (58.2s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  405 [desktop] › e2e/SV-5.spec.ts:231:5 › I (practice journey): a £8,000 request fires D13 before lock and stays permanently fee-free (2.0m)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  408 [desktop] › e2e/SV-5.spec.ts:364:5 › J: three fictional sources produce one coalesced catch, one recovery and one fee (1.0m)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  410 [desktop] › e2e/SV-6.spec.ts:128:5 › SV-6 M: partial blended receipt allocates only its exact quarter catch share (59.8s)
+  ✓  409 [desktop] › e2e/SV-6.spec.ts:103:5 › SV-6 G: half a catch settles, then a second settlement appends a cumulative revision (1.0m)
+  ✓  411 [desktop] › e2e/SV-7A.spec.ts:11:5 › a diary note and a fictional customer message persist; the diary shows only the standing notice (3.5s)
+  ✓  412 [desktop] › e2e/SV-7A.spec.ts:45:5 › unknown saves retry the exact command; refused saves preserve the draft (3.3s)
+  ✓  414 [desktop] › e2e/switch-live.spec.ts:4:5 › switch live freezes the accepted baseline in the no-charge pilot (2.6s)
+  ✓  413 [desktop] › e2e/SV-7A.spec.ts:88:5 › on-site diary work records one site event, exact replay adds none, and off-site work adds none (3.4s)
+  ✓  416 [desktop] › e2e/UI-DESIGN-JOBS.spec.ts:29:5 › UI-DESIGN-JOBS a job started from the design opens in its designed Work tab (691ms)
+  ✓  415 [desktop] › e2e/UI-DESIGN-JOBS.spec.ts:12:5 › UI-DESIGN-JOBS main screens and job tabs open in the design (2.1s)
+  ✓  418 [desktop] › e2e/UIWIRE-1.spec.ts:7:5 › an edited description persists without changing the money fixture (1.1s)
+  ✓  417 [desktop] › e2e/UIWIRE-1.spec.ts:6:5 › Walk, review and confirm the exact core-1000 baseline on the same job (2.0s)
+  ✓  419 [desktop] › e2e/UIWIRE-1.spec.ts:8:5 › a human omitted line persists without inheriting a rate (1.0s)
+  ✓  420 [desktop] › e2e/UIWIRE-1.spec.ts:9:5 › split and merge retain explicit review lineage (1.2s)
+  ✓  421 [desktop] › e2e/UIWIRE-1.spec.ts:10:5 › unknown source remains raw and cannot execute or authorise an action (673ms)
+  ✓  422 [desktop] › e2e/UIWIRE-1.spec.ts:11:5 › a stale second tab gets the exact conflict and concurrent confirmation is idempotent (1.7s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  423 [desktop] › e2e/UIWIRE-10.spec.ts:1:2866 › issues one immutable numbered synthetic customer invoice (5.6s)
+  ✓  424 [desktop] › e2e/UIWIRE-11.spec.ts:1:2866 › corrects an immutable synthetic customer invoice with an approved credit note (5.8s)
+  ✓  425 [desktop] › e2e/UIWIRE-13.spec.ts:4:5 › missing proof stays at zero and cannot be approved (3.2s)
+  ✓  426 [desktop] › e2e/UIWIRE-13.spec.ts:5:5 › complete generated sources permit one exact simulated approval (3.1s)
+  ✓  427 [desktop] › e2e/UIWIRE-14.spec.ts:4:5 › persisted statement and isolated exact what-if calculations (3.7s)
+  ✓  428 [desktop] › e2e/UIWIRE-15-READ-RECOVERY.spec.ts:60:5 › initial pending and faulty reads never publish a zero projection; real GET recovery persists (3.7s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+  ✓  430 [desktop] › e2e/UIWIRE-15-READ-RECOVERY.spec.ts:246:5 › late background and abandoned requested checks preserve workbench focus (2.3s)
+{"level":"log","message":"[REDACTED]"}
+  ✓  429 [desktop] › e2e/UIWIRE-15-READ-RECOVERY.spec.ts:144:5 › refresh failure hides a previously completed real practice job and recovers with GETs (7.1s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  432 [desktop] › e2e/UIWIRE-2.spec.ts:6:5 › prices and revises core-1000 without losing the old quote (2.4s)
+  ✓  431 [desktop] › e2e/UIWIRE-15.spec.ts:1:3136 › continues one persisted practice job through the complete synthetic core loop (6.1s)
+  ✓  433 [desktop] › e2e/UIWIRE-2.spec.ts:7:5 › blocks incomplete and unsupported drafts while retaining input (1.6s)
+  ✓  434 [desktop] › e2e/UIWIRE-2.spec.ts:8:5 › a stale browser conflicts instead of overwriting revision two (2.0s)
+  ✓  435 [desktop] › e2e/UIWIRE-3.spec.ts:5:5 › previews immutable v2 and delivers only through the fake executor (2.9s)
+  ✓  436 [desktop] › e2e/UIWIRE-3.spec.ts:6:5 › invalidates preview on recipient change and reconciles unknown outcome (2.2s)
+  ✓  437 [desktop] › e2e/UIWIRE-4.spec.ts:4:5 › records exact v2 provenance once and preserves it through cancellation and v3 (3.3s)
+  ✓  438 [desktop] › e2e/UIWIRE-5.spec.ts:8:5 › starts the same practice job once with a frozen no-charge baseline (3.6s)
+  ✓  440 [desktop] › e2e/UIWIRE-5.spec.ts:10:5 › does not offer activation for an unaccepted quote (1.4s)
+  ✓  439 [desktop] › e2e/UIWIRE-5.spec.ts:9:5 › labels the optional isolated base obligation as simulated and unpaid (2.8s)
+  ✓  441 [desktop] › e2e/UIWIRE-6.spec.ts:7:5 › persists deterministic job findings, exposes their real rules, and dismisses without authority (1.9s)
+  ✓  443 [desktop] › e2e/UIWIRE-7.spec.ts:4:5 › fails closed for malformed, live-mode, wrong-scope and unfinalized proof requests (3.0s)
+  ✓  442 [desktop] › e2e/UIWIRE-7.spec.ts:3:5 › attaches finalized generated proof, completes once, reloads, and appends rework on invalidation (4.6s)
+  ✓  445 [desktop] › e2e/UIWIRE-8.spec.ts:6:5 › blocks missing prices and retains rejected revisions (3.0s)
+  ✓  444 [desktop] › e2e/UIWIRE-8.spec.ts:5:5 › prices and approves immutable extras and omissions (4.3s)
+  ✓  447 [desktop] › e2e/VALUE-1-READ-RECOVERY.spec.ts:143:5 › initial pending, transport/HTTP/JSON/schema failures and GET-only recovery keep facts honest (3.4s)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  446 [desktop] › e2e/UIWIRE-9.spec.ts:1:2712 › assembles immutable accepted history, approved changes and exact proof manifest (4.5s)
+  ✓  448 [desktop] › e2e/VALUE-1-READ-RECOVERY.spec.ts:188:5 › refresh hides old figures; only the latest real read or failure may publish (3.7s)
+  ✓  449 [desktop] › e2e/VALUE-1-READ-RECOVERY.spec.ts:237:5 › a delayed real job A read cannot replace job B after client navigation (3.3s)
+  ✓  451 [desktop] › e2e/variations.spec.ts:1:47 › log extra creates, prices and approves an exact synthetic variation revision (481ms)
+  ✓  452 [desktop] › e2e/VOICE-1.spec.ts:20:5 › local-only dictation is reviewed, persisted once, and confirmed (1.9s)
+  ✓  453 [desktop] › e2e/VOICE-1.spec.ts:29:5 › unsupported browser keeps typed fallback usable (348ms)
+  ✓  454 [desktop] › e2e/VOICE-1.spec.ts:31:55 › denied stops local recognition and preserves typed work (372ms)
+  ✓  455 [desktop] › e2e/VOICE-1.spec.ts:31:55 › no-speech stops local recognition and preserves typed work (379ms)
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"log","message":"[REDACTED]"}
+  ✓  456 [desktop] › e2e/VOICE-1.spec.ts:33:5 › cancel and navigation clear provisional words and stop recognition (470ms)
+  ✓  450 [desktop] › e2e/VALUE-1.spec.ts:1:3136 › explains the completed core job from persisted facts and follows receipt reversal (6.5s)
+{"level":"error","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"debug","message":"[REDACTED]"}
+{"level":"warn","message":"[REDACTED]"}
+{"level":"error","message":"[REDACTED]"}
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ui-design-jobs/apps/api:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @jobguard/api@0.0.0 start:worker: `tsx src/worker.ts`
+Exit status 143
+
+  Slow test file: [mobile-360] › e2e/DEMO-J3-shadow.spec.ts (6.0m)
+  Slow test file: [desktop] › e2e/DEMO-J3-shadow.spec.ts (6.0m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  456 passed (32.3m)

@@ -16,3 +16,9 @@ Everything you need to build JobGuard is a file **in this repo** — you do not 
 `docs/archive/` holds the superseded rev 2.1 of the plan (kept, not deleted).
 
 **If you cannot see the files in step 2–3 on disk, you are in the wrong folder or a chat with no filesystem access — stop and tell Ben.** Nothing here should be reconstructed from memory; if a fact you need is not in one of these files, say so rather than inventing it.
+
+## Build operating method (Ben, 21 October 2026)
+
+Read [the local session policy](docs/workflow/CODEX_SESSION_POLICY.md) before build work. It adds the
+same-leaf saved-session rule, current-source preflight and session/usage receipt format to the existing
+build loop. Project contracts and reviews still lead. No stopped job is restarted by this instruction.

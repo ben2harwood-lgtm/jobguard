@@ -9,9 +9,10 @@ You are the **build agent** for JobGuard. This file is everything you need to st
 ## 0. How this chat runs — READ FIRST (this fixes "we can't start")
 
 - **You run as a terminal coding agent (Claude Code or the Codex CLI) opened inside this repository folder on the Mac: `/Users/benharwood/Claude/Projects/my-new-project`.** You already have every file here. If you cannot see `AGENTS.md` and `BUILD_PLAN.md` on the local filesystem, you were started in the wrong place — tell Ben to open a terminal agent **in that folder** and re-paste this; do not try to work without the files.
-- **You do NOT need GitHub, a git remote, or to clone anything.** There is no remote and that is intentional — this is a local build. "One task = one PR" means one reviewable branch + diff on this local repo, not a GitHub pull request. Never block because there is no remote.
-- **You have NO live connection to a reviewer, to "Claude", or to any other chat, and you must not try to contact one or wait for one.** The review loop is **asynchronous and human-relayed**: you build a task, run its tests yourself, commit it on a branch, and write a run receipt — then **STOP and tell Ben "task X is ready for review"**. Ben carries your diff to an independent reviewer and brings back a verdict. Anywhere this pack says "a Claude verdict" or "the checker", that means this human-relayed step, not a service you call. Never poll, never wait, never assume you can message another agent.
-- So: **build → self-test → commit branch + receipt → hand to Ben.** That is the whole loop from your side.
+- **▓▓ CLOUD-AUTONOMOUS MODE — founder-directed 2026-09-13. This supersedes the "local only / no remote / human-relayed" text below wherever they conflict. ▓▓** This repo has a private GitHub remote (`ben2harwood-lgtm/jobguard`). Build each task on a branch and **open a real GitHub pull request** whose description is your run receipt. "One task = one PR" now means a GitHub PR.
+- **There IS a live reviewer now: an independent Claude checker watches this repo's pull requests.** After you open a PR, **STOP — do not merge it yourself.** The checker reviews it and either approves and merges it (then starts the next leaf with a `@codex implement …` issue), or posts required fixes as a PR comment that mentions `@codex`. React to `@codex` comments on your own PRs by revising the same PR. Do not poll or wait on anything else.
+- So: **build one leaf → self-test → open a PR with a receipt → react to the checker's `@codex` comments.** That is the whole loop from your side.
+- **▓▓ STATE NOW (2026-09-14) — the repository is NOT empty. ▓▓** All buildable M0 foundations are complete and merged to `main`, and M1-1 (UI shell) and M1-2 (capture) are merged. `main` is at migration `0007_capture`. **Do NOT rebuild the foundations, re-scaffold, reset data, or re-run "start from empty" steps.** Resume from the current frontier in `BUILD_PLAN.md` (the next feature leaf is M1-3+). Sections below that describe first-time scaffolding are historical; treat them as reference, not as work to redo.
 
 ---
 
@@ -28,7 +29,7 @@ A UK "profit watchdog for builders" — a construction-trade SaaS. A builder tal
 ## 3. The build loop (how work is accepted)
 
 This is a cross-model loop, encoded in `AGENTS.md` §5.13:
-- **You (builder)** build one task as one reviewable PR, run its checks, and write a truthful run receipt: exact commands, exit codes, environment, code identity (commit), and honestly what was **not** run (e.g. "CI deferred until a remote exists"; "real-Postgres tests deferred until a container runtime is installed").
+- **You (builder)** build one task as one reviewable PR, run its checks, and write a truthful run receipt: exact commands, exit codes, environment, code identity (commit), and honestly what was **not** run (e.g. "real-Postgres tests deferred until a container runtime is installed"). CI now runs on every PR against the remote — record its results, do not describe checks as deferred for lack of a remote.
 - **A separate independent Claude review** records a verdict per task in `docs/verdicts/M0-n-claude.md` before technical acceptance — this is the **human-relayed** step from §0 (Ben carries your diff to a reviewer chat and pastes the verdict back). You do not contact it and never wait on it. **You never accept your own work.**
 - **Ben** issues work, owns merge/push/release, and makes the reserved decisions below.
 - "Reviewed" means a real recorded response for the diff, not an assertion. Treat "source-inspected", "test-executed" and "independently-verified" as three different claims. Missing evidence is a hold, not a pass.
@@ -37,7 +38,7 @@ This is a cross-model loop, encoded in `AGENTS.md` §5.13:
 
 - No real builder or customer data. **Synthetic only** until gate G1. Real data needs G1's approvals.
 - No spending, no paid API calls, no live model/Deepgram calls. The AI gateway (M0-12) is **fixture-only** until decision D04 approves a route. Hold spend at £0.
-- No `git push`, no remote, no merge to `main`, no release, no deployment.
+- Pushing your task branch and opening a PR is normal (that is the loop). But **no merge to `main`, no release, and no deployment** — those stay founder-reserved. Never force-push over another writer's newer work.
 - No approving a decision record (D01–D12) — you author them as `proposed`; only Ben/owners approve.
 - No installing system software that needs a password (Docker Desktop, etc.) — give Ben the exact step and continue with what doesn't need it.
 - No enabling production mode, real payment rails (Stripe/GoCardless/TrueLayer), or real invoicing.
@@ -109,8 +110,10 @@ Follow **`READ_FIRST.md`** at the repo root; it is the ordered index. In brief:
 
 ## 10. Do this now
 
+> **Historical — this "start from empty" checklist is done.** M0 foundations and M1-1/M1-2 are merged; `docs/repo-baseline.md` exists and Node 24 is recorded. Do not redo these steps. Resume from the current `BUILD_PLAN.md` frontier (M1-3+) and use the PR loop in §0. The steps below are kept only as a record of how the build was started.
+
 1. Read the three files above.
-2. Write `docs/repo-baseline.md` recording that the repo is empty, Node is 24 (approved deviation), and no container runtime is present yet.
-3. Build **M0-1** to its "Done when" (scaffold, CI, lane-lint, DB-independent `/healthz`, Compose file authored), running `pnpm typecheck/lint/test/build` locally and recording a run receipt. Note "CI runs deferred until a remote exists" honestly.
+2. Write `docs/repo-baseline.md` recording the baseline (Node 24 approved deviation; container-runtime status).
+3. Build **M0-1** to its "Done when" (scaffold, CI, lane-lint, DB-independent `/healthz`, Compose file authored), running `pnpm typecheck/lint/test/build` and recording a run receipt with the CI results.
 4. Produce a short "what I need from Ben" list: (a) install Docker Desktop, (b) confirm Node 24, (c) commit + issue M0-2/M0-3, (d) that D12 is now on the register.
-5. Stop before real data, spend, live model calls, push, or approving any decision — those are Ben's.
+5. Stop before real data, spend, live model calls, merge to `main`, or approving any decision — those are Ben's.

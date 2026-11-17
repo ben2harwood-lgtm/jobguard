@@ -5,8 +5,8 @@
 - **Policy version:** `reference_tax_invoice_policy_v1`
 - **Dated approver evidence:** None — proposed on 2026-09-13. Approval is founder-reserved; a future approval must identify approver, date, evidence URI/reference, and the exact policy version.
 - **Applicable environment / jurisdiction:** pilot_no_charge and production_billing; supported United Kingdom pilot cases only
-- **Source / supporting review:** BUILD_PLAN.md §§2, 3.4, 3.6; qualified UK tax/accounting review required
-- **Executable feature gate:** `G1 and G4; tax_invoice requires D02 through requireApprovedDecision`
+- **Source / supporting review:** `BUILD_PLAN.md` §§4, 5.4 and 11.5 (rev 3.0); qualified UK tax/accounting review required
+- **Executable feature gate:** `G1 and the applicable track gate (G4-C or G4-S); tax_invoice requires D02 through requireApprovedDecision`
 
 ## Exact proposed policy
 

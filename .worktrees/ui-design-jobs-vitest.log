@@ -1,0 +1,10 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+ RUN  v4.1.12 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ui-design-jobs/apps/web
+
+
+ Test Files  208 passed (208)
+      Tests  2342 passed (2342)
+   Start at  18:01:12
+   Duration  52.66s (transform 5.13s, setup 0ms, import 67.64s, tests 24.41s, environment 9ms)
+
