@@ -72,3 +72,41 @@ customer data, database server or browser server was used.
   normal lane CLI in CI after commit. No git writes or fetch performed.
 - The pnpm version command stalled and was interrupted; validation used installed
   package binaries directly.
+
+## LATER-SAFETY-19 landing catch-up — 6 Nov 2026
+
+Current main for this check is the local `origin/main` snapshot 9d4677cbd;
+local `main` is stale and was not used. The launcher already completed the
+merge at f0bd92eb3; no unresolved merge entries or conflict markers were found
+in the affected files. No git writes were run.
+
+- Compared the replacement issuer against main's latest definition (0518).
+  It is byte-identical outside the intended content validation/redaction block.
+  Main has no later definition of this routine and does not contain 0789.
+  The existing migration-number checker reports no renumber required.
+- Added the exact issuer signature to the existing predecessor routine comparison,
+  asserting the full replacement body from 0789. The complete owner/ACL/security
+  comparison remains enforced. This resolves the earlier named routine-test hold;
+  it adds no runtime behaviour and introduces no general exception.
+- Updated the later-safety-19 lane to exactly the changed non-lane paths against
+  origin/main, including the inherited migration, note, proof and tests.
+- PASS: installed `tsc -p packages/db/tsconfig.json --noEmit` and
+  `tsc -p apps/api/tsconfig.json --noEmit`.
+- PASS: API `vitest run --maxWorkers=2 src/shadow-demo-guide.application.test.ts
+  src/auth/customer-signin.test.ts`: 2 files, 48 tests.
+- PASS: DB `vitest run --maxWorkers=1 test/migration-proof-loader.test.ts`:
+  1 file, 77 tests.
+- PASS: PL/pgSQL CASE-in-IF lint (306 migrations), `git diff --check`, latest-main
+  routine comparison and exact own-lane path comparison.
+- FAIL: `LANE_BASE_REF=origin/main node tools/agent-lane-boundary-lint.mjs`:
+  `Lane later-safety-19 cannot edit: "config/lanes/later-safety-13.json"`.
+  That inherited lane file is absent on main and predates this catch-up. The lane
+  checker permits only a branch's own lane file, including for deleted paths, so
+  removing it on this branch would not resolve the gate. It was preserved under
+  the no-deletion instruction. Router integration of this inherited registration
+  is required; no lane checker or protection was weakened.
+
+NOT READY: lane boundary remains red. Database and browser suites were not run
+in this sandbox; real PostgreSQL fresh/upgrade/privilege/audit tests, the changed
+plan-entitlement lifecycle upgrade test, browser journeys, required CI and an
+independent RED review remain required. No PR, push, merge or release is claimed.

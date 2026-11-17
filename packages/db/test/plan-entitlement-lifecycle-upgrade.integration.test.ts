@@ -71,6 +71,14 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   ].map(([identity, name]) => [identity, finishSql.split(`CREATE OR REPLACE FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]]));
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    // LATER-SAFETY-13/19 replaces only this demo issuer; bind the full body and retain the ACL comparison below.
+    if (prior.nspname === "app" && prior.proname === "demo_issue_customer_link" &&
+      prior.args === "t uuid, j uuid, c uuid, session_digest text, link_digest text, content text") {
+      const sql = await readFile(new URL("../migrations/0789_demo_customer_link_reference.sql", import.meta.url), "utf8");
+      const body = sql.split("CREATE OR REPLACE FUNCTION app.demo_issue_customer_link(")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toEqual(body);
+      continue;
+    }
     // 0632 changes only these exact shadow routines; MIGFIX-7's upgrade test binds their full bodies and unchanged ACLs.
     if (prior.nspname === "app" && (
       (prior.proname === "record_shadow_disclosure" && prior.args === "p_tenant uuid, p_job uuid, p_signal uuid, p_event uuid, p_route text") ||
