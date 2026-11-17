@@ -42,7 +42,7 @@ export function PracticeJourney({ jobId, status, onSavedLabel, onNavigate }: { j
  const errorHeading = useRef<HTMLHeadingElement>(null), retryButton = useRef<HTMLButtonElement>(null);
  const load = useCallback(async (userInitiated = false) => {
   const request = ++generation.current;
-  activeRequest.current?.abort();
+  // A superseded same-job read may finish; only its generation can publish.
   const controller = new AbortController(); activeRequest.current = controller;
   const isCurrent = () => request === generation.current && !controller.signal.aborted && currentJob.current.jobId === jobId && currentJob.current.status === status;
   setState({ jobId, status, phase: "loading" });
@@ -83,7 +83,7 @@ export function PracticeJourney({ jobId, status, onSavedLabel, onNavigate }: { j
    if (isCurrent()) setState({ jobId, status, phase: "failed", userInitiated });
   }
  }, [jobId, status]);
- useEffect(() => { void load(); return () => { generation.current++; activeRequest.current?.abort(); navigationCleanup.current?.(); }; }, [load]);
+ useEffect(() => { void load(); return () => { generation.current++; if (currentJob.current.jobId !== jobId) activeRequest.current?.abort(); navigationCleanup.current?.(); }; }, [load]);
  useEffect(() => {
   if (typeof window === "undefined") return;
   const changed = (event: Event) => {
