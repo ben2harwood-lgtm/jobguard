@@ -47,13 +47,13 @@ const picomatch = () => ({
   patched_versions: "<0.0.0",
   findings: [
     { version: "4.0.7", paths: [".>@nestjs/cli>picomatch", "apps/web>vite>picomatch"] },
-    { version: "2.3.2", paths: [".>vitest>picomatch"] },
+    { version: "4.0.4", paths: [".>vitest>picomatch"] },
   ],
 });
 const findingsResult = (entries = [picomatch()]) => {
   const report = JSON.parse(clean().stdout);
   report.advisories = Object.fromEntries(entries.map((entry, index) => [index, entry]));
-  for (const entry of entries) report.metadata.vulnerabilities[entry.severity] += 1;
+  for (const entry of entries) report.metadata.vulnerabilities[entry.severity] += Math.max(1, entry.findings?.length ?? 0);
   return { status: 1, stdout: JSON.stringify(report) };
 };
 const assessFindings = (entries, now = approvedDate()) => assessAudit(findingsResult(entries), { now });
@@ -71,6 +71,20 @@ test("exception applies to every picomatch path and names the exception plainly"
   assert.match(result.message, /one named exception applied: GHSA-fc5q-39xc-vjpf \(picomatch, high\)/u);
   assert.match(result.message, /Ben 17 Nov 2026; expires 2026-12-17/u);
   assert.doesNotMatch(result.message, /no known vulnerabilities/iu);
+});
+test("real pnpm shape: one advisory with two installed-version findings and high count 2 applies", () => {
+  const result = findingsResult(), report = JSON.parse(result.stdout);
+  assert.equal(Object.keys(report.advisories).length, 1);
+  assert.deepEqual(report.advisories[0].findings.map(({ version }) => version), ["4.0.7", "4.0.4"]);
+  assert.equal(report.metadata.vulnerabilities.high, 2);
+  assert.equal(assessAudit(result, { now: approvedDate() }).code, 0);
+});
+test("counts exceeding or understating the actual findings still fail", () => {
+  const result = findingsResult(), report = JSON.parse(result.stdout);
+  for (const count of [1, 3]) {
+    report.metadata.vulnerabilities.high = count;
+    assert.equal(assessAudit({ ...result, stdout: JSON.stringify(report) }, { now: approvedDate() }).code, 1);
+  }
 });
 test("different advisory, module or severity is never waived", () => {
   for (const change of [

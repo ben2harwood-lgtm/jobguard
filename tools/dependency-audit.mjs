@@ -19,8 +19,7 @@ function applicableException(report, counts, now) {
   const advisories = report.advisories;
   if (!advisories || typeof advisories !== "object" || Array.isArray(advisories)) return;
   const entries = Object.values(advisories);
-  // Reconcile every reported finding; missing details must never hide another vulnerability.
-  if (!entries.length || severities.some((s) => counts[s] !== (s === exception.severity ? entries.length : 0))) return;
+  if (!entries.length) return;
   if (!entries.every((entry) => entry?.github_advisory_id === exception.advisory &&
     entry.module_name === exception.module && entry.severity === exception.severity &&
     // pnpm's registry report uses this exact sentinel for an unfixable advisory.
@@ -29,6 +28,10 @@ function applicableException(report, counts, now) {
     entry.findings.every((finding) => Array.isArray(finding?.paths) && finding.paths.length > 0 &&
       finding.paths.every((path) => typeof path === "string" &&
         path.split(">").every(Boolean) && path.split(">").at(-1) === exception.module)))) return;
+  // pnpm counts findings (installed versions), not advisories or dependency paths.
+  // Reconcile every reported finding; missing details must never hide another vulnerability.
+  const findingCount = entries.reduce((sum, entry) => sum + entry.findings.length, 0);
+  if (severities.some((s) => counts[s] !== (s === exception.severity ? findingCount : 0))) return;
   return exception;
 }
 
