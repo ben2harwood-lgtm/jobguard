@@ -1,0 +1,196 @@
+{
+  "migration": "0947_audit_verifier_role.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-later-safety-129",
+        "title": "LATER-SAFETY-129 checkpoint metadata verifier",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Dedicated verifier authorised by Ben on 13 November 2026; non-superuser provisioning, exact-head PostgreSQL CI and independent RED review remain required."
+        },
+        "cards": [
+          "LP-4",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-4": "Keep migration-owned audit reads tenant-bound and checkpoint verification complete.",
+          "LP-12": "Verify the non-owner verifier, column grants and migration-only execution boundary."
+        },
+        "downstream": "Only newest checkpoint metadata crosses tenants; no runtime execution, audit payload access or role membership.",
+        "sources": [
+          "packages/db/migrations/0947_audit_verifier_role.sql",
+          "packages/db/src/audit.ts"
+        ],
+        "tests": [
+          "packages/db/test/audit-event-migration-read-tenant.integration.test.ts",
+          "packages/db/test/audit-checkpoint-handoff.integration.test.ts"
+        ],
+        "gaps": [
+          "Source-derived expectations only; PostgreSQL catalogue and scratch reversal evidence pending.",
+          "Existing NOCREATEROLE bootstrap cannot provision or transfer ownership to this new role; separate authorised provisioning work is required."
+        ],
+        "path": "ap-roles-owners-schema"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "role|jobguard_audit_verifier|super=f,inherit=f,createrole=f,createdb=f,login=f,replication=f,bypassrls=f,connlimit=-1,settings=",
+        "group": "a-later-safety-129"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|schema|app|jobguard_audit_verifier|USAGE|-",
+        "group": "a-later-safety-129"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|schema|audit_control|jobguard_audit_verifier|USAGE|-",
+        "group": "a-later-safety-129"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|col|app.audit_event.tenant_id|jobguard_audit_verifier|SELECT|-",
+        "group": "a-later-safety-129"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|col|app.audit_event.sequence|jobguard_audit_verifier|SELECT|-",
+        "group": "a-later-safety-129"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|col|app.audit_event.event_hash|jobguard_audit_verifier|SELECT|-",
+        "group": "a-later-safety-129"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:audit_control.checkpoint_candidates()|jobguard_audit_verifier",
+        "group": "a-later-safety-129"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:audit_control.checkpoint_candidates()|jobguard_migration|EXECUTE|-",
+        "group": "a-later-safety-129"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:audit_control.checkpoint_candidates()",
+        "owner": "jobguard_audit_verifier",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.audit_event|audit_verifier_read|PERMISSIVE|SELECT|jobguard_audit_verifier|a17fcf0a2f50e2d4"
+    },
+    {
+      "section": "policies",
+      "before": "app.audit_event|migration_audit_integrity|PERMISSIVE|SELECT|jobguard_migration|a17fcf0a2f50e2d4",
+      "after": null
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.audit_event|migration_audit_integrity|PERMISSIVE|SELECT|jobguard_migration|ade3739356a579ac"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "audit_control",
+        "proname": "checkpoint_candidates",
+        "args": "",
+        "proowner": "jobguard_audit_verifier",
+        "proacl": "{jobguard_audit_verifier=X/jobguard_audit_verifier,jobguard_migration=X/jobguard_audit_verifier}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "audit_event",
+        "policyname": "audit_verifier_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_audit_verifier}",
+        "cmd": "SELECT",
+        "qual": "true",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": {
+        "schemaname": "app",
+        "tablename": "audit_event",
+        "policyname": "migration_audit_integrity",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "true",
+        "with_check": null
+      },
+      "after": {
+        "schemaname": "app",
+        "tablename": "audit_event",
+        "policyname": "migration_audit_integrity",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": null
+      }
+    }
+  ],
+  "tenancy": []
+}

@@ -96,8 +96,7 @@ export function verifyAuditChain(events: readonly AuditEvent[], checkpoint?: Aud
 export async function exportAuditCheckpoints(pool: Pool): Promise<AuditCheckpoint[]> {
   type Candidate = Omit<AuditCheckpoint, "recordedAt"> & { recordedAt: Date | null; inserted: boolean };
   const result = await pool.query<Candidate>(`WITH candidates AS MATERIALIZED (
-    SELECT DISTINCT ON (tenant_id) tenant_id, sequence, event_hash FROM app.audit_event
-    ORDER BY tenant_id, sequence DESC
+    SELECT tenant_id, sequence, event_hash FROM audit_control.checkpoint_candidates()
   ), inserted AS (
     INSERT INTO audit_control.checkpoint (tenant_id, sequence, event_hash)
     SELECT tenant_id, sequence, event_hash FROM candidates ORDER BY tenant_id, sequence

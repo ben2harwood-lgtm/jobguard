@@ -2,9 +2,14 @@
   "version": 2,
   "lanes": {
     "later-safety-129": {
-      "branches": ["codex/sandbox/later-safety-129"],
+      "branches": [
+        "codex/sandbox/later-safety-129"
+      ],
       "allow": [
-        "packages/db/test/audit-event-migration-read-tenant.integration.test.ts"
+        "packages/db/migrations/0947_audit_verifier_role.sql",
+        "packages/db/test/migration-proofs/0947_audit_verifier_role.proof.json",
+        "packages/db/test/audit-event-migration-read-tenant.integration.test.ts",
+        "packages/db/src/audit.ts"
       ]
     }
   }
