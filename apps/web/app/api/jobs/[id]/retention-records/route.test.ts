@@ -33,3 +33,14 @@ it.each(["RETENTION_DARK", "RETENTION_NOT_FOUND"] as const)("preserves %s as an 
   const response = await GET(new Request(url), params);
   expect(response.status).toBe(404); expect(response.headers.get("cache-control")).toBe("no-store");
 });
+
+it.each([["RETENTION_FORBIDDEN",403], ["RETENTION_UNAUTHENTICATED",401], ["RETENTION_UNAVAILABLE",503]] as const)("returns uncached %s for reads and writes", async (code, status) => {
+ state.read.mockRejectedValue(new RetentionRecordRepositoryError(code));
+ state.command.mockRejectedValue(new RetentionRecordRepositoryError(code));
+ for (const response of [await GET(new Request(url),params), await POST(new Request(url,{method:"POST",headers:{origin:"https://company.invalid"},body:"{}"}),params)]) {
+  expect(response.status).toBe(status); expect(response.headers.get("cache-control")).toBe("no-store");
+  const body = await response.json(); expect(body.code).toBe(code);
+  if (status === 403) expect(body.message).toBe("You don't have permission.");
+  expect(body.message).not.toMatch(/uncertain|retry/iu);
+ }
+});

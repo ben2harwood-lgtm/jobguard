@@ -23,13 +23,16 @@ export function NoticeFixtureScreen({ jobId, realNoticeRefusal }: { jobId: strin
   async function load() {
     const response = await fetch(path, { cache: "no-store", credentials: "same-origin", headers: await companyHeaders() });
     if (response.status === 404) { setView(null); setError("Practice notice unavailable. A first complete revision can be recorded for an owned job."); return; }
-    if (!response.ok) throw new Error("Practice notice unavailable. Sign in and refresh.");
+    if (!response.ok) {
+      setView(null);
+      throw new Error("Practice notice records could not be loaded. The result is unknown. Refresh and try again.");
+    }
     setView(await response.json() as NoticeFixtureView);
   }
   useEffect(() => {
     const saved = sessionStorage.getItem(storageKey);
     if (saved) setPending({ body: saved });
-    void load().catch(reason => setError(reason instanceof Error ? reason.message : "Practice notice unavailable."))
+    void load().catch(reason => setError(reason instanceof Error ? reason.message : "Practice notice records could not be loaded. The result is unknown. Refresh and try again."))
       .finally(() => setBusy(false));
     // Each job gets its own mounted screen and retry slot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -42,8 +45,7 @@ export function NoticeFixtureScreen({ jobId, realNoticeRefusal }: { jobId: strin
         headers: { ...await companyHeaders(), "Content-Type": "application/json" }, body: command.body });
       if (!response.ok) {
         const failure = await response.json() as { message?: string };
-        // A repository connection failure can be deliberately masked as not-found.
-        // Keep that command as uncertain too; never replace its identity on retry.
+        // An unavailable or lost reply is uncertain; retain the exact command for retry.
         if ([400, 401, 403, 409].includes(response.status)) clearPending();
         setView(null);
         throw new Error(failure.message ?? "Practice command refused. Refresh and review again.");
@@ -91,7 +93,7 @@ export function NoticeFixtureScreen({ jobId, realNoticeRefusal }: { jobId: strin
     {error ? <p role="alert">{error}</p> : null}
     {busy ? <p role="status">Loading practice records…</p> : null}
     <button style={control} disabled={busy} onClick={() => { setBusy(true); setError(""); void load()
-      .catch(() => { setView(null); setError("Practice notice unavailable. Sign in and refresh."); }).finally(() => setBusy(false)); }}>Refresh stored history</button>
+      .catch(reason => { setView(null); setError(reason instanceof Error ? reason.message : "Practice notice records could not be loaded. The result is unknown. Refresh and try again."); }).finally(() => setBusy(false)); }}>Refresh stored history</button>
     {pending ? <section aria-label="Uncertain command">
       <p>Reply may be unknown. New edits and approvals are blocked. Retry sends the exact saved command ID and facts.</p>
       <button style={control} disabled={busy} onClick={() => void submit(pending)}>Retry same saved command</button>

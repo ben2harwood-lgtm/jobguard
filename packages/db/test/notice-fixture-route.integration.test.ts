@@ -1,8 +1,9 @@
+import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { IdentityRepository } from "../src/identity-repository.js";
 import { NoticeFixtureRepository } from "../src/notice-fixture-repository.js";
-import { createWorkFixture, closeWorkFixture, type WorkFixture } from "./job-work-state-fixtures.js";
+import { createWorkFixture, closeWorkFixture, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
@@ -17,6 +18,7 @@ beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await 
 afterAll(async () => { await closeWorkFixture(f); vi.unstubAllEnvs(); });
 it("screen transport stores exact previews and separate facts, refuses attacks, and enqueues nothing (real PostgreSQL)", async () => {
   const a = await meterCompany(f), b = await meterCompany(f);
+  // meterCompany already seeds both fictional jobs live through seedWorkJob.
   const provider = new PersistedAuthProvider(new IdentityRepository(f.admin), "fictional-notice-route-secret-32-bytes");
   state.identity = new IdentityApplication(provider, "https://fixture.invalid");
   const token = randomUUID();
@@ -41,6 +43,19 @@ it("screen transport stores exact previews and separate facts, refuses attacks, 
     expect((await post({ ...revision, commandId: randomUUID(), data })).status).toBe(409);
   }
   expect((await f.admin.query("SELECT count(*)::int n FROM app.notice_fixture_record WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(0);
+  await workTenant(f.admin, a.tenantId, async db => {
+    await db.query("SET LOCAL session_replication_role=replica");
+    await db.query("UPDATE app.job SET status='draft' WHERE tenant_id=$1 AND id=$2", [a.tenantId, a.jobId]);
+  });
+  const draft = await post(revision);
+  const foreign = await POST(new Request(path, { method: "POST", body: JSON.stringify({ ...revision, jobId: b.jobId }) }), { params: Promise.resolve({ id: b.jobId }) });
+  expect(draft.status).toBe(404); expect(foreign.status).toBe(404);
+  expect(await draft.json()).toEqual(await foreign.json());
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.notice_fixture_record WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(0);
+  await workTenant(f.admin, a.tenantId, async db => {
+    await db.query("SET LOCAL session_replication_role=replica");
+    await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [a.tenantId, a.jobId]);
+  });
   expect((await post(revision)).status).toBe(201); expect((await post(revision)).status).toBe(201);
   expect((await post({ ...revision, data: { ...revision.data, recipientReference: "changed" } })).status).toBe(409);
   let view = await read(); expect(view.records).toHaveLength(1); expect(view.preview.input).toMatchObject(revision.data);
@@ -55,6 +70,22 @@ it("screen transport stores exact previews and separate facts, refuses attacks, 
   expect((await read()).serviceBook.events.map((e: any) => e.state)).toEqual(["queued", "provider_accepted", "outcome_unknown", "read", "legally_served"]);
   expect((await post(raw("revision", { ...revision.data, revision: 2, previousRevisionId: revision.data.revisionId, revisionId: randomUUID(), facts: { ...revision.data.facts, dueDate: "2026-11-12" } }))).status).toBe(201);
   expect((await read()).activeDecisionId).toBeNull(); expect((await post(event("read"))).status).toBe(409);
+  // Query faults must remain unknown at the actual GET and POST transport boundary.
+  const faultPool = { async connect() {
+    const client = await f.runtime.connect();
+    return { release: () => client.release(), query: (sql: string, args?: unknown[]) =>
+      client.query(sql.includes("app.notice_fixture_records") ? "SELECT 1/0" : sql,
+        sql.includes("app.notice_fixture_records") ? [] : args) };
+  } } as unknown as Pool;
+  state.application = new NoticeFixtureApplication(state.identity, new NoticeFixtureRepository(faultPool));
+  for (const response of [await GET(new Request(path), params), await post(revision)]) {
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({ code: "NOTICE_UNAVAILABLE", message: expect.stringContaining("result is unknown") });
+  }
+  state.application = new NoticeFixtureApplication(state.identity, new NoticeFixtureRepository(f.runtime));
+  // A failed reply must not change the result bound to the first command.
+  expect((await post(revision)).status).toBe(201);
   for (const role of ["estimator", "foreman", "finance", "read_only"]) {
     await f.admin.query("UPDATE app.membership SET role=$1 WHERE id=$2", [role, a.actorId]);
     expect((await post({ ...revision, commandId: randomUUID() })).status).toBe(404);

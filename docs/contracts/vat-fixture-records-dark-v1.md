@@ -40,7 +40,14 @@ which may include later appends; it does not create another row. SQL checks the
 stored hash before returning rows. Runtime has no direct table privileges; update,
 delete and truncate triggers reject changes even through owner fixture credentials.
 
-`read(context, jobId)` rebuilds the book from stored rows and recalculates through
+`read(context, actor, jobId)` requires a trusted session membership ID, never request
+input. In the same tenant transaction, before any VAT lookup, the repository checks
+that membership belongs to the tenant, has role owner or admin, is not revoked and
+has not expired. It holds a shared membership lock through the read. Refusal is
+`FORBIDDEN` (HTTP 403), "You don't have permission.", with no VAT data or record-existence
+hint. Writes remain owner-only under the existing routine.
+
+The authorized read rebuilds the book from stored rows and recalculates through
 core. Foreign, absent and empty books return the same typed not-found. Every record
 and read has `VAT_FIXTURE_LABEL` and environment `synthetic`. Net, VAT treatment,
 supplier VAT, customer-accounted reverse-charge VAT, gross, retained principal and
@@ -67,8 +74,8 @@ synthetic_demo-only (not-found elsewhere), with no-store responses. Server-only
 composition uses the workspace export. The application binds the verified session
 context directly and passes the current session membership ID, never an eligibility
 actor, to the repository's owner check. The identity bridge checks origin, CSRF and
-membership; POST requires an explicit trusted browser origin. GET preserves the
-repository's read permissions; non-owner writes preserve its typed refusal. Foreign,
+membership; POST requires an explicit trusted browser origin. GET requires the
+repository's current owner/admin read permission; non-owner writes preserve its typed refusal. Foreign,
 unknown and empty books share not-found. POST still proves the job/current owner in SQL.
 
 The structured form requires explicit treatment, eligibility and candidate tax basis.

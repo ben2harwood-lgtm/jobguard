@@ -42,7 +42,7 @@ it("loads current stored options, checks GET's actor and clears options at zero 
 });
 it("does not read history after a refused owner/admin gate or authentication", async () => {
   findMembership.mockResolvedValueOnce({ role: "read_only" });
-  await expect(app.read(credentials, id, id)).rejects.toThrow("UNAVAILABLE"); expect(mocks.read).not.toHaveBeenCalled();
+  await expect(app.read(credentials, id, id)).rejects.toThrow("FORBIDDEN"); expect(mocks.read).not.toHaveBeenCalled();
   mocks.resolve.mockRejectedValueOnce(new Error("UNAUTHENTICATED"));
   await expect(app.command(credentials, id, id, { commandId, rail: "card" })).rejects.toThrow("UNAUTHENTICATED"); expect(mocks.command).not.toHaveBeenCalled();
 });
@@ -58,7 +58,7 @@ it("preserves repository not-found and conflict refusals", () => {
 });
 it.each(["estimator", "foreman", "operative", "finance", "read_only"])("refuses %s on GET before invoice access", async role => {
   findMembership.mockResolvedValue({ role });
-  await expect(app.read(credentials, id, id)).rejects.toThrow("UNAVAILABLE");
+  await expect(app.read(credentials, id, id)).rejects.toThrow("FORBIDDEN");
   expect(mocks.list).not.toHaveBeenCalled(); expect(mocks.read).not.toHaveBeenCalled();
 });
 it("refuses an altered stored locator instead of rendering its options", async () => {
@@ -66,3 +66,22 @@ it("refuses an altered stored locator instead of rendering its options", async (
   await expect(app.read(credentials, id, id)).rejects.toThrow("UNAVAILABLE");
   expect(mocks.read).not.toHaveBeenCalled();
 });
+
+it.each([["FORBIDDEN", 403], ["UNAUTHENTICATED", 401], ["UNAVAILABLE", 503]] as const)(
+  "maps %s to %i without retry wording", (code, status) => {
+    expect(payNowAttemptFailure(new PayNowAttemptError(code))).toEqual({
+      status, body: { version: "pay-now-preview-error.v1", code },
+    });
+  });
+it("refuses a session lost after context resolution before invoice access", async () => {
+  authenticate.mockResolvedValue(null);
+  await expect(app.read(credentials, id, id)).rejects.toThrow("UNAUTHENTICATED");
+  expect(mocks.list).not.toHaveBeenCalled();
+});
+it.each(["METER_FORBIDDEN", "PAY_NOW_UNAUTHENTICATED", "private database fault"])(
+  "classifies prepare failure %s", async message => {
+    mocks.query.mockRejectedValue(new Error(message));
+    expect(await app.read(credentials, id, id).catch(payNowAttemptFailure)).toMatchObject({
+      status: message === "METER_FORBIDDEN" ? 403 : message === "PAY_NOW_UNAUTHENTICATED" ? 401 : 503,
+    });
+  });

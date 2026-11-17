@@ -1,0 +1,123 @@
+{
+  "migration": "1203_order_attestation_session.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-order-attestation-session",
+        "title": "LATER-SAFETY-10 dark order attestation session actor",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Synthetic draft storage outside LP-5 lifecycle dispatch; production lifecycle integration held; exact-head RED review and PostgreSQL CI remain required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Bind the actor to the persisted session and current company owner membership before new commands and replay.",
+          "LP-12": "Retain narrow runtime execute only; do not expose the private identity bridge."
+        },
+        "downstream": "Read-only session/company actor lookup under the caller order lock. No commercial action or lifecycle adapter.",
+        "sources": [
+          "packages/db/migrations/1203_order_attestation_session.sql",
+          "packages/db/src/purchase-order-action-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/purchase-order-action.test.ts",
+          "packages/db/test/purchase-order-audit.integration.test.ts"
+        ],
+        "gaps": [
+          "Runtime raw INSERT on manual attestations remains a named production hold. PostgreSQL CI and exact-head RED review remain required."
+        ],
+        "path": "ap-order-attestation-session"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.order_attestation_actor(uuid,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-order-attestation-session"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.order_attestation_actor(uuid,text)|jobguard_migration",
+        "group": "a-order-attestation-session"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-order-attestation-session",
+        "title": "LATER-SAFETY-10 dark order attestation session actor",
+        "description": "Read-only session/company actor lookup under the caller order lock. No commercial action or lifecycle adapter.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Bind the actor to the persisted session and current company owner membership before new commands and replay.",
+          "LP-12": "Retain narrow runtime execute only; do not expose the private identity bridge."
+        },
+        "sources": [
+          "packages/db/migrations/1203_order_attestation_session.sql",
+          "packages/db/src/purchase-order-action-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/purchase-order-action.test.ts",
+          "packages/db/test/purchase-order-audit.integration.test.ts"
+        ],
+        "gaps": [
+          "Runtime raw INSERT on manual attestations remains a named production hold. PostgreSQL CI and exact-head RED review remain required."
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.order_attestation_actor(uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.mon1_company_actor"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "order_attestation_actor",
+        "args": "t uuid, digest text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

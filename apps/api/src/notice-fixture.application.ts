@@ -57,6 +57,9 @@ const messages: Record<string, string> = {
   INVALID_SERVICE_STATE: "Record one initial queued fact, then separate evidence for each fact. Legally served also requires a separate assessment reference; delivery or read is insufficient.",
 };
 export function noticeFixtureFailure(error: unknown) {
+  if (error instanceof NoticeFixtureRepositoryError && error.code === "NOTICE_UNAVAILABLE") return { status: 503,
+    body: { version: "notice.fixture-error.v1", code: error.code,
+      message: "Practice notice records could not be loaded. The result is unknown. Refresh or retry the same saved command." } };
   if (error instanceof NoticeFixtureRepositoryError) return { status: 404,
     body: { version: "notice.fixture-error.v1", code: "NOT_FOUND", message: "Practice notice unavailable." } };
   if (error instanceof ConstructionNoticeError) return { status: error.code === "INVALID_INPUT" ? 400 : 409,

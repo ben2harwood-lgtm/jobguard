@@ -20,11 +20,8 @@ export class PracticeBankApplication {
     const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
     const digest = this.identity.provider.digest(`session:${credentials.sessionToken}`);
     const view = await this.repository.movements(context, digest);
-    if (view.connection?.status === "linked" && !await this.memory.vault.get(view.connection.connectionId)) {
-      await this.repository.stop(context, digest, view.connection.connectionId, "token_revoked");
-      return this.repository.movements(context, digest);
-    }
-    return view;
+    const credentialsUnavailable = view.connection?.status === "linked" && !await this.memory.vault.get(view.connection.connectionId);
+    return { ...view, credentialsUnavailable };
   }
   async command(credentials: TenantRequestCredentials, raw: unknown) {
     this.assertMode();

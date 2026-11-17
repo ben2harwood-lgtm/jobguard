@@ -31,7 +31,7 @@ export class MerchantOrderApplication {
     if (input.kind === "manual") return repository.attestManual(auth.context, {
       version: "manual-order-attestation.v1", jobId, revisionId: input.revisionId,
       commandId: input.commandId, supplierReference: input.supplierReference,
-    }, auth.membershipId);
+    }, { sessionDigest: auth.digest });
     if (Date.parse(input.expiresAt) > Date.now() + 10 * 60_000) throw new Error("ORDER_ACTION_INVALID");
     // Do not replace reviewed facts with a fresh preview: changes must invalidate authority.
     return repository.approve(auth.context, orderScope, {

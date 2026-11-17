@@ -14,7 +14,7 @@ const record = z.object({ input: append, actorId: id, recordHash: z.string().reg
   matrixVersion: z.literal(VAT_SUPPORT_MATRIX_VERSION), environment: z.literal("synthetic"),
   label: z.literal(VAT_FIXTURE_LABEL) }).strict();
 export class VatFixtureRepositoryError extends Error {
-  constructor(public readonly code: "INVALID_INPUT" | "NOT_FOUND" | "CONFLICT" | "UNAVAILABLE" | "DISABLED") {
+  constructor(public readonly code: "INVALID_INPUT" | "NOT_FOUND" | "FORBIDDEN" | "CONFLICT" | "UNAVAILABLE" | "DISABLED") {
     super(`VAT_FIXTURE_${code}`); this.name = "VatFixtureRepositoryError";
   }
 }
@@ -55,11 +55,17 @@ export class VatFixtureRepository {
     return { environment: "synthetic" as const, label: VAT_FIXTURE_LABEL, lineage: "fixture lineage, never authority" as const,
       records, book, reconciliation: reconcileVatTreatmentFixtures(book) };
   }
-  async read(context: VerifiedTenantContext, jobId: string) {
-    const job = id.safeParse(jobId);
-    if (!job.success) throw new VatFixtureRepositoryError("INVALID_INPUT");
-    return this.guarded(() => withTenant(this.pool, context, async db =>
-      this.project(context, job.data, await this.rows(db, context, job.data, null, "read"))));
+  async read(context: VerifiedTenantContext, actor: string, jobId: string) {
+    const job = id.safeParse(jobId), member = id.safeParse(actor);
+    if (!job.success || !member.success) throw new VatFixtureRepositoryError("INVALID_INPUT");
+    return this.guarded(() => withTenant(this.pool, context, async db => {
+      const current = await db.$client.query(`SELECT id FROM app.membership
+        WHERE tenant_id=$1 AND id=$2 AND role IN ('owner', 'admin')
+        AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp()) FOR SHARE`,
+      [context.tenantId, member.data]);
+      if (!current.rows.length) throw new VatFixtureRepositoryError("FORBIDDEN");
+      return this.project(context, job.data, await this.rows(db, context, job.data, member.data, "read"));
+    }));
   }
   async command(context: VerifiedTenantContext, actor: string, raw: unknown) {
     const parsed = append.safeParse(raw), member = id.safeParse(actor);

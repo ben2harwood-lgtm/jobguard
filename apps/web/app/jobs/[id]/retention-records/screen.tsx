@@ -22,7 +22,8 @@ export function RetentionRecordScreen({ jobId }: { jobId: string }) {
   const path = `/api/jobs/${encodeURIComponent(jobId)}/retention-records`;
   async function load() {
     const response = await fetch(path, { cache: "no-store", credentials: "same-origin", headers: await sessionHeaders() });
-    if (!response.ok) throw new Error("Retention records unavailable. Sign in and refresh.");
+    if (!response.ok) throw new Error(response.status === 403 ? "You don't have permission."
+      : response.status === 401 ? "Sign in with an authorised company session." : "Retention records unavailable. Sign in and refresh.");
     return await response.json() as View;
   }
   useEffect(() => {
@@ -32,7 +33,7 @@ export function RetentionRecordScreen({ jobId }: { jobId: string }) {
   }, [jobId]); // The page keys this component by job ID.
   async function refresh() {
     setBusy(true); setError("");
-    try { setView(await load()); } catch { setView(null); setError("Retention records unavailable. Sign in and refresh."); }
+    try { setView(await load()); } catch (reason) { setView(null); setError(reason instanceof Error ? reason.message : "Retention records unavailable. Sign in and refresh."); }
     finally { setBusy(false); }
   }
   async function send(record?: unknown) {

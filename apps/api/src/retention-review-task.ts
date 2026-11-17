@@ -2,7 +2,7 @@ import type { TaskList } from "graphile-worker";
 import { z } from "zod";
 
 const taskV1 = z.object({ version: z.literal("retention-review-task.v1"), tenantId: z.guid() }).strict();
-/** One scheduling owner; infrastructure credentials can append timer reviews only. */
+/** One scheduling owner; infrastructure discovers company IDs; runtime raises reviews. */
 export function registerRetentionReviewTasks(tasks: TaskList, environment: string, raiseReviews: (tenantId: string) => Promise<unknown>): string {
   if (environment !== "synthetic_demo") return "";
   tasks.discover_retention_reviews = async (_payload, helpers) => {

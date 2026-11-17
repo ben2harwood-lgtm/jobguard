@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-45": {
+      "branches": ["codex/sandbox/later-safety-45"],
+      "note": "LATER-SAFETY-45: test-only practice manual-placement screen regression on batch-46; no migrations.",
+      "allow": ["apps/web/e2e/M2-1-order-screen.spec.ts"]
+    }
+  }
+}

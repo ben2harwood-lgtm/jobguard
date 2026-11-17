@@ -21,7 +21,10 @@ export class VatFixtureApplication {
   async read(credentials: TenantRequestCredentials, jobId: string) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new VatFixtureRepositoryError("DISABLED");
     const context = await resolveVerifiedTenantContext(this.identity.provider, credentials, this.identity.allowedOrigin);
-    return fixtureView(await this.repository.read(context, jobId));
+    const principal = await this.identity.principal(credentials.sessionToken);
+    const member = await this.identity.provider.findMembership(principal, context.tenantId);
+    if (!member) throw new AuthError("TENANT_FORBIDDEN");
+    return fixtureView(await this.repository.read(context, member.id, jobId));
   }
   async command(credentials: TenantRequestCredentials, jobId: string, raw: unknown) {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new VatFixtureRepositoryError("DISABLED");
@@ -39,11 +42,11 @@ export class VatFixtureApplication {
 export type VatFixtureView = Awaited<ReturnType<VatFixtureApplication["read"]>>;
 export function vatFixtureFailure(error: unknown) {
   if (error instanceof VatFixtureRepositoryError) {
-    const messages = { INVALID_INPUT: "Missing or unsupported fixture fields, eligibility or owner permission. Nothing was stored; no default treatment is used.",
+    const messages = { FORBIDDEN: "You don't have permission.", INVALID_INPUT: "Missing or unsupported fixture fields, eligibility or owner permission. Nothing was stored; no default treatment is used.",
       NOT_FOUND: "No stored VAT fixtures are available for this job.",
       CONFLICT: "The command was already used with different content, or the book's fixed fields changed. Keep the original fixed fields and use a new command for a new document.",
       UNAVAILABLE: "VAT fixtures are unavailable. Retry the same command to resolve an uncertain result.", DISABLED: "Not found." };
-    return { status: error.code === "DISABLED" || error.code === "NOT_FOUND" ? 404 : error.code === "INVALID_INPUT" ? 400 : error.code === "CONFLICT" ? 409 : 503,
+    return { status: error.code === "FORBIDDEN" ? 403 : error.code === "DISABLED" || error.code === "NOT_FOUND" ? 404 : error.code === "INVALID_INPUT" ? 400 : error.code === "CONFLICT" ? 409 : 503,
       body: { version: "vat.fixture-error.v1", code: error.code, message: messages[error.code] } };
   }
   if (error instanceof VatTreatmentError) return { status: 400,

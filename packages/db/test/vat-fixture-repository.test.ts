@@ -27,9 +27,10 @@ function stored(value = input()) {
   return { input: value, actorId: id(3), recordHash: "a".repeat(64), matrixVersion: VAT_SUPPORT_MATRIX_VERSION,
     environment: "synthetic", label: VAT_FIXTURE_LABEL };
 }
-function fixture(initial: unknown[] = []) {
+function fixture(initial: unknown[] = [], allowed = true) {
   let rows = initial;
   const query = vi.fn(async (sql: string, values?: unknown[]) => {
+    if (sql.includes("FROM app.membership")) return { rows: allowed ? [{ id: id(3) }] : [] };
     if (!sql.includes("app.vat_fixture_records")) return { rows: [] };
     if (values?.[3] === "append") rows = [...rows, stored(JSON.parse(String(values[4])) as ReturnType<typeof input>)];
     return { rows: [{ result: rows }] };
@@ -48,7 +49,7 @@ describe("M4-21 durable dark VAT fixture boundary", () => {
       net: { pence: 10000 }, vatToSupplier: { pence: 0 }, reverseChargeVat: { pence: 450 },
       gross: { pence: 10000 }, retained: { pence: 1000 }, expectedCash: { pence: 9000 },
     }, groups: [{ treatment: "drc_5", wording: "Reverse charge: customer to account for VAT to HMRC." }] });
-    expect(await f.repo.read(f.context, id(2))).toEqual(result);
+    expect(await f.repo.read(f.context, id(3), id(2))).toEqual(result);
     expect(result.records[0]).toMatchObject({ matrixVersion: VAT_SUPPORT_MATRIX_VERSION, environment: "synthetic", label: VAT_FIXTURE_LABEL });
     expect(VAT_TREATMENTS_ENABLED).toBe(false); expect(assertVatTreatmentIssueAllowed).toThrow();
   });
@@ -98,9 +99,21 @@ describe("M4-21 durable dark VAT fixture boundary", () => {
   });
   it("fails closed on altered stored rows and redacts unexpected SQL errors", async () => {
     const f = fixture([{ ...stored(), environment: "production" }]);
-    await expect(f.repo.read(f.context, id(2))).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    await expect(f.repo.read(f.context, id(3), id(2))).rejects.toMatchObject({ code: "UNAVAILABLE" });
     f.query.mockRejectedValueOnce(new Error("private database content"));
-    await expect(f.repo.read(f.context, id(2))).rejects.toThrow("VAT_FIXTURE_UNAVAILABLE");
+    await expect(f.repo.read(f.context, id(3), id(2))).rejects.toThrow("VAT_FIXTURE_UNAVAILABLE");
     expect(f.release).toHaveBeenCalledTimes(2);
   });
+});
+
+it("checks current tenant membership before any VAT lookup, including empty books and retries", async () => {
+  for (const rows of [[], [stored()]]) {
+    const f = fixture(rows, false);
+    for (const job of [id(2), id(99)]) await expect(f.repo.read(f.context, id(3), job)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(f.query.mock.calls.some(([sql]) => sql.includes("app.vat_fixture_records"))).toBe(false);
+    const membership = f.query.mock.calls.find(([sql]) => sql.includes("FROM app.membership"))!;
+    expect(membership[0]).toMatch(/role IN \('owner', 'admin'\)/u);
+    expect(membership[0]).toContain("revoked_at IS NULL"); expect(membership[0]).toContain("expires_at>clock_timestamp()");
+    expect(membership[1]).toEqual([id(1), id(3)]);
+  }
 });

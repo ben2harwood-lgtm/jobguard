@@ -15,16 +15,16 @@ it("renders identical wording, options and builder fees for server projections w
 });
 
 // Exercise the screen's command handler and state transitions without a browser.
-const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0 }));
+const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0, effects: [] as (() => unknown)[] }));
 vi.mock("react", async original => ({ ...await original<typeof import("react")>(),
   useState: (initial: unknown) => {
     const index = hooks.cursor++;
     if (!(index in hooks.cells)) hooks.cells[index] = initial;
     return [hooks.cells[index], (value: unknown) => { hooks.cells[index] = value; }];
   },
-  useRef: (current: unknown) => ({ current }), useEffect: () => undefined,
+  useRef: (current: unknown) => ({ current }), useEffect: (effect: () => unknown) => { hooks.effects.push(effect); },
 }));
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); hooks.cells = []; hooks.cursor = 0; });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); hooks.cells = []; hooks.cursor = 0; hooks.effects = []; });
 it.each([400, 401, 403, 404, 409, 422, 408, 429, 500, 503, "network"] as const)(
   "clears only definite refusals and retains the exact command for uncertain outcome %s", async status => {
     const command = { commandId: id, rail: "card" };
@@ -55,3 +55,20 @@ it.each([400, 401, 403, 404, 409, 422, 408, 429, 500, 503, "network"] as const)(
     expect(html.includes("Retry same practice attempt")).toBe(!definite);
     if (definite) expect(html).toContain(`Practice attempt refused (${status})`);
   });
+
+it.each([401,403])("says GET %i is refused and clears a saved retry", async status => {
+  const command={commandId:id,rail:"card"};
+  const key=`pay-now-preview:${id}:${id}`;
+  const stored=new Map([[key,JSON.stringify(command)]]);
+  vi.stubGlobal("sessionStorage",{
+    getItem:(key:string)=>stored.get(key),removeItem:(key:string)=>stored.delete(key),
+  });
+  vi.spyOn(globalThis,"fetch")
+    .mockResolvedValueOnce(new Response(JSON.stringify({memberships:[{tenantId:id}],csrfToken:"fictional-csrf"})))
+    .mockResolvedValueOnce(new Response(JSON.stringify({code:status===401?"UNAUTHENTICATED":"FORBIDDEN"}),{status}));
+  hooks.cells=[null,"",false,command];
+  PayNowAttemptScreen({jobId:id,invoiceId:id});
+  hooks.effects[0]!();
+  await vi.waitFor(()=>expect(hooks.cells[1]).toBe(`Practice preview refused (${status}).`));
+  expect(hooks.cells[3]).toBe(null);expect(stored.has(key)).toBe(false);
+});

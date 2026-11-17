@@ -39,7 +39,7 @@ describe("M4-21 real PostgreSQL synthetic VAT documents", () => {
     credit.document.kind = "credit_note"; credit.document.creditOfDocumentId = first.document.id;
     credit.document.groups[0]!.cumulativeNetPence = 5000; credit.document.groups[0]!.retainedNetPence = 500;
     await repo.command(a.context, a.actorId, credit);
-    const read = await new VatFixtureRepository(c.runtime).read(a.context, a.jobId);
+    const read = await new VatFixtureRepository(c.runtime).read(a.context, a.actorId, a.jobId);
     expect(read.book.documents[0]).toEqual(first.document);
     expect(read.reconciliation.documents[0]?.cumulative).toMatchObject({ net: { pence: 10000 }, vatToSupplier: { pence: 0 },
       reverseChargeVat: { pence: 1800 }, gross: { pence: 10000 }, retained: { pence: 1000 }, expectedCash: { pence: 9000 } });
@@ -54,7 +54,7 @@ describe("M4-21 real PostgreSQL synthetic VAT documents", () => {
     await repo.command(a.context, a.actorId, first);
     await expect(repo.command(a.context, a.actorId, { ...first, jobId: b.jobId })).rejects.toMatchObject({ code: "CONFLICT" });
     expect(await count(a)).toBe(1);
-    await expect(repo.read(a.context, b.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repo.read(a.context, a.actorId, b.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
   it("serializes two appends from one previous document and refuses duplicate references", async () => {
     const a = await company(), repo = new VatFixtureRepository(c.runtime), first = input(a);
@@ -64,7 +64,7 @@ describe("M4-21 real PostgreSQL synthetic VAT documents", () => {
       v.document.groups[0]!.cumulativeNetPence = 20000; return v; };
     const results = await Promise.allSettled([repo.command(a.context, a.actorId, next()), repo.command(a.context, a.actorId, next())]);
     expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1); expect(await count(a)).toBe(2);
-    const read = await repo.read(a.context, a.jobId), duplicate = next();
+    const read = await repo.read(a.context, a.actorId, a.jobId), duplicate = next();
     duplicate.document.previousDocumentId = read.book.documents.at(-1)!.id;
     duplicate.document.documentReference = first.document.documentReference;
     await expect(repo.command(a.context, a.actorId, duplicate)).rejects.toBeInstanceOf(Error);
@@ -94,7 +94,7 @@ describe("M4-21 real PostgreSQL synthetic VAT documents", () => {
   it("hides foreign and absent jobs identically, rejects foreign actors, and enforces FORCE RLS", async () => {
     const a = await company(), b = await company(), repo = new VatFixtureRepository(c.runtime);
     await repo.command(a.context, a.actorId, input(a));
-    for (const jobId of [a.jobId, randomUUID()]) await expect(repo.read(b.context, jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    for (const jobId of [a.jobId, randomUUID()]) await expect(repo.read(b.context, b.actorId, jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(repo.command(a.context, b.actorId, input(a))).rejects.toBeInstanceOf(Error);
     await workTenant(c.admin, b.tenantId, async db => {
       await db.query("SET LOCAL ROLE jobguard_migration");
@@ -109,21 +109,40 @@ describe("M4-21 real PostgreSQL synthetic VAT documents", () => {
   });
   it("refuses direct runtime writes, owner updates, deletes and truncation without changing history", async () => {
     const a = await company(), repo = new VatFixtureRepository(c.runtime); await repo.command(a.context, a.actorId, input(a));
-    const before = await repo.read(a.context, a.jobId);
+    const before = await repo.read(a.context, a.actorId, a.jobId);
     for (const pool of [c.runtime, c.admin]) for (const sql of [
       "UPDATE app.vat_fixture_record SET payload='{}'::jsonb WHERE tenant_id=$1",
       "DELETE FROM app.vat_fixture_record WHERE tenant_id=$1",
     ]) await expect(workTenant(pool, a.tenantId, db => db.query(sql, [a.tenantId]))).rejects.toBeInstanceOf(Error);
     await expect(c.admin.query("TRUNCATE app.vat_fixture_record")).rejects.toBeInstanceOf(Error);
     await expect(workTenant(c.runtime, a.tenantId, db => db.query("INSERT INTO app.vat_fixture_record SELECT * FROM app.vat_fixture_record"))).rejects.toMatchObject({ code: "42501" });
-    expect(await repo.read(a.context, a.jobId)).toEqual(before);
+    expect(await repo.read(a.context, a.actorId, a.jobId)).toEqual(before);
+  });
+  it("permits only current owners and admins and rechecks revoked, expired and foreign actors", async () => {
+    const a = await company(), b = await company(), repo = new VatFixtureRepository(c.runtime);
+    const expected = await repo.command(a.context, a.actorId, input(a));
+    for (const role of ["owner", "admin", "estimator", "foreman", "finance", "read_only"]) {
+      await c.admin.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3", [role, a.tenantId, a.actorId]);
+      if (role === "owner" || role === "admin") expect(await repo.read(a.context, a.actorId, a.jobId)).toEqual(expected);
+      else for (const jobId of [a.jobId, randomUUID()])
+        await expect(repo.read(a.context, a.actorId, jobId)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    await expect(repo.read(a.context, b.actorId, a.jobId)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    for (const state of ["revoked", "expired"]) {
+      await c.admin.query(`UPDATE app.membership SET role=$1, revoked_at=$2,
+        expires_at=$3 WHERE tenant_id=$4 AND id=$5`,
+      [state === "revoked" ? "owner" : "admin", state === "revoked" ? new Date(0) : null,
+        state === "expired" ? new Date(0) : null, a.tenantId, a.actorId]);
+      await expect(repo.read(a.context, a.actorId, a.jobId)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+    expect(await count(a)).toBe(1);
   });
   it("keeps production-like databases closed", async () => {
     const other = await cluster(false, "jobguard_vat_closed");
     try {
       const a = await seedWorkJob(other as unknown as WorkFixture), repo = new VatFixtureRepository(other.runtime);
       await expect(repo.command(a.context, a.actorId, input(a))).rejects.toMatchObject({ code: "DISABLED" });
-      await expect(repo.read(a.context, a.jobId)).rejects.toMatchObject({ code: "DISABLED" });
+      await expect(repo.read(a.context, a.actorId, a.jobId)).rejects.toMatchObject({ code: "DISABLED" });
       expect((await other.admin.query("SELECT count(*)::int n FROM app.vat_fixture_record")).rows[0].n).toBe(0);
     } finally { await other.close(); }
   }, 240000);
