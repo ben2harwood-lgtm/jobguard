@@ -55,7 +55,8 @@ describe("LP-4 compatible upgrade and database-independent sealing", () => {
       const input={id,version:"audit.v1" as const,actorRef:"user:fixture",eventType:"fixture.created",
         subjectType:"job",subjectRef:job,payload:{}};
       const [event]=await withTenant(db.runtime,testTenantContext(tenant),tx=>appendAuditBatch(tx,[input]));
-      expect(event).toMatchObject({id,version:"audit.v2",sequence:1,payload:{references:{auditTrust:"lower_trust"}}});
+      // LP-6e 0758: new events are audit.v3 with sealed system attribution for an unbound writer.
+      expect(event).toMatchObject({id,version:"audit.v3",sequence:1,payload:{references:{auditTrust:"lower_trust",auditActorKind:"system"}}});
       verifyAuditChain([event!]);
       await withTenant(db.owner,testTenantContext(tenant),tx=>tx.$client.query(
         "SELECT app.append_final_lock_audit($1,$2,$3,'final_account.locked',$4::jsonb)",

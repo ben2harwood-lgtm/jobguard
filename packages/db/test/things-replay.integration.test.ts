@@ -26,7 +26,7 @@ async function asTenant(sql: string, params: unknown[]) {
   finally { await client.query("RESET app.tenant_id"); client.release(); }
 }
 // A real audit event for a fixture row written "by the earlier code", so its place in the audit chain is genuine.
-const legacyAudit = async () => (await withTenant(runtime, ctx, db => appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType: "fixture.legacy_command", subjectType: "job", subjectRef: job, payload: { references: { jobId: job }, hashes: { payloadHash: "a".repeat(64) }, classifications: { action: "operational" } } }])))[0]!.id;
+const legacyAudit = async () => (await withTenant(runtime, ctx, db => appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType: "fixture.legacy_record", subjectType: "job", subjectRef: job, payload: { references: { jobId: job }, hashes: { payloadHash: "a".repeat(64) }, classifications: { action: "operational" } } }])))[0]!.id;
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const count = async (table: string, jobId: string) => Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE job_id=$1`, [jobId])).rows[0].n);
 const stored = async (commandId: string) => Number((await admin.query("SELECT count(*) n FROM app.watchdog_command_result WHERE command_id=$1", [commandId])).rows[0].n);

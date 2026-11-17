@@ -541,27 +541,19 @@ it("keeps the recovery worker trigger invoker-owned and the delivery port migrat
   expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) FROM PUBLIC,jobguard_identity,jobguard_infrastructure,jobguard_shadow;");
 });
 
-it("pins the LP-6e presence-only probe, exact binder keys and sole caller", () => {
-  const candidate = read("../migrations/0756_lp6e_audit_attribution.sql");
-  const binder = definitions(read("../migrations/0562_lp6a_request_binding.sql")).find(m => m[1] === "app.bind_request")![3]!;
-  const environment = binder.match(/environment_key text:=(.*?); request_xid/u)![1]!;
-  const xid = binder.match(/request_xid xid8:=(.*?);/u)![1]!;
-  const probe = definitions(candidate).find(m => m[1] === "app.lp6e_request_binding_present")!;
-  expect(probe[2]).toBe("");
-  expect(probe[0]).toContain("RETURNS boolean\n LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog");
-  expect(probe[3]).toBe(`\n SELECT EXISTS(SELECT 1 FROM control_plane.request_binding b\n  WHERE b.environment_id=(${environment})\n   AND b.transaction_id=${xid});\n`);
-  expect(candidate).toContain("ALTER FUNCTION app.lp6e_request_binding_present() OWNER TO jobguard_binding_owner;");
-  expect(candidate).toContain("REVOKE ALL ON FUNCTION app.lp6e_request_binding_present() FROM PUBLIC;");
-  expect(candidate).toContain("REVOKE ALL ON FUNCTION app.lp6e_request_binding_present() FROM jobguard_runtime;");
-  expect([...candidate.matchAll(/GRANT EXECUTE ON FUNCTION app\.lp6e_request_binding_present\(\) TO ([^;]+);/gu)].map(m => m[1])).toEqual(["jobguard_migration"]);
-  const latest = new Map<string, string>();
-  for (const file of readdirSync(new URL("../migrations/", import.meta.url)).filter(f => f.endsWith(".sql")).sort())
-    for (const m of definitions(read(`../migrations/${file}`))) latest.set(m[1]!, m[3]!);
-  expect([...latest].filter(([, b]) => b.includes("app.lp6e_request_binding_present(")).map(([n]) => n)).toEqual(["app.lp6e_append_outbox_audit"]);
-  const bridge = latest.get("app.lp6e_append_outbox_audit")!;
+it("reuses the prerequisite's migration-only presence probe and preserves the worker refusal", () => {
+  const candidate = read("../migrations/0758_lp6e_audit_attribution.sql");
+  const prerequisite = read("../migrations/0754_lp6d_worker_binding_presence.sql");
+  expect(definitions(candidate).some(m => m[1] === "app.lp6e_request_binding_present")).toBe(false);
+  expect(prerequisite).toContain("REVOKE ALL ON FUNCTION app.lp6e_request_binding_present() FROM PUBLIC,jobguard_runtime;");
+  expect(prerequisite).toContain("GRANT EXECUTE ON FUNCTION app.lp6e_request_binding_present() TO jobguard_migration;");
+  const bridge = definitions(candidate).find(m => m[1] === "app.lp6e_append_outbox_audit")![3]!;
   expect(bridge).toContain("IF app.lp6d_request_bound() OR app.lp6e_request_binding_present() THEN\n  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;");
   expect(bridge.indexOf("REQUEST_BINDING_REFUSED")).toBeLessThan(bridge.indexOf("FROM app.action_outbox"));
-  expect(candidate).toContain("ALTER FUNCTION app.lp6e_append_outbox_audit(jsonb) OWNER TO jobguard_migration;");
-  expect(bridge).toContain("END,o.tenant_id INTO expected_type,t");
-  expect(classification["app.lp6e_request_binding_present()"]).toMatch(/^Reviewed /u);
+  const resolver = definitions(candidate).find(m => m[1] === "app.lp6e_audit_context")![3]!;
+  expect(resolver).toContain("IF app.lp6e_request_binding_present() THEN");
+  expect(resolver).not.toContain("EXCEPTION");
+  expect(candidate).toContain("ALTER FUNCTION app.lp6e_audit_context() OWNER TO jobguard_migration;");
+  expect(candidate).toContain("REVOKE ALL ON FUNCTION app.lp6e_audit_context() FROM PUBLIC,jobguard_runtime");
+  expect(classification["app.lp6e_request_binding_present()"]).toMatch(/^Private to jobguard_migration/u);
 });

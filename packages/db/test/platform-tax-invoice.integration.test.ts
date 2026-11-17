@@ -32,8 +32,9 @@ it("derives amounts and provenance from a real immutable subscription statement"
   const audit = (await f.admin.query("SELECT version,actor_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='platform_invoice.simulation_invoice'", [t.a.tenantId])).rows;
   expect(audit).toHaveLength(1);
   await assertV3AuditChain(f.admin, t.a.tenantId);
-  expect(audit[0]).toMatchObject({ version: "audit.v3", actor_ref: "system:database:postgres", payload: {
-    references: { number: invoice.number, auditTrust: "checked_operation", auditActorKind: "system" },
+  // LP-6e 0758: actor_ref keeps the domain claim; the issuing request is bound, so the sealed attribution is that member.
+  expect(audit[0]).toMatchObject({ version: "audit.v3", actor_ref: `membership:${t.a.actorId}`, payload: {
+    references: { number: invoice.number, auditTrust: "checked_operation", auditActorKind: "bound_member", auditActorRef: `membership:${t.a.actorId}` },
     hashes: { documentHash: downloadPlatformInvoice(invoice).hash },
   } });
   const trace = invoice.request.lines[0]!.provenance;

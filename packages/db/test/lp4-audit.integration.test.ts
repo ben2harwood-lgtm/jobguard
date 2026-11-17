@@ -11,7 +11,7 @@ import { jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job
 let db: JobDoorsDatabase;
 let tenant: string;
 const statement = (extra: Partial<AuditEventInput> = {}): AuditEventInput => ({
-  id: randomUUID(), version: "audit.v1", actorRef: "membership:synthetic-claim", eventType: "payment.completed",
+  id: randomUUID(), version: "audit.v1", actorRef: "membership:synthetic-claim", eventType: "job.note_recorded",
   subjectType: "job", subjectRef: randomUUID(), payload: { references: { jobId: randomUUID(), a: "a", A: "A", _a: "_a" } }, ...extra,
 });
 async function transaction<T>(pool: Pool, t: string, work: (client: PoolClient) => Promise<T>) {
@@ -35,7 +35,8 @@ describe("LP-4 actual runtime audit boundary (PostgreSQL)", () => {
     const events = await chain(tenant);
     expect(events.map(e => e.sequence)).toEqual(Array.from({ length: 16 }, (_, n) => n + 1));
     expect(() => verifyAuditChain(events)).not.toThrow();
-    expect(events.every(e => e.version === "audit.v2" && auditEventTrust(e) === "lower_trust")).toBe(true);
+    // LP-6e 0758: the same canonicalization under audit.v3.
+    expect(events.every(e => e.version === "audit.v3" && auditEventTrust(e) === "lower_trust")).toBe(true);
     expect(events.every(e => Math.abs(e.occurredAt.getTime() - Date.now()) < 60_000)).toBe(true);
   });
 
@@ -72,7 +73,8 @@ describe("LP-4 actual runtime audit boundary (PostgreSQL)", () => {
     expect(rows[0].source).not.toMatch(/INSERT\s+INTO\s+app\.audit_event/i);
   });
   it.each(["app.append_audit", "app.lp4_seal_audit", "app.ch4_append_fact_audit"])("%s matches its recorded database definition", async name => {
-    const inventory=JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8"));
+    // Reviewed baseline plus chained migration proofs (LP-6e 0758 records the current sealer body).
+    const { inventory } = await loadReviewedInventory();
     const expected=inventory.recorded.routines.filter((r: {identity:string})=>r.identity.startsWith(`function:${name}(`));
     expect(expected).toHaveLength(1);
     const actual=(await db.owner.query(`SELECT encode(sha256(convert_to(pg_get_functiondef(p.oid),'UTF8')),'hex') digest
@@ -135,10 +137,12 @@ describe("LP-4 actual runtime audit boundary (PostgreSQL)", () => {
     const other = (await jobDoorsActor(db.owner)).tenant;
     const inputs = ["approval.approved", "payment.settled", "command.completed", "payment.reversed", "command.cancelled"].map(eventType => statement({ eventType,
       payload: { references: { jobId: randomUUID(), finalAccountRevision: "locked:1", amountPence: "0" } } }));
-    const events = await append(tenant, inputs);
+    // LP-6e 0758 narrows this: unlisted authority-named statements now need a checked operation.
+    for (const input of inputs) await expect(append(tenant, [input])).rejects.toMatchObject({ code: "42501", message: "AUDIT_CHECKED_OPERATION_REQUIRED" });
+    expect((await chain(tenant)).filter(e => inputs.some(i => i.id === e.id))).toEqual([]);
+    const events = await append(tenant, [statement()]);
     expect(events.every(e => auditEventTrust(e) === "lower_trust")).toBe(true);
     expect(await chain(other)).toEqual([]);
-    expect((await chain(tenant)).filter(e => inputs.some(i => i.id === e.id))).toHaveLength(inputs.length);
     // This only proves the trust label and absence of an authorization insert.
     // Reserved-type rejection and downstream authority-consumer closure are NOT proved or built here.
     expect((await db.owner.query("SELECT count(*)::int n FROM app.action_authorization WHERE tenant_id=$1", [tenant])).rows[0].n).toBe(0);
