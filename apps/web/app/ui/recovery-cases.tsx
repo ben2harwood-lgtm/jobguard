@@ -63,7 +63,15 @@ const load=useCallback(async()=>{const t=ticket();setStatus("loading");setError(
 const held=useRef<Attempt|undefined>(undefined),[unsure,setUnsure]=useState(false),[needsReload,setNeedsReload]=useState(false);const hold=useCallback((next?:Attempt)=>{held.current=next;setUnsure(next!==undefined)},[]);
 // A new job starts from nothing (no cases of the previous job stay on screen), and leaving it makes every answer still in flight for it stale.
 // The optional delivery lookup is separate from the register read: it owns only the picker, never register status, busy, selection or focus. Pack ticks refresh only RecoveryMessages below.
-useEffect(()=>{setCases([]);setSelected(undefined);setDeliveries([]);setDeliveryId("");setBusy(false);setNeedsReload(false);hold(undefined);void load();return()=>{world.current+=1}},[load,hold]);
+const entryState=useRef({status,busy});entryState.current={status,busy};
+useEffect(()=>{
+ setCases([]);setSelected(undefined);setDeliveries([]);setDeliveryId("");setBusy(false);setNeedsReload(false);hold(undefined);void load();
+ // The shell owns register reloads for real hash navigation. Refresh only the
+ // optional picker here, without superseding an in-flight/unknown command.
+ const entered=()=>{if(window.location.hash==="#recovery-cases"&&entryState.current.status==="ready"&&!entryState.current.busy&&!held.current){void refreshDeliveries(world.current);}};
+ if(typeof window!=="undefined")window.addEventListener("hashchange",entered);
+ return()=>{world.current+=1;if(typeof window!=="undefined")window.removeEventListener("hashchange",entered);};
+},[load,hold,refreshDeliveries]);
 // Start the optional lookup only after the register has settled. It must not compete with that first read or restart it when the picker changes.
 // Capture the world at render: the register effect's cleanup changes it before this effect runs on a job switch, making the previous ready state stale.
 const lookupWorld=world.current;
