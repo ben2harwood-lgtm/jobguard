@@ -49,7 +49,7 @@ describe("SV-2 real PostgreSQL persistence (DW3–DW7)",()=>{
  it("returns nothing before a lock even with own revealed rows present (DW3 split)",async()=>{
   for(const [tenant,job,state] of [[T,J,"revealed"],[T,J,"candidate"],[T,J,"held_for_final_check"],[T,K,"revealed"],[O,L,"revealed"]])await signal(job,tenant,state);
   expect((await admin.query("SELECT id FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND state='revealed'",[T,J])).rowCount).toBeGreaterThan(0);
-  expect((await admin.query("SELECT to_regclass('app.final_account_lock') AS lock")).rows[0].lock).toBeNull();
+  expect((await admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=ANY($2::uuid[])",[T,[J,K]])).rows[0].n).toBe(0);
   expect(await new ShadowRepository(runtime).reveal(context(),{version:"shadow-read.v1",jobId:J})).toEqual([]);
   expect(await new ShadowRepository(runtime).reveal(context(),{version:"shadow-read.v1",jobId:K})).toEqual([]);
   await expect(runtime.query("SELECT * FROM app.reveal_shadow_signals($1,$2)",[T,J])).rejects.toMatchObject({code:"42501"});
