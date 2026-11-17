@@ -68,7 +68,8 @@ it.each(["draft", "quoting", "accepted", "lost"])("allows documented activation 
   expect(html).toContain("Continue this job");
   expect(html).not.toContain("could not be checked");
   expect(html).not.toContain("Checking saved progress");
-  expect(fetch).toHaveBeenCalledTimes(10);
+  expect(fetch).toHaveBeenCalledTimes(status === "draft" ? 9 : 10);
+  if (status === "draft") expect(fetch).not.toHaveBeenCalledWith(`/api/jobs/${jobId}/quotes`, expect.anything());
   expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/variations`, expect.objectContaining({ cache: "no-store" }));
 });
 

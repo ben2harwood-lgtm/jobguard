@@ -50,7 +50,7 @@ export function PracticeJourney({ jobId, status, onSavedLabel, onNavigate }: { j
    const path = `/api/jobs/${jobId}`, beforeActivation = ["draft", "quoting", "accepted", "lost"].includes(status);
    const [proposalRaw, quoteRaw, deliveryRaw, proofRaw, variationsRaw, accountRaw, lockRaw, checkRaw, invoicesRaw, feeRaw] = await Promise.all([
     readJson(`${path}/proposal`, controller.signal),
-    readJson(`${path}/quotes`, controller.signal, status === "draft" ? { status: 404, code: "NOT_FOUND" } : undefined),
+    status === "draft" ? undefined : readJson(`${path}/quotes`, controller.signal),
     readJson(`${path}/quotes/delivery`, controller.signal),
     readJson(`${path}/proof`, controller.signal, beforeActivation ? { status: 404, code: "NOT_FOUND" } : undefined),
     readJson(`${path}/variations`, controller.signal, beforeActivation ? { status: 400, code: "ACTIVATION_REQUIRED" } : undefined),
