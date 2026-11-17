@@ -108,7 +108,7 @@ const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   // persisted session. The tenant lock and import permission check stay.
   // LP-6d repair 10 re-pin (checker accepted on source: prechecks/lp-6d-r10-403be3a6-s9-and-oracle.md): principal type only (the
   // context-bearing alias is gone); the three DEMO fixture constructors are unchanged.
-  "packages/db/src/work-order-fixtures.ts": "bfcdf0a9d57691b3af4672313069e333e1399be598c46fd5f7500289a833089a",
+  "packages/db/src/work-order-fixtures.ts": "46a27d5662376acf51c51bd602c5556b566099f73c0caa3998a67a1092eaceb0",
   "packages/db/src/contractor-session-context.ts": "6fc5382c5b912992d715ded455a79f115884eba53f25ee55f9a1050878f4605c",
 };
 const reviewedPracticeSource = (file: SourceFile) => REVIEWED_PRACTICE_SOURCES[file.path] === createHash("sha256").update(file.text).digest("hex");
