@@ -1,0 +1,314 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+> @jobguard/web@0.0.0 build:cloudflare /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-deploy/apps/web
+> pnpm --workspace-root exec turbo run build --filter=@jobguard/web^... && opennextjs-cloudflare build
+
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/ai, @jobguard/api, @jobguard/config, @jobguard/core, @jobguard/db, @jobguard/storage
+   • Running build in 6 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/core:build: cache miss, executing a5bf7f1a9ec2380a
+@jobguard/storage:build: cache hit, replaying logs 31e904b62d25853c
+@jobguard/storage:build: 
+@jobguard/storage:build: > @jobguard/storage@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-host-1/packages/storage
+@jobguard/storage:build: > tsc -p tsconfig.json
+@jobguard/storage:build: 
+@jobguard/config:build: cache hit, replaying logs 2e7c8e809dbb6c99
+@jobguard/config:build: 
+@jobguard/config:build: > @jobguard/config@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-host-1/packages/config
+@jobguard/config:build: > tsc -p tsconfig.json
+@jobguard/config:build: 
+@jobguard/core:build: 
+@jobguard/core:build: > @jobguard/core@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-deploy/packages/core
+@jobguard/core:build: > tsc -p tsconfig.json
+@jobguard/core:build: 
+@jobguard/ai:build: cache miss, executing 1fe96efbbab3f46d
+@jobguard/db:build: cache miss, executing 9245e00d809cd5ce
+@jobguard/ai:build: 
+@jobguard/ai:build: > @jobguard/ai@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-deploy/packages/ai
+@jobguard/ai:build: > tsc -p tsconfig.json
+@jobguard/ai:build: 
+@jobguard/db:build: 
+@jobguard/db:build: > @jobguard/db@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-deploy/packages/db
+@jobguard/db:build: > tsc -p tsconfig.json
+@jobguard/db:build: 
+@jobguard/api:build: cache miss, executing fb7b9f48642792b0
+@jobguard/api:build: 
+@jobguard/api:build: > @jobguard/api@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-deploy/apps/api
+@jobguard/api:build: > nest build
+@jobguard/api:build: 
+
+ Tasks:    6 successful, 6 total
+Cached:    2 cached, 6 total
+  Time:    15.974s 
+
+
+┌─────────────────────────────┐
+│ OpenNext — Cloudflare build │
+└─────────────────────────────┘
+
+Monorepo detected at /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-deploy
+App directory: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-deploy/apps/web
+Next.js version : 16.4.2
+@opennextjs/cloudflare version: 1.20.12
+@opennextjs/aws version: 4.1.11
+workerd compatibility_date: 2026-10-01
+
+┌─────────────────────────────────┐
+│ OpenNext — Building Next.js app │
+└─────────────────────────────────┘
+
+▲ Next.js 16.4.2 (webpack)
+✓ Running next.config.mjs took 6ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 11.3s
+  Running TypeScript ...
+  Finished TypeScript in 7.0s ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/56) ...
+  Generating static pages using 9 workers (14/56) 
+  Generating static pages using 9 workers (28/56) 
+  Generating static pages using 9 workers (42/56) 
+✓ Generating static pages using 9 workers (56/56) in 585ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin/contractor
+├ ○ /admin/contractor/audit-exports
+├ ○ /admin/contractor/identity
+├ ƒ /api/auth/invitations
+├ ƒ /api/auth/oidc/[connectionId]/callback
+├ ƒ /api/auth/oidc/[connectionId]/start
+├ ƒ /api/auth/request
+├ ƒ /api/auth/scim/[connectionId]/deactivations
+├ ƒ /api/auth/session
+├ ƒ /api/auth/sso-required
+├ ƒ /api/auth/sso-required/detail
+├ ƒ /api/auth/sso-required/emergency
+├ ƒ /api/auth/sso/[connectionId]/callback
+├ ƒ /api/auth/sso/[connectionId]/start
+├ ƒ /api/auth/verify
+├ ƒ /api/contractor
+├ ƒ /api/contractor/audit-exports
+├ ƒ /api/contractor/baseline
+├ ƒ /api/contractor/baseline/compare
+├ ƒ /api/contractor/clients/[clientId]/customer-link
+├ ƒ /api/contractor/dashboard
+├ ƒ /api/contractor/jobs/[id]/assignments
+├ ƒ /api/contractor/jobs/[id]/billing
+├ ƒ /api/contractor/jobs/[id]/billing/[action]
+├ ƒ /api/contractor/jobs/[id]/order-check
+├ ƒ /api/contractor/jobs/[id]/order-lines
+├ ƒ /api/contractor/jobs/[id]/resident-contact
+├ ƒ /api/contractor/jobs/[id]/site-extras
+├ ƒ /api/contractor/jobs/[id]/site-extras/sor
+├ ƒ /api/contractor/jobs/[id]/site-visits
+├ ƒ /api/contractor/jobs/[id]/site-visits/[visitId]/complete
+├ ƒ /api/contractor/jobs/[id]/site-visits/start
+├ ƒ /api/contractor/jobs/[id]/sor-items
+├ ƒ /api/contractor/practice/acting-as
+├ ƒ /api/contractor/practice/acting-as/end
+├ ƒ /api/contractor/practice/session/revoke
+├ ƒ /api/contractor/practice/workers/[workerId]/acting-as
+├ ƒ /api/contractor/site/jobs
+├ ƒ /api/contractor/sor-versions
+├ ƒ /api/contractor/statements/[action]
+├ ƒ /api/contractor/work-order-imports
+├ ƒ /api/contractor/work-order-imports/[batchId]
+├ ƒ /api/contractor/work-orders/[workOrderId]/revisions
+├ ƒ /api/customer-portal/issue
+├ ƒ /api/customer-portal/read
+├ ƒ /api/customer-portal/revoke
+├ ƒ /api/customer-portal/signin
+├ ƒ /api/customer-portal/signout
+├ ƒ /api/customer-portal/variation-approvals
+├ ƒ /api/customer-portal/variations/read
+├ ƒ /api/decisions
+├ ƒ /api/jobs
+├ ƒ /api/jobs/[id]
+├ ƒ /api/jobs/[id]/commercial-integrity
+├ ƒ /api/jobs/[id]/commercial-integrity/reviews
+├ ƒ /api/jobs/[id]/confirm
+├ ƒ /api/jobs/[id]/customer-invoices
+├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]
+├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes
+├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes/preview
+├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/receipts
+├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/receipts/reversals
+├ ƒ /api/jobs/[id]/customer-messages
+├ ƒ /api/jobs/[id]/diary
+├ ƒ /api/jobs/[id]/fee-illustration
+├ ƒ /api/jobs/[id]/fee-illustration/what-if
+├ ƒ /api/jobs/[id]/final-account
+├ ƒ /api/jobs/[id]/final-account/dispositions
+├ ƒ /api/jobs/[id]/final-account/lock
+├ ƒ /api/jobs/[id]/final-account/review-extras
+├ ƒ /api/jobs/[id]/final-account/terms
+├ ƒ /api/jobs/[id]/final-check
+├ ƒ /api/jobs/[id]/final-check/catches
+├ ƒ /api/jobs/[id]/final-check/dispositions
+├ ƒ /api/jobs/[id]/final-check/disputes
+├ ƒ /api/jobs/[id]/final-check/runs
+├ ƒ /api/jobs/[id]/materials
+├ ƒ /api/jobs/[id]/parties
+├ ƒ /api/jobs/[id]/parties/import
+├ ƒ /api/jobs/[id]/parties/import-v3
+├ ƒ /api/jobs/[id]/parties/import-v3/preview
+├ ƒ /api/jobs/[id]/payment-fees
+├ ƒ /api/jobs/[id]/practice-facts
+├ ƒ /api/jobs/[id]/practice-feed
+├ ƒ /api/jobs/[id]/prevention-checks
+├ ƒ /api/jobs/[id]/prevention-checks/[action]
+├ ƒ /api/jobs/[id]/proof
+├ ƒ /api/jobs/[id]/proposal
+├ ƒ /api/jobs/[id]/purchase-orders
+├ ƒ /api/jobs/[id]/purchase-orders/placement
+├ ƒ /api/jobs/[id]/purchase-orders/revisions
+├ ƒ /api/jobs/[id]/quotes
+├ ƒ /api/jobs/[id]/quotes/acceptance
+├ ƒ /api/jobs/[id]/quotes/acceptance/disposition
+├ ƒ /api/jobs/[id]/quotes/activation
+├ ƒ /api/jobs/[id]/quotes/artifacts/[artifactId]
+├ ƒ /api/jobs/[id]/quotes/delivery
+├ ƒ /api/jobs/[id]/quotes/delivery/[action]
+├ ƒ /api/jobs/[id]/quotes/preview
+├ ƒ /api/jobs/[id]/readiness
+├ ƒ /api/jobs/[id]/readiness/[action]
+├ ƒ /api/jobs/[id]/receipt-case-allocations
+├ ƒ /api/jobs/[id]/recovery
+├ ƒ /api/jobs/[id]/recovery-allocations
+├ ƒ /api/jobs/[id]/recovery-allocations/reversals
+├ ƒ /api/jobs/[id]/recovery-cases
+├ ƒ /api/jobs/[id]/recovery-cases/eligibility
+├ ƒ /api/jobs/[id]/recovery-cases/terms
+├ ƒ /api/jobs/[id]/recovery/[action]
+├ ƒ /api/jobs/[id]/relevance-inbox
+├ ƒ /api/jobs/[id]/relevance-inbox/[action]
+├ ƒ /api/jobs/[id]/relevance-inbox/decisions/[decisionId]
+├ ƒ /api/jobs/[id]/review
+├ ƒ /api/jobs/[id]/shadow-demo
+├ ƒ /api/jobs/[id]/success-fee-attribution
+├ ƒ /api/jobs/[id]/success-fees
+├ ƒ /api/jobs/[id]/success-fees/collection
+├ ƒ /api/jobs/[id]/success-fees/statements
+├ ƒ /api/jobs/[id]/success-fees/statements/[statementId]
+├ ƒ /api/jobs/[id]/supplier-documents
+├ ƒ /api/jobs/[id]/supplier-documents/facts/confirm
+├ ƒ /api/jobs/[id]/supplier-documents/intake
+├ ƒ /api/jobs/[id]/supplier-documents/receipts
+├ ƒ /api/jobs/[id]/supplier-matches
+├ ƒ /api/jobs/[id]/supplier-matches/corrections
+├ ƒ /api/jobs/[id]/things-to-check
+├ ƒ /api/jobs/[id]/things-to-check/[action]
+├ ƒ /api/jobs/[id]/trial
+├ ƒ /api/jobs/[id]/value
+├ ƒ /api/jobs/[id]/value/v3
+├ ƒ /api/jobs/[id]/variations
+├ ƒ /api/jobs/[id]/work-state
+├ ƒ /api/jobs/capture
+├ ƒ /api/material-rates
+├ ƒ /api/meter/current
+├ ƒ /api/meter/jobs/[id]/work-state
+├ ƒ /api/northside
+├ ƒ /api/northside/client
+├ ƒ /api/northside/extras
+├ ƒ /api/northside/extras/[extraId]/[action]
+├ ƒ /api/northside/photo
+├ ƒ /api/quotes/preview
+├ ƒ /api/recovery-cases/[id]/evidence-packs
+├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/attachment-approval
+├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/download
+├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/inspect
+├ ƒ /api/recovery-cases/[id]/follow-ups
+├ ƒ /api/recovery-cases/[id]/follow-ups/[followUpId]/commands
+├ ƒ /api/recovery-cases/[id]/messages
+├ ƒ /api/recovery-cases/[id]/messages/[messageId]/commands
+├ ƒ /api/sandbox/runs
+├ ƒ /api/sandbox/runs/[id]
+├ ƒ /api/sandbox/runs/[id]/[action]
+├ ƒ /api/session
+├ ƒ /api/small-builder-demo/[operation]
+├ ƒ /api/subscriptions/commands
+├ ƒ /api/subscriptions/current
+├ ƒ /api/test-support/drain
+├ ƒ /api/value
+├ ○ /approvals/extras
+├ ○ /contractor/dashboard
+├ ƒ /contractor/jobs/[id]/billing
+├ ○ /contractor/statements
+├ ○ /contractor/work-orders
+├ ƒ /contractor/work-orders/[workOrderId]
+├ ○ /customer/extras
+├ ƒ /customer/sign-in
+├ ƒ /demo-s
+├ ƒ /demo-s/core-1000
+├ ƒ /demo-s/shadow-30000
+├ ƒ /extra-approval/[jobId]/[requestId]
+├ ƒ /jobs/[id]
+├ ƒ /jobs/[id]/imports
+├ ƒ /jobs/[id]/trial
+├ ƒ /jobs/[id]/value
+├ ○ /meter
+├ ○ /northside
+├ ○ /plans
+├ ƒ /practice/[id]
+├ ○ /sign-in
+├ ○ /site/extra
+├ ○ /supplier-fixtures
+├ ○ /things-to-check-report
+└ ƒ /value
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+WARN Node.js middleware support is experimental in cloudflare, and not officially maintained by OpenNext maintainers. Use at your own risk.
+
+┌──────────────────────────────┐
+│ OpenNext — Generating bundle │
+└──────────────────────────────┘
+
+Bundling middleware function...
+Bundling Node.js middleware...
+Bundling static assets...
+Bundling cache assets...
+Building server function: default...
+Applying code patches: 2.624s
+# copyPackageTemplateFiles
+[35m⚙️ Bundling the OpenNext server...
+[0m
+▲ [WARNING] Duplicate member "getElementsByTagName" in class body [duplicate-class-member]
+
+    .open-next/server-functions/default/apps/web/.next/server/chunks/3602.js:22:72950:
+      22 │ ...d."+this.debugInfo())}getElementsByTagName(a){throw Error("This...
+         ╵                          ~~~~~~~~~~~~~~~~~~~~
+
+  The original member "getElementsByTagName" is here:
+
+    .open-next/server-functions/default/apps/web/.next/server/chunks/3602.js:22:71904:
+      22 │ ...d."+this.debugInfo())}getElementsByTagName(a){throw Error("This...
+         ╵                          ~~~~~~~~~~~~~~~~~~~~
+
+▲ [WARNING] Duplicate member "getElementsByTagNameNS" in class body [duplicate-class-member]
+
+    .open-next/server-functions/default/apps/web/.next/server/chunks/3602.js:22:73042:
+      22 │ ...."+this.debugInfo())}getElementsByTagNameNS(a,b){throw Error("T...
+         ╵                         ~~~~~~~~~~~~~~~~~~~~~~
+
+  The original member "getElementsByTagNameNS" is here:
+
+    .open-next/server-functions/default/apps/web/.next/server/chunks/3602.js:22:72447:
+      22 │ ...."+this.debugInfo())}getElementsByTagNameNS(a,b){throw Error("T...
+         ╵                         ~~~~~~~~~~~~~~~~~~~~~~
+
+[35mWorker saved in `.open-next/worker.js` 🚀
+[0m
+OpenNext build complete.
