@@ -19,12 +19,14 @@
         "packages/db/src/enterprise-fee-repository.ts",
         "packages/db/test/lp6d-runtime-classification.json",
         "packages/db/test/migration-proofs/0761_northside_hosted_agreement.proof.json",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/northside-demo.integration.test.ts",
         "packages/db/test/northside-hosted-agreement-upgrade.integration.test.ts",
         "packages/db/test/northside-hosted-agreement.integration.test.ts",
-        "packages/db/test/northside-hosted-agreement.test.ts"
+        "packages/db/test/northside-hosted-agreement.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ],
-      "note": "RED ENT-11a/11b hosted Northside synthetic startup/statement repair. No deployment, terms or mandates for real use. Migration 0761 placeholder; recheck next free number at integration.",
+      "note": "RED ENT-11a/11b hosted Northside synthetic startup/statement repair, including explicit upgrade-catalogue successor registration. No deployment, terms or mandates for real use. Migration 0761 goes first above main 0760; LP7's unlanded placeholder moves at its own integration.",
       "receipt": "packages/db/migration-notes/0761_northside_hosted_agreement.md"
     }
   }

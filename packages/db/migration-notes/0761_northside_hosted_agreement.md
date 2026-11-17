@@ -54,9 +54,10 @@ inactive/suspended status, expired/revoked sessions, revoked owner, tenant/actor
 mismatch, finance-only statement selection/replay, actual non-synthetic database
 refusal, own-step populated upgrade, repeated migration and retained privileges.
 
-0761 is the next local placeholder above main's 0760. At integration, check the
-existing migration ledger/base and use the existing renumber tool if another
-piece lands first. Discovery registers the migration; landed 0138/0549/0749 are
+Migration ordering is reconciled: hosted blocker PR #839 goes first as 0761 above
+main's 0760; LP7 has no open PR and its unlanded placeholder moves to the next
+free number at its own integration. Northside is not renamed in this repair.
+Discovery registers the migration; landed 0138/0549/0749 are
 untouched. Apply before the new statement route. Forward fix only: disable the
 Northside entrypoint or ship a reviewed additive routine repair; preserve run,
 status, terms, audit and financial histories. Never roll back by deleting facts.
@@ -125,3 +126,51 @@ full required CI/build/lint and exact-head independent Claude RED review.
 PostgreSQL and localhost/browser execution are unavailable in this sandbox.
 Hosted Northside and own-practice saved-paid-report acceptance remain the source
 owner's work after the release owner verifies the reviewed synthetic live pin.
+
+## Repair 1 — explicit catalogue successor registration
+
+Starting head `30fb1edddc71b029d3f8101057877b10648ad517`, base
+`d628c81222fffa6071aca9d366df9e050a1128c3`, same piece and PR #839.
+Required CI run `44155005339`, core-db(4) job `134293263052`, exposed two
+explicit body maps still selecting 0749's `app.northside_register` definition.
+`migfix-7-upgrade.integration.test.ts` and
+`plan-entitlement-lifecycle-upgrade.integration.test.ts` now register the complete
+0761 body in their existing LP-6d successor maps. The exact current proof remains
+unchanged and is still consumed by their existing metadata/privilege comparisons.
+All existing assertions, negative cases, historical bodies and replay checks
+remain. No production code, SQL, proof fingerprint or dependency was changed.
+
+Adjacent inspection found no further explicit Northside registration omission.
+`enterprise-access-upgrade.integration.test.ts` discovers CREATE OR REPLACE
+successors from migration URLs, so it already recognizes 0761 while retaining
+its owner/ACL/security/settings comparisons. Northside's own populated upgrade
+test retains its privilege checks. Lane registration includes both repaired tests.
+ENT-11a/ENT-11b and all new targeted tests remain unchanged.
+
+Executed locally with installed Node 24.17.0 and Vitest 4.1.12:
+
+- From `packages/db`, `node node_modules/vitest/vitest.mjs run --maxWorkers=2
+  test/northside-hosted-agreement.test.ts test/migration-proof-loader.test.ts
+  test/lp6d-routines.test.ts`: **111 passed**, including current proof discovery,
+  effective inventory comparison and original Northside guard preservation.
+- From the repository root, `node node_modules/typescript/bin/tsc -p
+  packages/db/tsconfig.json --noEmit` and the same command with
+  `apps/web/tsconfig.json`: both **passed**.
+- `LANE_BASE_REF=d628c812 node tools/agent-lane-boundary-lint.mjs`: **passed**,
+  including the original piece and uncommitted repair paths and migration order.
+- Installed TypeScript `transpileModule` syntax checks passed for both repaired
+  integration files; this is syntax validation, not execution or typechecking of
+  those database tests. `git diff --check` also passed.
+
+PostgreSQL and browser execution remain unavailable here; no second database or
+browser run was started. Required real-PostgreSQL recheck must include
+`migfix-7-upgrade.integration.test.ts`,
+`plan-entitlement-lifecycle-upgrade.integration.test.ts` and
+`enterprise-access-upgrade.integration.test.ts`, plus the existing focused proof
+validation. Preserve the existing controller's production-browser run on the
+immutable public 30fb1edd snapshot; that evidence is not a resulting-head CI pass.
+Required CI and an independent Claude RED delta PASS on the resulting full head
+remain outstanding. Dependency-review independently fails on the reported
+picomatch 4.0.4/4.0.7 advisory `GHSA-fc5q-39xc-vjpf`, with no patched version
+reported. Resolving that prerequisite remains an explicit integration gate; this
+scoped repair changes neither dependencies nor audit exceptions.
