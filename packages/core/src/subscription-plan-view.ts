@@ -20,11 +20,14 @@ const work = z.object({ ...row, statement_id: id, amount_pence: pence, environme
 const attempt = z.object({ ...row, work_id: id });
 const result = z.object({ ...row, work_id: id, outcome: z.enum(["redirect", "settled", "outcome_unknown", "failed"]),
   environment: z.literal("synthetic_demo") });
+const change = z.object({ ...row, expected_revision: z.number().int().positive(), plan: z.literal("Solo"), effective_date: londonMeterDateV1 });
+const changeOutcome = z.object({ tenant_id: id, change_id: id, source_id: id,
+  outcome: z.enum(["applied", "refused_capacity", "refused_stale", "refused_authority"]) });
 /** Consumed projection of the C1 read. Other persisted fields are stripped, never displayed or used for money. */
 export const subscriptionPlanReadV1 = z.object({
   version: z.literal("subscription-persisted-read.v1"), environment: z.literal("synthetic_demo"), hypothetical: z.literal(true),
   billingDay: z.number().int().min(1).max(31).optional(),
-  agreements: z.array(agreement), periods: z.array(period), statements: z.array(statement),
+  agreements: z.array(agreement), changes: z.array(change), changeOutcomes: z.array(changeOutcome), periods: z.array(period), statements: z.array(statement),
   work: z.array(work), attempts: z.array(attempt), results: z.array(result),
 });
 
@@ -45,9 +48,9 @@ export const subscriptionPaymentLabels = {
 export function subscriptionPlanView(raw: unknown, asOf: unknown) {
   const data = parseSubscription(subscriptionPlanReadV1, raw);
   const date = parseSubscription(londonMeterDateV1, asOf);
-  const rows = [...data.agreements, ...data.periods, ...data.statements, ...data.work, ...data.attempts, ...data.results];
+  const rows = [...data.changes, ...data.changeOutcomes, ...data.agreements, ...data.periods, ...data.statements, ...data.work, ...data.attempts, ...data.results];
   requireValid(new Set(rows.map(r => r.tenant_id)).size <= 1);
-  for (const collection of [data.agreements, data.periods, data.statements, data.work, data.attempts, data.results]) {
+  for (const collection of [data.changes, data.agreements, data.periods, data.statements, data.work, data.attempts, data.results]) {
     requireValid(new Set(collection.map(r => r.id)).size === collection.length);
   }
   requireValid(new Set(data.agreements.map(a => a.revision)).size === data.agreements.length);
@@ -57,6 +60,13 @@ export function subscriptionPlanView(raw: unknown, asOf: unknown) {
   requireValid(data.work.every(w => data.statements.some(s => s.id === w.statement_id)));
   requireValid(data.attempts.every(a => data.work.some(w => w.id === a.work_id)));
   requireValid(data.results.every(r => data.work.some(w => w.id === r.work_id)));
+  requireValid(new Set(data.changeOutcomes.map(o => o.change_id)).size === data.changeOutcomes.length);
+  requireValid(data.changes.every(c => data.agreements.some(a => a.tenant_id === c.tenant_id && a.revision === c.expected_revision)));
+  requireValid(data.changeOutcomes.every(o => data.changes.some(c => c.tenant_id === o.tenant_id && c.id === o.change_id)));
+  const pending = data.changes.filter(c => !data.changeOutcomes.some(o => o.tenant_id === c.tenant_id && o.change_id === c.id));
+  // Historical duplicate pending rows are ambiguous; never choose one by ordering.
+  requireValid(pending.length <= 1);
+  const pendingChange = pending[0];
   const current = data.agreements.filter(a => a.effective_date <= date)
     .sort((a, b) => b.effective_date.localeCompare(a.effective_date) || b.revision - a.revision)[0];
   const periods = data.periods.map(p => {
@@ -92,6 +102,7 @@ export function subscriptionPlanView(raw: unknown, asOf: unknown) {
         maximumLabel: subscriptionPounds(p.maximumPence), annualLabel: subscriptionAnnualAvailable ? subscriptionPounds(p.annualPence) : null })),
     agreement: current ? { plan: current.plan, cadence: current.cadence, anchorDay: current.anchor_day,
       maximumLabel: subscriptionPounds(current.maximum_pence), effectiveDate: current.effective_date } : null,
+    pendingDowngrade: pendingChange ? { changeId: pendingChange.id, plan: pendingChange.plan, effectiveDate: pendingChange.effective_date } : null,
     periods };
 }
 export type SubscriptionPlanView = ReturnType<typeof subscriptionPlanView>;

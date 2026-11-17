@@ -26,11 +26,16 @@ export type NorthsideSeed = {
 const pad = (n: number, width = 4) => String(n).padStart(width, "0");
 const addDays = (iso: string, days: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 
-/** Idempotent per organisation (one tenant-level session lock): a second call returns the stored seed and writes nothing. */
+/** Idempotent per organisation (one tenant-level transaction lock): a second call returns the stored seed and writes nothing. */
 export async function seedNorthsideDemo(pool: Pool, owner: AuthenticatedMembership, context: VerifiedTenantContext): Promise<NorthsideSeed> {
   const lock = await pool.connect();
+  let failed = false;
+  let discard = false;
   try {
-    await lock.query("SELECT pg_advisory_lock(hashtextextended($1,57))", [owner.tenantId]);
+    // Keep this coordinator connection pinned under transaction-mode pooling.
+    // Business commands retain their separate transactions on the existing pool.
+    await lock.query("BEGIN");
+    await lock.query("SELECT pg_advisory_xact_lock(hashtextextended($1,57))", [owner.tenantId]);
     const contractors = new ContractorRepository(pool), orders = new WorkOrderRepository(pool);
     const view = () => contractors.query(owner, { version: "contractor-query.v1", tenantId: owner.tenantId, resource: "organisation" });
     const command = async (fields: Record<string, unknown>) => contractors.command(owner, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view()).revision, ...fields });
@@ -82,9 +87,20 @@ export async function seedNorthsideDemo(pool: Pool, owner: AuthenticatedMembersh
       if (result.counts.rejected !== 0) throw new Error(`The generated Northside orders were refused: ${JSON.stringify(result).slice(0, 600)}`);
     }
     return await storedSeed(pool, owner, context);
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
-    await lock.query("SELECT pg_advisory_unlock(hashtextextended($1,57))", [owner.tenantId]).catch(() => undefined);
-    lock.release();
+    // This transaction owns only the coordinator lock, so rollback also handles
+    // early returns and acquisition failures without changing partial seed writes.
+    try {
+      await lock.query("ROLLBACK");
+    } catch (error) {
+      discard = true;
+      if (!failed) throw error;
+    } finally {
+      lock.release(discard);
+    }
   }
 }
 
