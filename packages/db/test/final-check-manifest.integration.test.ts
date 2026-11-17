@@ -70,7 +70,7 @@ it.each(['rejected','expired'] as const)("C204 %s pre-lock upload is audited, ex
  await assertLp4SealedEvents(f.admin, a.tenantId, "final_check.completed");
  const exclusions=[{uploadId:upload,state:terminal,reason:terminal==='rejected'?'verification_invalid':'expired_unswept'}];
  const digest=(await f.admin.query("SELECT app.final_lock_hash($1::jsonb) hash",[JSON.stringify(exclusions)])).rows[0].hash;
- expect(events).toEqual([{payload:{references:{manifestId:m.id,lockId:expect.any(String),auditTrust:'checked_operation'},hashes:{exclusions:digest}}}]);
+ expect(events).toEqual([{payload:{references:{manifestId:m.id,lockId:expect.any(String),auditTrust:'checked_operation',auditActorKind:'system',auditActorRef:expect.stringMatching(/^system:database:[A-Za-z0-9_]+$/u)},hashes:{exclusions:digest}}}]);
  expect((await f.admin.query("SELECT id FROM app.final_check_manifest WHERE tenant_id=$1 AND id=$2",[a.tenantId,m.id])).rows).toEqual([{id:m.id}]);
 });
 

@@ -118,7 +118,12 @@ it("converts the invitation bridge and withdraws direct authorization revocation
   expect(inventory.entries.some(e => e.key.startsWith("acl|col|app.action_authorization.") && e.key.includes("|jobguard_runtime|UPDATE|"))).toBe(false);
   // r8: the revocation routine, revoke-claim helper and seven runtime lock/refusal/maintenance/probe helpers (owner + EXECUTE each),
   // plus (r10) the command-writer-owned delegated-actor match check (owner + migration EXECUTE). LP-6c's accessor gains no grant.
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding")).toHaveLength(30); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each) and the escalation worker (owner + runtime EXECUTE); LP-10 sink hold: + the actor-less recovery delivery worker (owner + runtime EXECUTE)
+  const presenceEntries = inventory.entries.filter(e => e.group === "a-lp6d-routine-binding" && e.key.includes("function:app.lp6e_request_binding_present()|"));
+  expect(presenceEntries.map(e => e.key).sort()).toEqual([
+    "acl|routine|function:app.lp6e_request_binding_present()|jobguard_migration|EXECUTE|-",
+    "owner|routine|function:app.lp6e_request_binding_present()|jobguard_binding_owner",
+  ]);
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding" && !presenceEntries.includes(e))).toHaveLength(30); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each) and the escalation worker (owner + runtime EXECUTE); LP-10 sink hold: + the actor-less recovery delivery worker (owner + runtime EXECUTE)
   expect(inventory.entries.some(e => e.key.startsWith("acl|routine|function:app.lp6_delegated_actor(") && e.key.includes("|jobguard_migration|"))).toBe(false);
 });
 
@@ -534,4 +539,21 @@ it("keeps the recovery worker trigger invoker-owned and the delivery port migrat
   expect(trigger).not.toMatch(/SECURITY DEFINER/u);
   expect(sql).toContain("ALTER FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) OWNER TO jobguard_migration;");
   expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) FROM PUBLIC,jobguard_identity,jobguard_infrastructure,jobguard_shadow;");
+});
+
+it("reuses the prerequisite's migration-only presence probe and preserves the worker refusal", () => {
+  const candidate = read("../migrations/0758_lp6e_audit_attribution.sql");
+  const prerequisite = read("../migrations/0753_lp6d_worker_binding_presence.sql");
+  expect(definitions(candidate).some(m => m[1] === "app.lp6e_request_binding_present")).toBe(false);
+  expect(prerequisite).toContain("REVOKE ALL ON FUNCTION app.lp6e_request_binding_present() FROM PUBLIC,jobguard_runtime;");
+  expect(prerequisite).toContain("GRANT EXECUTE ON FUNCTION app.lp6e_request_binding_present() TO jobguard_migration;");
+  const bridge = definitions(candidate).find(m => m[1] === "app.lp6e_append_outbox_audit")![3]!;
+  expect(bridge).toContain("IF app.lp6d_request_bound() OR app.lp6e_request_binding_present() THEN\n  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;");
+  expect(bridge.indexOf("REQUEST_BINDING_REFUSED")).toBeLessThan(bridge.indexOf("FROM app.action_outbox"));
+  const resolver = definitions(candidate).find(m => m[1] === "app.lp6e_audit_context")![3]!;
+  expect(resolver).toContain("IF app.lp6e_request_binding_present() THEN");
+  expect(resolver).not.toContain("EXCEPTION");
+  expect(candidate).toContain("ALTER FUNCTION app.lp6e_audit_context() OWNER TO jobguard_migration;");
+  expect(candidate).toContain("REVOKE ALL ON FUNCTION app.lp6e_audit_context() FROM PUBLIC,jobguard_runtime");
+  expect(classification["app.lp6e_request_binding_present()"]).toMatch(/^Private to jobguard_migration/u);
 });

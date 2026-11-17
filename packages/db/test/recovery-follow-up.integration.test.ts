@@ -1132,11 +1132,12 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     expect(clock).toHaveLength(1);
     expect(rows[0]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: { clock: clock[0]!.payloadHash },
-      references: { auditTrust: "lower_trust", caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
+      // LP-6e 0758: actor_ref keeps the clock's domain claim; sealed fields name the bound session member.
+      references: { auditTrust: "lower_trust", auditActorKind: "bound_member", auditActorRef: expect.stringMatching(/^membership:[a-f0-9-]{36}$/u), caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
     });
     expect(rows[1]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: {},
-      references: { auditTrust: "lower_trust", caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
+      references: { auditTrust: "lower_trust", auditActorKind: "bound_member", auditActorRef: expect.stringMatching(/^membership:[a-f0-9-]{36}$/u), caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
     });
     expect(rows[1]!.id).toBe(due[0]!.audit_event_id);
     await verifyChain();

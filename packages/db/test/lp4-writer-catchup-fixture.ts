@@ -31,9 +31,42 @@ export async function assertLp4SealedEvents(owner: Pool, tenant: string, eventTy
     FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [tenant])).rows;
   const matching = events.filter(e => e.eventType === eventType);
   expect(matching.length).toBeGreaterThan(0);
+  // Historical LP-4 upgrade scenarios stop before LP-6e; full-schema product
+  // scenarios install 0755. Establish that boundary before asserting one format.
+  const installedAt = (await owner.query("SELECT applied_at FROM public.jobguard_schema_migration WHERE migration_name='0758_lp6e_audit_attribution.sql'")).rows[0]?.applied_at as Date | undefined;
+  const v3Installed = installedAt !== undefined;
   for (const event of matching) {
-    expect(event.version).toBe("audit.v2");
+    // Events sealed before an upgrade applied 0758 keep their recorded v2 format; later ones are v3.
+    expect(event.version).toBe(installedAt !== undefined && new Date(event.occurredAt) >= installedAt ? "audit.v3" : "audit.v2");
     expect(auditEventTrust(event)).toBe("checked_operation");
   }
+  // The v3 envelope applies when every event in the chain was sealed after 0758 was applied.
+  if (v3Installed && events.every(event => new Date(event.occurredAt) >= installedAt!)) await assertV3AuditChain(owner, tenant);
+  verifyAuditChain(events);
+}
+
+/** Current-schema envelope assertions, in addition to each writer's exact content assertions. */
+export async function assertV3AuditChain(owner: Pool, tenant: string) {
+  const events = (await owner.query<AuditEvent>(`SELECT id,version,tenant_id AS "tenantId",sequence::int,
+    actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",payload,
+    occurred_at AS "occurredAt",payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash"
+    FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [tenant])).rows;
+  expect(events.length).toBeGreaterThan(0);
+  const hash = expect.stringMatching(/^[a-f0-9]{64}$/u);
+  const uuid = expect.stringMatching(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u);
+  for (const [index, event] of events.entries()) {
+    expect(event).toEqual({
+      id: uuid, version: "audit.v3", tenantId: tenant, sequence: index + 1,
+      actorRef: expect.any(String),
+      eventType: expect.any(String), subjectType: expect.any(String), subjectRef: expect.any(String),
+      occurredAt: expect.any(Date), payload: expect.objectContaining({ references: expect.objectContaining({
+        auditActorKind: event.payload.references?.auditActorRef?.startsWith("membership:") ? "bound_member" : "system",
+        auditActorRef: expect.stringMatching(/^(membership:[a-f0-9-]{36}|system:database:[A-Za-z0-9_]+)$/u),
+        auditTrust: expect.stringMatching(/^(checked_operation|lower_trust)$/u),
+      }) }),
+      payloadHash: hash, previousHash: index === 0 ? null : events[index - 1]!.eventHash, eventHash: hash,
+    });
+  }
+  // Independently recomputes the canonical payload/envelope hashes and checks the chain.
   verifyAuditChain(events);
 }

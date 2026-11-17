@@ -26,10 +26,11 @@ export class QuoteDeliveryRepository{
    await assertQuoteScopeCoverage(db,context.tenantId,jobId,r.id);
    const lines=(r.lines as QuoteLine[]).map(line=>({scopeItemId:line.scopeItemId,description:line.description,quantity:line.quantity,unit:line.unit,netPence:evaluateDraftQuote({currency:r.currency,taxPolicyVersion:r.tax_policy_version,lines:[line]}).totals.net.pence}));
    if(lines.reduce((total,line)=>total+line.netPence,0)!==Number(r.net_pence))throw new Error("QUOTE_LINE_TOTALS_MISMATCH");
+   const issuer=await firmProfileIssuer(db,jobId);
    const old=(await db.$client.query<any>(`SELECT id,content_hash,snapshot FROM app.quote_document_version WHERE job_id=$1 AND quote_revision_id=$2 AND customer->>'email'=$3 AND parties_snapshot->>'bindingId'=$4 AND reference=$5 ORDER BY document_version DESC LIMIT 1`,[jobId,r.id,recipient,parties.bindingId,reference])).rows[0];
-   if(old){const document=quoteDocumentV1.parse(old.snapshot),pdf=renderQuotePdf(document),hash=createHash("sha256").update(pdf).digest("hex");if(old.content_hash!==hash)throw new Error("QUOTE_CHANGED");if(JSON.stringify(document.issuer)===JSON.stringify(await firmProfileIssuer(db))&&document.lines.length===lines.length&&document.lines.every((line,index)=>line.netPence===lines[index]!.netPence))return{documentId:old.id,document,hash,pdf};}
+   if(old){const document=quoteDocumentV1.parse(old.snapshot),pdf=renderQuotePdf(document),hash=createHash("sha256").update(pdf).digest("hex");if(old.content_hash!==hash)throw new Error("QUOTE_CHANGED");if(JSON.stringify(document.issuer)===JSON.stringify(issuer)&&document.lines.length===lines.length&&document.lines.every((line,index)=>line.netPence===lines[index]!.netPence))return{documentId:old.id,document,hash,pdf};}
    const maximum=Number((await db.$client.query(`SELECT coalesce(max(document_version),0) maximum FROM app.quote_document_version WHERE job_id=$1`,[jobId])).rows[0]?.maximum??0),documentVersion=Math.max(r.revision,maximum+1);
-   const document=quoteDocumentV1.parse(attachCancellationKit({jobParties:parties,schemaVersion:"quote-document.v1",documentVersion,reference,quoteRevisionId:r.id,currency:"GBP",issuer:await firmProfileIssuer(db),customer:{name:parties.customer.name,address:[...parties.site.addressLines,parties.site.town,parties.site.postcode],email:recipient},lines,exclusions:["Replace shelves — not in this practice quote"],qualifications:["Synthetic fixture only; subject to clear site access"],subtotalPence:Number(r.subtotal_pence),discountPence:Number(r.discount_pence),netPence:Number(r.net_pence),taxPence:Number(r.tax_pence),totalPence:Number(r.total_pence)},process.env.JOBGUARD_ENV));
+   const document=quoteDocumentV1.parse(attachCancellationKit({jobParties:parties,schemaVersion:"quote-document.v1",documentVersion,reference,quoteRevisionId:r.id,currency:"GBP",issuer,customer:{name:parties.customer.name,address:[...parties.site.addressLines,parties.site.town,parties.site.postcode],email:recipient},lines,exclusions:["Replace shelves — not in this practice quote"],qualifications:["Synthetic fixture only; subject to clear site access"],subtotalPence:Number(r.subtotal_pence),discountPence:Number(r.discount_pence),netPence:Number(r.net_pence),taxPence:Number(r.tax_pence),totalPence:Number(r.total_pence)},process.env.JOBGUARD_ENV));
    const pdf=renderQuotePdf(document),hash=createHash("sha256").update(pdf).digest("hex");
    const id=randomUUID();await db.$client.query(`INSERT INTO app.quote_document_version(id,tenant_id,job_id,quote_revision_id,document_version,reference,content_hash,object_key,object_version_id,pdf_byte_length,issuer,customer,snapshot)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[id,context.tenantId,jobId,r.id,document.documentVersion,document.reference,hash,`runtime/quotes/${id}.pdf`,hash,pdf.byteLength,JSON.stringify(document.issuer),JSON.stringify(document.customer),JSON.stringify(document)]);return{documentId:id,document,hash,pdf};
   });
@@ -39,6 +40,8 @@ export class QuoteDeliveryRepository{
   const artifact=await withTenant(this.pool,context,async db=>(await db.$client.query<any>(`SELECT d.content_hash,d.document_version,d.snapshot,d.parties_snapshot->>'bindingId' AS binding_id,(SELECT x.binding_id::text FROM app.job_party_current x WHERE x.tenant_id=d.tenant_id AND x.job_id=d.job_id) AS current_binding_id FROM app.quote_document_version d WHERE d.id=$1 AND d.job_id=$2`,[input.documentId,jobId])).rows[0]);if(!artifact||!artifact.binding_id||artifact.binding_id!==artifact.current_binding_id)throw new Error("QUOTE_CHANGED");
   const authorizationId=randomUUID(),outboxActionId=randomUUID();const dispatcher=new UserCommandDispatcher(this.pool);
   const mutation=new IssueQuoteMutation({tenantId:context.tenantId,jobId,documentId:input.documentId,outboxActionId,recipients:[input.recipient],immutableContent:new TextDecoder().decode(renderQuotePdf(quoteDocumentV1.parse(artifact.snapshot)))});
+  const expectedIssuer=quoteDocumentV1.parse(artifact.snapshot).issuer;
+  let currentIssuer=expectedIssuer;
   await dispatcher.dispatch(context,{version:"command.v1",commandId:input.commandId,commandType:"quote.send",semanticKey:`quote-send:${input.documentId}`,actorMembershipId:DEMO_MEMBERSHIP_ID,subjectType:"quote_document",subjectRef:input.documentId,authorizationId,action:{actionType:"quote.send",recipient:JSON.stringify([input.recipient]),contentHash:input.contentHash,aggregateRevision:artifact.document_version,amountPence:null,currency:null,policyVersion:"free-quote-send.v1",expiresAt:new Date(Date.now()+3600_000)}},{
    lock:async(db,command)=>{
     await mutation.lock(db,command);
@@ -46,8 +49,14 @@ export class QuoteDeliveryRepository{
     const prior=(await db.$client.query<{content_hash:string;recipients:string[]}>(`SELECT content_hash,recipients FROM app.quote_send WHERE job_id=$1 AND document_id=$2`,[jobId,input.documentId])).rows[0];
     if(prior&&(prior.content_hash!==input.contentHash||JSON.stringify(prior.recipients)!==JSON.stringify([input.recipient])))throw new Error("COMMAND_CONFLICT");
     if(artifact.content_hash!==input.contentHash||artifact.snapshot.customer.email!==input.recipient)throw new Error("QUOTE_CHANGED");
+    if(!prior)currentIssuer=await firmProfileIssuer(db,jobId,expectedIssuer);
    },
-   mutate:(db,command)=>mutation.mutate(db,command),
+   mutate:async(db,command)=>{
+    const result=await mutation.mutate(db,command);
+    // Preserve existing refusals first; a changed issuer rolls back every provisional send effect.
+    if(JSON.stringify(expectedIssuer)!==JSON.stringify(currentIssuer))throw new Error("QUOTE_CHANGED");
+    return result;
+   },
   });return this.view(context,jobId,input.documentId);
  }
  async view(context:VerifiedTenantContext,jobId:string,documentId?:string):Promise<QuoteDeliveryView|null>{

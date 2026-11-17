@@ -1,4 +1,4 @@
-import { ExtraApprovalRepository, ContractorEntitlementAuthorityRepository } from "@jobguard/db";
+import { ExtraApprovalError, ExtraApprovalRepository, ContractorEntitlementAuthorityRepository } from "@jobguard/db";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
@@ -16,7 +16,7 @@ const member = () => ({ tenantId: uuid(), membershipId: uuid(), identityUserId: 
 const authorityFields = ["commandType", "actorMembershipId", "membershipId", "grantId", "tenantId", "requested_tenant_id", "role", "raisingRole", "origin", "kind", "jobTrack", "track", "serverRecordedAt", "time", "state", "raiserAssigned", "workOrderId", "workOrderRevisionId", "originHash", "environment", "provenance",
   "jobId", "sorItem", "sorVersionId", "excessOfScopeItemId", "unit", "rate", "ratePence", "unitRatePence", "adjustment", "net", "netPence", "price", "pricePence", "amount", "extraQuantity", "instructedQuantity", "outcome", "orderCheck", "coverage", "priceSource", "pricingBasis", "description", "revision", "revisionId", "contentHash", "requestHash", "siteVisitId"];
 const stored = (jobId: string) => ({ variationId: uuid(), jobId, coverage: "excess" as const, sorCode: "CLEAR-GUTTER", unit: "metre", claimedQuantity: "6", instructedQuantity: "4", extraQuantity: "2", orderLineScopeItemId: uuid(), priceSource: "server_sor", requestHash: "a".repeat(64), raisingMembershipId: uuid() });
-beforeEach(() => { vi.spyOn(ContractorEntitlementAuthorityRepository.prototype, "requireFeature").mockResolvedValue(); });
+beforeEach(() => { vi.spyOn(ContractorEntitlementAuthorityRepository.prototype, "requireFeature").mockResolvedValue(); vi.spyOn(ContractorEntitlementAuthorityRepository.prototype, "withAuthority").mockResolvedValue(undefined); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe("ENT-3c service and Nest boundary", () => {
@@ -287,4 +287,43 @@ it("recent items resolve the actor from the session and accept no request-select
  await expect(app.sorRecentItems(principal, "unknown")).rejects.toMatchObject({ code: "NOT_FOUND" });
  expect(repo).toHaveBeenCalledOnce();
  await pool.end();
+});
+
+
+it("LATER-SAFETY-184 approval preflight refuses v2 before capturing anything", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const pool = new Pool(), sessionId = uuid(), jobId = uuid();
+ vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(member());
+ vi.mocked(ContractorEntitlementAuthorityRepository.prototype.withAuthority).mockRejectedValue({ code: "FORBIDDEN" });
+ const log = vi.spyOn(SiteExtraRepository.prototype, "logSorSiteExtra");
+ const submit = vi.spyOn(ExtraApprovalRepository.prototype, "submitExtra");
+ await expect(new SiteExtraApplication(pool).logSor({ version: "contractor-principal.v1", sessionId }, jobId,
+  body({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) } }))).rejects.toMatchObject({ code: "SITE_PRICING_UNAVAILABLE" });
+ expect(log).not.toHaveBeenCalled(); expect(submit).not.toHaveBeenCalled(); await pool.end();
+});
+
+it("LATER-SAFETY-184 only INVALID_TRANSITION attempts scoped recovery after a verified log", async () => {
+ vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ const pool = new Pool(), m = member(), sessionId = uuid(), jobId = uuid(), result = stored(jobId), requestId = uuid();
+ vi.spyOn(ContractorRepository.prototype, "resolveSession").mockResolvedValue(m);
+ const log = vi.spyOn(SiteExtraRepository.prototype, "logSorSiteExtra").mockResolvedValue(result);
+ const submit = vi.spyOn(ExtraApprovalRepository.prototype, "submitExtra").mockRejectedValue(new ExtraApprovalError("INVALID_TRANSITION"));
+ const recover = vi.spyOn(ExtraApprovalRepository.prototype, "recoverPricedSubmission").mockResolvedValue({ requestId, state: "approved" });
+ const raw = body({ version: "log-sor-site-extra.v2", workStatus: "finished", description: "Fictional", photoEvidenceId: uuid(), residentConfirmation: { shownContentSha256: "a".repeat(64) } });
+ const app = new SiteExtraApplication(pool), principal = { version: "contractor-principal.v1", sessionId };
+ expect(await app.logSor(principal, jobId, raw)).toMatchObject({ requestId, state: "approved" });
+ expect(recover).toHaveBeenCalledWith(expect.objectContaining({ tenantId: m.tenantId }), m,
+  { ...raw, jobId });
+ recover.mockClear();
+ for (const code of ["PERMISSION_DENIED", "DATABASE_UNAVAILABLE", "COMMAND_CONFLICT"] as const) {
+  submit.mockRejectedValue(new ExtraApprovalError(code));
+  await expect(app.logSor(principal, jobId, raw)).rejects.toMatchObject({ code: "SITE_PRICING_UNAVAILABLE" });
+ }
+ expect(recover).not.toHaveBeenCalled();
+ submit.mockRejectedValue(new ExtraApprovalError("INVALID_TRANSITION"));
+ recover.mockRejectedValue(new ExtraApprovalError("INVALID_TRANSITION"));
+ await expect(app.logSor(principal, jobId, raw)).rejects.toMatchObject({ code: "SITE_PRICING_UNAVAILABLE" });
+ recover.mockClear(); log.mockRejectedValue(new SorSiteExtraError("IDEMPOTENCY_CONFLICT"));
+ await expect(app.logSor(principal, jobId, raw)).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+ expect(recover).not.toHaveBeenCalled(); await pool.end();
 });

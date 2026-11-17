@@ -1,15 +1,16 @@
 import type { AuditEvent } from "./audit.js";
-import { fakeAuditAppend } from "./audit-protocol-test-fixture.js";
+import { fakeAuditAppend, fakeOutboxAuditProbe } from "./audit-protocol-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 import { ActionExecutor, operateOutbox, reconcileOutbox, type FakeDeliveryResult, type OutboundAdapter } from "./outbox.js";
-import { verifiedTenantContextForQueuedJob } from "./tenant-context.js";
+import { verifiedTenantContextForQueuedJob, verifiedTenantContextFromMembership, type AuthenticatedMembership } from "./tenant-context.js";
 
 // Transaction protocol double; PostgreSQL predicates and concurrency are covered separately.
-function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succeeded", providerReference: "synthetic" }) {
+function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succeeded", providerReference: "synthetic" }, installed = false, bound = false) {
   const tenant = randomUUID(), id = randomUUID();
-  const context = verifiedTenantContextForQueuedJob(tenant);
+  const member = randomUUID();
+  const context = bound ? verifiedTenantContextFromMembership({ tenantId: tenant, membershipId: member, identityUserId: randomUUID() } as AuthenticatedMembership, { kind: "real", credential: "a".repeat(64) }) : verifiedTenantContextForQueuedJob(tenant);
   const row = { id, status, adapter: "fake_capture", authorization_id: randomUUID(),
     provider_effect_key: "synthetic", action_type: "send_quote", recipient: null,
     content_hash: "a".repeat(64), immutable_content: "synthetic", aggregate_revision: 1,
@@ -19,6 +20,8 @@ function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succe
   let audit: AuditEvent[] = [], snapshot: { row: typeof row; audit: AuditEvent[] };
   let inTransaction = false, failAudit = false, claimsEnabled = true;
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
+    if (sql === "SELECT app.bind_request($1, $2, $3)") return { rows: [] };
+    if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: member, tenant }] };
     if (sql === "BEGIN") { snapshot = { row: { ...row }, audit: [...audit] }; inTransaction = true; }
     if (sql === "COMMIT") inTransaction = false;
     if (sql === "ROLLBACK") { Object.assign(row, snapshot.row); audit = snapshot.audit; inTransaction = false; }
@@ -31,9 +34,17 @@ function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succe
     if (sql.startsWith("SELECT count(*)")) return { rows: [{ n: 0 }], rowCount: 1 };
     if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [], rowCount: 1 };
     if (sql.startsWith("SELECT nullif")) return { rows: [{ tenant_id: tenant }], rowCount: 1 };
-    if (sql.includes("FROM app.append_audit(")) {
+    const probe = fakeOutboxAuditProbe(sql, installed);
+    if (probe) return probe;
+    const bridge = sql === "SELECT * FROM app.lp6e_append_outbox_audit($1::jsonb)";
+    if ((installed && bridge) || sql.includes("FROM app.append_audit(")) {
       if (failAudit) throw new Error("synthetic audit failure");
-      const events = fakeAuditAppend(String(values[0]), tenant);
+      const events = fakeAuditAppend(bridge ? JSON.stringify([JSON.parse(String(values[0]))]) : String(values[0]), tenant);
+      if (installed) for (const event of events) {
+        event.version = "audit.v3";
+        event.actorRef = "system:outbox";
+        event.payload.references = { ...event.payload.references, auditActorKind: bound ? "bound_member" : "system", auditActorRef: bound ? `membership:${member}` : "system:database:fixture_worker" };
+      }
       audit.push(...events);
       return { rows: events, rowCount: events.length };
     }
@@ -76,6 +87,24 @@ describe("LATER-B9 synthetic outcome protocol", () => {
     expect(f.row.status).toBe(result.kind); expect(f.audit()).toHaveLength(1);
     expect(f.audit()[0]!.eventType).toBe(`outbox.${result.kind}`);
   });
+  it("uses the installed bridge for unbound queue work", async () => {
+    const f = fixture("pending", undefined, true); await f.execute();
+    expect(f.audit()).toHaveLength(1);
+    expect(f.audit()[0]).toMatchObject({ version: "audit.v3", actorRef: "system:outbox",
+      eventType: "outbox.succeeded", payload: { references: { auditTrust: "lower_trust", auditActorKind: "system" } } });
+    expect(f.query).toHaveBeenCalledWith("SELECT * FROM app.lp6e_append_outbox_audit($1::jsonb)", [expect.any(String)]);
+    expect(f.query.mock.calls.some(([sql]) => sql.includes("FROM app.append_audit("))).toBe(false);
+  });
+  it.each(["execute", "cancel", "retry", "reconcile"])("routes bound %s through ordinary append without the worker probe", async operation => {
+    const f = fixture(operation === "reconcile" ? "outcome_unknown" : operation === "execute" ? "pending" : "retryable", undefined, true, true);
+    if (operation === "execute") await f.execute();
+    else if (operation === "reconcile") await reconcileOutbox(f.pool, f.context, f.id, f.adapter);
+    else await operateOutbox(f.pool, f.context, f.id, operation as "cancel" | "retry");
+    expect(f.audit()).toHaveLength(1);
+    expect(f.audit()[0]!.payload.references).toMatchObject({auditActorKind:"bound_member"});
+    expect(f.query.mock.calls.some(([sql]) => sql.includes("to_regprocedure") || sql.includes("FROM app.lp6e_append_outbox_audit("))).toBe(false);
+    expect(f.query.mock.calls.some(([sql]) => sql.includes("FROM app.append_audit("))).toBe(true);
+  });
   it("L020 expired authorization refusal has one audit event", async () => {
     const f = fixture(); f.row.authorization_expires_at = new Date(0); await f.execute();
     expect(f.row.status).toBe("cancelled"); expect(f.audit()).toHaveLength(1); expect(f.adapter.deliver).not.toHaveBeenCalled();
@@ -83,8 +112,8 @@ describe("LATER-B9 synthetic outcome protocol", () => {
   it("L020 stale claim becomes unknown with one audit event", async () => {
     const f = fixture("executing"); await f.execute(); expect(f.row.status).toBe("outcome_unknown"); expect(f.audit()).toHaveLength(1);
   });
-  it("L020 audit failure rolls back outcome", async () => {
-    const f = fixture(); f.failAudit(); await expect(f.execute()).rejects.toThrow("synthetic audit failure");
+  it.each([false, true])("L020 audit failure rolls back outcome (bridge installed=%s)", async installed => {
+    const f = fixture("pending", undefined, installed); f.failAudit(); await expect(f.execute()).rejects.toThrow("synthetic audit failure");
     expect(f.row.status).toBe("executing"); expect(f.audit()).toHaveLength(0);
   });
   it.each(["retry", "cancel"] as const)("L020 operator %s commits one audit event", async command => {

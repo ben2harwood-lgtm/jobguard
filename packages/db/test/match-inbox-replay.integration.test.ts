@@ -20,7 +20,7 @@ const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(valu
 const count = async (table: string, jobId: string) => Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE job_id=$1`, [jobId])).rows[0].n);
 const stored = async (commandId: string) => Number((await admin.query("SELECT count(*) n FROM app.watchdog_command_result WHERE command_id=$1", [commandId])).rows[0].n);
 // A real audit event for a fixture row written "by the earlier code", so its place in the audit chain is genuine.
-const legacyAudit = async (jobId: string, eventType = "fixture.legacy_command", subject: { type: string; ref: string } = { type: "job", ref: jobId }, payloadHash = "a".repeat(64)) => (await withTenant(runtime, ctx, db => appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType, subjectType: subject.type, subjectRef: subject.ref, payload: { references: { jobId }, hashes: { payloadHash }, classifications: { action: "operational" } } }])))[0]!.id;
+const legacyAudit = async (jobId: string, eventType = "fixture.legacy_record", subject: { type: string; ref: string } = { type: "job", ref: jobId }, payloadHash = "a".repeat(64)) => (await withTenant(runtime, ctx, db => appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: "member:synthetic-builder", eventType, subjectType: subject.type, subjectRef: subject.ref, payload: { references: { jobId }, hashes: { payloadHash }, classifications: { action: "operational" } } }])))[0]!.id;
 // Direct fixture inserts pass the same BEFORE INSERT live guard as the runtime role, so they carry the tenant context.
 async function asTenant(sql: string, params: unknown[]) {
   const client = await admin.connect();

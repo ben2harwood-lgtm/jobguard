@@ -74,7 +74,7 @@ describe("SV5PRE authoritative completion", () => {
   const exclusions=rows.map(r=>({uploadId:r.upload_id,state:r.excluded_state,reason:r.excluded_reason})).sort((a,b)=>a.uploadId.localeCompare(b.uploadId));
   expect(exclusions).toHaveLength(4);
   const binding=(await f.admin.query("SELECT lock_id,app.final_lock_hash($3::jsonb) digest FROM app.final_check_manifest WHERE tenant_id=$1 AND id=$2",[a.tenantId,manifest.id,JSON.stringify(exclusions)])).rows[0];
-  expect(audit).toEqual([{payload:{references:{auditTrust:"checked_operation",manifestId:manifest.id,lockId:binding.lock_id},hashes:{exclusions:binding.digest}}}]);
+  expect(audit).toEqual([{payload:{references:{auditTrust:"checked_operation",auditActorKind:"system",auditActorRef:expect.stringMatching(/^system:database:[A-Za-z0-9_]+$/u),manifestId:manifest.id,lockId:binding.lock_id},hashes:{exclusions:binding.digest}}}]);
   const issued=await repo.issueInvoice(a.context,{jobId:a.jobId,actorMembershipId:LOCK_OWNER,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:LOCK_HASH,invoiceKind:"final",recipient:"practice-customer@example.invalid",issuedOn:"2026-10-20"});
   expect(issued.invoiceId).toBeTruthy();
  });
