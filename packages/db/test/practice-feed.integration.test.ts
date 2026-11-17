@@ -98,14 +98,14 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
   it("gives every fixed catalogue movement a durable identity with its exact pence, in one feed", async () => {
     const f = await connected(); let state = f.state;
     expect(state).toMatchObject({ feedState: "connected", consent: { version: "practice-feed-consent.v1", scope: "read_generated_movements", provider: "none", grantedAtRevision: 1, revokedAtRevision: null } });
-    expect(state.catalogue.map((entry) => entry.key)).toEqual(practiceMovementCatalogueV1.map((entry) => entry.key));
-    for (const entry of practiceMovementCatalogueV1) state = await cmd(repo(), f, advance(state.revision, entry.key, "settled"));
+    expect(state.catalogue.map((entry) => entry.movement)).toEqual(practiceMovementCatalogueV1.map((entry) => entry.movement));
+    for (const entry of practiceMovementCatalogueV1) state = await cmd(repo(), f, advance(state.revision, entry.movement, "settled"));
     expect(state.movements.map((m) => [m.movementKey, m.grossPence, m.kind, m.state, m.id])).toEqual(
-      practiceMovementCatalogueV1.map((entry) => [entry.key, entry.grossPence, entry.kind, "settled", `${state.accountId}:${entry.key}`]));
+      practiceMovementCatalogueV1.map((entry) => [entry.movement, entry.grossPence, entry.kind, "settled", `${state.accountId}:${entry.movement}`]));
     expect(state.movementCount).toBe(7); expect(state.allocatedEligibleNetPence).toBe(0);
     expect(state.movements.every((m) => m.allocatedEligibleNetPence === 0)).toBe(true);
     const stored = (await admin.query("SELECT movement_key,gross_pence::int8 p FROM app.practice_feed_event WHERE job_id=$1 ORDER BY movement_key", [f.jobId])).rows;
-    expect(stored.map((row) => [row.movement_key, Number(row.p)]).sort()).toEqual(practiceMovementCatalogueV1.map((entry) => [entry.key, entry.grossPence]).sort());
+    expect(stored.map((row) => [row.movement_key, Number(row.p)]).sort()).toEqual(practiceMovementCatalogueV1.map((entry) => [entry.movement, entry.grossPence]).sort());
     expect(await view(f)).toEqual(state);
   });
 
@@ -382,7 +382,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     try {
       await client.query("SET session_replication_role=replica"); // disables triggers, never CHECK constraints
       for (const entry of practiceMovementCatalogueV1) {
-        await expect(client.query(`INSERT INTO app.practice_feed_event${columns} VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, row(entry.key, entry.grossPence + 1)), entry.key).rejects.toMatchObject({ code: "23514" });
+        await expect(client.query(`INSERT INTO app.practice_feed_event${columns} VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, row(entry.movement, entry.grossPence + 1)), entry.movement).rejects.toMatchObject({ code: "23514" });
       }
       await expect(client.query(`INSERT INTO app.practice_feed_event${columns} VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, row("receipt-384", 38_400, "pending", "settled"))).rejects.toMatchObject({ code: "23514" });
       await expect(client.query(`INSERT INTO app.practice_feed_event${columns} VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, row("receipt-384", 38_400, "settled", "settled", "production"))).rejects.toMatchObject({ code: "23514" });

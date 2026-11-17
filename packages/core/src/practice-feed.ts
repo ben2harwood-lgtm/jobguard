@@ -20,27 +20,27 @@ export const practiceReceiptMovementKeyV1 = z.enum(["receipt-384", "receipt-3000
 export type PracticeMovementKind = "customer_receipt" | "supplier_refund";
 export type PracticeMovementFixture = "recovery-18800" | "shadow-30000" | "test-m" | "test-n" | "supplier-refund";
 export type PracticeMovementDefinition = Readonly<{
-  key: PracticeMovementKey; grossPence: number; kind: PracticeMovementKind; fixture: PracticeMovementFixture; label: string;
+  movement: PracticeMovementKey; grossPence: number; kind: PracticeMovementKind; fixture: PracticeMovementFixture; label: string;
 }>;
 
 /** The plan's fixed generated movements, in exact pence (BUILD_PLAN M4-7-S). */
 export const practiceMovementCatalogueV1: readonly PracticeMovementDefinition[] = Object.freeze([
-  { key: "receipt-384", grossPence: 38_400, kind: "customer_receipt", fixture: "recovery-18800", label: "£384.00 customer receipt (recovery-18800)" },
-  { key: "receipt-3000", grossPence: 300_000, kind: "customer_receipt", fixture: "recovery-18800", label: "£3,000.00 customer receipt (recovery-18800)" },
-  { key: "receipt-41280", grossPence: 4_128_000, kind: "customer_receipt", fixture: "shadow-30000", label: "£41,280.00 customer receipt (shadow-30000)" },
-  { key: "receipt-24000", grossPence: 2_400_000, kind: "customer_receipt", fixture: "test-m", label: "£24,000.00 customer receipt (Test M)" },
-  { key: "receipt-17280", grossPence: 1_728_000, kind: "customer_receipt", fixture: "test-m", label: "£17,280.00 customer receipt (Test M)" },
-  { key: "receipt-960", grossPence: 96_000, kind: "customer_receipt", fixture: "test-n", label: "£960.00 customer receipt (Test N)" },
-  { key: "supplier-refund-540", grossPence: 54_000, kind: "supplier_refund", fixture: "supplier-refund", label: "£540.00 supplier refund" },
+  { movement: "receipt-384", grossPence: 38_400, kind: "customer_receipt", fixture: "recovery-18800", label: "£384.00 customer receipt (recovery-18800)" },
+  { movement: "receipt-3000", grossPence: 300_000, kind: "customer_receipt", fixture: "recovery-18800", label: "£3,000.00 customer receipt (recovery-18800)" },
+  { movement: "receipt-41280", grossPence: 4_128_000, kind: "customer_receipt", fixture: "shadow-30000", label: "£41,280.00 customer receipt (shadow-30000)" },
+  { movement: "receipt-24000", grossPence: 2_400_000, kind: "customer_receipt", fixture: "test-m", label: "£24,000.00 customer receipt (Test M)" },
+  { movement: "receipt-17280", grossPence: 1_728_000, kind: "customer_receipt", fixture: "test-m", label: "£17,280.00 customer receipt (Test M)" },
+  { movement: "receipt-960", grossPence: 96_000, kind: "customer_receipt", fixture: "test-n", label: "£960.00 customer receipt (Test N)" },
+  { movement: "supplier-refund-540", grossPence: 54_000, kind: "supplier_refund", fixture: "supplier-refund", label: "£540.00 supplier refund" },
 ].map((entry) => Object.freeze(entry as PracticeMovementDefinition)));
 
-const definitions = new Map<PracticeMovementKey, PracticeMovementDefinition>(practiceMovementCatalogueV1.map((entry) => [entry.key, entry]));
+const definitions = new Map<PracticeMovementKey, PracticeMovementDefinition>(practiceMovementCatalogueV1.map((entry) => [entry.movement, entry]));
 export function practiceMovementDefinition(key: PracticeMovementKey): PracticeMovementDefinition {
   const found = definitions.get(key);
   if (!found) throw new Error(`Unknown practice movement ${String(key)}`);
   return found;
 }
-const catalogueIndex = (key: PracticeMovementKey) => practiceMovementCatalogueV1.findIndex((entry) => entry.key === key);
+const catalogueIndex = (key: PracticeMovementKey) => practiceMovementCatalogueV1.findIndex((entry) => entry.movement === key);
 
 export const practiceFeedStepV1 = z.enum(["pending", "settled", "replay", "page_overlap", "alternate_representation", "unknown_duplicate"]);
 export type PracticeFeedStep = z.infer<typeof practiceFeedStepV1>;
@@ -187,12 +187,12 @@ export function assessAttestedReceipt(
     ? practiceMovementCatalogueV1.find((entry) => entry.kind === "customer_receipt" && entry.grossPence === receipt.amountPence) ?? null
     : null;
   if (!candidate) return done("attested_only", "no_generated_amount", null);
-  if (matches.some((match) => match.movementKey === candidate.key)) return done("attested_only", "movement_already_matched", candidate.key);
-  const movement = movements.find((entry) => entry.movementKey === candidate.key && entry.underlyingMovementId === candidate.key);
-  if (!movement) return done("attested_only", "no_movement_yet", candidate.key);
-  if (movement.state === "pending") return done("attested_only", "pending", candidate.key);
-  if (!movement.eligibleForAllocation) return done("attested_only", "duplicate_held", candidate.key);
-  return done("attested_only", "ready_to_match", candidate.key, true);
+  if (matches.some((match) => match.movementKey === candidate.movement)) return done("attested_only", "movement_already_matched", candidate.movement);
+  const movement = movements.find((entry) => entry.movementKey === candidate.movement && entry.underlyingMovementId === candidate.movement);
+  if (!movement) return done("attested_only", "no_movement_yet", candidate.movement);
+  if (movement.state === "pending") return done("attested_only", "pending", candidate.movement);
+  if (!movement.eligibleForAllocation) return done("attested_only", "duplicate_held", candidate.movement);
+  return done("attested_only", "ready_to_match", candidate.movement, true);
 }
 
 export type PracticeFeedReceiptView = Readonly<{

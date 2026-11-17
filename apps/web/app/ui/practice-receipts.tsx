@@ -106,7 +106,7 @@ export function PracticeReceipts({ jobId }: { jobId: string }) {
           <div className={styles.field}>
             <label htmlFor={`practice-movement-${jobId}`}>Generated movement</label>
             <select id={`practice-movement-${jobId}`} value={movement} disabled={locked} onChange={(event) => setMovement(event.target.value as PracticeMovementKey)}>
-              {view.catalogue.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}
+              {view.catalogue.map((entry) => <option key={entry.movement} value={entry.movement}>{entry.label}</option>)}
             </select>
           </div>
           <div className={styles.field}>

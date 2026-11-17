@@ -27,7 +27,7 @@ const only = (movements: readonly PracticeFeedMovement[]) => {
 
 describe("M4-7-S fixed synthetic movement catalogue", () => {
   it("holds exactly the plan's movements, in exact pence", () => {
-    expect(practiceMovementCatalogueV1.map(({ key, grossPence, kind, fixture }) => [key, grossPence, kind, fixture])).toEqual([
+    expect(practiceMovementCatalogueV1.map(({ movement, grossPence, kind, fixture }) => [movement, grossPence, kind, fixture])).toEqual([
       ["receipt-384", 38_400, "customer_receipt", "recovery-18800"],
       ["receipt-3000", 300_000, "customer_receipt", "recovery-18800"],
       ["receipt-41280", 4_128_000, "customer_receipt", "shadow-30000"],
@@ -36,7 +36,7 @@ describe("M4-7-S fixed synthetic movement catalogue", () => {
       ["receipt-960", 96_000, "customer_receipt", "test-n"],
       ["supplier-refund-540", 54_000, "supplier_refund", "supplier-refund"],
     ]);
-    expect(practiceMovementKeyV1.options).toEqual(practiceMovementCatalogueV1.map((entry) => entry.key));
+    expect(practiceMovementKeyV1.options).toEqual(practiceMovementCatalogueV1.map((entry) => entry.movement));
   });
   it("is internally consistent with the plan arithmetic", () => {
     const pence = (key: PracticeMovementKey) => practiceMovementDefinition(key).grossPence;
@@ -92,7 +92,7 @@ describe("M4-7-S versioned commands and queries", () => {
 
 describe("M4-7-S deterministic generated adapter events", () => {
   it("generates the fixed events for every step of every movement", () => {
-    for (const { key, grossPence } of practiceMovementCatalogueV1) {
+    for (const { movement: key, grossPence } of practiceMovementCatalogueV1) {
       expect(generatedPracticeFeedEvents(key, "pending").map((e) => [e.eventId, e.state, e.identity])).toEqual([[`pending-${key}`, "pending", "identified"]]);
       expect(generatedPracticeFeedEvents(key, "settled").map((e) => [e.eventId, e.state])).toEqual([[`settled-${key}`, "settled"]]);
       expect(generatedPracticeFeedEvents(key, "replay").map((e) => e.eventId)).toEqual([`settled-${key}`]);
@@ -170,7 +170,7 @@ describe("M4-7-S monotone movement projection", () => {
     const next = () => (seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648) / 2_147_483_648;
     const steps = practiceFeedStepV1.options;
     for (let round = 0; round < 200; round++) {
-      const key = practiceMovementCatalogueV1[Math.floor(next() * practiceMovementCatalogueV1.length)]!.key;
+      const key = practiceMovementCatalogueV1[Math.floor(next() * practiceMovementCatalogueV1.length)]!.movement;
       const chosen = Array.from({ length: 1 + Math.floor(next() * 6) }, () => steps[Math.floor(next() * steps.length)]!);
       const events = run(key, chosen);
       const reconcile = next() < 0.5 ? [key] : [];
@@ -225,7 +225,7 @@ describe("M4-7-S builder-attested receipts qualify only against a settled moveme
   });
   it("every customer-receipt movement is a candidate for exactly its own amount", () => {
     for (const entry of practiceMovementCatalogueV1.filter((item) => item.kind === "customer_receipt")) {
-      expect(assessAttestedReceipt(receipt(entry.grossPence), view(entry.key, ["settled"]), [])).toMatchObject({ canMatch: true, candidateMovementKey: entry.key });
+      expect(assessAttestedReceipt(receipt(entry.grossPence), view(entry.movement, ["settled"]), [])).toMatchObject({ canMatch: true, candidateMovementKey: entry.movement });
     }
   });
 });

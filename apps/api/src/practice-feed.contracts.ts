@@ -7,7 +7,7 @@ const kind = z.enum(["customer_receipt", "supplier_refund"]);
 const fixture = z.enum(["recovery-18800", "shadow-30000", "test-m", "test-n", "supplier-refund"]);
 
 export const practiceFeedCatalogueEntryV1 = z.object({
-  key: practiceMovementKeyV1, grossPence: safePence, kind, fixture, label: z.string().min(1).max(120),
+  movement: practiceMovementKeyV1, grossPence: safePence, kind, fixture, label: z.string().min(1).max(120),
 }).strict();
 
 /** A settled movement is a fact only. `allocatedEligibleNetPence` is the literal 0: this leaf can never allocate. */
