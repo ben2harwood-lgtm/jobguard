@@ -1,0 +1,46 @@
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/ai, @jobguard/api, @jobguard/config, @jobguard/core, @jobguard/db, @jobguard/storage
+   • Running build in 6 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/core:build: cache bypass, force executing 88bc4e899e23dc38
+@jobguard/config:build: cache bypass, force executing a6f3f5b42fe953a0
+@jobguard/core:build: 
+@jobguard/core:build: > @jobguard/core@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/core
+@jobguard/core:build: > tsc -p tsconfig.json
+@jobguard/core:build: 
+@jobguard/config:build: 
+@jobguard/config:build: > @jobguard/config@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/config
+@jobguard/config:build: > tsc -p tsconfig.json
+@jobguard/config:build: 
+@jobguard/storage:build: cache bypass, force executing b78e5bb767bf3e1b
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/storage:build: 
+@jobguard/storage:build: > @jobguard/storage@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/storage
+@jobguard/storage:build: > tsc -p tsconfig.json
+@jobguard/storage:build: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/ai:build: cache bypass, force executing 05e696963b546b1d
+@jobguard/db:build: cache bypass, force executing 4ad3878cefad6852
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/db:build: 
+@jobguard/db:build: > @jobguard/db@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/db
+@jobguard/db:build: > tsc -p tsconfig.json
+@jobguard/db:build: 
+@jobguard/ai:build: 
+@jobguard/ai:build: > @jobguard/ai@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/ai
+@jobguard/ai:build: > tsc -p tsconfig.json
+@jobguard/ai:build: 
+ WARNING  IO error: Operation not permitted (os error 1)
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:build: cache bypass, force executing 7338cf188400eb8e
+@jobguard/api:build: 
+@jobguard/api:build: > @jobguard/api@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/apps/api
+@jobguard/api:build: > nest build
+@jobguard/api:build: 
+
+ Tasks:    6 successful, 6 total
+Cached:    0 cached, 6 total
+  Time:    43.5s 
+

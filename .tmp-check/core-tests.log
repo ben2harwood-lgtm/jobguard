@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/core
+
+
+ Test Files  3 passed (3)
+      Tests  149 passed (149)
+   Start at  21:46:44
+   Duration  1.31s (transform 984ms, setup 0ms, import 1.29s, tests 43ms, environment 0ms)
+

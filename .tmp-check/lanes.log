@@ -1,0 +1,6 @@
+
+> jobguard@ lint:lanes /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d
+> node tools/agent-lane-boundary-lint.mjs
+
+Lane boundary FAILED: Detached local HEAD has no task lane; check out the registered branch.
+ ELIFECYCLE  Command failed with exit code 1.

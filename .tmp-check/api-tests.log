@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/apps/api
+
+
+ Test Files  3 passed (3)
+      Tests  108 passed (108)
+   Start at  21:47:02
+   Duration  6.84s (transform 4.94s, setup 0ms, import 11.17s, tests 434ms, environment 0ms)
+

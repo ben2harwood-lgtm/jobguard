@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/apps/web
+
+
+ Test Files  3 passed (3)
+      Tests  72 passed (72)
+   Start at  21:47:26
+   Duration  3.41s (transform 2.29s, setup 0ms, import 5.49s, tests 73ms, environment 0ms)
+

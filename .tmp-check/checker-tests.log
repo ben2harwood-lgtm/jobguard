@@ -1,0 +1,12 @@
+✔ checker: UTF-8 framing stays unambiguous with delimiters, newlines and canonical UUIDs (2.181375ms)
+✔ checker: v1/v2/v3 are separate; mixing visit and evidence or supplying authority fails (1.388042ms)
+✔ checker: combined seam preserves live, authority, visit, evidence order (0.652667ms)
+✔ checker: failure of any inherited guard stops before evidence (0.611875ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 597.281875

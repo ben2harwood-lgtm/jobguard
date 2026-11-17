@@ -1,0 +1,58 @@
+
+> jobguard@ lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d
+> node tools/lint.mjs && turbo run lint --force --concurrency=2
+
+Core purity passed (156 TypeScript files).
+Lane boundary passed: {"lane":"ent-3d","branch":"codex/sandbox/ent-3d","event":"pull_request","base":"6659fb58791ec22588948f005b2bd4f6b299fa48","head":"a1c2fa91a310f787c9291ded0ab57e9d5db04233","comparison":"merge-base","files":["BUILD_PLAN.md","apps/api/openapi.json","apps/api/src/contractor/site-extra-evidence.application.test.ts","apps/api/src/contractor/site-extra.application.ts","apps/api/src/contractor/site-extra.controller.ts","apps/api/src/contractor/site-visit.application.test.ts","apps/web/app/api/contractor/jobs/[id]/site-extras/route.evidence.test.ts","apps/web/app/api/contractor/jobs/[id]/site-extras/route.ts","config/agent-lane-assignments.json","docs/contracts/site-extra-evidence-v1.md","docs/verdicts/ENT-3d/BUILDER_RECEIPT.md","packages/core/src/index.ts","packages/core/src/site-extra-evidence.test.ts","packages/core/src/site-extra-evidence.ts","packages/core/src/site-extra.ts","packages/db/MIGRATIONS.md","packages/db/migrations/0141_site_extra_evidence.sql","packages/db/src/migrate.ts","packages/db/src/site-extra-repository.ts","packages/db/test/site-extra-evidence-compatibility.test.ts","packages/db/test/site-extra-evidence-fixtures.ts","packages/db/test/site-extra-evidence-routines.integration.test.ts","packages/db/test/site-extra-evidence.integration.test.ts"]}
+Money arithmetic boundary check passed.
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/ai, @jobguard/api, @jobguard/config, @jobguard/core, @jobguard/db, @jobguard/storage, @jobguard/web
+   • Running lint in 7 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/core:lint: cache bypass, force executing 8e7ff8970fce727c
+@jobguard/config:lint: cache bypass, force executing 4d6da6e440405983
+@jobguard/core:lint: 
+@jobguard/core:lint: > @jobguard/core@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/core
+@jobguard/core:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/core:lint: 
+@jobguard/config:lint: 
+@jobguard/config:lint: > @jobguard/config@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/config
+@jobguard/config:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/config:lint: 
+@jobguard/storage:lint: cache bypass, force executing dfd13d7730ab88cd
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/storage:lint: 
+@jobguard/storage:lint: > @jobguard/storage@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/storage
+@jobguard/storage:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/storage:lint: 
+ WARNING  IO error: Operation not permitted (os error 1)
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/db:lint: cache bypass, force executing a8886968667b06eb
+@jobguard/ai:lint: cache bypass, force executing 6b7b2f86f8e4aa14
+@jobguard/db:lint: 
+@jobguard/db:lint: > @jobguard/db@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/db
+@jobguard/db:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/db:lint: 
+@jobguard/ai:lint: 
+@jobguard/ai:lint: > @jobguard/ai@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/packages/ai
+@jobguard/ai:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/ai:lint: 
+ WARNING  IO error: Operation not permitted (os error 1)
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:lint: cache bypass, force executing 0d331dca42156713
+@jobguard/api:lint: 
+@jobguard/api:lint: > @jobguard/api@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/apps/api
+@jobguard/api:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/api:lint: 
+@jobguard/web:lint: cache bypass, force executing c4b348c9b50dac92
+@jobguard/web:lint: 
+@jobguard/web:lint: > @jobguard/web@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3d/apps/web
+@jobguard/web:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/web:lint: 
+
+ Tasks:    7 successful, 7 total
+Cached:    0 cached, 7 total
+  Time:    51.81s 
+
