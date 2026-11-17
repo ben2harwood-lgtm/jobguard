@@ -14,6 +14,7 @@ const hooks = vi.hoisted(() => {
   const slots: { value?: unknown; current?: unknown; deps?: readonly unknown[]; cleanup?: (() => void) | undefined }[] = [];
   const effects: (() => void)[] = [];
   return {
+    unmount() { for (const slot of slots) slot?.cleanup?.(); },
     reset() { for (const slot of slots) slot?.cleanup?.(); cursor = 0; slots.length = 0; effects.length = 0; },
     render() { cursor = 0; },
     effects() { while (effects.length) effects.shift()!(); },
@@ -54,7 +55,7 @@ async function setup(termsAccepted: boolean, disposed: boolean) {
   lock: null, captures: [], dispositions: disposed ? [{ scopeItemId, disposition: "done" }] : [], termsAccepted, checkStatus: null, invoiceGuard: "FINAL_ACCOUNT_LOCK_REQUIRED" }) });
  vi.stubGlobal("fetch", fetch);
  const changed = vi.fn(async () => {});
- const render = () => { hooks.render(); const tree = FinalAccountLock({ jobId, account, onChanged: changed }); hooks.effects(); return tree; };
+ const render = (id = jobId) => { hooks.render(); const tree = FinalAccountLock({ jobId: id, account, onChanged: changed }); hooks.effects(); return tree; };
  render(); await tick();
  return { render, fetch };
 }
@@ -110,4 +111,47 @@ it.each([null, "pending", "failed"])("keeps the lock progress text for a %s reco
   return invoices(node.props.children as React.ReactNode);
  };
  expect(invoices(tree)?.props.lockGuard).toMatchObject({code:invoiceGuard});
+});
+
+async function pendingLockRead() {
+ const { render, fetch } = await setup(true, true);
+ const saved = await fetch.mock.results[0]!.value;
+ let release!: (response: unknown) => void;
+ let signal!: AbortSignal;
+ fetch.mockImplementationOnce((_path: string, init: { signal: AbortSignal }) => {
+  signal = init.signal;
+  return new Promise(resolve => { release = resolve; });
+ });
+ window.dispatchEvent(new Event("focus"));
+ return { render, fetch, saved, release, signal };
+}
+it("ignores a superseded same-job lock failure without aborting the read", async () => {
+ const { render, saved, release, signal } = await pendingLockRead();
+ window.dispatchEvent(new Event("focus")); await tick();
+ expect(signal.aborted).toBe(false);
+ release({ ok: false, json: async () => ({ code: "STALE_FAILURE" }) }); await tick();
+ expect(renderToStaticMarkup(render())).not.toContain("STALE_FAILURE");
+ expect(saved.ok).toBe(true);
+});
+it("ignores an unmounted same-job lock read without aborting it", async () => {
+ const { render, release, signal } = await pendingLockRead();
+ hooks.unmount();
+ expect(signal.aborted).toBe(false);
+ release({ ok: false, json: async () => ({ code: "UNMOUNTED_FAILURE" }) }); await tick();
+ expect(renderToStaticMarkup(render())).not.toContain("UNMOUNTED_FAILURE");
+});
+it("still aborts the current lock read when the job changes", async () => {
+ const { render, release, signal } = await pendingLockRead();
+ render("22222222-2222-4222-8222-222222222222");
+ expect(signal.aborted).toBe(true);
+ release({ ok: false, json: async () => ({ code: "OLD_JOB_FAILURE" }) }); await tick();
+ expect(renderToStaticMarkup(render())).not.toContain("OLD_JOB_FAILURE");
+});
+it("ignores a superseded successful lock snapshot that arrives after the latest read", async () => {
+ const { render, saved, release, signal } = await pendingLockRead();
+ window.dispatchEvent(new Event("focus")); await tick();
+ const stale = { ...await saved.json(), termsAccepted: false };
+ release({ ok: true, json: async () => stale }); await tick();
+ expect(signal.aborted).toBe(false);
+ expect(renderToStaticMarkup(render())).toContain("Final check terms accepted.");
 });

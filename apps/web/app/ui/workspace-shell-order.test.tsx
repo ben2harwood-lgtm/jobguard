@@ -178,7 +178,7 @@ it("does not put live job controls inside the quote fieldset or sidebar", () => 
  expect(activationFound).toBe(true);
 });
 
-it("revalidates saved projections on hash navigation without clearing the mounted job", () => {
+it("reloads saved projections on real hash navigation", () => {
  workspace("quoting");
  const listeners = new Map<string, () => void>();
  vi.stubGlobal("fetch", vi.fn(async()=>({ok:false,status:403})));
@@ -187,10 +187,9 @@ it("revalidates saved projections on hash navigation without clearing the mounte
  const cleanup=state.effects[1]!() as ()=>void;
  listeners.get("hashchange")!();
  expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/proposal`, expect.objectContaining({cache:"no-store"}));
- expect(state.setters[3]).not.toHaveBeenCalled();
- expect(state.setters[0]).not.toHaveBeenCalled();
- expect(state.setters[1]).not.toHaveBeenCalled();
- expect(state.setters[4]).toHaveBeenCalledWith("#final-account-title");
+ expect(state.setters[3]).toHaveBeenCalledWith(true);
+ expect(state.setters[0]).toHaveBeenCalledWith(null);
+ expect(state.setters[1]).toHaveBeenCalledWith(null);
  cleanup();
 });
 it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"])("keeps the same job editor identity for %s navigation", fragment => {
@@ -274,7 +273,7 @@ it("a committed snapshot supersedes a pending section refresh even if fetch igno
  expect((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].signal!.aborted).toBe(true);
  complete({ ok: true, json: async () => editor.props.result });
  await new Promise<void>(resolve => setImmediate(resolve));
- expect(state.setters[1]!.mock.calls).toEqual([[committed]]);
+ expect(state.setters[1]!.mock.calls).toEqual([[null], [committed]]);
  cleanup();
 });
 it("a denied section refresh fails closed without disguising it as an absent capture", async () => {

@@ -44,8 +44,7 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
   generation.current++;activeRequest.current?.abort();setCapture(snapshot);setJob(null);setError(null);setLoading(false);
  },[]);
  const load=useCallback(async(preserveView=false)=>{
-  // Reuse this job's pending read during repeated section navigation.
-  if(activeRequest.current&&!activeRequest.current.signal.aborted)return;
+  // Superseded same-job reads finish; the generation guard ignores their results.
   const current=++generation.current;const controller=new AbortController();activeRequest.current=controller;
   // Section navigation revalidates saved facts without tearing down local edits.
   if(!preserveView){setLoading(true);setJob(null);setCapture(null);setCompletionLabel(null);}setError(null);
@@ -63,11 +62,11 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
   }catch{if(current===generation.current&&!controller.signal.aborted)setError("unavailable");}
   finally{if(current===generation.current){activeRequest.current=null;setLoading(false);}}
  },[jobId]);
- useEffect(()=>{void load();return()=>{generation.current++;activeRequest.current?.abort();}},[load]);
- useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load(true);};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
+ useEffect(()=>{void load();return()=>{generation.current++;if(currentJobId.current!==jobId)activeRequest.current?.abort();}},[load]);
+ useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load();};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
  useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
  // Explicit in-workspace controls retain mounted editors and unsaved drafts.
- // Hash navigation revalidates saved reads while retaining the same job's panels.
+ // Ordinary URL/hash navigation still reloads saved reads, as on main.
  const navigateSection=(target:string)=>{
   history.replaceState(null,"",`${location.pathname}${location.search}${target}`);
   setFragment(target);

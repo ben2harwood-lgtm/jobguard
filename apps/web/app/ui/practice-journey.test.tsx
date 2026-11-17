@@ -9,6 +9,7 @@ const hooks = vi.hoisted(() => {
   const slots: { value?: unknown; current?: unknown; deps?: readonly unknown[]; cleanup?: (() => void) | undefined }[] = [];
   const effects: (() => void)[] = [];
   return {
+    unmount() { for (const slot of slots) slot?.cleanup?.(); },
     reset() { cursor = 0; slots.length = 0; effects.length = 0; },
     render() { cursor = 0; },
     effects() { while (effects.length) effects.shift()!(); },
@@ -57,7 +58,7 @@ async function journey(status: string, variationStatus = 400, variationCode = "A
     throw new Error(`Unexpected read ${path}`);
   });
   vi.stubGlobal("fetch", fetch);
-  const render = (id = jobId) => { hooks.render(); const tree = PracticeJourney({ jobId: id, status }); hooks.effects(); return renderToStaticMarkup(tree); };
+  const render = (id = jobId, savedStatus = status) => { hooks.render(); const tree = PracticeJourney({ jobId: id, status: savedStatus }); hooks.effects(); return renderToStaticMarkup(tree); };
   expect(render()).toContain("Checking saved progress");
   await new Promise<void>(resolve => setImmediate(resolve));
   return { html: render(), fetch, render };
@@ -176,4 +177,47 @@ it.each([
  const {html}=await journey("draft",400,"ACTIVATION_REQUIRED",jobId,{"fee-illustration":{status,body}});
  expect(html).toContain("Saved progress could not be checked");
  expect(html).not.toContain("journey-customer-balance");
+});
+
+async function pendingJourneyRead() {
+ const window = events(); const { fetch, render } = await journey("accepted");
+ const original = fetch.getMockImplementation()!;
+ const pending: { signal: AbortSignal; release: () => void }[] = [];
+ vi.stubGlobal("fetch", vi.fn((path: string, init: { signal: AbortSignal }) => new Promise(resolve => {
+  pending.push({ signal: init.signal, release: () => { void original(path).then(resolve); } });
+ })));
+ window.dispatchEvent(new Event("focus"));
+ return { window, pending, render, fetch };
+}
+it("lets superseded same-job journey reads finish without publishing their late results", async () => {
+ const { window, pending, render } = await pendingJourneyRead();
+ window.dispatchEvent(new Event("focus"));
+ expect(pending).toHaveLength(20);
+ expect(pending[0]!.signal.aborted).toBe(false);
+ for (const request of pending.slice(0, 10)) request.release();
+ await settle();
+ expect(render()).toContain("Checking saved progress");
+ for (const request of pending.slice(10)) request.release();
+ await settle(); expect(render()).toContain("Continue this job");
+});
+it("lets unmounted same-job journey reads finish without publishing", async () => {
+ const { pending, render } = await pendingJourneyRead();
+ hooks.unmount();
+ expect(pending.every(request => !request.signal.aborted)).toBe(true);
+ for (const request of pending) request.release();
+ await settle(); expect(render()).toContain("Checking saved progress");
+});
+it("still aborts the current journey reads when the job changes", async () => {
+ const { pending, render } = await pendingJourneyRead();
+ render(otherJobId);
+ expect(pending.slice(0, 10).every(request => request.signal.aborted)).toBe(true);
+ for (const request of pending.slice(0, 10)) request.release();
+ await settle(); expect(render(otherJobId)).not.toContain("journey-customer-balance");
+});
+it("does not abort journey reads when only the same job status changes", async () => {
+ const { pending, render } = await pendingJourneyRead();
+ render(jobId, "live");
+ expect(pending.slice(0, 10).every(request => !request.signal.aborted)).toBe(true);
+ for (const request of pending.slice(0, 10)) request.release();
+ await settle(); expect(render(jobId, "live")).toContain("Checking saved progress");
 });

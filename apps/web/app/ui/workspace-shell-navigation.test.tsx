@@ -8,6 +8,7 @@ const hooks = vi.hoisted(() => {
   const slots: { value?: unknown; current?: unknown; deps?: readonly unknown[]; cleanup?: (() => void) | undefined }[] = [];
   const effects: (() => void)[] = [];
   return {
+    unmount() { for (const slot of slots) slot?.cleanup?.(); },
     reset() { cursor = 0; slots.length = 0; effects.length = 0; },
     render() { cursor = 0; },
     effects() { while (effects.length) effects.shift()!(); },
@@ -60,27 +61,24 @@ function journey(node: React.ReactNode): React.ReactElement | undefined {
  if (node.type === PracticeJourney) return node;
  return React.Children.toArray(node.props.children).map(journey).find(Boolean);
 }
-it("reuses an in-flight same-job hash read and retains the mounted journey", async () => {
+it("does not abort superseded same-job hash reads and ignores their late results", async () => {
  const { requests, fetch, render, hashchange } = setup();
  render();
- hashchange(); render(); hashchange(); render();
- expect(fetch).toHaveBeenCalledTimes(1);
- expect(requests[0]!.signal.aborted).toBe(false);
- requests[0]!.resolve(snapshot()); await settle();
- const before = journey(render()); expect(before).toBeDefined();
- hashchange();
- const during = journey(render());
- expect(during?.type).toBe(before?.type); expect(during?.key).toBe(before?.key);
- expect(during?.props).toMatchObject({ jobId, status: "live" });
  hashchange(); render();
  expect(fetch).toHaveBeenCalledTimes(2);
- expect(requests[1]!.signal.aborted).toBe(false);
+ expect(requests[0]!.signal.aborted).toBe(false);
  requests[1]!.resolve(snapshot()); await settle();
  expect(journey(render())).toBeDefined();
+ requests[0]!.resolve({ ...snapshot(), status: "draft" }); await settle();
+ expect(journey(render())?.props).toMatchObject({ jobId, status: "live" });
+ hashchange();
+ expect(journey(render())).toBeUndefined(); // Real hash navigation still reloads the whole workspace.
+ requests[2]!.resolve(snapshot()); await settle();
+ expect(journey(render())).toBeDefined();
 });
-it("aborts a pending read when the job changes and ignores its late response", async () => {
- const { requests, fetch, render, hashchange } = setup();
- render(); hashchange(); render();
+it("aborts the current read when the job changes and ignores its late response", async () => {
+ const { requests, fetch, render } = setup();
+ render();
  const loading = render(otherJobId);
  expect(journey(loading)).toBeUndefined();
  expect(requests[0]!.signal.aborted).toBe(true);
@@ -90,4 +88,11 @@ it("aborts a pending read when the job changes and ignores its late response", a
  expect(requests[1]!.signal.aborted).toBe(false);
  requests[1]!.resolve(snapshot(otherJobId)); await settle();
  expect(journey(render(otherJobId))?.props).toMatchObject({ jobId: otherJobId });
+});
+it("ignores an unmounted same-job shell read without aborting it", async () => {
+ const { requests, render } = setup();
+ render(); hooks.unmount();
+ expect(requests[0]!.signal.aborted).toBe(false);
+ requests[0]!.resolve(snapshot()); await settle();
+ expect(journey(render())).toBeUndefined();
 });
