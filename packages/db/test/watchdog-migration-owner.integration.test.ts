@@ -7,7 +7,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MIGRATION_URLS } from "../src/index.js";
-import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 // 0096 adds job-qualified foreign keys to tables that FORCE row-level security.
 // Deployments run migrations as the non-superuser owner role, with no tenant
@@ -52,7 +52,7 @@ beforeAll(async () => {
   expect(previous.some(url => name(url).endsWith("_shared_money_origin.sql"))).toBe(true);
   expect(previous).toEqual(MIGRATION_URLS.slice(0, MIGRATION_URLS.indexOf(target)));
   directory = await mkdtemp(join(tmpdir(), "jg-ch2-owner-"));
-  const port = 60500 + Math.floor(Math.random() * 400);
+  const port = await freePort(60500, 400);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", max: 4 });

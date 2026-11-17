@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { assertReviewConfirmable, proposalReviewV1, ReviewConflictError, type ProposalReview } from "@jobguard/core";
+import { assertReviewConfirmable, calculateNetLine, money, parseQuantity, proposalReviewV1, ReviewConflictError, type ProposalReview } from "@jobguard/core";
 import type { CommandMutation, ConsequentialCommand } from "./commands.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -18,6 +18,7 @@ export class ProposalReviewRepository {
       const originalQuestions=proposal.proposal.questions.map(item=>item.question.value).sort();
       const reviewedQuestions=review.questions.map(item=>item.question).sort();
       if(JSON.stringify(originalQuestions)!==JSON.stringify(reviewedQuestions)) throw new ReviewConflictError("Every flagged question must remain in the review");
+      await assertCapturedIdentitiesReconciled(db,context.tenantId,review);
       if(!current){
         if(expectedRevision!==0) throw new ReviewConflictError("The review does not have the expected revision");
         await db.$client.query(`INSERT INTO app.proposal_review(id,tenant_id,job_id,proposal_id,revision) VALUES($1,$2,$3,$4,0)`,[review.reviewId,context.tenantId,review.jobId,review.proposalId]);
@@ -41,6 +42,16 @@ export class ProposalReviewRepository {
   async read(context:VerifiedTenantContext,jobId:string):Promise<ProposalReview|null>{return withTenant(this.pool,context,async db=>{const head=(await db.$client.query<{id:string;proposal_id:string;revision:number}>(`SELECT id,proposal_id,revision FROM app.proposal_review WHERE tenant_id=$1 AND job_id=$2`,[context.tenantId,jobId])).rows[0];if(!head)return null;const lines=(await db.$client.query<any>(`SELECT l.*,coalesce(array_agg(p.parent_scope_item_id) FILTER(WHERE p.parent_scope_item_id IS NOT NULL),'{}') parents FROM app.proposal_review_line l LEFT JOIN app.proposal_review_line_parent p ON (p.tenant_id,p.review_id,p.line_id)=(l.tenant_id,l.review_id,l.id) WHERE l.tenant_id=$1 AND l.review_id=$2 GROUP BY l.tenant_id,l.id ORDER BY l.ordinal`,[context.tenantId,head.id])).rows;const questions=(await db.$client.query<any>(`SELECT * FROM app.proposal_review_question WHERE tenant_id=$1 AND review_id=$2 ORDER BY id`,[context.tenantId,head.id])).rows;return proposalReviewV1.parse({version:"proposal_review_v1",reviewId:head.id,proposalId:head.proposal_id,jobId,revision:head.revision,lines:lines.map(x=>({id:x.id,scopeItemId:x.scope_item_id,origin:x.origin,description:x.description,room:x.room,category:x.category,quantity:x.quantity_decimal,unit:x.unit,unitPricePence:x.unit_price_pence===null?null:Number(x.unit_price_pence),disposition:x.disposition,dismissalReason:x.dismissal_reason,parentScopeItemIds:x.parents,sourceExcerpt:x.source_excerpt})),questions:questions.map(x=>({id:x.id,question:x.question,blocking:x.blocking,disposition:x.disposition,answer:x.answer}))});});}
 }
 
+/** The immutable proposal owns the original line/identity pairs, including retired parents. */
+async function assertCapturedIdentitiesReconciled(db:TenantTransaction,tenantId:string,review:ProposalReview){
+  const original=(await db.$client.query<{id:string;scope_item_id:string}>(`SELECT id,scope_item_id FROM app.proposal_line WHERE tenant_id=$1 AND job_id=$2 AND proposal_id=$3`,[tenantId,review.jobId,review.proposalId])).rows;
+  const proposed=review.lines.filter(line=>line.origin==="proposal");
+  const identities=new Set(review.lines.map(line=>line.scopeItemId));
+  if(identities.size!==review.lines.length || proposed.length!==original.length || original.some(line=>!proposed.some(candidate=>candidate.id===line.id&&candidate.scopeItemId===line.scope_item_id))){
+    throw new ReviewConflictError("Every captured identity must remain in the review with its original line");
+  }
+}
+
 async function ensureScopeIdentity(db:TenantTransaction,tenantId:string,jobId:string,scopeId:string){
   await db.$client.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id) VALUES($1,$2,$3) ON CONFLICT (tenant_id,id) DO NOTHING`,[scopeId,tenantId,jobId]);
   const valid=(await db.$client.query(`SELECT 1 FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[tenantId,jobId,scopeId])).rowCount;
@@ -55,9 +66,10 @@ export class ConfirmProposalReview implements CommandMutation<{jobId:string;revi
     if(!locked || locked.revision!==this.review.revision || locked.state!=="reviewing" || command.action.aggregateRevision!==this.review.revision) throw new ReviewConflictError("The review changed; reconcile before confirming");
     const job=(await db.$client.query<{revision:number;status:string}>(`SELECT revision,status FROM app.job WHERE tenant_id=$1 AND id=$2`,[tenantId,this.review.jobId])).rows[0];
     if(!job || job.status!=="draft") throw new ReviewConflictError("Job is no longer awaiting review");
-    for(const line of this.review.lines.filter(x=>x.disposition==="accepted"||x.origin==="human")){
+    await assertCapturedIdentitiesReconciled(db,tenantId,this.review);
+    for(const line of this.review.lines.filter(x=>x.disposition==="accepted")){
       await db.$client.query(`UPDATE app.scope_identity SET state='confirmed' WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[tenantId,this.review.jobId,line.scopeItemId]);
-      const total=line.unitPricePence;
+      const total=line.unitPricePence===null?null:calculateNetLine(parseQuantity(line.quantity!),money(line.unitPricePence)).pence;
       await db.$client.query(`INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,$5,$6,$7,$8,$9)`,[randomUUID(),tenantId,this.review.jobId,line.scopeItemId,line.description,line.quantity,line.unit,line.unitPricePence,total]);
       await db.$client.query(`INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) VALUES($1,$2,$3)`,[tenantId,this.review.jobId,line.scopeItemId]);
       for(const parent of line.parentScopeItemIds) await db.$client.query(`INSERT INTO app.scope_lineage(tenant_id,job_id,parent_scope_item_id,child_scope_item_id,kind) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,[tenantId,this.review.jobId,parent,line.scopeItemId,line.parentScopeItemIds.length>1?"merge":"split"]);

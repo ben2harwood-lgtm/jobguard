@@ -74,5 +74,20 @@ export * from "./sor-repository.js";
 export * from "./job-scheduling-repository.js";
 export * from "./work-order-fixtures.js";
 
+export * from "./audit-export-repository.js";
 export * from "./recovery-eligibility-v3-repository.js";
 export * from "./enterprise-identity-repository.js";
+export * from "./sso-required-repository.js";
+export * from "./extra-repository.js";
+export * from "./shadow-repository.js";
+export * from "./contractor-session-context.js";
+export * from "./shadow-detection-repository.js"; export * from "./shadow-observation-reader.js";
+
+export * from "./final-account-lock-repository.js";
+export * from "./recovery-case-terms-repository.js";
+export * from "./contractor-practice-session-repository.js";
+export * from "./site-extra-repository.js";
+export * from "./scim-repository.js";
+export * from "./recovery-allocation-repository.js";
+export * from "./site-visit-repository.js";
+export * from "./recovery-payment-payer-repository.js";

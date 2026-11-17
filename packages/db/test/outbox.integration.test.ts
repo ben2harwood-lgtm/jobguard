@@ -1,5 +1,5 @@
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -35,7 +35,7 @@ let sequence = 1;
 
 beforeAll(async () => {
   databaseDir = await mkdtemp(join(tmpdir(), "jobguard-outbox-"));
-  const port = 57500 + Math.floor(Math.random() * 400);
+  const port = await freePort(57500, 400);
   postgres = new EmbeddedPostgres({
     databaseDir,
     port,

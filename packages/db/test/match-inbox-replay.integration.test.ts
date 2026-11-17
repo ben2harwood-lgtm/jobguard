@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { InboxRelevanceRepository, MaterialRepository, migrate, withTenant, PurchaseOrderRepository, SupplierDocumentRepository, SupplierMatchRepository } from "../src/index.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 // Supplier-match create and correction, and inbox dismissal: a replay returns what the command first returned, a
 // successful no-op keeps its command identity, and the id is bound to its job and payload.
@@ -30,7 +30,7 @@ async function asTenant(sql: string, params: unknown[]) {
 
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "jg-match-inbox-replay-"));
-  const port = 60400 + Math.floor(Math.random() * 99);
+  const port = await freePort(60400, 99);
   pg = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await pg.initialise(); await pg.start();
   admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "synthetic" });

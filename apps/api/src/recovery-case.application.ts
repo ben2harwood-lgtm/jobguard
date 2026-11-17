@@ -1,3 +1,7 @@
+import { RecoveryCaseTermsRepository } from "@jobguard/db";
+import { RecoveryPaymentPayerRepository } from "@jobguard/db";
+import { recoveryPaymentPayerCommandV1 } from "./recovery-case.contracts.js";
+import { recoveryCaseTermsCommandV1 } from "./recovery-case.contracts.js";
 import { PracticeAccess } from "./practice-access.js";
 import { ZodError } from "zod";
 import type { Pool } from "pg";
@@ -34,11 +38,23 @@ export class RecoveryCaseApplication {
    {membershipId:practice.membershipId,identityUserId:practice.identityUserId});
   return this.committedView(jobId, practice, affected.id);
  }
+ async terms(jobId: string, raw: unknown) {
+  if(process.env.JOBGUARD_ENV !== "synthetic_demo") throw new Error("ELIGIBILITY_REVIEWER_FORBIDDEN");
+  const practice = await this.access.job(jobId);
+  const input = recoveryCaseTermsCommandV1.parse(await recoveryInput(raw));
+  return new RecoveryCaseTermsRepository(practiceMaterialPool(this.pool, practice.digest)).approve(practice.context, jobId, input,
+   {membershipId:practice.membershipId,identityUserId:practice.identityUserId});
+ }
  async eligibility(jobId: string, raw: unknown, sessionId?: string) {
   if(process.env.JOBGUARD_ENV !== "synthetic_demo") throw new Error("ELIGIBILITY_REVIEWER_FORBIDDEN");
   const practice = await new PracticeAccess(this.pool, sessionId ?? this.sessionId).job(jobId);
   const body = await recoveryInput(raw);
   const reviewer = {membershipId:practice.membershipId,identityUserId:practice.identityUserId};
+  if (typeof body === "object" && body !== null && "version" in body && body.version === "recovery-payment-payer-command.v1") {
+   const input = recoveryPaymentPayerCommandV1.parse(body);
+   const result = await new RecoveryPaymentPayerRepository(practiceMaterialPool(this.pool, practice.digest)).command(practice.context, jobId, input, reviewer, practice.digest);
+   return {...await this.committedView(jobId, practice, input.caseId.toLowerCase()), paymentPayerMarkCommandResult: result};
+  }
   if (typeof body === "object" && body !== null && "version" in body && body.version === "recovery-eligibility-command.v3") {
    const input = recoveryEligibilityCommandV3.parse(body);
    const result = await new RecoveryEligibilityV3Repository(practiceMaterialPool(this.pool, practice.digest)).review(practice.context, jobId, input, reviewer, practice.digest);

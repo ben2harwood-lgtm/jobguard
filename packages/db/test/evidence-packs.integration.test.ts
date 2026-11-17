@@ -7,7 +7,7 @@ import EmbeddedPostgres from 'embedded-postgres';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EvidencePackRepository, migrate, withTenant, type VerifiedTenantContext } from '../src/index.js';
-import { closeTestPools, installLegacySyntheticPartyFixtures } from './pool-test-utils.js';
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from './pool-test-utils.js';
 import { seedEvidencePackFixture } from './evidence-pack-fixture.js';
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
@@ -17,7 +17,7 @@ let repo: EvidencePackRepository;
 const actor = 'membership:recorded-test-owner';
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'jg-evidence-packs-'));
-  const port = 60300 + Math.floor(Math.random() * 200);
+  const port = await freePort(60300, 200);
   const postgresLog: string[] = [];
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C', '--encoding=UTF8'], onLog: message => { postgresLog.push(message); } });
   try { await postgres.initialise(); await postgres.start(); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }

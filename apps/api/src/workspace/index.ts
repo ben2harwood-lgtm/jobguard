@@ -64,5 +64,22 @@ export * from "../practice-feed.contracts.js";
 export * from "../practice-feed.application.js";
 export * from "../practice-feed.http.js";
 
+export * from "../practice-facts.contracts.js";
+export * from "../practice-facts.application.js";
+export * from "../practice-facts.http.js";
 export * from "../auth/sso/sso.application.js";
 export * from "../auth/sso/sso.contracts.js";
+export * from "../auth/sso/sso-required.application.js";
+export * from "../auth/sso/sso-required.contracts.js";
+export { AuditExportApplication, auditExportHttpFailure, assertAuditExportMode } from "../audit-export/audit-export.application.js";
+
+export * from "../final-account-lock.application.js";
+export * from "../final-account-lock.contracts.js";
+export { ContractorPracticeSessionApplication, assertContractorPracticeSessionMode, contractorPracticeSessionHttpFailure, createContractorPracticeSessionApplication } from "../contractor/contractor-practice-session.application.js";
+export { SiteExtraApplication, assertSiteExtraMode, siteExtraHttpFailure } from "../contractor/site-extra.application.js";
+export { sorSiteExtraHttpFailure } from "../contractor/site-extra.application.js";
+export { siteVisitHttpFailure } from "../contractor/site-extra.application.js";
+export * from "../auth/sso/scim.application.js";
+export * from "../auth/sso/scim.contracts.js";
+export * from "../recovery-allocation.application.js";
+export * from "../recovery-allocation.contracts.js";

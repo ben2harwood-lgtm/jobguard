@@ -16,7 +16,7 @@ import {
 import type { PrivateVersionedStorage } from "@jobguard/storage";
 import { watchdogCommandGuards } from "@jobguard/core";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), otherTenant = randomUUID(), member = randomUUID();
 const context = testTenantContext(tenant);
@@ -32,7 +32,7 @@ const storage: PrivateVersionedStorage = {
 };
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "jg-ch2-"));
-  const port = 60400 + Math.floor(Math.random() * 100);
+  const port = await freePort(60400, 100);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", max: 4 });

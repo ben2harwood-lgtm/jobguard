@@ -21,3 +21,30 @@ describe("SV-1 shadow domain", () => {
             expect(() => createLockSnapshot({ ...s, ...c })).toThrow();
     });
 });
+
+describe("SV-4 component lock hashes", () => {
+    it("sorts stable identities and binds every component source row", async () => {
+        const { hashLockCaptureRegister, hashLockLineSet, hashLockScopeDispositions } = await import("./lock.js");
+        const s = snap();
+        const bindings = [
+            { hash: hashLockCaptureRegister, rows: s.captureRegister, changed: s.captureRegister.map(c => ({ ...c, description: `${c.description} changed` })) },
+            { hash: hashLockLineSet, rows: s.lines, changed: s.lines.map(l => ({ ...l, netPence: l.netPence + 1 })) },
+            { hash: hashLockScopeDispositions, rows: s.scopeDispositions, changed: s.scopeDispositions.map(d => ({ ...d, disposition: "removed" })) },
+        ];
+        for (const binding of bindings) {
+            expect(binding.hash([...binding.rows].reverse())).toBe(binding.hash(binding.rows));
+            expect(binding.hash(binding.changed)).not.toBe(binding.hash(binding.rows));
+            expect(() => binding.hash([...binding.rows, binding.rows[0]])).toThrow();
+            expect(() => binding.hash([{ ...binding.rows[0], unknown: true }])).toThrow();
+        }
+    });
+    it("binds every log-extra state, unknown value and exact recorded instant", async () => {
+        const { hashLockCaptureRegister } = await import("./lock.js");
+        const capture = snap().captureRegister[0]!;
+        const states = ["draft", "priced", "approved", "rejected", "withdrawn"];
+        const hashes = states.map(state => hashLockCaptureRegister([{ ...capture, state }]));
+        expect(new Set(hashes).size).toBe(5);
+        expect(hashLockCaptureRegister([{ ...capture, valuePence: 0 }])).not.toBe(hashLockCaptureRegister([capture]));
+        expect(hashLockCaptureRegister([{ ...capture, serverRecordedAt: "2026-10-01T00:00:00.000001Z" }])).not.toBe(hashLockCaptureRegister([capture]));
+    });
+});

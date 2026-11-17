@@ -156,7 +156,7 @@ describe("UIWIRE-12 customer receipts",()=>{
   await expect(withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6)`,[T,f.jobId,p.paymentId,M,randomUUID(),"Old unsafe entrypoint"]))).rejects.toMatchObject({code:"42501"});
   const privileges=(await admin.query(`SELECT has_function_privilege('jobguard_runtime','app.reverse_practice_customer_receipt(uuid,uuid,uuid,uuid,uuid,uuid,text)','EXECUTE') bound,has_function_privilege('jobguard_runtime','app.reverse_practice_customer_receipt(uuid,uuid,uuid,uuid,uuid,text)','EXECUTE') unbound`)).rows[0];
   expect(privileges).toEqual({bound:true,unbound:false});
-  for(const table of ["customer_payment","customer_payment_reversal"])for(const action of ["UPDATE","DELETE","TRUNCATE"]){
+  for(const table of ["customer_payment","customer_payment_reversal","recovery_allocation_command","recovery_allocation_review","recovery_allocation_line_source","recovery_case_allocation","recovery_case_allocation_reversal","receipt_line_allocation"])for(const action of ["UPDATE","DELETE","TRUNCATE"]){
    expect((await admin.query(`SELECT has_table_privilege('jobguard_runtime',$1,$2) allowed`,[`app.${table}`,action])).rows[0].allowed).toBe(false);
   }
  });

@@ -29,6 +29,7 @@ async function deliveredMessage(page: Page) {
   await click(page, "Open £320 withheld payment");
   await expect(page.getByTestId("case-claimed-net")).toHaveText("£320.00");
   const caseId = (await get(page, `/api/jobs/${source.jobId}/recovery-cases`)).cases.at(-1).id as string;
+  await post(page, `/api/jobs/${source.jobId}/recovery-cases/terms`, { version: "recovery-case-terms-command.v1", action: "approve", commandId: randomUUID(), caseId, termsVersion: "synthetic_recovery_fee_terms.v1", feePolicyVersion: "reference_fee_policy_v3", eligibilityPolicyVersion: "reference_recovery_eligibility_policy_v3", termsHash: (await import("node:crypto")).createHash("sha256").update(`recovery-case-terms.v1\ncaseId=${caseId}\ntermsVersion=synthetic_recovery_fee_terms.v1\nfeePolicyVersion=reference_fee_policy_v3\neligibilityPolicyVersion=reference_recovery_eligibility_policy_v3\npolicyStatus=proposed`).digest("hex") });
   await click(page, "Build evidence pack");
   await expect(page.getByTestId("pack-state")).toHaveText("Sources mapped — inspect the evidence");
   await click(page, "Approve this pack for attachment");

@@ -11,7 +11,7 @@ import {
   ActionExecutor, EvidencePackRepository, FakeRecoveryMessageAdapter, RecoveryCaseRepository, RecoveryMessageRepository, migrate, withTenant,
   type OutboundAdapter, type RecoveryMessageActor, type RecoveryMessageState, type VerifiedTenantContext,
 } from '../src/index.js';
-import { closeTestPools, installLegacySyntheticPartyFixtures } from './pool-test-utils.js';
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from './pool-test-utils.js';
 import { seedEvidencePackFixture } from './evidence-pack-fixture.js';
 
 // Real PostgreSQL 16, real migrations, the real non-owner runtime role: no SQLite/ORM mock stands in for a guarantee here.
@@ -139,7 +139,7 @@ async function rawBase() {
 
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'jg-recovery-messages-'));
-  const port = 60900 + Math.floor(Math.random() * 200);
+  const port = await freePort(60900, 200);
   const postgresLog: string[] = [];
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C', '--encoding=UTF8'], onLog: message => { postgresLog.push(message); } });
   try { await postgres.initialise(); await postgres.start(); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }

@@ -693,8 +693,8 @@ Existing users need no backfill: legacy synthetic users stay in their existing d
 Do not auto-link email addresses to pre-existing identities. Under Ben’s merge-ahead ruling,
 0111 replaces this PR’s earlier reservations (0052, then 0098, then 0108): 0102, 0103, 0106, 0107
 (M4-5-S, `recovery_messages`), 0109 (CH-1) and 0110 (ENT-2) merged ahead of this PR, so 0111 is the next
-free number at merge. 0112 (M4-6-S) and 0113 (CH-7) are allocated after it, and 0100 (SV-2) takes the
-next free number at its own merge. The runner places 0111 after 0110_work_orders.sql (currently last);
+free number at merge. 0112 (M4-6-S) and 0113 (CH-7) are allocated after it, and 0100 (SV-2) later merged as
+0128. The runner places 0111 after 0110_work_orders.sql (currently last);
 0102_contractor_parties.sql, 0103_prevention_checks.sql, 0106_practice_feed.sql,
 0107_recovery_messages.sql, 0109_job_activation_terms.sql and 0110_work_orders.sql therefore apply before
 0111. The SQL bytes are unchanged by the renumber (SHA-256 9779d3f6…59e0).
@@ -737,6 +737,9 @@ Forward fix: preserve immutable history and replace only the affected routines i
 
 Renumbered from 0113 to 0119 on 11 October 2026 under the merge-ahead ruling because 0115 merged first.
 
+The new `practice_feed_event_job_identity` unique key on `app.practice_feed_event` covers `(tenant_id,job_id,id)`.
+The new `recovery_eligibility_v1_duplicate_payment_refusal` trigger on `app.recovery_eligibility_revision` calls `app.refuse_v1_eligibility_for_duplicate_payment()` to refuse new v1 review rows for a `duplicate_supplier_payment` case.
+
 Expand-only synthetic candidate reviews, tenant/job/case-qualified claim components and a typed supplier-credit link; adds `duplicate_supplier_payment` without changing old cases/reviews. Runtime tables are FORCE RLS, owned by `jobguard_migration`, SELECT/INSERT only, with invoker write guards and deferred audit/component completeness. No fee/posting, terms or pursuit routine changes. The consumed-credit positive path fails closed because merged 0106 has no supplier-invoice payment movement; see `docs/contracts/recovery-eligibility-v3.md`. Keep v1 data byte-for-byte. Forward fix with a new migration; any application rollback must retain a reader compatible with the new category after such cases exist. Never drop populated history or narrow a used category. PostgreSQL fresh/upgrade/catalog tests are written but NOT RUN in the builder sandbox. Round 1 (11 October 2026) adds, inside 0119 only, a new trigger `recovery_eligibility_v1_duplicate_payment_refusal` (function `app.refuse_v1_eligibility_for_duplicate_payment`, invoker rights) that refuses any new v1 review or approval row for a `duplicate_supplier_payment` case, and makes the stored v3 result guard require every result key with the right JSON type (an absent `reason` is no longer accepted as null). No merged routine is replaced and no merged column, policy or grant changes.
 
 ## 0120 — ENT-10a synthetic SAML identity
@@ -761,3 +764,226 @@ request/assertion identities, links, revocations and audit records. Repair forwa
 with a separately numbered migration. Do not drop identity/audit history or rewrite
 an already applied migration. No real-provider rollout or D04/G5 approval follows
 from migration success.
+
+## 0121 — audit export (ENT-10b)
+
+Renumbered 0116 → 0121 on 11 October under the merge-ahead ruling.
+
+Adds `app.audit_export` and `app.audit_export_checkpoint`, tenant-qualified audit/membership/checkpoint FKs, FORCE RLS, migration ownership and append-only triggers. Runtime gets SELECT/INSERT on the new export table and SELECT only on the new checkpoint handoff; existing objects and privileges are unchanged. Existing restricted assurance credentials copy existing checkpoints; no runtime access to `audit_control` or new elevated routine. No backfill. Previous application remains compatible. Disable new routes and fix forward on failure; never rewrite/delete audit history or exports as rollback. Live signing/rotation remains HELD. Fresh install is covered by the existing migration/bootstrap suites; upgrade and catalogue/runtime attacks by `test/audit-export.integration.test.ts`. Database suites were NOT RUN in the builder sandbox.
+
+## 0122 — ENT-4b origin persistence and audit
+
+Renumbered 0117 → 0122 on 11 October 2026 under the merge-ahead ruling.
+
+Adds `app.extra_event`, `app.extra_duplicate_link` and `app.extra_order_line_link`, owned by `jobguard_migration`, with enabled/FORCE RLS, tenant policy, SELECT/INSERT-only runtime grants and immutable UPDATE/DELETE guards. Adds four SECURITY INVOKER trigger functions, all revoked from PUBLIC/runtime; no callable helper or SECURITY DEFINER routine.
+
+Existing objects extended by addition only: `app.extra_origin` (ten nullable provenance columns, six composite FKs, two CHECKs, partial capture-ID unique index, insert provenance trigger and deferred audit trigger); `app.variation` (four nullable reference columns, two FKs, one CHECK). B5 pricing basis is HELD: a column on a fingerprinted table would change approved evidence packs and needs its own decision. No fingerprinted table is extended. SH-1's command-receipt FK, command map, immutability and `variation_requires_origin` are reused unchanged. Every pre-existing row retains its old values; no backfill, defaults, policy/grant changes or routine replacement.
+
+References existing keys on command receipts, memberships, role grants, work orders/revisions/lines, visits, SoR items, evidence, variations and revisions without altering those objects. Fixture contractor origins retain all-NULL new columns and are exempt from the new audit/logged requirement. Work-order contractor origins require structural provenance and the exact raised audit plus logged event at commit. Prompt provenance and unlink command/authorization remain held.
+
+Forward fix: disable callers of this new repository, preserve all appended records and deploy an additive corrective migration after review. Do not drop populated history or rewrite origins. No destructive rollback SQL is supplied. Database fresh/upgrade/catalog checks were written; sandbox execution is NOT RUN (sandbox cannot start PostgreSQL / a browser). Dispatcher/CI must execute them before acceptance.
+
+## 0130_recovery_eligibility_v3_f17_timing.sql (CH-7-F17-BEFORE-OPEN)
+
+Renumbered from 0125 to 0123 on 11 October 2026 under the merge-ahead ruling because 0120 merged first and 0121 and 0122 were taken by open pull requests (0124 was reserved by PRACTICE-FACTS-1), and renumbered from 0123 to 0130 on 12 October under Ben's 5 October merge-ahead ruling because 0127 (STORED-TIMES-1) and 0128 (SV-2) merged ahead of it and 0129 is reserved by ENT-10d; the SQL bytes are unchanged (sha256 recorded in the builder receipt). Registered last in numeric order, after 0128. Restates only 0119's `app.guard_recovery_eligibility_v3` with `CREATE OR REPLACE`: the existing `paid_before` exclusion now also applies to `duplicate_supplier_payment`. The stored original settlement timestamp at or before (`<=`) case opening gives an excluded F17 candidate, 0p and exactly `Paid before you opened this case`. After opening, settled F17 remains 45,000p with a null reason. No second timing comparison, table/column/policy/grant/trigger change, backfill or row rewrite; function ownership, invoker rights and EXECUTE privileges remain intact. No routine from another migration is replaced.
+
+Upgrade coverage is appended to `test/recovery-eligibility-v3.integration.test.ts`: a separate database is installed through every migration registered before 0130 (the file is found by name, so this includes 0127 and 0128) and saves an F17 candidate for already-settled cash (the 0119 guard accepts it). Migration 0130 is then applied alone and the complete textual review, claim-line and audit rows are compared byte-for-byte straight away. The migration runner then runs twice (it applies anything registered after 0130, which today is nothing, and both runs must succeed), and the rows that existed before 0130 are found again by primary key and compared as canonical database text over their pre-existing column names and full types. A column, row, trigger or function added or replaced by a later migration is not looked at; rolled-back controls using the same comparison show that a one-microsecond change, a retype or a lost row fail it, and that an added column, a replaced function (including one whose body contains `$function$`), a later claim line and a later review pass it. The corrected review is appended against the review revision read from the database at that point. Fresh-install coverage, microsecond boundaries, equal-instant exclusion, complete raw runtime refusal transactions and an after-opening raw-write control are in that same file. **NOT RUN (sandbox cannot start PostgreSQL / a browser).**
+
+Forward fix only: retain immutable saved candidates and audit history, replace the affected routine in a reviewed later migration. An application rollback must keep the timing rule or fail closed against this guard; do not revert the guard to 0119 or rewrite historical Q. CI database/browser execution, fresh Claude Opus review and a separate Sol check on the exact dispatcher commit remain required before acceptance. Synthetic only; no new fee derivation, posting, statement, provider or operational alert.
+
+## 0127 — STORED-TIMES-1 recovery timing pin
+
+Adds one SECURITY INVOKER function, `app.pin_recovery_timing_created_at()`, owned by `jobguard_migration`, `search_path=pg_catalog`, EXECUTE revoked from PUBLIC/runtime, and ordinary BEFORE INSERT row triggers named `a_recovery_timing_pin` on `app.recovery_case` and `app.practice_feed_event`. Every role's insert stores `transaction_timestamp()` instead of a chosen time; the pin fires before the existing source/feed guards. A raw writer's back-dating attempt cannot supply either stored time. No existing routine/hash, column, default, grant, policy or constraint changes; no backfill. Earlier stored times and all history remain unchanged. `CREATE TRIGGER` takes a short table lock.
+
+Runtime UPDATE/DELETE remains denied by 0018/0034 (case) and 0106 (feed), SQLSTATE 42501. The case's merged append-only trigger also refuses owner UPDATE/DELETE with 55000. Infrastructure/identity lack app-schema access (0000/0111). The feed's privilege-only guard suffices at the non-owner business-runtime boundary: runtime cannot grant itself rights, and the merged catalog test pins SELECT/INSERT-only grants. The owner CAN update feed rows; privileged actors can remove triggers. No UPDATE guard is added. Ordinary triggers permit the existing superuser replica-mode UPDATE fixtures; cold whole-cluster restore retains the stored times.
+
+After this pin a raw writer can still back-date by as long as it keeps its own transaction open, because the stored time is the transaction's start. That is bounded, needs raw database access, and is not closed by this order.
+
+Forward fix: never drop or rewrite history; correct by a later reviewed migration. Prior product paths omit these times and retain the same transaction clock. `extra-origin-upgrade.integration.test.ts` must still pass unedited for this change: 0127 only CREATES a new function and preserves every earlier definition. Fresh/upgrade, privilege and F18/F19 coverage is in `test/recovery-timing-pin.integration.test.ts`; database/browser execution is NOT RUN (sandbox cannot start PostgreSQL / a browser). See `docs/contracts/recovery-timing-pin-v1.md` and the builder receipt. Independent RED-lane reviews and acceptance remain pending.
+
+## 0128 — SV-2 shadow persistence and isolation
+
+Renumbered from 0100 to 0118 on 11 October and from 0118 to 0128 on 12 October under Ben's 5 October merge-ahead ruling. 0119 (CH-7), 0120 (ENT-10a), 0121 (ENT-10b), 0122 (ENT-4b) and everything lower have merged; 0123 (CH-7-F17-BEFORE-OPEN), 0124 (PRACTICE-FACTS-1), 0125 (ENT-10d) and 0126 (ENT-3a) are reserved and 0127 (STORED-TIMES-1, PR #142) precedes it in this branch's base, so 0128 is the next free number. The SQL bytes are unchanged by both renumberings (sha256 recorded in the refresh receipt); the runner lists it last.
+
+Expand-only after 0094. Adds eight restricted shadow tables and one append-only
+variation-withdrawal fact, qualified evidence/version/hash/receive-time identity,
+small-builder catch-source enforcement, bounded reveal/disclosure/emergency read
+routines, and a private audit implementation using the existing serialized chain.
+No backfill: SH-1's completed origins and source labels remain unchanged. The
+existing application capture path starts issuing `LogBuilderExtra`; the legacy
+synthetic insert compatibility remains for earlier demos and fixtures.
+
+Fresh superuser installs create the two NOLOGIN shadow roles idempotently. The
+non-superuser Neon bootstrap creates/checks them before migration; migration owner
+remains NOCREATEROLE. PostgreSQL 16 gives that CREATEROLE bootstrap owner an
+automatic ADMIN-only membership in each role it creates (no INHERIT, no SET,
+granted by the bootstrap superuser). The owner cannot revoke it, so it stays; the
+bootstrap accepts exactly that shape, fails closed on any other holder, and the
+support route checks `USAGE` (not `MEMBER`) so the leftover membership grants no
+support authority. No support holder is appointed. Because the schema `app` is
+now usable by these two roles, 0128 revokes PUBLIC EXECUTE from the four older
+SECURITY DEFINER routines that never had it revoked (`advance_final_account_draft`,
+`invalidate_stale_final_account_authorizations`, `reserve_customer_invoice_number`,
+`issue_practice_customer_invoice`); `jobguard_runtime` keeps its explicit grants.
+Runtime has no shadow-table privilege; catch-source probes
+are denied before PostgreSQL's RLS-bypassing FK checks. Emergency reads and every
+disclosure append audit atomically. New facts reject UPDATE/DELETE/TRUNCATE;
+signal source fields and disclosure provenance are immutable/monotonic.
+
+The reveal routine fails closed when SV-4's lock relation is absent. It checks
+only a matching tenant/job lock when present. SV-4 owes positive reveal tests and
+must acquire the job lock before recording the lock/audit; SV-5 adds exact locked
+line/disposition bindings. Neither dependency is simulated with a new lock table.
+
+Forward fix: disable application use of affected routines first, retain evidence,
+origin, disclosure and audit history, then append a reviewed corrective migration.
+Do not down-migrate populated history or weaken the probe barrier. A migration
+failure rolls its SQL transaction back, leaving the predecessor schema intact.
+Before acceptance CI must execute real PostgreSQL fresh/upgrade, least-privilege
+catalog, support disclosure, rollback, immutable metadata, source-FK/probe and
+non-superuser twice-run bootstrap tests, plus unchanged variation/final-account
+and browser regressions. Local sandbox initialization errors are not DB passes.
+
+## 0129 — Single sign-on required (ENT-10d)
+
+Renumbered 0126 → 0125 on 11 October under the merge-ahead ruling (merged numbers end at 0121; 0122, 0123 and 0124 are taken by open pieces). Renumbered from 0125 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
+
+Additive identity/control-plane switch revisions, held emergency rule and approval/use/log records; gated identity routines. Default OFF, no backfill. No object from 0111 or 0120 altered or restated. Deploy this migration before application code. Forward-fix only: retain immutable switch/audit history; an authorized bound admin may append OFF before disabling the feature. Emergency approver latch is not lifted. The private append helper has no identity execute grant.
+
+## 0131 — PRACTICE-FACTS-1 part A
+
+Renumbered from 0124 on 12 October under Ben's 5 October merge-ahead ruling; the SQL bytes are unchanged.
+
+`0131_practice_feed_facts.sql` replaces exactly six catalogue CHECK constraints on
+`practice_feed_command`, `practice_feed_event` and `practice_feed_receipt_match`.
+It retains every existing allowed value and adds **six movement keys** from
+`practiceFactsCatalogueV1` to the command/event movement checks:
+`receipt-12000`, `receipt-14640`, `supplier-payment-600`, `supplier-payment-840`,
+`receipt-interest-120` and `receipt-compensation-70`.
+The receipt-only checks (command match action and receipt-match keys/amounts)
+add **four receipt keys**: `receipt-12000`, `receipt-14640`,
+`receipt-interest-120` and `receipt-compensation-70`.
+Supplier payments cannot match customer receipts. Constraint discovery uses table identity
+and `pg_get_constraintdef` containing `receipt-384`, requiring exactly two matches
+per table; any mismatch aborts the transaction. Each widened replacement keeps
+its discovered original constraint name and validates existing rows, in the
+same transaction. The upgrade test compares all six names, validation flags
+and every old allowed literal before and after 0131.
+
+Creates NO table, column, role, grant, policy, trigger or function. Updates,
+rewrites and deletes NO existing row. Both feed routines remain unchanged.
+The access-exclusive lock and validation scan are the operational migration cost.
+The populated upgrade, row bytes, no-op rerun and unchanged security/routine
+catalogue probes are in `test/practice-facts.integration.test.ts`; they are
+NOT RUN in the builder sandbox (cannot start PostgreSQL). They were later run on the Mac
+(the whole suite once, as part of merge train B) and in GitHub's CI on the merged head
+(pull request #139; acceptance comment 6132008864).
+
+Forward-fix: retain the expanded checks and disable the new route if a defect is
+found. Narrowing the checks is unsafe once new rows exist; do not delete or edit
+append-only facts to roll back. The integrator owns the BUILD_PLAN §12.2 ledger.
+
+## 0132 — SV-4 final-account lock
+
+Renumbered from 0130 to 0132 on 12 October 2026 under the merge-ahead ruling because ENT-10d (0129) and CH-7-F17-BEFORE-OPEN (0130) merged first and 0131 is reserved for PRACTICE-FACTS-1; the SQL bytes are unchanged (sha256 543977d99659b724f9f22ca23279c4b9e6210eb053f599ac3d9ffd8df16b7df7).
+
+`0132_final_account_lock.sql`: SV-4 immutable lock, dispositions, synthetic terms, append-only check facts and invoice/line side bindings; only new lock-bound issue is guarded. No fingerprinted-table columns or existing grants change. Forward-fix by additive migration; do not delete locks or issued invoices.
+
+## 0134 — CH-7-TERMS (proposed synthetic withheld-payment terms)
+
+Adds one migration-owned forced-RLS approval table, the controlled `app.approve_recovery_case_terms` routine and the invoker `app.recovery_case_terms_approved` helper, a server time pin, immutable-row trigger and three ordinary pursuit insert triggers beside the merged guards. No existing column, routine, grant, policy or row is changed. Runtime has SELECT only on approvals and EXECUTE on the two callable functions. Active-owner authorization is checked inside the definer routine as well as by the merged dispatcher (coordinator's 12 October amendment). Decision/receipt/audit paths remain dispatcher-owned.
+
+A builder's agreement to the proposed fee terms for a case is not approval of the fee policy and authorises no charge.
+
+Chasing a withheld payment on a job that is not bound to the v3 fee policy is NOT guarded by this order.
+
+Existing rows are not examined or backfilled. A guarded message approved before this migration but not yet delivered is refused at delivery without terms and follows the merged blocked path. The guard runs at message preview, exact approval and delivery-record insertion, including reminders. A due follow-up is used for the populated upgrade proof's new preview after its earlier delivered message; earlier delivery remains intact. Upgrade tests compare named pre-existing columns as canonical PostgreSQL JSON text and full types, by pre-existing primary-key identity. Rolled-back controls cover a microsecond, retyping, a later nullable column, replaced function and added row; subsequent migrations are applied twice. Database execution is still owed; T8 was ruled on 12 Oct by the coordinator and amended to prove ONE transaction identity with ordered times (never exact equality; the merged audit path takes a fresh `clock_timestamp()` per event while the approval requires `transaction_timestamp()`, so exact equality was never achievable).
+
+Forward fix: preserve all approval and chase history and amend only through a separately reviewed later migration. Do not roll back by removing the guard while pursuits exist. New terms/policy versions and withdrawal require their own reviewed migration and product ruling. DW3, wording, the UI and live M4-5 helper integration remain owed. Real charging remains locked.
+
+## 0135 — site extra authority (ENT-3a)
+
+Renumbered from 0126 to 0135 on 12 October 2026 under the merge-ahead ruling because 0127 to 0129 merged first and 0130 to 0134 are reserved by open pull requests; the SQL bytes are unchanged (sha256 1e3119299e15572885633d5f892f2bc385756589e65a1b280d476f5c5cc74eab).
+
+Additive: only `app.ent3a_extra_authority(uuid,text,uuid)` (STABLE) and
+`app.ent3a_require_extra_authority(uuid,uuid)` (VOLATILE). Both PL/pgSQL,
+SECURITY INVOKER, `search_path=pg_catalog`, owned by `jobguard_migration`.
+PUBLIC and infrastructure EXECUTE revoked explicitly; runtime EXECUTE granted
+only on these two signatures. No merged migration object altered or restated;
+no table or column added, no row changed or backfilled. The founder's 11 October
+raising rule applies through SiteExtraRepository and the ENT-4b seam; ordinary
+ENT-4b writers remain structurally governed only (issued Q5).
+
+The read-only decision selects the lowest covering, unrevoked grant of the
+member's own role. The stored-origin guard holds the shared tenant administration
+lock until commit. Refusals roll back the attempted command; their coalesced audit
+record is appended separately. No business network action, price or fee.
+
+Upgrade/catalogue and governed-path tests: `site-extra-authority.integration.test.ts`
+and `site-extra.integration.test.ts`. NOT RUN in the builder sandbox (cannot start
+PostgreSQL). Integrator must execute before acceptance. They were later executed
+(83 of 83 database tests passing on the combined head, plus GitHub's CI run on that head)
+before the merge (pull request #156, merge c84c6b3; acceptance comment 6136417276). Expand-compatible with
+prior clients. Forward fix preferred: stop this route and issue a reviewed
+additive correction; rollback of this leaf alone requires disabling the route
+and removing its two routines and migration registration under a separate
+operator change. No historical data rollback is needed.
+
+## 0137 — synthetic SCIM deactivation (ENT-10a2)
+
+Adds only `identity.scim_event` (immutable, tenant-qualified, FORCE RLS, no application table privileges) and `identity.scim_deactivate(uuid,jsonb)` (restricted identity EXECUTE only; SECURITY DEFINER with pg_catalog search path). No object from 0111, 0120 or 0129 altered or restated; no backfill; no existing row changed by the migration. No column, index, constraint, policy, trigger or grant added to any existing table. PostgreSQL creates the internal foreign-key enforcement triggers automatically as part of the new table's constraints.
+
+The governed repository transaction writes existing one-way membership/session revocation facts, grant revocations and the record, then appends the audit event last. This is the first product code to set app.membership.revoked_at. Existing request gates remain unchanged. Synthetic database only, replay once, owner protected, no reactivation. Roll forward for any repair; removing the new objects is permissible only before any message has been accepted. Accepted history and revocation facts must never be cleared by rollback. Upgrade proof snapshots populated named columns, full types and primary-key identities before this migration, verifies this migration alone, then applies later migrations twice. Database tests are NOT RUN (sandbox cannot start PostgreSQL / a browser).
+
+## 0136 — recovery allocations (M4-8-S)
+
+Expand-only: adds immutable allocation reviews, line-source bindings, case allocations/reversals, receipt-line fractions and command identities. Runtime SELECT only; session-checked migration-owned `write_recovery_allocation` appends facts and Decision authorizations. No existing object or grant changes. All constraints remain immediate; the public repository transaction invokes the joined case event last and then appends caller audit before commit. Forward fix only after facts exist: disable the allocator, preserve original rows, add compensating facts in a reviewed follow-up migration; do not drop or edit commercial history. Saved deposit and supplementary-invoice fixtures remain Q2-held.
+
+## 0138_practice_session_hardening.sql — contractor practice session boundary
+
+Depends on 0054 and 0094. Converts contractor session values in place into canonical SHA-256 digests and independent random row numbers. Live home records supply the remaining deadline; ended or absent home records end converted rows. New starts with no home record retain a nonrenewable seven-day cap. Lookup reads the home record on every call. Adds holder-only contractor revoke with a deferred audit requirement, write-once guards, and the same owner refusal in grant.create as member.invite. No new direct table write grants; only the checked revoke routine gains runtime EXECUTE.
+
+Forward fix preferred. A rollback restoring the three 0054 routines must also drop the three new NOT NULL requirements and the guard trigger, since the old start writes four columns. No current row retains its original session value, so restoring the old lookup ends every current session; each browser starts a new company. No rows are deleted. PostgreSQL upgrade and catalogue checks remain pending outside the sandbox.
+
+## 0133 — SV-3 shadow detection
+
+Renumbered from 0129 to 0133 on 12 October 2026 under the merge-ahead ruling because 0129 (ENT-10d), 0130 (CH-7-F17) and 0131 (PRACTICE-FACTS-1) merged first and 0132 is SV-4; the SQL bytes are unchanged (sha256 6d317e043790d4bb97acfb91d918b755a0e2ee9a08fdf6cbeefeb26fbdfe5aa6).
+
+`0133_shadow_detection.sql`: SV-3: append-only FORCE-RLS `shadow_must_surface_firing`, shadow-only `surface_shadow_signal_early` EXECUTE, and the single `must_surface_signal` finding kind. Atomic Decision/disclosure/firing/audit; no new business-table grants. Forward fix only: retain immutable firings and disclosures; disable the worker to stop new detections. Database upgrade proof is in `shadow-detection.integration.test.ts`.
+
+## 0139 — site visit start and complete, and the close-out answer (ENT-3b)
+
+Additive: one table and six PL/pgSQL functions, all owned by `jobguard_migration` with `search_path=pg_catalog`. `app.closeout_answer` holds one immutable row per visit (forced row security, the merged `tenant_isolation` policy, runtime SELECT only, update and delete refused by the merged immutable trigger). `app.ent3b_visit_authority(uuid,uuid)` (STABLE, SECURITY INVOKER) is the one place the visit rule lives and calls merged routines only. `app.ent3b_start_visit(uuid,uuid,uuid)` and `app.ent3b_complete_visit(uuid,uuid,uuid,uuid,text)` are the only writers of `app.site_visit` and `app.closeout_answer` (SECURITY DEFINER; they re-decide the rule under the shared tenant administration lock, check the command receipt and take the visit locks 3101 and 3102). `app.ent3b_require_open_visit(uuid,uuid)` (SECURITY INVOKER) is called by the site-extra seam when an extra names a visit. `app.ent3b_closeout_guard()` and `app.ent3b_require_closeout_audit()` are trigger functions, not executable by the runtime role.
+
+One deferred trigger is added to the merged `app.site_visit` table, so that a completed visit without exactly one matching answer (and a visit that has an answer but is not completed) cannot commit for any writer, the table owner included. No column, index, constraint, policy or grant is added to any existing table; no existing object is replaced or removed; no row is changed or backfilled. The application login gains SELECT on the new table and EXECUTE on four functions by an explicit list, and no write grant on any table.
+
+Upgrade proof and catalogue: `site-visit-upgrade.integration.test.ts` and `site-visit-authority.integration.test.ts`. Forward fix preferred: stop the two routes and issue a reviewed correction; the answer table holds records that must be kept. Removing the new objects is permissible only before any visit has been completed through it. No historical data rollback is needed.
+
+## 0140 — site extra pricing (ENT-3c)
+
+Additive only: two new tables, `app.extra_sor_revision` (the server-priced first revision of a schedule-item site extra, one row at most per extra, `revision=1`) and
+`app.extra_pricing_basis` (how a revision's price was reached, keyed by extra and revision number, only `server_sor` for revision 1 can be written here), five routines
+(`app.ent3c_record_sor_revision(uuid,uuid,text,text)`, `app.ent3c_sor_revision_guard()`, `app.ent3c_require_sor_revision_audit()`, `app.ent3c_pricing_basis_guard()`,
+`app.ent3c_require_pricing_basis()`) and triggers on the two new tables only. It needs 0110 and 0122 and calls no ENT-3a routine. No column, index, constraint, policy,
+grant or trigger is added to any existing table, no row of `app.variation_revision` is written, no existing object is replaced or dropped, nothing is backfilled and no existing row changes.
+
+Standard F: the application login holds SELECT only on both new tables. The only writer is the SECURITY DEFINER routine `app.ent3c_record_sor_revision`
+(owner `jobguard_migration`, `search_path=pg_catalog`, EXECUTE granted to `jobguard_runtime` by exact signature, revoked from PUBLIC and infrastructure). It takes no actor,
+rate, price, outcome or time: it reads the stored origin, receipt, variation, baseline revision, schedule item and order lines of the raising transaction, decides the
+order check again, prices the extra quantity alone through the merged `app.sor_line_net_pence`, and runs only while the raising command's own receipt is still processing.
+The two BEFORE INSERT guards bind every writer, the table owner included, and set `content_hash` and `server_recorded_at` themselves; two deferred constraint triggers require
+the raising transaction's one audit event and the basis row at commit. Row security is enabled and forced with the merged two-role tenant policy; the merged immutability
+trigger rejects UPDATE and DELETE.
+
+Forward fix only. Removing the new objects is permissible only before any priced extra has been accepted; accepted history must never be cleared by rollback. Upgrade proof:
+`packages/db/test/site-extra-pricing-upgrade.integration.test.ts` (rule 9 shape). Database tests are written and run on the Mac gate; see the builder receipt for what was run here.
+
+## 0141 — site extra evidence (ENT-3d)
+
+Adds exactly five routines in schema `app` and their EXECUTE grants to `jobguard_runtime` (explicit list, none to PUBLIC or `jobguard_infrastructure`): `ent3d_content_sha256`, `ent3d_confirmation_document`, `ent3d_site_extra_evidence`, `ent3d_record_resident_confirmation` and `ent3d_require_site_extra_evidence`. All are SECURITY INVOKER with a `pg_catalog` search path, owned by `jobguard_migration`. No table, column, index, trigger, constraint, policy or table grant; no existing row changed; no earlier routine replaced. The only writer of a confirmation object is `ent3d_record_resident_confirmation`; it runs with the application login's pre-existing INSERT rights on the two evidence tables (none added) and carries its own authority check (`ent3a_extra_authority`).
+
+Forward fix preferred. A confirmation object is two ordinary evidence rows, so nothing is ever deleted: to stop the feature, stop the v3 body in the application; the five routines can be replaced by a reviewed forward migration. Upgrade proof (`site-extra-evidence.integration.test.ts`, rule 9) snapshots existing rows by named columns, full column types and primary keys before this migration, applies it alone, then applies everything after it twice. The two database files ran against embedded PostgreSQL on the builder's Mac (receipt lists counts); reviewers re-run them.
+
+### 0142 — recovery insurer money (CH-7-INSURER Round 2)
+
+Adds the shared current payer function and append-only, FORCE-RLS payment marks with exact evidence references, timestamp pinning, immutable history and deferred audit completeness. Standard F gives runtime SELECT only; the session-bound controlled writer and job-lock helper each check authority, check/set tenant context and fix search_path. No app.job grant or merged table/column/policy/grant change. Restates only the newest 0130 review guard and 0119 effect trigger, adding Part A's insurer exclusion after paid-before and its line reason, plus F19's individual-interest message and reasonHeld release. A6 derives a required payer fact after the exact payment and job locks and cites current insurer binding/mark IDs in audit. The insurer exclusion has its own reason; F21 remains null/held under the Round 2 ruling. 0142 never rewrites saved reviews or lines; forward-fix is the rollback strategy, retaining readers and mark history. The previous application ignores marks but its insurer review inserts now fail closed; coordinate the three coordinator-owned setup-only payer additions and CI evidence before rollout. PostgreSQL fresh, upgrade, catalog and concurrency checks are NOT RUN in the builder sandbox; rule-9 upgrade proof compares named original F19/F21 rows and full column types, with identity matching and rolled-back controls. No new external alert or provider.

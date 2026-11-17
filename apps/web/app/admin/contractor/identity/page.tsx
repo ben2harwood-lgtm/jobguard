@@ -127,7 +127,69 @@ export default function ContractorIdentityPage() {
           {view.mappings.filter(item => item.connection_id === connectionId).map(item => <p key={`${item.idp_group}:${item.revision}`} data-testid="sso-mapping">{item.idp_group} → {item.role}; {item.scope_kind} {item.scope_id}; revision {item.revision}; {item.enabled ? "enabled" : "disabled"}</p>)}
         </section>
       </>}
+      <SingleSignOnRequired session={session} tenantId={tenantId} />
       <section aria-label="Identity audit events"><h2>Identity audit events</h2><p>Persisted event references for this business.</p>{view?.events.map(event => <p data-testid="sso-event" key={event.id}>{event.event_type} · {event.created_at} · {event.id}</p>)}</section>
     </>}
   </main>;
+}
+
+// ENT-10d is one independent section; existing connection/domain/mapping controls stay unchanged.
+type RequiredState={version:"sso-required-state.v1";environment:"synthetic_demo";tenantId:string;required:boolean;revision:number;unlinkedMembers:number};
+const requiredMessages:Record<string,string>={
+  INVALID_SSO_REQUIRED_INPUT:"Enter a reason between 20 and 500 characters and reload the current revision.",
+  SSO_REQUIRED_FORBIDDEN:"Your current session cannot administer this business.",
+  SSO_REQUIRED_NEEDS_SSO_SESSION:"Use your own single sign-on session to change this requirement.",
+  SSO_REQUIRED_NO_CONNECTION:"A connection needs a verified domain, an enabled mapping and a successful sign-in before you can turn this on.",
+  SSO_REQUIRED_UNLINKED_MEMBERS:"Every active member must link their SAML identity before you can turn this on.",
+  STALE_SSO_REQUIRED:"Another administrator changed the requirement. Reload it before trying again.",
+  SSO_ROUTE_BLOCKED:"Single sign-on administration is available only in the synthetic sandbox.",
+  SSO_EMERGENCY_REFUSED:"Emergency access is unavailable because no approver has been set.",
+  SSO_REQUIRED_UNAVAILABLE:"The requirement could not be confirmed. Reload before making changes.",
+};
+function SingleSignOnRequired({session,tenantId}:{session:Session;tenantId:string}) {
+  const [state,setState]=useState<RequiredState|null>(null),[reason,setReason]=useState("");
+  const [pending,setPending]=useState(false),[stale,setStale]=useState(true),[error,setError]=useState("");
+  const errorRef=useRef<HTMLParagraphElement>(null),generation=useRef(0);
+  useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
+  const parse=(body:unknown):RequiredState=>{
+    const r=body as Partial<RequiredState>|null;
+    if(!r||r.version!=="sso-required-state.v1"||r.environment!=="synthetic_demo"||r.tenantId!==tenantId||typeof r.required!=="boolean"||!Number.isSafeInteger(r.revision)||r.revision!<0||!Number.isSafeInteger(r.unlinkedMembers)||r.unlinkedMembers!<0)throw new Error("SSO_REQUIRED_UNAVAILABLE");
+    return r as RequiredState;
+  };
+  async function load() {
+    const request=++generation.current;setPending(true);setStale(true);setError("");
+    try {
+      const response=await fetch(`/api/auth/sso-required?version=sso-required-view.v1&requested_tenant_id=${encodeURIComponent(tenantId)}`,{cache:"no-store",headers:{"x-csrf-token":session.csrfToken,"x-tenant-id":tenantId}});
+      const body=await response.json();if(!response.ok)throw new Error(body.code??"SSO_REQUIRED_UNAVAILABLE");
+      const result=parse(body);if(request!==generation.current)return;setState(result);setStale(false);
+    }catch(e){if(request===generation.current){setStale(true);setError(requiredMessages[e instanceof Error?e.message:""]??requiredMessages.SSO_REQUIRED_UNAVAILABLE!);}}
+    finally{if(request===generation.current)setPending(false);}
+  }
+  useEffect(()=>{setState(null);void load();return ()=>{generation.current++;};},[tenantId,session.csrfToken]);
+  async function change(required:boolean) {
+    if(pending||stale||!state)return;
+    const request=++generation.current;setPending(true);setError("");
+    try {
+      const response=await fetch("/api/auth/sso-required",{method:"POST",headers:{"content-type":"application/json","x-csrf-token":session.csrfToken,"x-tenant-id":tenantId},body:JSON.stringify({version:"sso-required-command.v1",requested_tenant_id:tenantId,required,expectedRevision:state.revision,reason})});
+      const body=await response.json();if(!response.ok)throw new Error(body.code??"SSO_REQUIRED_UNAVAILABLE");
+      const result=parse(body);if(request!==generation.current)return;setState(result);setStale(false);
+    }catch(e){if(request===generation.current){setStale(true);setError(requiredMessages[e instanceof Error?e.message:""]??requiredMessages.SSO_REQUIRED_UNAVAILABLE!);}}
+    finally{if(request===generation.current)setPending(false);}
+  }
+  const blocked=pending||stale||!state||reason.length<20||reason.length>500;
+  return <section aria-label="Single sign-on required">
+    <h2>Single sign-on required</h2>
+    <p role="note">Practice sandbox — synthetic data; nothing is sent or charged</p>
+    <p>Current state: <span data-testid="sso-required-state">{pending?"Pending":stale?(state?"Stale":"Unknown"):state?.required?"On":"Off"}</span></p>
+    <p>Revision: <span data-testid="sso-required-revision">{state?.revision??"Unknown"}</span>{stale&&state?" (out-of-date)":""}</p>
+    <p>Members without a linked identity: {state?.unlinkedMembers??"Unknown"}{stale&&state?" (out-of-date)":""}</p>
+    <p>Only your own SAML-bound administrator session can change the requirement. Every active member must already have a linked identity before it is turned on.</p>
+    {error&&<p role="alert" ref={errorRef} tabIndex={-1}>{error}</p>}
+    <button type="button" style={field} disabled={pending} onClick={()=>void load()}>Reload single sign-on requirement</button>
+    <label htmlFor="sso-required-reason">Reason for changing single sign-on requirement</label>
+    <textarea id="sso-required-reason" style={{...field,minHeight:88}} minLength={20} maxLength={500} disabled={pending} value={reason} onChange={e=>setReason(e.target.value)} />
+    <button type="button" style={field} disabled={blocked||state?.required===true} onClick={()=>void change(true)}>Turn single sign-on requirement on</button>
+    <button type="button" style={field} disabled={blocked||state?.required===false} onClick={()=>void change(false)}>Turn single sign-on requirement off</button>
+    <p>Emergency access: not available — no approver has been set</p>
+  </section>;
 }

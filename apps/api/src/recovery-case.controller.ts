@@ -20,6 +20,12 @@ export class RecoveryCaseController {
   try { return await new RecoveryCaseApplication(this.pool, practiceCookie(cookie)).command(id, body); }
   catch(error) { const failure = recoveryCommandFailure(error); throw new HttpException(failure.body, failure.status); }
  }
+ @Post("terms")
+ @ApiOperation({ summary: "Record owner agreement to proposed synthetic case fee terms" })
+ async terms(@Param("id") id: string, @Body() body: unknown, @Headers("cookie") cookie?: string) {
+  try { return await new RecoveryCaseApplication(this.pool, practiceCookie(cookie)).terms(id, body); }
+  catch(error) { const failure = recoveryCommandFailure(error); throw new HttpException(failure.body, failure.status); }
+ }
  @Post("eligibility")
  @ApiOperation({ summary: "Review v1/v3 synthetic D03 candidates or approve a v1 review" })
  async eligibility(@Param("id") id: string, @Body() body: unknown, @Req() request: { headers: { cookie?: string } }, @Headers("cookie") _cookie?: string) {
