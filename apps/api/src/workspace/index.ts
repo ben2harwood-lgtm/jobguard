@@ -49,3 +49,7 @@ export * from "../evidence-pack.application.js";
 export * from "../practice-feed.contracts.js";
 export * from "../practice-feed.application.js";
 export * from "../practice-feed.http.js";
+
+export * from "../practice-allocation.contracts.js";
+export * from "../practice-allocation.application.js";
+export * from "../practice-allocation.http.js";

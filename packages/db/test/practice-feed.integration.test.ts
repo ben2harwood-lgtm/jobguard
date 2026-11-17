@@ -35,7 +35,7 @@ beforeAll(async () => {
   admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password });
   // Upgrade from exactly the preceding supported schema, retaining a prior job.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
-  for (const url of MIGRATION_URLS.slice(0, -1)) {
+  for (const url of MIGRATION_URLS.filter(url => url.pathname.split("/").at(-1)! < "0043")) {
     await admin.query(await readFile(url, "utf8"));
     await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]);
   }
@@ -54,7 +54,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
   it("upgrades from 0041, preserves prior rows and applies 0043 once without taking 0042", async () => {
     expect((await admin.query("SELECT title FROM app.job WHERE id=$1", [previousJob])).rows[0].title).toBe("Previous schema job");
     const names = (await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name);
-    expect(names).toHaveLength(43); expect(names.at(-1)).toBe("0043_practice_feed.sql"); expect(names.some(name => name.startsWith("0042"))).toBe(false);
+    expect(names).toHaveLength(MIGRATION_URLS.length); expect(names).toContain("0043_practice_feed.sql"); expect(names.some(name => name.startsWith("0042"))).toBe(false);
   });
   it("persists pending £384, exact settlement and stable source identity without allocation", async () => {
     const f = await connected();

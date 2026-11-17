@@ -55,6 +55,10 @@
     "./practice-feed-contracts": {
       "types": "./src/practice-feed.contracts.ts",
       "import": "./dist/practice-feed.contracts.js"
+    },
+    "./practice-allocation-contracts": {
+      "types": "./src/practice-allocation.contracts.ts",
+      "import": "./dist/practice-allocation.contracts.js"
     }
   },
   "scripts": {

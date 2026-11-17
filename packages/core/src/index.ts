@@ -36,3 +36,5 @@ export * from "./readiness.js";
 export * from "./inbox-relevance.js";
 export * from "./evidence-pack.js";
 export * from "./practice-feed.js";
+
+export * from "./practice-allocation.js";
