@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { classifyReferenceD03, recoveryCaseCommandV1, recoveryEligibilityCommandV1, transitionRecoveryCase, type RecoveryEligibilityCommand, type RecoveryCaseState } from "@jobguard/core";
+import { bindRecoveryMessageCaseSession } from "./recovery-message-repository.js";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -32,10 +33,10 @@ export class RecoveryCaseRepository{
   await db.$client.query("INSERT INTO app.recovery_eligibility_revision(id,tenant_id,job_id,case_id,revision,case_revision,evidence_revision,policy_version,policy_revision,scenario,classification,eligible_net_pence,currency,reason,citations,status,reviewer_ref,command_id,subject_hash,previous_hash)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'GBP',$13,$14,$15,$16,$17,$18,$19)",[randomUUID(),context.tenantId,jobId,input.caseId,revision,caseRevision,row.evidenceRevision,row.policyVersion,row.policyRevision,row.scenario,row.classification,row.eligibleNetPence,row.reason,JSON.stringify(row.citations),row.status,authorizedReviewer,input.commandId,hash,old?.subject_hash??null]);
   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:authorizedReviewer,eventType:`recovery.eligibility.${input.action}`,subjectType:"recovery_case",subjectRef:input.caseId,payload:{references:{jobId,commandId:input.commandId},hashes:{command:hash},classifications:{recovery:"financial"}}}]);
  });return (await this.list(context,jobId)).find(x=>x.id===input.caseId)!}
- async command(context:VerifiedTenantContext,jobId:string,raw:unknown):Promise<RecoveryCaseView>{const input=recoveryCaseCommandV1.parse(raw),hash=digest(input);let caseId="";await withTenant(this.pool,context,async db=>{
+ async command(context:VerifiedTenantContext,jobId:string,raw:unknown,messageSession?:{sessionId:string;membershipId:string}):Promise<RecoveryCaseView>{const input=recoveryCaseCommandV1.parse(raw),hash=digest(input);let caseId="";await withTenant(this.pool,context,async db=>{
   await db.$client.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[context.tenantId,input.action==="open"?jobId:input.caseId]);
   const replay=await db.$client.query<any>("SELECT case_id,payload_hash FROM app.recovery_case_event WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,input.commandId]);
-  if(replay.rowCount){if(replay.rows[0].payload_hash!==hash)throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");caseId=replay.rows[0].case_id;return;}
+  if(replay.rowCount){if(replay.rows[0].payload_hash!==hash)throw new Error("IDEMPOTENCY_PAYLOAD_CONFLICT");caseId=replay.rows[0].case_id;if(messageSession)await bindRecoveryMessageCaseSession(db,context,caseId,messageSession.sessionId,messageSession.membershipId);return;}
   const job=await db.$client.query("SELECT 1 FROM app.job WHERE tenant_id=$1 AND id=$2",[context.tenantId,jobId]);if(!job.rowCount)throw new Error("RECOVERY_JOB_NOT_FOUND");
   if(input.action==="open"){
    caseId=randomUUID();const claimId=randomUUID();
@@ -51,6 +52,7 @@ export class RecoveryCaseRepository{
    else {const next=transitionRecoveryCase({state:x.state, event:input.eventType,claimedPence:Number(x.claimed),landedPence:Number(x.landed),...(input.amountPence===undefined?{}:{amountPence:input.amountPence})});await db.$client.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,amount_pence,reviewer_ref,command_id,payload_hash,previous_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",[randomUUID(),context.tenantId,jobId,caseId,Number(x.event_count)+1,input.eventType,x.state,next.state,input.eventType==="write_off"?next.writtenOffPence:input.amountPence??null,input.reviewerRef,input.commandId,hash,x.previous_hash]);}
    if(input.action==="amend_claim")await db.$client.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash,previous_hash) VALUES($1,$2,$3,$4,$5,'claim_amended',$6,$6,$7,$8,$9,$10)",[randomUUID(),context.tenantId,jobId,caseId,Number(x.event_count)+1,x.state,input.reviewerRef,input.commandId,hash,x.previous_hash]);
   }
+  if(input.action==="open"&&messageSession)await bindRecoveryMessageCaseSession(db,context,caseId,messageSession.sessionId,messageSession.membershipId);
   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:input.reviewerRef,eventType:`recovery.${input.action}`,subjectType:"recovery_case",subjectRef:caseId,payload:{references:{jobId,commandId:input.commandId},hashes:{command:hash},classifications:{recovery:"financial"}}}]);
  });return (await this.list(context,jobId)).find(x=>x.id===caseId)!}
 }

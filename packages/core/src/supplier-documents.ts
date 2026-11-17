@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const supplierFixtureIds = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice"] as const;
+export const supplierFixtureIds = ["materials-B-delivery", "materials-320-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice"] as const;
 export const supplierDocumentIntakeV1 = z.object({
   version: z.literal("supplier-document-intake.v1"),
   fixtureId: z.enum(supplierFixtureIds),
@@ -13,6 +13,7 @@ export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),ac
 export type SupplierDocumentIntake=z.infer<typeof supplierDocumentIntakeV1>;
 
 export const supplierFixtures = {
+  "materials-320-delivery": {type:"delivery",number:"DEL-M320-001",media:"text/plain",bytes:"Practice sandbox — synthetic data; nothing is sent or charged\nFICTIONAL DELIVERY DEL-M320-001\nmaterials-320: 40 each received",pages:1},
   "materials-B-delivery": {type:"delivery",number:"DEL-MB-001",media:"application/pdf",bytes:"%PDF-1.4\nSynthetic delivery: 10 each\n%%EOF",pages:1},
   "materials-B-invoice": {type:"invoice",number:"INV-MB-001",media:"text/plain",bytes:"FICTIONAL SUPPLIER INVOICE INV-MB-001\n10 each @ GBP 25.00\nNET GBP 250.00",pages:1},
   "materials-B-revised-invoice": {type:"invoice",number:"INV-MB-001-R",media:"text/plain",bytes:"FICTIONAL REVISED SUPPLIER INVOICE INV-MB-001-R\n8 each @ GBP 20.00\nNET GBP 160.00",pages:1},
