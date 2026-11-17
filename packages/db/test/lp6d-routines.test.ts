@@ -540,3 +540,20 @@ it("keeps the recovery worker trigger invoker-owned and the delivery port migrat
   expect(sql).toContain("ALTER FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) OWNER TO jobguard_migration;");
   expect(sql).toContain("REVOKE ALL ON FUNCTION app.lp6d_recovery_message_sink_worker(uuid,text) FROM PUBLIC,jobguard_identity,jobguard_infrastructure,jobguard_shadow;");
 });
+
+it("reuses the prerequisite's migration-only presence probe and preserves the worker refusal", () => {
+  const candidate = read("../migrations/0758_lp6e_audit_attribution.sql");
+  const prerequisite = read("../migrations/0753_lp6d_worker_binding_presence.sql");
+  expect(definitions(candidate).some(m => m[1] === "app.lp6e_request_binding_present")).toBe(false);
+  expect(prerequisite).toContain("REVOKE ALL ON FUNCTION app.lp6e_request_binding_present() FROM PUBLIC,jobguard_runtime;");
+  expect(prerequisite).toContain("GRANT EXECUTE ON FUNCTION app.lp6e_request_binding_present() TO jobguard_migration;");
+  const bridge = definitions(candidate).find(m => m[1] === "app.lp6e_append_outbox_audit")![3]!;
+  expect(bridge).toContain("IF app.lp6d_request_bound() OR app.lp6e_request_binding_present() THEN\n  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;");
+  expect(bridge.indexOf("REQUEST_BINDING_REFUSED")).toBeLessThan(bridge.indexOf("FROM app.action_outbox"));
+  const resolver = definitions(candidate).find(m => m[1] === "app.lp6e_audit_context")![3]!;
+  expect(resolver).toContain("IF app.lp6e_request_binding_present() THEN");
+  expect(resolver).not.toContain("EXCEPTION");
+  expect(candidate).toContain("ALTER FUNCTION app.lp6e_audit_context() OWNER TO jobguard_migration;");
+  expect(candidate).toContain("REVOKE ALL ON FUNCTION app.lp6e_audit_context() FROM PUBLIC,jobguard_runtime");
+  expect(classification["app.lp6e_request_binding_present()"]).toMatch(/^Private to jobguard_migration/u);
+});

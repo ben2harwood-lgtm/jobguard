@@ -11,6 +11,11 @@ function expectRelationsUnchanged(before:Relation[],after:Relation[],laterAcl:Se
   columns:(row.columns as {attname:string}[]).filter(c=>!['quote_document_id','quote_document_version','quote_document_hash'].includes(c.attname)),
   constraints:(row.constraints as {name:string}[]).filter(c=>!['customer_portal_grant_quote_complete','customer_portal_grant_quote_document_fk'].includes(c.name)),
  }:row);
+ // LP-6e 0758 widens only the audit version CHECK by exactly 'audit.v3'; map that one definition back.
+ after=after.map(row=>row.nspname==='app'&&row.relname==='audit_event'?{...row,
+  constraints:(row.constraints as {name:string;definition:string}[]).map(c=>c.name==='audit_event_version_check'
+   ?{...c,definition:c.definition.replace("'audit.v2'::character varying, 'audit.v3'::character varying]","'audit.v2'::character varying]")}:c),
+ }:row);
  for(const row of before){
   if(!laterAcl.has(`${row.nspname}.${row.relname}`)){expect(after).toContainEqual(row);continue;}
   // A later GRANT/REVOKE may also be column-level (0740 REVOKE UPDATE(revoked_at) ON app.action_authorization),
@@ -102,6 +107,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const after=await predecessorCatalogue(h.admin);
  const delegationSql=await readFile(new URL('../migrations/0724_lp6c_customer_portal_delegation.sql',import.meta.url),'utf8');
  const delegationProof=JSON.parse(await readFile(new URL('./migration-proofs/0724_lp6c_customer_portal_delegation.proof.json',import.meta.url),'utf8'));
+ const lp6eProof=JSON.parse(await readFile(new URL('./migration-proofs/0758_lp6e_audit_attribution.proof.json',import.meta.url),'utf8'));
  // Pin the exact new scope shape while retaining every raw predecessor attribute.
  const isBinding=(r:Relation)=>r.nspname==='control_plane'&&r.relname==='request_binding';
  type Column={attname:string;attnum:number;attnotnull:boolean;[key:string]:unknown};
@@ -242,6 +248,9 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const bindingReaders=new Set(['app.current_actor','app.current_tenant']);
  for(const row of catalogue.routines){
   const expected={...row,proacl:lp6cRoutineAcl(row)};
+  // LP-6e 0758 adds only the proof-pinned audit-writer EXECUTE on the two binding readers.
+  const lp6e=lp6eProof.upgrade.find((e:{section:string;after?:{nspname:string;proname:string;args:string}})=>e.section==='routines'&&e.after?.nspname===row.nspname&&e.after.proname===row.proname&&e.after.args===row.args);
+  if(lp6e&&lp6e.before){expect(expected.proacl).toBe(lp6e.before.proacl);expected.proacl=lp6e.after.proacl;}
   if(row.nspname==='identity'&&row.proname==='customer_portal_use') {
    const change=delegationProof.upgrade.find((entry:{section:string;after?:{nspname:string;proname:string}})=>entry.section==='routines'&&entry.after?.nspname==='identity'&&entry.after.proname==='customer_portal_use');
    expect(row.proacl).toBe(change.before.proacl);

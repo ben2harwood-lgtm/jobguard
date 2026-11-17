@@ -1,4 +1,5 @@
 {
+  "app.lp6e_append_outbox_audit(jsonb)": "Reviewed LP-6e migration-owned lower-trust queued outbox audit port; refuses bound or binding-present requests; existing queue-tenant-trust hold until LP-10",
   "app.accept_final_check_terms(uuid,uuid,uuid,text)": "LP-6d",
   "app.accept_rate_suggestion(uuid,text,jsonb)": "Reviewed 0609_rate_suggestion_acceptance.sql: calls app.ch5_import_actor",
   "app.accounting_export(uuid,text,text,text,jsonb)": "LP-6d",
@@ -342,5 +343,6 @@
   "app.quote_reference_requires_preview()": "Trigger only (0738_quote_firm_sequence.sql): deferred constraint trigger; runtime has no EXECUTE",
   "app.practice_owner_digest(text,uuid)": "Reviewed 0741_identity_linked_practice.sql: calls app.authenticate_practice_session; read-only owner-digest lookup",
   "app.lp6d_recovery_message_sink_worker(uuid,text)": "Reviewed LP-6d LP-10 recovery-sink hold: actor-less synthetic queue route refuses bound requests, inserts only stored approved message fields through unchanged sink checks; existing queue-tenant-trust named hold until LP-10 worker credentials",
-  "app.lp6e_request_binding_present()": "Private to jobguard_migration (plus binding owner), never runtime EXECUTE; LP-6e r3 boolean presence probe: binding-owner, environment/current transaction only, deliberately ignores expiry; only actor-less worker refusals consume it in 0757. LP-6e audit bridge and LP-10 remain separate."
+  "app.lp6e_request_binding_present()": "Private to jobguard_migration (plus binding owner), never runtime EXECUTE; LP-6e r3 boolean presence probe: binding-owner, environment/current transaction only, deliberately ignores expiry; only actor-less worker refusals consume it in 0757. LP-6e audit bridge and LP-10 remain separate.",
+  "app.lp6e_audit_context()": "Reviewed source: private migration-owned optional audit context resolver; EXECUTE only for audit writer and owner; present invalid bindings never fall back"
 }

@@ -1,3 +1,4 @@
+import { assertV3AuditChain } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { cluster, type Cluster } from "./extra-fixtures.js";
@@ -68,8 +69,9 @@ it("switches only the exact job/company, preserves historic artifacts/IDs, preve
  otherJob.source.sourceId = otherJob.scope.sourceId = otherJob.target.sourceId = "demo-unrelated";
  await c.admin.query("INSERT INTO app.accounting_export_fixture(tenant_id,source_id,artifact,consent_expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')", [f.a.tenantId, "demo-unrelated", otherJob]);
  expect(await f.call("preview", "demo-unrelated")).toMatchObject({ artifact: { route: "codat" } });
- const audit = (await c.admin.query("SELECT version,payload->'references'->>'auditTrust' trust FROM app.audit_event WHERE tenant_id=$1 AND event_type='accounting_export.route_change'", [f.a.tenantId])).rows;
- expect(audit).toEqual([{ version: "audit.v2", trust: "checked_operation" }]);
+ const audit = (await c.admin.query("SELECT version,actor_ref,payload->'references'->>'auditActorKind' actor_kind,payload->'references'->>'auditTrust' trust FROM app.audit_event WHERE tenant_id=$1 AND event_type='accounting_export.route_change'", [f.a.tenantId])).rows;
+ await assertV3AuditChain(c.admin, f.a.tenantId);
+ expect(audit).toEqual([{ version: "audit.v3", actor_ref: `membership:${f.a.actorId}`, actor_kind: "bound_member", trust: "checked_operation" }]);
 });
 it("racing distinct confirms change once; reused decisions and altered command replay are refused", async () => {
  const f = await setup(), approval = await f.confirmation();

@@ -46,6 +46,9 @@ describe("PostgresReservationStore transaction adapter", () => {
     const f = setup();
     expect(await f.store.transaction(ctx.tenantId, async (_book, sources) => sources.collection(id(5), id(6)))).toMatchObject({ tenantId: ctx.tenantId });
     expect(f.sources).toHaveBeenCalledWith(f.db);
+    // Preserve the exact credential-bearing context through the in-transaction writer.
+    expect(mocks.withTenant).toHaveBeenCalledWith(expect.anything(), f.context, expect.any(Function));
+    expect(f.query.mock.calls.some(([sql]) => sql.includes("lp6e_append_outbox_audit") || sql.includes("to_regprocedure"))).toBe(false);
     expect(f.query.mock.calls.map(([sql]) => sql.split(" ")[0])).toEqual(["INSERT", "SELECT", "SELECT", "SELECT"]);
     expect(f.query.mock.calls[1]![0]).toContain("app.lock_fee_reservation_book");
     expect(f.query.mock.calls.at(-1)![0]).toContain("$3::jsonb");
