@@ -764,3 +764,11 @@ request/assertion identities, links, revocations and audit records. Repair forwa
 with a separately numbered migration. Do not drop identity/audit history or rewrite
 an already applied migration. No real-provider rollout or D04/G5 approval follows
 from migration success.
+
+## 0123_recovery_eligibility_v3_f17_timing.sql (CH-7-F17-BEFORE-OPEN)
+
+Renumbered from 0125 to 0123 on 11 October 2026 under the merge-ahead ruling because 0120 merged first and 0121 and 0122 are taken by open pull requests (0124 is reserved by PRACTICE-FACTS-1); registered after 0120 in numeric order. Restates only 0119's `app.guard_recovery_eligibility_v3` with `CREATE OR REPLACE`: the existing `paid_before` exclusion now also applies to `duplicate_supplier_payment`. The stored original settlement timestamp at or before (`<=`) case opening gives an excluded F17 candidate, 0p and exactly `Paid before you opened this case`. After opening, settled F17 remains 45,000p with a null reason. No second timing comparison, table/column/policy/grant/trigger change, backfill or row rewrite; function ownership, invoker rights and EXECUTE privileges remain intact. No routine from another migration is replaced.
+
+Upgrade coverage is appended to `test/recovery-eligibility-v3.integration.test.ts`: a separate database installed through 0119 saves an F17 candidate for already-settled cash, then runs the migration runner twice and compares complete textual review, claim-line and audit rows byte-for-byte before appending a corrected review. Fresh-install coverage, microsecond boundaries, equal-instant exclusion, complete raw runtime refusal transactions and an after-opening raw-write control are in that same file. **NOT RUN (sandbox cannot start PostgreSQL / a browser).**
+
+Forward fix only: retain immutable saved candidates and audit history, replace the affected routine in a reviewed later migration. An application rollback must keep the timing rule or fail closed against this guard; do not revert the guard to 0119 or rewrite historical Q. CI database/browser execution, fresh Claude Opus review and a separate Sol check on the exact dispatcher commit remain required before acceptance. Synthetic only; no new fee derivation, posting, statement, provider or operational alert.

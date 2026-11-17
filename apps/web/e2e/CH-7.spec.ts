@@ -69,3 +69,14 @@ test("a duplicate-payment case offers no v1 review controls and refuses a v1 com
  expect(refused.status()).toBe(400);expect(await refused.json()).toMatchObject({code:"ELIGIBILITY_FIXTURE_MISMATCH"});
  expect((await get(page,`/api/jobs/${jobId}/recovery-cases`)).cases.at(-1).eligibility).toBeNull();
 });
+
+test("F17 refund settled before opening shows the existing timing exclusion through Review v3 F17",async({page})=>{
+ await confirmCapturedScope(page);const jobId=(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;
+ const path=`/api/jobs/${jobId}/practice-feed`;
+ const feed=await post(page,path,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:0,action:"connect"});
+ await post(page,path,{version:"practice-feed-command.v1",commandId:randomUUID(),expectedRevision:feed.revision,action:"advance",movement:"supplier-refund-540",step:"settled"});
+ await page.getByRole("button",{name:"Open duplicate supplier payment",exact:true}).click();
+ await page.getByRole("article",{name:"Selected recovery case"}).waitFor();
+ await page.getByRole("button",{name:"Review v3 F17",exact:true}).click();
+ await expect(page.getByTestId("v3-reason")).toHaveText("Paid before you opened this case");
+});

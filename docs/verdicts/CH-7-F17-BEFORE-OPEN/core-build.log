@@ -1,0 +1,17 @@
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/core
+   • Running build in 1 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/core:build: cache miss, executing 14d84c10064d376f
+@jobguard/core:build: 
+@jobguard/core:build: > @jobguard/core@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-7-f17-before-open/packages/core
+@jobguard/core:build: > tsc -p tsconfig.json
+@jobguard/core:build: 
+
+ Tasks:    1 successful, 1 total
+Cached:    0 cached, 1 total
+  Time:    4.35s 
+
+ WARNING  IO error: Operation not permitted (os error 1)

@@ -47,6 +47,9 @@ export function recoveryFixtureDefinitionV3(fixture:RecoveryEligibilityFixtureV3
 export function evaluateRecoveryEligibilityV3(raw:unknown):RecoveryEligibilityViewV3 {
  const parsed=recoveryEligibilityFactsV3.safeParse(raw);if(!parsed.success)throw new RecoveryEligibilityV3Error("INVALID_COMMAND");
  const f=parsed.data,definition=recoveryFixtureDefinitionV3(f.fixture);
+ // CH-7 owns refund timing; SV-1's supplier predicate has no timing input.
+ // The repository supplies PostgreSQL's original-settlement <= opening decision.
+ const refundBeforeOpening=definition.category==="duplicate_supplier_payment"&&f.paymentTiming==="before_opening";
  const lines=definition.lines.map((line,index)=>{
   const binding={tenantId:f.tenantId,jobId:f.jobId,workId:f.caseId,lineId:`${f.caseId}:${index}`};
   const base={version:"shadow-eligibility.v1",policyVersion:"reference_recovery_eligibility_policy_v3",environment:"synthetic_reference",...binding,caseId:f.caseId,approvedCase:true,unresolvedDispute:false,
@@ -57,11 +60,11 @@ export function evaluateRecoveryEligibilityV3(raw:unknown):RecoveryEligibilityVi
    definition.category==="prevention"?{category:definition.category}:{category:definition.category,mode:"applied_credit",credit:{consumedNetPence:line.netPence,laterInvoiceId:f.jobId,laterInvoicePayment:f.fixture==="F16-partial"?"partial":f.fixture==="F21"?"unpaid":"full",sourceRef:f.sourceRef}};
   const result=evaluateRecoveryEligibility(createEligibilityFacts({...base,...specifics}));
   const reason:RecoveryEligibilityViewV3["reason"]=f.fixture==="F22"?"Prevented spending is not recovered cash":
-   f.fixture==="F20"||definition.category==="withheld_customer_payment"&&f.paymentTiming==="before_opening"?"Paid before you opened this case":
+   refundBeforeOpening||f.fixture==="F20"||definition.category==="withheld_customer_payment"&&f.paymentTiming==="before_opening"?"Paid before you opened this case":
    line.kind==="fixed_compensation"?"Fixed statutory compensation is not part of the fee base":
    f.fixture==="F15"?"Credit note below the £250 minimum":f.fixture==="F16-partial"?"Credit note used against an invoice not yet paid in full":f.fixture==="F21"?null:
    f.settlement==="pending"?"Pending money cannot qualify":f.settlement==="unverified"?"A manual payment record is not settlement evidence":null;
-  return {...line,qualifyingPrincipal:moneyFromBigInt(parseExactPence(result.qualifyingPrincipal).numerator),reason,reasonHeld:f.fixture==="F21"||line.kind==="statutory_interest"&&line.debtorType==="individual"};
+  return {...line,qualifyingPrincipal:moneyFromBigInt(refundBeforeOpening?0n:parseExactPence(result.qualifyingPrincipal).numerator),reason,reasonHeld:f.fixture==="F21"||line.kind==="statutory_interest"&&line.debtorType==="individual"};
  });
  const q=sumExactPence(lines.map(l=>exactPence(BigInt(l.qualifyingPrincipal.pence))));
  return recoveryEligibilityViewV3.parse({version:"recovery-eligibility-review.v3",policyVersion:"reference_recovery_eligibility_policy_v3",fixture:f.fixture,outcome:q.numerator>0n?"eligible_for_review":"excluded",qualifyingPrincipal:moneyFromBigInt(q.numerator),reason:lines.find(l=>l.reason!==null)?.reason??null,reasonHeld:lines.some(l=>l.reasonHeld),terminal:f.fixture==="F22",productionEnabled:false,lines});

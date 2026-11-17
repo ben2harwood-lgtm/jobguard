@@ -1,0 +1,21 @@
+PASS: 24 changed/untracked paths fit the issued lane (including this log).
+PASS: one added lane line; 0119 unchanged; all existing test bodies and expected values byte-identical.
+PASS: guard equals 0119 plus exactly CREATE OR REPLACE and the single F17 category extension; one unchanged timing comparison.
+Source inspection only; not PostgreSQL execution or an independent review.
+--- 0119 guard
++++ 0125 guard
+@@ -1,4 +1,4 @@
+-CREATE FUNCTION app.guard_recovery_eligibility_v3() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
++CREATE OR REPLACE FUNCTION app.guard_recovery_eligibility_v3() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
+ DECLARE c app.recovery_case_current; e app.practice_feed_event; r app.recovery_eligibility_v3_review;
+  digest text:=nullif(current_setting('app.practice_material_digest',true),'');
+  expected_q bigint:=0; expected_reason text; expected_category text; expected_kind text;
+@@ -50,7 +50,7 @@
+  IF NEW.fixture='F15' THEN expected_reason:='Credit note below the £250 minimum';
+  ELSIF NEW.fixture='F22' THEN expected_reason:='Prevented spending is not recovered cash';
+  ELSIF NEW.fixture='F21' THEN expected_reason:=NULL;
+- ELSIF coalesce(paid_before,false) AND c.case_type='withheld_customer_payment' THEN expected_reason:='Paid before you opened this case';
++ ELSIF coalesce(paid_before,false) AND c.case_type IN('withheld_customer_payment','duplicate_supplier_payment') THEN expected_reason:='Paid before you opened this case';
+  ELSIF NOT coalesce(settled,false) THEN expected_reason:='Pending money cannot qualify';
+  ELSE expected_q:=CASE NEW.fixture WHEN 'F17' THEN 45000 WHEN 'F18' THEN 262000 WHEN 'F19' THEN 250000 ELSE 0 END;
+   expected_reason:=CASE WHEN NEW.fixture IN('F18','F19') THEN 'Fixed statutory compensation is not part of the fee base' ELSE NULL END;
