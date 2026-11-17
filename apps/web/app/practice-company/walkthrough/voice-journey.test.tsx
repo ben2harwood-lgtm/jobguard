@@ -346,20 +346,25 @@ describe("REAL-WALK-PAYOFF screen actions", () => {
   expect(click).toHaveBeenCalledTimes(saved ? 0 : 1);
  });
  it.each([false, true])("confirms and prices its own row without approving or duplicating it: already priced %s", async priced => {
-  let answered = priced, editing = false, refreshed = false;
+  let answered = priced, editing = false, refreshed = false, finalCheckBusy = true, readinessReads = 0;
   const presses: string[] = [];
   const row = { textContent: "fitted loft hatch", scrollIntoView: vi.fn(), querySelectorAll: (selector: string) => selector === ".variation-revision" ? priced ? [{ querySelector: () => ({ textContent: "Price revision 2 · £300.00" }) }] : [] : ["Change price", "Save new proposed revision"].map(name => ({ textContent: name, disabled: false, click: () => { presses.push(name); editing = name === "Change price"; } })) };
   const finding = { textContent: "fitted loft hatch", querySelector: () => answered ? {} : null };
   const previousWorkspace = {}, nextWorkspace = {};
   const refresh = vi.fn();
   vi.stubGlobal("document", { getElementById: (id: string) => id === "walk-refresh" ? { click: refresh } : {
-   querySelector: (selector: string) => selector === "#captured-job-workspace" ? refreshed ? nextWorkspace : previousWorkspace : selector.includes("final-check-item") ? finding : selector.includes("final-check-disposition") ? answered ? {} : null : editing ? {} : null,
+   querySelector: (selector: string) => selector === "#captured-job-workspace" ? refreshed ? nextWorkspace : previousWorkspace
+    : selector.includes("final-check-reveal") ? { getAttribute: () => { readinessReads++; return String(finalCheckBusy); } }
+    : selector.includes("final-check-item") ? finding : selector.includes("final-check-disposition") ? answered ? {} : null : editing ? {} : null,
    querySelectorAll: () => [row],
   } });
   const fill = vi.spyOn(screenActions, "fill").mockResolvedValue();
   const click = vi.spyOn(screenActions, "click").mockImplementation(async name => { expect(name).toBe("Yes — this was extra work"); answered = true; });
   let finished = false;
   const action = priceFoundExtra({} as HTMLElement, new AbortController().signal).then(() => { finished = true; });
+  await vi.waitFor(() => expect(readinessReads).toBeGreaterThan(0));
+  expect(refresh).not.toHaveBeenCalled();
+  finalCheckBusy = false;
   await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   expect(finished).toBe(false);
   expect(presses).toEqual([]); // The old row is still visible while refresh commits.
