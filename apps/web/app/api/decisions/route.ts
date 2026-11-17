@@ -11,6 +11,7 @@ function failure(error: unknown) {
       case "NOT_FOUND": return NextResponse.json({ code: "NOT_FOUND" }, { status: 404 });
       case "CONFLICT": return NextResponse.json({ code: "CONFLICT" }, { status: 409 });
       case "INVALID_COMMAND":
+      case "REQUEST_BINDING_REFUSED":
       case "STALE_REVISION":
       case "IDEMPOTENCY_CONFLICT":
       case "VARIATION_REVISION_CONFLICT":

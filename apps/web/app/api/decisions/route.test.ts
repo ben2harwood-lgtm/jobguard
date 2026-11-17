@@ -195,3 +195,13 @@ it("preserves successful dismissal and command body", async () => {
   expect(stub.evaluate).not.toHaveBeenCalled();
   expect(response.cookies.get("jg_decision_job")).toBeUndefined();
 });
+
+it("preserves the evaluate REQUEST_BINDING_REFUSED public response", async () => {
+  stub.evaluate.mockRejectedValue(Object.assign(new Error("REQUEST_BINDING_REFUSED"), { code: "42501" }));
+  const response = await POST(postRequest(evaluation));
+  expect(response.status).toBe(400);
+  expect(await response.text()).toBe('{"code":"REQUEST_BINDING_REFUSED"}');
+  expect(stub.evaluate).toHaveBeenCalledExactlyOnceWith(evaluation);
+  expect(stub.dismiss).not.toHaveBeenCalled();
+  expect(response.cookies.get("jg_decision_job")).toBeUndefined();
+});
