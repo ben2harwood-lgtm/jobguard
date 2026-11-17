@@ -94,7 +94,7 @@ const APPROVED_PRACTICE_FILES = [
 const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   // Renewed caller source review 6 Nov 2026, later-safety-108 repair 4: v1 ownership now requires the succeeded import receipt.
   // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
-  "packages/db/src/practice-session.ts": "49c6c2dadcaa0412208dbce6585c0e30a283b4d4c3b98b50179eec3bad054729",
+  "packages/db/src/practice-session.ts": "ca87026313b99e833e4145ba853c021bb0ffbebcd76279510155cfc62a64de56",
   "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
   "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
   // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.

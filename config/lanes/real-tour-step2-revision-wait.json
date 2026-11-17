@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-tour-step2-revision-wait": {
+      "branches": ["codex/sandbox/real-tour-step2-revision-wait"],
+      "allow": [
+        "apps/web/e2e/real-tour-one-saved-job-now.spec.ts"
+      ]
+    }
+  }
+}
