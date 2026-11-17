@@ -2,7 +2,7 @@ import { isRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import {
-  addMoney, money, candidateM1TaxPolicy, allocateGroupTax,
+  addMoney, money, candidateM1TaxPolicy, allocateGroupTax, allocateSignedInvoiceTax,
   createFinalAccountLockSnapshot, verifyFinalAccountLockSnapshot, assertFinalAccountInvoiceGuard,
   FINAL_ACCOUNT_DECLARATION_VERSION, FINAL_CHECK_TERMS_VERSION,
   JobWorkStateError, FinalAccountLockError, type FinalAccountLockErrorCode, type FinalAccountLockHashes,
@@ -111,13 +111,18 @@ export class FinalAccountLockRepository {
   const view = await this.read(context,c.jobId);
   assertFinalAccountInvoiceGuard(c.invoiceKind,view.lock ? { id:view.lock.id,tenantId:context.tenantId,jobId:c.jobId,serverTimestamp:view.lock.lockedAt } : null,view.check);
   try { return await withTenant(this.pool, context, async db => {
+   // Existing immutable receipts may predate the signed split. SQL still
+   // authenticates and validates the exact payload before returning a replay.
+   const priorInvoice = (await db.$client.query<{ invoice_id: string }>("SELECT result->>'invoiceId' invoice_id FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2 AND status='succeeded'", [context.tenantId,c.commandId])).rows[0]?.invoice_id;
    const result = (await db.$client.query<{ result: { invoiceId: string; invoiceNumber: string; netPence: number; taxPence: number; totalPence: number; pdfSha256: string; sourceHash: string; invoiceKind: string; lockId: string } }>(`SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,$6,$7,$8::date,$9) result`,[context.tenantId,c.jobId,c.finalAccountRevisionId,c.actorMembershipId,c.commandId,c.invoiceKind,c.recipient,c.issuedOn,c.expectedSourceHash])).rows[0]!.result;
    // Reuse the merged exact money and tax primitives; disagreement rolls back every issue effect.
    const lines = (await db.$client.query<{ final_account_line_id: string; net_pence: string; tax_pence: string; gross_pence: string }>(`SELECT final_account_line_id,net_pence::text,tax_pence::text,gross_pence::text FROM app.final_account_invoiced_line WHERE tenant_id=$1 AND job_id=$2 AND invoice_id=$3 ORDER BY final_account_line_id`,[context.tenantId,c.jobId,result.invoiceId])).rows;
    const net = lines.reduce((sum,l)=>addMoney(sum,money(Number(l.net_pence))),money(0));
    const tax = candidateM1TaxPolicy.calculateGroup(net,"standard_rate_20");
-   const allocation = lines.every(l=>Number(l.net_pence)===0) ? new Map(lines.map(l=>[l.final_account_line_id,money(0)])) : allocateGroupTax(tax,lines.map(l=>({id:l.final_account_line_id,net:money(Number(l.net_pence))})));
-   if (net.pence!==result.netPence || tax.pence!==result.taxPence || addMoney(net,tax).pence!==result.totalPence || lines.some(l=>allocation.get(l.final_account_line_id)?.pence!==Number(l.tax_pence) || addMoney(money(Number(l.net_pence)),money(Number(l.tax_pence))).pence!==Number(l.gross_pence))) throw new Error("INVOICE_AMOUNT_INVALID");
+   const allocation = allocateSignedInvoiceTax(tax,lines.map(l=>({id:l.final_account_line_id,net:money(Number(l.net_pence))})));
+   const matches = (split: ReadonlyMap<string, { readonly pence: number }>) => lines.every(l=>split.get(l.final_account_line_id)?.pence===Number(l.tax_pence));
+   const historicalReplay = priorInvoice===result.invoiceId && !matches(allocation) && matches(allocateGroupTax(tax,lines.map(l=>({id:l.final_account_line_id,net:money(Number(l.net_pence))}))));
+   if (net.pence!==result.netPence || tax.pence!==result.taxPence || addMoney(net,tax).pence!==result.totalPence || (!matches(allocation) && !historicalReplay) || lines.some(l=>addMoney(money(Number(l.net_pence)),money(Number(l.tax_pence))).pence!==Number(l.gross_pence))) throw new Error("INVOICE_AMOUNT_INVALID");
    return result;
   }); } catch (error) {
    // Classify only the new revoked-member replay refusal, after SQL's original

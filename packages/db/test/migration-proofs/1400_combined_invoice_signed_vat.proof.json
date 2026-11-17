@@ -1,0 +1,92 @@
+{
+  "migration": "1400_combined_invoice_signed_vat.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.action_authorization",
+          "app.action_outbox",
+          "app.command_receipt",
+          "app.customer_invoice",
+          "app.customer_invoice_evidence",
+          "app.customer_invoice_sequence",
+          "app.decision",
+          "app.decision_resolution",
+          "app.final_account_invoice_binding",
+          "app.final_account_invoiced_line"
+        ],
+        "staticCalls": [
+          "app.append_final_lock_audit",
+          "app.begin_command",
+          "app.ch4_require_open",
+          "app.complete_command",
+          "app.current_actor",
+          "app.current_tenant",
+          "app.final_check_require_invoice_actor",
+          "app.final_lock_canonical",
+          "app.final_lock_hash",
+          "app.final_lock_require_owner",
+          "app.j3_require_combined_revision",
+          "app.lp5_bind_effect",
+          "app.require_authoritative_final_check",
+          "app.require_current_job_parties"
+        ]
+      },
+      "after": {
+        "identity": "function:app.issue_lock_bound_customer_invoice(uuid,uuid,uuid,uuid,uuid,text,text,date,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.action_authorization",
+          "app.action_outbox",
+          "app.command_receipt",
+          "app.customer_invoice",
+          "app.customer_invoice_evidence",
+          "app.customer_invoice_sequence",
+          "app.decision",
+          "app.decision_resolution",
+          "app.final_account_invoice_binding",
+          "app.final_account_invoiced_line"
+        ],
+        "staticCalls": [
+          "app.append_final_lock_audit",
+          "app.begin_command",
+          "app.ch4_require_open",
+          "app.complete_command",
+          "app.current_actor",
+          "app.current_tenant",
+          "app.final_check_require_invoice_actor",
+          "app.final_lock_canonical",
+          "app.final_lock_hash",
+          "app.final_lock_require_owner",
+          "app.j3_require_combined_revision",
+          "app.lp5_bind_effect",
+          "app.require_authoritative_final_check",
+          "app.require_current_job_parties"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

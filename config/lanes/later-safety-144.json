@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-144": {
+      "branches": [
+        "codex/sandbox/later-safety-144"
+      ],
+      "note": "LATER-SAFETY-144 RED: signed combined-invoice VAT; stacked on LP-6c.",
+      "allow": [
+        "packages/core/src/tax.ts",
+        "packages/core/src/tax.test.ts",
+        "packages/db/src/final-account-lock-repository.ts",
+        "packages/db/test/final-account-lock-invoice.integration.test.ts",
+        "packages/db/migrations/1400_combined_invoice_signed_vat.sql",
+        "packages/db/test/migration-proofs/1400_combined_invoice_signed_vat.proof.json"
+      ]
+    }
+  }
+}
