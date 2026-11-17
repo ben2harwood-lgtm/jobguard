@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-157": {
+      "branches": [
+        "codex/sandbox/later-safety-157"
+      ],
+      "allow": [
+        "packages/db/migrations/0751_accounting_export_attempt_reconciliation.sql",
+        "packages/db/test/migration-proofs/0751_accounting_export_attempt_reconciliation.proof.json",
+        "packages/db/migration-notes/0751_accounting_export_attempt_reconciliation.md",
+        "packages/db/test/accounting-export-attempt-reconciliation.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/lp6d-routines.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -11,10 +11,10 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { approvedSimulation, command, count, issue, meterCompany, meterInput, rows, storeMeter, terms, type SubscriptionCompany } from "./subscription-persistence-fixtures.js";
 import { rolledBack, snapshotRows } from "./upgrade-proof-utils.js";
 
-const stem = "0754_subscription_attempt_reconciliation";
+const stem = "0756_subscription_attempt_reconciliation";
 const signature = "app.mon2_command(uuid,text,uuid,jsonb)";
 const migration = readFileSync(new URL(`../migrations/${stem}.sql`, import.meta.url), "utf8");
-const predecessor = readFileSync(new URL("../migrations/0752_subscription_pending_downgrade.sql", import.meta.url), "utf8");
+const predecessor = readFileSync(new URL("../migrations/0755_subscription_pending_downgrade.sql", import.meta.url), "utf8");
 const oldGuard = "  IF work.id IS NULL OR work.agreement_revision<>current_revision OR NOT app.mon2_authorized(t,work.authorization_id,current_revision) THEN RAISE EXCEPTION 'SUBSCRIPTION_FORBIDDEN' USING ERRCODE='42501'; END IF;";
 const exceptionStart = migration.indexOf("  IF kind='reconcile_simulation' THEN\n   -- Recover");
 const exceptionEnd = migration.indexOf("\n  IF kind='execute_simulation' THEN", exceptionStart);
@@ -72,7 +72,7 @@ async function refuses(f: WorkFixture, a: SubscriptionCompany, input: Record<str
  expect(await effects(f)).toEqual(before);
 }
 
-it("replaces only the attempted reconciliation guard, retaining the 0752 pending-change/owner-before-replay body and transaction", () => {
+it("replaces only the attempted reconciliation guard, retaining the 0755 pending-change/owner-before-replay body and transaction", () => {
  expect(exceptionStart).toBeGreaterThan(0); expect(exceptionEnd).toBeGreaterThan(exceptionStart);
  expect(body(migration).replace(exception, oldGuard)).toBe(body(predecessor));
  expect(migration).toMatch(/\nBEGIN;\n/); expect(migration.trimEnd()).toMatch(/COMMIT;$/);
@@ -84,14 +84,16 @@ describe.sequential("LATER-SAFETY-158 attempted subscription reconciliation (rea
  let f: WorkFixture;
  beforeAll(async () => { f = await createWorkFixture(); }, 60000);
  afterAll(async () => closeWorkFixture(f));
- it("0754 preserves pending-change refusal and exact replay without new money/approval/audit effects", async () => {
+ it("0756 preserves pending-change refusal and exact replay without new money/approval/audit effects", async () => {
   const a = await meterCompany(f);
   const acceptedTerms = terms(a);
   await command(f, a, acceptedTerms);
   const input = { ...terms(a, "Solo", 1, acceptedTerms.anchorDay), kind: "change" }, id = randomUUID();
   const pending = await command(f, a, input, id);
   expect(pending).toMatchObject({ status: "pending", revision: 1 });
-  expect(await definition(f)).toContain("SUBSCRIPTION_PENDING_CHANGE");
+  const installed = await definition(f);
+  expect(installed).toContain(exception); // The refusal below runs after the 0756 replacement.
+  expect(installed).toContain("SUBSCRIPTION_PENDING_CHANGE");
   const before = await effects(f);
   await expect(command(f, a, input)).rejects.toMatchObject({ message: "SUBSCRIPTION_PENDING_CHANGE", code: "23514" });
   expect(await effects(f)).toEqual(before);
@@ -282,7 +284,7 @@ describe.sequential("LATER-SAFETY-158 attempted subscription reconciliation (rea
  });
 });
 
-describe("0754 populated predecessor upgrade (real PostgreSQL)", () => {
+describe("0756 populated predecessor upgrade (real PostgreSQL)", () => {
  let f: WorkFixture, runtime: Pool | undefined;
  beforeAll(async () => { f = await createWorkFixture(false); }, 60000);
  afterAll(async () => { await runtime?.end(); await closeWorkFixture(f); });

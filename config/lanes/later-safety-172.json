@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-172": {
+      "branches": ["codex/sandbox/later-safety-172"],
+      "allow": [
+        "apps/web/app/contractor/jobs/[id]/possible-extras/job-finish.tsx",
+        "apps/web/app/contractor/jobs/[id]/possible-extras/job-finish.test.tsx",
+        "apps/web/e2e/later-safety-172-finish-refusals.spec.ts"
+      ]
+    }
+  }
+}

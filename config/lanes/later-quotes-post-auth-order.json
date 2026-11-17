@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-quotes-post-auth-order": {
+      "branches": ["codex/sandbox/later-quotes-post-auth-order"],
+      "allow": [
+        "apps/web/app/api/jobs/[id]/quotes/route.ts",
+        "apps/web/app/api/jobs/[id]/quotes/route.test.ts"
+      ]
+    }
+  }
+}

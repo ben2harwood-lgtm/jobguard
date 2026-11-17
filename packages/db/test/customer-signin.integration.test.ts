@@ -161,6 +161,8 @@ it("session is scoped to one job/customer/tenant and sign-out revokes server-sid
   expect((await use(w, k, "resolve")).rows[0].result).toMatchObject({ jobId: w.job, customerId: w.customer, companyId: w.account });
   for (const changes of [{ job: randomUUID() }, { customer: randomUUID() }, { tenant: randomUUID() }]) await expect(use(w, k, "resolve", changes)).rejects.toMatchObject(refused);
   await use(w, k, "signout"); await expect(use(w, k, "resolve")).rejects.toMatchObject(refused);
+  expect((await c.admin.query("SELECT revoked_at IS NOT NULL revoked FROM app.customer_portal_session WHERE tenant_id=$1 AND token_digest=$2", [w.tenant, k.sessionDigest])).rows).toEqual([{ revoked: true }]);
+  await expect(use(w, k, "signout")).rejects.toMatchObject(refused);
 });
 it.each(["revoked", "expired", "issuer_revoked", "stale"])("sessions refuse %s after redemption", async kind => {
   const w = await world(), k = await issue(w); await use(w, k);
@@ -169,6 +171,7 @@ it.each(["revoked", "expired", "issuer_revoked", "stale"])("sessions refuse %s a
   if (kind === "issuer_revoked") await c.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [w.tenant, w.member]);
   if (kind === "stale") await c.admin.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) SELECT tenant_id,$2,customer_id,revision+1,payload FROM app.customer_revision WHERE tenant_id=$1 AND id=$3", [w.tenant, randomUUID(), w.revision]);
   await expect(use(w, k, "resolve")).rejects.toMatchObject(refused);
+  await expect(use(w, k, "signout")).rejects.toMatchObject(refused);
 });
 it("new tables have FORCE RLS and no direct runtime, identity or infrastructure access", async () => {
   for (const table of ["customer_portal_grant", "customer_portal_session", "customer_variation_approval"]) {

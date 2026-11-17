@@ -166,9 +166,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
     ["ef_inputs", "t uuid, ag app.enterprise_agreement_version, p_period text", "0745_enterprise_fee_rejected_line.sql"],
-    // LS-149: 0746_subscription_internal_owner_guard.sql; LS-162: 0752_subscription_pending_downgrade.sql.
-    // 0754 is the latest body, retaining both owner-before-replay and pending-change refusal.
-    ["mon2_command", "t uuid, digest text, command_id uuid, v jsonb", "0754_subscription_attempt_reconciliation.sql"],
+    // 0756 retains LS-149 owner-before-replay and LS-162 pending-change refusal from 0755.
+    ["mon2_command", "t uuid, digest text, command_id uuid, v jsonb", "0756_subscription_attempt_reconciliation.sql"],
     ["ef_prepare_statement", "p_session uuid, p_command uuid, p_period text", "0704_enterprise_fee_period_order.sql"],
     ["cb_derive", "p_session uuid, p_job uuid, p_command uuid, p_source text, p_invoice text, p_hash text, p_projection jsonb", "0748_billing_policy_hold_projection.sql"],
     ["ef_post_statement", "p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid", "0704_enterprise_fee_period_order.sql"],
@@ -215,6 +214,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["accept_final_check_terms", "p_tenant uuid, p_actor uuid, p_command uuid, p_version text", "0735_per_firm_final_check_terms.sql"],
     ["guard_final_lock_disclosure_terms", "", "0735_per_firm_final_check_terms.sql"],
     ["surface_shadow_signal_early", "p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb", "0735_per_firm_final_check_terms.sql"],
+    ["connector_promotion", "p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb", "0754_connector_promotion_list_closed_job.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (name === "decision_check_command") expect(sql).toContain("rv.result->>'sourceJobId'=source.id::text");
@@ -291,10 +291,28 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     .matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis)) {
     lp6dBodies.set(m[1]!, [...(lp6dBodies.get(m[1]!) ?? []), m[4]!]);
   }
+  // LATER-SAFETY-183 is xa_price's sole successor; retain the full LP-6d binding prefix.
+  const pricePermissionSql = await readFile(new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_price", [pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!]);
   // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
   lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);
+  // LP6D-WORKER-PRESENCE: exact latest sources; historical 0749 assertions remain above.
+  const presenceSql = await readFile(new URL("../migrations/0753_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
+  for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis))
+    lp6dBodies.set(m[1]!, [m[4]!]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    // 0751 succeeds LP-6d for this exact dispatcher; pin it before generic LP-6d successor handling.
+    if (prior.nspname === "app" && prior.proname === "accounting_export" &&
+      prior.args === "t uuid, digest text, operation text, source text, v jsonb") {
+      const sql = await readFile(new URL("../migrations/0751_accounting_export_attempt_reconciliation.sql", import.meta.url), "utf8");
+      const body = sql.split("AS $$")[1]!.split("$$;")[0];
+      expect(current?.definition?.split("$function$")[1]).toBe(body);
+      expect(current?.source).toBe(body);
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
+      expect(current?.definition).not.toEqual(prior.definition);
+      continue;
+    }
     if (prior.definition !== null && current?.source !== prior.source && lp6dBodies.get(`${prior.nspname}.${prior.proname}`)?.includes(current?.source)) {
       // The header may change only in LANGUAGE (contractor_session's checked bridge moves from sql to plpgsql).
       const header = (definition: string) => definition.replace(/^ LANGUAGE \w+$/mu, " LANGUAGE <checked>");
@@ -394,11 +412,6 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       const body = sql.split(`CREATE OR REPLACE FUNCTION app.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
       expect(current?.source).toBe(body);
-    } else
-    // 0599_accounting_export_route_change changes only this checked synthetic dispatcher; dedicated route upgrade tests bind the body.
-    if (prior.nspname === "app" && prior.proname === "accounting_export" &&
-      prior.args === "t uuid, digest text, operation text, source text, v jsonb") {
-      expect(current?.definition).not.toEqual(prior.definition);
     } else
     // 0808 changes only this exact authority body, preserving all routine metadata and grants.
     if (prior.nspname === "app" && prior.proname === "lp_authority" && prior.args === "p_session uuid, p_job uuid, p_action text") {

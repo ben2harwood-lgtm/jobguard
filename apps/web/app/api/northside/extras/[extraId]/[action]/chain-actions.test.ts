@@ -13,7 +13,7 @@ vi.mock("../../../../../lib/northside-server", () => ({
   demoActor: h.actor, demoContext: async () => tenant,
   bodyOf: (r: Request) => r.json(),
   parseDemoBody: (schema: z.ZodType, raw: unknown) => { const p = schema.safeParse(raw); if (!p.success) throw { code: "INVALID_COMMAND", status: 422 }; return p.data; },
-  requireOrigin: (r: Request) => { if (!isTrustedBrowserOrigin(r, {})) throw { code: "ORIGIN_FORBIDDEN", status: 403 }; },
+  requireOrigin: (r: Request) => { if (!isTrustedBrowserOrigin(r, { NODE_ENV: "test" })) throw { code: "ORIGIN_FORBIDDEN", status: 403 }; },
   json: (body: unknown) => Response.json(body),
   failure: (e: { code: string; status?: number }) => Response.json({ code: e.code }, { status: e.status ?? 409 }),
 }));

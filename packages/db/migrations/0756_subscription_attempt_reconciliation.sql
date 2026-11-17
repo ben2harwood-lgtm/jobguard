@@ -1,5 +1,5 @@
 -- LATER-SAFETY-158 (RED): reconcile attempted work against its original exact approval.
--- Replaces only mon2_command from 0752 (#811 first); pending-change and owner guards stay intact.
+-- Rebased verbatim on 0755; only the LS-158 reconciliation guard differs.
 BEGIN;
 CREATE OR REPLACE FUNCTION app.mon2_command(t uuid,digest text,command_id uuid,v jsonb) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 #variable_conflict use_variable
