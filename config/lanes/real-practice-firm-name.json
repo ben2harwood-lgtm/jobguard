@@ -41,7 +41,8 @@
         "packages/db/migration-notes/0752_practice_firm_name.md",
         "packages/db/migration-notes/0757_practice_firm_name.md",
         "packages/db/test/lp6d-runtime-classification.json",
-        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "apps/web/e2e/REAL-FIRM-PROFILE.spec.ts"
       ]
     }
   }
