@@ -39,20 +39,28 @@ const jobId = "11111111-1111-4111-8111-111111111111";
 const otherJobId = "22222222-2222-4222-8222-222222222222";
 const response = (body: unknown, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 
-async function journey(status: string, variationStatus = 400, variationCode = "ACTIVATION_REQUIRED", invoiceJobId = jobId) {
+async function journey(status: string, variationStatus = 400, variationCode = "ACTIVATION_REQUIRED", invoiceJobId = jobId, overrides: Record<string, { body: unknown; status: number }> = {}) {
   vi.stubGlobal("React", React);
   const fetch = vi.fn(async (path: string) => {
+    const override = overrides[path.split("/").at(-1)!];
+    if (override) return response(override.body, override.status);
     if (path.endsWith("/proof")) return response({ version: "practice-proof-view.v1", environment: "synthetic_demo", jobId, completion: null, realExternalActions: 0 });
     if (path.endsWith("/variations")) return response({ code: variationCode }, variationStatus);
     if (path.endsWith("/customer-invoices")) return response({ version: 1, environment: "synthetic_demo", jobId: invoiceJobId, invoices: [] });
+    if (path.endsWith("/proposal")) return response({ version: 1, environment: "synthetic_demo", jobId, captureId: jobId, proposalId: jobId, reviewId: jobId, status, source: { text: "Fictional", kind: "text", version: 1, acquisition: null, audioByteLength: 0 }, proposal: { title: "Fictional", lines: [], questions: [] }, review: null });
+    if (path.endsWith("/quotes")) return response({ version: 1, environment: "synthetic_demo", jobId, scope: [], draft: null, revisions: [] });
     if (path.endsWith("/fee-illustration")) return response({ code: "NOT_FOUND" }, 404);
+    if (path.endsWith("/delivery")) return response(null);
+    if (path.endsWith("/final-account")) return response({ version: 1, environment: "synthetic_demo", jobId, account: null });
+    if (path.endsWith("/lock")) return response({ version: "final-account-lock.view.v1", jobId, lock: null });
+    if (path.endsWith("/final-check")) return response({ state: "unlocked", items: [] });
     throw new Error(`Unexpected read ${path}`);
   });
   vi.stubGlobal("fetch", fetch);
-  const render = () => { hooks.render(); const tree = PracticeJourney({ jobId, status }); hooks.effects(); return renderToStaticMarkup(tree); };
+  const render = (id = jobId) => { hooks.render(); const tree = PracticeJourney({ jobId: id, status }); hooks.effects(); return renderToStaticMarkup(tree); };
   expect(render()).toContain("Checking saved progress");
   await new Promise<void>(resolve => setImmediate(resolve));
-  return { html: render(), fetch };
+  return { html: render(), fetch, render };
 }
 
 it.each(["draft", "quoting", "accepted", "lost"])("allows documented activation absence for a %s job", async status => {
@@ -60,7 +68,8 @@ it.each(["draft", "quoting", "accepted", "lost"])("allows documented activation 
   expect(html).toContain("Continue this job");
   expect(html).not.toContain("could not be checked");
   expect(html).not.toContain("Checking saved progress");
-  expect(fetch).toHaveBeenCalledTimes(4);
+  expect(fetch).toHaveBeenCalledTimes(status === "draft" ? 9 : 10);
+  if (status === "draft") expect(fetch).not.toHaveBeenCalledWith(`/api/jobs/${jobId}/quotes`, expect.anything());
   expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/variations`, expect.objectContaining({ cache: "no-store" }));
 });
 
@@ -78,4 +87,93 @@ it("refuses a wrong-job invoice projection instead of showing progress", async (
   const { html } = await journey("accepted", 400, "ACTIVATION_REQUIRED", otherJobId);
   expect(html).toContain("Saved progress could not be checked");
   expect(html).not.toContain("journey-customer-balance");
+});
+
+function events() {
+ const window = new EventTarget(); vi.stubGlobal("window",window); return window;
+}
+const settle = () => new Promise<void>(resolve => setImmediate(resolve));
+it("refreshes only matching saved-change events and focus, with string lifecycle details",async()=>{
+ const window=events();const {fetch,render}=await journey("accepted");
+ expect(fetch).toHaveBeenCalledTimes(10);
+ for(const name of ["job-saved","jobguard:invoice-changed","jobguard:final-check-changed"]){
+  window.dispatchEvent(new CustomEvent(name,{detail:{jobId:otherJobId}}));expect(fetch).toHaveBeenCalledTimes(10);
+ }
+ window.dispatchEvent(new CustomEvent("job-lifecycle-changed",{detail:{jobId}}));expect(fetch).toHaveBeenCalledTimes(10);
+ const notifications=vi.fn();window.addEventListener("job-saved",notifications);
+ for(const [index,name] of ["job-saved","job-lifecycle-changed","jobguard:invoice-changed","jobguard:final-check-changed","focus"].entries()){
+  window.dispatchEvent(name==="focus"?new Event(name):new CustomEvent(name,{detail:name==="job-lifecycle-changed"?jobId:{jobId}}));
+  await settle();expect(render()).toContain("Continue this job");expect(fetch).toHaveBeenCalledTimes(10*(index+2));
+ }
+ expect(notifications).toHaveBeenCalledTimes(1); // Only the explicit test event; reads publish nothing.
+});
+it("clears displayed money after a failed read instead of claiming completion",async()=>{
+ const window=events();const {fetch,render}=await journey("accepted");
+ fetch.mockImplementation(async()=>response({code:"DATABASE_UNAVAILABLE"},503));
+ window.dispatchEvent(new Event("focus"));await settle();
+ const html=render();expect(html).toContain("Saved progress could not be checked");expect(html).not.toContain("journey-customer-balance");
+});
+it.each([401,403,404])("refuses foreign-session/unavailable reads with status %s",async status=>{
+ const window=events();const {fetch,render}=await journey("accepted");
+ fetch.mockImplementation(async()=>response({code:"NOT_FOUND"},status));window.dispatchEvent(new Event("focus"));await settle();
+ expect(render()).toContain("Saved progress could not be checked");
+});
+it("clears previous-job facts immediately and ignores late other-job replies",async()=>{
+ const window=events();const {fetch,render}=await journey("accepted");
+ const original=fetch.getMockImplementation()!;const releases:(()=>void)[]=[];
+ fetch.mockImplementation(path=>new Promise(resolve=>{releases.push(()=>{void original(path).then(resolve);});}));
+ window.dispatchEvent(new Event("focus"));
+ expect(render(otherJobId)).toContain("Checking saved progress");
+ for(const release of releases.slice(0,10))release();await settle();
+ const html=render(otherJobId);expect(html).not.toContain("journey-customer-balance");expect(html).not.toContain("You finished this practice job");
+});
+
+const lifecycleAbsences = [
+  ["proof", 404, "NOT_FOUND"],
+  ["final-check", 403, "FINAL_CHECK_FORBIDDEN"],
+] as const;
+for (const [endpoint, httpStatus, code] of lifecycleAbsences) {
+  it.each(["draft", "quoting", "accepted", "lost"])(`allows documented ${endpoint} absence before activation for %s`, async status => {
+    const { html } = await journey(status, 400, "ACTIVATION_REQUIRED", jobId, {
+      [endpoint]: { body: { code }, status: httpStatus },
+    });
+    expect(html).toContain("Continue this job");
+    expect(html).not.toContain("could not be checked");
+  });
+  it.each([
+    ["live", httpStatus, { code }],
+    ["invoiced", httpStatus, { code }],
+    ["paid", httpStatus, { code }],
+    ["accepted", 503, { code }],
+    ["accepted", 401, { code }],
+    ["accepted", httpStatus === 404 ? 403 : 404, { code }],
+    ["accepted", httpStatus, { code: "DATABASE_UNAVAILABLE" }],
+    ["accepted", httpStatus, { code, unexpected: true }],
+  ])(`refuses unexpected ${endpoint} absence for %s / %s / %j`, async (status, refusedStatus, body) => {
+    const { html } = await journey(status, 400, "ACTIVATION_REQUIRED", jobId, {
+      variations: { status: 200, body: { version: 1, environment: "synthetic_demo", jobId,
+        baselinePence: 90000, capPence: 0, parentScopeItemId: jobId,
+        approvedAdditionsPence: 0, approvedOmissionsPence: 0, pendingExtrasPence: 0, variations: [] } },
+      [endpoint]: { body, status: refusedStatus },
+    });
+    expect(html).toContain("Saved progress could not be checked");
+    expect(html).not.toContain("journey-customer-balance");
+  });
+}
+it.each(["draft", "quoting", "accepted", "lost"])("allows the combined pre-activation absences for %s", async status => {
+  const { html } = await journey(status, 400, "ACTIVATION_REQUIRED", jobId, {
+    proof: { body: { code: "NOT_FOUND" }, status: 404 },
+    "final-check": { body: { code: "FINAL_CHECK_FORBIDDEN" }, status: 403 },
+  });
+  expect(html).toContain("Continue this job");
+  expect(html).not.toContain("could not be checked");
+});
+
+it.each([
+ [404, {code:"DATABASE_UNAVAILABLE"}], [400, {code:"NOT_FOUND"}],
+ [200, null], [200, {version:1}],
+])("preserves fee illustration read-health failures without claiming progress: %s / %j", async (status, body) => {
+ const {html}=await journey("draft",400,"ACTIVATION_REQUIRED",jobId,{"fee-illustration":{status,body}});
+ expect(html).toContain("Saved progress could not be checked");
+ expect(html).not.toContain("journey-customer-balance");
 });
