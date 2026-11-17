@@ -9,6 +9,22 @@ test.setTimeout(240_000);
 test.beforeEach(async ({ page }) => { await installContractorAgreementFixture(page); });
 const base = 'http://127.0.0.1:3000';
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
+async function expectAdminFitsViewport(page: Page) {
+  await expect(page).toHaveURL(/\/admin\/contractor$/);
+  // Root overflow is hidden globally, so also inspect the actual content and controls.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  const overflow = await page.locator('main').evaluate(main => {
+    const width = document.documentElement.clientWidth;
+    return [main, ...main.querySelectorAll('*')].flatMap(element => {
+      if (!element.getClientRects().length) return [];
+      const rect = element.getBoundingClientRect();
+      const outsideViewport = rect.left < -1 || rect.right > width + 1;
+      const clippedContent = element.matches('main, section, button, a, pre') && element.scrollWidth > element.clientWidth + 1;
+      return outsideViewport || clippedContent ? [{ tag: element.tagName, text: element.textContent?.slice(0, 80), left: rect.left, right: rect.right }] : [];
+    });
+  });
+  expect(overflow, 'Contractor admin content and controls fit the viewport').toEqual([]);
+}
 async function workspace(page: Page): Promise<ContractorWorkspace> {
   const response = await page.request.get('/api/contractor');
   expect(response.status()).toBe(200);
@@ -21,12 +37,13 @@ async function revise(page: Page, current: ContractorWorkspace, fields: Record<s
   } });
 }
 
-test('revising only the approval limit preserves stored terms and subsequent order pricing', async ({ page }, testInfo) => {
+test('revising only the approval limit preserves stored terms and subsequent order pricing', async ({ page }) => {
   const db = new Pool({ host: '127.0.0.1', port: 55432, user: 'postgres', password: 'sbox-e2e-owner', database: 'jobguard_synthetic_demo', max: 1 });
   try {
     await page.goto('/admin/contractor');
     await button(page, 'Start generated contractor practice').click();
     await expect(page.getByTestId('contractor-revision')).toHaveText('0');
+    await expectAdminFitsViewport(page);
     // ENT-2's supported generated import prepares the genuine client, contract and usable schedule.
     await page.goto('/contractor/work-orders');
     await page.getByLabel(/Orders with problems/).check();
@@ -67,6 +84,12 @@ test('revising only the approval limit preserves stored terms and subsequent ord
     expect(latest.document).toEqual(commercialDocument);
     expect(latest.rules).toEqual({ ...rules, proceedLimit: { pence: 33307, currency: 'GBP' } });
     expect((await storedVersions()).slice(0, previousRows.length)).toEqual(previousRows);
+    // Check the persisted admin view on desktop and phone, including the long source IDs.
+    for (const details of await page.getByTestId('contract-version').locator('details').all()) {
+      if (await details.getAttribute('open') === null) await details.locator('summary').click();
+      await expect(details).toHaveAttribute('open', '');
+    }
+    await expectAdminFitsViewport(page);
     // Starter orders are new identities, so they must pin the revised contract and retain its rates.
     await page.goto('/contractor/work-orders');
     await page.getByLabel(/Starter orders/).check();
@@ -89,9 +112,8 @@ test('revising only the approval limit preserves stored terms and subsequent ord
     expect((await page.request.post('/api/contractor', { data: {} })).status()).toBe(403);
     expect((await page.request.post('/api/contractor/work-order-imports', { headers: { origin: base }, data: { version: 'work-order-import-request.v1', environment: 'synthetic_demo', commandId: crypto.randomUUID(), source: { kind: 'csv', name: 'mine.csv', csv: 'version\r\n' } } })).status()).toBe(403);
     expect((await workspace(page)).contracts).toEqual(saved.contracts);
-    // Phone layout is tracked separately in LATER-ADMIN-CONTRACTOR-MOBILE-OVERFLOW.
-    if (testInfo.project.name === 'desktop') {
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-    }
+    // This final page is /contractor/work-orders, whose order table overflows at 360px (LATER-WORK-ORDERS-TABLE-MOBILE).
+    // /admin/contractor itself is checked at both widths above.
+    if (test.info().project.name === 'desktop') expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   } finally { await db.end(); }
 });
