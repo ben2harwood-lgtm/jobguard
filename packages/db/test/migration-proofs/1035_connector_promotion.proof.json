@@ -1,0 +1,208 @@
+{
+  "migration": "1035_connector_promotion.sql",
+  "lp0": [
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-ent13a-human-promotion",
+        "title": "ENT-13a dark human fixture promotion",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Bounded synthetic lifecycle dispatch; exact-head RED review and PostgreSQL CI remain required."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Retain per-request persisted session and company membership verification before reads and replay.",
+          "LP-12": "Verify exact migration ownership and runtime-only closed entry point; helpers and tables remain private."
+        },
+        "downstream": "Human session promotes fixture references through existing imports only. Connector capabilities and receipts stay unchanged.",
+        "sources": [
+          "packages/db/migrations/1035_connector_promotion.sql",
+          "packages/db/src/connector-promotion-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/connector-promotion.integration.test.ts"
+        ],
+        "gaps": [
+          "Actual PostgreSQL catalogue execution and follow-up RED review remain required."
+        ],
+        "path": "ap-ent13a-human-promotion"
+      }
+    },
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-ent13a-human-promotion",
+        "title": "ENT-13a dark human fixture promotion",
+        "description": "Synthetic persisted human session and current member authority are checked before staged-event disclosure and replay. Per-client ENT-2 import or existing materials authority remains controlling. No connector grants or activation.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Preserve authenticated company/member ownership, current session checks and synthetic database refusal.",
+          "LP-12": "Review fixed search_path, migration-owned private tables and helpers, and absence of runtime direct writes."
+        },
+        "sources": [
+          "packages/db/migrations/1035_connector_promotion.sql",
+          "packages/db/src/connector-promotion-repository.ts"
+        ],
+        "tests": [
+          "packages/db/test/connector-promotion.integration.test.ts"
+        ],
+        "gaps": [
+          "PostgreSQL CI and independent RED review remain required; no live provider route exists."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.connector_promotion(uuid,text,text,uuid,jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-ent13a-human-promotion"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.connector_promotion(uuid,text,text,uuid,jsonb)|jobguard_migration",
+        "group": "a-ent13a-human-promotion"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.connector_promotion(uuid,text,text,uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.connector_promotion"
+        ],
+        "staticCalls": [
+          "app.contractor_allowed",
+          "app.contractor_member_active",
+          "app.contractor_practice_session_digest",
+          "app.contractor_session",
+          "app.lp4_seal_audit",
+          "app.lp_authority",
+          "app.work_order_client_permitted"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.connector_promotion|tenant_promotion|PERMISSIVE|ALL|jobguard_migration|6fa387f2f629fba6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.connector_promotion|immutable_promotion|app.reject_audit_mutation|BEFORE DELETE/UPDATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "app.connector_promotion",
+        "data": []
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "connector_promotion",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "connector_promotion_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "connector_promotion_tenant_id_command_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "connector_promotion",
+        "policyname": "tenant_promotion",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "connector_promotion",
+        "args": "p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "connector_promotion",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

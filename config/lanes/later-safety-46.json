@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-46": {
+      "branches": ["codex/sandbox/later-safety-46"],
+      "note": "LATER-SAFETY-46: RED stale connector promotion regression coverage; stacks on batch-41. No migration.",
+      "allow": ["packages/db/test/connector-promotion.integration.test.ts"]
+    }
+  }
+}
