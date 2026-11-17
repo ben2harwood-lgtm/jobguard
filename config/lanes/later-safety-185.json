@@ -6,7 +6,9 @@
       "allow": [
         "packages/db/src/northside-demo.ts",
         "packages/db/src/work-order-fixtures.ts",
-        "packages/db/test/seed-transaction-locks.integration.test.ts"
+        "packages/db/test/seed-transaction-locks.integration.test.ts",
+        "apps/api/src/auth/context-boundary.test.ts",
+        "packages/db/test/extra-origin.integration.test.ts"
       ]
     }
   }
