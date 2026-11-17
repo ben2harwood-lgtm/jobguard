@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PracticeAccessError } from "../../../../../packages/db/dist/practice-session.js";
-import { RequestBindingRefusedError } from "../../../../../packages/db/dist/request-binding-error.js";
+import { PracticeAccessError, RequestBindingRefusedError } from "@jobguard/db";
 import { materialRateCommandV1 } from "../../../../api/src/material.contracts";
 
 const stub = vi.hoisted(() => ({ cookie: vi.fn(), workspace: vi.fn(), addRate: vi.fn() }));
