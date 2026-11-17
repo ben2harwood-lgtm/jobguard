@@ -2,11 +2,12 @@
   "version": 2,
   "lanes": {
     "later-next-step-resolve-extras": {
-      "branches": ["codex/sandbox/later-next-step-resolve-extras"],
+      "branches": [
+        "codex/sandbox/later-next-step-resolve-extras"
+      ],
       "note": "Test only: prove the practice guide prompts to resolve found extras before the final customer invoice; interim drafts are a separate surface.",
       "allow": [
-        "apps/web/app/ui/practice-journey.test.tsx",
-        "config/lanes/later-next-step-resolve-extras.json"
+        "apps/web/app/ui/practice-journey.test.tsx"
       ]
     }
   }
