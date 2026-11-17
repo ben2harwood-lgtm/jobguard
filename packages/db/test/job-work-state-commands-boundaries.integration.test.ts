@@ -59,7 +59,11 @@ describe("CH-4-C capacity, post-lock and hidden-state boundaries",()=>{
  });
  it("closed completed-result use refused and new completed check cannot bypass closure",async()=>{
   const p=await seedWorkPractice(f);await boundaryLock(f,await practiceWorkJob(f,p));
-  await workTenant(f.admin,p.auth.context.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) SELECT tenant_id,job_id,$3,id,locked_at,'completed' FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[p.auth.context.tenantId,p.jobId,randomUUID()]));
+  await workTenant(f.admin,p.auth.context.tenantId,async db=>{
+   // Historical setup only, like boundaryLock; current guards remain enabled below.
+   await db.query("SET LOCAL session_replication_role='replica'");
+   await db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) SELECT tenant_id,job_id,$3,id,locked_at,'completed' FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[p.auth.context.tenantId,p.jobId,randomUUID()]);
+  });
   const history=(await f.admin.query("SELECT row_to_json(c) row FROM app.final_account_lock_check c WHERE tenant_id=$1 AND job_id=$2",[p.auth.context.tenantId,p.jobId])).rows;
   await runWorkCommand(f.runtime,p,workCommand("close",{reason:"other",note:"Fictional closed job"}));const before=await commandCounts(f,p);
   await expect(workTenant(f.runtime,p.auth.context.tenantId,db=>db.query("SELECT * FROM app.reveal_shadow_signals($1,$2)",[p.auth.context.tenantId,p.jobId]))).rejects.toThrow("JOB_WORK_CLOSED");
