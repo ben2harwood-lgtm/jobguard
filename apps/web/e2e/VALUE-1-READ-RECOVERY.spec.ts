@@ -69,10 +69,10 @@ async function keyboardAction(page: Page, action: Locator) {
 }
 
 async function pending(page: Page) {
-  await expect(page.getByRole("status")).toHaveText(loading);
+  await expect(page.locator("main").getByRole("status")).toHaveText(loading);
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "true");
   await expect(page.locator(".value-card")).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Job money position" })).toHaveCount(0);
+  await expect(page.locator("main").getByRole("region", { name: "Job money position" })).toHaveCount(0);
   await accessible(page);
 }
 
@@ -84,15 +84,15 @@ async function failed(page: Page) {
 }
 
 async function ready(page: Page, snapshot: JobValueResponse) {
-  await expect(page.getByRole("heading", { name: "How JobGuard helps protect your money", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "← Back to job", exact: true })).toHaveAttribute("href", `/jobs/${snapshot.jobId}`);
+  await expect(page.locator("main").getByRole("heading", { name: "How JobGuard helps protect your money", exact: true })).toBeVisible();
+  await expect(page.locator("main").getByRole("link", { name: "← Back to job", exact: true })).toHaveAttribute("href", `/jobs/${snapshot.jobId}`);
   await expect(page.getByTestId("value-approved-extras")).toHaveText(snapshot.approvedExtras.pence === null ? "No recorded outcome yet" : "£125.00");
   for (const source of snapshot.approvedExtras.sources) {
     const link = page.locator(".value-card").getByRole("link", { name: `${source.label} · source ${source.id}`, exact: true });
     await expect(link).toHaveAttribute("href", source.href);
   }
   for (const source of snapshot.quoteCoverage) {
-    await expect(page.getByRole("link", { name: `${source.label} · source ${source.id}`, exact: true })).toHaveAttribute("href", source.href);
+    await expect(page.locator("main").getByRole("link", { name: `${source.label} · source ${source.id}`, exact: true })).toHaveAttribute("href", source.href);
   }
   await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
   await accessible(page);
@@ -172,7 +172,7 @@ test("initial pending, transport/HTTP/JSON/schema failures and GET-only recovery
       await keyboardAction(page, button(page, "Try again"));
       await page.keyboard.press("Enter");
       await failed(page);
-      await expect(page.getByRole("heading", { name: failure, exact: true })).toBeFocused();
+      await expect(page.locator("main").getByRole("heading", { name: failure, exact: true })).toBeFocused();
     });
   }
   await keyboardAction(page, button(page, "Try again"));

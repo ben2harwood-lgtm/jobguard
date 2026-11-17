@@ -123,3 +123,29 @@ LATER / SIMPLICITY (initial source precheck, nonblocking): `apps/web/e2e/VALUE-1
 Raw usage fields `input_tokens`, `cached_input_tokens`, `cache_write_input_tokens`, `output_tokens`, `reasoning_output_tokens`: unknown at receipt time. No cache/allowance saving inferred. Runtime startup metadata is in existing log.txt; caller may append actual final emitted usage after child exit.
 
 Parent checks 2026-10-27: exact fresh01a17f6f child EXIT0/group85092 gone verified. Pinned frozen install --ignore-scripts EXIT0 and unchanged lock; normal heavy-slot API prerequisite build6/6 EXIT0; web semantic typecheck EXIT0; actual installed Playwright runner list8cases2files bothprojects EXIT0. Historical missing dependency failures preserved. No browser/DB execution or acceptance claimed; draft for required full currentmainCI and exactcandidate independentclassification before separateacceptance/C282.
+
+## CI repair try 1 — 30 October 2026
+
+Entry HEAD: `aeb7307e` (the supplied brief names earlier `b729dc74`). The brief's
+“Failing CI jobs and their error lines” section is empty. `gh pr checks 342`
+failed to connect to api.github.com, so no failing job or root cause could be
+confirmed. This repair is NOT ready to commit without that evidence.
+
+Scoped the new spec's remaining page-wide status, region, heading and link role
+assertions to `main`, as directed in the brief. The sandbox notice remains
+scoped by its exact role/name in the shared shell (`app/layout.tsx`). No
+expectations, timeouts, application code, migrations or existing tests changed.
+Installed Next's app-router announcer has role `alert`; the spec's alert
+assertions were already scoped to main. Thus the remaining unscoped status
+assertion is not a confirmed explanation of the reported CI failure.
+
+Local checks actually executed:
+- `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit --incremental false`: PASS.
+- From `apps/web`, `./node_modules/.bin/playwright test --list --workers=2 --project=mobile-360 --project=desktop VALUE-1-READ-RECOVERY.spec.ts`: PASS, six cases collected; no browser execution.
+- `git diff --check`: PASS.
+
+A `pnpm --version` probe stalled and was interrupted; no packages were downloaded
+or installed. No database/browser suite, git write, push or merge was attempted.
+Conditional NONRED scope remains unchanged (test locators only); no independent
+review claimed. Router needs the actual CI failure lines before committing or
+claiming a completed repair.
