@@ -64,7 +64,7 @@ describe("stamped tenant context boundary", () => {
   it("exports only two stamped constructors and no arbitrary-object registrar", () => {
     expect(Object.keys(tenantContext).sort()).toEqual([
       // LP-6d: bindIssuedCredential binds a credential the same transaction just issued; it is not a constructor.
-      "InvalidTenantContextError", "bindAfterLocks", "bindIssuedCredential", "verifiedTenantContextForQueuedJob",
+      "InvalidTenantContextError", "bindAfterLocks", "bindIssuedCredential", "isRequestTransaction", "verifiedTenantContextForQueuedJob",
       "verifiedTenantContextFromMembership", "withTenant",
     ]);
   });

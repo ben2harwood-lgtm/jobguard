@@ -8,6 +8,7 @@ test("onboarding suggests both deals without selecting a plan, accepting terms o
   const emptySubscription = {
     version: "subscription-persisted-read.v1", environment: "synthetic_demo", hypothetical: true,
     billingDay: 15, agreements: [], periods: [], statements: [], work: [], attempts: [], results: [],
+    changes: [], changeOutcomes: [],
   };
   await page.route("**/api/subscriptions/current", route => route.fulfill({ json: emptySubscription }));
   await page.goto("/plans");

@@ -1,3 +1,4 @@
+import { assertV3AuditChain } from "./lp4-writer-catchup-fixture.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -45,12 +46,13 @@ describe("LP-5a actual PostgreSQL command lifecycle", () => {
     const results = await Promise.all(commands.map(c => f.dispatcher.dismissDecision(f.context, c)));
     expect(results).toEqual(Array(3).fill({ decisionId: f.command.decisionId, resolution: "dismissed", authorizedAction: false }));
     expect(await counts(f.actor.tenant)).toMatchObject({ receipts: 1, resolutions: 1, authorizations: 0, audits: 2 });
-    const audits = (await db.owner.query("SELECT version,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='command.succeeded'", [f.actor.tenant])).rows;
+    const audits = (await db.owner.query("SELECT version,actor_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='command.succeeded'", [f.actor.tenant])).rows;
     expect(audits).toHaveLength(1);
     const receipts=(await db.owner.query("SELECT command_id FROM app.command_receipt WHERE tenant_id=$1",[f.actor.tenant])).rows;
     expect(receipts).toHaveLength(1);
     expect(commands.map(c=>c.commandId)).toContain(receipts[0].command_id);
-    expect(audits[0]).toMatchObject({ version: "audit.v2", payload: { references: { commandId: receipts[0].command_id, auditTrust: "checked_operation" } } });
+    await assertV3AuditChain(db.owner, f.actor.tenant);
+    expect(audits[0]).toMatchObject({ version: "audit.v3", actor_ref: `membership:${f.actor.member}`, payload: { references: { commandId: receipts[0].command_id, auditTrust: "checked_operation", auditActorKind: "bound_member" } } });
     await expect(f.dispatcher.dismissDecision(f.context, { ...f.command, resolution: "rejected" })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
     await expect(f.dispatcher.dismissDecision(f.context, { ...f.command, expectedSnapshotRevision: 2 })).rejects.toMatchObject({ code: "COMMAND_CONFLICT" });
   });

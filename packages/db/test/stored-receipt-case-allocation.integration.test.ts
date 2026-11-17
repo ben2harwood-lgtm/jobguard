@@ -28,7 +28,7 @@ it("LP-4 seals a stored-receipt review without a null allocation reference and r
  expect(review.reviewId).toBe(p.commandId);
  expect(await execute(x,p)).toEqual({...review,replayed:true});
  const events=(await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='recovery.stored_receipt_reviewed'",[x.context.tenantId,x.jobId])).rows;
- expect(events).toEqual([{payload:{references:{commandId:p.commandId,caseId:x.caseId,factLineId:x.fact.lineAllocationId,auditTrust:"checked_operation"},hashes:{}}}]);
+ expect(events).toEqual([{payload:{references:{commandId:p.commandId,caseId:x.caseId,factLineId:x.fact.lineAllocationId,auditTrust:"checked_operation",auditActorKind:"bound_member",auditActorRef:expect.stringMatching(/^membership:[a-f0-9-]{36}$/u)},hashes:{}}}]);
  await assertLp4SealedEvents(f.admin,x.context.tenantId,"recovery.stored_receipt_reviewed");
  // The real fixture's producer also reviews before allocating: its revision is
  // null at review time and must be omitted only from the audit references.
