@@ -42,13 +42,24 @@ it("wrong-job order links are unavailable without returning order details", asyn
   const response = await f.reply(new Request("https://practice.invalid/api", { method: "POST", headers: { origin: "https://practice.invalid" }, body: "{}" }), "job");
   expect(response.status).toBe(404); expect(await response.json()).toEqual({ code: "NOT_FOUND" });
 });
-it("accepts the browser loopback origin when next start uses localhost internally", async () => {
-  const f = await fixture({});
+it("accepts the explicitly allowed browser loopback origin when next start uses localhost internally", async () => {
+  const f = await fixture({ NODE_ENV: "production", JOBGUARD_ALLOWED_ORIGINS: "http://127.0.0.1:3000" });
   const response = await f.reply(new Request("http://localhost:3000/api", {
     method: "POST", headers: { origin: "http://127.0.0.1:3000" }, body: '{"kind":"preview"}',
   }), "route-job");
   expect(response.status).toBe(200);
   expect(f.execute).toHaveBeenCalledWith("route-job", { kind: "preview" });
+});
+it("rejects the browser loopback origin without an explicit setting when next start uses localhost internally", async () => {
+  const f = await fixture({ NODE_ENV: "production" });
+  const response = await f.reply(new Request("http://localhost:3000/api", {
+    method: "POST", headers: { origin: "http://127.0.0.1:3000" }, body: '{"kind":"preview"}',
+  }), "route-job");
+  expect(response.status).toBe(403);
+  expect(await response.json()).toEqual({ code: "ORIGIN_FORBIDDEN" });
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(f.app).not.toHaveBeenCalled();
+  expect(f.execute).not.toHaveBeenCalled();
 });
 it("rejects unconfigured origins and forwarded-host spoofing before application work", async () => {
   const f = await fixture({});

@@ -5,6 +5,12 @@ import { afterEach, expect, it, vi } from "vitest";
 import { subscriptionPlanView } from "@jobguard/core";
 import { loadSubscriptionPlan, loadSubscriptionWorkspace, PlanDetails, PlanScreen, submitSubscriptionAction, subscriptionActionMessage } from "./plan-screen";
 import { OnboardingSuggestion } from "./subscription-onboarding";
+const screenState = vi.hoisted(() => ({ values: [] as unknown[] }));
+vi.mock("react", async importOriginal => {
+  const actual = await importOriginal<typeof React>();
+  return { ...actual, useState: ((initial: unknown) => screenState.values.length
+    ? [screenState.values.shift(), () => {}] : actual.useState(initial)) as typeof React.useState };
+});
 vi.stubGlobal("React", React);
 afterEach(() => vi.useRealTimers());
 it.each([
@@ -26,7 +32,7 @@ it.each([["", "no"], ["-1", "no"], ["1.5", "no"], ["abc", "yes"], ["900719925474
   });
 const session = { csrfToken: "company-csrf", memberships: [{ tenantId: "00000000-0000-4000-8000-000000000001" }] };
 const empty = { version: "subscription-persisted-read.v1", environment: "synthetic_demo", hypothetical: true,
-  agreements: [], periods: [], statements: [], work: [], attempts: [], results: [] };
+  changes: [], changeOutcomes: [], agreements: [], periods: [], statements: [], work: [], attempts: [], results: [] };
 it("loads only C1's exact read route with company credentials and no cache", async () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-04-30T23:30:00Z"));
   const read = { ...empty, agreements: [{ tenant_id: "00000000-0000-4000-8000-000000000001",
@@ -169,4 +175,38 @@ it("renders every billing day as an ordinal without changing the saved day", () 
   const html = renderToStaticMarkup(createElement(PlanDetails, { view }));
   expect(view.billingDay).toBeNull();
   expect(html).not.toContain("Your billing day:");
+});
+
+it("reloads the persisted Solo request and renders its saved date until an outcome exists", async () => {
+  const tenant_id = session.memberships[0]!.tenantId;
+  const change = { tenant_id, id: "00000000-0000-4000-8000-000000000030", expected_revision: 1, plan: "Solo", effective_date: "2026-12-31" };
+  const raw = { ...empty, agreements: [{ tenant_id, id: "00000000-0000-4000-8000-000000000002", revision: 1, plan: "Builder", cadence: "monthly", anchor_day: 31, maximum_pence: 16900, effective_date: "2000-01-01" }], changes: [change] };
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session)).mockResolvedValueOnce(Response.json(raw));
+  const view = await loadSubscriptionPlan(fetcher);
+  expect(view.pendingDowngrade?.effectiveDate).toBe("2026-12-31");
+  expect(renderToStaticMarkup(createElement(PlanDetails, { view }))).toContain("Downgrade to Solo pending for 2026-12-31");
+  const complete = subscriptionPlanView({ ...raw, changeOutcomes: [{ tenant_id, change_id: change.id, source_id: "00000000-0000-4000-8000-000000000040", outcome: "refused_capacity" }] }, "2026-12-31");
+  expect(renderToStaticMarkup(createElement(PlanDetails, { view: complete }))).not.toContain("Downgrade to Solo pending");
+});
+it("maps the typed pending conflict to reload guidance", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(session))
+    .mockResolvedValueOnce(Response.json({ version: "subscription-error.v1", code: "SUBSCRIPTION_PENDING_CHANGE" }, { status: 409 }));
+  await expect(submitSubscriptionAction(session.memberships[0]!.tenantId, "new-id", {}, fetcher)).rejects.toThrow("A downgrade is already pending");
+});
+
+it("disables the actual downgrade button after reload and enables it after a recorded refusal", () => {
+  const tenant_id = session.memberships[0]!.tenantId;
+  const raw = { ...empty, agreements: [{ tenant_id, id: "00000000-0000-4000-8000-000000000002", revision: 1, plan: "Builder", cadence: "monthly", anchor_day: 31, maximum_pence: 16900, effective_date: "2000-01-01" }],
+    changes: [{ tenant_id, id: "00000000-0000-4000-8000-000000000030", expected_revision: 1, plan: "Solo", effective_date: "2026-12-31" }] };
+  for (const pending of [true, false]) {
+    const view = subscriptionPlanView({ ...raw, changeOutcomes: pending ? [] : [{ tenant_id, change_id: raw.changes[0]!.id, source_id: "00000000-0000-4000-8000-000000000040", outcome: "refused_capacity" }] }, "2026-11-15");
+    // Render the real screen with its saved read and explicit consent already loaded.
+    screenState.values = [view, "", tenant_id, [], false, "", "", "Solo", true];
+    try {
+      const html = renderToStaticMarkup(createElement(PlanScreen, { consentTerms: createElement("p", null, "Terms"), consentText: "Terms" }));
+      const button = html.match(/<button[^>]*>Request downgrade to Solo<\/button>/)?.[0];
+      expect(button).toBeDefined();
+      expect(button!.includes('disabled=""')).toBe(pending);
+    } finally { screenState.values = []; }
+  }
 });

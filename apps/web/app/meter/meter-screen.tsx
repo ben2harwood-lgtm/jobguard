@@ -2,29 +2,33 @@
 import { useEffect, useState } from "react";
 import { meterTodayReadV1, meterTodayLabels, type MeterTodayRead, meterTodayJobsReadV1, type MeterTodayJobsRead } from "@jobguard/core";
 
-async function loadMeterResponse(fetcher: typeof fetch, endpoint: string) {
-  const sessionResponse = await fetcher("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
-  if (!sessionResponse.ok) {
-    // Finish the fetch before hiding the optional meter on a refused read.
-    await sessionResponse.text().catch(() => "");
-    throw new Error(sessionResponse.status < 500 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
-  }
-  const session = await sessionResponse.json() as { csrfToken?: string; memberships?: { tenantId: string }[] };
-  const tenantId = session.memberships?.[0]?.tenantId;
-  if (!session.csrfToken || !tenantId) throw new Error("SIGN_IN_REQUIRED");
-  const response = await fetcher(endpoint, { cache: "no-store", credentials: "same-origin",
-    headers: { "x-csrf-token": session.csrfToken, "x-tenant-id": tenantId } });
+import { CompanyWorkspace, companySession, selectCompany, companyHeaders, type SelectedCompany } from "./company-selection";
+
+async function loadMeterResponse(fetcher: typeof fetch, endpoint: string, company: SelectedCompany) {
+  const response = await fetcher(endpoint, { cache: "no-store", credentials: "same-origin", headers: companyHeaders(company) });
   if (!response.ok) {
     await response.text().catch(() => "");
     throw new Error(response.status === 401 || response.status === 403 ? "SIGN_IN_REQUIRED" : "READ_UNAVAILABLE");
   }
   return response.json() as Promise<unknown>;
 }
-export async function loadMeter(fetcher: typeof fetch = fetch): Promise<MeterTodayRead> {
-  return meterTodayReadV1.parse(await loadMeterResponse(fetcher, "/api/meter/current"));
+async function resolveCompany(fetcher: typeof fetch, tenant?: string) {
+  const company = selectCompany(await companySession(fetcher), tenant);
+  if (!company) throw new Error("COMPANY_SELECTION_REQUIRED");
+  return company;
 }
-export async function loadMeterJobs(fetcher: typeof fetch = fetch): Promise<MeterTodayJobsRead> {
-  return meterTodayJobsReadV1.parse(await loadMeterResponse(fetcher, "/api/meter/current/jobs"));
+export async function loadMeter(fetcher: typeof fetch = fetch, tenant?: string): Promise<MeterTodayRead> {
+  return meterTodayReadV1.parse(await loadMeterResponse(fetcher, "/api/meter/current", await resolveCompany(fetcher, tenant)));
+}
+export async function loadMeterJobs(fetcher: typeof fetch = fetch, tenant?: string): Promise<MeterTodayJobsRead> {
+  return meterTodayJobsReadV1.parse(await loadMeterResponse(fetcher, "/api/meter/current/jobs", await resolveCompany(fetcher, tenant)));
+}
+export async function loadCompanyMeter(company: SelectedCompany, fetcher: typeof fetch = fetch) {
+  const [view, jobs] = await Promise.all([
+    loadMeterResponse(fetcher, "/api/meter/current", company).then(value => meterTodayReadV1.parse(value)),
+    loadMeterResponse(fetcher, "/api/meter/current/jobs", company).then(value => meterTodayJobsReadV1.parse(value)),
+  ]);
+  return { tenantId: company.tenantId, view, jobs };
 }
 export function MeterJobs({ view }: { view: MeterTodayJobsRead }) {
   return <section aria-label="Jobs behind today's count"><h2>Jobs behind today's count</h2>
@@ -35,16 +39,26 @@ export function MeterJobs({ view }: { view: MeterTodayJobsRead }) {
   </section>;
 }
 export function JobsOnTheGoLine({ hasCompanySession = false }: { hasCompanySession?: boolean }) {
-  const [view, setView] = useState<MeterTodayRead | null>(null);
+  return hasCompanySession ? <OptionalCompanyMeterLine /> : null;
+}
+function OptionalCompanyMeterLine() {
+  const [loaded, setLoaded] = useState<{ company: SelectedCompany; view: MeterTodayRead } | null>(null);
   useEffect(() => {
-    if (!hasCompanySession) return;
-    let active = true;
-    void loadMeter().then(value => { if (active) setView(value); }).catch(() => { if (active) setView(null); });
-    return () => { active = false; };
-  }, [hasCompanySession]);
-  if (!view) return null;
-  const labels = meterTodayLabels(view);
-  return <p><a data-testid="jobs-on-the-go-line" href="/meter">{labels.count}</a> · {labels.next}</p>;
+    let active = true, latest = 0;
+    const refresh = () => {
+      const request = ++latest; setLoaded(null);
+      void resolveCompany(fetch).then(async company => ({ company,
+        view: meterTodayReadV1.parse(await loadMeterResponse(fetch, "/api/meter/current", company)),
+      })).then(value => { if (active && request === latest) setLoaded(value); }).catch(() => {
+        if (active && request === latest) setLoaded(null);
+      });
+    };
+    refresh(); window.addEventListener("focus", refresh);
+    return () => { active = false; window.removeEventListener("focus", refresh); };
+  }, []);
+  if (!loaded) return null;
+  const labels = meterTodayLabels(loaded.view);
+  return <p>{loaded.company.name}: <a data-testid="jobs-on-the-go-line" href={`/meter?tenant=${encodeURIComponent(loaded.company.tenantId)}`}>{labels.count}</a> · {labels.next}</p>;
 }
 export function MeterDetails({ view }: { view: MeterTodayRead }) {
   const labels = meterTodayLabels(view);
@@ -56,32 +70,31 @@ export function MeterDetails({ view }: { view: MeterTodayRead }) {
     <p>{view.freeSmallPlaces} small {view.freeSmallPlaces === 1 ? "place does" : "places do"} not take a plan place today.</p>
   </section>;
 }
-export function MeterScreen() {
-  const [view, setView] = useState<MeterTodayRead | null>(null);
+export function MeterScreen({ tenant }: { tenant?: string | string[] | undefined }) {
+  return <main className="workspace-page"><h1>Jobs on the go</h1>
+    <p>Synthetic demonstration. Figures and prices are hypothetical. No real payments are taken.</p>
+    <CompanyWorkspace key={JSON.stringify(tenant) ?? "default"} initialTenant={tenant}>{company => <CompanyMeter company={company} />}</CompanyWorkspace>
+    <p><a href="/plans">Plans and subscription</a></p>
+  </main>;
+}
+function CompanyMeter({ company }: { company: SelectedCompany }) {
+  const [loaded, setLoaded] = useState<Awaited<ReturnType<typeof loadCompanyMeter>> | null>(null);
   const [error, setError] = useState("");
-  const [jobs, setJobs] = useState<MeterTodayJobsRead | null>(null);
-  const [jobsUnavailable, setJobsUnavailable] = useState(false);
   useEffect(() => {
     let active = true;
-    void loadMeter().then(value => { if (active) setView(value); }).catch((reason: unknown) => {
+    void loadCompanyMeter(company).then(value => { if (active) setLoaded(value); }).catch((reason: unknown) => {
       if (active) setError(reason instanceof Error && reason.message === "SIGN_IN_REQUIRED" ? "sign-in" : "unavailable");
     });
     return () => { active = false; };
-  }, []);
-  useEffect(() => {
-    let active = true;
-    void loadMeterJobs().then(value => { if (active) setJobs(value); }).catch(() => { if (active) setJobsUnavailable(true); });
-    return () => { active = false; };
-  }, []);
+  }, [company.tenantId, company.csrfToken]);
+  const view = loaded?.tenantId === company.tenantId ? loaded.view : null;
+  const jobs = loaded?.tenantId === company.tenantId ? loaded.jobs : null;
   const consistentJobs = jobs && view && jobs.meter.date === view.date && jobs.meter.plan === view.plan &&
     jobs.meter.countedPlaces === view.countedPlaces && jobs.meter.freeSmallPlaces === view.freeSmallPlaces;
-  return <main className="workspace-page"><h1>Jobs on the go</h1>
-    <p>Synthetic demonstration. Figures and prices are hypothetical. No real payments are taken.</p>
+  return <>
     {error ? <p role="alert">{error === "sign-in" ? <a href="/sign-in">Sign in to your company to see its meter.</a>
       : "Today's meter is unavailable. Reload to try again."}</p>
       : view ? <MeterDetails view={view} /> : <p role="status">Loading today's meter…</p>}
-    {view && (consistentJobs ? <MeterJobs view={jobs} /> : jobsUnavailable || jobs ?
-      <p role="status">Today's job list is unavailable. Reload to try again.</p> : <p role="status">Loading today's job list…</p>)}
-    <p><a href="/plans">Plans and subscription</a></p>
-  </main>;
+    {view && (consistentJobs ? <MeterJobs view={jobs} /> : <p role="status">Today's job list is unavailable. Reload to try again.</p>)}
+  </>;
 }

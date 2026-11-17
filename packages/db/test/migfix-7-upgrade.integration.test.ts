@@ -193,7 +193,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0699_sync_checkpoint_bound_reader.sql"],
     ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
     ["app.ef_inputs(t uuid, ag app.enterprise_agreement_version, p_period text)", "0745_enterprise_fee_rejected_line.sql"],
-    ["app.mon2_command(t uuid, digest text, command_id uuid, v jsonb)", "0746_subscription_internal_owner_guard.sql"],
+    // 0756 retains LS-149 owner-before-replay and LS-162 pending-change refusal from 0755.
+    ["app.mon2_command(t uuid, digest text, command_id uuid, v jsonb)", "0756_subscription_attempt_reconciliation.sql"],
     ["app.ef_prepare_statement(p_session uuid, p_command uuid, p_period text)", "0704_enterprise_fee_period_order.sql"],
     ["app.ef_post_statement(p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid)", "0704_enterprise_fee_period_order.sql"],
     ["app.accounting_export_route_read(t uuid, digest text, source text)", "0709_accounting_export_route_read_exported.sql"],
@@ -237,7 +238,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.xa_client_view_authority(p_job uuid, p_request uuid, p_actor uuid, p_email text)", "0686_extra_client_authority_loss.sql"],
     ["app.xa_client_decide(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text)", "0686_extra_client_authority_loss.sql"],
     ["identity.extra_customer_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0686_extra_client_authority_loss.sql"],
-    ["app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)", "0691_connector_billing_kind_link.sql"],
+    ["app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)", "0754_connector_promotion_list_closed_job.sql"],
     ["app.guard_practice_material_requirement()", "0690_import_ancestry_record_anchor.sql"],
     ["app.ch4_read_work_facts(t uuid, j uuid, digest text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.read_job_sources(t uuid, j uuid, digest text, source text)", "0690_import_ancestry_record_anchor.sql"],
@@ -272,6 +273,13 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const argNames = (args: string) => args.split(",").map(arg => arg.trim().split(/\s+/u)[0]!).filter(Boolean).join(",");
   const lp6dBodies = new Map<string, string>();
   for (const m of lp6dSql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu)) lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
+  // LATER-SAFETY-183 changes only xa_price after LP-6d, retaining its binding prefix.
+  const pricePermissionSql = await readFile(new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_price(p_job,p_variation,p_command,p_actor,p_net,p_revise)", pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!);
+  // LP6D-WORKER-PRESENCE: only these three definitions supersede historical bodies.
+  const presenceSql = await readFile(new URL("../migrations/0753_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
+  for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu))
+    lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
   const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;
   const namedAdditions = [
     "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",

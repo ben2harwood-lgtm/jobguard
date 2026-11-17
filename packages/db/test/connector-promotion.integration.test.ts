@@ -1,10 +1,12 @@
 // Real PostgreSQL only; intentionally not executed in the restricted builder sandbox.
 import { createHash, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { ConnectorPromotionRepository, ContractorRepository, WorkOrderRepository, generateWorkOrderSample, prepareWorkOrderDemo, withTenant, derivedUuid } from "../src/index.js";
+import { ConnectorPromotionRepository, ContractorRepository, WorkOrderRepository, generateWorkOrderSample, prepareWorkOrderDemo, withTenant, derivedUuid, requireContractorRequestContext } from "../src/index.js";
 import { cluster } from "./extra-fixtures.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { promptSession, promptFixture } from "./enterprise-live-prompt-fixtures.js";
+import { moveOffLive, cancelOrder } from "./site-visit-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 let c: Awaited<ReturnType<typeof cluster>>, repo: ConnectorPromotionRepository;
 beforeAll(async()=>{process.env.JOBGUARD_ENV="synthetic_demo";c=await cluster();repo=new ConnectorPromotionRepository(c.runtime);},180_000);
@@ -23,7 +25,7 @@ async function stage(tenant:string,kind="work_order",document="fixture:starter_o
  return {selection:{version:"connector-promotion.v1",namespace,eventId},receipt,binding,token,input};
 }
 async function counts(tenant:string) {
- const tables=["work_order","work_order_revision","work_order_line","materials_issue_fact","audit_event","connector_promotion","prompt_resolution","extra_origin"];
+ const tables=["work_order","work_order_revision","work_order_line","materials_issue_fact","audit_event","connector_promotion","prompt_resolution","extra_origin","command_receipt","import_batch","import_row_receipt","billing_status_import","billing_fact"];
  return Object.fromEntries(await Promise.all(tables.map(async table=>[table,(await c.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`,[tenant])).rows[0].n])));
 }
 it("imports exactly ENT-2 generated baseline prices, replays once, and keeps the connector receipt staged",async()=>{
@@ -125,4 +127,97 @@ it("direct SQL cannot substitute a command id or forge an import effect",async()
   await expect(withTenant(c.runtime,context,db=>db.$client.query("SELECT app.connector_promotion($1,$2,$3,$4,$5::jsonb)",[f.session,e.selection.namespace,e.selection.eventId,command,JSON.stringify({batchId:randomUUID(),version:"work-order-import-result.v1"})]))).rejects.toBeDefined();
  }
  expect(await counts(f.p.tenantId)).toEqual(before);
+});
+
+async function mixedBatch(tenant: string) {
+ const order=await stage(tenant), material=await stage(tenant,"materials_issue","fixture:door-materials",1,"fixture:demo-order-1");
+ const billing=await stage(tenant,"billing_status","fixture:unused",1,"fixture:invoice");
+ return {order,material,billing};
+}
+async function selected(session:string,e:Awaited<ReturnType<typeof stage>>,record=false) {
+ const principal=await new ContractorRepository(c.runtime).resolveSession(session);
+ return withTenant(c.runtime,requireContractorRequestContext(principal),db=>db.$client.query(
+  "SELECT app.connector_promotion($1,$2,$3,$4,$5::jsonb) value",
+  [session,e.selection.namespace,e.selection.eventId,record?derivedUuid(`${principal.tenantId}:${e.selection.namespace}:${e.selection.eventId}`):null,record?"{}":null]));
+}
+async function listKinds(session:string) { return (await repo.list(session)).map(e=>e.kind).sort(); }
+const mixedKinds=["billing_status","materials_issue","work_order"];
+const remainingKinds=["billing_status","work_order"];
+it.each(["closed","non-ordered"])("keeps owner and finance mixed lists available when materials is %s, without writes or selected/replay authority",async state=>{
+ const f=await promptFixture(c),e=await mixedBatch(f.p.tenantId);
+ const liveBefore=await counts(f.p.tenantId);
+ for(const session of [f.sessions.owner!,f.sessions.finance!]) expect(await listKinds(session)).toEqual(mixedKinds);
+ expect(await counts(f.p.tenantId)).toEqual(liveBefore);
+ const promoted=await repo.promote(f.sessions.owner!,e.material.selection);
+ expect(await repo.promote(f.sessions.owner!,e.material.selection)).toEqual(promoted);
+ if(state==="closed") await moveOffLive(c,f); else await cancelOrder(c,f);
+ const before=await counts(f.p.tenantId);
+ for(const session of [f.sessions.owner!,f.sessions.finance!]) {
+  expect(await listKinds(session)).toEqual(remainingKinds);
+  for(const record of [false,true]) await expect(selected(session,e.material,record)).rejects.toMatchObject({code:"P0001",message:"JOB_NOT_LIVE"});
+  // The repository must not return an old successful promotion after live authority has ended.
+  await expect(repo.promote(session,e.material.selection)).rejects.toBeDefined();
+ }
+ expect(await counts(f.p.tenantId)).toEqual(before);
+});
+it("omits a materials candidate with no target job, while selected reads and recording retain their refusal",async()=>{
+ const f=await organisation(),e=await mixedBatch(f.p.tenantId),before=await counts(f.p.tenantId);
+ expect(await listKinds(f.session)).toEqual(remainingKinds);
+ for(const record of [false,true]) await expect(selected(f.session,e.material,record)).rejects.toMatchObject({code:"P0002",message:"NOT_FOUND"});
+ await expect(repo.promote(f.session,e.material.selection)).rejects.toMatchObject({code:"NOT_FOUND"});
+ expect(await counts(f.p.tenantId)).toEqual(before);
+});
+it("does not restore materials visibility for supervisors, unauthorized/revoked members, foreign sessions or mismatched requests",async()=>{
+ const f=await promptFixture(c),foreign=await organisation(),e=await mixedBatch(f.p.tenantId);
+ const before=await counts(f.p.tenantId),outside=await counts(foreign.p.tenantId);
+ expect(await repo.list(f.sessions.supervisor!)).toEqual([]);
+ expect(await repo.list(f.sessions.operative!)).toEqual([]);
+ expect(await repo.list(foreign.session)).toEqual([]);
+ for(const session of [f.sessions.supervisor!,f.sessions.operative!,foreign.session]) {
+  await expect(selected(session,e.material)).rejects.toMatchObject({code:"P0002",message:"NOT_FOUND"});
+ }
+ await c.admin.query("INSERT INTO app.role_grant_revocation(tenant_id,id,grant_id) VALUES($1,$2,$3)",[f.p.tenantId,randomUUID(),f.members.finance.grant]);
+ expect(await repo.list(f.sessions.finance!)).toEqual([]);
+ await expect(selected(f.sessions.finance!,e.material)).rejects.toMatchObject({code:"P0002",message:"NOT_FOUND"});
+ await c.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId]);
+ await expect(repo.list(f.sessions.owner!)).rejects.toBeDefined();
+ // Bind one actor, then attempt to use another tenant's session on that request.
+ const db=await c.admin.connect();
+ try {
+  await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[f.p.tenantId]);await db.query("SET LOCAL ROLE jobguard_runtime");
+  await db.query("SELECT app.bind_request('contractor_practice',$1,$2)",[f.sessions.supervisor!,f.p.tenantId]);
+  await expect(db.query("SELECT app.connector_promotion($1,NULL,NULL,NULL,NULL)",[foreign.session])).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
+ } finally {await db.query("ROLLBACK");db.release();}
+ expect(await counts(f.p.tenantId)).toEqual(before);expect(await counts(foreign.p.tenantId)).toEqual(outside);
+});
+it("rethrows unrelated P0001, near-match messages and other SQLSTATEs from materials authority",async()=>{
+ const f=await promptFixture(c);await mixedBatch(f.p.tenantId);const before=await counts(f.p.tenantId);
+ for(const [code,message] of [["P0001","FICTIONAL_AUTHORITY_FAILURE"],["P0001","JOB_NOT_LIVE_DIFFERENT"],["22023","JOB_NOT_LIVE"]]) {
+  const db=await c.admin.connect();
+  try {
+   await db.query("BEGIN");
+   // Scratch replacement is transaction-local and rolled back, including all routine metadata.
+   await db.query(`CREATE OR REPLACE FUNCTION app.lp_authority(p_session uuid,p_job uuid,p_action text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN RAISE EXCEPTION '${message}' USING ERRCODE='${code}'; END $$`);
+   await db.query("SELECT set_config('app.tenant_id',$1,true)",[f.p.tenantId]);await db.query("SET LOCAL ROLE jobguard_runtime");await db.query("SELECT app.bind_request('contractor_practice',$1,$2)",[f.sessions.owner!,f.p.tenantId]);
+   await expect(db.query("SELECT app.connector_promotion($1,NULL,NULL,NULL,NULL)",[f.sessions.owner!])).rejects.toMatchObject({code,message});
+  } finally {await db.query("ROLLBACK");db.release();}
+ }
+ expect(await listKinds(f.sessions.owner!)).toEqual(mixedKinds);expect(await counts(f.p.tenantId)).toEqual(before);
+});
+it("negative control: reverting only the exact JOB_NOT_LIVE skip breaks the closed-job list; rollback restores it",async()=>{
+ const f=await promptFixture(c);await mixedBatch(f.p.tenantId);await moveOffLive(c,f);
+ const before=await counts(f.p.tenantId);
+ const latest=await readFile(new URL("../migrations/0754_connector_promotion_list_closed_job.sql",import.meta.url),"utf8");
+ const skip="     IF p_event IS NULL AND p_result IS NULL AND SQLERRM='JOB_NOT_LIVE' THEN CONTINUE; END IF;\n";
+ expect(latest.split(skip)).toHaveLength(2);
+ const scratch=latest.replace(skip,"");
+ const routine=scratch.slice(scratch.indexOf("CREATE OR REPLACE FUNCTION"),scratch.indexOf("ALTER FUNCTION"));
+ const db=await c.admin.connect();
+ try {
+  await db.query("BEGIN");await db.query(routine);
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[f.p.tenantId]);await db.query("SET LOCAL ROLE jobguard_runtime");await db.query("SELECT app.bind_request('contractor_practice',$1,$2)",[f.sessions.owner!,f.p.tenantId]);
+  await expect(db.query("SELECT app.connector_promotion($1,NULL,NULL,NULL,NULL)",[f.sessions.owner!])).rejects.toMatchObject({code:"P0001",message:"JOB_NOT_LIVE"});
+ } finally {await db.query("ROLLBACK");db.release();}
+ expect(await listKinds(f.sessions.owner!)).toEqual(remainingKinds);expect(await counts(f.p.tenantId)).toEqual(before);
 });

@@ -2,7 +2,7 @@ import { subscriptionConsentText } from "@jobguard/core";
 import { expect, it, vi } from "vitest";
 import { MemoryAuthProvider, type TenantRequestCredentials } from "@jobguard/api/identity";
 import { SubscriptionApplication } from "@jobguard/api/workspace";
-import { subscriptionPersistedReadV1, type VerifiedTenantContext } from "@jobguard/db";
+import { SubscriptionPersistenceError, subscriptionPersistedReadV1, type VerifiedTenantContext } from "@jobguard/db";
 import { loadSubscriptionPlan, submitSubscriptionAction } from "./plan-screen";
 
 const state = vi.hoisted(() => ({ token: "", application: null as SubscriptionApplication | null }));
@@ -36,12 +36,13 @@ it("passes the screen's actual Request headers through C1's real credential read
   }, { read, command });
   const requests: Request[] = [];
   let omit = "";
+  let commandStatus = 0;
   const transport: typeof fetch = async (input, init) => {
     const request = new Request(new URL(String(input), "https://fictional.invalid"), init);
     if (request.url.endsWith("/api/auth/session")) return Response.json({ csrfToken: signedIn.csrfToken, memberships: [membership] });
     requests.push(request);
     if (omit) request.headers.delete(omit);
-    if (request.method === "POST") { request.headers.set("origin", "https://fictional.invalid"); return POST(request); }
+    if (request.method === "POST") { request.headers.set("origin", "https://fictional.invalid"); const response = await POST(request); commandStatus = response.status; return response; }
     return GET(request);
   };
   expect((await loadSubscriptionPlan(transport)).agreement?.plan).toBe("Builder");
@@ -63,4 +64,10 @@ it("passes the screen's actual Request headers through C1's real credential read
     await expect(submitSubscriptionAction(membership.tenantId, "00000000-0000-4000-8000-000000000011", selection, transport)).rejects.toThrow();
     expect(command).toHaveBeenCalledOnce();
   }
+  omit = "";
+  command.mockRejectedValueOnce(new SubscriptionPersistenceError("SUBSCRIPTION_PENDING_CHANGE"));
+  await expect(submitSubscriptionAction(membership.tenantId, "00000000-0000-4000-8000-000000000012", selection, transport)).rejects.toThrow("A downgrade is already pending");
+  // The existing API status allowlist is outside this piece's permitted files.
+  // Its fallback preserves the specific typed code; the screen handles it independently of status.
+  expect(commandStatus).toBe(503);
 });
