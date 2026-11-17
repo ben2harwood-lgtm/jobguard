@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PracticeAccessError, RequestBindingRefusedError } from "@jobguard/db";
+import { PracticeAccessError } from "../../../../../packages/db/dist/practice-session.js";
+import { RequestBindingRefusedError } from "../../../../../packages/db/dist/request-binding-error.js";
 import { materialRateCommandV1 } from "../../../../api/src/material.contracts";
 
 const stub = vi.hoisted(() => ({ cookie: vi.fn(), workspace: vi.fn(), addRate: vi.fn() }));
@@ -40,7 +41,8 @@ describe.each(["composition", "addRate"] as const)("material rate %s failures", 
   });
   it.each([
     pgError, new Error("Unknown private failure"), new Error("PRIVATE_STALE_CONNECTION"),
-    new Error("STALE_MATERIAL_RATE_REVISION extra detail"), new Error("UNAUTHENTICATED"),
+    new Error("STALE_MATERIAL_RATE_REVISION extra detail"), new Error("toString"),
+    new Error("REQUEST_BINDING_REFUSED with private detail"),
     new SyntaxError("private service parser failure"), { code: "23505", message: "private SQL" },
     { code: "UNAUTHENTICATED" }, { code: "STALE_MATERIAL_RATE_REVISION" },
     "private non-Error throw", null, undefined,
@@ -51,9 +53,21 @@ describe.each(["composition", "addRate"] as const)("material rate %s failures", 
     expect(stub.addRate).toHaveBeenCalledTimes(stage === "composition" ? 0 : 1);
   });
 
-  it("preserves the exact stale revision refusal", async () => {
-    fail(new Error("STALE_MATERIAL_RATE_REVISION"));
-    await expectResponse(await POST(request()), 409, "STALE_MATERIAL_RATE_REVISION");
+  it.each([
+    ["STALE_REVISION", 409], ["IDEMPOTENCY_CONFLICT", 400],
+    ["VARIATION_REVISION_CONFLICT", 400], ["CURRENT_REVISION_REQUIRED", 400],
+    ["BASELINE_REQUIRED", 400], ["CREDIT_EXCEEDS_INVOICE", 400],
+    ["JOB_NOT_FOUND", 400], ["JOB_NOT_LIVE", 400], ["DECISION_NOT_FOUND", 400],
+    ["FORBIDDEN", 400], ["INVALID_COMMAND", 400], ["DATABASE_UNAVAILABLE", 400],
+    ["NOT_FOUND", 400], ["CONFLICT", 400], ["QUOTE_CHANGED", 400],
+    ["ALREADY_LOCKED", 400], ["SOURCE_CHANGED", 400],
+    ["STALE_MATERIAL_RATE_REVISION", 409], ["PRACTICE_MATERIAL_NOT_FOUND", 400],
+    ["REQUEST_BINDING_REFUSED", 400], ["UNAUTHENTICATED", 400], ["SYNTHETIC_MODE_REQUIRED", 400],
+  ] as const)("preserves public outcome %s/%s byte-for-byte", async (code, status) => {
+    fail(new Error(code));
+    await expectResponse(await POST(request()), status, code);
+    expect(stub.workspace).toHaveBeenCalledTimes(1);
+    expect(stub.addRate).toHaveBeenCalledTimes(stage === "composition" ? 0 : 1);
   });
 
   it.each([
