@@ -110,7 +110,7 @@ it.each([true,false])("LATER-SAFETY-60 customer timing matches contractor timing
  const {extraProceed}=await import("../src/extra-proceed.js");
  const {withTenant}=await import("../src/tenant-context.js");
  const {deriveVisitApprovalTiming,readExtraApprovalTiming}=await import("../src/extra-approval-timing.js");
- if(proceeded) await extraProceed(c.runtime,f.ctx,w.members.operative.member,f.s.jobId,f.s.extraId,
+ if(proceeded) await extraProceed(c.runtime,await testActorContext(c.admin,f.ctx,w.members.operative.member),w.members.operative.member,f.s.jobId,f.s.extraId,
   {version:"record-extra-proceed.v1",commandId:randomUUID(),requestId:f.s.requestId,reason:"Fictional work proceeded before client approval"});
  await f.use(f.signinDigest,"redeem");
  type TimingInputs={visit:Parameters<typeof deriveVisitApprovalTiming>[0]|null;requests:Parameters<typeof deriveVisitApprovalTiming>[1];

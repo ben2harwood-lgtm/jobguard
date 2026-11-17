@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { cluster, type Cluster } from "./extra-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { withTenant } from "../src/tenant-context.js";
 import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
 export { cluster };
@@ -23,7 +23,7 @@ export async function fixture(c: Cluster) {
   await db.$client.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','adoption_import')", [tenant,job]);
  });
  await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user,tenant,membershipId]);
- return { tenant, job, context, sessionDigest, actor: { membershipId, identityUserId: user } };
+ return { tenant, job, context: await testBoundTenantContext(c.admin, tenant, membershipId, sessionDigest), sessionDigest, actor: { membershipId, identityUserId: user } };
 }
 export type Fixture = Awaited<ReturnType<typeof fixture>>;
 export async function newCase(c: Cluster, f: Fixture, caseType: 'withheld_customer_payment' | 'merchant_overcharge' = 'withheld_customer_payment') {

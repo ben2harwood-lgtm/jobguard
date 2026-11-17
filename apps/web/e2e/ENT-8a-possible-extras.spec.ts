@@ -25,7 +25,7 @@ async function fixture() {
   const demo = await db.prepareWorkOrderDemo(runtime, p, { siteCount: 3 });
   await new db.WorkOrderRepository(runtime).importCsv(p, { commandId: crypto.randomUUID(), name: "fictional-inbox.csv", kind: "csv", csv: db.demoFile([db.demoRow(demo, 1), db.demoRow(demo, 2)]) });
   const jobs = (await admin.query("SELECT job_id,id FROM app.work_order WHERE tenant_id=$1 ORDER BY reference", [p.tenantId])).rows;
-  const sessions: Record<string, string> = {}, members: Record<string, { member: { membershipId: string }; grant: string }> = {};
+  const sessions: Record<string, string> = {}, members: Record<string, { member: { membershipId: string; tenantId: string; identityUserId: string }; grant: string }> = {};
   for (const role of ["supervisor", "finance", "operative"]) {
    let memberId = demo.operativeMembershipId;
    if (role !== "operative") {
@@ -35,9 +35,9 @@ async function fixture() {
    const actor = (await admin.query("SELECT m.identity_user_id,g.id FROM app.membership m JOIN app.role_grant g ON(g.tenant_id,g.membership_id)=(m.tenant_id,m.id) WHERE m.tenant_id=$1 AND m.id=$2 ORDER BY g.id LIMIT 1", [p.tenantId, memberId])).rows[0]!;
    const token = crypto.randomUUID();
    await admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) VALUES($1,$2,$3,$4,$5,clock_timestamp(),clock_timestamp()+interval '6 days')", [crypto.randomUUID(), p.tenantId, memberId, actor.identity_user_id, createHash("sha256").update(token).digest("hex")]);
-   sessions[role] = token; members[role] = { member: { membershipId: memberId }, grant: actor.id };
+   sessions[role] = token; members[role] = { member: { membershipId: memberId, tenantId: p.tenantId, identityUserId: actor.identity_user_id }, grant: actor.id };
   }
-  const f = { p, ctx: db.verifiedTenantContextFromMembership(p), jobId: jobs[0]!.job_id as string, otherJob: jobs[1]!.job_id as string, sessions, members };
+  const f = { p, ctx: db.verifiedTenantContextFromMembership(p), financeContext: db.verifiedTenantContextFromMembership(members.finance!.member as Parameters<typeof db.verifiedTenantContextFromMembership>[0], { kind: "contractor_practice", credential: sessions.finance! }), jobId: jobs[0]!.job_id as string, otherJob: jobs[1]!.job_id as string, sessions, members };
   const repo = new db.EnterpriseLivePromptRepository(runtime);
   await repo.importMaterials(sessions.finance!, materialsInput(f));
   return { c, f, repo, prompt: (await repo.list(sessions.supervisor!, listInput(f))).items[0]! };
@@ -94,7 +94,7 @@ test("an explicit authorised existing-extra choice coalesces without creating an
  const { c, f, prompt } = await fixture();
  try {
   const line = (await c.admin.query("SELECT l.scope_item_id,l.sor_version_id FROM app.work_order_line l JOIN app.work_order_current w ON(w.tenant_id,w.revision_id)=(l.tenant_id,l.revision_id) WHERE l.tenant_id=$1 AND l.job_id=$2 AND l.sor_code='REPAIR-DOOR'", [f.p.tenantId, f.jobId])).rows[0]!;
-  const office = async () => new (await database()).ExtraRepository(c.runtime).raiseExtra(f.ctx, { version: "raise-extra.v1", commandId: crypto.randomUUID(), commandType: "RecordOfficeExtra", jobId: f.jobId, actorMembershipId: f.members.finance!.member.membershipId, grantId: f.members.finance!.grant, note: "Fictional office extra", description: "Fictional door excess", sorItem: { versionId: line.sor_version_id, code: "REPAIR-DOOR" }, excessOfScopeItemId: line.scope_item_id });
+  const office = async () => new (await database()).ExtraRepository(c.runtime).raiseExtra(f.financeContext, { version: "raise-extra.v1", commandId: crypto.randomUUID(), commandType: "RecordOfficeExtra", jobId: f.jobId, actorMembershipId: f.members.finance!.member.membershipId, grantId: f.members.finance!.grant, note: "Fictional office extra", description: "Fictional door excess", sorItem: { versionId: line.sor_version_id, code: "REPAIR-DOOR" }, excessOfScopeItemId: line.scope_item_id });
   await office(); const chosen = await office();
   await context.addCookies([{ name: "jg_session", value: f.sessions.supervisor!, url: origin }]);
   await page.goto(`/contractor/jobs/${f.jobId}/possible-extras?promptId=${prompt.id}`);

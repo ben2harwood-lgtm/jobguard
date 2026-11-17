@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-6c-money-routines"
       ],
-      "note": "LP-6c RED repair 5 READY for coordinator PostgreSQL comparison: preserve 0667 ownership guard and byte-identical 1217; exact-member fixture binding and completed explicit-actor call-site sweep, including binding-only practice-owner proof edits. Assertions unchanged. Real PostgreSQL, GitHub CI and independent exact-head RED review remain pending.",
+      "note": "LP-6c RED CI repair try 1: repair actor/session fixture binding without changing assertions or migrations. Do not commit: customer-portal message delegation has no supported protected binding; restoring that path needs an approved identity design. PostgreSQL/browser CI and independent exact-head RED review remain required.",
       "allow": [
         "docs/contracts/lp-0-effective-privileges-v1.md",
         "packages/db/migration-notes/0686_lp6c_money_binding.md",
@@ -291,7 +291,11 @@
         "packages/db/test/watchdog-fixtures.ts",
         "packages/db/test/watchdog.integration.test.ts",
         "packages/db/test/worm-command.integration.test.ts",
-        "packages/db/test/worm-hold-screen.integration.test.ts"
+        "packages/db/test/worm-hold-screen.integration.test.ts",
+        "apps/web/e2e/ENT-8a-possible-extras.spec.ts",
+        "apps/web/e2e/MON-6-customer-practice-pay-now.spec.ts",
+        "apps/web/e2e/MON-6-stored-pay-now-preview.spec.ts",
+        "packages/db/test/canonical-revise-duplicate-guard.integration.test.ts"
       ]
     }
   }
