@@ -32,17 +32,19 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
   const [busy, setBusy] = useState(false), [description, setDescription] = useState(""), [amount, setAmount] = useState("");
   const errorTarget = useRef<HTMLParagraphElement | null>(null);
   useEffect(() => { if (error) errorTarget.current?.focus(); }, [error]);
-  const writing = useRef(false), active = useRef<AbortController | null>(null), lifetime = useRef(0), currentJob = useRef(jobId);
+  const writing = useRef(false), active = useRef<AbortController | null>(null), lifetime = useRef(0), readGeneration = useRef(0), currentJob = useRef(jobId);
   currentJob.current = jobId;
   const load = useCallback(async () => {
-    active.current?.abort(); const controller = new AbortController(); active.current = controller;
+    const request = ++readGeneration.current;
+    const controller = new AbortController(); active.current = controller;
+    const isCurrent = () => request === readGeneration.current && currentJob.current === jobId && !controller.signal.aborted;
     try {
       const response = await fetch(`/api/jobs/${jobId}/final-account/lock`, { cache: "no-store", signal: controller.signal });
       if (!response.ok) { const failure = await response.json(); throw new Error(String(failure.code)); }
       const next = viewV1.parse(await response.json());
       if (next.jobId !== jobId) throw new Error("WRONG_JOB_RESPONSE");
-      if (!controller.signal.aborted) { setView(next); setError(""); }
-    } catch (failure) { if (!controller.signal.aborted) { setView(null); setError(failure instanceof Error ? failure.message : "DATABASE_UNAVAILABLE"); } }
+      if (isCurrent()) { setView(next); setError(""); }
+    } catch (failure) { if (isCurrent()) { setView(null); setError(failure instanceof Error ? failure.message : "DATABASE_UNAVAILABLE"); } }
   }, [jobId]);
   useEffect(() => {
     setView(null); setError(""); writing.current = false; setBusy(false); setDescription(""); setAmount("");
@@ -52,7 +54,7 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
     const visible = () => { if (document.visibilityState === "visible") void load(); };
     window.addEventListener("focus", focus); document.addEventListener("visibilitychange", visible);
     void load();
-    return () => { lifetime.current++; window.removeEventListener("focus", focus); document.removeEventListener("visibilitychange", visible); active.current?.abort(); window.removeEventListener(FINAL_CHECK_CHANGED_EVENT, changed); window.removeEventListener(JOB_SAVED_EVENT, changed); window.removeEventListener(INVOICE_CHANGED_EVENT, changed); };
+    return () => { lifetime.current++; readGeneration.current++; window.removeEventListener("focus", focus); document.removeEventListener("visibilitychange", visible); if (currentJob.current !== jobId) active.current?.abort(); window.removeEventListener(FINAL_CHECK_CHANGED_EVENT, changed); window.removeEventListener(JOB_SAVED_EVENT, changed); window.removeEventListener(INVOICE_CHANGED_EVENT, changed); };
   }, [load, account.id, jobId]);
   async function command(route: string, body: unknown, after?: () => void) {
     if (writing.current) return;

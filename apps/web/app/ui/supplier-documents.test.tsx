@@ -7,7 +7,7 @@ vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof React
   useState: (initial: unknown) => [initial === null ? fixture.state : initial, vi.fn()],
   useEffect: vi.fn(), useCallback: (fn: unknown) => fn,
 }));
-vi.mock("./materials-command", () => ({ materialsCommandFor: () => ({}),
+vi.mock("./materials-command", () => ({ materialsCommandFor: () => ({ read: async (_key: string, query: () => Promise<unknown>, apply: (value: unknown) => void) => apply(await query()) }),
   useMaterialsCommand: () => ({ busy: false, run: async (fn: () => Promise<void>) => fn() }),
 }));
 vi.stubGlobal("React", React);
@@ -46,4 +46,18 @@ it("labels each delivery quantity separately", () => {
   for (const label of ["Ordered", "Delivered", "Rejected", "Missing", "Later delivered"])
     expect(html).toContain(`<dt>${label}</dt>`);
   expect(html).toContain('data-testid="delivery-later-delivered">1 each');
+});
+
+it("refreshes supplier sources on hash-only recovery entry and removes its listener on exit", async () => {
+ const events=Object.assign(new EventTarget(),{location:{hash:"#recovery-cases"}});
+ vi.stubGlobal("window",events);
+ const fetcher=vi.fn(async()=>({ok:true,json:async()=>({state:fixture.state})}));
+ vi.stubGlobal("fetch",fetcher);
+ panel();
+ const cleanup=vi.mocked(React.useEffect).mock.calls.at(-1)![0]();
+ events.dispatchEvent(new Event("hashchange"));await new Promise<void>(resolve=>setImmediate(resolve));
+ expect(fetcher).toHaveBeenCalledExactlyOnceWith("/api/jobs/fictional-job/supplier-documents",{cache:"no-store"});
+ if(typeof cleanup==="function")cleanup();
+ events.dispatchEvent(new Event("hashchange"));
+ expect(fetcher).toHaveBeenCalledTimes(1);
 });

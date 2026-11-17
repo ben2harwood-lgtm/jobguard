@@ -43,24 +43,26 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
   // A newer post-command read supersedes any pre-command navigation request.
   generation.current++;activeRequest.current?.abort();setCapture(snapshot);setJob(null);setError(null);setLoading(false);
  },[]);
- const load=useCallback(async()=>{
-  const current=++generation.current;activeRequest.current?.abort();const controller=new AbortController();activeRequest.current=controller;
-  setLoading(true);setError(null);setJob(null);setCapture(null);setCompletionLabel(null);
+ const load=useCallback(async(preserveView=false)=>{
+  // Superseded same-job reads finish; the generation guard ignores their results.
+  const current=++generation.current;const controller=new AbortController();activeRequest.current=controller;
+  // Section navigation revalidates saved facts without tearing down local edits.
+  if(!preserveView){setLoading(true);setJob(null);setCapture(null);setCompletionLabel(null);}setError(null);
   try{
    const proposalResponse=await fetch(`/api/jobs/${encodeURIComponent(jobId)}/proposal`,{cache:"no-store",signal:controller.signal});
    if(current!==generation.current)return;
-   if(proposalResponse.ok){const parsed=captureWorkspaceResponseV1.parse(await proposalResponse.json());if(parsed.jobId!==jobId)throw new Error("WRONG_JOB_RESPONSE");if(current===generation.current)setCapture(parsed);return;}
+   if(proposalResponse.ok){const parsed=captureWorkspaceResponseV1.parse(await proposalResponse.json());if(parsed.jobId!==jobId)throw new Error("WRONG_JOB_RESPONSE");if(current===generation.current){setCapture(parsed);setJob(null);}return;}
    // Only an absent capture permits the non-capture workspace. A failed capture
    // service must not be disguised as an apparently healthy partial workspace.
    if(proposalResponse.status!==404){setError(proposalResponse.status===401||proposalResponse.status===403?"forbidden":"unavailable");return;}
    const response=await fetch(`/api/jobs/${encodeURIComponent(jobId)}`,{cache:"no-store",signal:controller.signal});
    if(current!==generation.current)return;
    if(!response.ok){setError([401,403,404].includes(response.status)?"forbidden":"unavailable");return;}
-   const parsed=jobWorkspaceResponseV1.parse(await response.json());if(parsed.job.id!==jobId)throw new Error("WRONG_JOB_RESPONSE");if(current===generation.current)setJob(parsed.job);
+   const parsed=jobWorkspaceResponseV1.parse(await response.json());if(parsed.job.id!==jobId)throw new Error("WRONG_JOB_RESPONSE");if(current===generation.current){setCapture(null);setJob(parsed.job);}
   }catch{if(current===generation.current&&!controller.signal.aborted)setError("unavailable");}
-  finally{if(current===generation.current)setLoading(false);}
+  finally{if(current===generation.current){activeRequest.current=null;setLoading(false);}}
  },[jobId]);
- useEffect(()=>{void load();return()=>{generation.current++;activeRequest.current?.abort();}},[load]);
+ useEffect(()=>{void load();return()=>{generation.current++;if(currentJobId.current!==jobId)activeRequest.current?.abort();}},[load]);
  useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load();};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
  useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
  // Explicit in-workspace controls retain mounted editors and unsaved drafts.
@@ -86,7 +88,13 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
     const open=Array.from(root.querySelectorAll<HTMLButtonElement>(".confirmed-scope button")).find(button=>button.textContent==="Price the work");open?.click();
     if(open)return false;
    }
-   const target=source?document.getElementById(source):root.querySelector<HTMLElement>(selector);if(!target||!root.contains(target))return false;const focusRegion=target.matches?.("h1,h2,h3")?(target.closest?.("section")??target):target;if(target!==document.activeElement&&focusRegion.contains?.(document.activeElement)&&document.activeElement!==document.body){observer?.disconnect();return true;}for(let parent=target.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;target.style&&(target.style.scrollMarginTop="96px");target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:"start"});observer?.disconnect();return true;};
+   const target=source?document.getElementById(source):root.querySelector<HTMLElement>(selector);if(!target||!root.contains(target))return false;const focusRegion=target.matches?.("h1,h2,h3")?(target.closest?.("section")??target):target;if(target!==document.activeElement&&focusRegion.contains?.(document.activeElement)&&document.activeElement!==document.body){(document.activeElement as HTMLElement).scrollIntoView?.({block:"center"});observer?.disconnect();return true;}for(let parent=target.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;target.style&&(target.style.scrollMarginTop="96px");target.tabIndex=-1;
+   // Reveal the region first: focusing it can redirect focus to a journey control.
+   // That control must be the final scroll destination, rather than the region.
+   target.scrollIntoView({block:"start"});target.focus({preventScroll:true});
+   const focused=document.activeElement as HTMLElement|null;
+   if(focused&&focused!==target&&focusRegion.contains?.(focused))focused.scrollIntoView?.({block:"center"});
+   observer?.disconnect();return true;};
   if(focus())return;
   observer=new MutationObserver(()=>{focus();});observer.observe(root,{childList:true,subtree:true});
   const timeout=window.setTimeout(()=>observer?.disconnect(),15000);
@@ -103,7 +111,7 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
    <PracticeJourney jobId={jobId} status={capture.status} onSavedLabel={setCompletionLabel} onNavigate={navigateSection}/>
    <JobParties jobId={jobId}/>
    {/* The same saved status removes pre-live proof and enables the editor proof slot. */}
-   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={jobId} result={capture} initialPricing={pricing} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId} extrasHref="#variations-title"/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
+   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal key={jobId} result={capture} initialPricing={pricing} sectionNavigationKey={fragment} sectionView={fragment==="#scope"?"scope":pricing?"pricing":undefined} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState jobId={jobId}/><JobDiary key={`diary:${jobId}`} jobId={jobId} extrasHref="#variations-title"/><CustomerMessages key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
    <hr/>
    <h2 id="practice-tools">Practice tools — demo only, not part of your job</h2>
    <p>These tools use fictional examples to explore JobGuard; they are separate from your job’s next steps.</p>

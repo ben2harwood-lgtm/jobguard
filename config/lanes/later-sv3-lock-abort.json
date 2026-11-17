@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-sv3-lock-abort": {
+      "branches": [
+        "codex/sandbox/later-sv3-lock-abort"
+      ],
+      "note": "RED r2: restore main full hash reload and exact assertions; invalidate superseded/unmounted shell, journey and final-account-lock reads without transport aborts; retain job-change and stale-response guards.",
+      "allow": [
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/app/ui/workspace-shell-navigation.test.tsx",
+        "apps/web/app/ui/workspace-shell-order.test.tsx",
+        "apps/web/app/ui/practice-journey.tsx",
+        "apps/web/app/ui/practice-journey.test.tsx",
+        "apps/web/app/ui/final-account-lock.tsx",
+        "apps/web/app/ui/final-account-lock.test.tsx"
+      ]
+    }
+  }
+}
