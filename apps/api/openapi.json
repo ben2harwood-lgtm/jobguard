@@ -1043,6 +1043,113 @@
           "evidence-packs"
         ]
       }
+    },
+    "/recovery-cases/{id}/messages": {
+      "get": {
+        "operationId": "RecoveryMessageController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read source-bound practice messages and durable fake delivery receipts",
+        "tags": [
+          "recovery-messages"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryMessageController_post",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "commandId"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "recovery-message-preview.v1",
+                      "recovery-message-command.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "approve",
+                      "cancel",
+                      "retry",
+                      "reconcile",
+                      "advance"
+                    ]
+                  },
+                  "messageId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "expectedCaseRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "packId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "recipient": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "\\.invalid$"
+                  },
+                  "body": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "amountPence": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000000000
+                  },
+                  "contentHash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "success",
+                      "retryable",
+                      "outcome_unknown"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview, approve, cancel or advance one exact factual practice message",
+        "tags": [
+          "recovery-messages"
+        ]
+      }
     }
   },
   "info": {
