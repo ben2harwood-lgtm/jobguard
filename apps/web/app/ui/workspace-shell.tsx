@@ -44,7 +44,9 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
   generation.current++;activeRequest.current?.abort();setCapture(snapshot);setJob(null);setError(null);setLoading(false);
  },[]);
  const load=useCallback(async(preserveView=false)=>{
-  const current=++generation.current;activeRequest.current?.abort();const controller=new AbortController();activeRequest.current=controller;
+  // Reuse this job's pending read during repeated section navigation.
+  if(activeRequest.current&&!activeRequest.current.signal.aborted)return;
+  const current=++generation.current;const controller=new AbortController();activeRequest.current=controller;
   // Section navigation revalidates saved facts without tearing down local edits.
   if(!preserveView){setLoading(true);setJob(null);setCapture(null);setCompletionLabel(null);}setError(null);
   try{
@@ -59,13 +61,13 @@ export function WorkspaceShell({jobId,initialPricing=false}:{jobId:string;initia
    if(!response.ok){setError([401,403,404].includes(response.status)?"forbidden":"unavailable");return;}
    const parsed=jobWorkspaceResponseV1.parse(await response.json());if(parsed.job.id!==jobId)throw new Error("WRONG_JOB_RESPONSE");if(current===generation.current){setCapture(null);setJob(parsed.job);}
   }catch{if(current===generation.current&&!controller.signal.aborted)setError("unavailable");}
-  finally{if(current===generation.current)setLoading(false);}
+  finally{if(current===generation.current){activeRequest.current=null;setLoading(false);}}
  },[jobId]);
  useEffect(()=>{void load();return()=>{generation.current++;activeRequest.current?.abort();}},[load]);
- useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load();};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
+ useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load(true);};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
  useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
  // Explicit in-workspace controls retain mounted editors and unsaved drafts.
- // Ordinary URL/hash navigation still reloads saved reads, as on main.
+ // Hash navigation revalidates saved reads while retaining the same job's panels.
  const navigateSection=(target:string)=>{
   history.replaceState(null,"",`${location.pathname}${location.search}${target}`);
   setFragment(target);

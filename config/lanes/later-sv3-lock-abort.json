@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-sv3-lock-abort": {
+      "branches": [
+        "codex/sandbox/later-sv3-lock-abort"
+      ],
+      "note": "RED: preserve same-job pending reads and mounted journey during hash navigation; retain job-change cancellation and stale-response guards.",
+      "allow": [
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/app/ui/workspace-shell-navigation.test.tsx",
+        "apps/web/app/ui/workspace-shell-order.test.tsx",
+        "config/lanes/later-sv3-lock-abort.json"
+      ]
+    }
+  }
+}
