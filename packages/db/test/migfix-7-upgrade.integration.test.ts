@@ -287,6 +287,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const presenceSql = await readFile(new URL("../migrations/0753_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
   for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu))
     lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
+  // LATER-SAFETY-189: xa_proceed's latest body preserves covered reads and requires the raiser for writes.
+  const proceedRaiserSql = await readFile(new URL("../migrations/0760_extra_proceed_raiser_authority.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_proceed(p_job,p_extra,p_actor,p_body)", proceedRaiserSql.split("AS $$")[1]!.split("$$;")[0]!);
   const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;
   const namedAdditions = [
     "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",
