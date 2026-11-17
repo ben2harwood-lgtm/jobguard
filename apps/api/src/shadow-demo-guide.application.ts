@@ -7,7 +7,7 @@ import { PracticeAccess } from "./practice-access.js";
 export class ShadowDemoGuideError extends Error {
  constructor(readonly code: "SYNTHETIC_MODE_REQUIRED" | "INVALID_SHADOW_GUIDE_COMMAND") { super(code); }
 }
-const linkCommandV1 = z.object({ version: z.literal("shadow-guide-customer-link.v1"), customerId: z.string().uuid() }).strict();
+const linkCommandV1 = z.object({ version: z.literal("shadow-guide-customer-link.v1"), customerId: z.string().uuid(), documentId: z.string().uuid().optional() }).strict();
 /** Demo-only (shadow-30000 guide). Refused outside synthetic_demo here and in every route and SQL routine. */
 export class ShadowDemoGuideApplication {
  private readonly access: PracticeAccess; private readonly repository: ShadowDemoGuideRepository;
@@ -27,7 +27,7 @@ export class ShadowDemoGuideApplication {
   if (!input.success) throw new ShadowDemoGuideError("INVALID_SHADOW_GUIDE_COMMAND");
   const secret = randomBytes(32).toString("base64url");
   const path = `/customer/sign-in#${auth.context.tenantId}/${jobId}/${input.data.customerId}/${secret}`;
-  await this.repository.issueCustomerLink(auth.context, jobId, input.data.customerId, auth.digest, linkDigest(`customer-link:${secret}`), path);
+  await this.repository.issueCustomerLink(auth.context, jobId, input.data.customerId, auth.digest, linkDigest(`customer-link:${secret}`), path, ...(input.data.documentId ? [input.data.documentId] as const : [] as const));
   return { version: "shadow-guide-customer-link-issued.v1" as const, path, delivery: "simulated_delivery" as const, realExternalActions: 0 as const };
  }
 }
