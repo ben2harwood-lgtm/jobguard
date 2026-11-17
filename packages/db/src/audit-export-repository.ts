@@ -62,7 +62,7 @@ export function verifySignedAuditExport(raw: unknown, trustedPublicKeyPem?: stri
     for (const checkpoint of payload.checkpoints) verifyAuditChain(events, { ...checkpoint, recordedAt: new Date(checkpoint.recordedAt) });
     const tail = events.at(-1)!;
     if (tail.eventHash !== payload.headHash || tail.id !== payload.exportId || tail.eventType !== "audit.export.created" || tail.subjectRef !== payload.exportId || tail.occurredAt.toISOString() !== payload.createdAt) throw new Error();
-    return { version: "audit-export-verification.v1" as const, integrityValid: true, complete: trustedPublicKeyPem !== undefined, signerTrusted: trustedPublicKeyPem !== undefined, checkpointTrust: "signer attests restricted handoff; no external timestamp" as const, actorAttribution: events.map(event => ({ id: event.id, actorRef: event.actorRef, kind: auditActorAttribution(event) })), notice: AUDIT_EXPORT_NOTICE, evidenceTrust: events.map(event => ({ id: event.id, trust: auditEventTrust(event) })), payload };
+    return { version: "audit-export-verification.v1" as const, integrityValid: true, complete: trustedPublicKeyPem !== undefined, signerTrusted: trustedPublicKeyPem !== undefined, checkpointTrust: "signer attests restricted handoff; no external timestamp" as const, actorAttribution: events.map(event => ({ id: event.id, actorRef: event.version === "audit.v3" ? event.payload.references?.auditActorRef : event.actorRef, kind: auditActorAttribution(event) })), notice: AUDIT_EXPORT_NOTICE, evidenceTrust: events.map(event => ({ id: event.id, trust: auditEventTrust(event) })), payload };
   } catch { throw new AuditExportError("AUDIT_EXPORT_INVALID"); }
 }
 export interface AuditExportActor { membershipId: string; identityUserId: string; }

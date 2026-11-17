@@ -18,6 +18,8 @@ for (const file of readdirSync(directory).filter(f => /^\d{4}.*\.sql$/.test(f)).
   for (const fn of functions(readFileSync(new URL(file, directory), "utf8"))) {
     if (file === lp6dMigration) { lp6dGuarded.push({ ...fn, predecessor: final.get(fn.name) }); if (file > sealingMigration && replacements.has(fn.name)) recreatedWriters.push({ ...fn, file }); continue; }
     final.set(fn.name, fn.sql);
+    // LP-6e (0758) replaces the private sealer itself; it is the sole direct writer, not a converted caller.
+    if (file === "0758_lp6e_audit_attribution.sql" && fn.name === "app.lp4_seal_audit") continue;
     if (file !== sealingMigration && !(file === "0660_baseline_ancestry_audit_trust.sql" && fn.name === "app.decision_check_command") && !(file === "0698_final_check_post_invoice_rerun.sql" && fn.name === "app.guard_final_check_manifest")) main.set(fn.name, { file, sql: fn.sql });
     if (file > sealingMigration && replacements.has(fn.name)) recreatedWriters.push({ ...fn, file });
   }

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { commercialOutboundClaimsEnabled } from "./commercial-outbound-pause.js";
 import { darkOrderStillAuthorized } from "./purchase-order-action-guard.js";
 import { appendAuditBatch, auditEventInputV1Schema } from "./audit.js";
-import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { isRequestTransaction, withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 export const outboundActionV1Schema=z.object({version:z.literal("outbound-action.v1"),id:z.guid({ error: "Invalid uuid" }),authorizationId:z.guid({ error: "Invalid uuid" }),adapter:z.string().regex(/^fake_/u),providerEffectKey:z.string().min(1).max(300),actionType:z.string().min(1).max(100),recipient:z.string().max(320).nullable(),contentHash:z.string().regex(/^[a-f0-9]{64}$/u),immutableContent:z.string().max(1_000_000),aggregateRevision:z.number().int().nonnegative(),amountPence:z.number().int().nonnegative().nullable(),currency:z.literal("GBP").nullable(),policyVersion:z.string().min(1).max(80),authorizationExpiresAt:z.coerce.date()}).strict();
 export type OutboundAction=z.infer<typeof outboundActionV1Schema>;
@@ -28,8 +28,10 @@ export type OutboxRevocationRefusal = { kind: "cancelled"; code: "AUTHORIZATION_
 
 async function appendOutboxAudit(db: TenantTransaction, input: unknown): Promise<void> {
   const event = auditEventInputV1Schema.strict().parse(input);
-  // Preserve the established pre-cutover path in supported older schemas.
-  const installed = (await db.$client.query("SELECT to_regprocedure('app.lp6e_append_outbox_audit(jsonb)') installed")).rows[0].installed;
+  // A request's existing in-transaction writer is not the actor-less queue worker.
+  // A routing mistake still fails closed at the bridge's protected presence check.
+  if (isRequestTransaction(db)) { await appendAuditBatch(db, [event]); return; }
+  const installed = (await db.$client.query("SELECT to_regprocedure('app.lp6e_append_outbox_audit(jsonb)') installed")).rows[0]?.installed;
   if (installed) await db.$client.query("SELECT * FROM app.lp6e_append_outbox_audit($1::jsonb)", [JSON.stringify(event)]);
   else await appendAuditBatch(db, [event]);
 }
