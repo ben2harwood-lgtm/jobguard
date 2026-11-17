@@ -294,6 +294,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   lp6dBodies.set("app.xa_price", [pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!]);
   // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
   lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);
+  // LP6D-WORKER-PRESENCE: exact latest sources; historical 0749 assertions remain above.
+  const presenceSql = await readFile(new URL("../migrations/0753_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
+  for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis))
+    lp6dBodies.set(m[1]!, [m[4]!]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     // 0751 succeeds LP-6d for this exact dispatcher; pin it before generic LP-6d successor handling.
