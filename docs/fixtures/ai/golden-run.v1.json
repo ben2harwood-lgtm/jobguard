@@ -10,7 +10,7 @@
     "packages/ai/src/capture.ts": "febb8a6c3a8a8328ff8d6742cf63ab5e9b1148c057c902ab3a63a4b9aa36c3dc",
     "packages/ai/src/capture-fixture-parser.ts": "04493e34fd8993abe766d82b7fa3584d3f308bcce9a787ce4e277a2451216241",
     "packages/ai/src/fixture-provider.ts": "c4b11ef40797f2dfd3ced96cad708e1f450e42e055f3af1d7a1fcb5565573d1d",
-    "packages/ai/src/gateway.ts": "eb5a784b9fa2f604ef27204fdcb9495a32704528e8fa696cfadfc7e04b6ddeb4",
+    "packages/ai/src/gateway.ts": "f123bc0a187e12f2ed7b512c36aba40fe6d0bb69a1d1af3487552b44edcd7c66",
     "packages/ai/src/types.ts": "5ec490f7e93cecadb3c6e672beb9eebf23e53f2acaf99bfde83e5f585b4b0911",
     "packages/ai/src/capture-evaluation.ts": "4bcecbf1c87f34dcc7e4d3d13dfeae069d31aad2e22201b7b1ef85d5b5f20eaf",
     "packages/ai/src/evaluation-runner.ts": "e4b9cdb8f6f51cd1e3eff4f5338dd5f09aedc081e0c7150fcb77d1cd5fefb65a",
