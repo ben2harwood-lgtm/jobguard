@@ -115,3 +115,39 @@ Mobile now scopes its ambient types with `types: ["react"]` and `typeRoots: ["./
 **Age-clear date:** `glob@14.0.2`, published 27 October 2026 at 22:07:00.325 UTC, reaches fourteen days on **10 November 2026 at 22:07:00.325 GMT (Europe/London)**. No clock override, release-age exclusion or security downgrade is permitted. Full graph resolution and supply-chain lint must run again then; other immature packages may still block it.
 
 The 5 November scoped follow-up passed broad `pnpm typecheck` and `pnpm build` (8/8 tasks each). Broad lint remains fail-closed on unresolved mobile lock bindings under the unchanged fourteen-day control. See `docs/contracts/m3-2-native-risk.md` for the same-stack continuation, exact verification commands and additional all-unchecked device steps. Neither aggregate piece is finished.
+
+
+## 16 November 2026 — NATIVE-MATURE-LOCKFILE resolution receipt (HELD)
+
+This child worktree is on `codex/sandbox/native-mature-lockfile` at the required saved native head `49e3e892bd142d86ea85d8db5ddd4a10b4cb2b2d`. Initial working tree was clean. No fetch, git write, owner-branch mutation, native-composition merge, migration, PR or CI dispatch occurred. The prior 14 November `/tmp` handoff concerned an incorrect base; that base problem is absent in this pass.
+
+**Unresolved prerequisite, do not integrate:** `pnpm-lock.yaml` remains unchanged and lacks the mobile importer/integrity bindings. Exact pins, security overrides, `minimumReleaseAge: 20160`, release evidence, supply-chain checker and native encryption/authority flags remain unchanged. No integrity, snapshot or publication date was invented. Glob's previously evidenced eligibility date remains 10 November 2026 at 22:07:00.325 GMT; it establishes neither graph maturity nor completion today.
+
+Runtime: Node `v24.17.0`; cached pnpm `10.28.1` verified at `/Users/benharwood/.npm/_npx/116f317e7afab6e7/node_modules/pnpm/bin/pnpm.cjs`. Check commands used the existing `/tmp/jg-pnpm-10.28.1-bin` wrapper first in PATH (points to cached Corepack pnpm 10.28.1). The default pnpm wrapper emitted an ignored-overrides warning and stalled on `--version`; it was interrupted and not used for resolution. Vitest reports `4.1.12`; its actual `--help` lists `--maxWorkers <workers>`. The selected test invocation used `--maxWorkers=1`, not inherited Vitest 2 settings.
+
+The final sandbox instruction prohibits package downloads. To attempt resolution without touching an installed tree, copied only workspace manifests, workspace configuration and the current lock into `/tmp/native-mature-lockfile-20261116-58ao0v7_`. No package manifest or control was changed in that copy. From that directory ran the cached pinned CLI:
+
+```sh
+node /Users/benharwood/.npm/_npx/116f317e7afab6e7/node_modules/pnpm/bin/pnpm.cjs install --offline --lockfile-only --store-dir /tmp/native-mature-lockfile-20261116-58ao0v7_/store
+```
+
+**Exit 1:** `ERR_PNPM_NO_OFFLINE_META Failed to resolve turbo@2.10.12 in package mirror /Users/benharwood/Library/Caches/pnpm/metadata-ff-v1.3/registry.npmjs.org/turbo.json`. pnpm reported `resolved 1, reused 0, downloaded 0, added 0`. Resolution stopped at missing root metadata before mobile graph resolution. This is not evidence of an immature turbo release. Its publication/earliest eligible date is not established here. No online retry, release-evidence refresh, frozen install, age bypass, script-policy bypass or package download was attempted. A clean install cannot be proved without a successfully resolved complete lock.
+
+Local checks (from this worktree unless noted):
+
+| Command | Actual result |
+| --- | --- |
+| `node --check apps/mobile/tools/supply-chain.mjs` | PASS, syntax only |
+| `node apps/mobile/tools/supply-chain.mjs` | Exit 1, unchanged fail-closed assertion `expo: registry integrity missing from lock` |
+| Existing Vitest entrypoint, from `apps/mobile`: `node ../../node_modules/.pnpm/vitest@4.1.12_@types+node@24.0.3_vite@7.3.7_@types+node@24.0.3_terser@5.51.2_tsx@4.20.3_yaml@2.9.1_/node_modules/vitest/vitest.mjs run --maxWorkers=1 src/store.test.ts src/sync.test.ts src/lifecycle.test.ts` | Exit 1, 3 suites failed to load, zero tests executed: cannot resolve `expo/tsconfig.base`. `apps/mobile/node_modules` is absent; installed root dependencies do not establish mobile readiness. No remaining mobile batches run after this shared prerequisite failure |
+| `PATH=/tmp/jg-pnpm-10.28.1-bin:$PATH pnpm --filter @jobguard/mobile typecheck` | Exit 2, TS2688 missing React type definitions and TS6053 missing `expo/tsconfig.base` |
+| `PATH=/tmp/jg-pnpm-10.28.1-bin:$PATH pnpm typecheck --concurrency=1` | Exit 2 at mobile with the same missing dependencies; Turbo reports 4 successful / 6 total tasks and warns mobile workspace is absent from lock. Other remaining tasks are not a full-root pass. Cache writes also emitted sandbox IO warnings |
+| `node --test --test-concurrency=1 tools/ci-workflow.test.mjs` | PASS, 9/9 tooling tests; not a GitHub CI run |
+| `LANE_BASE_REF=49e3e892bd142d86ea85d8db5ddd4a10b4cb2b2d node tools/agent-lane-boundary-lint.mjs` | Exit 1, correctly refuses self-comparison while HEAD still equals the specified base. No git write to evade refusal |
+| Existing exported lane helpers `loadLanePolicy`, `selectLane`, `lanePathAllowed` | Working-tree policy parse, exact child-branch selection and both receipt/lane paths PASS. Not committed-range evidence |
+
+An initial root typecheck command incorrectly used `pnpm typecheck -- --concurrency=1`, forwarding the option to TypeScript and failing TS5023. Corrected to the command above; no source change was made to address the invocation error. Root build/lint/full tests, other tooling suites, database/browser and device suites were not run: the final sandbox order limits local work to relevant unit tests/typecheck, dependencies cannot be downloaded, and the relevant unresolved lock check already fails. Tooling suites that create git fixture repositories were not run under the no-git-writes restriction. No broader pass is claimed.
+
+Only this appended receipt and the child lane file change. The lane grants exactly this receipt, not itself or the owner's lane. Router next step: resume genuine full age-enforced graph resolution in an environment permitting authentic registry metadata and package installation, retaining all pins/overrides/controls; then prove isolated frozen install and rerun mandatory checks. Any newly immature release or required out-of-scope control change remains a named hold. NOPR remains in effect. This slice and aggregate M3-1 remain OPEN; physical-device development builds/encryption/sync proof, approved route, D08, G3, M3-2 extraction/key lifecycle/cleanup and exact-head independent RED review remain outstanding.
+
+Final whitespace check: `git diff --check` PASS. No implementation code changed; no worthwhile implementation simplification was identified for a LATER / SIMPLICITY entry.

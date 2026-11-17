@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "native-mature-lockfile": {
+      "branches": [
+        "codex/sandbox/native-mature-lockfile"
+      ],
+      "allow": [
+        "docs/contracts/m3-1-native-risk.md"
+      ],
+      "note": "M3-1 NATIVE-MATURE-LOCKFILE resolution receipt only; offline metadata hold, NOPR=1, RED native integration review still required."
+    }
+  }
+}
