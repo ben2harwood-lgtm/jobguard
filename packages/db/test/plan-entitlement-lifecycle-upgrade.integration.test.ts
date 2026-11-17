@@ -166,7 +166,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // This batch replaces only these exact routine identities; compare their complete bodies.
   const batchBodies = await Promise.all([
     ["ef_inputs", "t uuid, ag app.enterprise_agreement_version, p_period text", "0745_enterprise_fee_rejected_line.sql"],
-    ["mon2_command", "t uuid, digest text, command_id uuid, v jsonb", "0746_subscription_internal_owner_guard.sql"],
+    ["mon2_command", "t uuid, digest text, command_id uuid, v jsonb", "0755_subscription_pending_downgrade.sql"],
     ["ef_prepare_statement", "p_session uuid, p_command uuid, p_period text", "0704_enterprise_fee_period_order.sql"],
     ["cb_derive", "p_session uuid, p_job uuid, p_command uuid, p_source text, p_invoice text, p_hash text, p_projection jsonb", "0748_billing_policy_hold_projection.sql"],
     ["ef_post_statement", "p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid", "0704_enterprise_fee_period_order.sql"],
@@ -213,6 +213,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["accept_final_check_terms", "p_tenant uuid, p_actor uuid, p_command uuid, p_version text", "0735_per_firm_final_check_terms.sql"],
     ["guard_final_lock_disclosure_terms", "", "0735_per_firm_final_check_terms.sql"],
     ["surface_shadow_signal_early", "p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb", "0735_per_firm_final_check_terms.sql"],
+    ["connector_promotion", "p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb", "0754_connector_promotion_list_closed_job.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (name === "decision_check_command") expect(sql).toContain("rv.result->>'sourceJobId'=source.id::text");
@@ -294,6 +295,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   lp6dBodies.set("app.xa_price", [pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!]);
   // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
   lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);
+  // LP6D-WORKER-PRESENCE: exact latest sources; historical 0749 assertions remain above.
+  const presenceSql = await readFile(new URL("../migrations/0753_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
+  for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis))
+    lp6dBodies.set(m[1]!, [m[4]!]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     // 0751 succeeds LP-6d for this exact dispatcher; pin it before generic LP-6d successor handling.
