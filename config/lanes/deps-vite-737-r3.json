@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "deps-vite-737-r3": {
+      "branches": [
+        "codex/sandbox/deps-vite-737-r3"
+      ],
+      "allow": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "config/lanes/deps-vite-737-r3.json",
+        "docs/verdicts/DEPS-VITE-737-R3/BUILDER_RECEIPT.md"
+      ],
+      "receipt": "docs/verdicts/DEPS-VITE-737-R3/BUILDER_RECEIPT.md",
+      "note": "HOLD: initial clean-checkout gate failed; do not commit. Exact bounded Vite R3 lane; no resolver attempt executed."
+    }
+  }
+}
