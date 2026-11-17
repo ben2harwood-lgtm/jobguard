@@ -52,6 +52,19 @@ const claim = async (id: string) => (await worker.query("SELECT app.claim_worker
 const complete = async (id: string, token: string) => (await worker.query("SELECT app.complete_worker_action($1,$2,'succeeded','fictional-receipt',NULL) AS value", [id, token])).rows[0]!.value;
 
 describe("LP-10 real login authority", () => {
+  it("preserves the legacy executor row lock until its checked-worker cutover", async () => {
+    const { id } = await enqueue(), client = await web.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [t]);
+      // ActionExecutor's first row lock needs UPDATE privilege even though it
+      // has not changed state. The four premature REVOKEs broke this query.
+      const locked = await client.query("SELECT id FROM app.action_outbox WHERE id=$1 FOR UPDATE", [id]);
+      expect(locked.rows).toEqual([{ id }]);
+    } finally { await client.query("ROLLBACK"); client.release(); }
+    expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0].status).toBe("pending");
+    expect((await admin.query("SELECT * FROM app.action_attempt WHERE action_id=$1", [id])).rows).toEqual([]);
+  });
   it("web cannot bind, claim, complete, or directly change worker state", async () => {
     const { id } = await enqueue();
     for (const sql of ["SELECT app.bind_worker_action($1)", "SELECT app.claim_worker_action($1,ARRAY['fake_capture'])",

@@ -14,11 +14,11 @@ GRANT USAGE ON SCHEMA app TO jobguard_worker;
 GRANT USAGE ON SCHEMA outbound_control TO jobguard_worker;
 GRANT EXECUTE ON FUNCTION outbound_control.claims_enabled() TO jobguard_worker;
 -- No table privileges, no inheritance from the web or infrastructure role.
--- Column grants survive REVOKE UPDATE(table), so withdraw both explicitly.
-REVOKE UPDATE ON app.action_outbox,app.action_attempt FROM jobguard_runtime;
-REVOKE UPDATE(status,next_attempt_at,claimed_at,completed_at,updated_at) ON app.action_outbox FROM jobguard_runtime;
-REVOKE UPDATE(outcome,provider_reference,error_code,finished_at) ON app.action_attempt FROM jobguard_runtime;
-REVOKE INSERT ON app.action_attempt FROM jobguard_runtime;
+-- Defer the four runtime outbox/attempt REVOKEs until quote/recovery delivery,
+-- customer sign-in, and operator cancel/retry/reconcile use checked worker paths.
+-- The first LP-10 security check explicitly requires this fallback: withdrawing
+-- those existing privileges now breaks their SELECT FOR UPDATE and state writes.
+-- LP-10 remains unready: keep the web-write refusal assertions as the cutover gate.
 
 CREATE UNLOGGED TABLE control_plane.worker_action_binding (
  transaction_id xid8 PRIMARY KEY, action_id uuid NOT NULL, tenant_id uuid NOT NULL,
