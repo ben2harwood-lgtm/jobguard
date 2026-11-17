@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-s-fc-company-db": {
+      "branches": ["codex/sandbox/demo-s-fc-company-db"],
+      "note": "DEMO-S-FC-COMPANY-DB: named authority holds only; no company routine implemented.",
+      "allow": ["docs/contracts/company-final-check-db-v1.md"]
+    }
+  }
+}
