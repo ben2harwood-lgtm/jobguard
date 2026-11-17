@@ -3,10 +3,11 @@
   "lanes": {
     "later-safety-123": {
       "branches": ["codex/sandbox/later-safety-123"],
-      "note": "LATER-SAFETY-123-CATCHUP; RED session/target disclosure. Exact union with origin/main cc7e1cc891edf80d8dbfce8d7560607c497f00d4; no behavior or test expectation changes; no migration.",
+      "note": "LATER-SAFETY-123 CI repair try 1; RED session/target disclosure. Await and assert the committed first supplier-match correction before the stale-tab command; preserve all assertions. No production behavior or migration changes. DB setup timeouts remain unresolved under the no-loosening constraint.",
       "allow": [
         "apps/web/app/api/northside/route.ts",
-        "apps/web/app/api/northside/route.test.ts"
+        "apps/web/app/api/northside/route.test.ts",
+        "apps/web/e2e/M2-4-S.spec.ts"
       ]
     }
   }
