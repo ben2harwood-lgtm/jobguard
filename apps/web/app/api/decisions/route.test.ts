@@ -92,6 +92,9 @@ const internalErrors = [
   new Error("FORBIDDEN: fictional internal detail"),
   new Error("NOT_FOUND_fictional_relation"),
   new Error("CONFLICT fictional constraint"),
+  new Error("STALE_REVISION fictional detail"),
+  new Error("IDEMPOTENCY_CONFLICT_fictional_constraint"),
+  new Error("DATABASE_UNAVAILABLE fictional connection"),
   Object.assign(new Error("fictional unknown message"), { code: "FORBIDDEN" }),
   { code: "fictional_unknown", message: "fictional database detail" },
   { code: "NOT_FOUND", message: "NOT_FOUND" },
@@ -110,7 +113,10 @@ for (const { name, invoke, service } of operations) {
     [new Error("FORBIDDEN"), 403, "FORBIDDEN"],
     [new Error("NOT_FOUND"), 404, "NOT_FOUND"],
     [new Error("CONFLICT"), 409, "CONFLICT"],
-    [new Error("INVALID_COMMAND"), 400, "INVALID_COMMAND"],
+    ...["INVALID_COMMAND", "STALE_REVISION", "IDEMPOTENCY_CONFLICT", "VARIATION_REVISION_CONFLICT",
+      "CURRENT_REVISION_REQUIRED", "BASELINE_REQUIRED", "CREDIT_EXCEEDS_INVOICE", "JOB_NOT_FOUND",
+      "JOB_NOT_LIVE", "DECISION_NOT_FOUND", "DATABASE_UNAVAILABLE", "QUOTE_CHANGED", "ALREADY_LOCKED",
+      "SOURCE_CHANGED"].map(code => [new Error(code), 400, code] as const),
     [new PracticeAccessError("UNAUTHENTICATED"), 401, "UNAUTHENTICATED"],
     [new PracticeAccessError("NOT_FOUND"), 404, "NOT_FOUND"],
     [new PracticeAccessError("SYNTHETIC_MODE_REQUIRED"), 403, "SYNTHETIC_MODE_REQUIRED"],
@@ -126,13 +132,13 @@ for (const { name, invoke, service } of operations) {
     expect(service).toHaveBeenCalledOnce();
     expect(response.cookies.get("jg_decision_job")).toBeUndefined();
   });
-  it(`${name} maps recognized schema errors to INVALID_COMMAND`, async () => {
+  it(`${name} preserves the established schema-error response`, async () => {
     const parsed = z.object({ field: z.literal("valid") }).safeParse({ field: "fictional private detail" });
     if (parsed.success) throw new Error("expected invalid fixture");
     service.mockRejectedValue(parsed.error);
     const response = await invoke();
     expect(response.status).toBe(400);
-    expect(await response.text()).toBe('{"code":"INVALID_COMMAND"}');
+    expect(await response.text()).toBe('{"code":"DATABASE_UNAVAILABLE"}');
   });
 }
 it("keeps a valid cookie when the ownership-recovery list fails internally", async () => {

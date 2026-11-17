@@ -1,17 +1,30 @@
-import { PracticeAccessError } from "@jobguard/db";
 import { isRouteValidationError } from "../../lib/route-error-code";
 import { practiceFailure } from "../../lib/synthetic-server";
 import{cookies}from"next/headers";import{NextRequest,NextResponse}from"next/server";import{hasSyntheticSession}from"../../lib/synthetic-server";import{workspaceApplication}from"../../lib/workspace-server";
 async function authenticated(){return hasSyntheticSession((await cookies()).get("jg_session")?.value)}
 function failure(error: unknown) {
-  if (isRouteValidationError(error)) return NextResponse.json({ code: "INVALID_COMMAND" }, { status: 400 });
-  // Only established public refusals may cross this HTTP boundary.
+  if (isRouteValidationError(error)) return NextResponse.json({ code: "DATABASE_UNAVAILABLE" }, { status: 400 });
+  // Preserve the established public business outcomes; never expose arbitrary messages.
   if (error instanceof Error) {
     switch (error.message) {
       case "FORBIDDEN": return NextResponse.json({ code: "FORBIDDEN" }, { status: 403 });
       case "NOT_FOUND": return NextResponse.json({ code: "NOT_FOUND" }, { status: 404 });
       case "CONFLICT": return NextResponse.json({ code: "CONFLICT" }, { status: 409 });
-      case "INVALID_COMMAND": return NextResponse.json({ code: "INVALID_COMMAND" }, { status: 400 });
+      case "INVALID_COMMAND":
+      case "STALE_REVISION":
+      case "IDEMPOTENCY_CONFLICT":
+      case "VARIATION_REVISION_CONFLICT":
+      case "CURRENT_REVISION_REQUIRED":
+      case "BASELINE_REQUIRED":
+      case "CREDIT_EXCEEDS_INVOICE":
+      case "JOB_NOT_FOUND":
+      case "JOB_NOT_LIVE":
+      case "DECISION_NOT_FOUND":
+      case "DATABASE_UNAVAILABLE":
+      case "QUOTE_CHANGED":
+      case "ALREADY_LOCKED":
+      case "SOURCE_CHANGED":
+        return NextResponse.json({ code: error.message }, { status: 400 });
     }
   }
   return NextResponse.json({ code: "DATABASE_UNAVAILABLE" }, { status: 503 });
@@ -30,7 +43,8 @@ export async function GET(request: NextRequest) {
     } catch (error) {
       // Only an implicit filter's ownership refusal can recover. The same service
       // rechecks the session and tenant before listing its allowed inbox.
-      if (explicitJob !== null || !requestedJob || !(error instanceof PracticeAccessError) || error.code !== "NOT_FOUND") throw error;
+      // practiceFailure returns 404 only for a typed PracticeAccessError NOT_FOUND.
+      if (explicitJob !== null || !requestedJob || practiceFailure(error)?.status !== 404) throw error;
       result = await decisions.list({ tenantId });
       staleFilter = true;
     }

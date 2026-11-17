@@ -237,7 +237,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.xa_client_view_authority(p_job uuid, p_request uuid, p_actor uuid, p_email text)", "0686_extra_client_authority_loss.sql"],
     ["app.xa_client_decide(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text)", "0686_extra_client_authority_loss.sql"],
     ["identity.extra_customer_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0686_extra_client_authority_loss.sql"],
-    ["app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)", "0691_connector_billing_kind_link.sql"],
+    ["app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)", "0754_connector_promotion_list_closed_job.sql"],
     ["app.guard_practice_material_requirement()", "0690_import_ancestry_record_anchor.sql"],
     ["app.ch4_read_work_facts(t uuid, j uuid, digest text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.read_job_sources(t uuid, j uuid, digest text, source text)", "0690_import_ancestry_record_anchor.sql"],
@@ -275,6 +275,10 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // LATER-SAFETY-183 changes only xa_price after LP-6d, retaining its binding prefix.
   const pricePermissionSql = await readFile(new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.xa_price(p_job,p_variation,p_command,p_actor,p_net,p_revise)", pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!);
+  // LP6D-WORKER-PRESENCE: only these three definitions supersede historical bodies.
+  const presenceSql = await readFile(new URL("../migrations/0753_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
+  for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu))
+    lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
   const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;
   const namedAdditions = [
     "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",

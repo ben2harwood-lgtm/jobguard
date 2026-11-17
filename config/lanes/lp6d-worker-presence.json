@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp6d-worker-presence": {
+      "branches": [
+        "codex/sandbox/lp6d-worker-presence"
+      ],
+      "allow": [
+        "packages/db/migrations/0757_lp6d_worker_binding_presence.sql",
+        "packages/db/migrations/0754_lp6d_worker_binding_presence.sql",
+        "packages/db/migrations/0753_lp6d_worker_binding_presence.sql",
+        "packages/db/test/lp6d-routines.test.ts",
+        "packages/db/test/lp6d-runtime-classification.json",
+        "packages/db/test/lp6d-worker-presence.integration.test.ts",
+        "packages/db/test/lp6d-worker-presence.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0757_lp6d_worker_binding_presence.proof.json",
+        "packages/db/test/migration-proofs/0754_lp6d_worker_binding_presence.proof.json",
+        "packages/db/test/migration-proofs/0753_lp6d_worker_binding_presence.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}
