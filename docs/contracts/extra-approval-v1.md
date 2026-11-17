@@ -1,0 +1,22 @@
+# Extra approval foundation v1 — ENT-5, 13 October 2026
+
+Issued against main `6659fb58791ec22588948f005b2bd4f6b299fa48`, built ahead on ENT-3d `82f05c2af245255a84921108e554ecab4e065054`. This is a proposal evaluator and immutable source-binding foundation, not an enabled approval chain. BUILD_PLAN §§9.1.3–9.1.7, §9.2 ENT-5 and §2.4 remain binding. Real data is OFF; no spending, invoice, fee or provider execution is issued. D02, D06, D12 and D16 are not approved here.
+
+All answers below are quoted from `~/.local/share/full-steam/jg-orders/next-wave/BEN-ANSWERS-20261013.md`, card **jobguard-twenty-product-decisions-2026-10-13**:
+
+- Q01/Q05/Q11: “Surveyors price; site staff report; supervisors withdraw.” Only surveyor pricing, the supplied site-staff classification and supervisor withdrawal constraints are issued. The reporting matrix and wider withdrawal roles are HELD.
+- Q04: “Keep separate approvers across versions; never allow self-approval.” Pure constraints use explicitly supplied synthetic person identities. Different step slots cannot be occupied by the same person across revisions. A repeated approval of the same slot returns `held_repeat_semantics`; no persisted identity key is selected.
+- Q05: “Record both; show uncertainty; later approval does not erase breaches.” Start and finish are separate supplied facts with explicit uncertainty. Established breaches remain append-only input history. No timing or breach derivation is supplied.
+- Q06: “Set both amounts; customer follows required company approvals.” The merged rule schema requires explicit T and Y for threshold rules. Comparisons are independent: net ≤ X, net > T, net > Y, with null above every threshold. Y < T remains admissible under the merged schema. No combined interpretation or proceed permission is created. A supplied required customer step follows the company steps.
+- Q08: “Keep original approvers; enable only agreed backups after agreed waits.” Pure eligibility takes explicit original identities, agreed backup identities and an established elapsed-wait condition. It selects no wait, timer origin or notification authority.
+- Q14: “Keep history; stop future actions and cancel unused permission.” Pure history preservation cancels unused supplied authority on authority loss and refuses future actions. It grants no historical read or export entitlement.
+
+The evaluator validates `approvalRulesV1` without changing it. It binds explicit immutable rule/contract/revision identities and hashes, GBP Money or null, evidence and timer terms into a frozen proposal. No state can become `approved` through this function. Reference rules and test values are synthetic examples, never defaults. It records separate threshold comparisons without interpreting inconsistent T/Y terms.
+
+Q02 (dispatcher): `extra_approval_revision_binding` binds an existing `extra_sor_revision` or `variation_revision` to an approval identity. It preserves source price, quantities, adjustment, baseline and hash. New source checks use named columns. Logical predecessor bindings must be the same tenant/job/extra and adjacent revision. No submission, pricing, event or current-state writer is enabled; the future side-cache amendment needs coordinator recording.
+
+Q07 (dispatcher): a `contract_rule` fact has no human actor or grant. It may precede a required client step. The merged ENT-4a `approvalSnapshotValid` currently requires it to be the sole step and requires an actor UUID. That validator and its tests remain unchanged. Downstream compatibility amendment is HELD with integrated chain execution.
+
+Remaining holds: Q01 pricing inputs/rounding/revision components; Q03 applicable contract; Q04 persisted person/repeat rules; Q05 operational facts/timing/proceed; Q06 amounts and T/Y composition; Q08 timer terms/backups; Q10 send/cancel roles/lifetimes/resends; Q11 rejection/wider withdrawal; Q12 client retry/history; Q13 identity bridge; Q14 export/refusal audit; Q15 scheduler/executor; Q16 query/automatic submission. UI is parked. No existing logged extra is submitted automatically.
+
+Migration 0157 creates only the two issued immutable tables. Runtime SELECT only, FORCE RLS, no callable business writer. Owner-created test specimens are not command or actor authority. Held writers must take every business lock before audit head; existing job advisory lock seed 417 and administration seed 54 remain unchanged. No business locks, audit append or deferred business writer are introduced here.

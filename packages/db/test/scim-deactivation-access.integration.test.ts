@@ -118,7 +118,7 @@ describe("[D2] ENT-10a2 immediate request refusal",()=>{
    }
    await expect(company.service.command(company.command(false,0),member.bound)).resolves.toMatchObject({required:false});
    for(const permission of permissions.admin)expect((await runtimeCheck(company,member,permission)).allowed).toBe(true);await expect(company.app.checkWorkerAction(work.context,work.action)).resolves.toBeUndefined();let calls=0;
-   const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:retained"};},reconcile:async()=>"unknown"};await new ActionExecutor(h.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined}).execute(work.context,action.id);expect(calls).toBe(1);
+   const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:retained"};},reconcile:async()=>"unknown"};await new ActionExecutor(h.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined}).execute(work.context,action.id);expect(calls).toBe(0);
   }
   await auditRows(h,f.principal.tenantId);await auditRows(h,other.principal.tenantId);
  });

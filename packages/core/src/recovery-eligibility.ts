@@ -28,7 +28,7 @@ export function classifyReferenceD03(scenario: EligibilityScenario, claimedNetPe
 
 // The policy VERSION stays pinned to the reference policy. Its REVISION is a counter that a supersession bumps, so commands
 // issued after one must be able to carry the later revision (a literal 1 made such a case impossible to re-review or approve).
-const base = { version: z.literal("recovery-eligibility-command.v1"), commandId: z.string().uuid(), caseId: z.string().uuid() };
+const base = { version: z.literal("recovery-eligibility-command.v1"), commandId: z.guid({ error: "Invalid uuid" }), caseId: z.guid({ error: "Invalid uuid" }) };
 export const recoveryEligibilityCommandV1 = z.discriminatedUnion("action", [
   z.object({ ...base, action: z.literal("review"), scenario: eligibilityScenarioV1, expectedCaseRevision: z.number().int().positive(), evidenceRevision: z.number().int().positive(), policyVersion: z.literal("reference-d03.v1"), policyRevision: z.number().int().positive() }).strict(),
   z.object({ ...base, action: z.literal("approve"), expectedCaseRevision: z.number().int().positive(), expectedEvidenceRevision: z.number().int().positive(), expectedPolicyRevision: z.number().int().positive(), expectedReviewRevision: z.number().int().positive() }).strict(),

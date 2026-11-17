@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-design-note-fix2": {
+      "branches": [
+        "codex/sandbox/lp-design-note-fix2"
+      ],
+      "note": "LP-DESIGN-NOTE-FIX2: pin the inventory LP-0 recorded input; docs/tooling only.",
+      "allow": [
+        "tools/lp-downstream-inventory.py",
+        "tools/lp-downstream-inventory.test.mjs",
+        "docs/contracts/lp-downstream-effects-v1.md",
+        "docs/contracts/lp-downstream-lp-0-recorded-input-v1.json"
+      ]
+    }
+  }
+}

@@ -2,8 +2,8 @@ import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { AuditCheckpointHandoffError, runAuditCheckpointHandoff } from "./audit-checkpoint-handoff.js";
 
-const environmentV1 = z.object({ JOBGUARD_ENV: z.literal("synthetic_demo"), MIGRATION_DATABASE_URL: z.string().url() });
-const argumentsV1 = z.object({ operator: z.string().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/u), tenantId: z.string().uuid().optional() }).strict();
+const environmentV1 = z.object({ JOBGUARD_ENV: z.literal("synthetic_demo"), MIGRATION_DATABASE_URL: z.string().refine(value => URL.canParse(value), "Invalid url") });
+const argumentsV1 = z.object({ operator: z.string().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/u), tenantId: z.guid({ error: "Invalid uuid" }).optional() }).strict();
 /** Returns an exit status and emits exactly one JSON line; driver errors are never printed. */
 export async function runAuditCheckpointHandoffCli(args: string[] = process.argv.slice(2), env: NodeJS.ProcessEnv = process.env, emit: (line: string) => void = line => { process.stdout.write(line); }): Promise<number> {
   try {

@@ -40,3 +40,32 @@ Citation counts refer to proposal output BEFORE database persistence. Actual sto
 Builder: ChatGPT, under Ben's instruction to continue JobGuard. Initial source main `ab8e7f2d9d43ac5ec6ff62bff2533b0fa508d404`; integrated parent `913ff5985665520bea7f3322a8cacc6530a2f1b7` on the receipts branch. This is a separate stacked candidate, not acceptance or main merge of its parent.
 
 Local pure-module checks on Node22.16: 51 Node tests passed; 32/32 cases, 41/41 labelled intents, 119/119 proposal spans and 63/63 designated unknown/question checks. These local checks did not execute Zod, the application gateway, the pinned Node24 build or browser tests. Those must be reported from the exact candidate's actual CI or subsequent pinned local execution, not inferred from these local results. No independent Claude verdict or founder acceptance is recorded here.
+
+## M0-12a fixture golden record
+
+`golden-run.v1.json` is the checked-in, zero-cost fixture record. The contract CLI
+and source tests compare a fresh run with it; CI never refreshes it automatically.
+It records the local fixture deployment, versions, source-code/corpus hashes,
+raw metric counts, per-case errors and prediction hashes. Elapsed time is excluded
+so reruns remain comparable. Empty predictions and zero denominators fail closed.
+The scorer and report share the pinned proposed targets; changing a JSON record
+cannot lower them. A target change requires a recorded decision and corresponding
+contract and test updates, rather than silently updating the record.
+
+After an intentional model/prompt/parser/schema or gateway change, build the AI
+workspace and its dependencies, then explicitly regenerate the record for review:
+
+```sh
+node --input-type=module <<'JS'
+import { writeFile } from 'node:fs/promises';
+import { runCaptureEvaluation } from './packages/ai/dist/evaluation-runner.js';
+import { createGoldenRunRecord } from './packages/ai/dist/golden-run-record.js';
+const record = await createGoldenRunRecord(await runCaptureEvaluation());
+await writeFile('docs/fixtures/ai/golden-run.v1.json', JSON.stringify(record, null, 2) + '\n');
+JS
+```
+
+Review the record diff alongside the implementation and tests. Fixture success
+still cannot authorize release or serve as a live-model golden run. D04 route
+approval, founder-authorized spending and persisted-citation live evidence remain
+separate release gates; `eval:live` continues to refuse execution.

@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv6-persist-b": {
+      "branches": [
+        "codex/sandbox/sv6-persist-b"
+      ],
+      "receipt": "docs/verdicts/SV6-PERSIST-B/BUILDER_RECEIPT.md",
+      "note": "RED SV-6 persist-b (SV-5/SV-6 finish-list rows), PR #373: catch-up only. Preserve recovery attribution and main Final Check catch/run handlers. No new behaviour, test-expectation changes or migration; earlier PASS retained, GitHub CI pending.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/recovery-attribution.application.test.ts",
+        "apps/api/src/recovery-attribution.application.ts",
+        "apps/api/src/recovery-attribution.contracts.ts",
+        "apps/api/src/recovery-attribution.controller.test.ts",
+        "apps/api/src/recovery-attribution.controller.ts",
+        "apps/api/src/recovery-attribution.http.test.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/success-fee-attribution/route.ts",
+        "docs/contracts/recovery-attribution-v1.md",
+        "docs/verdicts/SV6-PERSIST-B/BUILDER_RECEIPT.md",
+        "packages/core/src/watchdog.ts",
+        "packages/db/src/recovery-attribution-repository.test.ts",
+        "packages/db/src/recovery-attribution-repository.ts",
+        "packages/db/test/recovery-attribution-access.integration.test.ts",
+        "packages/db/test/recovery-attribution-fixture.ts",
+        "packages/db/test/recovery-attribution-replay.integration.test.ts"
+      ]
+    }
+  }
+}

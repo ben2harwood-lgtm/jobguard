@@ -56,6 +56,12 @@ export async function ownerTx<T>(c: Cluster, tenantId: string, work: (db: Tenant
 export async function receipt(db: TenantTransaction, tenantId: string, jobId: string, variationId: string, actor: string, type = "LogSiteExtra", commandId = randomUUID(), fields: { status?: string; semanticKey?: string } = {}) {
  await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,$3,$4,$5,$6::text,$7,CASE WHEN $6::text='succeeded' THEN '{}'::jsonb ELSE NULL END,CASE WHEN $6::text='succeeded' THEN clock_timestamp() ELSE NULL END)", [tenantId, commandId, type, fields.semanticKey ?? `extra-origin:${jobId}:${variationId}`, "a".repeat(64), fields.status ?? "processing", actor]); return commandId;
 }
+/** Raw guard fixtures deliberately bypass the repository lifecycle so one SQL
+ * defect can be isolated. Call only after that fixture's real mutation, inside
+ * its transaction; no processing receipt may leak across a fixture commit. */
+export async function terminalizeFixtureReceipt(db: TenantTransaction, tenantId: string, commandId: string, result: Record<string,unknown>) {
+ await db.$client.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2 AND status='processing'",[tenantId,commandId,JSON.stringify(result)]);
+}
 export async function rawVariation(db: TenantTransaction, tenant: string, job: string, variation = randomUUID(), kind = "site_user", track = "contractor") {
  const scope = randomUUID();
  await db.$client.query("INSERT INTO app.scope_identity(tenant_id,job_id,id) VALUES($1,$2,$3)", [tenant, job, scope]);

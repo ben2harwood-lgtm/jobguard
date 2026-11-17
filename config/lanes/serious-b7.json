@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "serious-b7": {
+      "branches": ["codex/sandbox/serious-b7"],
+      "receipt": "docs/verdicts/SERIOUS-B7/BUILDER_RECEIPT.md",
+      "note": "SERIOUS-B7, Batch 7 only, RED. C1: repairs existing evidence-pack commands; no new web workflow. PostgreSQL and browser verification belongs to dispatcher CI. S23 stopped under the existing-expectation rule.",
+      "allow": [
+        "packages/db/src/evidence-pack-repository.ts",
+        "packages/db/src/evidence-pack-sources.ts",
+        "packages/db/src/serious-b7.test.ts",
+        "packages/db/test/evidence-pack-fixture.ts",
+        "packages/db/test/serious-b7.integration.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts",
+        "packages/db/migrations/0185_evidence_pack_authority.sql",
+        "packages/db/migration-notes/0185_evidence_pack_authority.md",
+        "docs/verdicts/SERIOUS-B7/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

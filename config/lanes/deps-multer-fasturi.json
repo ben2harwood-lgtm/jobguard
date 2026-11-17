@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "deps-multer-fasturi": {
+      "branches": ["codex/sandbox/deps-multer-fasturi"],
+      "allow": ["package.json", "pnpm-lock.yaml"],
+      "note": "C243(4): pin multer 2.5.0 and fast-uri 3.1.9 security patches; no web workflow changes. Online lockfile resolution belongs to the coordinator."
+    }
+  }
+}

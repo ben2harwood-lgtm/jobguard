@@ -1,0 +1,60 @@
+{
+  "base": "6671538c8d69936c162368c760dd6ce0f7f10493",
+  "head": "6671538c8d69936c162368c760dd6ce0f7f10493",
+  "scanner_and_pinned_files": [
+    {
+      "file": "apps/api/src/auth/context-boundary.test.ts",
+      "sha256": "a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35",
+      "base_sha256": "a848f5e873ca9cc0811e90adf5a35ae18fe4f1ae1da5f889f00ea29ccd287d35",
+      "unchanged": true
+    },
+    {
+      "file": "packages/db/src/practice-session.ts",
+      "sha256": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
+      "base_sha256": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
+      "unchanged": true
+    },
+    {
+      "file": "packages/db/src/contractor-repository.ts",
+      "sha256": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
+      "base_sha256": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
+      "unchanged": true
+    },
+    {
+      "file": "packages/db/src/contractor-party-repository.ts",
+      "sha256": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
+      "base_sha256": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
+      "unchanged": true
+    },
+    {
+      "file": "packages/db/src/work-order-repository.ts",
+      "sha256": "4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3",
+      "base_sha256": "4d101604ad160801f1d70b24ee7e3f55287bed2f3d53b9ed83b3d0113d4580a3",
+      "unchanged": true
+    },
+    {
+      "file": "packages/db/src/sor-repository.ts",
+      "sha256": "45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5",
+      "base_sha256": "45e54b465b2a12747d838ea1cbb7c6a8d859f12894848940be5401ab17e000d5",
+      "unchanged": true
+    },
+    {
+      "file": "packages/db/src/job-scheduling-repository.ts",
+      "sha256": "ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d",
+      "base_sha256": "ce9b3fee004db9e7e303511f169d55b4a8a2339521927816c9b378b79517e52d",
+      "unchanged": true
+    },
+    {
+      "file": "packages/db/src/work-order-fixtures.ts",
+      "sha256": "cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386",
+      "base_sha256": "cfcd6d41a3618dd626544b3443e52fdba2c879accacb38637e49e531b4137386",
+      "unchanged": true
+    },
+    {
+      "file": "packages/db/src/contractor-session-context.ts",
+      "sha256": "a1c76687dc593763d97603cf196c7ef015087359191051d882f6229cac6adf4c",
+      "base_sha256": "a1c76687dc593763d97603cf196c7ef015087359191051d882f6229cac6adf4c",
+      "unchanged": true
+    }
+  ]
+}

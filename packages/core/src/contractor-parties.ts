@@ -1,5 +1,5 @@
 import { z } from "zod";
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 export const noResidentReasons = ["void_property", "communal_area", "client_withheld"] as const;
 /** Synthetic-only entry boundary. No route accepts real resident contacts while G1 is closed. */
 const residentContactFields = {

@@ -11,7 +11,7 @@ export class PracticeFeedApplicationError extends Error {
 }
 
 type PracticeFeedStore = Pick<PracticeFeedRepository, "view" | "command">;
-const identifier = z.string().uuid();
+const identifier = z.guid({ error: "Invalid uuid" });
 /** One application for both transports (Nest and the in-process Next route handlers). */
 export class PracticeFeedApplication {
   private readonly repository: PracticeFeedStore;

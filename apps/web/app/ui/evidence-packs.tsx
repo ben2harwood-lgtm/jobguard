@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { canonicalManifest, type EvidenceManifest, type EvidenceSource } from "@jobguard/core";
+import { EvidencePacksV3 } from "./evidence-packs-v3";
 import { pounds } from "../lib/pounds";
 
 type Inspection = { findings: string[]; contentMatches: boolean; complete: boolean };
@@ -107,5 +108,6 @@ export function EvidencePacks({ caseId, claimedNetPence, onChange }: { caseId: s
       <p data-testid="pack-current-attachment-status">{pack.attachmentApprovalValid ? "Attachment approval recorded for these exact hashes" : "Attachment approval needed"}</p>
       {invalidated && <p data-testid="pack-attachment-status">Previous attachment approval invalidated by the new evidence version</p>}
     </article>}
+    <EvidencePacksV3 key={caseId} caseId={caseId} />
   </section>;
 }

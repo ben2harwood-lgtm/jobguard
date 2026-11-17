@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-extra-approve": {
+      "branches": [
+        "codex/sandbox/m5-extra-approve"
+      ],
+      "receipt": "docs/verdicts/m5-extra-approve/BUILDER_RECEIPT.md",
+      "note": "MON-5 M5-VARIATION; RED, synthetic only; stacked on m5-signin. Own lane file is implicitly editable.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/auth/application-auth.guard.ts",
+        "apps/api/src/auth/customer-variation.controller.ts",
+        "apps/api/src/auth/customer-variation.test.ts",
+        "apps/api/src/auth/customer-variation.ts",
+        "apps/api/src/auth/index.ts",
+        "apps/api/src/auth/sso/oidc.controller.ts",
+        "apps/api/src/variation/contracts.ts",
+        "apps/web/app/api/customer-portal/variation-approvals/route.ts",
+        "apps/web/app/api/customer-portal/variations/read/route.ts",
+        "apps/web/app/customer/extras/extras.tsx",
+        "apps/web/app/customer/extras/page.tsx",
+        "apps/web/app/customer/sign-in/signin.tsx",
+        "apps/web/app/ui/job-variations.tsx",
+        "apps/web/e2e/customer-extra-approval.spec.ts",
+        "apps/web/middleware.ts",
+        "docs/contracts/customer-portal-authority-proposal.md",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/verdicts/m5-extra-approve/BUILDER_RECEIPT.md",
+        "packages/core/src/customer-variation-approval.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0502_customer_variation_approval.sql",
+        "packages/db/src/variation-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/customer-signin.integration.test.ts",
+        "packages/db/test/customer-variation-approval.integration.test.ts",
+        "packages/db/test/customer-variation-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}

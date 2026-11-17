@@ -1,0 +1,24 @@
+{
+  "version": "baseline-history.v1",
+  "environment": "synthetic_demo",
+  "sourceNamespace": "fictional.invalid",
+  "sourceBatchId": "fictional-history-1",
+  "sourceRevision": "revision-1",
+  "startMonth": "2026-01",
+  "endMonthExclusive": "2026-07",
+  "teamIds": ["pilot", "rest"],
+  "jobs": [
+    {
+      "sourceJobId": "job-1", "teamId": "pilot", "month": "2026-01",
+      "extras": [
+        { "sourceExtraId": "extra-1", "sourceWorkId": "work-1", "reportedNet": { "pence": 15000, "currency": "GBP" } },
+        { "sourceExtraId": "extra-2", "sourceWorkId": "work-2", "reportedNet": null }
+      ]
+    },
+    { "sourceJobId": "job-2", "teamId": "pilot", "month": "2026-06", "extras": [] },
+    {
+      "sourceJobId": "job-3", "teamId": "rest", "month": "2026-03",
+      "extras": [ { "sourceExtraId": "extra-3", "sourceWorkId": "work-3", "reportedNet": { "pence": 12500, "currency": "GBP" } } ]
+    }
+  ]
+}

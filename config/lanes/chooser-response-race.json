@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "chooser-response-race": {
+      "branches": [
+        "codex/sandbox/chooser-response-race"
+      ],
+      "note": "Read the replayed capture body in the route handler: the browser can discard it when the page navigates, which fails DEMO-S-chooser intermittently.",
+      "allow": [
+        "apps/web/e2e/DEMO-S-chooser.spec.ts"
+      ]
+    }
+  }
+}

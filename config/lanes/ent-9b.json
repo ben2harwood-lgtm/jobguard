@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-9b": {
+      "branches": ["codex/sandbox/ent-9b"],
+      "receipt": "docs/verdicts/ENT-9B/BUILDER_RECEIPT.md",
+      "note": "ENT-9B AMBER: synthetic read projections and advisory observations, stacked on ENT-7. No schema, grants, writers, routes, UI or production activation. Shared package exports are additive and serialize at landing. Persisted billing reads remain held for ENT-6B.",
+      "allow": [
+        "apps/api/src/contractor/enterprise-dashboard.application.test.ts",
+        "apps/api/src/contractor/enterprise-dashboard.application.ts",
+        "apps/api/src/contractor/enterprise-dashboard.boundaries.test.ts",
+        "docs/contracts/enterprise-dashboard-v1.md",
+        "docs/verdicts/ENT-9B/BUILDER_RECEIPT.md",
+        "packages/core/src/enterprise-dashboard-billing.test.ts",
+        "packages/core/src/enterprise-dashboard-billing.ts",
+        "packages/core/src/enterprise-dashboard.test.ts",
+        "packages/core/src/enterprise-dashboard.ts",
+        "packages/core/src/enterprise-signal.test.ts",
+        "packages/core/src/enterprise-signal.ts",
+        "packages/core/src/index.ts",
+        "packages/db/src/enterprise-dashboard-queries.ts",
+        "packages/db/src/enterprise-dashboard-repository.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/enterprise-dashboard.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ch8-v": {
+      "branches": [
+        "codex/sandbox/ch8-v"
+      ],
+      "receipt": "docs/verdicts/CH8-V/BUILDER_RECEIPT.md",
+      "note": "RED \u2014 CH-8 current-main catch-up only. Retains snapshot regressions; no runtime or migration changes.",
+      "allow": [
+        "apps/api/src/evidence-pack-v3.application.test.ts",
+        "docs/verdicts/CH8-V/BUILDER_RECEIPT.md",
+        "packages/db/test/evidence-pack-v3-isolation.integration.test.ts"
+      ]
+    }
+  }
+}

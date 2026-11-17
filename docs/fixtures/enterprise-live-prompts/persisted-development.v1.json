@@ -1,0 +1,49 @@
+{
+  "version": "persisted-prompt-evaluation.v1",
+  "cases": [
+    {
+      "id": "development-material",
+      "rule": "b",
+      "input": {
+        "lines": [
+          {
+            "workIdentity": "copper-pipe",
+            "unit": "metre",
+            "quantity": "2"
+          }
+        ],
+        "facts": [
+          {
+            "sourceId": "fictional-stores",
+            "eventId": "development",
+            "workIdentity": "copper-pipe",
+            "unit": "metre",
+            "quantity": "3",
+            "occurredAtMicros": "2000000",
+            "kind": "issue"
+          }
+        ]
+      }
+    },
+    {
+      "id": "development-visit",
+      "rule": "c",
+      "input": {
+        "visitId": "development-visit",
+        "startMicros": "1000000",
+        "endMicros": "400000000",
+        "lines": [
+          {
+            "quantity": "3",
+            "standardMinutes": "1"
+          }
+        ],
+        "factor": {
+          "numerator": "3",
+          "denominator": "2",
+          "contractVersionId": "fictional-v2"
+        }
+      }
+    }
+  ]
+}

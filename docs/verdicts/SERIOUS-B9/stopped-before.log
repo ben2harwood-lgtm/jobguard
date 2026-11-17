@@ -1,0 +1,45 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/fixlater-6/packages/db
+
+ ❯ src/serious-b9-stopped.test.ts (2 tests | 2 failed) 24ms
+   × S26 F18 principal-only settlement excludes absent interest 19ms
+   × S27 accepts the signed invoice composition with an approved omission 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/serious-b9-stopped.test.ts > S26 F18 principal-only settlement excludes absent interest
+AssertionError: expected 262000 to be 250000 // Object.is equality
+
+- Expected
++ Received
+
+- 250000
++ 262000
+
+ ❯ src/serious-b9-stopped.test.ts:18:45
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/serious-b9-stopped.test.ts > S27 accepts the signed invoice composition with an approved omission
+AssertionError: promise rejected "RecoveryAllocationError: ALLOCATION_SOURC… { code: '…' }" instead of resolving
+ ❯ src/serious-b9-stopped.test.ts:24:239
+
+
+Caused by: RecoveryAllocationError: ALLOCATION_SOURCE_REQUIRED
+ ❯ fail src/recovery-allocation-b9-original.ts:56:65
+ ❯ RecoveryAllocationRepository.lineFacts src/recovery-allocation-b9-original.ts:323:108
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'ALLOCATION_SOURCE_REQUIRED' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  13:08:26
+   Duration  1.09s (transform 689ms, setup 0ms, import 910ms, tests 24ms, environment 0ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/fixlater-6/packages/db:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/serious-b9-stopped.test.ts --maxWorkers=1

@@ -77,14 +77,25 @@ export class SsoApplication {
       this.gate();ssoConnectionIdV1.parse(connectionId);const input=ssoStartV1.parse(raw);
       if(credentials.origin!==this.allowedOrigin)throw new SsoError("SSO_FORBIDDEN");
       const relayState=randomBytes(32).toString("base64url");
+      let linking:{tenantId:string;principal:AuthPrincipal}|undefined;
+      if(input.linkExisting) {
+        // Release the lookup client before provider authentication acquires pool clients of its own.
+        const connection=await this.repository.transaction(async client=>this.metadata(await this.repository.connection(client,connectionId)));
+        const context=await resolveVerifiedTenantContext(this.provider,{...credentials,requestedTenantId:connection.tenantId},this.allowedOrigin);
+        if(context.tenantId!==connection.tenantId)throw new SsoError("LINK_FORBIDDEN");
+        const principal=await this.provider.authenticate(credentials.sessionToken!);
+        if(!principal)throw new SsoError("LINK_FORBIDDEN");
+        linking={tenantId:context.tenantId,principal};
+      }
       return this.repository.transaction(async client=>{
-        const connection=this.metadata(await this.repository.connection(client,connectionId));
+        let connection=this.metadata(await this.repository.connection(client,connectionId));
         let linkSessionId:string|null=null;
-        if(input.linkExisting) {
-          const context=await resolveVerifiedTenantContext(this.provider,{...credentials,requestedTenantId:connection.tenantId},this.allowedOrigin);
-          if(context.tenantId!==connection.tenantId)throw new SsoError("LINK_FORBIDDEN");
-          const principal=await this.provider.authenticate(credentials.sessionToken!);
-          if(!principal)throw new SsoError("LINK_FORBIDDEN");linkSessionId=principal.sessionId;
+        if(linking) {
+          await client.query("SELECT pg_advisory_xact_lock_shared(hashtextextended($1,54))",[linking.tenantId]);
+          connection=this.metadata(await this.repository.connection(client,connectionId));
+          if(connection.tenantId!==linking.tenantId)throw new SsoError("LINK_FORBIDDEN");
+          await this.repository.requireLinkSession(client,linking.tenantId,linking.principal.sessionId,linking.principal.identityUserId,this.base.digest(`session:${credentials.sessionToken}`),credentials.csrfToken!);
+          linkSessionId=linking.principal.sessionId;
         }
         const cache=this.repository.cache(client,connectionId,this.base.digest(`sso-state:${relayState}`),linkSessionId);
         let requestId:string|undefined;
@@ -109,7 +120,8 @@ export class SsoApplication {
           const claims=await new SamlAdapter(connection,this.repository.cache(client,connectionId)).validate(input.SAMLResponse);
           claims.email=claims.email.toLowerCase();
           const sessionToken=randomBytes(32).toString("base64url"),csrfToken=randomBytes(24).toString("base64url"),id=randomUUID();
-          const outcome=await this.repository.complete(client,connectionId,claims,{id,tokenDigest:this.base.digest(`session:${sessionToken}`),csrfToken,expiresAt:new Date(Date.now()+connection.sessionLimitSeconds*1000)},this.base.digest(`sso-state:${input.relayState}`));
+          const expiresAt=(await client.query<{expires_at:Date}>("SELECT date_trunc('milliseconds',clock_timestamp()) + $1::integer * interval '1 second' expires_at",[connection.sessionLimitSeconds])).rows[0]!.expires_at;
+          const outcome=await this.repository.complete(client,connectionId,claims,{id,tokenDigest:this.base.digest(`session:${sessionToken}`),csrfToken,expiresAt},this.base.digest(`sso-state:${input.relayState}`));
           if('code' in outcome) {
             const failure=typed(new SsoError(outcome.code as SsoError['code']));
             // Revocation is deliberately committed on a verified no-group sign-in.

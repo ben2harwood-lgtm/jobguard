@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "sv7a-onsite": {
+      "branches": [
+        "codex/sandbox/sv7a-onsite"
+      ],
+      "note": "SV-7A / CH-4 RED: MON-1 admission and first site evidence for on-site diary notes. Migration 0505; no PR until router opens it.",
+      "allow": [
+        "apps/api/src/job-source.controller.test.ts",
+        "apps/api/src/job-source.errors.ts",
+        "apps/api/src/watchdog-registry.test.ts",
+        "packages/db/migration-notes/0505_onsite_diary_admission.md",
+        "packages/db/migrations/0505_onsite_diary_admission.sql",
+        "packages/db/src/job-source-repository.ts",
+        "packages/db/src/onsite-diary-admission.test.ts",
+        "packages/db/test/job-work-state-syntax.test.ts",
+        "packages/db/test/onsite-diary-admission.integration.test.ts",
+        "packages/db/test/onsite-diary-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

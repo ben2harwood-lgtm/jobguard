@@ -126,7 +126,7 @@ export function deriveRecoveryFollowUpState(facts: FollowUpFacts): FollowUpDispl
 
 // ---- Commands ---------------------------------------------------------------------------------------------------------------------------
 
-const id = z.string().uuid();
+const id = z.guid({ error: "Invalid uuid" });
 const digest = z.string().regex(/^[a-f0-9]{64}$/u);
 const revision = z.number().int().safe().positive();
 const amount = z.number().int().safe().positive().max(1_000_000_000_000);

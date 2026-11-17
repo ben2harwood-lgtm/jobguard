@@ -1,0 +1,1 @@
+{"version":2,"lanes":{"tests-errors-1":{"branches":["codex/sandbox/tests-errors-1"],"receipt":"docs/verdicts/TESTS-ERRORS-1/BUILDER_RECEIPT.md","note":"RED practice refusal redaction tests; decision 74 PARK.","allow":["apps/api/src/practice-errors.redaction.test.ts","docs/ledger/TESTS-ERRORS-1.md","docs/verdicts/TESTS-ERRORS-1/BUILDER_RECEIPT.md"]}}}

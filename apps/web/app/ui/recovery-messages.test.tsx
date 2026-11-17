@@ -72,9 +72,9 @@ describe("saved recovery message controls and sources", () => {
 });
 
 
-// RecoveryCases' useState calls in the order the component makes them (this file replaces useState with a positional mock): packTick, deliveries, deliveryId, then M4-1-S-R's
+// RecoveryCases' useState calls in the order the component makes them (this file replaces useState with a positional mock): disputeAmount, packTick, deliveries, deliveryId, then M4-1-S-R's
 // cases, status, selected, error, busy, amount, claimAmount, reverseAmount, errorSeq, and last the unresolved-attempt flags unsure and needsReload.
-const workbenchState = (deliveries: unknown[], deliveryId: string) => [0, deliveries, deliveryId, [], 'ready', undefined, '', false, '1000.00', '', '', 0, false, false];
+const workbenchState = (deliveries: unknown[], deliveryId: string) => ['', 0, deliveries, deliveryId, [], 'ready', undefined, '', false, '1000.00', '', '', 0, false, false];
 describe('supplier recovery source picker (Sol 5)', () => {
   it('offers the recorded fictional partial delivery as an explicit selection', () => {
     hooks.values = workbenchState([{ id: id(20), document_type: 'delivery', status: 'ready', document_number: 'DN-FICTIONAL-42' }], id(20));
@@ -310,7 +310,7 @@ describe("delivery lookup is separate from register loading (round 11)", () => {
   const realFetch = globalThis.fetch;
   afterEach(() => { globalThis.fetch = realFetch; });
   it.each(["loading", "failed", "ready"])("starts the delivery lookup only when the register is ready (%s)", async status => {
-    hooks.values = workbenchState([], ""); hooks.values[4] = status;
+    hooks.values = workbenchState([], ""); hooks.values[5] = status;
     hooks.slot = 0; hooks.sets = []; hooks.effects = [];
     const fetched = vi.fn(async () => ({ ok: true, json: async () => ({ state: { documents: [] } }) }));
     globalThis.fetch = fetched as unknown as typeof fetch;
@@ -321,7 +321,7 @@ describe("delivery lookup is separate from register loading (round 11)", () => {
     if (status === "ready") {
       await vi.waitFor(() => expect(hooks.sets).toHaveLength(2));
       expect(fetched).toHaveBeenCalledExactlyOnceWith(`/api/jobs/${id(2)}/supplier-documents`, { cache: "no-store" });
-      expect(hooks.sets.map(([slot]) => slot)).toEqual([1, 2]); // Only deliveries and the selected delivery; no register, busy or error write.
+      expect(hooks.sets.map(([slot]) => slot)).toEqual([2, 3]); // Only deliveries and the selected delivery; no register, busy or error write.
     } else {
       expect(fetched).not.toHaveBeenCalled();
       expect(hooks.sets).toEqual([]);

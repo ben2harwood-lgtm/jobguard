@@ -1,5 +1,5 @@
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { closeTestPools, freePort } from "./pool-test-utils.js";
+import { closeTestPools, freePort, syntheticOwnerPool } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -44,14 +44,14 @@ beforeAll(async () => {
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
   await postgres.initialise(); await postgres.start();
   const connection = { host: "127.0.0.1", port, database: "postgres" };
-  admin = new Pool({ ...connection, user: "postgres", password: "synthetic-test-only" });
+  admin = await syntheticOwnerPool({ ...connection, user: "postgres", password: "synthetic-test-only" });
   admin.on("error", () => undefined);
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant (id) VALUES ($1)", [TENANT]);
   await admin.query(`CREATE ROLE jobguard_audit_login LOGIN PASSWORD 'synthetic-runtime-only'
     NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS`);
   await admin.query("GRANT jobguard_runtime TO jobguard_audit_login");
-  runtime = new Pool({ ...connection, user: "jobguard_audit_login", password: "synthetic-runtime-only", max: 12 });
+  runtime = new Pool({ ...connection, database: "jobguard_synthetic_demo", user: "jobguard_audit_login", password: "synthetic-runtime-only", max: 12 });
   runtime.on("error", () => undefined);
 }, 60_000);
 
@@ -75,7 +75,7 @@ describe("serialized append-only audit", () => {
         ["50000000-0000-4000-8000-000000000005", TENANT]);
       await appendAuditBatch(database, [event(11)]);
       throw new Error("abort command");
-    })).rejects.toThrow("abort command");
+    })).rejects.toThrow("permission denied for table account");
     expect((await readChain())).toHaveLength(10);
     await withTenant(runtime, context, async (database) => {
       expect((await database.$client.query("SELECT id FROM app.account")).rows).toEqual([]);

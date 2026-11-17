@@ -25,8 +25,8 @@ export const jobRecordProposalV1 = z.object({
   questions: z.array(z.object({ question: field(z.string().min(1).max(500)) })),
 });
 export const captureRequestV1 = z.object({
-  contractVersion: z.literal(CAPTURE_CONTRACT_VERSION), requested_tenant_id: z.string().uuid(),
-  captureId: z.string().uuid(), source: z.discriminatedUnion("kind", [
+  contractVersion: z.literal(CAPTURE_CONTRACT_VERSION), requested_tenant_id: z.guid({ error: "Invalid uuid" }),
+  captureId: z.guid({ error: "Invalid uuid" }), source: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("text"), text: z.string().min(1).max(50_000) }),
     z.object({ kind: z.literal("browser_local_transcript"), text: z.string().min(1).max(50_000), acquisition: z.object({
       contractVersion: z.literal("browser_local_dictation_v1"), language: z.literal("en-GB"), processLocally: z.literal(true),

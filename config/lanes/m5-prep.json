@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "m5-prep": {
+      "branches": ["codex/sandbox/m5-prep"],
+      "receipt": "docs/verdicts/M5-PREP/BUILDER_RECEIPT.md",
+      "note": "C270, 25 Oct 2026. M5-PREP synthetic documentation and adversarial vector design only. C1: non-code preparation; no runtime or browser journey. A/B integration and all authority, persistence, transport and customer execution remain DEPENDENCY-BOUND. No migration or catalogue delta.",
+      "allow": [
+        "docs/planning/mon5-candidate-reuse-map.md",
+        "docs/contracts/customer-portal-authority-proposal.md",
+        "docs/fixtures/customer-portal-authority-cases.json",
+        "docs/verdicts/M5-PREP/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

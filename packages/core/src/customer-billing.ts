@@ -11,7 +11,7 @@ export function formatPracticeCustomerInvoiceNumber(sequence:number):string{
  return `${PRACTICE_INVOICE_NUMBER_PREFIX}-${sequence.toString().padStart(6,"0")}`;
 }
 
-const uuid=z.string().uuid();
+const uuid=z.guid({ error: "Invalid uuid" });
 export const customerPaymentV1=z.object({version:z.literal("customer-payment.record.v1"),commandId:uuid,actorMembershipId:uuid,jobId:uuid,invoiceId:uuid,paidOn:z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),amountPence:z.number().int().positive(),currency:z.literal("GBP"),method:z.enum(["bank_transfer","cash","card_elsewhere","cheque","other"]),reference:z.string().trim().min(1).max(120),builderAttestsReceived:z.literal(true)}).strict();
 export const customerPaymentReversalV1=z.object({version:z.literal("customer-payment.reverse.v1"),commandId:uuid,actorMembershipId:uuid,jobId:uuid,paymentId:uuid,reason:z.string().trim().min(1).max(240)}).strict();
 

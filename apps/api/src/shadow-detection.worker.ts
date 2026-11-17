@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { AiGatewayError } from "@jobguard/ai";
 import { detectShadowObservations, type Observation, type ShadowCapture, type ShadowProposal } from "@jobguard/core";
 import type { VerifiedTenantContext } from "@jobguard/db";
-const taskV1 = z.object({ version: z.literal("shadow-detection-task.v1"), tenantId: z.string().uuid(), jobId: z.string().uuid() }).strict();
+const taskV1 = z.object({ version: z.literal("shadow-detection-task.v1"), tenantId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }) }).strict();
 export class ShadowWorkerError extends Error {
   constructor(readonly code: "INVALID_SHADOW_TASK" | "SHADOW_TASK_TENANT_MISMATCH" | "SHADOW_TERMS_NOT_ACCEPTED" | "SHADOW_SYNTHETIC_ONLY") { super(code); }
 }
@@ -26,7 +27,22 @@ export class ShadowDetectionWorker {
     if (!await this.ports.hasAcceptedTerms(context)) throw new ShadowWorkerError("SHADOW_TERMS_NOT_ACCEPTED");
     const { observations, captures } = await this.ports.read(context, { version: "shadow-observation-read.v1", jobId: parsed.data.jobId });
     const at = this.now(), proposals = [...detectShadowObservations(observations, captures, at)];
-    for (const o of observations) proposals.push(...(await this.ports.propose(o, o.evidence.id, at)).proposals);
+    let aiFailure: AiGatewayError | undefined;
+    for (const o of observations) {
+      // Catch only the AI call. Validation, authority, cancellation and sink failures
+      // retain their normal refusal semantics; they are never partial successes.
+      let result: Awaited<ReturnType<ShadowWorkerPorts["propose"]>>;
+      try { result = await this.ports.propose(o, o.evidence.id, at); }
+      catch (error) {
+        if (!(error instanceof AiGatewayError) || !["fixture_not_found", "invalid_provider_response", "invalid_output", "invalid_citation"].includes(error.code)) throw error;
+        aiFailure ??= error;
+        continue;
+      }
+      proposals.push(...result.proposals);
+    }
     await this.ports.persist(context, { version: "shadow-detection-batch.v1", jobId: parsed.data.jobId, observations, captures, proposals });
+    // The sink owns must-surface processing. Commit its deterministic results first,
+    // then fail the task honestly so the existing scheduler records the AI failure.
+    if (aiFailure) throw aiFailure;
   }
 }

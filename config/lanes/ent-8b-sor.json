@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-8b-sor": {
+      "branches": ["codex/sandbox/ent-8b-sor"],
+      "receipt": "docs/verdicts/ENT-8B-SOR/BUILDER_RECEIPT.md",
+      "note": "ENT-8B-SOR: fixture-only internal SoR suggestions and fictional evaluation. No route, UI, database write, pricing command or live provider; C1 browser evidence inapplicable. Shared AI exports serialize with ENT-8B at landing.",
+      "allow": [
+        "packages/ai/src/sor-suggestion.ts",
+        "packages/ai/src/sor-suggestion.test.ts",
+        "packages/ai/src/sor-suggestion-evaluation.ts",
+        "packages/ai/src/sor-suggestion-evaluation.test.ts",
+        "packages/ai/src/index.ts",
+        "packages/db/test/sor-suggestion-confirmation.test.ts",
+        "docs/fixtures/ai/sor-suggestion-inputs.v1.json",
+        "docs/fixtures/ai/sor-suggestion-responses.v1.json",
+        "docs/fixtures/ai/sor-suggestion-labels.v1.json",
+        "docs/contracts/sor-suggestion-v1.md",
+        "docs/verdicts/ENT-8B-SOR/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

@@ -146,7 +146,7 @@ it("[PH11] all revoke refusals are indistinguishable and write nothing", async (
  expect(await new ContractorRepository(c.runtime).resolveSession(a.session)).toEqual(a.p); expect(await new ContractorRepository(c.runtime).resolveSession(b.session)).toEqual(b.p);
 });
 it("[PH12] failures at routine, audit insert and commit roll back both versions and audit head", async () => {
- for (const fragment of ["revoke_contractor_practice_session", "INSERT INTO app.audit_event", "COMMIT"]) {
+ for (const fragment of ["revoke_contractor_practice_session", "FROM app.append_audit(", "COMMIT"]) {
   const f = await session(), before = await sessionText(c, f.session), events = await counts(c.admin), head = (await c.admin.query("SELECT row_to_json(x)::text FROM audit_control.audit_head x WHERE tenant_id=$1", [f.p.tenantId])).rows;
   const connect = c.runtime.connect.bind(c.runtime), spy = vi.spyOn(c.runtime, "connect");
   spy.mockImplementation((async () => { const client = await connect(), query = client.query.bind(client);

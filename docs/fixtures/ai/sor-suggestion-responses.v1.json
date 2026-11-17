@@ -1,0 +1,121 @@
+{
+  "version": "sor-suggestion-responses.v1",
+  "cases": [
+    {
+      "id": "outside-tap",
+      "output": {
+        "version": "sor-suggestions.v1",
+        "suggestions": [
+          {
+            "label": "suggestion",
+            "sorCode": "OUTSIDE-TAP",
+            "citation": {
+              "sourceId": "20000000-0000-4000-8000-000000000006",
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          }
+        ]
+      },
+      "citations": [
+        {
+          "sourceId": "20000000-0000-4000-8000-000000000006",
+          "start": 0,
+          "end": 19
+        }
+      ]
+    },
+    {
+      "id": "gutter",
+      "output": {
+        "version": "sor-suggestions.v1",
+        "suggestions": [
+          {
+            "label": "suggestion",
+            "sorCode": "CLEAR-GUTTER",
+            "citation": {
+              "sourceId": "20000000-0000-4000-8000-000000000006",
+              "start": 0,
+              "end": 23,
+              "quote": "Cleared blocked gutter."
+            }
+          }
+        ]
+      },
+      "citations": [
+        {
+          "sourceId": "20000000-0000-4000-8000-000000000006",
+          "start": 0,
+          "end": 23
+        }
+      ]
+    },
+    {
+      "id": "door",
+      "output": {
+        "version": "sor-suggestions.v1",
+        "suggestions": [
+          {
+            "label": "suggestion",
+            "sorCode": "DOOR",
+            "citation": {
+              "sourceId": "20000000-0000-4000-8000-000000000006",
+              "start": 0,
+              "end": 23,
+              "quote": "Replaced internal door."
+            }
+          }
+        ]
+      },
+      "citations": [
+        {
+          "sourceId": "20000000-0000-4000-8000-000000000006",
+          "start": 0,
+          "end": 23
+        }
+      ]
+    },
+    {
+      "id": "embedded-instructions",
+      "output": {
+        "version": "sor-suggestions.v1",
+        "suggestions": [
+          {
+            "label": "suggestion",
+            "sorCode": "OUTSIDE-TAP",
+            "citation": {
+              "sourceId": "20000000-0000-4000-8000-000000000006",
+              "start": 0,
+              "end": 19,
+              "quote": "Fitted outside tap."
+            }
+          }
+        ]
+      },
+      "citations": [
+        {
+          "sourceId": "20000000-0000-4000-8000-000000000006",
+          "start": 0,
+          "end": 19
+        }
+      ]
+    },
+    {
+      "id": "ambiguous-tap",
+      "output": {
+        "version": "sor-suggestions.v1",
+        "suggestions": []
+      },
+      "citations": []
+    },
+    {
+      "id": "no-item",
+      "output": {
+        "version": "sor-suggestions.v1",
+        "suggestions": []
+      },
+      "citations": []
+    }
+  ]
+}

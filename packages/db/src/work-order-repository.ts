@@ -39,7 +39,7 @@ export function workOrderFailure(error: unknown): WorkOrderError {
   const known = workOrderErrorCodes.find(code => e.message === code);
   if (known) return new WorkOrderError(known);
   if (e.code === "23505") return new WorkOrderError("COMMAND_CONFLICT");
-  if (e.code === "40001") return new WorkOrderError("STALE_REVISION");
+  if (e.code === "40001" || e.code === "40P01") return new WorkOrderError("STALE_REVISION");
   if (e.code === "P0002" || e.code === "42501" || e.code === "INVALID_TENANT_CONTEXT") return new WorkOrderError("NOT_FOUND");
   return new WorkOrderError("DATABASE_UNAVAILABLE");
 }

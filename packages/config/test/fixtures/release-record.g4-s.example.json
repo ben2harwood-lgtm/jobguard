@@ -1,0 +1,31 @@
+{
+  "version": "release-record.v1",
+  "id": "fixture:unexecuted-g4-s",
+  "commit": "0000000000000000000000000000000000000000",
+  "environment": "production_billing",
+  "phase": "bounded_smoke",
+  "track": "small-builder",
+  "tenantIds": [
+    "11111111-1111-4111-8111-111111111111"
+  ],
+  "jurisdictions": [
+    "fixture:unapproved-jurisdiction"
+  ],
+  "enabledRailIds": [
+    "success_fee_stripe"
+  ],
+  "policies": [],
+  "gates": [
+    {
+      "id": "G4-S",
+      "status": "revoked",
+      "approver": "____",
+      "approvedAt": "2000-01-01T00:00:00Z",
+      "evidence": "____"
+    }
+  ],
+  "consentEvidence": "____",
+  "sandboxAcceptanceEvidence": "____",
+  "rollbackDisablePlan": "docs/operations/rollback-disable-plan.md",
+  "retroactivePilotBilling": false
+}

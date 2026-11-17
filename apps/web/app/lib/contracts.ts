@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-export const tenantIdV1 = z.string().uuid();
+export const tenantIdV1 = z.guid({ error: "Invalid uuid" });
 export const jobStatusV1 = z.enum(["draft", "quoting", "accepted", "live", "invoiced", "paid", "lost"]);
 export const deliveryStateV1 = z.enum(["not_sent", "queued", "outcome_unknown", "delivered", "unknown"]);
 export const paymentStateV1 = z.enum(["not_due", "due", "part_paid", "settled", "unknown"]);
 export const jobSummaryV1 = z.object({
-  id: z.string().uuid(), tenantId: tenantIdV1, title: z.string(), customerLabel: z.string(), siteLabel: z.string().default("Details needed"), status: jobStatusV1,
+  id: z.guid({ error: "Invalid uuid" }), tenantId: tenantIdV1, title: z.string(), customerLabel: z.string(), siteLabel: z.string().prefault("Details needed"), status: jobStatusV1,
   document: z.object({ kind: z.enum(["none", "quote", "invoice", "unknown"]), reference: z.string().nullable(), delivery: deliveryStateV1 }),
   customerPayment: paymentStateV1, pilotNoCharge: z.boolean(), updatedLabel: z.string(),
 });

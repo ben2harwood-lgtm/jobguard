@@ -1,0 +1,11 @@
+import { afterEach, expect, it, vi } from 'vitest';
+const state=vi.hoisted(()=>({session:'session',requestRun:vi.fn(),failure:vi.fn()}));
+vi.mock('next/headers',()=>({cookies:async()=>({get:()=>state.session?{value:state.session}:undefined})}));
+vi.mock('../../../../../lib/synthetic-server',()=>({hasSyntheticSession:(value:unknown)=>Boolean(value),practiceFailure:(error:unknown)=>error instanceof Error && error.message==='NOT_FOUND'?Response.json({code:'NOT_FOUND'},{status:404}):null}));
+vi.mock('../../../../../lib/workspace-server',()=>({workspaceApplication:async()=>({finalCheck:state})}));
+import { POST } from './route';
+const params={params:Promise.resolve({id:'fictional-job'})};
+afterEach(()=>{vi.clearAllMocks();state.session='session';});
+it('missing session requests nothing',async()=>{state.session='';expect((await POST(new Request('https://fictional.invalid',{method:'POST'}),params)).status).toBe(401);expect(state.requestRun).not.toHaveBeenCalled();});
+it('records the request through the checked application',async()=>{state.requestRun.mockResolvedValue({state:'requested'});const response=await POST(new Request('https://fictional.invalid',{method:'POST',body:JSON.stringify({version:'final-check-run.request.v1'})}),params);expect(response.status).toBe(201);expect(await response.json()).toEqual({state:'requested'});expect(state.requestRun).toHaveBeenCalledWith('fictional-job',{version:'final-check-run.request.v1'});});
+it('typed refusals keep their status',async()=>{state.requestRun.mockRejectedValue(new Error('FINAL_ACCOUNT_LOCK_REQUIRED'));state.failure.mockReturnValue({status:400,body:{code:'FINAL_ACCOUNT_LOCK_REQUIRED'}});expect((await POST(new Request('https://fictional.invalid',{method:'POST'}),params)).status).toBe(400);});

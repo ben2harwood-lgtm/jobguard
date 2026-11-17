@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-9-s-posting": {
+      "branches": [
+        "codex/sandbox/m4-9-s-posting"
+      ],
+      "receipt": "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
+      "note": "RED M4-9-S catch-only source-backed positive/zero posting; migrations 0405-0406. Q2/Q3 held. This lane file is implicitly owned; paths list this piece only, not inherited stacked changes. 30 October test-only repair: retain producer protocol and main baseline/mixed-check fixture callers; add missing review/source refusal regressions.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/success-fee.application.test.ts",
+        "apps/api/src/success-fee.application.ts",
+        "apps/api/src/success-fee.controller.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/success-fee-posting-v3.md",
+        "docs/verdicts/M4-9-S/BUILDER_RECEIPT.md",
+        "packages/core/src/success-fee-catch-posting.test.ts",
+        "packages/core/src/success-fee-posting.ts",
+        "packages/db/migrations/0405_success_fee_catch_facts.sql",
+        "packages/db/migrations/0406_success_fee_catch_posting.sql",
+        "packages/db/src/success-fee-repository.test.ts",
+        "packages/db/src/success-fee-repository.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/stored-receipt-case-fixture.ts",
+        "packages/db/test/success-fee-access.integration.test.ts",
+        "packages/db/test/success-fee-catch-fixture.ts",
+        "packages/db/test/success-fee-catch-posting.integration.test.ts",
+        "packages/db/test/success-fee-catch-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -14,9 +14,9 @@ export const observationFactsV1 = z.object({
   activeDispute: z.boolean(), silenceMateriallyWorsensDispute: z.boolean(), disclosureDuty: z.boolean(),
 }).strict().readonly();
 export const observationV1 = z.object({
-  version: z.literal("observation.v1"), tenantId: z.string().uuid(), jobId: z.string().uuid(),
+  version: z.literal("observation.v1"), tenantId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }),
   kind: z.enum(observationKinds),
-  evidence: z.object({ id: z.string().uuid(), objectVersionId: z.string().min(1).max(300), sha256: z.string().regex(/^[a-f0-9]{64}$/u), serverReceivedAt: instantV1 }).strict().readonly(),
+  evidence: z.object({ id: z.guid({ error: "Invalid uuid" }), objectVersionId: z.string().min(1).max(300), sha256: z.string().regex(/^[a-f0-9]{64}$/u), serverReceivedAt: instantV1 }).strict().readonly(),
   text: z.string().min(1).max(100_000), facts: observationFactsV1,
   citations: z.array(z.object({ start: z.number().int().nonnegative(), end: z.number().int().positive(), quote: z.string().min(1) }).strict().readonly()).min(1).max(100).readonly(),
 }).strict().superRefine((o, ctx) => {

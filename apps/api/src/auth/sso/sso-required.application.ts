@@ -6,7 +6,7 @@ import { PersistedAuthProvider } from "../persisted-auth-provider.js";
 import { resolveVerifiedTenantContext, type TenantRequestCredentials } from "../principal-bridge.js";
 import { SsoAuthProvider } from "./sso.application.js";
 import { requireSyntheticSso } from "./sso.contracts.js";
-import { SsoRequiredError, ssoRequiredCodes, ssoRequiredCommandV1, ssoRequiredViewV1, ssoEmergencyV1 } from "./sso-required.contracts.js";
+import { SsoRequiredError, ssoRequiredCodes, ssoRequiredCommandV1, ssoRequiredViewV1, ssoEmergencyV2, ssoRequiredDetailViewV1 } from "./sso-required.contracts.js";
 function typed(error:unknown):SsoRequiredError {
   if(error instanceof SsoRequiredError)return error;
   if(error instanceof AuthError)return new SsoRequiredError("SSO_REQUIRED_FORBIDDEN");
@@ -18,7 +18,7 @@ function typed(error:unknown):SsoRequiredError {
 /** Same application for Nest and Next. Required mode has no permissive default. */
 export class SsoRequiredApplication {
   readonly provider:SsoAuthProvider;
-  constructor(readonly base:PersistedAuthProvider,readonly repository:SsoRequiredRepository,readonly allowedOrigin:string,readonly mode:DeploymentMode) {
+  constructor(readonly base:PersistedAuthProvider,readonly repository:SsoRequiredRepository,readonly allowedOrigin:string,readonly mode:DeploymentMode,readonly windowMinutes?:number|"invalid") {
     this.provider=new SsoAuthProvider(base,new EnterpriseIdentityRepository(base.repository.pool));
   }
   private gate():void {requireSyntheticSso(this.mode,"in-process-test-idp");}
@@ -32,6 +32,18 @@ export class SsoRequiredApplication {
       const scope=await this.repository.enterprise.sessionScope(principal.sessionId);
       target=scope?.connectionId??"sso-required";
       return await this.repository.view(context,this.base.digest(`session:${credentials.sessionToken}`));
+    }catch(error){const failure=error instanceof z.ZodError||error instanceof SyntaxError?new SsoRequiredError("INVALID_SSO_REQUIRED_INPUT"):typed(error);await this.repository.refusal(target,failure.code);throw failure;}
+  }
+  async detail(raw:unknown,credentials:TenantRequestCredentials) {
+    let target="sso-required";
+    try {
+      this.gate();const input=ssoRequiredDetailViewV1.parse(raw);
+      const context=await resolveVerifiedTenantContext(this.provider,{...credentials,requestedTenantId:input.requested_tenant_id},this.allowedOrigin);
+      const principal=await this.provider.authenticate(credentials.sessionToken!);
+      if(!principal)throw new SsoRequiredError("SSO_REQUIRED_FORBIDDEN");
+      const scope=await this.repository.enterprise.sessionScope(principal.sessionId);
+      target=scope?.connectionId??"sso-required";
+      return await this.repository.detail(context,this.base.digest(`session:${credentials.sessionToken}`));
     }catch(error){const failure=error instanceof z.ZodError||error instanceof SyntaxError?new SsoRequiredError("INVALID_SSO_REQUIRED_INPUT"):typed(error);await this.repository.refusal(target,failure.code);throw failure;}
   }
   async command(raw:unknown,credentials:TenantRequestCredentials) {
@@ -52,21 +64,33 @@ export class SsoRequiredApplication {
         }
         throw error;
       }
-    }catch(error){const failure=error instanceof z.ZodError||error instanceof SyntaxError?new SsoRequiredError("INVALID_SSO_REQUIRED_INPUT"):typed(error);await this.repository.refusal(target,failure.code);throw failure;}
+    }catch(error){const failure=error instanceof z.ZodError||error instanceof SyntaxError?new SsoRequiredError("INVALID_SSO_REQUIRED_INPUT"):typed(error);await this.repository.refusal(target,failure.code);
+      if(failure.code==="SSO_REQUIRED_UNLINKED_MEMBERS") {
+        let unlinked:SsoRequiredError["unlinked"];
+        try {const input=ssoRequiredCommandV1.parse(raw);unlinked=(await this.detailAfterRefusal({version:"sso-required-detail-view.v1",requested_tenant_id:input.requested_tenant_id},credentials)).unlinked;}
+        catch { /* The original refusal remains authoritative if enrichment fails. */ }
+        if(unlinked!==undefined)throw new SsoRequiredError(failure.code,{cause:failure},unlinked);
+      }
+      throw failure;}
+  }
+  private async detailAfterRefusal(raw:unknown,credentials:TenantRequestCredentials) {
+    this.gate();const input=ssoRequiredDetailViewV1.parse(raw);
+    const context=await resolveVerifiedTenantContext(this.provider,{...credentials,requestedTenantId:input.requested_tenant_id},this.allowedOrigin);
+    return this.repository.detail(context,this.base.digest(`session:${credentials.sessionToken}`));
   }
   async emergency(raw:unknown,origin:string|undefined) {
     let cause="EMERGENCY_ROUTE_BLOCKED";
     try {
-      this.gate();cause="EMERGENCY_INPUT_INVALID";const input=ssoEmergencyV1.parse(raw);
+      this.gate();cause="EMERGENCY_INPUT_INVALID";const input=ssoEmergencyV2.parse(raw);
       cause="EMERGENCY_ORIGIN_REFUSED";
       if(origin!==this.allowedOrigin)throw new SsoRequiredError("SSO_EMERGENCY_REFUSED");
       cause="EMERGENCY_MAILBOX_REFUSED";
       const user=await this.base.proveEmergencyMailbox(input.email,input.code);
       if(!user)throw new SsoRequiredError("SSO_EMERGENCY_REFUSED");
       cause="EMERGENCY_UNAVAILABLE";
-      const result=await this.repository.emergency(user,input);cause=result.cause;
+      const result=await this.repository.emergency(user,input,...(this.windowMinutes===undefined?[]:[this.windowMinutes]));cause=result.cause;
       if(!result.used)throw new SsoRequiredError("SSO_EMERGENCY_REFUSED");
-      return {version:"sso-emergency-response.v1" as const,environment:"synthetic_demo" as const,required:false as const};
+      return {version:"sso-emergency-response.v2" as const,environment:"synthetic_demo" as const,required:false as const,requiredAgainAt:result.closesAt!,windowMinutes:result.windowMinutes!};
     }catch {
       // One public response for every cause. Tenant log/audit, where authorized, already committed together.
       try {await this.repository.refusal("emergency",cause);}

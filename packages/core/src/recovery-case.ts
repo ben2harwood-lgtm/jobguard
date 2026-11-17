@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { money } from "./money.js";
 
-export const recoveryCaseTypeV1 = z.enum(["merchant_overcharge", "withheld_customer_payment", "prevention", "duplicate_supplier_payment"]);
+export const recoveryCaseTypeV1 = z.enum(["merchant_overcharge", "withheld_customer_payment", "prevention", "duplicate_supplier_payment", "missed_variation_final_account"]);
 export const recoveryCaseStateFullV1 = z.enum([
   "identified", "evidence_assembled", "pursuing", "negotiating", "partially_landed", "landed",
   "closed_recovered", "closed_no_recovery", "prevented",
@@ -106,6 +106,7 @@ export function transitionRecoveryCase(input: Readonly<{
 }>): { state: RecoveryCaseState; landedPence: number; writtenOffPence: number } {
   if (!recoveryEventAllowedFrom(input.state, input.event)) throw new RecoveryTransitionError(input.state, input.event);
   const claimed: number = money(input.claimedPence).pence;
+  if (input.event === "dispute" && input.amountPence !== undefined && (money(input.amountPence).pence <= 0 || input.amountPence > claimed)) throw new RecoveryTransitionError(input.state, input.event);
   let landed: number = money(input.landedPence).pence;
   const priorWrittenOff: number = money(input.writtenOffPence ?? 0).pence;
   if (landed + priorWrittenOff > claimed) throw new RecoveryTransitionError(input.state, input.event);
@@ -196,15 +197,15 @@ export function assertRecoverySources(input: Readonly<{
 }
 
 export const recoveryCaseCommandV1 = z.discriminatedUnion("action", [
-  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("open"), commandId:z.string().uuid(),
-    caseType:recoveryCaseTypeV1, claimedNetPence:z.number().int().positive().max(1_000_000_000_000),
+  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("open"), commandId:z.guid({ error: "Invalid uuid" }),
+    caseType:recoveryCaseTypeV1.refine(value => value !== "missed_variation_final_account", "Final Check cases are created by server confirmation"), claimedNetPence:z.number().int().positive().max(1_000_000_000_000),
     counterparty:z.string().trim().min(1).max(120), book:z.enum(["supplier_cost", "builder_customer"]),
     sourceType:z.enum(["supplier_documents", "customer_invoice"]), sourceRefs:z.array(z.string().trim().min(1).max(160)).min(1).max(6),
     reviewerRef:z.string().trim().min(1).max(200).optional(), expectedRevision:z.literal(0) }).strict(),
-  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("amend_claim"), commandId:z.string().uuid(),
-    caseId:z.string().uuid(), claimedNetPence:z.number().int().positive().max(1_000_000_000_000), reviewerRef:z.string().trim().min(1).max(200).optional(), expectedRevision:z.number().int().positive() }).strict(),
-  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("transition"), commandId:z.string().uuid(),
-    caseId:z.string().uuid(), eventType:recoveryEventTypeV1, amountPence:z.number().int().positive().max(1_000_000_000_000).optional(),
+  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("amend_claim"), commandId:z.guid({ error: "Invalid uuid" }),
+    caseId:z.guid({ error: "Invalid uuid" }), claimedNetPence:z.number().int().positive().max(1_000_000_000_000), reviewerRef:z.string().trim().min(1).max(200).optional(), expectedRevision:z.number().int().positive() }).strict(),
+  z.object({ version:z.literal("recovery-case-command.v1"), action:z.literal("transition"), commandId:z.guid({ error: "Invalid uuid" }),
+    caseId:z.guid({ error: "Invalid uuid" }), eventType:recoveryEventTypeV1, amountPence:z.number().int().positive().max(1_000_000_000_000).optional(),
     reviewerRef:z.string().trim().min(1).max(200).optional(), expectedRevision:z.number().int().positive() }).strict(),
 ]);
 export type RecoveryCaseCommand = z.infer<typeof recoveryCaseCommandV1>;

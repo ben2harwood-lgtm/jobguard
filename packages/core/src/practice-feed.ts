@@ -46,14 +46,14 @@ export const practiceFeedStepV1 = z.enum(["pending", "settled", "replay", "page_
 export type PracticeFeedStep = z.infer<typeof practiceFeedStepV1>;
 
 const commandBase = {
-  version: z.literal("practice-feed-command.v1"), commandId: z.string().uuid(),
+  version: z.literal("practice-feed-command.v1"), commandId: z.guid({ error: "Invalid uuid" }),
   expectedRevision: z.number().int().nonnegative().max(1_000_000),
 };
 export const practiceFeedCommandV1 = z.discriminatedUnion("action", [
   z.object({ ...commandBase, action: z.literal("connect") }).strict(),
   z.object({ ...commandBase, action: z.literal("advance"), movement: practiceMovementKeyV1, step: practiceFeedStepV1 }).strict(),
   z.object({ ...commandBase, action: z.literal("reconcile_duplicate"), movement: practiceMovementKeyV1 }).strict(),
-  z.object({ ...commandBase, action: z.literal("match_receipt"), movement: practiceReceiptMovementKeyV1, paymentId: z.string().uuid() }).strict(),
+  z.object({ ...commandBase, action: z.literal("match_receipt"), movement: practiceReceiptMovementKeyV1, paymentId: z.guid({ error: "Invalid uuid" }) }).strict(),
   z.object({ ...commandBase, action: z.literal("disconnect") }).strict(),
 ]);
 export type PracticeFeedCommand = z.infer<typeof practiceFeedCommandV1>;
@@ -61,7 +61,7 @@ export type PracticeFeedCommand = z.infer<typeof practiceFeedCommandV1>;
 export const practiceFeedQueryV1 = z.object({
   version: z.literal("practice-feed-query.v1"),
   cursor: z.string().regex(/^(0|[1-9][0-9]{0,5})$/u).optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
+  limit: z.coerce.number().int().min(1).max(50).prefault(20),
 }).strict();
 export type PracticeFeedQuery = z.infer<typeof practiceFeedQueryV1>;
 

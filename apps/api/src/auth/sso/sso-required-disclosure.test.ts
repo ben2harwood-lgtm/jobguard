@@ -124,11 +124,11 @@ describe("ENT-10d refusal audit failures do not disclose SSO requirements", () =
   it("[S10] emergency SQL parameters omit mailbox address and code", async () => {
     const query = vi.fn(async (sql: string) => ({ rows: sql.includes("sso_emergency_use") ? [{ result: { used: false, cause: "EMERGENCY_APPROVER_RULE_UNSET" } }] : [] }));
     const repository = new SsoRequiredRepository({ connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool);
-    const input = { version: "sso-emergency.v1", requested_tenant_id: tenant, email: address, code: "12345678", reason: "Synthetic emergency parameter test reason" };
-    await repository.emergency(user, input);
+    const input = { version: "sso-emergency.v2", commandId: randomUUID(), requested_tenant_id: tenant, email: address, code: "12345678", reason: "Synthetic emergency parameter test reason" };
+    await repository.emergency(user, input,60);
     const parameters = query.mock.calls.find(([sql]) => sql.includes("sso_emergency_use")) as unknown as [string, unknown[]];
     expect(parameters[1][0]).toBe(user);
-    expect(JSON.parse(parameters[1][1] as string)).toEqual({ version: input.version, requested_tenant_id: tenant, reason: input.reason });
+    expect(JSON.parse(parameters[1][1] as string)).toEqual({ version: input.version, requested_tenant_id: tenant, commandId:input.commandId, windowMinutes:60, reason: input.reason });
     expect(JSON.stringify(parameters[1])).not.toContain(input.email);
     expect(JSON.stringify(parameters[1])).not.toContain(input.code);
   });

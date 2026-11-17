@@ -1,0 +1,100 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/fixlater-6/packages/db
+
+ ❯ src/serious-b9-before.test.ts (5 tests | 5 failed) 82ms
+     × S28 uses issued integer line tax instead of requiring a blended ratio 36ms
+     × S29 excludes cumulative account work outside the issued subset 22ms
+     × S30 resolves saved remittance when the caller omits its ID 17ms
+     × S31 excludes a later credit from an earlier receipt denominator 3ms
+     × S32 reverses saved line facts after original remittance invalidation 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/serious-b9-before.test.ts > SERIOUS-B9 reader regressions > S28 uses issued integer line tax instead of requiring a blended ratio
+RecoveryAllocationError: FRACTIONAL_CASE_SPLIT
+ ❯ fail src/recovery-allocation-b9-original.ts:56:65
+
+ ❯ integral src/recovery-allocation-b9-original.ts:63:33
+ ❯ src/recovery-allocation-b9-original.ts:337:52
+ ❯ RecoveryAllocationRepository.lineFacts src/recovery-allocation-b9-original.ts:336:19
+ ❯ read src/serious-b9-before.test.ts:37:14
+ ❯ src/serious-b9-before.test.ts:43:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/serious-b9-before.test.ts > SERIOUS-B9 reader regressions > S29 excludes cumulative account work outside the issued subset
+RecoveryAllocationError: ALLOCATION_SOURCE_REQUIRED
+ ❯ fail src/recovery-allocation-b9-original.ts:56:65
+
+ ❯ RecoveryAllocationRepository.lineFacts src/recovery-allocation-b9-original.ts:323:108
+ ❯ read src/serious-b9-before.test.ts:37:14
+ ❯ src/serious-b9-before.test.ts:47:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/serious-b9-before.test.ts > SERIOUS-B9 reader regressions > S30 resolves saved remittance when the caller omits its ID
+AssertionError: expected { …(6) } to match object { rule: 'explicit', …(1) }
+(8 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "rule": "explicit",
+-   "sourceRef": "593b8cc3-4086-4356-9111-c310d49167bc",
++   "rule": "pro_rata",
++   "sourceRef": "1a0c0169-19a1-4d1f-8605-d5df3f886113",
+  }
+
+ ❯ src/serious-b9-before.test.ts:53:26
+     51|  it("S30 resolves saved remittance when the caller omits its ID", asyn…
+     52|   const { facts }=await read({ recorded: true });
+     53|   expect(facts.lines[0]).toMatchObject({ rule: "explicit", sourceRef: …
+       |                          ^
+     54|  });
+     55|  it("S31 excludes a later credit from an earlier receipt denominator",…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/serious-b9-before.test.ts > SERIOUS-B9 reader regressions > S31 excludes a later credit from an earlier receipt denominator
+AssertionError: expected { numerator: '17625000', …(1) } to deeply equal { numerator: '125000', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "denominator": "1",
+-   "numerator": "125000",
++   "denominator": "133",
++   "numerator": "17625000",
+  }
+
+ ❯ src/serious-b9-before.test.ts:63:64
+     61|    rows:[{...baseLine,net_pence:"141000",gross_pence:"169200",invoice_…
+     62|     {...baseLine,id:second,net_pence:"141000",gross_pence:"169200",inv…
+     63|   expect(facts.lines.find((row:any)=>row.lineId===second).net).toEqual…
+       |                                                                ^
+     64|  });
+     65|  it("S32 reverses saved line facts after original remittance invalidat…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/serious-b9-before.test.ts > SERIOUS-B9 reader regressions > S32 reverses saved line facts after original remittance invalidation
+RecoveryAllocationError: ALLOCATION_SOURCE_REQUIRED
+ ❯ fail src/recovery-allocation-b9-original.ts:56:65
+
+ ❯ RecoveryAllocationRepository.lineFacts src/recovery-allocation-b9-original.ts:357:53
+ ❯ read src/serious-b9-before.test.ts:37:14
+ ❯ src/serious-b9-before.test.ts:68:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed (5)
+   Start at  13:08:59
+   Duration  2.84s (transform 1.02s, setup 0ms, import 2.61s, tests 82ms, environment 0ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/fixlater-6/packages/db:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/serious-b9-before.test.ts --maxWorkers=1

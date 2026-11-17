@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-1b": {
+      "branches": [
+        "codex/sandbox/mon-1b"
+      ],
+      "receipt": "docs/verdicts/MON-1B/BUILDER_RECEIPT.md",
+      "note": "MON-1B RED: synthetic persisted meter on unmerged MON-1 parent. Provisional migration 0184; additive catalogue rows pending coordinator ruling. No parent changes except additive db exports; no commercial charge, shared-practice summary, stop/trial policy or trip hooks. No PR before parent merges.",
+      "allow": [
+        "packages/db/migrations/0184_meter_persistence.sql",
+        "packages/db/migration-notes/0184_meter_persistence.md",
+        "packages/db/src/index.ts",
+        "packages/db/src/meter-persistence.ts",
+        "packages/db/src/meter-persistence.test.ts",
+        "packages/db/src/meter-repository.ts",
+        "packages/db/src/meter-repository.test.ts",
+        "packages/db/test/meter-vitest.config.ts",
+        "packages/db/test/meter-persistence-fixtures.ts",
+        "packages/db/test/meter-persistence.integration.test.ts",
+        "packages/db/test/meter-persistence-upgrade.integration.test.ts",
+        "packages/db/test/tenancy.integration.test.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "docs/contracts/meter-persistence-v1.md",
+        "docs/verdicts/MON-1B/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

@@ -11,3 +11,9 @@ coverage/
 playwright-report/
 test-results/
 .jobguard/
+
+# Cloudflare local output and local-only secrets
+.open-next/
+.wrangler/
+.dev.vars
+.dev.vars.*

@@ -4,6 +4,7 @@ export type AiGatewayErrorCode =
   | "invalid_provider_response"
   | "invalid_output"
   | "invalid_citation"
+  | "timeout"
   | "cancelled"
   | "live_route_disabled";
 

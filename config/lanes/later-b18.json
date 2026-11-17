@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b18": {
+      "branches": [
+        "codex/sandbox/later-b18"
+      ],
+      "receipt": "docs/verdicts/LATER-B18/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B18 (coordinator queue-fill 16 Oct night). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "apps/api/src/workspace/fee-illustration-later.test.ts",
+        "apps/api/src/workspace/fee-illustration.controller.ts",
+        "docs/ledger/LATER-B18.md",
+        "docs/verdicts/LATER-B18/BUILDER_RECEIPT.md",
+        "packages/db/migration-notes/0192_fee_illustration_replay.md",
+        "packages/db/migrations/0192_fee_illustration_replay.sql",
+        "packages/db/test/fee-illustration-later-upgrade.integration.test.ts",
+        "packages/db/test/fee-illustration-later.integration.test.ts"
+      ]
+    }
+  }
+}

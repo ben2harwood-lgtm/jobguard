@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-10-m57": {
+      "branches": ["codex/sandbox/ent-10-m57"],
+      "note": "RED ENT-10 / M5-7 dark conformance only. Synthetic identity, unchanged permission policy, exact Decisions and server-side non-synthetic refusals. No migration or live enablement. Own lane file is implicitly permitted.",
+      "allow": [
+        "apps/api/src/auth/sso/m57-dark-conformance.test.ts",
+        "packages/db/test/m57-sso-conformance.integration.test.ts",
+        "packages/db/test/later-sso-authority.integration.test.ts"
+      ]
+    }
+  }
+}

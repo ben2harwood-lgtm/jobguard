@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "flake-diag-2": {
+      "branches": ["codex/sandbox/flake-diag-2"],
+      "receipt": "docs/verdicts/FLAKE-DIAG-2/BUILDER_RECEIPT.md",
+      "note": "CH-2 completion/reload race diagnosis; test waits for authoritative completion before persistence checks and navigation.",
+      "allow": [
+        "apps/web/e2e/CH-2.spec.ts",
+        "docs/verdicts/FLAKE-DIAG-2/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

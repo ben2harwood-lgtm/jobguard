@@ -1,0 +1,20 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-3c/packages/db
+
+ ❯ test/quote-reacceptance.integration.test.ts (9 tests | 1 failed | 8 skipped) 1975ms
+     × a reused command id with a changed method, stated time or cancellation time is a COMMAND_CONFLICT (first and later acceptances) 67ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/quote-reacceptance.integration.test.ts > quote re-acceptance after cancellation > a reused command id with a changed method, stated time or cancellation time is a COMMAND_CONFLICT (first and later acceptances)
+AssertionError: promise resolved "{ version: 1, …(8) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "activeAcceptance": {
++     "acceptedAt": "2026-10-02T10:00:00.000Z",
++     "actor": "A Builder Ltd (builder)",

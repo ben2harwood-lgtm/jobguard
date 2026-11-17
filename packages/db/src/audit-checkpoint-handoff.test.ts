@@ -31,7 +31,10 @@ beforeEach(() => {
     if (sql.includes("FROM app.audit_export_checkpoint")) return { rows: handed ? [{ sequence: "1", event_hash: headHash, event_sequence: "1", actual_hash: headHash }] : [] };
     if (sql.includes("current_setting")) return { rows: [{ tenant_id: tenant }] };
     if (sql.includes("clock_timestamp")) return { rows: [{ occurred_at: new Date("2026-10-11T22:30:00.000Z") }] };
-    if (sql.startsWith("INSERT INTO app.audit_event")) operatorEvent = values;
+    if (sql.includes("FROM app.append_audit(")) {
+      operatorEvent = JSON.parse(values[0] as string);
+      return { rows: [{ sequence: 2, eventHash: "b".repeat(64), occurredAt: new Date("2026-10-11T22:30:00.000Z") }] };
+    }
     if (sql.startsWith("INSERT INTO audit_control.checkpoint")) return { rows: [{ recorded_at: new Date("2026-10-11T22:30:00.001Z") }] };
     if (sql.startsWith("INSERT INTO app.audit_export_checkpoint") && failure) throw Object.assign(new Error("driver detail omitted"), { code: failure });
     return { rows: [], rowCount: 1 };
@@ -78,10 +81,10 @@ it("[A13] connected target and unknown tenant fail without inserts", async () =>
 it("[A14] trace locks before reads, uses only local settings and commits after copy", async () => {
   expect(await runAuditCheckpointHandoff(options)).toMatchObject({ outcomes: [{ outcome: "handed_off", sequence: 2 }] });
   const lock = queries.findIndex(q => q.sql.includes("app.lock_audit_head()"));
-  expect(queries.slice(lock - 2, lock).map(q => q.sql)).toEqual(["SELECT set_config('app.tenant_id', $1, true)", "SET LOCAL ROLE jobguard_runtime"]);
+  expect(queries.slice(lock - 2, lock).map(q => q.sql)).toEqual(["SELECT set_config('app.tenant_id', $1, true)", "SET LOCAL ROLE jobguard_migration"]);
   expect(queries.findIndex(q => q.sql.includes("FROM app.audit_event"))).toBeGreaterThan(lock);
   expect(queries.filter(q => /^SET ROLE/u.test(q.sql))).toEqual([]);
-  const append = queries.findIndex(q => q.sql.startsWith("INSERT INTO app.audit_event"));
+  const append = queries.findIndex(q => q.sql.includes("FROM app.append_audit("));
   const checkpoint = queries.findIndex(q => q.sql.startsWith("INSERT INTO audit_control.checkpoint"));
   const copy = queries.findIndex(q => q.sql.startsWith("INSERT INTO app.audit_export_checkpoint"));
   expect(append).toBeLessThan(checkpoint); expect(checkpoint).toBeLessThan(copy);
@@ -101,8 +104,8 @@ it("[C-OPS-4] requires a bounded plain operator label and records session user a
   }
   expect(connect).not.toHaveBeenCalled();
   await runAuditCheckpointHandoff(options);
-  expect(operatorEvent[8]).toEqual(new Date("2026-10-11T22:30:00.000Z"));
-  expect(JSON.parse(operatorEvent[9] as string).references).toEqual({ environment: "synthetic_demo", priorSequence: "1", operator: "ben.ops-1", sessionUser: "fixture_owner" });
+  expect(operatorEvent[0]).not.toHaveProperty("occurredAt");
+  expect((operatorEvent[0] as { payload: unknown }).payload).toMatchObject({ references: { environment: "synthetic_demo", priorSequence: "1", operator: "ben.ops-1", sessionUser: "fixture_owner" } });
 });
 it("[C-OPS-4] CLI requires operator, refuses duplicate/unknown flags and says nothing to do", async () => {
   for (const args of [[], ["--operator"], ["--operator", "bad label"], ["--operator", "ben", "--operator", "ben"], ["--operator", "ben", "--unknown", tenant], ["--operator", "ben", "--tenant", "invalid"]]) {
@@ -244,7 +247,30 @@ function assertOperatorUnreachable(files: ReadonlyMap<string, string>): void {
         if (expression.text === "require") return true;
         return (checker.getSymbolAtLocation(expression)?.declarations ?? []).some(declaration =>
           ts.isVariableDeclaration(declaration) && ts.isVariableDeclarationList(declaration.parent) &&
-          Boolean(declaration.parent.flags & ts.NodeFlags.Const) && declaration.initializer && isRequire(declaration.initializer, seen));
+          Boolean(declaration.parent.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let)) && declaration.initializer && isRequire(declaration.initializer, seen));
+      };
+      // FL104 is a textual control: inspect known child_process calls, never execute
+      // their text. Resolve imported bindings so unrelated functions and shadowed
+      // parameters with the same names remain valid request code.
+      const fromChildProcess = (declaration: ts.Node): boolean => {
+        for (let parent: ts.Node | undefined = declaration; parent; parent = parent.parent) {
+          if (ts.isImportDeclaration(parent)) return ts.isStringLiteralLike(parent.moduleSpecifier) && ["child_process", "node:child_process"].includes(parent.moduleSpecifier.text);
+        }
+        return false;
+      };
+      const launchNames = new Set(["spawn", "spawnSync", "exec", "execSync", "execFile", "execFileSync", "fork"]);
+      const isProcessLaunch = (expression: ts.Expression): boolean => {
+        if (ts.isIdentifier(expression)) return (checker.getSymbolAtLocation(expression)?.declarations ?? []).some(declaration =>
+          ts.isImportSpecifier(declaration) && launchNames.has((declaration.propertyName ?? declaration.name).text) && fromChildProcess(declaration));
+        return ts.isPropertyAccessExpression(expression) && launchNames.has(expression.name.text) &&
+          (checker.getSymbolAtLocation(expression.expression)?.declarations ?? []).some(declaration =>
+            (ts.isNamespaceImport(declaration) || ts.isImportClause(declaration)) && fromChildProcess(declaration));
+      };
+      const operatorReference = /(?:^|[^\w-])(?:audit-checkpoint-handoff(?:-cli)?\.(?:[cm]?[jt]sx?)(?=$|[^\w.-])|handoff:audit-checkpoint(?=$|[^\w:-]))/u;
+      const checkProcessArgument = (node: ts.Node): void => {
+        const value = ts.isExpression(node) ? constant(node) : undefined;
+        if (value !== undefined && operatorReference.test(value)) throw new Error(`Operator subprocess reference in ${path}`);
+        ts.forEachChild(node, checkProcessArgument);
       };
       const dependencies: string[] = [];
       const addSpecifier = (expression: ts.Expression | undefined) => {
@@ -253,6 +279,7 @@ function assertOperatorUnreachable(files: ReadonlyMap<string, string>): void {
         dependencies.push(specifier);
       };
       const visit = (node: ts.Node) => {
+        if (ts.isCallExpression(node) && isProcessLaunch(node.expression)) node.arguments.forEach(checkProcessArgument);
         if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteralLike(node.moduleSpecifier)) dependencies.push(node.moduleSpecifier.text);
         if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) addSpecifier(node.moduleReference.expression);
         if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument) && ts.isStringLiteralLike(node.argument.literal)) dependencies.push(node.argument.literal.text);
@@ -294,6 +321,39 @@ function reachabilityFixture(): Map<string, string> {
     ["packages/db/src/audit-checkpoint-handoff.ts", "export function runAuditCheckpointHandoff() {}"],
   ]);
 }
+it.each([
+  'import { createRequire } from "node:module"; let load = createRequire(import.meta.url); export const entry = load("../../db/src/audit-checkpoint-handoff.js");',
+  'let load = require; let alias = load; export const entry = alias("../../db/src/audit-checkpoint-handoff.js");',
+])("[L004] let loader aliases cannot reach the operator: %s", source => {
+  const files = reachabilityFixture();
+  files.set("packages/bridge/src/index.ts", source);
+  expect(() => assertOperatorUnreachable(files)).toThrow("Operator reachable from apps/api/src/handler.ts");
+});
+it.each([
+  'import { spawn } from "node:child_process"; spawn("node", ["packages/db/dist/audit-checkpoint-handoff-cli.js", "--operator", "fixture"]);',
+  'import { execFile as run } from "child_process"; const script = "packages/db/src/" + "audit-checkpoint-handoff.ts"; run("tsx", [script]);',
+  'import * as processes from "node:child_process"; processes.fork("packages/db/dist/audit-checkpoint-handoff-cli.js");',
+  'import processes from "node:child_process"; processes.execSync("pnpm handoff:audit-checkpoint --operator fixture");',
+  'import { spawnSync } from "node:child_process"; spawnSync("node", ["--eval", \'import("./packages/db/dist/audit-checkpoint-handoff.js")\']);',
+  'import { exec } from "node:child_process"; exec("node packages/db/dist/audit-checkpoint-handoff-cli.js");',
+  'import { execFileSync } from "node:child_process"; execFileSync("node", ["packages/db/dist/audit-checkpoint-handoff-cli.js"]);',
+])("[FL104] textual subprocess control refuses an operator script or module reference: %s", source => {
+  const files = reachabilityFixture();
+  files.set("apps/api/src/handler.ts", source);
+  expect(() => assertOperatorUnreachable(files)).toThrow("Operator subprocess reference in apps/api/src/handler.ts");
+});
+it.each([
+  'import { spawn } from "node:child_process"; spawn("node", ["tools/benign-fixture.js"]);',
+  'import { execFile } from "node:child_process"; execFile("cat", ["docs/audit-checkpoint-handoff.md"]);',
+  'import { spawn } from "./benign.js"; spawn("packages/db/dist/audit-checkpoint-handoff-cli.js");',
+  'import { spawn } from "node:child_process"; // spawn("node", ["packages/db/dist/audit-checkpoint-handoff-cli.js"]);\nexport const label = "audit-checkpoint-handoff-cli.js";',
+  'const load = (path: string) => path; export const label = load("../../db/src/audit-checkpoint-handoff.js");',
+  'import { spawn } from "node:child_process"; function label(spawn: (value: string) => string) { return spawn("audit-checkpoint-handoff-cli.js"); }',
+])("[L004][FL104] benign request fixtures remain accepted: %s", source => {
+  const files = reachabilityFixture();
+  files.set("apps/api/src/handler.ts", source);
+  expect(() => assertOperatorUnreachable(files)).not.toThrow();
+});
 it("[Round 1 F2] same guard permits an unrelated workspace graph", () => {
   expect(() => assertOperatorUnreachable(reachabilityFixture())).not.toThrow();
 });

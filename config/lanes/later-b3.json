@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b3": {
+      "branches": [
+        "codex/sandbox/later-b3"
+      ],
+      "receipt": "docs/verdicts/LATER-B3/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B3; BUILD-DON'T-MERGE (decision 74). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "docs/ledger/LATER-B3.md",
+        "docs/verdicts/LATER-B3/BUILDER_RECEIPT.md",
+        "packages/ai/src/capture-evaluation.ts",
+        "packages/ai/src/gateway.ts",
+        "packages/ai/src/later-capture-evaluation.test.ts",
+        "packages/ai/src/later-gateway.test.ts"
+      ]
+    }
+  }
+}

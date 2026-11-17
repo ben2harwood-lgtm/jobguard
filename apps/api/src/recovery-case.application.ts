@@ -1,4 +1,6 @@
 import { RecoveryCaseTermsRepository } from "@jobguard/db";
+import { RecoveryPaymentPayerRepository } from "@jobguard/db";
+import { recoveryPaymentPayerCommandV1 } from "./recovery-case.contracts.js";
 import { recoveryCaseTermsCommandV1 } from "./recovery-case.contracts.js";
 import { PracticeAccess } from "./practice-access.js";
 import { ZodError } from "zod";
@@ -48,6 +50,11 @@ export class RecoveryCaseApplication {
   const practice = await new PracticeAccess(this.pool, sessionId ?? this.sessionId).job(jobId);
   const body = await recoveryInput(raw);
   const reviewer = {membershipId:practice.membershipId,identityUserId:practice.identityUserId};
+  if (typeof body === "object" && body !== null && "version" in body && body.version === "recovery-payment-payer-command.v1") {
+   const input = recoveryPaymentPayerCommandV1.parse(body);
+   const result = await new RecoveryPaymentPayerRepository(practiceMaterialPool(this.pool, practice.digest)).command(practice.context, jobId, input, reviewer, practice.digest);
+   return {...await this.committedView(jobId, practice, input.caseId.toLowerCase()), paymentPayerMarkCommandResult: result};
+  }
   if (typeof body === "object" && body !== null && "version" in body && body.version === "recovery-eligibility-command.v3") {
    const input = recoveryEligibilityCommandV3.parse(body);
    const result = await new RecoveryEligibilityV3Repository(practiceMaterialPool(this.pool, practice.digest)).review(practice.context, jobId, input, reviewer, practice.digest);

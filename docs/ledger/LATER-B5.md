@@ -1,0 +1,3 @@
+# LATER-B5
+
+BUILT, PARKED (decision 74). `finishHistory` in `packages/db/src/recovery-message-repository.ts` now binds the open start to its own attempt, so an earlier attempt's failure cannot close a later one. New PostgreSQL tests in `packages/db/test/later-recovery-message-attempt.integration.test.ts` are NOT RUN here (PostgreSQL cannot start in the sandbox); CI must run them. No migration, no GRANT. Typecheck, lint and build (`--force`) pass. Lane file `config/lanes/later-b5.json` is the dispatcher's to register. RED review and separate acceptance outstanding. See [builder receipt](../verdicts/LATER-B5/BUILDER_RECEIPT.md).

@@ -1,0 +1,9 @@
+version,environment,sourceNamespace,sourceBatchId,sourceRevision,startMonth,endMonthExclusive,rowType,teamId,sourceJobId,month,sourceExtraId,sourceWorkId,reportedNetPence,currency
+baseline-history.v1,synthetic_demo,fictional.invalid,fictional-history-1,revision-1,2026-01,2026-07,team,pilot,,,,,,
+baseline-history.v1,synthetic_demo,fictional.invalid,fictional-history-1,revision-1,2026-01,2026-07,team,rest,,,,,,
+baseline-history.v1,synthetic_demo,fictional.invalid,fictional-history-1,revision-1,2026-01,2026-07,job,pilot,job-1,2026-01,,,,
+baseline-history.v1,synthetic_demo,fictional.invalid,fictional-history-1,revision-1,2026-01,2026-07,job,pilot,job-2,2026-06,,,,
+baseline-history.v1,synthetic_demo,fictional.invalid,fictional-history-1,revision-1,2026-01,2026-07,job,rest,job-3,2026-03,,,,
+baseline-history.v1,synthetic_demo,fictional.invalid,fictional-history-1,revision-1,2026-01,2026-07,extra,,job-1,,extra-1,work-1,15000,GBP
+baseline-history.v1,synthetic_demo,fictional.invalid,fictional-history-1,revision-1,2026-01,2026-07,extra,,job-1,,extra-2,work-2,,
+baseline-history.v1,synthetic_demo,fictional.invalid,fictional-history-1,revision-1,2026-01,2026-07,extra,,job-3,,extra-3,work-3,12500,GBP

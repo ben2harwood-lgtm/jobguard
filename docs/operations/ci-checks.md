@@ -11,7 +11,7 @@ The paused `integration/own-mind-reconciled-2026-08-21` belongs to `ben2harwood-
 1. The lane checker reads validated immutable GitHub event SHAs. PRs compare the merge base to the PR head; pushes compare the complete before/after range; first pushes inspect the tracked tree. Missing history, self-comparisons, checkout mismatches and unknown events fail rather than passing an empty substitute check. Renames check both old/new paths. Local runs additionally include staged, unstaged and untracked files.
 2. Lane policy has no default or blanket all-files grant. Actual task names and file locations are registered. Unknown/ambiguous branches and conflicting overrides fail. Main has an explicitly identified integration scope, not a PR fallback. The repair lane permits package manifests and named test/type configuration files, not arbitrary application-source or migration changes. Its regression assertion was updated to reflect the user-authorised dependency subtask while continuing to deny broad source access.
 3. The `dependency-review` job now runs a real pnpm vulnerability audit on PRs and main pushes, including private repositories and production/development/optional dependencies. Findings, registry failures and malformed/incomplete responses fail. No exclusions or severity waivers were added. This is not a licence, provenance or production-security certification.
-4. CI now runs the existing browser suite against `next start` after the production build, at mobile and desktop viewport sizes, with two workers and no retries. Earlier mandatory suites remain enabled. Superseded CI runs are cancelled to avoid redundant execution.
+4. CI now runs the existing browser suite against `next start` after the production build, at mobile and desktop viewport sizes, with one worker in CI and no retries. Earlier mandatory suites remain enabled. The original workflow queued runs without cancelling an in-progress run; CI-SPEED below supersedes that scheduling policy.
 
 ## Dependency remediation
 
@@ -34,3 +34,114 @@ The original unretained local-test claim remains withdrawn. Only actual hosted l
 Read PR #15's latest pinned head SHA and its complete CI result. Do not infer success from an older commit or a plan. Record any independent review against the exact final diff. Keep main unchanged until the repository's independent-verdict and separate acceptance requirements are met; do not self-approve or fabricate a Claude verdict. After merge, verify the actual main-push run separately. This repair does not release the product or enable live users/providers.
 
 Primary references: https://pnpm.io/10.x/cli/audit ; https://docs.github.com/en/actions/reference/workflows-and-actions/contexts ; https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9 .
+
+## Parallel checks and reruns (CI-SPEED, 28 October 2026)
+
+Plan piece: **CI-SPEED**, branch `codex/sandbox/ci-speed`. **RED**: this changes the merge gate and requires one independent Claude review of the exact head. Any suspected weakening goes to Ben. No product code, migrations, providers or releases change.
+
+| Execution job | Checks |
+| --- | --- |
+| `core-checks` | Frozen install, `pnpm typecheck`, `pnpm lint`, root Node tool tests, then every non-DB workspace test via Turbo. This retains the API OpenAPI check and AI fixture tests. |
+| `core-db` (four shards) | Frozen install, API/dependency builds (the same six build tasks as the original root test graph, including DB and AI), then the existing DB test script with Vitest's `--shard=N/4`. One worker per runner, separate embedded PostgreSQL instances. |
+| `web-shards` (six shards; CI-WEB-SHARD-BALANCE below) | Frozen install, full `pnpm build`, Chromium installation, then `pnpm test:e2e --shard=N/6` against the production build. The complete matrix retains both projects, one worker per runner, zero retries and its own synthetic database per runner. |
+| `secrets` | Existing gitleaks scan, unchanged. |
+| `dependency-review` | Existing audit across all dependency scopes, unchanged. |
+
+The root `pnpm test` script is unchanged for developers. CI partitions its work: `node --test tools/*.test.mjs` and `turbo run test --filter='!@jobguard/db'` run in `core-checks`; the excluded DB command runs in full across the four `core-db` shards, after building the API dependency closure (`pnpm exec turbo run build --filter=@jobguard/api...`). DB tests import built API and AI modules outside the DB package dependency graph, so building only the DB closure is insufficient. There is no test-name, file, changed-path or viewport selection. Native runner sharding automatically includes new tests. Each matrix has `fail-fast: false`, so one failed shard does not cancel its siblings.
+
+The required names remain `core`, `web`, `secrets`, `dependency-review` and `checks`. `core` always aggregates `core-checks` and the complete DB matrix; `web` always aggregates the complete browser matrix. Both require exact `success` results. The unchanged `checks` gate always requires all four required results to be exactly `success`. Failure, cancellation, skipped, empty or missing results fail the corresponding gate. All execution jobs and the `core`/`web` summaries retain 90-minute limits; `checks` retains five minutes. Suite timeouts are unchanged.
+
+Every execution job derived from core/web prints `git rev-parse HEAD` and compares it with `github.sha`. Existing pnpm store caching stays enabled. No test-result or build-output caching is added. Newer runs cancel older in-progress runs only for the same PR ref; main never cancels in progress. Runs for different PRs remain independent.
+
+GitHub's **Re-run failed jobs** reruns failed jobs and their dependent gates on the same recorded candidate SHA; it does not pick up a newer main. CI adds no retries. Each failed browser shard uploads **playwright-evidence-<shard>-<run_attempt>** for 14 days, containing `apps/web/playwright-report/` and `apps/web/test-results/`. An early failure may produce no report, in which case upload warns. HTML reports and retained traces remain enabled.
+
+### Timing and validation
+
+Today's six green runs (`~/.local/share/full-steam/ci-timings-2026-10-28.txt`) measured core **37–60 minutes**, including `pnpm test` **36–59 minutes**; web **22–31 minutes**, including browsers **21–28 minutes** and build about **one minute**. With four shards each, expect core **12–20 minutes** and web **8–12 minutes**, subject to the longest individual file, runner load and available GitHub concurrency. These are estimates, not measured results. Four-way sharding increases simultaneous runner demand; queue time may limit the wall-clock gain when several PRs run together.
+
+Local validation: workflow regression tests exercise the actual shell of all three gates with success, failure, cancelled, skipped and missing results; retain setup, SHA, timeout and artifact assertions; and verify complete matrix definitions and test-script composition. YAML parsing and Turbo dry-run inspection validate structure and workspace inclusion. Regression tests assert install/build/test ordering in every DB and browser shard and compare the DB build tasks, commands and dependency edges with the original root test graph; browser builds retain that entire graph plus the production web build. Discovery-only inventory checks compare the DB file set via the installed Vitest sequencer and the browser test set via Playwright `--list`, proving exact shard unions without duplicates, including both projects. Discovery is not test execution.
+
+Database/browser execution and actual speed measurements require GitHub CI after the router pushes: this sandbox cannot start PostgreSQL or bind localhost. Full CI on current main and independent RED review remain required. This piece overlaps `.github/workflows/ci.yml`, `tools/ci-workflow.test.mjs` and this document with other CI work; serialize conflicting changes.
+
+## Browser shard balance (ci-web-shard-balance, 2 November 2026)
+
+Repair of PR #515, measured head `f7260cc2`. The supplied hosted measurement was
+60 minutes overall versus 47 before: ten of twelve browser shards took 4–10 minutes,
+while shards 2 and 8 took 36 minutes each, with up to 20 minutes waiting for runners.
+Shard 2 reported mobile J3 at 18 minutes, A1 at 5.9 minutes and the J3 approval-read
+test alone at 6 minutes. Twelve shards did not fix the repeated journey work.
+
+### Exact spec changes
+
+- `DEMO-J3-shadow.spec.ts`: the three tests previously each called `completeJ3`,
+  replaying all nine journey steps three times per viewport. Now one test runs that
+  complete fresh journey once, then runs the existing value and approval-read
+  assertions as named `test.step` groups over its saved result. Both groups only
+  read that result; the value group also visits the value screen. Every distinct
+  assertion and every journey action remains. The original value and approval-read
+  names remain in the step report. Final Check polling uses Playwright's default
+  intervals instead of five seconds, retaining its 180-second deadline.
+- `DEMO-A1-rest.spec.ts`: all seven independent fresh-job scenarios and their
+  assertions remain. Final Check polling uses default intervals instead of five
+  seconds, retaining the same 180-second deadline and 300-second test timeout.
+  Comments explain why those setups cannot safely share a mutable job. There are
+  no fixed sleeps or serial-mode suites in either spec, and `fullyParallel` already
+  splits individual tests. A1 waits for actual minute-scheduled worker discovery;
+  the practice run control uses the same discovery queue, so adding it would not
+  remove that delay. No worker, queue, provider or application behavior changes.
+
+J3 now executes two full journeys across both widths instead of six, removing
+four redundant executions. This is a structural consolidation, so discovery has
+four fewer test/project identities; the retained steps contain the same distinct
+checks. At the measured six minutes per journey, the saving is approximately
+12 minutes on each formerly slow shard, before redistribution. That is an estimate,
+not a new hosted measurement. Faster polling only reduces observation latency;
+it does not remove the worker's minute-based schedule.
+
+Use six native browser shards to reduce runner demand and queueing. Both projects,
+one worker per runner, zero retries, all existing skips and every timeout remain
+unchanged. `web` still always requires exact success from the entire matrix;
+failures, cancellations, skips and missing results fail the gate. DB stays at four
+shards. No product code, migration, commercial policy or release change. Retain
+RED review of the exact head because this piece changes CI gating configuration
+and the structure of shadow-journey coverage.
+
+### Validation and hosted follow-up
+
+Local validation is discovery/static checking only; this sandbox cannot start
+PostgreSQL or a browser server. The router must push and obtain green CI on the
+current candidate, plus the independent review. Target maximum browser job duration
+is about 20–25 minutes; six shards are a candidate, not a timing guarantee.
+
+For the hosted comparison, record run ID, SHA and attempt, all six browser job and
+test-step durations, queue wait separately, full workflow time, build/install time,
+and the slowest core/DB job. Confirm both widths pass the full J3 journey and its
+value/approval steps and all seven A1 scenarios. Account for the four consolidated
+identities when comparing totals. Inspect retained HTML reports and traces if the
+long tail remains; do not add retries, skips or timeouts to meet the target.
+
+This repair overlaps `.github/workflows/ci.yml`, `tools/ci-workflow.test.mjs`, the
+lane, this receipt and the two named specs; serialize conflicting edits.
+
+Local results for this repair:
+
+- `node --check tools/ci-workflow.test.mjs` passed.
+- `node --test --test-concurrency=2 tools/ci-workflow.test.mjs` passed all nine
+  tests, including actual aggregate shell behavior for failed, cancelled, skipped
+  and missing dependency results, full shard membership and build prerequisites.
+- `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit --incremental false`
+  passed. This is also the web package's lint check; full workspace checks stay in CI.
+- From `apps/web`, installed Playwright `test --list --reporter=json` in CI mode
+  and the same discovery command with each `--shard=N/6` proved an exact union of
+  518 identities: 259 per width, no omissions or duplicates. Shard counts were
+  87, 87, 86, 86, 86, 86. The affected specs contribute 16 identities: one J3 and
+  seven A1 scenarios per width. Discovery starts neither PostgreSQL nor browsers.
+- A one-off TypeScript AST comparison against HEAD confirmed the same 90 J3 and
+  81 A1 assertion expressions, normalizing only the changed poll interval option.
+- Direct use of the existing lane policy loader, selector and path validator
+  accepted all six changed paths. This checks working-tree paths, not a committed
+  range. `git diff --check` passed.
+
+No packages were downloaded and no git mutation or fetch was run. Browser/database
+execution, whole-workspace checks, independent RED review and hosted timing remain
+with CI and the router. No hosted speedup is claimed from local discovery.

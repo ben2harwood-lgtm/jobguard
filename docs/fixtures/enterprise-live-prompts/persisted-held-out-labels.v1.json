@@ -1,0 +1,101 @@
+{
+  "version": "persisted-prompt-labels.v1",
+  "cases": [
+    {
+      "id": "persisted-a-held-1",
+      "expectedCount": 1
+    },
+    {
+      "id": "persisted-a-held-2",
+      "expectedCount": 0
+    },
+    {
+      "id": "persisted-a-held-3",
+      "expectedCount": 0
+    },
+    {
+      "id": "persisted-a-held-4",
+      "expectedCount": 0
+    },
+    {
+      "id": "persisted-a-held-5",
+      "expectedCount": 0
+    },
+    {
+      "id": "persisted-a-held-6",
+      "expectedCount": 0
+    },
+    {
+      "id": "persisted-a-held-7",
+      "expectedCount": 1
+    },
+    {
+      "id": "persisted-a-held-8",
+      "expectedCount": 0
+    },
+    {
+      "id": "materials-above",
+      "expectedCount": 1
+    },
+    {
+      "id": "materials-equal",
+      "expectedCount": 0
+    },
+    {
+      "id": "materials-pack",
+      "expectedCount": 0
+    },
+    {
+      "id": "materials-unknown",
+      "expectedCount": 0
+    },
+    {
+      "id": "materials-replay",
+      "expectedCount": 1
+    },
+    {
+      "id": "materials-conflict",
+      "expectedCount": 0
+    },
+    {
+      "id": "materials-return",
+      "expectedCount": 0
+    },
+    {
+      "id": "visit-above",
+      "expectedCount": 1
+    },
+    {
+      "id": "visit-equal",
+      "expectedCount": 0
+    },
+    {
+      "id": "visit-no-factor",
+      "expectedCount": 0
+    },
+    {
+      "id": "visit-missing-standard",
+      "expectedCount": 0
+    },
+    {
+      "id": "visit-invalid-duration",
+      "expectedCount": 0
+    },
+    {
+      "id": "closeout-yes-0",
+      "expectedCount": 1
+    },
+    {
+      "id": "closeout-yes-1",
+      "expectedCount": 0
+    },
+    {
+      "id": "closeout-no-0",
+      "expectedCount": 0
+    },
+    {
+      "id": "closeout-None-0",
+      "expectedCount": 0
+    }
+  ]
+}

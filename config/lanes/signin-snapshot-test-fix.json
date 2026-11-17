@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "signin-snapshot-test-fix": {
+      "branches": ["codex/sandbox/signin-snapshot-test-fix"],
+      "note": "SIGNIN-SNAPSHOT-TEST-FIX: test-only frozen table sets for migration row snapshots.",
+      "allow": [
+        "packages/db/test/customer-signin.integration.test.ts",
+        "packages/db/test/contractor-entitlement-fixtures.ts",
+        "packages/db/test/upgrade-proof-utils.ts",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/contractor-entitlement-snapshot.test.ts"
+      ]
+    }
+  }
+}

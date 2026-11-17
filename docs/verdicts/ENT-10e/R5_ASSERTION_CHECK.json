@@ -1,0 +1,24 @@
+{
+  "baseline": "baa2d591a99beadbaadf6635f8718142ddd81502",
+  "method": "TypeScript AST: every expect(...) matcher expression compared in order, byte-for-byte. Deterministic check, not independent review.",
+  "records": [
+    {
+      "file": "packages/db/test/sso-emergency.integration.test.ts",
+      "assertions": 96,
+      "unchanged": true,
+      "sha256": "68ca4261d0590250541496919a26518a89ffe4bb9cc1198740506ece592274d9"
+    },
+    {
+      "file": "packages/db/test/sso-emergency-concurrency.integration.test.ts",
+      "assertions": 25,
+      "unchanged": true,
+      "sha256": "18d19eb3ebc8f260cd73ab645091e1279ee01ffc0e8fa74ae0020134861d6d9e"
+    },
+    {
+      "file": "packages/db/test/sso-emergency-window.integration.test.ts",
+      "assertions": 76,
+      "unchanged": true,
+      "sha256": "2a27749001c23333efe9e842c29cb7b76d5898d4438a3c0d48edc233907e9070"
+    }
+  ]
+}

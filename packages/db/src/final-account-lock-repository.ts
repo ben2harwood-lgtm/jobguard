@@ -4,23 +4,28 @@ import {
   addMoney, money, candidateM1TaxPolicy, allocateGroupTax,
   createFinalAccountLockSnapshot, verifyFinalAccountLockSnapshot, assertFinalAccountInvoiceGuard,
   FINAL_ACCOUNT_DECLARATION_VERSION, FINAL_CHECK_TERMS_VERSION,
-  FinalAccountLockError, type FinalAccountLockErrorCode, type FinalAccountLockHashes,
+  JobWorkStateError, FinalAccountLockError, type FinalAccountLockErrorCode, type FinalAccountLockHashes,
 } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
-const uuid = z.string().uuid();
+export const FINAL_LOCK_UPLOAD_WAIT_MS = 5000;
+const uuid = z.guid({ error: "Invalid uuid" });
 const identity = { jobId: uuid, actorMembershipId: uuid };
 const lockInput = z.object({...identity,commandId:uuid,finalAccountRevisionId:uuid,expectedRevision:z.number().int().nonnegative().safe(),declarationVersion:z.literal(FINAL_ACCOUNT_DECLARATION_VERSION)}).strict();
 const dispositionInput = z.object({...identity,commandId:uuid,scopeItemId:uuid,disposition:z.enum(["done","removed","deferred"])}).strict();
 const termsInput = z.object({actorMembershipId:uuid,commandId:uuid,termsVersion:z.literal(FINAL_CHECK_TERMS_VERSION)}).strict();
 const invoiceInput = z.object({ ...identity, commandId: uuid, finalAccountRevisionId: uuid,
  expectedSourceHash: z.string().regex(/^[a-f0-9]{64}$/u), invoiceKind: z.enum(["final", "supplementary"]),
- recipient: z.string().email().regex(/@example\.invalid$/u), issuedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
+ recipient: z.email({ error: "Invalid email" }).regex(/@example\.invalid$/u), issuedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
 }).strict();
-const knownCodes = new Set<string>(["FINAL_ACCOUNT_ALREADY_LOCKED", "SCOPE_DISPOSITION_MISSING", "DISCLOSURE_TERMS_NOT_ACCEPTED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_REVIEW_CLOSED", "INVALID_FINAL_ACCOUNT_LOCK_INPUT", "FINAL_ACCOUNT_SOURCE_CHANGED", "SCOPE_ITEM_NOT_BASELINE", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "SUPPLEMENTARY_INVOICE_BASE_REQUIRED", "INVOICE_AMOUNT_INVALID", "INVOICE_SOURCE_CORRECTION_REQUIRED", "FINAL_ACCOUNT_TOTAL_MISMATCH", "JOB_NOT_FOUND"]);
-function typed(error: unknown): never {
+const knownCodes = new Set<string>(["FINAL_ACCOUNT_LOCK_BUSY", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS", "FINAL_ACCOUNT_ALREADY_LOCKED", "SCOPE_DISPOSITION_MISSING", "DISCLOSURE_TERMS_NOT_ACCEPTED", "FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED", "FINAL_REVIEW_CLOSED", "INVALID_FINAL_ACCOUNT_LOCK_INPUT", "FINAL_ACCOUNT_SOURCE_CHANGED", "SCOPE_ITEM_NOT_BASELINE", "FINAL_INVOICE_REVISION_MISMATCH", "FINAL_INVOICE_ALREADY_ISSUED", "SUPPLEMENTARY_INVOICE_BASE_REQUIRED", "INVOICE_AMOUNT_INVALID", "INVOICE_SOURCE_CORRECTION_REQUIRED", "FINAL_ACCOUNT_TOTAL_MISMATCH", "JOB_NOT_FOUND", "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"]);
+function typed(error: unknown, uploadInFlight = false): never {
  const e = error as { message?: string; detail?: string };
+ if (e.message === "JOB_WORK_CLOSED") throw new JobWorkStateError("JOB_WORK_CLOSED");
  if (e.message === "IDEMPOTENCY_PAYLOAD_CONFLICT") throw new FinalAccountLockError("IDEMPOTENCY_CONFLICT");
+ // 55P03: the lock waited its bounded time for an evidence upload that holds the job and gave up; nothing was written.
+ // C204: only an evidence upload in flight is reported as such; any other holder of the job lock is a plain busy refusal.
+ if ((error as { code?: string }).code === "55P03") throw new FinalAccountLockError(uploadInFlight ? "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS" : "FINAL_ACCOUNT_LOCK_BUSY");
  if (e.message === "STALE_OR_BLOCKED_FINAL_ACCOUNT") throw new FinalAccountLockError("STALE_REVISION");
  if (e.message && knownCodes.has(e.message)) throw new FinalAccountLockError(e.message as FinalAccountLockErrorCode, e.detail && uuid.safeParse(e.detail).success ? e.detail : undefined);
  throw error;
@@ -42,7 +47,8 @@ export type FinalAccountLockView = { captures: Array<{ id: string; description: 
 
 /** Request-scoped verified context only. No provider, shadow-table read or saved tenant authority. */
 export class FinalAccountLockRepository {
- constructor(private readonly pool: Pool) {}
+ /** lockWaitMs bounds how long locking waits for evidence uploads already in progress (default 5s). */
+ constructor(private readonly pool: Pool, private readonly lockWaitMs: number = FINAL_LOCK_UPLOAD_WAIT_MS) {}
  async read(context: VerifiedTenantContext, jobId: string): Promise<FinalAccountLockView> {
   uuid.parse(jobId);
   return withTenant(this.pool, context, async db => {
@@ -64,11 +70,23 @@ export class FinalAccountLockRepository {
  async lock(context: VerifiedTenantContext, raw: z.infer<typeof lockInput>): Promise<PersistedFinalAccountLock> {
   const input = parse(lockInput, raw);
   try { return await withTenant(this.pool, context, async db => {
+   // Evidence writes hold SHARE on the job; the lock takes UPDATE, so it waits for uploads already in progress and then sees them.
+   await db.$client.query("SELECT set_config('lock_timeout',$1,true)", [`${Math.trunc(this.lockWaitMs)}ms`]);
    const row = (await db.$client.query<any>(`SELECT l.*,r.source_hash locked_source_hash,to_char(l.locked_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') locked_at_text FROM app.lock_final_account($1,$2,$3,$4,$5,$6,$7) l JOIN app.final_account_revision r ON(r.tenant_id,r.job_id,r.id)=(l.tenant_id,l.job_id,l.final_account_revision_id)`, [context.tenantId, input.jobId, input.actorMembershipId, input.commandId, input.finalAccountRevisionId, input.expectedRevision, input.declarationVersion])).rows[0]!;
    const snapshot = createFinalAccountLockSnapshot(row.snapshot);
    if (snapshot.digest !== row.snapshot_digest.trim() || snapshot.captureRegisterHash !== row.capture_register_hash.trim() || snapshot.lineSetHash !== row.line_set_hash.trim() || snapshot.scopeDispositionHash !== row.scope_disposition_hash.trim()) throw new FinalAccountLockError("FINAL_ACCOUNT_SOURCE_CHANGED");
    return lockProjection(row);
-  }); } catch (error) { return typed(error); }
+  }); } catch (error) {
+   if ((error as { code?: string }).code === "55P03") {
+    // The failed transaction is gone. Inspect only the shared upload marker for this verified tenant/job.
+    const inFlight = await this.pool.query<{ held: boolean }>(`SELECT EXISTS(SELECT 1 FROM pg_locks
+     WHERE locktype='advisory' AND classid=(hashtext('final_check_upload:'||$1::text)::bigint & 4294967295)::oid
+     AND objid=(hashtext($2::text)::bigint & 4294967295)::oid AND objsubid=2
+     AND mode='ShareLock' AND granted AND pid<>pg_backend_pid()) held`, [context.tenantId, input.jobId]).then(r => r.rows[0]?.held === true, () => false);
+    return typed(error, inFlight);
+   }
+   return typed(error);
+  }
  }
  async disposition(context: VerifiedTenantContext, raw: z.infer<typeof dispositionInput>) {
   const c = parse(dispositionInput, raw);
@@ -99,6 +117,31 @@ export class FinalAccountLockRepository {
    const allocation = lines.every(l=>Number(l.net_pence)===0) ? new Map(lines.map(l=>[l.final_account_line_id,money(0)])) : allocateGroupTax(tax,lines.map(l=>({id:l.final_account_line_id,net:money(Number(l.net_pence))})));
    if (net.pence!==result.netPence || tax.pence!==result.taxPence || addMoney(net,tax).pence!==result.totalPence || lines.some(l=>allocation.get(l.final_account_line_id)?.pence!==Number(l.tax_pence) || addMoney(money(Number(l.net_pence)),money(Number(l.tax_pence))).pence!==Number(l.gross_pence))) throw new Error("INVOICE_AMOUNT_INVALID");
    return result;
-  }); } catch (error) { return typed(error); }
+  }); } catch (error) {
+   // Classify only the new revoked-member replay refusal, after SQL's original
+   // authority check has failed and its transaction has rolled back. Never
+   // return a stored result or change the practice-session refusal contract.
+   if ((error as { code?: string }).code === "42501" && (error as Error).message === "FORBIDDEN") {
+    let revokedReplay = false;
+    try {
+     revokedReplay = await withTenant(this.pool, context, async db => (await db.$client.query<{ revoked_member_replay: boolean }>(`SELECT EXISTS(
+      SELECT 1 FROM app.command_receipt receipt
+      JOIN app.membership membership_row ON(membership_row.tenant_id,membership_row.id)=(receipt.tenant_id,receipt.actor_membership_id)
+      JOIN app.customer_invoice invoice ON invoice.tenant_id=receipt.tenant_id AND invoice.id::text=(receipt.result->>'invoiceId')
+      JOIN app.job job ON(job.tenant_id,job.id)=(invoice.tenant_id,invoice.job_id)
+      JOIN app.final_account_invoice_binding binding ON(binding.tenant_id,binding.job_id,binding.invoice_id)=(invoice.tenant_id,invoice.job_id,invoice.id)
+      JOIN app.action_authorization grant_row ON(grant_row.tenant_id,grant_row.id)=(invoice.tenant_id,invoice.authorization_id)
+      WHERE receipt.tenant_id=$1::uuid AND receipt.command_id=$2::uuid AND receipt.actor_membership_id=$3::uuid
+       AND receipt.command_type='IssueLockBoundInvoice' AND receipt.status='succeeded' AND receipt.semantic_key=$5::uuid::text
+       AND membership_row.role='owner' AND membership_row.revoked_at IS NOT NULL AND job.practice_session_digest IS NULL
+       AND nullif(current_setting('app.practice_material_digest',true),'') IS NULL
+       AND invoice.job_id=$4::uuid AND invoice.final_account_revision_id=$5::uuid AND invoice.source_hash=$6::text
+       AND invoice.issued_on=$7::date AND binding.invoice_kind=$8::text AND grant_row.recipient=$9::text AND grant_row.actor_membership_id=$3::uuid
+     ) AS revoked_member_replay`, [context.tenantId,c.commandId,c.actorMembershipId,c.jobId,c.finalAccountRevisionId,c.expectedSourceHash,c.issuedOn,c.invoiceKind,c.recipient])).rows[0]!.revoked_member_replay);
+    } catch { /* A failed diagnostic read must preserve the original refusal. */ }
+    if (revokedReplay) throw new FinalAccountLockError("FORBIDDEN");
+   }
+   return typed(error);
+  }
  }
 }

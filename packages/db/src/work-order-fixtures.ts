@@ -42,7 +42,9 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedM
       const version = contracts.contracts.filter(c => c.client_id === existing.id).at(-1)!;
       const document = version.document as ReturnType<typeof contractDocument>;
       const stored = await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => ({
-        sites: (await db.$client.query<{ id: string }>("SELECT id FROM app.site_revision WHERE payload->'addressLines'->>0 LIKE '% Fictional Demo Street' ORDER BY created_at,id")).rows.map(r => r.id),
+        // The generator creates numbered streets in numeric order; transaction timestamps and random UUIDs cannot recover that order.
+        sites: (await db.$client.query<{ id: string; address_line: string }>("SELECT id,payload->'addressLines'->>0 address_line FROM app.site_revision WHERE payload->'addressLines'->>0 LIKE '% Fictional Demo Street'"))
+          .rows.sort((a, b) => a.address_line.localeCompare(b.address_line, "en", { numeric: true }) || a.id.localeCompare(b.id)).map(r => r.id),
         operative: (await db.$client.query<{ membership_id: string }>("SELECT membership_id FROM app.contractor_member WHERE email='demo.operative@fictional.invalid'")).rows[0]?.membership_id,
         sor: (await db.$client.query<{ schedule_id: string }>("SELECT schedule_id FROM app.sor_version WHERE id=$1", [document.sorVersionIds[0]])).rows[0]?.schedule_id,
       }));

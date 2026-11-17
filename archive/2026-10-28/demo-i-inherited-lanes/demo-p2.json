@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-p2": {
+      "branches": ["codex/sandbox/demo-p2"],
+      "receipt": "docs/verdicts/DEMO-P2/BUILDER_RECEIPT.md",
+      "note": "Issued build-ahead preparation only; pure schema validation. P1 executable mapping, runtime rendering, provenance, independent review and acceptance remain held.",
+      "allow": [
+        "docs/contracts/small-builder-demo-trace-v1.md",
+        "packages/core/src/small-builder-demo-trace.ts",
+        "packages/core/src/small-builder-demo-trace.test.ts",
+        "docs/fixtures/small-builder-demo-trace-cases.json",
+        "docs/verdicts/DEMO-P2/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

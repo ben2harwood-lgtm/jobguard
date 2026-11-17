@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-rest-finish": {
+      "branches": [
+        "codex/sandbox/demo-rest-finish"
+      ],
+      "note": "Remaining small-builder demo pieces on top of demo-finish-2: core-1000, trial, meter, chooser report and scenarios. Own lane file is implicitly owned.",
+      "allow": [
+        "apps/web/app/api/jobs/[id]/quotes/activation/route.ts",
+        "apps/web/app/demo-s/chooser-state.ts",
+        "apps/web/app/demo-s/chooser.test.tsx",
+        "apps/web/app/demo-s/chooser.tsx",
+        "apps/web/app/demo-s/core-1000/journey-model.ts",
+        "apps/web/app/demo-s/core-1000/journey.test.tsx",
+        "apps/web/app/demo-s/core-1000/journey.tsx",
+        "apps/web/app/demo-s/core-1000/page.tsx",
+        "apps/web/app/demo-s/core-1000/result.tsx",
+        "apps/web/app/demo-s/journey-launch.ts",
+        "apps/web/app/demo-s/meter-preview.tsx",
+        "apps/web/app/demo-s/trial/journey-model.ts",
+        "apps/web/app/demo-s/trial/journey.test.tsx",
+        "apps/web/app/demo-s/trial/journey.tsx",
+        "apps/web/app/jobs/[id]/value/page.tsx",
+        "apps/web/app/meter/meter-screen.test.tsx",
+        "apps/web/app/meter/meter-screen.tsx",
+        "apps/web/e2e/DEMO-A1-rest.spec.ts",
+        "apps/web/e2e/DEMO-A1-scenarios.spec.ts",
+        "apps/web/e2e/DEMO-J1-core-1000.spec.ts",
+        "apps/web/e2e/DEMO-J4-meter.spec.mts",
+        "apps/web/e2e/DEMO-J5-trial.spec.mts",
+        "apps/web/e2e/DEMO-J5-trial.spec.ts",
+        "apps/web/e2e/DEMO-S-chooser.spec.ts",
+        "apps/web/e2e/helpers/chooser-sign-in.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.json",
+        "packages/core/src/meter-today.ts",
+        "packages/core/src/small-builder-demo-meter.ts",
+        "packages/db/migrations/0516_trial_first_activation_capacity.sql",
+        "packages/db/migrations/0517_meter_track_review_read.sql",
+        "packages/db/src/meter-today-repository.ts",
+        "packages/db/src/small-builder-trial-demo-repository.ts",
+        "packages/db/test/free-first-job-lifecycle.integration.test.ts",
+        "packages/db/test/meter-track-review.integration.test.ts",
+        "packages/db/test/migration-proofs/legacy-migrations.json",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/trial-lock-order.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "meter-upgrade-test-fix": {
+      "branches": ["codex/sandbox/meter-upgrade-test-fix"],
+      "allow": ["packages/db/test/meter-track-review-upgrade.integration.test.ts"],
+      "note": "METER-UPGRADE-TEST-FIX: isolate the 0385 preservation proof and compare the same migration set on replay."
+    }
+  }
+}

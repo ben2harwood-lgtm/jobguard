@@ -1,0 +1,13 @@
+# ENT-8B fictional fixture evaluation
+
+Run only this piece with `pnpm eval --maxWorkers=2 src/enterprise-ai-prompts.test.ts src/enterprise-ai-evaluation.test.ts`.
+
+Four development cases and eight separate held-out cases use fictional notes, transcript text and photo captions. No photos or speech are processed. Held-out labels are stored separately and opened after predictions. The recorded provider responses accompany inputs; this is a deterministic fixture regression set, not a blinded model benchmark or a live-model evaluation. One builder authored the sources, responses and labels; no independent labelling is claimed.
+
+The held-out cases cover additional work, mixed instructed/additional work, work already ordered, negation, uncertainty, embedded instructions and no additional work. Candidate identity is the sorted set of exact cited source/span identities, never its description. Offsets count UTF-16 code units with an exclusive end. The manual ambiguity label was corrected during construction from 16:33 to 17:34 to match the stored `additional socket` span; the scorer initially reported one omission, one unsupported addition and an ambiguity error.
+
+The report gives omission count/rate, unsupported additions, false-prompt count/rate, recall, false-prompt precision, citation validity and ambiguity errors separately. Precision is true candidate prompts divided by all predicted candidate prompts; recall is true candidate prompts divided by expected candidates, including candidates explicitly labelled for review. A review candidate remains uncertain. Citation validity measures candidates whose entire citation set validates, not the truth of the cited assertion. Empty denominators are `null`. Duplicate identities, duplicate cases and unmatched label sets refuse. Invalid citations in actual generation fail the evaluation rather than being dropped from the denominator. The scorer's fault controls separately exercise invalid citations and false/missed identities.
+
+Fixture PASS requires zero omissions, unsupported additions, invalid citations and ambiguity errors. This is a local deterministic regression criterion, not a production accuracy threshold. Embedded-instruction fixtures prove the recorded response path and strict authority boundary only; they provide no evidence about a live model's behaviour. No instruction resistance for a future live model is claimed.
+
+Live evaluation, real contractor data, D04/DPA approval, M0-12a and G2 remain held. Every report says `releaseDecision: NOT_AUTHORIZED`. Confirmation/dismissal and prompt persistence are absent from merged ENT-8a; this evaluation cannot prove their database effects.

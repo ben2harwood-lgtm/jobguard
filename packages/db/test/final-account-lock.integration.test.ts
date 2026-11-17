@@ -19,10 +19,13 @@ export const LOCK_HASH = "a".repeat(64);
 export type LockFixture = { postgres: EmbeddedPostgres; directory: string; port: number; credential: string; admin: Pool; runtime: Pool; shadow: Pool; owner: Pool };
 export async function createLockFixture(install = true): Promise<LockFixture> {
  const directory = await mkdtemp(join(tmpdir(), "sv4-pg16-")), port = await freePort(58400, 250), credential = randomUUID();
- const connection = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password: credential };
+ const connection = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: credential };
  const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
- await postgres.initialise(); await postgres.start(); const admin = new Pool(connection);
- if (install) { await migrate(admin); await installLegacySyntheticPartyFixtures(admin); }
+ await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo"); const admin = new Pool(connection);
+ if (install) {
+  for (const role of ["jobguard_audit_writer", "jobguard_command_writer"]) await admin.query(`DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; END IF; END $do$`);
+  await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
+ }
  const pools: Pool[] = [];
  for (const role of ["jobguard_runtime", "jobguard_shadow", "jobguard_migration"]) {
   const login = `sv4_${randomUUID().replaceAll("-", "")}`;
@@ -77,7 +80,7 @@ export async function addFixtureCapture(f: LockFixture, a: Awaited<ReturnType<ty
 export async function insertFixtureOriginalEvidence(pool: Pool, tenantId: string, jobId: string, scopeItemId: string, evidence: string, objectVersion: string) {
  const upload = randomUUID();
  await asFixtureTenant(pool, tenantId, async db => {
-  await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')`, [upload, tenantId, jobId, scopeItemId, `synthetic/${evidence}`, LOCK_HASH]);
+  await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at) VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,clock_timestamp())`, [upload, tenantId, jobId, scopeItemId, `synthetic/${evidence}`, LOCK_HASH, objectVersion]); // set-up only (per C135): its verified object means the upload is verified, so the lock's pending-photo refusal does not apply
   await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)
    VALUES($1,$2,$3,$4,$5,'original','photo',$6,$7,$8,0,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())`, [evidence, tenantId, upload, jobId, scopeItemId, `synthetic/${evidence}`, objectVersion, LOCK_HASH]);
  });
@@ -261,7 +264,7 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
   }
   for(const signature of ['read_final_account_lock_sources(uuid,uuid,uuid)','guard_final_account_lock_check()','guard_final_account_invoiced_line()','final_lock_canonical(jsonb)','final_lock_hash(jsonb)','final_lock_require_owner(uuid,uuid)','append_final_lock_audit(uuid,uuid,uuid,text,jsonb,jsonb)','serialize_final_account_source()','serialize_final_review_receipt()']){
    const rows=(await f.admin.query("SELECT CASE a.grantee WHEN 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END grantee FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=$1::regprocedure AND a.privilege_type='EXECUTE' ORDER BY grantee",[`app.${signature}`])).rows;
-   expect(rows).toEqual([{grantee:'jobguard_migration'}]);
+   expect(rows).toEqual([...(signature==='final_lock_canonical(jsonb)' ? [{grantee:'jobguard_audit_writer'},{grantee:'jobguard_command_writer'}] : []),{grantee:'jobguard_migration'}]);
   }
  });
  it("C4 minimal grants, FORCE RLS, owner and append-only posture on all six new tables",async()=>{

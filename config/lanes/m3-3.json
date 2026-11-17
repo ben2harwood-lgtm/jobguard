@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-3": {
+      "branches": [
+        "codex/sandbox/m3-3-core"
+      ],
+      "receipt": "docs/verdicts/M3-3/BUILDER_RECEIPT.md",
+      "note": "M3-3 pure synthetic download-policy slice only (core schemas and decisions, contract doc). No migration, grant, route, provider config, repository or UI. Existing core index ADDITIVE export only.",
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/core/src/sync-download.ts",
+        "packages/core/src/sync-download.test.ts",
+        "docs/contracts/sync-download-v1.md",
+        "docs/ledger/M3-3.md",
+        "docs/verdicts/M3-3/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

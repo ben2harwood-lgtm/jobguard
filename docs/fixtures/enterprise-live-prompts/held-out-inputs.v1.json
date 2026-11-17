@@ -1,0 +1,523 @@
+{
+  "version": "enterprise-completion-corpus.v1",
+  "cases": [
+    {
+      "id": "held-1",
+      "input": {
+        "version": "enterprise-completion-input.v1",
+        "environment": "synthetic_demo",
+        "tenantId": "00000000-0000-4000-8000-000000000001",
+        "jobId": "00000000-0000-4000-8000-000000000002",
+        "baseline": {
+          "workOrderId": "00000000-0000-4000-8000-000000000003",
+          "revisionId": "00000000-0000-4000-8000-000000000004",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workIds": [
+            "hinge"
+          ]
+        },
+        "recognition": {
+          "version": "fictional-held-terms.v1",
+          "entries": [
+            {
+              "workId": "hinge",
+              "terms": [
+                "hinge",
+                "door pivot"
+              ]
+            },
+            {
+              "workId": "fan",
+              "terms": [
+                "extractor fan"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          {
+            "evidenceId": "00000000-0000-4000-8000-000000000015",
+            "tenantId": "00000000-0000-4000-8000-000000000001",
+            "jobId": "00000000-0000-4000-8000-000000000002",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-1",
+            "status": "verified",
+            "invalidated": false,
+            "content": {
+              "kind": "completion_note",
+              "text": "Done: extractor fan"
+            }
+          }
+        ],
+        "observations": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000000016",
+            "evidenceId": "00000000-0000-4000-8000-000000000015",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-1",
+            "locator": {
+              "kind": "text_span",
+              "start": 6,
+              "end": 19,
+              "quote": "extractor fan"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "held-2",
+      "input": {
+        "version": "enterprise-completion-input.v1",
+        "environment": "synthetic_demo",
+        "tenantId": "00000000-0000-4000-8000-000000000001",
+        "jobId": "00000000-0000-4000-8000-000000000002",
+        "baseline": {
+          "workOrderId": "00000000-0000-4000-8000-000000000003",
+          "revisionId": "00000000-0000-4000-8000-000000000004",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workIds": [
+            "hinge"
+          ]
+        },
+        "recognition": {
+          "version": "fictional-held-terms.v1",
+          "entries": [
+            {
+              "workId": "hinge",
+              "terms": [
+                "hinge",
+                "door pivot"
+              ]
+            },
+            {
+              "workId": "fan",
+              "terms": [
+                "extractor fan"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          {
+            "evidenceId": "00000000-0000-4000-8000-000000000025",
+            "tenantId": "00000000-0000-4000-8000-000000000001",
+            "jobId": "00000000-0000-4000-8000-000000000002",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-2",
+            "status": "verified",
+            "invalidated": false,
+            "content": {
+              "kind": "completion_note",
+              "text": "Done: hinge"
+            }
+          }
+        ],
+        "observations": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000000026",
+            "evidenceId": "00000000-0000-4000-8000-000000000025",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-2",
+            "locator": {
+              "kind": "text_span",
+              "start": 6,
+              "end": 11,
+              "quote": "hinge"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "held-3",
+      "input": {
+        "version": "enterprise-completion-input.v1",
+        "environment": "synthetic_demo",
+        "tenantId": "00000000-0000-4000-8000-000000000001",
+        "jobId": "00000000-0000-4000-8000-000000000002",
+        "baseline": {
+          "workOrderId": "00000000-0000-4000-8000-000000000003",
+          "revisionId": "00000000-0000-4000-8000-000000000004",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workIds": [
+            "hinge"
+          ]
+        },
+        "recognition": {
+          "version": "fictional-held-terms.v1",
+          "entries": [
+            {
+              "workId": "hinge",
+              "terms": [
+                "hinge",
+                "door pivot"
+              ]
+            },
+            {
+              "workId": "fan",
+              "terms": [
+                "extractor fan"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          {
+            "evidenceId": "00000000-0000-4000-8000-000000000035",
+            "tenantId": "00000000-0000-4000-8000-000000000001",
+            "jobId": "00000000-0000-4000-8000-000000000002",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-3",
+            "status": "verified",
+            "invalidated": false,
+            "content": {
+              "kind": "completion_note",
+              "text": "Done: door pivot"
+            }
+          }
+        ],
+        "observations": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000000036",
+            "evidenceId": "00000000-0000-4000-8000-000000000035",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-3",
+            "locator": {
+              "kind": "text_span",
+              "start": 6,
+              "end": 16,
+              "quote": "door pivot"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "held-4",
+      "input": {
+        "version": "enterprise-completion-input.v1",
+        "environment": "synthetic_demo",
+        "tenantId": "00000000-0000-4000-8000-000000000001",
+        "jobId": "00000000-0000-4000-8000-000000000002",
+        "baseline": {
+          "workOrderId": "00000000-0000-4000-8000-000000000003",
+          "revisionId": "00000000-0000-4000-8000-000000000004",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workIds": [
+            "hinge"
+          ]
+        },
+        "recognition": {
+          "version": "fictional-held-terms.v1",
+          "entries": [
+            {
+              "workId": "hinge",
+              "terms": [
+                "hinge",
+                "door pivot"
+              ]
+            },
+            {
+              "workId": "fan",
+              "terms": [
+                "extractor fan"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          {
+            "evidenceId": "00000000-0000-4000-8000-000000000045",
+            "tenantId": "00000000-0000-4000-8000-000000000001",
+            "jobId": "00000000-0000-4000-8000-000000000002",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-4",
+            "status": "verified",
+            "invalidated": false,
+            "content": {
+              "kind": "completion_note",
+              "text": "Done: perhaps a fan"
+            }
+          }
+        ],
+        "observations": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000000046",
+            "evidenceId": "00000000-0000-4000-8000-000000000045",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-4",
+            "locator": {
+              "kind": "text_span",
+              "start": 6,
+              "end": 19,
+              "quote": "perhaps a fan"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "held-5",
+      "input": {
+        "version": "enterprise-completion-input.v1",
+        "environment": "synthetic_demo",
+        "tenantId": "00000000-0000-4000-8000-000000000001",
+        "jobId": "00000000-0000-4000-8000-000000000002",
+        "baseline": {
+          "workOrderId": "00000000-0000-4000-8000-000000000003",
+          "revisionId": "00000000-0000-4000-8000-000000000004",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workIds": [
+            "hinge"
+          ]
+        },
+        "recognition": {
+          "version": "fictional-held-terms.v1",
+          "entries": [
+            {
+              "workId": "hinge",
+              "terms": [
+                "hinge",
+                "door pivot"
+              ]
+            },
+            {
+              "workId": "fan",
+              "terms": [
+                "extractor fan"
+              ]
+            },
+            {
+              "workId": "another-fan",
+              "terms": [
+                "extractor fan"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          {
+            "evidenceId": "00000000-0000-4000-8000-000000000055",
+            "tenantId": "00000000-0000-4000-8000-000000000001",
+            "jobId": "00000000-0000-4000-8000-000000000002",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-5",
+            "status": "verified",
+            "invalidated": false,
+            "content": {
+              "kind": "completion_note",
+              "text": "Done: extractor fan"
+            }
+          }
+        ],
+        "observations": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000000056",
+            "evidenceId": "00000000-0000-4000-8000-000000000055",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-5",
+            "locator": {
+              "kind": "text_span",
+              "start": 6,
+              "end": 19,
+              "quote": "extractor fan"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "held-6",
+      "input": {
+        "version": "enterprise-completion-input.v1",
+        "environment": "synthetic_demo",
+        "tenantId": "00000000-0000-4000-8000-000000000001",
+        "jobId": "00000000-0000-4000-8000-000000000002",
+        "baseline": {
+          "workOrderId": "00000000-0000-4000-8000-000000000003",
+          "revisionId": "00000000-0000-4000-8000-000000000004",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workIds": [
+            "hinge"
+          ]
+        },
+        "recognition": {
+          "version": "fictional-held-terms.v1",
+          "entries": [
+            {
+              "workId": "hinge",
+              "terms": [
+                "hinge",
+                "door pivot"
+              ]
+            },
+            {
+              "workId": "fan",
+              "terms": [
+                "extractor fan"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          {
+            "evidenceId": "00000000-0000-4000-8000-000000000065",
+            "tenantId": "00000000-0000-4000-8000-000000000001",
+            "jobId": "00000000-0000-4000-8000-000000000002",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-6",
+            "status": "upload_pending",
+            "invalidated": false,
+            "content": {
+              "kind": "completion_note",
+              "text": "Done: extractor fan"
+            }
+          }
+        ],
+        "observations": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000000066",
+            "evidenceId": "00000000-0000-4000-8000-000000000065",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-6",
+            "locator": {
+              "kind": "text_span",
+              "start": 6,
+              "end": 19,
+              "quote": "extractor fan"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "held-7",
+      "input": {
+        "version": "enterprise-completion-input.v1",
+        "environment": "synthetic_demo",
+        "tenantId": "00000000-0000-4000-8000-000000000001",
+        "jobId": "00000000-0000-4000-8000-000000000002",
+        "baseline": {
+          "workOrderId": "00000000-0000-4000-8000-000000000003",
+          "revisionId": "00000000-0000-4000-8000-000000000004",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workIds": [
+            "hinge"
+          ]
+        },
+        "recognition": {
+          "version": "fictional-held-terms.v1",
+          "entries": [
+            {
+              "workId": "hinge",
+              "terms": [
+                "hinge",
+                "door pivot"
+              ]
+            },
+            {
+              "workId": "fan",
+              "terms": [
+                "extractor fan"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          {
+            "evidenceId": "00000000-0000-4000-8000-000000000075",
+            "tenantId": "00000000-0000-4000-8000-000000000001",
+            "jobId": "00000000-0000-4000-8000-000000000002",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-7",
+            "status": "verified",
+            "invalidated": false,
+            "content": {
+              "kind": "completion_photo",
+              "tags": [
+                "extractor fan"
+              ]
+            }
+          }
+        ],
+        "observations": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000000076",
+            "evidenceId": "00000000-0000-4000-8000-000000000075",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-7",
+            "locator": {
+              "kind": "photo_tag",
+              "tag": "extractor fan"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "held-8",
+      "input": {
+        "version": "enterprise-completion-input.v1",
+        "environment": "synthetic_demo",
+        "tenantId": "00000000-0000-4000-8000-000000000001",
+        "jobId": "00000000-0000-4000-8000-000000000002",
+        "baseline": {
+          "workOrderId": "00000000-0000-4000-8000-000000000003",
+          "revisionId": "00000000-0000-4000-8000-000000000004",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workIds": [
+            "hinge"
+          ]
+        },
+        "recognition": {
+          "version": "fictional-held-terms.v1",
+          "entries": [
+            {
+              "workId": "hinge",
+              "terms": [
+                "hinge",
+                "door pivot"
+              ]
+            },
+            {
+              "workId": "fan",
+              "terms": [
+                "extractor fan"
+              ]
+            }
+          ]
+        },
+        "sources": [
+          {
+            "evidenceId": "00000000-0000-4000-8000-000000000085",
+            "tenantId": "00000000-0000-4000-8000-000000000001",
+            "jobId": "00000000-0000-4000-8000-000000000002",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-8",
+            "status": "verified",
+            "invalidated": true,
+            "content": {
+              "kind": "completion_note",
+              "text": "Done: extractor fan"
+            }
+          }
+        ],
+        "observations": [
+          {
+            "observationId": "00000000-0000-4000-8000-000000000086",
+            "evidenceId": "00000000-0000-4000-8000-000000000085",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "objectVersion": "fictional-version-8",
+            "locator": {
+              "kind": "text_span",
+              "start": 6,
+              "end": 19,
+              "quote": "extractor fan"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

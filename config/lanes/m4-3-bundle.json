@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-3-bundle": {
+      "branches": [
+        "codex/sandbox/m4-3-bundle"
+      ],
+      "note": "RED M4-3 deterministic synthetic evidence-bundle assembler, contractor joins, CH-8 compatibility, PDF/ZIP and offline verifier. No migration.",
+      "allow": [
+        "packages/db/src/evidence-bundle-files.ts",
+        "packages/db/src/evidence-bundle-sources.ts",
+        "packages/db/src/evidence-bundle.ts",
+        "packages/db/src/index.ts",
+        "packages/db/test/evidence-bundle.integration.test.ts",
+        "packages/db/test/evidence-bundle.test.ts",
+        "packages/db/test/evidence-bundle-sources.test.ts",
+        "packages/db/tools/verify-evidence-bundle.mjs",
+        "docs/contracts/evidence-bundle.md"
+      ]
+    }
+  }
+}

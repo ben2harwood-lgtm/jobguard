@@ -1,0 +1,44 @@
+{
+  "version": "sor-suggestion-labels.v1",
+  "labelStatus": "AUTHOR_PROPOSED_INDEPENDENT_REVIEW_PENDING",
+  "cases": [
+    {
+      "id": "outside-tap",
+      "acceptableCodes": [
+        "OUTSIDE-TAP"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "gutter",
+      "acceptableCodes": [
+        "CLEAR-GUTTER"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "door",
+      "acceptableCodes": [
+        "DOOR"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "embedded-instructions",
+      "acceptableCodes": [
+        "OUTSIDE-TAP"
+      ],
+      "ambiguous": false
+    },
+    {
+      "id": "ambiguous-tap",
+      "acceptableCodes": [],
+      "ambiguous": true
+    },
+    {
+      "id": "no-item",
+      "acceptableCodes": [],
+      "ambiguous": false
+    }
+  ]
+}

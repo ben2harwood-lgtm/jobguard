@@ -1,0 +1,163 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/migfix-4-base/packages/db
+
+ ❯ test/migfix-4-upgrade.integration.test.ts (7 tests | 2 failed) 4619ms
+     × [MIGFIX-4.upgrade] applies 0153 alone as migration owner, repeats it, preserves existing rows/types/identities and catalogue privileges 3ms
+     × [MIGFIX-4.2] old supersession facts refuse acceptance after upgrade without rewriting them 6ms
+ ❯ test/migfix-4.integration.test.ts (7 tests | 4 failed) 4754ms
+     × [MIGFIX-4.1] supersession invalidates pending acceptance 57ms
+     × [MIGFIX-4.2] superseded document cannot be accepted with a fresh revision 20ms
+     × [MIGFIX-4.3] acceptance and supersession serialize on the job 42ms
+     × [MIGFIX-4.authority] routine authority is checked before unknown, foreign, quoting, accepted or live job state 17ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/migfix-4-upgrade.integration.test.ts > MIGFIX-4 populated 0153 upgrade proof > [MIGFIX-4.upgrade] applies 0153 alone as migration owner, repeats it, preserves existing rows/types/identities and catalogue privileges
+AssertionError: expected [ '0000_tenancy.sql', …(79) ] to include '0153_quote_supersession_guard.sql'
+ ❯ test/migfix-4-upgrade.integration.test.ts:114:19
+    112|   it("[MIGFIX-4.upgrade] applies 0153 alone as migration owner, repeat…
+    113|     const names = MIGRATION_URLS.map(url => url.pathname.split("/").at…
+    114|     expect(names).toContain(own); expect(names).toEqual([...names].sor…
+       |                   ^
+    115|     for (const table of tables) expect(Object.keys(proof[table]!.rows)…
+    116|     expect((await c.admin.query("SELECT migration_name FROM public.job…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  test/migfix-4-upgrade.integration.test.ts > MIGFIX-4 populated 0153 upgrade proof > [MIGFIX-4.2] old supersession facts refuse acceptance after upgrade without rewriting them
+AssertionError: promise resolved "{ …(9) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "acceptanceId": "588bd032-1b53-4a57-ad05-8e9f3f5b8d78",
++   "acceptanceKind": "builder_attestation",
++   "acceptedTotalPence": 12000,
++   "documentHash": "d336a53e2905d4dc5123f64eba2fc3eaccb8daf672792f8d1e6d05f586315d7e",
++   "documentId": "ee99edec-3238-4655-8090-a58cd0a837d2",
++   "documentVersion": 1,
++   "eventId": "1abfd056-c4ff-4570-bc1e-7c44df18b2ef",
++   "jobId": "092a7f18-fbe9-441c-99b1-4f8e6b1fea35",
++   "state": "accepted",
+  }
+
+ ❯ test/migfix-4-upgrade.integration.test.ts:171:71
+    169|   it("[MIGFIX-4.2] old supersession facts refuse acceptance after upgr…
+    170|     const revision = (await state(superseded)).revision as number;
+    171|     await expect(execute(superseded, acceptance(superseded, revision))…
+       |                                                                       ^
+    172|     expect(await proofDifferences(c.admin, proof)).toEqual({ rows: [],…
+    173|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  test/migfix-4.integration.test.ts > MIGFIX-4 exact quote acceptance > [MIGFIX-4.1] supersession invalidates pending acceptance
+AssertionError: promise resolved "{ …(9) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "acceptanceId": "52f9f854-9779-4f31-b845-c72e7ace8deb",
++   "acceptanceKind": "builder_attestation",
++   "acceptedTotalPence": 12000,
++   "documentHash": "3b7092c6ca331c56e0b6c52f9b6ff3b58c138089886eef159369e1f047cd82d5",
++   "documentId": "d5e85c80-e7df-4429-9f27-865d8a3df672",
++   "documentVersion": 1,
++   "eventId": "82c6dd1c-e8e2-4bce-acab-dfe3a32f9d9e",
++   "jobId": "e4d47119-0f40-4850-a873-18969d404c77",
++   "state": "accepted",
+  }
+
+ ❯ test/migfix-4.integration.test.ts:92:37
+     90|     const f = await issued(), pending = acceptance(f), supersede = dis…
+     91|     await execute(f, supersede);
+     92|     await expect(execute(f, pending)).rejects.toMatchObject({ code: "4…
+       |                                     ^
+     93|     expect(await state(f)).toEqual({ status: "quoting", revision: 1, a…
+     94|     expect((await c.admin.query("SELECT 1 FROM app.command_receipt WHE…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  test/migfix-4.integration.test.ts > MIGFIX-4 exact quote acceptance > [MIGFIX-4.2] superseded document cannot be accepted with a fresh revision
+AssertionError: promise resolved "{ …(9) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "acceptanceId": "7aa9f00e-3229-42cb-9584-9e1c9d36a075",
++   "acceptanceKind": "builder_attestation",
++   "acceptedTotalPence": 12000,
++   "documentHash": "d6fbd8f8b02a0dd1dcaa92e373288ab230804d1651f34653ab7130ac19ba63b3",
++   "documentId": "094ebdc5-2edf-4039-8ffd-43fbb8685c28",
++   "documentVersion": 1,
++   "eventId": "88659bdc-3d40-430f-8334-ec4c411a00be",
++   "jobId": "eb6c657a-86a2-4726-b66d-c237cdb50e0c",
++   "state": "accepted",
+  }
+
+ ❯ test/migfix-4.integration.test.ts:101:53
+     99|     const f = await issued(); await execute(f, disposition(f));
+    100|     const revision = (await state(f)).revision as number;
+    101|     await expect(execute(f, acceptance(f, revision))).rejects.toMatchO…
+       |                                                     ^
+    102|     expect(await state(f)).toMatchObject({ status: "quoting", accepted…
+    103|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  test/migfix-4.integration.test.ts > MIGFIX-4 exact quote acceptance > [MIGFIX-4.3] acceptance and supersession serialize on the job
+AssertionError: expected 'success' to be '40001' // Object.is equality
+
+Expected: "40001"
+Received: "success"
+
+ ❯ test/migfix-4.integration.test.ts:133:36
+    131|         expect(blocked, "second transaction is waiting on the first jo…
+    132|       } finally { release(); await winner; }
+    133|       expect((await waiting).code).toBe("40001");
+       |                                    ^
+    134|       const now = await state(f);
+    135|       expect(now).toEqual(firstKind === "superseded"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  test/migfix-4.integration.test.ts > MIGFIX-4 exact quote acceptance > [MIGFIX-4.authority] routine authority is checked before unknown, foreign, quoting, accepted or live job state
+AssertionError: expected error: acceptance is not allowed { …(15) } to match object { code: '42501', message: 'FORBIDDEN' }
+(17 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "code": "42501",
+-   "message": "FORBIDDEN",
++ DatabaseError {
++   "code": "22023",
+  }
+
+ ❯ test/migfix-4.integration.test.ts:205:11
+    203|           "SELECT * FROM app.record_builder_attested_acceptance($1,$2,…
+    204|           [f.tenant, randomUUID(), randomUUID(), job, f.document, f.ha…
+    205|         ))).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN…
+       |           ^
+    206|         await expect(withTenant(c.runtime, f.context, db => db.$client…
+    207|           "SELECT * FROM app.record_quote_disposition($1,$2,$3,$4,1,$5…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  6 failed | 8 passed (14)
+   Start at  11:11:35
+   Duration  6.16s (transform 1.62s, setup 0ms, import 2.66s, tests 9.37s, environment 0ms)
+

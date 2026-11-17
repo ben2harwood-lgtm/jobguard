@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-b2": {
+      "branches": [
+        "codex/sandbox/later-b2"
+      ],
+      "receipt": "docs/verdicts/LATER-B2/BUILDER_RECEIPT.md",
+      "note": "Stage-end LATER sweep batch LATER-B2; BUILD-DON'T-MERGE (decision 74). Lane registered by JobGuard dispatcher 14 to exactly the files the build changed.",
+      "allow": [
+        "docs/ledger/LATER-B2.md",
+        "docs/verdicts/LATER-B2/BUILDER_RECEIPT.md",
+        "packages/db/src/demo-seed.determinism.test.ts"
+      ]
+    }
+  }
+}

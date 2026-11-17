@@ -1,3 +1,4 @@
+import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,7 +9,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { practiceMovementCatalogueV1, type PracticeFeedView } from "@jobguard/core";
 import {
-  CaptureRepository, SandboxRepository, issuePracticeSession, authenticatePracticeSession, appendAuditBatch, migrate, MIGRATION_URLS, PracticeFeedRepository, PracticeInvoiceRepository, verifiedTenantContextFromMembership, withTenant,
+  CaptureRepository, SandboxRepository, issuePracticeSession, authenticatePracticeSession, appendAuditBatch, migrate, MIGRATION_URLS, practiceMaterialPool, PracticeFeedRepository, PracticeInvoiceRepository, verifiedTenantContextFromMembership, withTenant,
 } from "../src/index.js";
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
@@ -46,7 +47,7 @@ async function connected() {
 }
 // A real issued practice invoice (£1,320.00) so that builder-attested receipts are recorded through the real routine.
 async function invoice(jobId: string) {
-  const invoices = new PracticeInvoiceRepository(runtime), quoteId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID();
+  const invoices = new PracticeInvoiceRepository(practiceMaterialPool(runtime, (await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, jobId])).rows[0].practice_session_digest)), quoteId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID();
   await admin.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,110000,'accepted')", [quoteId, DEMO_TENANT_ID, jobId, "b".repeat(64)]);
   // CH-2/CH-3a: take the job live through the real lifecycle routine, under the tenant context that the live-job and party guards read.
   const lifecycle = await admin.connect();
@@ -61,6 +62,13 @@ async function invoice(jobId: string) {
   await admin.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
     VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',110000,22000,132000,false,'[]')`, [revisionId, DEMO_TENANT_ID, jobId, draftId, "b".repeat(64), quoteId]);
   await admin.query("UPDATE app.final_account_draft SET revision=1,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, revisionId]);
+  // Coordinator r4: scoped pool is used only to establish terms, lock and checked completion.
+  const scopeItemId = randomUUID();
+  await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeItemId, DEMO_TENANT_ID, jobId]);
+  await admin.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional baseline',110000,1)", [randomUUID(), DEMO_TENANT_ID, jobId, revisionId, quoteId, scopeItemId]);
+  const persistedDigest = (await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, jobId])).rows[0].practice_session_digest;
+  const setupPool = practiceMaterialPool(runtime, persistedDigest);
+  await prepareInvoicePrerequisites(admin, setupPool, DEMO_TENANT_ID, jobId, DEMO_MEMBERSHIP_ID, revisionId);
   const issued = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: DEMO_MEMBERSHIP_ID, commandId: randomUUID(), recipient: "practice@example.invalid", issuedOn: "2026-09-19" });
   return { invoices, invoiceId: issued.id };
 }
@@ -80,8 +88,8 @@ beforeAll(async () => {
   const port = await freePort(60300, 200);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password,
     persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password });
   // Upgrade from exactly the preceding supported schema, retaining a prior job.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   // The previous schema is every migration registered before 0106, so later migrations (0102, 0103, ...) never change what this suite upgrades from.
@@ -100,7 +108,7 @@ beforeAll(async () => {
   // CH-3a: a job cannot go live without parties. This suite exercises the feed, not the party registry, so it installs the same explicit fictional party recipe as the other pre-CH-3a suites.
   await installLegacySyntheticPartyFixtures(admin);
   await admin.query("CREATE ROLE practice_feed_test_login LOGIN PASSWORD 'synthetic-feed-test-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO practice_feed_test_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "practice_feed_test_login", password, max: 8 });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "practice_feed_test_login", password, max: 8 });
 }, 90_000);
 afterAll(async () => { if (priorEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = priorEnvironment; await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });
 

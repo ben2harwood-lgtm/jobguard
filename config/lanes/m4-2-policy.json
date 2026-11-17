@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-2-policy": {
+      "branches": ["codex/sandbox/m4-2-policy"],
+      "note": "RED M4-2 dark domain policy/review slice. No runtime adapter, migration, provider or production activation. Exact own lane file is implicitly permitted.",
+      "allow": [
+        "docs/contracts/recovery-billability-policy-v1.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/recovery-billability-policy.ts",
+        "packages/core/src/recovery-billability-policy.test.ts"
+      ]
+    }
+  }
+}

@@ -1,8 +1,9 @@
+import { readJobSourceObservations } from "./job-source-observation-reader.js";
 import { z } from "zod";
 import type { Pool } from "pg";
 import { FINAL_CHECK_TERMS_VERSION, observationV1, parseObservation, shadowCaptureV1, type Observation, type ShadowCapture } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
-const readV1 = z.object({ version: z.literal("shadow-observation-read.v1"), jobId: z.string().uuid() }).strict();
+const readV1 = z.object({ version: z.literal("shadow-observation-read.v1"), jobId: z.guid({ error: "Invalid uuid" }) }).strict();
 export class ShadowObservationReadError extends Error {
   constructor(readonly code: "INVALID_OBSERVATION_READ" | "OBSERVATION_JOB_UNAVAILABLE" | "TERMS_RELATION_UNAVAILABLE" | "TERMS_NOT_ACCEPTED" | "SOURCE_NOT_FINALIZED" | "DETECTION_LOCKED_JOB") { super(code); }
 }
@@ -41,8 +42,8 @@ export class ShadowObservationReader {
       if(locksAvailable && (await db.$client.query("SELECT 1 FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[context.tenantId,jobId])).rowCount)
         throw new ShadowObservationReadError("DETECTION_LOCKED_JOB");
       // Read all merged sources using qualified relationships. A source without an immutable finalized object stays unprocessed.
-      const evidence = (await db.$client.query<{ id: string; object_version_id: string; sha256: string; received: string; evidence_type: string; text: string | null }>(`
-        SELECT e.id,e.object_version_id,e.sha256,to_char(e.server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') received,e.evidence_type,
+      const evidence = (await db.$client.query<{ id: string; object_version_id: string; sha256: string; received: string; evidence_type: string; content_type: string; text: string | null }>(`
+        SELECT e.id,e.object_version_id,e.sha256,to_char(e.server_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') received,e.evidence_type,e.content_type,
           c.content_text AS text
         FROM app.evidence_object e
         LEFT JOIN app.capture_source c ON c.tenant_id=e.tenant_id AND c.sha256=e.sha256
@@ -59,13 +60,17 @@ export class ShadowObservationReader {
       const observations: Observation[] = [];
       for (const e of evidence) {
         const kind = supplier.some(s => s.content_hash === e.sha256) ? "supplier_line"
-          : ["completion_photo", "site_photo"].includes(e.evidence_type) ? "completion_photo"
+          : (["completion_photo", "site_photo"].includes(e.evidence_type) || (e.evidence_type === "electrical_certificate" && e.content_type === "image/png")) ? "completion_photo"
           : e.text !== null ? "note_or_voice" : null;
         if (!kind) continue;
         const source = await this.sources.decode({ tenantId:context.tenantId,jobId,kind, evidenceId: e.id, objectVersionId: e.object_version_id, sha256: e.sha256, text: e.text });
         if (!source) continue;
         observations.push(observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId, kind,
           evidence: { id: e.id, objectVersionId: e.object_version_id, sha256: e.sha256, serverReceivedAt: e.received }, ...source, facts:{...source.facts,scopeArea:"job"} }));
+      }
+      // SV-7A: exact synthetic originals, on the same runtime transaction. No shadow query or intake scheduling.
+      for (const source of await readJobSourceObservations(db,context.tenantId,jobId)) {
+        if (!observations.some(o => o.evidence.id === source.evidence.id && o.evidence.objectVersionId === source.evidence.objectVersionId)) observations.push(source);
       }
       // Scope area is not persisted in the merged source tables. The synthetic adapter uses the conservative job-wide area.
       const baseline = (await db.$client.query(`SELECT l.scope_item_id,l.scope_revision_id,l.description,

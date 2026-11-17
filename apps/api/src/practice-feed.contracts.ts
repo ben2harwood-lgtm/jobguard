@@ -26,7 +26,7 @@ export const practiceFeedReceiptAssessmentV1 = z.object({
 }).strict();
 
 export const practiceFeedReceiptViewV1 = z.object({
-  paymentId: z.string().uuid(), invoiceId: z.string().uuid(), paidOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
+  paymentId: z.guid({ error: "Invalid uuid" }), invoiceId: z.guid({ error: "Invalid uuid" }), paidOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
   reference: z.string().max(120), amountPence: safePence, currency: z.literal("GBP"), reversed: z.boolean(),
   assessment: practiceFeedReceiptAssessmentV1,
 }).strict();
@@ -35,8 +35,8 @@ export const practiceFeedResponseV1 = z.object({
   version: z.literal("practice-feed-view.v1"),
   environment: z.literal("synthetic_demo"),
   realExternalActions: z.literal(0),
-  jobId: z.string().uuid(),
-  accountId: z.string().uuid().nullable(),
+  jobId: z.guid({ error: "Invalid uuid" }),
+  accountId: z.guid({ error: "Invalid uuid" }).nullable(),
   feedState: z.enum(["not_connected", "connected", "disconnected"]),
   consent: z.object({
     version: z.literal("practice-feed-consent.v1"), scope: z.literal("read_generated_movements"), provider: z.literal("none"),

@@ -5,14 +5,14 @@ import { addMoney, money, moneyFromBigInt, subtractMoney, type Money } from "./m
 export const feeStatementInputV1 = z.object({
   version: z.literal("fee-statement.v1"),
   mode: z.enum(["synthetic_demo", "pilot_no_charge"]),
-  tenantId: z.string().uuid(), jobId: z.string().uuid(),
+  tenantId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }),
   acceptedNetPence: z.number().int().nonnegative(), settledBasePlanPence: z.number().int().nonnegative(),
   priorPostedRecoveryPence: z.number().int(), priorRecoveryPaymentsPence: z.number().int().nonnegative(),
   outcomes: z.array(z.object({
-    sourceId: z.string().uuid(), caseId: z.string().uuid(), state: z.enum(["eligible", "prevented", "reversed"]),
+    sourceId: z.guid({ error: "Invalid uuid" }), caseId: z.guid({ error: "Invalid uuid" }), state: z.enum(["eligible", "prevented", "reversed"]),
     eligibleNetPence: z.number().int().nonnegative(), grossCashPence: z.number().int().nonnegative(),
-    evidenceId: z.string().uuid().nullable(), evidenceState: z.enum(["verified", "pending", "rejected"]).nullable(),
-    reversesSourceId: z.string().uuid().nullable(),
+    evidenceId: z.guid({ error: "Invalid uuid" }).nullable(), evidenceState: z.enum(["verified", "pending", "rejected"]).nullable(),
+    reversesSourceId: z.guid({ error: "Invalid uuid" }).nullable(),
   }).strict()),
 }).strict();
 

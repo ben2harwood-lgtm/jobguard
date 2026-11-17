@@ -1,0 +1,163 @@
+{
+  "base": "6671538c8d69936c162368c760dd6ce0f7f10493",
+  "head": "5245b01bbafce460b06300b062cfe9290f1796de",
+  "observed_origin_main": "8a6bde1c12fb48f4cccb4b18e60fb6614e8b5849",
+  "source_files": [
+    {
+      "file": "apps/api/src/app.module.ts",
+      "sha256": "42aca9b6a3b828dcf48fd511860acdb5cbca843f0380656c6060dbfc4781dd6f"
+    },
+    {
+      "file": "apps/api/src/contractor/practice-worker-switch.application.test.ts",
+      "sha256": "48b1efc6e9fd7abb77227eb082731ff2828647c9f457a54bd3789833f59cf39a"
+    },
+    {
+      "file": "apps/api/src/contractor/practice-worker-switch.application.ts",
+      "sha256": "4c9bd665677c1dec8aa9f5faa25efbba5543550f97b76a62caeae94c6a130283"
+    },
+    {
+      "file": "apps/api/src/contractor/practice-worker-switch.controller.ts",
+      "sha256": "5a777f4fa8574b79cefd5b1b612e1d76161e0e26fb6c0112a859790b12ad9d65"
+    },
+    {
+      "file": "apps/api/src/contractor/practice-worker-switch.http.test.ts",
+      "sha256": "17ed442c7193297cb2b6e293d0b2f01d3ca5c5ed775bdcd1b8c083af95ca6a89"
+    },
+    {
+      "file": "apps/api/src/workspace/index.ts",
+      "sha256": "889489999fcb2d57bec1d16273c33c310a4677a1559703566ddd98f12422b02e"
+    },
+    {
+      "file": "apps/web/app/api/contractor/practice/acting-as/end/route.test.ts",
+      "sha256": "967d1935977e6576c60cd4ccaf6024b6c57c9986513cc45c7c4d8206aa95fe2d"
+    },
+    {
+      "file": "apps/web/app/api/contractor/practice/acting-as/end/route.ts",
+      "sha256": "2b2aa4264b1f727b047885cf46401d850d790f2fc8bbf694b4c2d290b865d863"
+    },
+    {
+      "file": "apps/web/app/api/contractor/practice/acting-as/route.test.ts",
+      "sha256": "e118b592709519810013c9b5d4eb422aa5d672a97c1be56c65b3162c0cbdb917"
+    },
+    {
+      "file": "apps/web/app/api/contractor/practice/acting-as/route.ts",
+      "sha256": "4dacc1138639be0ab792ea4c16ea12fd5063e032ee11e1a453e287049711c03d"
+    },
+    {
+      "file": "apps/web/app/api/contractor/practice/workers/[workerId]/acting-as/route.test.ts",
+      "sha256": "b01c7dcda3e4ed09422ab8da5d86d68f2b6e3d92a19775f555879aaa40659af1"
+    },
+    {
+      "file": "apps/web/app/api/contractor/practice/workers/[workerId]/acting-as/route.ts",
+      "sha256": "f342ff1b64fcbf2e3f51a5cc28c25af39a6a86f949744fe4b23dffdb9030410a"
+    },
+    {
+      "file": "config/agent-lane-assignments.json",
+      "sha256": "38a2bb0c8e945c7d4c7a08c8092c346214b13f458ffb4a290b26f511edfeec9c"
+    },
+    {
+      "file": "docs/contracts/practice-worker-switch-v1.md",
+      "sha256": "3105dd7bd678a5c0dd4f843e1c4c884f772c2dd008b003d14a985cf94a4f0c6b"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "sha256": "daec16f5cb13b13e661733425eba6e6405ccd4c07081f420dd1e2be060845ae1"
+    },
+    {
+      "file": "packages/core/src/practice-worker-switch.test.ts",
+      "sha256": "9cd19dd5355871bec262e02df5a9677084eb42e2df2b66c5d638726707bb093b"
+    },
+    {
+      "file": "packages/core/src/practice-worker-switch.ts",
+      "sha256": "967c4b14a227e8561b6fdc05e0a0bf398ea4aa022e6b01162ec82f0e8c337489"
+    },
+    {
+      "file": "packages/db/MIGRATIONS.md",
+      "sha256": "1b1a95c60a03ca55a0513f59a1dd917a3bb26d6fadbedf583a0757d1bcc527b7"
+    },
+    {
+      "file": "packages/db/migrations/0165_practice_worker_switch.sql",
+      "sha256": "295b9b644b1b944cb7d626c77e48bf42dee213b78b74ffd26444eb9cb3e113be"
+    },
+    {
+      "file": "packages/db/src/index.ts",
+      "sha256": "0ac2e0de387d90b28667f3a9a192abcec89234d921e2163a6aeb91101d3b3424"
+    },
+    {
+      "file": "packages/db/src/migrate.ts",
+      "sha256": "9cb5056705b4eda5dcbd9dc5df35c428af6b7b7827725b8b0952bded36ad9359"
+    },
+    {
+      "file": "packages/db/src/practice-worker-switch-repository.ts",
+      "sha256": "5dfa0151cbfa2598f8f721acaa72297b08d492a049758895e19728de31ba4161"
+    },
+    {
+      "file": "packages/db/test/practice-company-marker.integration.test.ts",
+      "sha256": "8254e4ad28566224a439d69851645c90efdb0c7c6a42f162243ef61df3336990"
+    },
+    {
+      "file": "packages/db/test/practice-worker-switch-fixtures.ts",
+      "sha256": "7bd87ba945a522989b7b9d25f3455df8ccc6acfa22a8ca96521fe4d697fea81c"
+    },
+    {
+      "file": "packages/db/test/practice-worker-switch-proof.integration.test.ts",
+      "sha256": "558fadfe9acdf8f04fa22da72e87ffc431d54ccde859bbe68df7f06badcf27d9"
+    },
+    {
+      "file": "packages/db/test/practice-worker-switch-upgrade.integration.test.ts",
+      "sha256": "6f7b8487dfdf0aa2f0e90117f82f438f28fce6cb4f9fdd79aa7cfee49fad979a"
+    },
+    {
+      "file": "packages/db/test/practice-worker-switch.integration.test.ts",
+      "sha256": "c389c326f0e249f9ed48213db79988f3fdf69aaed7cb52cbcfaf993d0f19ca48"
+    }
+  ],
+  "all_changed_paths": [
+    "apps/api/src/app.module.ts",
+    "apps/api/src/contractor/practice-worker-switch.application.test.ts",
+    "apps/api/src/contractor/practice-worker-switch.application.ts",
+    "apps/api/src/contractor/practice-worker-switch.controller.ts",
+    "apps/api/src/contractor/practice-worker-switch.http.test.ts",
+    "apps/api/src/workspace/index.ts",
+    "apps/web/app/api/contractor/practice/acting-as/end/route.test.ts",
+    "apps/web/app/api/contractor/practice/acting-as/end/route.ts",
+    "apps/web/app/api/contractor/practice/acting-as/route.test.ts",
+    "apps/web/app/api/contractor/practice/acting-as/route.ts",
+    "apps/web/app/api/contractor/practice/workers/[workerId]/acting-as/route.test.ts",
+    "apps/web/app/api/contractor/practice/workers/[workerId]/acting-as/route.ts",
+    "config/agent-lane-assignments.json",
+    "docs/contracts/practice-worker-switch-v1.md",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/BUILDER_RECEIPT.md",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/BUILDER_RECEIPT.round1.md",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_ADVISORY_LOCKS.txt",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_APPLICATION-TESTS.log",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_BUILD.log",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_CORE-TESTS.log",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_DB-TEST-TYPES-FINAL.log",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_DB-TEST-TYPES.log",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_DIFF_EVIDENCE.json",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_DIFF_EVIDENCE.txt",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_LINT.log",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_PW29_NOT_RUN.txt",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_SOURCE_EVIDENCE.json",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_TYPECHECK.log",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/CONTINUATION_WEB-TESTS.log",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/DIFF_EVIDENCE.txt",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/INSPECTIONS.md",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/RUNS.json",
+    "docs/verdicts/PRACTICE-WORKER-SWITCH/SOURCE_EVIDENCE.json",
+    "packages/core/src/index.ts",
+    "packages/core/src/practice-worker-switch.test.ts",
+    "packages/core/src/practice-worker-switch.ts",
+    "packages/db/MIGRATIONS.md",
+    "packages/db/migrations/0165_practice_worker_switch.sql",
+    "packages/db/src/index.ts",
+    "packages/db/src/migrate.ts",
+    "packages/db/src/practice-worker-switch-repository.ts",
+    "packages/db/test/practice-company-marker.integration.test.ts",
+    "packages/db/test/practice-worker-switch-fixtures.ts",
+    "packages/db/test/practice-worker-switch-proof.integration.test.ts",
+    "packages/db/test/practice-worker-switch-upgrade.integration.test.ts",
+    "packages/db/test/practice-worker-switch.integration.test.ts"
+  ]
+}

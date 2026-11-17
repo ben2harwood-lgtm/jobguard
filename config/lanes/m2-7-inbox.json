@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "m2-7-inbox": {
+      "branches": ["codex/sandbox/m2-7-inbox"],
+      "note": "M2-7 dark outcome metrics and optional fixture-only wording; no live routes or migration.",
+      "allow": [
+        "packages/core/src/inbox-outcome-metrics.ts",
+        "packages/core/src/inbox-outcome-metrics.test.ts",
+        "packages/core/src/index.ts",
+        "packages/ai/src/inbox-wording.ts",
+        "packages/ai/src/inbox-wording.test.ts",
+        "packages/ai/src/index.ts"
+      ]
+    }
+  }
+}

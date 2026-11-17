@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-11a-flake": {
+      "branches": [
+        "codex/sandbox/ent-11a-flake"
+      ],
+      "note": "CI unblock: the ENT-11a desktop journey's first /site/extra readiness wait gets a 60 s budget (cold first assigned-jobs read after 2,000-order generation). Assertion unchanged.",
+      "allow": [
+        "apps/web/e2e/ENT-11a.spec.ts"
+      ]
+    }
+  }
+}

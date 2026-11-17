@@ -1,0 +1,14 @@
+{
+  "purpose": "Candidate preservation only; no livewrites. Archive-only normal commit mustprecede any oldSQL/note removal. Renumber preserves SQLbytes; note/stemreferences only.",
+  "originals": [
+    {
+      "path": "packages/db/migrations/0235_free_first_job_admission.sql",
+      "sha256": "c9243b5c64a557efd143e7bf9693fdde7e1b14f5a36556d4fd094c555e3309f8"
+    },
+    {
+      "path": "packages/db/migration-notes/0235_free_first_job_admission.md",
+      "sha256": "114411533e11a94b16e22202d4341d3a11c2c56edaf3fb4af62593b9e6afcf1d"
+    }
+  ],
+  "zip_sha256": "97eae7be5bd648ebb6b43e4905dd979919546557a01870bb1acfc79aed784b2c"
+}

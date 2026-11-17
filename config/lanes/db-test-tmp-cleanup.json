@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "db-test-tmp-cleanup": {
+      "branches": [
+        "codex/sandbox/db-test-tmp-cleanup"
+      ],
+      "note": "Test-only: practice databases remove their temp folders after stopping. No test expectation changes.",
+      "allow": [
+        "packages/db/test/catalog-fixlater-8.integration.test.ts",
+        "packages/db/test/ch7-f21-reason-upgrade.integration.test.ts",
+        "packages/db/test/ch7-f21-reason.integration.test.ts",
+        "packages/db/test/enterprise-dashboard.authority-fixtures.ts",
+        "packages/db/test/final-check-fixture.ts",
+        "packages/db/test/job-work-state-fixtures.ts",
+        "packages/db/test/pool-test-utils.ts",
+        "packages/db/test/practice-supplier-credit-money-regression.integration.test.ts",
+        "packages/db/test/practice-supplier-credit-upgrade.integration.test.ts",
+        "packages/db/test/practice-supplier-credit.integration.test.ts",
+        "packages/db/test/recovery-legacy-later.integration.test.ts",
+        "packages/db/test/recovery-terms-timing-upgrade.integration.test.ts",
+        "packages/db/test/recovery-terms-timing.integration.test.ts",
+        "packages/db/test/small-builder-origin-rule9.integration.test.ts"
+      ]
+    }
+  }
+}
