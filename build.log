@@ -1,0 +1,291 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+> jobguard@ build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/demo-recount-20261102
+> turbo run build
+
+
+   • Packages in scope: @jobguard/ai, @jobguard/api, @jobguard/config, @jobguard/core, @jobguard/db, @jobguard/storage, @jobguard/web
+   • Running build in 7 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/core:build: cache miss, executing 8f48deafe015c2b9
+@jobguard/storage:build: cache hit, replaying logs 31e904b62d25853c
+@jobguard/storage:build: 
+@jobguard/storage:build: > @jobguard/storage@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/cf-host-1/packages/storage
+@jobguard/storage:build: > tsc -p tsconfig.json
+@jobguard/storage:build: 
+@jobguard/config:build: cache hit, replaying logs 38a5913a58a2a473
+@jobguard/config:build: 
+@jobguard/config:build: > @jobguard/config@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/demo-finish/packages/config
+@jobguard/config:build: > tsc -p tsconfig.json
+@jobguard/config:build: 
+@jobguard/core:build: 
+@jobguard/core:build: > @jobguard/core@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/demo-recount-20261102/packages/core
+@jobguard/core:build: > tsc -p tsconfig.json
+@jobguard/core:build: 
+@jobguard/ai:build: cache miss, executing ab342196c427acfa
+@jobguard/db:build: cache miss, executing b6de80c10ee25c9e
+@jobguard/ai:build: 
+@jobguard/ai:build: > @jobguard/ai@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/demo-recount-20261102/packages/ai
+@jobguard/ai:build: > tsc -p tsconfig.json
+@jobguard/ai:build: 
+@jobguard/db:build: 
+@jobguard/db:build: > @jobguard/db@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/demo-recount-20261102/packages/db
+@jobguard/db:build: > tsc -p tsconfig.json
+@jobguard/db:build: 
+@jobguard/api:build: cache miss, executing 9a527f3c07e73c08
+@jobguard/api:build: 
+@jobguard/api:build: > @jobguard/api@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/demo-recount-20261102/apps/api
+@jobguard/api:build: > nest build
+@jobguard/api:build: 
+@jobguard/web:build: cache miss, executing 400519f64439bd9a
+@jobguard/web:build: 
+@jobguard/web:build: > @jobguard/web@0.0.0 build /Users/benharwood/Claude/Projects/my-new-project/.worktrees/demo-recount-20261102/apps/web
+@jobguard/web:build: > next build
+@jobguard/web:build: 
+@jobguard/web:build: ▲ Next.js 16.4.2 (Turbopack)
+@jobguard/web:build: ✓ Running next.config.mjs took 9ms
+@jobguard/web:build: ⚠ No build cache found. Please configure build caching for faster rebuilds. Read more: https://nextjs.org/docs/messages/no-cache
+@jobguard/web:build: 
+@jobguard/web:build:   Creating an optimized production build ...
+@jobguard/web:build: ✓ Compiled successfully in 10.6s
+@jobguard/web:build:   Running TypeScript ...
+@jobguard/web:build:   Finished TypeScript in 10.7s ...
+@jobguard/web:build:   Collecting page data using 9 workers ...
+@jobguard/web:build:   Generating static pages using 9 workers (0/57) ...
+@jobguard/web:build:   Generating static pages using 9 workers (14/57) 
+@jobguard/web:build:   Generating static pages using 9 workers (28/57) 
+@jobguard/web:build:   Generating static pages using 9 workers (42/57) 
+@jobguard/web:build: ✓ Generating static pages using 9 workers (57/57) in 689ms
+@jobguard/web:build: Turbopack build encountered 1 warning:
+@jobguard/web:build: ./packages/db/dist/migrate.js:134:46
+@jobguard/web:build: Warning: Module not found: Can't resolve '../migrations/'
+@jobguard/web:build:   [90m132 |[0m ...ls() {
+@jobguard/web:build:   [90m133 |[0m ...
+@jobguard/web:build: [33m[1m>[0m [90m134 |[0m ...iscoverMigrationUrls([36mnew[0m [33mURL[0m([33mMIGRATION_DIRECTORY[0m, [36mimport[0m.meta.url), [33mLISTED_MIGRATION_U...[0m
+@jobguard/web:build:   [90m    |[0m                         [33m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+@jobguard/web:build:   [90m135 |[0m ...
+@jobguard/web:build:   [90m136 |[0m ...
+@jobguard/web:build:   [90m137 |[0m ...rror [36minstanceof[0m [33mError[0m ? error.message : [33mString[0m(error);
+@jobguard/web:build: 
+@jobguard/web:build: 
+@jobguard/web:build: 
+@jobguard/web:build: Import trace:
+@jobguard/web:build:   App Route:
+@jobguard/web:build:     ./packages/db/dist/migrate.js
+@jobguard/web:build:     ./packages/db/dist/index.js
+@jobguard/web:build:     ./apps/web/app/api/contractor/statements/[action]/route.ts
+@jobguard/web:build: 
+@jobguard/web:build: https://nextjs.org/docs/messages/module-not-found
+@jobguard/web:build: 
+@jobguard/web:build: 
+@jobguard/web:build:   Finalizing page optimization ...
+@jobguard/web:build: 
+@jobguard/web:build: Route (app)
+@jobguard/web:build: ┌ ○ /
+@jobguard/web:build: ├ ○ /_not-found
+@jobguard/web:build: ├ ○ /admin/contractor
+@jobguard/web:build: ├ ○ /admin/contractor/audit-exports
+@jobguard/web:build: ├ ○ /admin/contractor/identity
+@jobguard/web:build: ├ ƒ /api/auth/invitations
+@jobguard/web:build: ├ ƒ /api/auth/oidc/[connectionId]/callback
+@jobguard/web:build: ├ ƒ /api/auth/oidc/[connectionId]/start
+@jobguard/web:build: ├ ƒ /api/auth/request
+@jobguard/web:build: ├ ƒ /api/auth/scim/[connectionId]/deactivations
+@jobguard/web:build: ├ ƒ /api/auth/session
+@jobguard/web:build: ├ ƒ /api/auth/sso-required
+@jobguard/web:build: ├ ƒ /api/auth/sso-required/detail
+@jobguard/web:build: ├ ƒ /api/auth/sso-required/emergency
+@jobguard/web:build: ├ ƒ /api/auth/sso/[connectionId]/callback
+@jobguard/web:build: ├ ƒ /api/auth/sso/[connectionId]/start
+@jobguard/web:build: ├ ƒ /api/auth/verify
+@jobguard/web:build: ├ ƒ /api/contractor
+@jobguard/web:build: ├ ƒ /api/contractor/audit-exports
+@jobguard/web:build: ├ ƒ /api/contractor/baseline
+@jobguard/web:build: ├ ƒ /api/contractor/baseline/compare
+@jobguard/web:build: ├ ƒ /api/contractor/clients/[clientId]/customer-link
+@jobguard/web:build: ├ ƒ /api/contractor/dashboard
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/assignments
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/billing
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/billing/[action]
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/order-check
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/order-lines
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/resident-contact
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/site-extras
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/site-extras/sor
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/site-visits
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/site-visits/[visitId]/complete
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/site-visits/start
+@jobguard/web:build: ├ ƒ /api/contractor/jobs/[id]/sor-items
+@jobguard/web:build: ├ ƒ /api/contractor/practice/acting-as
+@jobguard/web:build: ├ ƒ /api/contractor/practice/acting-as/end
+@jobguard/web:build: ├ ƒ /api/contractor/practice/session/revoke
+@jobguard/web:build: ├ ƒ /api/contractor/practice/workers/[workerId]/acting-as
+@jobguard/web:build: ├ ƒ /api/contractor/site/jobs
+@jobguard/web:build: ├ ƒ /api/contractor/sor-versions
+@jobguard/web:build: ├ ƒ /api/contractor/statements/[action]
+@jobguard/web:build: ├ ƒ /api/contractor/work-order-imports
+@jobguard/web:build: ├ ƒ /api/contractor/work-order-imports/[batchId]
+@jobguard/web:build: ├ ƒ /api/contractor/work-orders/[workOrderId]/revisions
+@jobguard/web:build: ├ ƒ /api/customer-portal/issue
+@jobguard/web:build: ├ ƒ /api/customer-portal/read
+@jobguard/web:build: ├ ƒ /api/customer-portal/revoke
+@jobguard/web:build: ├ ƒ /api/customer-portal/signin
+@jobguard/web:build: ├ ƒ /api/customer-portal/signout
+@jobguard/web:build: ├ ƒ /api/customer-portal/variation-approvals
+@jobguard/web:build: ├ ƒ /api/customer-portal/variations/read
+@jobguard/web:build: ├ ƒ /api/decisions
+@jobguard/web:build: ├ ƒ /api/jobs
+@jobguard/web:build: ├ ƒ /api/jobs/[id]
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/commercial-integrity
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/commercial-integrity/reviews
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/confirm
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/credit-notes/preview
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/receipts
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-invoices/[invoiceId]/receipts/reversals
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/customer-messages
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/diary
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/fee-illustration
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/fee-illustration/what-if
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-account
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-account/dispositions
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-account/lock
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-account/review-extras
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-account/terms
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-check
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-check/catches
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-check/dispositions
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-check/disputes
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/final-check/runs
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/materials
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/parties
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/parties/import
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/parties/import-v3
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/parties/import-v3/preview
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/payment-fees
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/practice-facts
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/practice-feed
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/prevention-checks
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/prevention-checks/[action]
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/proof
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/proposal
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/purchase-orders
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/purchase-orders/placement
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/purchase-orders/revisions
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/acceptance
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/acceptance/disposition
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/activation
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/artifacts/[artifactId]
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/delivery
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/delivery/[action]
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/quotes/preview
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/readiness
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/readiness/[action]
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/receipt-case-allocations
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-allocations
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-allocations/reversals
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-cases
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-cases/eligibility
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery-cases/terms
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/recovery/[action]
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/relevance-inbox
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/relevance-inbox/[action]
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/relevance-inbox/decisions/[decisionId]
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/review
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/shadow-demo
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/shadow-demo/customer-link
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/shadow-demo/review-inputs
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/shadow-demo/source-hold
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/success-fee-attribution
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/success-fees
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/success-fees/collection
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/success-fees/collection/demo-settle
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/success-fees/money-check
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/success-fees/statements
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/success-fees/statements/[statementId]
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents/facts/confirm
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents/intake
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-documents/receipts
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-matches
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/supplier-matches/corrections
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/things-to-check
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/things-to-check/[action]
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/trial
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/value
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/value/v3
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/variations
+@jobguard/web:build: ├ ƒ /api/jobs/[id]/work-state
+@jobguard/web:build: ├ ƒ /api/jobs/capture
+@jobguard/web:build: ├ ƒ /api/material-rates
+@jobguard/web:build: ├ ƒ /api/meter/current
+@jobguard/web:build: ├ ƒ /api/meter/jobs/[id]/work-state
+@jobguard/web:build: ├ ƒ /api/northside
+@jobguard/web:build: ├ ƒ /api/northside/client
+@jobguard/web:build: ├ ƒ /api/northside/extras
+@jobguard/web:build: ├ ƒ /api/northside/extras/[extraId]/[action]
+@jobguard/web:build: ├ ƒ /api/northside/photo
+@jobguard/web:build: ├ ƒ /api/quotes/preview
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/attachment-approval
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/download
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/evidence-packs/[packId]/inspect
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/follow-ups
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/follow-ups/[followUpId]/commands
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/messages
+@jobguard/web:build: ├ ƒ /api/recovery-cases/[id]/messages/[messageId]/commands
+@jobguard/web:build: ├ ƒ /api/sandbox/runs
+@jobguard/web:build: ├ ƒ /api/sandbox/runs/[id]
+@jobguard/web:build: ├ ƒ /api/sandbox/runs/[id]/[action]
+@jobguard/web:build: ├ ƒ /api/session
+@jobguard/web:build: ├ ƒ /api/small-builder-demo/[operation]
+@jobguard/web:build: ├ ƒ /api/subscriptions/commands
+@jobguard/web:build: ├ ƒ /api/subscriptions/current
+@jobguard/web:build: ├ ƒ /api/test-support/drain
+@jobguard/web:build: ├ ƒ /api/value
+@jobguard/web:build: ├ ○ /approvals/extras
+@jobguard/web:build: ├ ○ /contractor/dashboard
+@jobguard/web:build: ├ ƒ /contractor/jobs/[id]/billing
+@jobguard/web:build: ├ ○ /contractor/statements
+@jobguard/web:build: ├ ○ /contractor/work-orders
+@jobguard/web:build: ├ ƒ /contractor/work-orders/[workOrderId]
+@jobguard/web:build: ├ ○ /customer/extras
+@jobguard/web:build: ├ ƒ /customer/sign-in
+@jobguard/web:build: ├ ƒ /demo-s
+@jobguard/web:build: ├ ƒ /demo-s/core-1000
+@jobguard/web:build: ├ ƒ /demo-s/recovery-18800
+@jobguard/web:build: ├ ƒ /demo-s/shadow-30000
+@jobguard/web:build: ├ ƒ /demo-s/trial
+@jobguard/web:build: ├ ƒ /extra-approval/[jobId]/[requestId]
+@jobguard/web:build: ├ ƒ /jobs/[id]
+@jobguard/web:build: ├ ƒ /jobs/[id]/imports
+@jobguard/web:build: ├ ƒ /jobs/[id]/recovery-journey
+@jobguard/web:build: ├ ƒ /jobs/[id]/shadow-journey
+@jobguard/web:build: ├ ƒ /jobs/[id]/trial
+@jobguard/web:build: ├ ƒ /jobs/[id]/value
+@jobguard/web:build: ├ ○ /meter
+@jobguard/web:build: ├ ○ /northside
+@jobguard/web:build: ├ ○ /plans
+@jobguard/web:build: ├ ƒ /practice/[id]
+@jobguard/web:build: ├ ○ /sign-in
+@jobguard/web:build: ├ ○ /site/extra
+@jobguard/web:build: ├ ○ /supplier-fixtures
+@jobguard/web:build: ├ ○ /things-to-check-report
+@jobguard/web:build: └ ƒ /value
+@jobguard/web:build: 
+@jobguard/web:build: 
+@jobguard/web:build: ƒ Proxy (Middleware)
+@jobguard/web:build: 
+@jobguard/web:build: ○  (Static)   prerendered as static content
+@jobguard/web:build: ƒ  (Dynamic)  server-rendered on demand
+@jobguard/web:build: 
+
+ Tasks:    7 successful, 7 total
+Cached:    2 cached, 7 total
+  Time:    52.95s 
+
