@@ -3,7 +3,7 @@ import { recordExtraProceedV1 } from "@jobguard/core";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { parseOfflineIntentV1, SiteExtraError, logSiteExtraV1, logSiteExtraV3, logSiteExtraV4, siteExtraLoggedV4, siteExtraLoggedV1, siteExtraLoggedV3, siteExtraFailureV1, siteExtraHttpStatus, siteExtraContentSha256V1 } from "@jobguard/core";
-import { derivedUuid, ExtraApprovalRepository, ContractorEntitlementAuthorityRepository, ContractorRepository, SiteExtraRepository, WatchdogError, contractorSessionContext, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
+import { derivedUuid, ExtraApprovalError, ExtraApprovalRepository, ContractorEntitlementAuthorityRepository, ContractorRepository, SiteExtraRepository, WatchdogError, contractorSessionContext, type AuthenticatedMembership, type VerifiedTenantContext } from "@jobguard/db";
 import { workOrderPrincipalV1 } from "./work-order.contracts.js";
 import { recordSiteSupervisorQueryV1, siteSupervisorQueryV1, siteSupervisorQueriesV1, sorSiteExtraSubmittedV2, SorSiteExtraError, parseLogSorSiteExtra, parseOrderCheckQuery, parseSorItemsQuery, siteOrderCheckV1, siteSorItemsV1, siteSorRecentItemsV1, sorSiteExtraFailureV1, sorSiteExtraHttpStatus, sorSiteExtraLoggedV1 } from "@jobguard/core";
 import { SiteVisitRepository } from "@jobguard/db";
@@ -97,6 +97,12 @@ export class SiteExtraApplication {
    const body = parseLogSorSiteExtra(raw);
    const job = z.guid({ error: "Invalid uuid" }).safeParse(jobId); if (!job.success) throw new SorSiteExtraError("NOT_FOUND");
    await this.requireSiteOrigin(sessionId);
+   if (body.version === "log-sor-site-extra.v2") {
+    // Current-session preflight only; both durable repositories retain their checks.
+    await new ContractorEntitlementAuthorityRepository(this.pool).withAuthority(sessionId, async (db, authority) => {
+     await db.$client.query("SELECT app.mon8_require_feature($1,'approval_chains')", [authority.membershipId]);
+    });
+   }
    const context = await this.resolveContext(sessionId, member);
    const result = await this.repository.logSorSiteExtra(context, member, { commandId: body.commandId, jobId: job.data, sorCode: body.sorCode, quantity: body.quantity, ...(body.orderLineScopeItemId ? { orderLineScopeItemId: body.orderLineScopeItemId } : {}), note: body.note, ...(body.version === "log-sor-site-extra.v2" ? { version: body.version, description: body.description, workStatus: body.workStatus, photoEvidenceId: body.photoEvidenceId, residentConfirmation: body.residentConfirmation, ...(body.siteVisitId ? { siteVisitId: body.siteVisitId } : {}) } : {}) });
    // The log has committed. Submission has its own durable receipt, so failures leave
@@ -104,7 +110,15 @@ export class SiteExtraApplication {
    let submission: Record<string, unknown> | undefined;
    if (body.version === "log-sor-site-extra.v2") {
     const submitId = derivedUuid(`ent3-priced-submit:${context.tenantId.toLowerCase()}:${body.commandId.toLowerCase()}`);
-    submission = await new ExtraApprovalRepository(this.pool).submitExtra(context, member, { version: "submit-extra.v1", commandId: submitId, jobId: job.data, extraId: result.variationId });
+    const approvals = new ExtraApprovalRepository(this.pool);
+    try {
+     submission = await approvals.submitExtra(context, member, { version: "submit-extra.v1", commandId: submitId, jobId: job.data, extraId: result.variationId });
+    } catch (error) {
+     if (!(error instanceof ExtraApprovalError) || error.code !== "INVALID_TRANSITION") throw error;
+     // logSorSiteExtra has verified this caller's exact command/payload, including
+     // on replay. A competing submit is recoverable only from current scoped facts.
+     submission = await approvals.recoverPricedSubmission(context, member, { ...body, jobId: job.data });
+    }
    }
    const answer = { version: "sor-site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job.data, extraId: result.variationId, state: "logged", priceSource: result.priceSource,
     orderCheck: { outcome: result.coverage === "new" ? "new" : "more_than_ordered", sorCode: result.sorCode, unit: result.unit, claimedQuantity: result.claimedQuantity, instructedQuantity: result.instructedQuantity, extraQuantity: result.extraQuantity, orderLineScopeItemId: result.orderLineScopeItemId } };

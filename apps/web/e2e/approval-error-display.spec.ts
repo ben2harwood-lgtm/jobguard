@@ -5,6 +5,7 @@ const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")
 const tenant_id = id(1);
 const read = {
   version: "subscription-persisted-read.v1", environment: "synthetic_demo", hypothetical: true, billingDay: 1,
+  changes: [], changeOutcomes: [],
   agreements: [{ tenant_id, id: id(2), revision: 1, plan: "Solo", cadence: "monthly", anchor_day: 1,
     maximum_pence: 4900, effective_date: "2026-01-01" }],
   periods: [{ tenant_id, id: id(3), period_start: "2026-01-01", period_end: "2026-02-01",
