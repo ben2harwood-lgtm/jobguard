@@ -19,7 +19,7 @@ export interface AuditCheckpointHandoffResult {
   database: string;
   outcomes: Array<{ tenantId: string; outcome: "handed_off" | "unchanged" | "failed"; sequence: number | null; code?: AuditCheckpointHandoffCode }>;
 }
-const optionsV1 = z.object({ ownerUrl: z.string(), tenantId: z.string().uuid().optional(), operator: z.string().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/u) }).strict();
+const optionsV1 = z.object({ ownerUrl: z.string(), tenantId: z.guid({ error: "Invalid uuid" }).optional(), operator: z.string().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/u) }).strict();
 function failureCode(error: unknown): AuditCheckpointHandoffCode {
   const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
   if (code === "42501") return "AUDIT_CHECKPOINT_FORBIDDEN";

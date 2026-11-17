@@ -3,7 +3,7 @@ import { z } from "zod";
 export const supplierFixtureIds = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice", "practice-credit-300", "practice-later-invoice-1440"] as const;
 export const supplierDocumentIntakeV1 = z.object({
   version: z.literal("supplier-document-intake.v1"),
-  commandId: z.string().uuid().optional(),
+  commandId: z.guid({ error: "Invalid uuid" }).optional(),
   fixtureId: z.enum(supplierFixtureIds),
   channel: z.enum(["picker", "fixture_mail"]),
   alias: z.string().max(200).optional(),
@@ -33,7 +33,7 @@ export function formatReceiptQuantity(micros: bigint): string {
   const fraction = (magnitude % RECEIPT_SCALE).toString().padStart(6, "0").replace(/0+$/, "");
   return `${micros < 0n ? "-" : ""}${magnitude / RECEIPT_SCALE}${fraction ? `.${fraction}` : ""}`;
 }
-export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),commandId:z.string().uuid().optional(),accepted:receiptQuantityV1,rejected:receiptQuantityV1,expectedRevision:z.number().int().nonnegative()}).strict().refine(
+export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),commandId:z.guid({ error: "Invalid uuid" }).optional(),accepted:receiptQuantityV1,rejected:receiptQuantityV1,expectedRevision:z.number().int().nonnegative()}).strict().refine(
   input => !RECEIPT_DECIMAL.test(input.accepted) || !RECEIPT_DECIMAL.test(input.rejected)
     || receiptMicrosUnchecked(input.accepted) + receiptMicrosUnchecked(input.rejected) <= RECEIPT_MAX,
   { message: "Delivered quantity exceeds numeric(20,6)", path: ["rejected"] },

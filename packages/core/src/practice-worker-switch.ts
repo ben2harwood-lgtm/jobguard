@@ -5,12 +5,12 @@ export const PRACTICE_WORKER_SWITCH_WINDOW_MINUTES = 30;
 
 export const practiceWorkerSwitchOnV1 = z.object({
   version: z.literal("practice-worker-switch-on.v1"),
-  commandId: z.string().uuid(),
+  commandId: z.guid({ error: "Invalid uuid" }),
 }).strict();
 
 export const practiceWorkerSwitchOffV1 = z.object({
   version: z.literal("practice-worker-switch-off.v1"),
-  commandId: z.string().uuid(),
+  commandId: z.guid({ error: "Invalid uuid" }),
 }).strict();
 
 /** Public facts only. Session row numbers and authority stay server-side. */
@@ -19,11 +19,11 @@ export const practiceWorkerSwitchStateV1 = z.object({
   environment: z.literal("synthetic_demo"),
   realExternalActions: z.literal(0),
   state: z.enum(["owner", "acting", "unclosed"]),
-  switchId: z.string().uuid().nullable(),
-  workerMembershipId: z.string().uuid().nullable(),
-  startedAt: z.string().datetime({ precision: 6 }).nullable(),
-  expiresAt: z.string().datetime({ precision: 6 }).nullable(),
-  endedAt: z.string().datetime({ precision: 6 }).nullable(),
+  switchId: z.guid({ error: "Invalid uuid" }).nullable(),
+  workerMembershipId: z.guid({ error: "Invalid uuid" }).nullable(),
+  startedAt: z.iso.datetime({ precision: 6, error: "Invalid datetime" }).nullable(),
+  expiresAt: z.iso.datetime({ precision: 6, error: "Invalid datetime" }).nullable(),
+  endedAt: z.iso.datetime({ precision: 6, error: "Invalid datetime" }).nullable(),
   endReason: z.enum(["switched_back", "expired"]).nullable(),
 }).strict();
 

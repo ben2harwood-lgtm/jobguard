@@ -17,12 +17,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "zod": "3.25.67",
+    "zod": "4.6.6",
     "@jobguard/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "5.8.3",
-    "vitest": "4.1.11",
+    "vitest": "4.1.12",
     "@types/node": "24.0.3"
   }
 }

@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-export const subscriptionSimulatedWorkV1=z.object({version:z.literal("subscription-simulated-work.v1"),environment:z.literal("synthetic_demo"),workId:z.string().uuid(),statementId:z.string().uuid(),amountPence:z.number().int().min(0).max(16900),contentHash:z.string().regex(/^[a-f0-9]{64}$/u),currency:z.literal("GBP")}).strict();
+export const subscriptionSimulatedWorkV1=z.object({version:z.literal("subscription-simulated-work.v1"),environment:z.literal("synthetic_demo"),workId:z.guid({ error: "Invalid uuid" }),statementId:z.guid({ error: "Invalid uuid" }),amountPence:z.number().int().min(0).max(16900),contentHash:z.string().regex(/^[a-f0-9]{64}$/u),currency:z.literal("GBP")}).strict();
 export type SubscriptionSimulatedWork=z.infer<typeof subscriptionSimulatedWorkV1>;
-export const subscriptionSimulatedResultV1=z.object({version:z.literal("subscription-simulated-result.v1"),synthetic:z.literal(true),workId:z.string().uuid(),resultId:z.string().uuid(),outcome:z.enum(["redirect","settled","outcome_unknown","failed"])}).strict();
+export const subscriptionSimulatedResultV1=z.object({version:z.literal("subscription-simulated-result.v1"),synthetic:z.literal(true),workId:z.guid({ error: "Invalid uuid" }),resultId:z.guid({ error: "Invalid uuid" }),outcome:z.enum(["redirect","settled","outcome_unknown","failed"])}).strict();
 export type SubscriptionSimulatedResult=z.infer<typeof subscriptionSimulatedResultV1>;
 export interface SubscriptionPaymentAdapter {
  execute(work:SubscriptionSimulatedWork):Promise<SubscriptionSimulatedResult>;

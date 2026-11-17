@@ -60,7 +60,7 @@ const canonical = (value: unknown): string => value === null || typeof value !==
   : `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, child]) => `${JSON.stringify(key)}:${canonical(child)}`).join(",")}}`;
 const requestHashOf = (value: unknown) => createHash("sha256").update(canonical(value)).digest("hex");
 /** One canonical spelling per UUID, so lock keys, replay and audit subjects cannot differ by letter case. */
-const uuidArg = (value: string) => z.string().uuid().parse(value).toLowerCase();
+const uuidArg = (value: string) => z.guid({ error: "Invalid uuid" }).parse(value).toLowerCase();
 const APPROVAL_LIFETIME_MS = 3_600_000;
 const STALE_EXECUTION_MS = 300_000;
 const RECOVERY_MESSAGE_EXECUTOR_REF = "system:recovery-message-executor";

@@ -1,13 +1,14 @@
 import { z } from "zod";
 import type { Pool } from "pg";
-import { ContractorRepository } from "@jobguard/db";
+import { ContractorRepository, ContractorRetainedReadRepository } from "@jobguard/db";
 import { ContractorError, contractorQueryV1 } from "@jobguard/core";
-const sessionV1 = z.object({ version: z.literal("contractor-principal.v1"), sessionId: z.string().uuid() }).strict();
+const sessionV1 = z.object({ version: z.literal("contractor-principal.v1"), sessionId: z.guid({ error: "Invalid uuid" }) }).strict();
 const startV1 = z.object({ version: z.literal("contractor-practice.v1"), environment: z.literal("synthetic_demo") }).strict();
 /** Server-only composition; all tenant/membership authority comes from the persisted bearer session. */
 export class ContractorApplication {
  private readonly repository: ContractorRepository;
- constructor(pool: Pool) { this.repository = new ContractorRepository(pool); }
+ private readonly retained: ContractorRetainedReadRepository;
+ constructor(pool: Pool) { this.repository = new ContractorRepository(pool); this.retained = new ContractorRetainedReadRepository(pool); }
  private session(raw: unknown) {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new ContractorError("MODE_FORBIDDEN");
   const parsed=sessionV1.safeParse(raw);
@@ -24,11 +25,10 @@ export class ContractorApplication {
   const session=this.session(principal);
   const query=contractorQueryV1.safeParse(raw);
   if(!query.success) throw new ContractorError("INVALID_COMMAND");
-  return this.repository.query(await this.repository.resolveSession(session),query.data);
+  return this.retained.query(session,query.data);
  }
  async resume(principal: unknown) {
-  const member=await this.repository.resolveSession(this.session(principal));
-  return this.repository.query(member,{version:"contractor-query.v1",tenantId:member.tenantId,resource:"organisation"});
+  return this.retained.resume(this.session(principal));
  }
  async command(principal: unknown, raw: unknown) {
   const member=await this.repository.resolveSession(this.session(principal));

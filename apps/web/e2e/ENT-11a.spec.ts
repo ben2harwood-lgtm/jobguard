@@ -54,6 +54,7 @@ test("the first contractor demo: operative logs an extra with photo and resident
   await page.setViewportSize({ width: 360, height: 800 }); // mobile-360
   const op = { page };
   await op.page.goto("/site/extra");
+  await expect(op.page.locator("main[data-site-extra-state]")).toHaveAttribute("data-site-extra-state", "ready");
   await expect(op.page.getByText(banner, { exact: true })).toHaveCount(1);
   await expect(op.page.getByLabel("Job")).toContainText("NS-1-0001");
   await op.page.getByLabel("What is the extra work?").fill(description);
@@ -173,3 +174,20 @@ test("the first contractor demo: operative logs an extra with photo and resident
   expect(Number((await db.query("SELECT count(*) n FROM app.extra_origin WHERE tenant_id=$1", [tenant])).rows[0].n)).toBe(1);
   await db.end();
 });
+
+// Transport and HTTP fault regressions: neither is an empty assignment register.
+for (const fault of ["transport", "http"] as const) {
+  test(`assigned-job ${fault} failure is visible instead of no jobs`, async ({ page }) => {
+    await page.route("**/api/contractor/site/jobs", async route => {
+      if (fault === "transport") await route.abort("failed");
+      else await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ code: "SITE_VISIT_UNAVAILABLE" }) });
+    });
+    await page.route("**/api/northside/extras", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ code: "NORTHSIDE_UNAVAILABLE" }) }));
+    await page.goto("/site/extra");
+    await expect(page.locator("main[data-site-extra-state]")).toHaveAttribute("data-site-extra-state", "failed");
+    await expect(page.locator("main").getByRole("alert")).toContainText(fault === "http" ? "could not load" : "Failed to fetch");
+    await expect(page.getByText("No jobs are assigned to you.", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Reload jobs and extras", exact: true })).toBeEnabled();
+    await expect(page.getByRole("region", { name: "My extras" })).toContainText("Extras are unavailable.");
+  });
+}

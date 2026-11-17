@@ -327,3 +327,161 @@ Checks actually run in this sandbox using installed Node 24.17.0 and cached pnpm
 | `git diff --check`; preservation comparisons | Exit 0 |
 
 Root `pnpm test` was not run because it includes PostgreSQL integration suites; package source units and tooling were run as recorded above. Database/migration and browser suites remain GitHub CI responsibilities after dispatcher push. Source authority and every prior release/acceptance hold remain in force. The C236 repair is source-inspected and locally test-executed to the limits above, not independently verified or self-accepted. Dispatcher commit message: `/private/tmp/jg-msg-m48-b1.txt`.
+
+## M48-B1-CATCHUP-CURRENT-MAIN-20261026 — bounded predecessor repair
+
+Source candidate only; no Git metadata/add/commit/push, independent verdict,
+acceptance, integration or release performed by this worker. Original accepted
+refusing foundation remains pinned to
+`d8a5ca64c5768ec8a9bf1c750edc67bb1347304d`; its acceptance does not cover this delta.
+
+Preflight verified HEAD at that source, branch `codex/sandbox/m48-b1`, MERGE_HEAD
+`a6778b4ae923ec15ba39377ee0c4ca2006f31040`, no unmerged entries, no initial
+unstaged/untracked changes, and C0
+`e9d4fed25e2bab494f5158bd9dd738779821991c` as an ancestor of that main.
+The dispatcher-prepared staged merge tree was independently reconstructed from
+`git ls-files --stage -z` in memory as
+`02eca76089fb29b8fba8fef6d118aacc66c5ac20`, without writing Git objects/index.
+Staged current-main changes are preserved; only the two issued files were edited.
+Remote freshness, resource/process clearance and launch admission belong to the
+parent dispatcher; this worker did not create another driver/admission or queue.
+
+Provenance read: full applicable AGENTS, parent AGENTS.override.md, current build
+rules and full simplicity rule; BUILD_PLAN M4-8-S and §10.3; C0 source contract;
+original M48-B1-v5-w6/r1/r2, R2/R3 repair orders, original builder receipt and
+`v5-m48-b1-acceptance-d8a5ca64-20261024.md`; checked PLAN-READINESS Packet 1,
+its predecessor/CI-evidence correction and later narrow-check correction. The
+repository-relative session-policy file is absent; the supplied authoritative
+`/Users/benharwood/Claude/Projects/Next Gen Learning Platform/docs/workflow/CODEX_SESSION_POLICY.md`
+was read in full. Current build-rule SHA-256:
+`72fadbf76cf18785182b3e68791216b925159995dba1fee6f295fd54d28a3c28`;
+full simplicity SHA-256:
+`6951013f7f7c750002f3096a4e9d1c7a467fabe0a4a6b26972169f2493ffeee6`.
+Checked plan correction component:
+`a99a2207d9db156981963b6bf77e1fa558a47c86069bab0b4695e7a31dc26202`;
+Packet 1 failure-mode/CI correction was read in the same checked publication.
+C264/C266/C280 and the current issued two-file order govern this phase.
+
+Changed `packages/db/test/receipt-line-allocation-facts-upgrade.integration.test.ts`
+and this existing receipt only. The test consumes authoritative MIGRATION_URLS
+and its existing migrationListProblem discovery failure, validates basename shape,
+safe numeric prefixes and strict numeric ordering, requires exactly one own entry
+and an explicit predecessor, and checks the complete applied prefix against the
+actual ordered slice. There is no alternate migration list/parser module.
+Guards run before fixture creation, so invalid input cannot mutate a database.
+The same fixture is then created and the unchanged database proof runs. The
+existing 120-second test timeout is retained. Numbering gaps in the authoritative
+history are valid; a filtered/skipped entry in the applied prefix is not.
+
+Preserved byte-for-byte from accepted source: SQL 0211, repository reader/writer
+(including RECEIPT_LINE_SOURCE_HANDOFF_REQUIRED and whole verified-context argument),
+facts/access/races suites, and the upgrade test's existing database SQL/assertion
+block from the predecessor loop body through all four FK checks. Thus nonempty
+populated baseline, named rows/types/PK identity, row mutation, retype, rollback,
+successor/rerun and tenant/job-qualified FK assertions remain. One basename-only
+`M48-B1-UPGRADE-PREDECESSOR <predecessor> -> 0211_receipt_line_source_bridge.sql`
+log was added after all those assertions. SQL SHA-256 remains
+`f0c93fd5f791b34b0b3dde541c1a183c4d9fb249539b413bcb40cc63284d42c9`.
+No schema/backfill, compatibility interface, alert, provider or product change.
+
+Checks actually executed with existing dependencies, pinned installed Node
+`24.15.0` at `/private/tmp/jg-ci-enterprise-node-v24.15.0-darwin-arm64/bin/node`:
+
+| Check | Actual result |
+|---|---|
+| Exact parent/tree/conflict/initial drift and C0 ancestry checks | PASS; read-only, no merge command |
+| Installed `packages/db/node_modules/vitest/vitest.mjs --version` | 4.1.11; differs from current-main package declaration 4.1.12; no install/download performed |
+| `node --check /private/tmp/m48-b1-current-controls.cjs` | PASS |
+| Same scratch preparation script: TypeScript createSourceFile parse diagnostics on changed test | PASS; syntax only, not project test-typecheck |
+| From packages/db: `node node_modules/vitest/vitest.mjs list --maxWorkers=1 test/receipt-line-allocation-facts-upgrade.integration.test.ts` | Exit 0; discovers the actual A8 test, no hooks/test body/database execution |
+| From `/private/tmp/m48-b1-current-controls-VyXtbt`: `node /Users/benharwood/Claude/Projects/my-new-project/.worktrees/m48-b1/packages/db/node_modules/vitest/vitest.mjs run --config vitest.config.mjs --maxWorkers=1` | Final exit 0; 9 source-level scratch controls passed |
+| Native Node import of actual `packages/db/src/migrate.ts` | Exit 0; source discovery only: `0208_meter_small_trip.sql -> 0211_receipt_line_source_bridge.sql` |
+| Byte-preservation checks and `git diff --check` | PASS |
+
+Scratch controls execute the changed pre-database guard block, transpiled from the
+candidate, against the existing discovery parser/list. They accept the actual list
+and reject absent own, duplicate own, own without predecessor, duplicate number,
+reversed order, invalid basename, discovery failure and a scratch-only filtered
+prefix. No candidate mutation or PostgreSQL assertion was executed. The initial
+scratch run was 8 pass/1 fail because its harness passed a filesystem path to
+`new URL`; correcting that scratch URL to `file:///...` produced 9/9. An initial
+preservation probe also named a nonexistent held application source file; the
+corrected probe used actual repository/facts/access/races paths and passed.
+These harness/probe failures are not hidden or claimed as product failures.
+Scratch artifacts remain outside the candidate; no new reporting document added.
+
+**Dispatcher/CI need (not run locally):** execute the checked plan's exact batches
+with the approved pinned pnpm 10.28.1 environment and no more than two workers:
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/receipt-line-allocation-facts-upgrade.integration.test.ts test/receipt-line-allocation-facts.integration.test.ts test/receipt-line-allocation-facts-access.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/receipt-line-allocation-facts-races.integration.test.ts test/recovery-allocation-upgrade.integration.test.ts
+```
+
+Required current-main CI, including typecheck/lint/test/build/OpenAPI,
+database/migrations/browser and applicable gates, remains mandatory. No broad
+Turbo, package build/typecheck, database/browser or unchanged passing suite was
+rerun here; this test-only delta used the later narrow syntax/discovery correction.
+No project-faithful static test compilation is established by syntax/discovery,
+transpilation or source package checks. PostgreSQL guarantees await actual CI.
+CI evidence is **PENDING**: attach candidate SHA, effective main SHA and merge
+line, run ID, job name, log/artifact URL, exact line/section of
+`M48-B1-UPGRADE-PREDECESSOR`, and the executed upgrade result. The locally observed
+0208 predecessor is source-discovery evidence only, not the required CI evidence.
+
+Positive A1–A8/source authority/design/HTTP/UI remain HELD, including the withheld
+M48-SOURCE-BRIDGE browser spec. STOP-PREDECESSOR-0210 remains retired. Current-main
+floor 0237 is a separate migration-path permission hold: no renumber, new path,
+archive, registry, instruction or dependency edit is authorized/performed here.
+Normal dispatcher scoped checkpoint/feature push and current-main CI follow only
+through its existing authority; actual C280 RED delta review and separate acceptance
+must bind the resulting candidate. No main merge, deployment, release or real data.
+No new simplicity observation is added on this continuation/recheck.
+
+```yaml
+session_record_version: 1
+task_id: M48-B1-CATCHUP-CURRENT-MAIN-20261026
+project: JobGuard
+role: builder
+thread_id: 01a1793e-0fe7-7a70-88ec-80eb1fe74f65
+surface: codex-cli
+host: local sandbox
+authorised_route_ref: issued bounded current-main continuation; Gmail ~/.codex-ben2 C266
+repository: /Users/benharwood/Claude/Projects/my-new-project
+integration_target: origin/main
+integration_target_revision: a6778b4ae923ec15ba39377ee0c4ca2006f31040
+worktree: /Users/benharwood/Claude/Projects/my-new-project/.worktrees/m48-b1
+branch: codex/sandbox/m48-b1
+starting_base_revision: d8a5ca64c5768ec8a9bf1c750edc67bb1347304d
+source_pin: d8a5ca64c5768ec8a9bf1c750edc67bb1347304d
+candidate_revision: uncommitted two-file delta over prepared merge tree 02eca76089fb29b8fba8fef6d118aacc66c5ac20
+last_validated_revision: same uncommitted source candidate
+allowed_files_ref: issued two-file order; existing config/lanes/m48-b1.json
+governing_contract_ref: AGENTS.md; BUILD_PLAN.md M4-8-S and 10.3; checked Packet1 corrections
+model_requested: gpt-6.1-sol
+effort_requested: medium
+model_runtime_confirmed: unknown
+effort_runtime_confirmed: unknown
+runtime_confirmation_ref: parent launch evidence required; not inferred from request
+last_completed_turn: bounded predecessor repair and narrow checks
+last_receipt_ref: docs/verdicts/M48-B1/BUILDER_RECEIPT.md
+state: source handoff; CI/migration-path/review/acceptance held
+resumed_from_thread_id: none; distinct bounded current-main successor
+successor_reason: materially changed current-main phase explicitly issued; original histories preserved
+preflight_ref: this receipt section
+result_id: unknown
+acknowledgement_ref: pending dispatcher
+ci_evidence_ref: pending
+reviewer: pending actual C280 RED delta reviewer
+review_evidence_ref: pending
+accepting_actor: pending separate actor
+acceptance_evidence_ref: original d8a5ca64 acceptance is historical; new delta pending
+outstanding_holds: CI; floor0237 migration-path permission; independent delta review/acceptance; positive source/A1-A8/HTTP/UI
+builder_finished_at: 2026-10-26
+coordinator_acknowledged_at: unknown
+integrated_at: unknown
+merged_revision: unknown
+```
+
+Token/cache/runtime-model counters are unavailable here: unknown, not zero. No
+continuity/cache saving or runtime model/effort verification is claimed.

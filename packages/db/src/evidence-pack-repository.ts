@@ -9,8 +9,8 @@ import { appendAuditBatch } from './audit.js';
 import { loadEvidencePackSources } from './evidence-pack-sources.js';
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from './tenant-context.js';
 
-const commandIdSchema = z.string().uuid().transform(value => value.toLowerCase());
-const generateInput = z.object({ commandId: commandIdSchema, format: z.literal('TEXT').default('TEXT') }).strict();
+const commandIdSchema = z.guid({ error: "Invalid uuid" }).transform(value => value.toLowerCase());
+const generateInput = z.object({ commandId: commandIdSchema, format: z.literal('TEXT').prefault('TEXT') }).strict();
 const approvalInput = z.object({ commandId: commandIdSchema, expectedManifestHash: z.string().regex(/^[a-f0-9]{64}$/), expectedContentHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 const scenarioInput = z.enum(['intact', 'missing', 'tampered', 'wrong-version', 'checkpoint']);
 export type EvidencePackScenario = z.infer<typeof scenarioInput>;
@@ -32,7 +32,7 @@ export class EvidencePackError extends Error {
 function fail(code: string): never { throw new EvidencePackError(code); }
 const actorSchema = z.string().min(1).max(200);
 /** One canonical spelling per UUID, so command hashes and advisory lock keys cannot differ by letter case. */
-const uuidArg = (value: string) => z.string().uuid().parse(value).toLowerCase();
+const uuidArg = (value: string) => z.guid({ error: "Invalid uuid" }).parse(value).toLowerCase();
 
 export class EvidencePackRepository {
   constructor(private readonly pool: Pool) {}

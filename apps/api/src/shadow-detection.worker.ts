@@ -2,7 +2,7 @@ import { z } from "zod";
 import { AiGatewayError } from "@jobguard/ai";
 import { detectShadowObservations, type Observation, type ShadowCapture, type ShadowProposal } from "@jobguard/core";
 import type { VerifiedTenantContext } from "@jobguard/db";
-const taskV1 = z.object({ version: z.literal("shadow-detection-task.v1"), tenantId: z.string().uuid(), jobId: z.string().uuid() }).strict();
+const taskV1 = z.object({ version: z.literal("shadow-detection-task.v1"), tenantId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }) }).strict();
 export class ShadowWorkerError extends Error {
   constructor(readonly code: "INVALID_SHADOW_TASK" | "SHADOW_TASK_TENANT_MISMATCH" | "SHADOW_TERMS_NOT_ACCEPTED" | "SHADOW_SYNTHETIC_ONLY") { super(code); }
 }

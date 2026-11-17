@@ -1,3 +1,4 @@
+import { prepareInvoiceFinalCheck } from "./customer-invoice-journey";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { pounds } from "../../app/lib/pounds";
@@ -64,6 +65,7 @@ export async function recovery18800(page: Page) {
   const before = await jsonResult(page.request.get(finalPath), "Read final account revision");
   const final = await post(page, finalPath, { version: "final-account.assemble.v1", commandId: id(), expectedRevision: before.account?.revision ?? 0 });
   expect(final.account.issueBlocked).toBe(false);
+  await prepareInvoiceFinalCheck(page,jobId,final.account);
   const issued = await post(page, `/api/jobs/${jobId}/customer-invoices`, { version: "practice-customer-invoice.issue.v1", commandId: id(), finalAccountRevisionId: final.account.id, expectedSourceHash: final.account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-10-12" });
   const invoice = issued.invoices.at(-1); expect(invoice).toMatchObject({ netPence: 1880000, totalPence: 2256000 });
   const invoiceId = invoice.id as string, receiptPath = `/api/jobs/${jobId}/customer-invoices/${invoiceId}/receipts`;

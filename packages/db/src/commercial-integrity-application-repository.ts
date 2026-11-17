@@ -1,3 +1,4 @@
+import { utcDatetimeV1 } from "@jobguard/core";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -7,11 +8,11 @@ import { PracticeAccessError, practiceOwnedJobsSql } from "./practice-session.js
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 const reviewV1 = z.object({
-  version: z.literal("commercial-integrity-review.v1"), commandId: z.string().uuid(),
+  version: z.literal("commercial-integrity-review.v1"), commandId: z.guid({ error: "Invalid uuid" }),
   findingKey: z.string().min(1), explanation: z.string().trim().min(1).max(500),
   outcome: z.literal("dismissed_false_positive"),
 }).strict();
-const feedbackV1 = reviewV1.extend({ jobId: z.string().uuid(), recordedAt: z.string().datetime() });
+const feedbackV1 = reviewV1.extend({ jobId: z.guid({ error: "Invalid uuid" }), recordedAt: utcDatetimeV1 });
 const commandType = "commercial_integrity.review";
 
 /** Existing operational receipts retain feedback; no Decision, authority or money is created. */

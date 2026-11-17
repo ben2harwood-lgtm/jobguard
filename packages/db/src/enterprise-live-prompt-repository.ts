@@ -5,12 +5,12 @@ import { contractorSessionContext } from "./contractor-session-context.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { readEnterpriseCompletionFindings, readStoredCompletionPhoto } from "./enterprise-live-prompt-source-reader.js";
-const endInput = z.object({version:z.literal("end-check.v1"),commandId:z.string().uuid(),jobId:z.string().uuid(),agreementVersionId:z.string().uuid().optional(),completionEventId:z.string().uuid().optional(),visitId:z.string().uuid().optional()}).strict();
+const endInput = z.object({version:z.literal("end-check.v1"),commandId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),agreementVersionId:z.guid({ error: "Invalid uuid" }).optional(),completionEventId:z.guid({ error: "Invalid uuid" }).optional(),visitId:z.guid({ error: "Invalid uuid" }).optional()}).strict();
 type Result = Record<string,unknown>;
 export type EnterprisePromptItem = {id:string;jobId:string;promptHash:string;rule:"a"|"b"|"c"|"d";ruleVersion:string;surfacedAt:string;resolution:string|null};
 export type EnterprisePromptPage = {items:EnterprisePromptItem[];nextCursor:string|null};
-const itemSchema = z.object({id:z.string().uuid(),jobId:z.string().uuid(),promptHash:z.string().regex(/^[a-f0-9]{64}$/u),rule:z.enum(["a","b","c","d"]),ruleVersion:z.string(),surfacedAt:z.string(),resolution:z.string().nullable()});
-const pageSchema = z.object({items:z.array(itemSchema),nextCursor:z.string().uuid().nullable()});
+const itemSchema = z.object({id:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" }),promptHash:z.string().regex(/^[a-f0-9]{64}$/u),rule:z.enum(["a","b","c","d"]),ruleVersion:z.string(),surfacedAt:z.string(),resolution:z.string().nullable()});
+const pageSchema = z.object({items:z.array(itemSchema),nextCursor:z.guid({ error: "Invalid uuid" }).nullable()});
 function failure(error:unknown):never {
  if(error instanceof EnterpriseLivePromptPersistenceError)throw error;
  const message=(error as {message?:string}).message;
@@ -30,12 +30,12 @@ export class EnterpriseLivePromptRepository {
   }catch(error){failure(error);}
  }
  private async write(sessionId:string,raw:unknown):Promise<Result>{
-  const input=z.object({version:z.string(),jobId:z.string().uuid(),commandId:z.string().uuid()}).passthrough().parse(raw);
+  const input=z.object({version:z.string(),jobId:z.guid({ error: "Invalid uuid" }),commandId:z.guid({ error: "Invalid uuid" })}).passthrough().parse(raw);
   try {const context:VerifiedTenantContext=await contractorSessionContext(this.pool,sessionId);
    return await withTenant(this.pool,context,async db=>{
     let sourceBytes:Buffer|null=null;
     if(input.version==="completion-observation.v1" && (input.locator as {kind?:string}|undefined)?.kind==="photo_tag") {
-     const source=z.object({jobId:z.string().uuid(),evidenceId:z.string().uuid(),sha256:z.string(),objectVersion:z.string()}).parse(input);
+     const source=z.object({jobId:z.guid({ error: "Invalid uuid" }),evidenceId:z.guid({ error: "Invalid uuid" }),sha256:z.string(),objectVersion:z.string()}).parse(input);
      sourceBytes=await readStoredCompletionPhoto(db,sessionId,source);
     }
     const output=(await db.$client.query<{value:{replay:boolean;result:Result;audits:AuditEventInput[]}}>("SELECT app.lp_command($1,$2::jsonb,$3::bytea) value",[sessionId,JSON.stringify(input),sourceBytes])).rows[0]!.value;

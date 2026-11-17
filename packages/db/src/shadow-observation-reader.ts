@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Pool } from "pg";
 import { FINAL_CHECK_TERMS_VERSION, observationV1, parseObservation, shadowCaptureV1, type Observation, type ShadowCapture } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
-const readV1 = z.object({ version: z.literal("shadow-observation-read.v1"), jobId: z.string().uuid() }).strict();
+const readV1 = z.object({ version: z.literal("shadow-observation-read.v1"), jobId: z.guid({ error: "Invalid uuid" }) }).strict();
 export class ShadowObservationReadError extends Error {
   constructor(readonly code: "INVALID_OBSERVATION_READ" | "OBSERVATION_JOB_UNAVAILABLE" | "TERMS_RELATION_UNAVAILABLE" | "TERMS_NOT_ACCEPTED" | "SOURCE_NOT_FINALIZED" | "DETECTION_LOCKED_JOB") { super(code); }
 }

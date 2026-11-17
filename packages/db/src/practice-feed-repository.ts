@@ -28,7 +28,7 @@ export class PracticeFeedRepositoryError extends Error {
 }
 const fail = (code: PracticeFeedErrorCode): never => { throw new PracticeFeedRepositoryError(code); };
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 /** SBOX's sha256 digest of the practice session token (`authenticatePracticeSession(...).digest`). The raw bearer token never reaches this class. */
 const sessionDigestV1 = z.string().regex(/^[0-9a-f]{64}$/u);
 const canonical = (value: unknown): string => {

@@ -1,3 +1,4 @@
+import { publishEmptyCompletion, createHistoricalInvoice } from "./sv5pre-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
@@ -8,11 +9,15 @@ type Account=Awaited<ReturnType<typeof seedAccount>>;
 const invoiceInput=(a:Account,invoiceKind:'final'|'supplementary'='final')=>({jobId:a.jobId,actorMembershipId:LOCK_OWNER,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedSourceHash:LOCK_HASH,invoiceKind,recipient:'practice-customer@example.invalid',issuedOn:'2026-10-12'});
 async function appendCheck(f:LockFixture,a:Account,status:'pending'|'failed'|'completed',overrides:{lockId?:string;cutoff?:string;jobId?:string}={}){
  const row=(await f.admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0];
+ if(status==='completed' && Object.keys(overrides).length===0) return publishEmptyCompletion(f,a);
  const id=randomUUID();await asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5::timestamptz,$6)",[a.tenantId,overrides.jobId??a.jobId,id,overrides.lockId??row.id,overrides.cutoff??row.cutoff,status]));return id;
 }
 describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
  let f:LockFixture;
  beforeAll(async()=>{f=await createLockFixture()},60000);afterAll(async()=>closeLockFixture(f));
+ let historical:Awaited<ReturnType<typeof createHistoricalInvoice>>;
+ beforeAll(async()=>{historical=await createHistoricalInvoice()},60000);
+ afterAll(async()=>{if(historical)await historical.close()});
  const direct=(a:Account,input:ReturnType<typeof invoiceInput>)=>asFixtureTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,$6,$7,$8::date,$9)",[a.tenantId,input.jobId,input.finalAccountRevisionId,input.actorMembershipId,input.commandId,input.invoiceKind,input.recipient,input.issuedOn,input.expectedSourceHash]));
  it("missing lock, no completion, pending and failed are typed repository/routine refusals with no invoice effects",async()=>{
   const a=await seedAccount(f.admin),repo=new FinalAccountLockRepository(f.runtime);
@@ -85,10 +90,17 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
    expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(0);
   }
  });
- it("Q1 legacy issue remains available without lock; an interim side binding requires no lock",async()=>{
-  const a=await seedAccount(f.admin),invoice=await new PracticeInvoiceRepository(f.runtime).issue(a.context,{jobId:a.jobId,finalAccountRevisionId:a.revisionId,actorMembershipId:LOCK_OWNER,commandId:randomUUID(),recipient:'practice-customer@example.invalid',issuedOn:'2026-10-12'});
-  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,revision_id) VALUES($1,$2,$3,'interim',$4)",[a.tenantId,a.jobId,invoice.id,a.revisionId]));
-  expect((await f.admin.query("SELECT invoice_kind,lock_id,check_id FROM app.final_account_invoice_binding WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual([{invoice_kind:'interim',lock_id:null,check_id:null}]);
+ it("Q1 new legacy final issue requires lock and changes no commercial effects",async()=>{
+  const a=await seedAccount(f.admin);
+  const counts=async()=>Promise.all(['customer_invoice_sequence','decision','decision_resolution','action_authorization','customer_invoice','final_account_invoice_binding','final_account_invoiced_line','action_outbox','command_receipt','audit_event'].map(async table=>(await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`,[a.tenantId])).rows[0].n));
+  const before=await counts();
+  await expect(new PracticeInvoiceRepository(f.runtime).issue(a.context,{jobId:a.jobId,finalAccountRevisionId:a.revisionId,actorMembershipId:LOCK_OWNER,commandId:randomUUID(),recipient:'practice-customer@example.invalid',issuedOn:'2026-10-12'})).rejects.toThrow('FINAL_ACCOUNT_LOCK_REQUIRED');
+  expect(await counts()).toEqual(before);
+ });
+ it("Q1 historical interim side binding requires no lock",async()=>{
+   const a=historical.account,invoice=historical.invoice;
+   await asFixtureTenant(historical.fixture.admin,a.tenantId,db=>db.query("INSERT INTO app.final_account_invoice_binding(tenant_id,job_id,invoice_id,invoice_kind,revision_id) VALUES($1,$2,$3,'interim',$4)",[a.tenantId,a.jobId,invoice.id,a.revisionId]));
+   expect((await historical.fixture.admin.query("SELECT invoice_kind,lock_id,check_id FROM app.final_account_invoice_binding WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual([{invoice_kind:'interim',lock_id:null,check_id:null}]);
  });
  it("a completion belonging to a foreign tenant cannot be bound or authorize either invoice kind",async()=>{
   const a=await seedAccount(f.admin),b=await seedAccount(f.admin);
@@ -97,6 +109,34 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
   await expect(appendCheck(f,a,'completed',{lockId:foreign.id,jobId:b.jobId})).rejects.toMatchObject({code:'23503'});
   await appendCheck(f,b,'completed');const repo=new FinalAccountLockRepository(f.runtime);
   for(const kind of ['final','supplementary']as const){const input=invoiceInput(a,kind);await expect(repo.issueInvoice(a.context,input)).rejects.toMatchObject({code:'FINAL_CHECK_NOT_COMPLETE'});await expect(direct(a,input)).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE')}
+ });
+
+ it("PRE-Q4-05 r2 practice-session job issues through the lock-bound application; wrong and absent digests remain refused",async()=>{
+  const {createHash}=await import("node:crypto");
+  const {practiceMaterialPool,issuePracticeSession,DEMO_TENANT_ID,DEMO_MEMBERSHIP_ID,DEMO_IDENTITY_USER_ID}=await import("../src/index.js");
+  const {FinalAccountLockApplication}=await import("../../../apps/api/src/final-account-lock.application.js");
+  const prior=process.env.JOBGUARD_ENV;process.env.JOBGUARD_ENV="synthetic_demo";
+  try{
+   const a=await seedAccount(f.admin,DEMO_TENANT_ID);
+   await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_IDENTITY_USER_ID]);
+   await f.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) SELECT $1,tenant_id,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id=$4 ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_IDENTITY_USER_ID,DEMO_TENANT_ID,LOCK_OWNER]);
+   const session=await issuePracticeSession(f.runtime),digest=createHash("sha256").update(session).digest("hex");
+   await asFixtureTenant(f.admin,a.tenantId,async db=>{await db.query("SET LOCAL session_replication_role='replica'");await db.query("UPDATE app.job SET practice_session_digest=$1,practice_scenario='home' WHERE tenant_id=$2 AND id=$3",[digest,a.tenantId,a.jobId]);});
+   const repo=await prepareLock(f,a);await repo.lock(a.context,a.input);await appendCheck(f,a,'completed');
+   const command={...invoiceInput(a),actorMembershipId:DEMO_MEMBERSHIP_ID};
+   const before=(await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows;
+   for(const pool of [f.runtime,practiceMaterialPool(f.runtime,createHash("sha256").update(randomUUID()).digest("hex"))])
+    await expect(new FinalAccountLockRepository(pool).issueInvoice(a.context,command)).rejects.toMatchObject({code:'42501'});
+   expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toEqual(before);
+   const {actorMembershipId:_actor,jobId:_job,...body}=command;
+   const app=new FinalAccountLockApplication(f.runtime,session),result=await app.issueInvoice(a.jobId,{version:'lock-bound-invoice.issue.v1',...body});
+   expect(result.invoices).toHaveLength(1);expect(result.invoices[0]).toMatchObject({netPence:3360000,taxPence:672000,totalPence:4032000});
+   expect(await app.issueInvoice(a.jobId,{version:'lock-bound-invoice.issue.v1',...body})).toEqual(result);
+   for(const pool of [f.runtime,practiceMaterialPool(f.runtime,createHash("sha256").update(randomUUID()).digest("hex"))])
+    await expect(new FinalAccountLockRepository(pool).issueInvoice(a.context,command)).rejects.toMatchObject({code:'42501'});
+   const certificates=(await f.admin.query("SELECT count(*)::int n FROM app.final_account_invoice_binding b JOIN app.shadow_final_check_completion c ON(c.tenant_id,c.job_id,c.check_id)=(b.tenant_id,b.job_id,b.check_id) WHERE b.tenant_id=$1 AND b.job_id=$2",[a.tenantId,a.jobId])).rows;
+   expect(certificates).toEqual([{n:1}]);
+  }finally{if(prior===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=prior;}
  });
 
 });

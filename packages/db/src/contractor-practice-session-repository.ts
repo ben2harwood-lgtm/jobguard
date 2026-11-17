@@ -4,7 +4,7 @@ import { ContractorPracticeSessionError, contractorPracticeSessionRevokedV1 } fr
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { appendAuditBatch } from "./audit.js";
 import { derivedUuid } from "./work-order-repository.js";
-const routineAnswer = z.object({ session: z.string().uuid(), member: z.string().uuid(), revokedAt: z.string().datetime({ precision: 6 }) }).strict();
+const routineAnswer = z.object({ session: z.guid({ error: "Invalid uuid" }), member: z.guid({ error: "Invalid uuid" }), revokedAt: z.iso.datetime({ precision: 6, error: "Invalid datetime" }) }).strict();
 export class ContractorPracticeSessionRepository {
  constructor(private readonly pool: Pool) {}
  async revoke(context: VerifiedTenantContext, sessionId: string) {

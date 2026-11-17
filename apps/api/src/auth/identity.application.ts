@@ -7,10 +7,10 @@ import { verifyCodeV1 } from "./auth-schemas.js";
 import { PersistedAuthProvider } from "./persisted-auth-provider.js";
 import { resolveVerifiedTenantContext, type TenantRequestCredentials } from "./principal-bridge.js";
 
-export const identityRequestV1 = z.object({version:z.literal("identity-request.v1"),email:z.string().email().max(320),purpose:z.enum(["signup","signin","invitation"]),invitationId:z.string().uuid().optional()}).strict();
+export const identityRequestV1 = z.object({version:z.literal("identity-request.v1"),email:z.email({ error: "Invalid email" }).max(320),purpose:z.enum(["signup","signin","invitation"]),invitationId:z.guid({ error: "Invalid uuid" }).optional()}).strict();
 export const identityVerifyV1 = verifyCodeV1.extend({version:z.literal("identity-verify.v1")}).strict();
-export const identityInvitationV1 = z.object({version:z.literal("identity-invitation.v1"),requested_tenant_id:z.string().uuid(),email:z.string().email().max(320),role:z.enum(["admin","estimator","foreman","operative","finance","read_only"])}).strict();
-export const identitySessionV1 = z.object({version:z.literal("identity-session.v1"),environment:z.literal("synthetic_demo"),principal:z.object({id:z.string().uuid(),sessionId:z.string().uuid()}),csrfToken:z.string().min(24),memberships:z.array(z.object({id:z.string().uuid(),tenantId:z.string().uuid(),role:z.enum(["owner","admin","estimator","foreman","operative","finance","read_only"]),name:z.string()}))}).strict();
+export const identityInvitationV1 = z.object({version:z.literal("identity-invitation.v1"),requested_tenant_id:z.guid({ error: "Invalid uuid" }),email:z.email({ error: "Invalid email" }).max(320),role:z.enum(["admin","estimator","foreman","operative","finance","read_only"])}).strict();
+export const identitySessionV1 = z.object({version:z.literal("identity-session.v1"),environment:z.literal("synthetic_demo"),principal:z.object({id:z.guid({ error: "Invalid uuid" }),sessionId:z.guid({ error: "Invalid uuid" })}),csrfToken:z.string().min(24),memberships:z.array(z.object({id:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" }),role:z.enum(["owner","admin","estimator","foreman","operative","finance","read_only"]),name:z.string()}))}).strict();
 
 /** Same application service for Nest and the server-only Next adapter. */
 export class IdentityApplication {
@@ -45,7 +45,7 @@ export class IdentityApplication {
     this.provider.assertRecipient(email);
     const result=(await this.provider.repository.pool.query<{id:string|null;connection_id?:string|null}>("SELECT * FROM identity.sso_invite_member($1,$2,$3,$4)",[this.provider.digest(`session:${credentials.sessionToken}`),input.requested_tenant_id,email,input.role])).rows[0];
     const id=result?.id;
-    if(typeof id!=="string" || !z.string().uuid().safeParse(id).success) {
+    if(typeof id!=="string" || !z.guid({ error: "Invalid uuid" }).safeParse(id).success) {
       const forbidden = new AuthError("TENANT_FORBIDDEN");
       try { await this.provider.recordInvitationRefusal(result?.connection_id); }
       catch (error) { Object.defineProperty(forbidden,"cause",{value:error}); }

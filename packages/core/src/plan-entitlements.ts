@@ -29,14 +29,14 @@ export const planEntitlementEnablementV1 = z.object({
 }).strict().readonly();
 export const planEntitlementCheckV1 = z.object({
   version: z.literal("plan-entitlement-check.v1"), feature: planEntitlementFeatureV1,
-  jobId: z.string().uuid().optional(),
+  jobId: z.guid({ error: "Invalid uuid" }).optional(),
 }).strict().readonly();
 export const planEntitlementErrorCodes = ["INVALID_ENTITLEMENT_INPUT", "ENTITLEMENT_FORBIDDEN", "ENTITLEMENT_UNAVAILABLE"] as const;
 export type PlanEntitlementErrorCode = typeof planEntitlementErrorCodes[number];
 export class PlanEntitlementError extends Error {
   constructor(readonly code: PlanEntitlementErrorCode) { super(code); this.name = "PlanEntitlementError"; }
 }
-export function parsePlanEntitlement<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T {
+export function parsePlanEntitlement<T>(schema: z.ZodType<T, unknown>, raw: unknown): T {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) throw new PlanEntitlementError("INVALID_ENTITLEMENT_INPUT");
   return parsed.data;

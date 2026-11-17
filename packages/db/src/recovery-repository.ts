@@ -3,7 +3,7 @@ import { z } from "zod";
 import { syntheticLandingCommandV1 } from "@jobguard/core";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 export const recoveryLandingPostingIdsV1 = z.object({ allocationId: uuid, derivationId: uuid, journalId: uuid }).passthrough();
 // Validate the envelope once: separate strict parses reject each other's fields.
 const postingId = syntheticLandingCommandV1.shape.commandId;

@@ -1,7 +1,7 @@
 import { z } from "zod";
 export const identityEmailV1 = z.object({
   version: z.literal("identity-email.v1"), category: z.literal("identity_challenge"),
-  challengeId: z.string().uuid(), email: z.string().email(), code: z.string().regex(/^\d{8}$/u),
+  challengeId: z.guid({ error: "Invalid uuid" }), email: z.email({ error: "Invalid email" }), code: z.string().regex(/^\d{8}$/u),
   environment: z.literal("synthetic_demo"),
 }).strict();
 export class IdentityRouteBlocked extends Error { readonly code = "IDENTITY_ROUTE_BLOCKED"; }

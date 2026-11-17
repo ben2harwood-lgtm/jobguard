@@ -1,3 +1,4 @@
+import { offsetDatetimeV1 } from "./datetime.js";
 import { z } from "zod";
 import { MAX_MONEY_PENCE } from "./money.js";
 import {
@@ -13,7 +14,7 @@ const amount = z.number().int().nonnegative().max(MAX_MONEY_PENCE);
  * contracts (receipt allocation and `extra-origin.v1` provenance), so no field can accept an offset the reader rejects.
  */
 const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)$/u;
-export const instantV1 = z.string().datetime({ offset: true }).refine(value => INSTANT.test(value), "Invalid UTC offset");
+export const instantV1 = offsetDatetimeV1.refine(value => INSTANT.test(value), "Invalid UTC offset");
 const INTEGER_TEXT = /^-?\d+$/u;
 const isComparable = (line: { outstandingGross: { numerator: string; denominator: string }; grossPence: number }) =>
   typeof line.outstandingGross?.numerator === "string" && INTEGER_TEXT.test(line.outstandingGross.numerator) &&

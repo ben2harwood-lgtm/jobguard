@@ -9,7 +9,7 @@ import { Pool } from "pg";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
 import {
   DiscrepancyRepository, EvidenceService, InboxRelevanceRepository, MaterialRepository, ProofCommandService, PurchaseOrderRepository, ReadinessRepository,
-  SupplierDocumentRepository, SupplierMatchRepository, migrate,
+  SupplierDocumentRepository, SupplierMatchRepository, JobWorkStateRepository, migrate,
 } from "../src/index.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
@@ -104,7 +104,23 @@ interface Case {
   /** Exact retries whose server-generated fields differ; they must replay the first result unchanged. */
   retries?: string[];
 }
+// Rulings 124/126: use the same random tenant and normal owner as every case.
+const workFixtures = new Map<string, { revision:number; marker?:string }>();
+const prepareWork = async (job:string,finish=false) => {
+ const revision=Number((await admin.query("SELECT coalesce(max(sequence),0) revision FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2",[tenant,job])).rows[0].revision);
+ const state:{revision:number;marker?:string}={revision};workFixtures.set(job,state);
+ if(finish){const result=await new JobWorkStateRepository(observed.pool).finish(ctx,job,member,{version:"job-work-state-command.v1",action:"finish",commandId:randomUUID(),expectedRevision:revision});state.revision=Math.max(...result.events.map(e=>e.sequence));state.marker=result.events.find(e=>e.kind==="finished_on_site")!.id;}
+};
+const workCase=(action:"finish"|"cancel_finish",method:"finish"|"cancelFinish"):Case=>({
+ key:`job-work-state-repository.ts#${method}`,
+ registry:[`/api/jobs/[id]/work-state#${action}`,`nest:/jobs/:id/work-state#${action}`,`command:WorkState.${action}`],
+ prepare:job=>prepareWork(job,action==="cancel_finish"),
+ run:async(job,id,variant)=>{const w=workFixtures.get(job)!;return new JobWorkStateRepository(observed.pool)[method](ctx,job,member,{version:"job-work-state-command.v1",action,commandId:id,expectedRevision:w.revision+(variant==="changed"?1:0),...(action==="cancel_finish"?{markerId:w.marker}:{})});},
+ later:async job=>{const revision=Number((await admin.query("SELECT coalesce(max(sequence),0) revision FROM app.job_work_state_event WHERE tenant_id=$1 AND job_id=$2",[tenant,job])).rows[0].revision);await new JobWorkStateRepository(observed.pool).command(ctx,job,member,{version:"job-work-state-command.v1",action:"close",commandId:randomUUID(),expectedRevision:revision,reason:"other",note:"Fictional later history"});},
+});
+// Resume is held and unregistered until MON-1-PLACES supplies capacity admission.
 const cases: Case[] = [
+  workCase("finish","finish"), workCase("cancel_finish","cancelFinish"),
   { key: "purchase-order-repository.ts#revise", registry: ["/api/jobs/[id]/purchase-orders/revisions", "nest:/jobs/:id/purchase-orders/revisions"],
     prepare: async job => { await pre.requirement(job); },
     run: async (job, id, variant) => po.revise(ctx, job, orderInput(st(job).requirement, 0, id, variant === "changed" ? "11" : "10")),

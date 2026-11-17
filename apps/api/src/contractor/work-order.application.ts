@@ -52,4 +52,4 @@ export function workOrderHttpFailure(error: unknown) {
   const status = workOrderHttpStatus(failure.code);
   return { status, body: workOrderFailureV1.parse({ version: "work-order-error.v1", code: failure.code, recoverable: status === 503 }) };
 }
-export const workOrderIdSchema = z.string().uuid();
+export const workOrderIdSchema = z.guid({ error: "Invalid uuid" });

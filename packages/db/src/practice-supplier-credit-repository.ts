@@ -9,9 +9,9 @@ import type { RecoveryEligibilityV3Review } from "./recovery-eligibility-v3-repo
 
 // Internal versioned database result boundary. Authority and hashes come from SQL.
 const writerReply = z.object({
-  id: z.string().uuid(), revision: z.number().int().positive(), caseRevision: z.number().int().positive(), sourceEventId: z.string().uuid(),
+  id: z.guid({ error: "Invalid uuid" }), revision: z.number().int().positive(), caseRevision: z.number().int().positive(), sourceEventId: z.guid({ error: "Invalid uuid" }),
   result: z.unknown(), payloadHash: z.string().regex(/^[a-f0-9]{64}$/u), resultHash: z.string().regex(/^[a-f0-9]{64}$/u),
-  actorMembershipId: z.string().uuid(), commandId: z.string().uuid(), replayed: z.boolean(),
+  actorMembershipId: z.guid({ error: "Invalid uuid" }), commandId: z.guid({ error: "Invalid uuid" }), replayed: z.boolean(),
 }).strict();
 const knownRefusals = new Set([
   "INVALID_COMMAND", "ELIGIBILITY_REVIEWER_FORBIDDEN", "RECOVERY_JOB_NOT_FOUND", "RECOVERY_CASE_NOT_FOUND",

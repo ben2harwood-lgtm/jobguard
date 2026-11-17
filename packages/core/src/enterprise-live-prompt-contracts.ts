@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const name = z.string().min(1).max(200).refine(value => value.trim() === value);
 const term = z.string().min(1).max(1000).refine(value => value.trim().length > 0);

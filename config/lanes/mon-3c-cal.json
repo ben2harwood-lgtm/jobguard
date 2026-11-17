@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "mon-3c-cal": {
+      "branches": ["codex/sandbox/mon-3c-cal"],
+      "receipt": "docs/verdicts/MON-3C-CAL/BUILDER_RECEIPT.md",
+      "note": "Issued 25 Oct 2026, C279 synthetic clock only. Pure calendar and end reducer. Shared core barrel remains coordinator-owned; no runtime enablement or conversion billing policy.",
+      "allow": [
+        "packages/core/src/free-first-job-calendar.ts",
+        "packages/core/src/free-first-job-calendar.test.ts",
+        "docs/verdicts/MON-3C-CAL/**"
+      ]
+    }
+  }
+}

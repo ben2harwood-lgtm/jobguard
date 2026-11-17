@@ -6,7 +6,7 @@ export class SubscriptionError extends Error {
     super(code); this.name = "SubscriptionError";
   }
 }
-export function parseSubscription<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T {
+export function parseSubscription<T>(schema: z.ZodType<T, unknown>, raw: unknown): T {
   const result = schema.safeParse(raw);
   if (!result.success) throw new SubscriptionError("INVALID_SUBSCRIPTION_INPUT");
   return result.data;
@@ -38,7 +38,7 @@ export function getSubscriptionCatalogue(raw: unknown) {
 /** Settled selection fields only. No anchor policy, acceptance, approval or authority is implied. */
 export const subscriptionTermsSelectionV1 = z.object({
   version: z.literal("subscription-terms-selection.v1"), catalogueVersion: z.literal(policy.version), plan: subscriptionPlanV1,
-  cadence: z.enum(["monthly", "annual"]).default("monthly"), expectedRevision: z.number().int().safe().nonnegative(),
+  cadence: z.enum(["monthly", "annual"]).prefault("monthly"), expectedRevision: z.number().int().safe().nonnegative(),
   termsVersion: z.string().trim().min(1).max(100),
 }).strict().readonly();
 export const subscriptionAnnualAvailable = false;

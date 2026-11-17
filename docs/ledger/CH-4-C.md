@@ -1,0 +1,122 @@
+# CH-4-C — Sub-order A implementation ledger
+
+Issued 18 October 2026. Synthetic only. Source implementation is not technical
+acceptance. Migration 0201; no commits/pushes by builder. RED: two Claude checks
+at exact dispatcher commit, then separate acceptance.
+
+| Hold/acceptance | Disposition and evidence |
+| --- | --- |
+| Q-01 / closed check and result use | 0201 replaces final-check admission, reveal and lock-bound invoice guard; history/replay and must-surface disclosure preserved. PostgreSQL NOT RUN. |
+| Q-02 | Coordinator ruling 107 implemented in watchdog registry and action-qualified transport identities; shared static-check incompatibilities are recorded in receipt, not hidden by reclassification. |
+| Q-03 / post-lock intake | No snagging admission. Existing image guard preserved; 0164 source guard replaced for diary/message/original locking and post-lock refusal. C owns executable intake. |
+| Q-04 / timing | Shared versioned London calendar dates, day31 and original microseconds; STOP T-01 below for unresolved financial instant conventions. |
+| Q-05 / history | Cancellation references marker and appends; pure preservation helper never rewrites past stops. No retrospective billing or interval restoration. |
+| Q-06 / commands | Exact owner/session SQL, strict schema, tenant-wide identity, expected revision, durable snapshot replay, events/link/audit and Nest/Next POST. PostgreSQL proofs written, NOT RUN. |
+| Q-07 / linked job | Exact offer copy retained; link existing ordinary successor, no creation or activation. |
+| Q-08/Q-09/Q-10 | Merged foundations reused; no backfill; dispatcher allocated 0201. |
+| CH4 replay/original receive time | Existing receipt and original fact timestamps unchanged; new command server time uses PostgreSQL microseconds. |
+| CH4 intervals / restart | T-01 STOP; B real capacity dependency. No fixture meter or cached count authorizes a place. |
+| CH4 closed check / lock | Serialized SQL guards; no reopening reset of status, baseline, lock, trial or check. |
+| CH4 nonactivity / first evidence | Existing classification retained; shared timing helper has no shadow inputs. |
+| CH4 sources, tenant isolation, catalog, upgrade | Existing suites retained except exact superseded public-signature expectations; new DB suites written. PostgreSQL NOT RUN. |
+| Whole CH-4 card | NOT COMPLETE: timer STOP, B/C integration, DB/browser execution and RED verdict/acceptance remain. |
+
+## Item-specific STOP T-01
+
+Before: `BUILD_PLAN.md:1353–1360` supplies London day31 and intervals touching
+calendar days; `:1372–1376` supplies trial origin and earlier termination facts.
+`docs/contracts/job-work-state-v1.md:35` holds exact deadline/DST/endpoint
+semantics. The supplied answers settle switch-live origin and shared London rule,
+but do not choose exact 7/30/90 deadline clock times, gap/fold resolution or
+inclusive/exclusive equal-time financial endpoints.
+
+After: `packages/core/src/job-work-timing.ts:64` refuses deadline-instant
+resolution with `WORK_TIMING_CONVENTION_REQUIRED`;
+`docs/contracts/job-work-timing-v1.md:26` records the bounded STOP. The implementation
+supplies original-time date candidates and earlier termination facts only. It
+cannot claim operational intervals or implicit counting restart admission until
+that convention and B's place-admission transaction are supplied. Existing source
+facts are still recorded; they are not themselves an implemented place or bill.
+No guessed money rule, retrospective restoration, trial reset or fee policy was
+introduced. All other settled owner/closed-result commands continue independently.
+
+## Earlier shared-checker conflicts — historical, superseded
+
+Rulings 114 and the r2 structural CI repair addressed the earlier exact
+lane/registry/POST assertions and legacy-query observer structure. They remain
+intact in this round. The coordinator integration at head 73a0e755 applied the
+own helper catalogue rows and call metadata; earlier pending-patch descriptions
+are historical. Current acceptance holds are listed in v5-r3 below.
+
+## CI ROUND v5-r1 — 20 October 2026
+
+Migration reserved by dispatch: **0201** (renamed SQL and migration note).
+Source fixes: retain the repository live SHARE guard, authenticate before it,
+and avoid upgrading finish/cancel job locks. Their event serializer is acquired
+before revision reads; other commands retain sorted UPDATE locks. Audit is last.
+New commands check active owner, then live state, then revision; stored replay
+still precedes lifecycle checks. Command fixtures explicitly bind pre-live
+practice jobs to the synthetic small-builder track, enabling link racers to
+reach the unchanged cycle exclusion. Added only the missing private projection
+catalogue record and seven exact new routine rows in SERIOUS-B5 (no new tables).
+
+Local results and limitations are in BUILDER_RECEIPT.md v5-r1. PostgreSQL and
+browser evidence: NOT RUN; GitHub required checks remain outstanding. Normal
+session HTTP wiring and the historical DB timeout item remain PARK; this round's
+DB unit run passed without changing timeouts. Capacity/timing gates are unchanged.
+The speed-v5 dispatch ledger lives outside this worktree and was not edited.
+
+## CI ROUND v5-r2 — 20 October 2026
+
+Starting head `499a7140ffda7086e289f1b9ae3cb5d2c6ec555c`; frozen main
+`dc5721230fd8aedbf2d9d0457789074b66b48765`. Actual failing-first evidence:
+`/private/tmp/jg-ch4-ci-39465455025.log`, fourteen failures (5 files).
+These were not classified as pre-existing.
+
+| Defect group | Source repair | Regression (PostgreSQL CI only) |
+| --- | --- | --- |
+| Two pre-live close/link failures | Exact checked migration-owned close/reopen/link identity exception; original live/recovery/tenant guards preserved | Existing pre-live command and one-winner link-cycle race assertions unchanged; additive real pre-live locked reopen/link, raw forged identity/receipt, owner/session/job refusal cases |
+| Five supplier/discrepancy lock-observer failures | Complete legacy query moved to private read-only helper with predicates/order retained | Unchanged watchdog-lock-order suite; own helper owner/ACL/read-only catalogue and upgrade rows |
+| Six exhaustive non-live failures | Add actual finish/cancel attempts first in registry order, bind existing owner and explicit synthetic track | Unchanged exhaustive equality, exact JOB_NOT_LIVE and no-write checks, with work-event/link/result snapshots added |
+| Fifteen vs thirteen discovered IDs | Add immutable tenant-scoped CH4 event/link detection; list actual finish/cancel only with real protection | Discovery equality plus exhaustive foreign-kind/replay checks now include both; additive close/reopen/link IDs after bookkeeping removal and foreign-tenant reuse |
+
+0201 is retained. Shared catalogue changes are proposed only in
+`/private/tmp/SHARED-CH-4-C.patch` with rationale `/private/tmp/SHARED-CH-4-C.md`;
+root must apply serially before LP0/SERIOUS-B5 can pass. No supplier/discrepancy
+repository, lock observer, shared replay assertion or cycle-race assertion changed.
+Receipt records allowed local checks and the unchanged shared harness strict
+TypeScript error. Database/migration/browser suites NOT RUN locally. Green CI,
+two independent exact-head Claude checks and separate acceptance remain due.
+Capacity, timer, normal-session transport and all production gates stay held.
+
+## v5-r3 — A and B S1 repair, 20 October 2026
+
+Starting head `73a0e755c82f7a308ec02b0bd84a27e36f785611`, frozen main
+`dc5721230fd8aedbf2d9d0457789074b66b48765`. Read both actual complete verdicts
+at `/Users/benharwood/.local/share/full-steam/jg-runs/v5-ch-4-c-opus-A-73a0e755.md`
+and `v5-ch-4-c-opus-B-73a0e755.md`. Both are REPAIR, not acceptance.
+
+S1 source repair: recursive practice-owned closure at every existing SQL recheck;
+job-bound application/repository checks; merged GET link filter for practice
+responses; hash/receipt/transaction-bound endpoint storage checks. Normal
+server-membership owner authority, 0201 and every r2 structural repair remain.
+Only the expressly authorized sibling-session success expectation is replaced
+with exact forbidden/no-write assertions. Added owned success, recursive real
+adoption, endpoint/refused replay substitution, normal-owner cross-session link,
+filtered response, direct storage/runtime bypass and job/identity/audit wait
+revocation cases. Existing watchdog, legacy, observer, one-winner, money, grants
+and upgrade assertions are untouched.
+
+Source typechecking/lint evidence and exact disk numbers are in the receipt.
+The initial 43 GiB disk-floor hold cleared to just over 45 GiB before heavy
+checks resumed: 73 focused unit tests and DB/API builds passed. PostgreSQL and
+browser suites remain CI-only. Old-head rerun results prove nothing about this
+uncommitted repair. Root serially applies only the proposed trigger call-metadata
+patch, captures actual PostgreSQL catalogue definitions, commits and requests two
+fresh independent full-head verdicts. No new reviews or acceptance were performed.
+
+Fix-later A/B findings remain recorded: typed 409 subcodes; shared routine-grant
+classification and actual definition hashes; shadow-worker lock-order coverage;
+legacy identity algebra edge; legacy invoice debt; shared harness diagnostic.
+None expands this bounded security repair or grants an exception. Timer/capacity,
+normal HTTP transport and production release gates remain held.

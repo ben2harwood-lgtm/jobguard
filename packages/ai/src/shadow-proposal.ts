@@ -10,7 +10,7 @@ export const shadowAiOutputV1 = z.object({ version: z.literal("shadow-ai-proposa
 }).strict()).max(20) }).strict();
 export const shadowFixtureCorpusV1 = z.object({ version: z.literal("shadow-observation-corpus.v1"), cases: z.array(z.object({
   id: z.string().min(1), observations: z.array(observationV1).min(1), captures: z.array(shadowCaptureV1),
-  responses: z.record(z.object({ output: shadowAiOutputV1, citations: z.array(z.object({ sourceId: z.string(), start: z.number().int().nonnegative(), end: z.number().int().positive() }).strict()) }).strict()),
+  responses: z.record(z.string(), z.object({ output: shadowAiOutputV1, citations: z.array(z.object({ sourceId: z.string(), start: z.number().int().nonnegative(), end: z.number().int().positive() }).strict()) }).strict()),
 }).strict()).min(1) }).strict();
 export const SHADOW_PROMPT_VERSION = "shadow-proposal.fixture.v1";
 /** Prompt policy and operation are fixed; uploaded instructions appear only inside source data. */

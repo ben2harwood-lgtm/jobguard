@@ -9,7 +9,7 @@ import { sorQuantityV1 } from "./sor-pricing.js";
  * No money is calculated here: the one price is computed by the database function app.sor_line_net_pence
  * and no answer of this module carries a money value. Quantities are canonical decimal text compared as scaled bigint.
  */
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const reviewedText = (maximum: number) => z.string().min(1).max(maximum).refine(value => /\S/u.test(value));
 const codeText = z.string().trim().min(1).max(80);
 const quantityScale = 6;
@@ -58,14 +58,14 @@ export const logSorSiteExtraV1 = z.object({
   version: z.literal("log-sor-site-extra.v1"), commandId: uuid, sorCode: codeText, quantity: positiveQuantityV1, orderLineScopeItemId: uuid.optional(), note: reviewedText(5000),
 }).strict();
 export type LogSorSiteExtra = z.infer<typeof logSorSiteExtraV1>;
-const logSorHeadV1 = logSorSiteExtraV1.extend({ quantity: z.unknown() });
+const logSorHeadV1 = logSorSiteExtraV1.extend({ quantity: z.unknown().optional() });
 /** Valid apart from its quantity is INVALID_QUANTITY; every other invalid body is INVALID_COMMAND. */
 export function parseLogSorSiteExtra(raw: unknown): LogSorSiteExtra {
   const head = logSorHeadV1.safeParse(raw);
   if (!head.success) throw new SorSiteExtraError("INVALID_COMMAND");
   return { ...head.data, quantity: requireQuantity(head.data.quantity) };
 }
-const sorSiteExtraInputHeadV1 = z.object({ commandId: uuid, jobId: uuid, sorCode: codeText, quantity: z.unknown(), orderLineScopeItemId: uuid.optional(), note: reviewedText(5000) }).strict();
+const sorSiteExtraInputHeadV1 = z.object({ commandId: uuid, jobId: uuid, sorCode: codeText, quantity: z.unknown().optional(), orderLineScopeItemId: uuid.optional(), note: reviewedText(5000) }).strict();
 export type SorSiteExtraInput = { commandId: string; jobId: string; sorCode: string; quantity: string; orderLineScopeItemId?: string; note: string };
 export function parseSorSiteExtraInput(raw: unknown): SorSiteExtraInput {
   const head = sorSiteExtraInputHeadV1.safeParse(raw);
@@ -81,7 +81,7 @@ export function parseSorItemsQuery(raw: unknown): { q: string } {
   if (!parsed.success) throw new SorSiteExtraError("INVALID_COMMAND");
   return parsed.data;
 }
-const orderCheckQueryHeadV1 = z.object({ sorCode: codeText, quantity: z.unknown(), orderLine: uuid.optional() }).strict();
+const orderCheckQueryHeadV1 = z.object({ sorCode: codeText, quantity: z.unknown().optional(), orderLine: uuid.optional() }).strict();
 export function parseOrderCheckQuery(raw: unknown): { sorCode: string; quantity: string; orderLine?: string } {
   const head = orderCheckQueryHeadV1.safeParse(raw);
   if (!head.success) throw new SorSiteExtraError("INVALID_COMMAND");

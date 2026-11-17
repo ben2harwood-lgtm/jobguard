@@ -14,9 +14,9 @@ const quantity = z.union([z.number().finite().min(0).max(1_000_000), z.string()]
 export const discrepancyInputV1 = z.object({
   version: z.literal("discrepancy-input.v1"),
   ruleRevision: z.string().min(1),
-  sourceDocumentId: z.string().uuid(),
-  sourceVersionId: z.string().uuid(),
-  matchRevisionId: z.string().uuid(),
+  sourceDocumentId: z.guid({ error: "Invalid uuid" }),
+  sourceVersionId: z.guid({ error: "Invalid uuid" }),
+  matchRevisionId: z.guid({ error: "Invalid uuid" }),
   confirmed: z.literal(true),
   matched: z.literal(true),
   orderedQuantity: quantity,

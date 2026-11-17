@@ -1,4 +1,4 @@
-import{z}from"zod";const uuid=z.string().uuid();
+import{z}from"zod";const uuid=z.guid({ error: "Invalid uuid" });
 export const proofQueryV1=z.object({jobId:uuid}).strict();
 export const proofCommandV1=z.discriminatedUnion("action",[
  z.object({version:z.literal("practice-proof-command.v1"),action:z.literal("select_generated"),commandId:uuid,scopeItemId:uuid,fixture:z.literal("completion-photo")}).strict(),

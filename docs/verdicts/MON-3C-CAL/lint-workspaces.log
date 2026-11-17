@@ -1,0 +1,51 @@
+• turbo 2.10.12
+
+   • Packages in scope: @jobguard/ai, @jobguard/api, @jobguard/config, @jobguard/core, @jobguard/db, @jobguard/storage, @jobguard/web
+   • Running lint in 7 packages
+   • Remote caching disabled, using shared worktree cache
+
+@jobguard/core:lint: cache miss, executing 676fe7b8d40c8b2b
+@jobguard/storage:lint: cache hit, replaying logs 99e3c00a83c01f81
+@jobguard/config:lint: cache hit, replaying logs 4cf002c9ad98d638
+@jobguard/storage:lint: 
+@jobguard/storage:lint: > @jobguard/storage@0.0.0 lint /Users/benharwood/.local/share/full-steam/jg-runs/review-wt/flake-diag-2-A-f7e0a552-20261025/packages/storage
+@jobguard/storage:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/storage:lint: 
+@jobguard/config:lint: 
+@jobguard/config:lint: > @jobguard/config@0.0.0 lint /Users/benharwood/.local/share/full-steam/jg-runs/review-wt/flake-diag-2-A-f7e0a552-20261025/packages/config
+@jobguard/config:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/config:lint: 
+@jobguard/core:lint: 
+@jobguard/core:lint: > @jobguard/core@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/core
+@jobguard/core:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/core:lint: 
+@jobguard/ai:lint: cache miss, executing eeeb40dc283c001e
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/db:lint: cache miss, executing 7f7215c313da7edb
+@jobguard/ai:lint: 
+@jobguard/ai:lint: > @jobguard/ai@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/ai
+@jobguard/ai:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/ai:lint: 
+@jobguard/db:lint: 
+@jobguard/db:lint: > @jobguard/db@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/packages/db
+@jobguard/db:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/db:lint: 
+ WARNING  IO error: Operation not permitted (os error 1)
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/api:lint: cache miss, executing 8a468a01e66e93d2
+@jobguard/api:lint: 
+@jobguard/api:lint: > @jobguard/api@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/apps/api
+@jobguard/api:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/api:lint: 
+ WARNING  IO error: Operation not permitted (os error 1)
+@jobguard/web:lint: cache miss, executing 3f2f408295729c02
+@jobguard/web:lint: 
+@jobguard/web:lint: > @jobguard/web@0.0.0 lint /Users/benharwood/Claude/Projects/my-new-project/.worktrees/mon-3c-cal/apps/web
+@jobguard/web:lint: > tsc -p tsconfig.json --noEmit
+@jobguard/web:lint: 
+ WARNING  IO error: Operation not permitted (os error 1)
+
+ Tasks:    7 successful, 7 total
+Cached:    2 cached, 7 total
+  Time:    13.541s 
+

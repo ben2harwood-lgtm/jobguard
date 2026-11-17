@@ -8,7 +8,7 @@ export const SYNTHETIC_DEMO_TERMS = "synthetic_demo_illustrative.v1" as const;
 export const ILLUSTRATIVE_BASE_PRINCIPAL_PENCE = 7_900 as const;
 export type ActivationMode = "pilot_no_charge" | "synthetic_demo";
 
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 export const switchLiveV1 = z.object({
   version: z.literal("switch-live.v1"), activationId: uuid, capSnapshotId: uuid,

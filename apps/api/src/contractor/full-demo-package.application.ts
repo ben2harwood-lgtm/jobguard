@@ -7,7 +7,7 @@ import { BaselinePreparationHeld, baselinePrepareV1, prepareEnterpriseBaseline }
 
 export const fullDemoPackageLabel = "Practice sandbox — synthetic data; nothing is sent or charged";
 export const fullDemoPackageQueryV1 = z.object({ version: z.literal("full-demo-package-query.v1"), dashboard: dashboardQueryV1 }).strict();
-const principalV1 = z.object({ sessionId: z.string().uuid() }).strict();
+const principalV1 = z.object({ sessionId: z.guid({ error: "Invalid uuid" }) }).strict();
 export const fullDemoHeldStageV1 = z.union([
   z.object({ stage: z.enum(["export", "billing", "payment"]), status: z.literal("held"), prerequisite: z.literal("ENT-6B") }).strict(),
   z.object({ stage: z.literal("statement"), status: z.literal("held"), prerequisite: z.literal("ENT-7-P") }).strict(),

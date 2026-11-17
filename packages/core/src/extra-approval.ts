@@ -16,7 +16,7 @@ function freeze<T>(value: T): T {
   if (value !== null && typeof value === "object") { for (const item of Object.values(value)) freeze(item); Object.freeze(value); }
   return value;
 }
-const uuid = z.string().uuid(), hash = z.string().regex(/^[a-f0-9]{64}$/u);
+const uuid = z.guid({ error: "Invalid uuid" }), hash = z.string().regex(/^[a-f0-9]{64}$/u);
 export const extraApprovalInputV1 = z.object({ version: z.literal("extra-approval-input.v1"), ruleVersionId: uuid, ruleDocumentHash: hash, clientContractVersionId: uuid,
   revision: z.object({ id: uuid, hash, net: z.object({ pence: z.number().int().positive().max(MAX_MONEY_PENCE), currency: z.literal("GBP") }).strict().nullable() }).strict(), rules: approvalRulesV1 }).strict();
 

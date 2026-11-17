@@ -6,7 +6,7 @@ import { appendAuditBatch } from "./audit.js";
 import type { AuditEventInput } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
-const uuid = z.string().uuid();
+const uuid = z.guid({ error: "Invalid uuid" });
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
 /** Shared boundary adapter; the public money kernel owns magnitude and integer rules. */
 export const nonnegativeMoneyPenceSchema = z.number().nonnegative().superRefine((value, refinementIssues) => {

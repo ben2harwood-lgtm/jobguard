@@ -1,8 +1,8 @@
 import { rethrowJobWorkState, checkPostLockSourceLifecycle, refuseLockedNewSource } from "./job-work-state-sources.js";
 import { claimCommandIdentity, readCommandIdentity, requestHashFor, requireLiveJob } from "./watchdog.js";
 import{randomUUID,createHash}from"node:crypto";import type{Pool}from"pg";import{z}from"zod";import type{PrivateVersionedStorage}from"@jobguard/storage";import{appendAuditBatch}from"./audit.js";import{withTenant,type TenantTransaction,type VerifiedTenantContext}from"./tenant-context.js";
-const uuid=z.string().uuid(),hash=z.string().regex(/^[a-f0-9]{64}$/u);
-export const completeProofCommandV1Schema=z.object({version:z.literal("proof.complete.v1"),commandId:uuid,actorMembershipId:uuid,jobId:uuid,scopeItemId:uuid,stage:z.string().min(1).max(40),evidenceId:uuid,requiredEvidenceType:z.string().min(1).max(40),decisionId:uuid.nullable().default(null),deriveDecision:z.boolean().default(false)}).strict().refine(c=>!(c.deriveDecision&&c.decisionId),"name the Decision or have the server derive it, not both");
+const uuid=z.guid({ error: "Invalid uuid" }),hash=z.string().regex(/^[a-f0-9]{64}$/u);
+export const completeProofCommandV1Schema=z.object({version:z.literal("proof.complete.v1"),commandId:uuid,actorMembershipId:uuid,jobId:uuid,scopeItemId:uuid,stage:z.string().min(1).max(40),evidenceId:uuid,requiredEvidenceType:z.string().min(1).max(40),decisionId:uuid.nullable().prefault(null),deriveDecision:z.boolean().prefault(false)}).strict().refine(c=>!(c.deriveDecision&&c.decisionId),"name the Decision or have the server derive it, not both");
 export const invalidateProofCommandV1Schema=z.object({version:z.literal("proof.invalidate.v1"),commandId:uuid,actorMembershipId:uuid,evidenceId:uuid,reasonCode:z.enum(["object_revoked","verification_invalid","wrong_subject"])}).strict();
 export class ProofCommandError extends Error{constructor(readonly code:"FORBIDDEN"|"PROOF_NOT_FINAL"|"COMMAND_CONFLICT",message:string=code){super(message);this.name="ProofCommandError"}}
 const canonical=(v:unknown)=>JSON.stringify(v,Object.keys(v as object).sort());

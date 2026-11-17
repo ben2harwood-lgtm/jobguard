@@ -138,3 +138,129 @@ OpenAPI source metadata is additive (one read and source 422 responses). Generat
 was refused by the sandbox's tsx IPC `listen EPERM`; the JSON artifact is unchanged
 and the dispatcher must regenerate it and run `openapi:check`. The root lane gate
 also refused the initial no-commit self-comparison. Neither gate was bypassed.
+
+## CH-4-C supersession — 18 October 2026
+
+Ben's answers 1.1, 1.2 and 2 and coordinator ruling 107 supersede the old Q-01,
+Q-02, Q-05 and Q-06 holds only as follows. This additive section is current;
+preceding descriptions of absent commands describe the merged 0144 slice.
+
+Active owners may finish, cancel a named outstanding marker, close with a plan
+reason and nonblank note, reopen the current close, resume, and link an ordinary
+independently created successor. SQL derives authority from the persisted practice
+session and exact direct ownership of both endpoints. Adoption is not a mutation
+exception. Current membership/session expiry and revocation are checked after
+waits and on replay. No admin, finance, worker or shared-tenant sibling session is
+owner authority. Only synthetic small-builder jobs qualify.
+
+POST work-state accepts the strict `job-work-state-command.v1` discriminated
+union, or `job-link-command.v1` with `action: link`. IDs and expected revisions
+are required. Revision is max event sequence plus outgoing link count. No actor,
+tenant, timestamp, purpose, permission or policy field is admitted. The two public
+SQL signatures are documented in the 0201 migration note. Commands persist a
+canonical request hash, receipt, event/link and append-only audit atomically.
+Replay rechecks current authority and returns the stored original snapshot without
+adding an event or audit. Fresh GET exposes current persisted history, not a cache.
+
+Ruling 107: finish/cancel_finish/resume are `watchdog_live_only`;
+close/reopen/link are `pre_live_allowed`. Classification is no grant. Successful
+replay is checked before lifecycle refusal, but after current authentication.
+Close/reopen never change commercial job status. A locked reopen permits only
+non-site administration. It leaves the lock and completed historical checks intact.
+New completed-result reveal/use and new check completion require current open state
+under the job lock. Historical invoice replay and safety disclosure are preserved.
+
+Q-03 is resolved as refusal: no post-lock snagging photos, diary or customer
+message intake. No client label bypass or snagging admission routine exists.
+Linking requires the predecessor lock, exact current customer/site/payer bindings,
+both direct session-owned endpoints and existing cycle checks. Linking creates no
+job, quote, activation, fee or capacity exemption.
+
+Capacity-dependent commands are deliberately unavailable until B installs real
+transaction-bound admission. Timer/interval STOP T-01 is isolated in
+[job-work-timing-v1.md](job-work-timing-v1.md). This also holds deriving implicit
+restart places from source receipts. A alone does not complete CH-4 or MON-1.
+No subscription, success fee, provider or release authority is added.
+
+## r1 (ruling 114)
+
+Resume is HELD until MON-1-PLACES supplies capacity admission. Its transport and
+command registry keys, watchdog guard registration, shared harness case and SQL
+execution branch are removed. Requests fail closed with capacity unavailable;
+there is no executable resume action. Finish/cancel precheck with requireLiveJob
+in their command transaction. HTTP 409 retains only JOB_NOT_LIVE and
+IDEMPOTENCY_CONFLICT, including mapped work-state conflicts.
+
+## c1 (rulings 124/126)
+
+Normal owner commands accept a server-authenticated membership UUID in the job's
+tenant. SQL reuses `final_lock_require_owner`, rejecting revoked, expired and
+non-owner memberships before execution/replay and after waits/audit. The c1
+interpretation that a practice digest could use the shared membership to command
+another visitor's job was an authorization defect, superseded by v5-r3 below.
+Ruling 126 does not grant cross-session practice authority. Resume remains HELD
+and the 409 response contract is unchanged.
+
+Normal identity callers can use `command` with identity credentials, which verifies session, CSRF,
+origin and membership with the existing identity bridge. Transport wiring is
+STOPPED outside this lane: the shared ApplicationAuthGuard refuses all normal
+session workflow requests and the Next workspace factory supplies only practice
+credentials. No normal-session HTTP availability is claimed by this change.
+
+## v5-r1 CI repair — 20 October 2026
+
+0201 retains the live guard's first job SHARE lock for finish/cancel. These
+commands take command identity and the existing per-job event serializer before
+reading the revision. Their event trigger also retains SHARE, avoiding a lock
+upgrade. Close/reopen/link retain sorted job UPDATE locks. Audit is last.
+Repository plain reads verify authentication/owner membership before the live
+guard; SQL rechecks authority after waits. New live-only commands check live
+state before expected revision. SQL stored replay remains before lifecycle
+checks, with current authority rechecked.
+
+## v5-r2 administrative identity boundary
+
+Pre-live close/reopen/link use the existing checked owner command boundary.
+Only the migration-owned identity insertion for those exact actions may bypass
+the identity table's live guard, bound to the command's matching processing
+receipt, active tenant owner and synthetic small-builder binding. A runtime
+insert, forged receipt or caller-set flag cannot obtain that exception.
+All other guarded tables/actions, including finish/cancel, still require live.
+Locked reopen leaves status, baseline, lock and trial unchanged; unlocked reopen
+and resume remain capacity-gated. Both link endpoints retain owner, binding and
+cycle checks. No site work on non-live jobs is enabled.
+
+Immutable command events and links reserve their tenant-wide IDs even without
+modern watchdog bookkeeping. Other kinds/jobs conflict; ambiguous legacy owners
+still have no winner. Exact stored command replay retains its original result
+and current authority checks. Legacy reads are isolated in a private read-only
+helper without changing lock acquisition order or authorizing any new writes.
+
+## v5-r3 — restore practice job authority (20 October 2026)
+
+Actual independent A and B verdicts at `73a0e755c82f7a308ec02b0bd84a27e36f785611`
+both require S1 repair. No policy relaxation or cross-session authority is granted.
+The normal membership-UUID path above is preserved. For practice digests, every
+command requires the same recursive job-owned closure as `ch4_read_work_facts`:
+direct session ownership, plus imported jobs with null direct digest and immutable
+`job.imported_baseline_attested` source lineage. This applies to the target and
+both link endpoints at all existing pre-lock, post-job-lock, post-identity-lock,
+replay and post-audit checks. The application checks `PracticeAccess.job(jobId)`;
+the repository live precheck uses the same owned-job SQL before its SHARE lock.
+
+Practice command responses filter links exactly like the merged GET reader:
+both endpoints must carry the caller's direct digest. Imported jobs can be
+commanded through lineage, but links involving them remain omitted from practice
+responses. Normal owner responses retain tenant-authorized links. A new successor
+must still be an ordinary independently created job; import authority does not
+waive that rule. A sibling session cannot see close notes through commands/replay.
+
+Link storage rechecks both endpoints with the command's authority. The transient
+transaction-local envelope is the exact existing hashed command object, verified
+against the processing receipt, identity, actor, endpoint/binding IDs and current
+DB transaction before it is used; the caller-set setting alone grants nothing.
+The command restores the previous setting after insertion. Direct storage without
+an envelope retains the predecessor practice-digest equality check and runtime
+still has no INSERT grant. This permits the trusted normal-owner command without
+restoring a blanket equality rule that would forbid its legitimate links.
+No new migration, grant, table, access exception or money effect is introduced.

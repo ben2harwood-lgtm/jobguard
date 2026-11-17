@@ -1,4 +1,4 @@
-import{z}from"zod";const uuid=z.string().uuid();
+import{z}from"zod";const uuid=z.guid({ error: "Invalid uuid" });
 const price=z.object({quantity:z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/u),unit:z.string().min(1).max(40),unitRatePence:z.number().int().min(0).max(1_000_000_000_000),direction:z.enum(["addition","omission"])}).strict();
 export const variationCommandV1=z.discriminatedUnion("action",[
  z.object({version:z.literal("variation-command.v1"),action:z.literal("propose"),proposalId:uuid,scopeItemId:uuid,existingScopeItemId:uuid.nullable(),lineageParentScopeItemId:uuid.nullable(),description:z.string().trim().min(1).max(500),captureText:z.string().trim().min(1).max(5000),price:price.nullable()}).strict(),

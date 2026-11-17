@@ -116,11 +116,11 @@ export function assertOriginUnchanged(before: EnterpriseExtra, after: Enterprise
   if (a.id !== b.id || a.tenantId !== b.tenantId || a.jobId !== b.jobId || a.scopeItemId !== b.scopeItemId ||
     JSON.stringify(a.origin) !== JSON.stringify(b.origin) || JSON.stringify(a.raisingCommand) !== JSON.stringify(b.raisingCommand) || JSON.stringify(a.orderAtOrigin) !== JSON.stringify(b.orderAtOrigin)) return refuse("INVALID_ORIGIN");
 }
-const reconciliationAuthorizationV1 = z.object({ version: z.literal("enterprise-reconciliation-authorization.v1"), decisionId: z.string().uuid(),
-  action: z.literal("ReconcileExportedDuplicate"), tenantId: z.string().uuid(), jobId: z.string().uuid(), canonicalId: z.string().uuid(), actorId: z.string().uuid(),
+const reconciliationAuthorizationV1 = z.object({ version: z.literal("enterprise-reconciliation-authorization.v1"), decisionId: z.guid({ error: "Invalid uuid" }),
+  action: z.literal("ReconcileExportedDuplicate"), tenantId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }), canonicalId: z.guid({ error: "Invalid uuid" }), actorId: z.guid({ error: "Invalid uuid" }),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/u), resolution: z.enum(["approved", "rejected", "dismissed"]), current: z.boolean(), expired: z.boolean(),
 }).strict();
-const repairV1 = z.object({ kind: z.enum(["unlink", "reconcile"]), reason: z.string().trim().min(1).max(300), reconciliationId: z.string().uuid().nullable(), inputFactsHash: z.string().regex(/^[a-f0-9]{64}$/u), authorization: reconciliationAuthorizationV1.nullable() }).strict();
+const repairV1 = z.object({ kind: z.enum(["unlink", "reconcile"]), reason: z.string().trim().min(1).max(300), reconciliationId: z.guid({ error: "Invalid uuid" }).nullable(), inputFactsHash: z.string().regex(/^[a-f0-9]{64}$/u), authorization: reconciliationAuthorizationV1.nullable() }).strict();
 export function assertDuplicateRepair(raw: unknown, suppliedActor: EnterpriseActor, rawRepair: unknown): void {
   const g = parseEnterpriseGroup(raw); assertDuplicateGroup(g);
   const actor = readEnterprise(enterpriseActorV1, suppliedActor), repair = readEnterprise(repairV1, rawRepair), exported = g.members.some(e => e.exportLineId !== null);
@@ -132,7 +132,7 @@ export function assertDuplicateRepair(raw: unknown, suppliedActor: EnterpriseAct
       a.tenantId !== g.tenantId || a.jobId !== g.jobId || a.canonicalId !== g.canonicalId || a.actorId !== actor.membershipId || a.contentHash !== repair.inputFactsHash) return refuse("PERMISSION_DENIED");
   }
 }
-const coalesceV1 = z.object({ tenantId: z.string().uuid(), jobId: z.string().uuid(), matchingExtraId: z.string().uuid() }).strict();
+const coalesceV1 = z.object({ tenantId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }), matchingExtraId: z.guid({ error: "Invalid uuid" }) }).strict();
 export function coalescePrompt(raw: unknown, matching: unknown): Readonly<{ canonicalId: string; createsOrigin: false }> {
   const g = parseEnterpriseGroup(raw); assertDuplicateGroup(g); const match = readEnterprise(coalesceV1, matching);
   if (match.tenantId !== g.tenantId || match.jobId !== g.jobId || !g.members.some(e => e.id === match.matchingExtraId)) return refuse("INVALID_DUPLICATE_GROUP");

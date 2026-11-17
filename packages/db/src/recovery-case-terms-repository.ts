@@ -8,7 +8,7 @@ const CODES=["RECOVERY_TERMS_FORBIDDEN","RECOVERY_TERMS_COMMAND_CONFLICT","RECOV
 export class RecoveryCaseTermsError extends Error {
  constructor(readonly code:(typeof CODES)[number]) { super(code);this.name="RecoveryCaseTermsError"; }
 }
-const uuid=(value:string)=>z.string().uuid().parse(value).toLowerCase();
+const uuid=(value:string)=>z.guid({ error: "Invalid uuid" }).parse(value).toLowerCase();
 const rowSchema=z.object({id:z.string(),tenant_id:z.string(),job_id:z.string(),case_id:z.string(),terms_version:z.string(),fee_policy_version:z.string(),eligibility_policy_version:z.string(),policy_status:z.string(),environment:z.string(),terms_hash:z.string(),actor_membership_id:z.string(),command_id:z.string(),authorization_id:z.string(),approved_at:z.coerce.date()});
 function fromRow(raw:unknown):RecoveryCaseTerms {
  const r=rowSchema.parse(raw);

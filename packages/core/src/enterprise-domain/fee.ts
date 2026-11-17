@@ -69,7 +69,7 @@ export function allocateEnterpriseReceipt(raw: unknown): readonly EnterpriseRece
   });
 }
 export type EnterpriseStatementLine = Readonly<{ extraId: string; contributionChange: ExactPence; fee: Money }>;
-const changeV1 = z.array(z.object({ extraId: z.string().uuid(), change: z.object({ numerator: z.bigint(), denominator: z.bigint().positive() }).strict() }).strict()).max(10000);
+const changeV1 = z.array(z.object({ extraId: z.guid({ error: "Invalid uuid" }), change: z.object({ numerator: z.bigint(), denominator: z.bigint().positive() }).strict() }).strict()).max(10000);
 /** Same-sign apportionment delegates to allocateMoney; mixed signs use signed floors of exact changes. */
 export function statementLines(deltaPence: number, supplied: readonly Readonly<{ extraId: string; change: ExactPence }>[]): readonly EnterpriseStatementLine[] {
   return checked(() => {

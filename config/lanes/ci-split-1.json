@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-split-1": {
+      "branches": [
+        "codex/sandbox/ci-split-1"
+      ],
+      "note": "CI-only concurrent core/web checks and failure evidence; no product workflow or test execution settings change.",
+      "allow": [
+        ".github/workflows/ci.yml",
+        "apps/web/playwright.config.ts",
+        "docs/operations/ci-checks.md",
+        "tools/ci-workflow.test.mjs"
+      ]
+    }
+  }
+}

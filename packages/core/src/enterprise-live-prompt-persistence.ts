@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { completionWorkLocatorV1 } from "./enterprise-live-prompt-contracts.js";
-const id = z.string().uuid();
+const id = z.guid({ error: "Invalid uuid" });
 const text = z.string().trim().min(1).max(200);
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const decimal = z.string().regex(/^(?:0|[1-9]\d{0,17})(?:\.\d{1,6})?$/u);

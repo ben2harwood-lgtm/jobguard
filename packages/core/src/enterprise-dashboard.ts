@@ -4,7 +4,7 @@ import { sha256 } from "./evidence-pack.js";
 import { instantV1 } from "./receipt-allocation.js";
 import { compareServerInstants } from "./enterprise-domain/contracts.js";
 
-const uuid = z.string().uuid().transform(v => v.toLowerCase());
+const uuid = z.guid({ error: "Invalid uuid" }).transform(v => v.toLowerCase());
 const moneyV1 = z.object({ pence: z.number().int().nonnegative().max(MAX_MONEY_PENCE), currency: z.literal("GBP") }).strict();
 export const dashboardDimensions = ["region", "team", "operative", "client", "contract", "period"] as const;
 const dimensions = z.object({ region: uuid.nullable(), team: uuid, operative: uuid.nullable(), client: uuid, contract: uuid }).strict();
@@ -23,7 +23,7 @@ export const dashboardExtraV1 = z.object({ jobId: uuid, extraId: uuid, canonical
 }).strict();
 export const dashboardFactsV1 = z.object({ version: z.literal("enterprise-dashboard-facts.v1"), cutoff: instantV1,
   extras: z.array(dashboardExtraV1).max(100000),
-  closeouts: z.array(z.object({ jobId: uuid, sourceId: uuid, dimensions, at: instantV1, answer: z.enum(["yes", "no"]).nullable() }).strict()).max(100000).default([]),
+  closeouts: z.array(z.object({ jobId: uuid, sourceId: uuid, dimensions, at: instantV1, answer: z.enum(["yes", "no"]).nullable() }).strict()).max(100000).prefault([]),
   billing: z.object({ status: z.literal("held"), prerequisite: z.literal("ENT-6B") }).strict(),
 }).strict();
 export type DashboardFacts = z.infer<typeof dashboardFactsV1>;
@@ -32,7 +32,7 @@ export class EnterpriseDashboardError extends Error {
   constructor(readonly code: "DASHBOARD_INVALID" | "NOT_FOUND" | "MODE_FORBIDDEN" | "DASHBOARD_PREREQUISITE_REQUIRED" | "DASHBOARD_UNAVAILABLE") { super(code); }
   toJSON() { return { version: "enterprise-dashboard-error.v1", code: this.code }; }
 }
-export function dashboardParse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T {
+export function dashboardParse<T>(schema: z.ZodType<T, unknown>, raw: unknown): T {
   const result = schema.safeParse(raw);
   if (!result.success) throw new EnterpriseDashboardError("DASHBOARD_INVALID");
   return result.data;

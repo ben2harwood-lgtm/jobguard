@@ -3,7 +3,7 @@ import { instantV1 } from "./receipt-allocation.js";
 import { compareServerInstants } from "./enterprise-domain/contracts.js";
 import { sha256 } from "./evidence-pack.js";
 import { dashboardParse, dashboardCanonical, dashboardFreeze, dashboardCompareText, EnterpriseDashboardError } from "./enterprise-dashboard.js";
-const uuid = z.string().uuid().transform(v => v.toLowerCase());
+const uuid = z.guid({ error: "Invalid uuid" }).transform(v => v.toLowerCase());
 const quantity = z.string().regex(/^(0|[1-9]\d{0,11})(\.\d{1,6})?$/u);
 const scaled = (s: string) => { const [whole, fraction = ""] = s.split("."); return BigInt(whole!) * 1000000n + BigInt(fraction.padEnd(6, "0")); };
 export const enterpriseSignalFactsV1 = z.object({ version: z.literal("enterprise-signal-facts.v1"),

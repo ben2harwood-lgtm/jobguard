@@ -6,7 +6,7 @@ import { workOrderPrincipalV1 } from './work-order.contracts.js';
 export class PromptBoundaryError extends Error {
  constructor(readonly code: 'MODE_FORBIDDEN' | 'UNAUTHENTICATED' | 'ORIGIN_FORBIDDEN' | 'INVALID_PROMPT_COMMAND') { super(code); }
 }
-const listQuery = z.object({ limit: z.string().regex(/^[1-9]\d{0,2}$/u).transform(Number).pipe(z.number().int().min(1).max(100)).optional(), after: z.string().uuid().optional() }).strict();
+const listQuery = z.object({ limit: z.string().regex(/^[1-9]\d{0,2}$/u).transform(Number).pipe(z.number().int().min(1).max(100)).optional(), after: z.guid({ error: "Invalid uuid" }).optional() }).strict();
 /** The persisted session is the only authority. Repository checked routines recheck current authority under lock. */
 export class EnterpriseLivePromptApplication {
  private readonly repository: EnterpriseLivePromptRepository;

@@ -7,7 +7,7 @@ import {
 export const freeFirstJobQueryV1 = z.object({ version: z.literal("free-first-job-query.v1") }).strict().readonly();
 export const freeFirstJobReadSnapshotV1 = z.object({
   version: z.literal("free-first-job-read-snapshot.v1"), environment: z.literal("synthetic_demo"),
-  tenantId: z.string().uuid(), jobId: z.string().uuid(), eligibility: freeFirstJobPreviewInputV1,
+  tenantId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }), eligibility: freeFirstJobPreviewInputV1,
   timeline: freeFirstJobEndPreviewInputV1.nullable(),
 }).strict().refine(value => value.eligibility.tenantId === value.tenantId && value.eligibility.jobId === value.jobId &&
   (value.timeline === null || (value.timeline.tenantId === value.tenantId && value.timeline.jobId === value.jobId)),

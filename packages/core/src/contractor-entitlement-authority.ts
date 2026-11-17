@@ -5,9 +5,9 @@ const revision = z.number().int().positive().max(2147483647);
 /** Internal transaction projection, not a bearer credential or commercial approval. */
 export const contractorEntitlementAuthorityV1 = z.object({
  version: z.literal("contractor-entitlement-authority.v1"), environment: z.literal("synthetic_demo"),
- tenantId: z.string().uuid(), membershipId: z.string().uuid(), identityUserId: z.string().uuid(),
- assignment: z.object({ id: z.string().uuid(), revision, track: z.enum(["contractor", "small_builder"]), agreementReference: z.string().regex(/^synthetic-agreement:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u) }).strict().readonly().nullable(),
- status: z.object({ id: z.string().uuid(), revision, status: z.enum(["active", "inactive", "suspended"]) }).strict().readonly().nullable(),
+ tenantId: z.guid({ error: "Invalid uuid" }), membershipId: z.guid({ error: "Invalid uuid" }), identityUserId: z.guid({ error: "Invalid uuid" }),
+ assignment: z.object({ id: z.guid({ error: "Invalid uuid" }), revision, track: z.enum(["contractor", "small_builder"]), agreementReference: z.string().regex(/^synthetic-agreement:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u) }).strict().readonly().nullable(),
+ status: z.object({ id: z.guid({ error: "Invalid uuid" }), revision, status: z.enum(["active", "inactive", "suspended"]) }).strict().readonly().nullable(),
 }).strict().refine(v => v.assignment !== null || v.status === null).readonly();
 export type ContractorEntitlementAuthority = z.infer<typeof contractorEntitlementAuthorityV1>;
 export const contractorEntitlementEnablementV1 = z.object({ version: z.literal("contractor-entitlement-enablement.v1"), environment: z.literal("synthetic_demo"), enabled: z.array(contractorEntitlementFeatureV1).max(5).refine(v => new Set(v).size === v.length) }).strict().readonly();
