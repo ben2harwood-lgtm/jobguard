@@ -80,14 +80,14 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
   const sourcePath = join(root, "source"), backupPath = join(root, "backup"), restoredPath = join(root, "restored");
   const sourcePort = await vacantPort(), password = randomUUID();
   let restoredPort = await vacantPort(); while (restoredPort === sourcePort) restoredPort = await vacantPort();
-  const clusterOptions = { user: "postgres", password, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], postgresFlags: ["-c", "listen_addresses=127.0.0.1"], onLog: () => undefined, onError: () => undefined };
+  const clusterOptions = { user: "postgres", password, persistent: true, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], postgresFlags: ["-c", "listen_addresses=127.0.0.1"], onLog: () => undefined, onError: () => undefined };
   const source = new EmbeddedPostgres({ ...clusterOptions, databaseDir: sourcePath, port: sourcePort });
   const restored = new EmbeddedPostgres({ ...clusterOptions, databaseDir: restoredPath, port: restoredPort });
   const pools = new Set();
   const pool = (port, user = "postgres") => { const p = new Pool({ host: "127.0.0.1", port, user, password, database: "postgres", max: 4 }); pools.add(p); return p; };
   const closePools = async () => { await Promise.all([...pools].map(p => p.end())); pools.clear(); await new Promise(ok => setTimeout(ok, 25)); };
   const pass = (id, detail) => checks.push({ id, status: "PASS", detail });
-  const ids = Object.fromEntries(["tenant", "otherTenant", "identity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision"].map(name => [name, randomUUID()]));
+  const ids = Object.fromEntries(["tenant", "otherTenant", "identity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision", "variation"].map(name => [name, randomUUID()]));
   const context = api.verifiedTenantContextFromMembership({ tenantId: ids.tenant, membershipId: ids.member, identityUserId: ids.identity });
   const otherContext = api.verifiedTenantContextFromMembership({ tenantId: ids.otherTenant, membershipId: randomUUID(), identityUserId: ids.identity });
   const fixtureHash = digest("fictional-source-only");
@@ -99,11 +99,28 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     assert.match(postgresVersion, /^16\./);
     await api.migrate(admin);
     const migrationNames = (await admin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(row => row.migration_name);
+    assert.deepEqual(migrationNames, api.MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)));
+    assert.ok(migrationNames.includes("0095_job_parties.sql"));
     await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [ids.tenant, ids.otherTenant]);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [ids.identity]);
     await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional restore builder')", [ids.account, ids.tenant]);
     await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [ids.member, ids.tenant, ids.account, ids.identity]);
-    await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional restore job','live'),($3,$4,'Other tenant fictional job','draft')", [ids.job, ids.tenant, ids.otherJob, ids.otherTenant]);
+    await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional restore job','quoting'),($3,$4,'Other tenant fictional job','draft')", [ids.job, ids.tenant, ids.otherJob, ids.otherTenant]);
+    // Supply explicit generated parties before the existing live-state fixture.
+    const partyClient = await admin.connect();
+    try {
+      await partyClient.query("BEGIN");
+      await partyClient.query("SELECT set_config('app.tenant_id',$1,true)", [ids.tenant]);
+      await api.seedSyntheticPartyFixture(partyClient, ids.tenant, ids.job);
+      // SH-1 binds legacy live INSERTs; this generated fixture goes live by UPDATE.
+      await partyClient.query("SET LOCAL ROLE jobguard_migration");
+      await partyClient.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture',$2)", [ids.tenant, ids.job]);
+      assert.deepEqual((await partyClient.query("SELECT job_track,environment,provenance,source_id FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2", [ids.tenant, ids.job])).rows,
+        [{ job_track: "small_builder", environment: "synthetic_demo", provenance: "legacy_synthetic_live_fixture", source_id: ids.job }]);
+      await partyClient.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [ids.tenant, ids.job]);
+      await partyClient.query("COMMIT");
+    } catch (error) { await partyClient.query("ROLLBACK"); throw error; }
+    finally { partyClient.release(); }
     await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [ids.scope, ids.tenant, ids.job]);
     await admin.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')", [ids.tenant, ids.job, ids.scope]);
     await admin.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,10000,'accepted')", [ids.quote, ids.tenant, ids.job, fixtureHash]);
@@ -113,6 +130,16 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     // Generated login exists only inside these disposable clusters. No deployment secrets are read.
     await admin.query(`CREATE ROLE rehearsal_runtime LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO rehearsal_runtime`);
     let runtime = pool(sourcePort, "rehearsal_runtime");
+    const trackRows = connection => api.withTenant(connection, context, async db => (await db.$client.query("SELECT * FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2", [ids.tenant, ids.job])).rows);
+    const sourceTrack = await trackRows(runtime);
+    assert.equal(sourceTrack.length, 1);
+    const createBuilderOrigin = (connection, variation) => api.withTenant(connection, context, async db => {
+      assert.equal((await db.$client.query("SELECT pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0].runtime_role, true);
+      await db.$client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,existing_scope_item_id,capture_kind,capture_text,description) VALUES($1,$2,$3,$4,$4,'text','Fictional restore extra','Fictional restore extra')", [variation, ids.tenant, ids.job, ids.scope]);
+      const origin = (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.job, variation])).rows;
+      assert.deepEqual(origin, [{ job_track: "small_builder", kind: "builder_logged", provenance: "legacy_synthetic_capture", raising_role: "legacy_unrecorded", source_capture_hash: digest("Fictional restore extra") }]);
+      return origin;
+    });
     class DatabaseSyntheticStorage {
       constructor(connection) { this.connection = connection; }
       async createUploadUrl({ key }) { return `synthetic.invalid/${encodeURIComponent(key)}`; }
@@ -157,6 +184,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
       }
       actionIds.push(actionId);
     }
+    const sourceOrigin = await createBuilderOrigin(runtime, ids.variation);
     // The snapshot covers every row, including money/audit/control metadata, not only the examples above.
     const tables = (await admin.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN ('app','audit_control','identity','control_plane','infrastructure','public') AND tablename NOT LIKE 'pg_%' ORDER BY schemaname,tablename")).rows;
     const quote = identifier => '"' + identifier.replaceAll('"', '""') + '"';
@@ -194,7 +222,10 @@ export async function runSyntheticRestoreRehearsal(options = {}, api) {
     admin = pool(restoredPort); runtime = pool(restoredPort, "rehearsal_runtime"); storage = new DatabaseSyntheticStorage(runtime);
     assert.equal((await admin.query("SHOW server_version")).rows[0].server_version, postgresVersion);
     assert.deepEqual(await rowSnapshot(admin), before);
-    pass("all-rows-restored", `${before.length} application/control tables match their pre-backup row counts and hashes.`);
+    assert.deepEqual(await trackRows(runtime), sourceTrack);
+    assert.deepEqual(await api.withTenant(runtime, context, async db => (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.job, ids.variation])).rows), sourceOrigin);
+    await createBuilderOrigin(runtime, randomUUID());
+    pass("all-rows-restored", `${before.length} application/control tables match their pre-backup row counts and hashes before new capture. The immutable small-builder track and saved origin survive; a subsequent builder origin commits under the runtime role.`);
     const restoredBilling = new api.CustomerBillingCommandService(runtime);
     assert.deepEqual(await restoredBilling.balance(context, issued.invoiceId), sourceBalance);
     // A committed manual receipt must not be duplicated by a restored command retry.

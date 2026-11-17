@@ -1,12 +1,17 @@
 export const jobStatuses = ["draft", "quoting", "accepted", "live", "invoiced", "paid", "lost"] as const;
 export type JobStatus = (typeof jobStatuses)[number];
 
+/** `work_order` jobs (ENT-2) are created from a client work order: live from import, with no quote baseline, cap or fee policy. */
+export const jobProvenances = ["system_generated_quote", "imported", "work_order"] as const;
+export type JobProvenance = (typeof jobProvenances)[number];
+
 export type JobTransitionReason =
-  | "start_quote" | "accept_quote" | "switch_live" | "issue_invoice" | "balance_settled"
+  | "work_order_import" | "start_quote" | "accept_quote" | "switch_live" | "issue_invoice" | "balance_settled"
   | "quote_lost" | "cancel_acceptance" | "reopen_quote" | "payment_reversal" | "additional_amount_due";
 
 const legalJobTransitions: Readonly<Record<JobStatus, Readonly<Partial<Record<JobStatus, readonly JobTransitionReason[]>>>>> = {
-  draft: { quoting: ["start_quote"] },
+  // ENT-2: only the work-order import routine (provenance work_order, CH-3b parties bound) enters live without a quote.
+  draft: { quoting: ["start_quote"], live: ["work_order_import"] },
   quoting: { accepted: ["accept_quote"], lost: ["quote_lost"] },
   accepted: { live: ["switch_live"], quoting: ["cancel_acceptance"] },
   live: { invoiced: ["issue_invoice"] },

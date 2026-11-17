@@ -47,6 +47,40 @@ export const MIGRATION_URLS = [
   new URL("../migrations/0041_evidence_packs.sql", import.meta.url),
   new URL("../migrations/0042_evidence_pack_repair.sql", import.meta.url),
   new URL("../migrations/0053_shared_money_origin.sql", import.meta.url),
+  new URL("../migrations/0054_contractor_organisation.sql", import.meta.url),
+  new URL("../migrations/0094_practice_session_ownership.sql", import.meta.url),
+  new URL("../migrations/0095_job_parties.sql", import.meta.url),
+  new URL("../migrations/0096_watchdog_live.sql", import.meta.url),
+  new URL("../migrations/0097_recovery_case_current.sql", import.meta.url),
+  new URL("../migrations/0102_contractor_parties.sql", import.meta.url),
+  new URL("../migrations/0103_prevention_checks.sql", import.meta.url),
+  new URL("../migrations/0106_practice_feed.sql", import.meta.url),
+  new URL("../migrations/0107_recovery_messages.sql", import.meta.url),
+  new URL("../migrations/0109_job_activation_terms.sql", import.meta.url),
+  new URL("../migrations/0110_work_orders.sql", import.meta.url),
+  new URL("../migrations/0111_persisted_identity.sql", import.meta.url),
+  new URL("../migrations/0112_recovery_follow_up.sql", import.meta.url),
+  new URL("../migrations/0115_recovery_follow_up_repair.sql", import.meta.url),
+  new URL("../migrations/0119_recovery_eligibility_v3.sql", import.meta.url),
+  new URL("../migrations/0120_enterprise_identity.sql", import.meta.url),
+  new URL("../migrations/0121_audit_export.sql", import.meta.url),
+  new URL("../migrations/0122_extra_origin_persistence.sql", import.meta.url),
+  new URL("../migrations/0127_recovery_timing_pin.sql", import.meta.url),
+  new URL("../migrations/0128_shadow_persistence.sql", import.meta.url),
+  new URL("../migrations/0129_sso_required.sql", import.meta.url),
+  new URL("../migrations/0130_recovery_eligibility_v3_f17_timing.sql", import.meta.url),
+  new URL("../migrations/0131_practice_feed_facts.sql", import.meta.url),
+  new URL("../migrations/0132_final_account_lock.sql", import.meta.url),
+  new URL("../migrations/0133_shadow_detection.sql", import.meta.url),
+  new URL("../migrations/0134_recovery_case_terms.sql", import.meta.url),
+  new URL("../migrations/0135_site_extra_authority.sql", import.meta.url),
+  new URL("../migrations/0136_recovery_allocation.sql", import.meta.url),
+  new URL("../migrations/0137_scim_deactivation.sql", import.meta.url),
+  new URL("../migrations/0138_practice_session_hardening.sql", import.meta.url),
+  new URL("../migrations/0139_site_visit_closeout.sql", import.meta.url),
+  new URL("../migrations/0140_site_extra_pricing.sql", import.meta.url),
+  new URL("../migrations/0141_site_extra_evidence.sql", import.meta.url),
+  new URL("../migrations/0142_recovery_insurer_money.sql", import.meta.url),
 ] as const;
 export const INITIAL_MIGRATION_URL = MIGRATION_URLS[0];
 
@@ -59,7 +93,9 @@ export async function migrate(pool: Pick<Pool | PoolClient, "query">): Promise<v
     const applied = await pool.query("SELECT 1 FROM public.jobguard_schema_migration WHERE migration_name=$1", [migrationName]);
     if (applied.rowCount) continue;
     const sql = await readFile(fileURLToPath(migrationUrl), "utf8");
-    await pool.query(sql);
+    // Select backfill mode within this migration's transaction, even with a pooled connection.
+    const mode = process.env.JOBGUARD_ENV === "synthetic_demo" ? "synthetic_demo" : "details_needed";
+    await pool.query(migrationName === "0095_job_parties.sql" ? sql.replace("BEGIN;", `BEGIN; SELECT set_config('app.deployment_mode','${mode}',true);`) : sql);
     await pool.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1) ON CONFLICT DO NOTHING", [migrationName]);
   }
 }

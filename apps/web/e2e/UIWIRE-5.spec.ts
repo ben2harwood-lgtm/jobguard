@@ -1,4 +1,4 @@
-import{expect,test,type Page}from"@playwright/test";import{openReview}from"./helpers/capture-journey";
+import{expect,test,type Page}from"@playwright/test";import{openReview}from"./helpers/v1-sample-job";
 test.setTimeout(180_000);
 const B=(page:Page,name:string)=>page.getByRole("button",{name,exact:true});
 async function click(page:Page,name:string){const button=B(page,name);await expect(button).toBeVisible();await expect(button).toBeEnabled();await button.click();}

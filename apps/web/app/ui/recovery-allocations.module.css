@@ -1,0 +1,11 @@
+.panel { padding: 1rem; margin-block: 1rem; border: 1px solid #c6cbd1; border-radius: .5rem; overflow-wrap: anywhere; }
+.panel button, .panel select, .panel input, .panel summary { min-height: 44px; min-width: 44px; }
+.panel button, .panel input, .panel select { padding: .6rem; max-width: 100%; box-sizing: border-box; }
+.panel :focus-visible { outline: 3px solid #195bb0; outline-offset: 3px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: .7rem; }
+.facts dd { margin: .2rem 0; font-weight: 600; }
+.form { display: grid; gap: .8rem; margin-block: 1rem; }
+.form label { display: grid; gap: .3rem; min-width: 0; }
+.form select, .form input { width: 100%; box-sizing: border-box; }
+.error { padding: .8rem; border-left: 4px solid #a31525; background: #fff1f2; }
+.panel article { margin-block: 1rem; padding-block: .7rem; border-top: 1px solid #c6cbd1; }

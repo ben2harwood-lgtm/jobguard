@@ -33,12 +33,17 @@ it("rejects impossible timezone offsets on both origin timestamps",()=>{
 it("accepts exactly the offsets from -23:59 to +23:59 and never an instant JavaScript cannot read",()=>{
  const pad=(n:number)=>String(n).padStart(2,"0");
  const accepted:string[]=[];
+ // Keep every full-object parse and Date.parse check; construct assertions only after the exhaustive sweep.
+ const mismatches:{field:typeof originTimeFields[number];offset:string;expected:boolean;actual:boolean;unreadableValue?:string}[]=[];
  for(const field of originTimeFields) for(const sign of ["+","-"]) for(let hours=0;hours<=99;hours++) for(let minutes=0;minutes<=99;minutes++){
   const offset=`${sign}${pad(hours)}:${pad(minutes)}`,value=`${clock}${offset}`;
   const parsed=extraOriginV1.safeParse({...originValue,[field]:value});
-  expect(parsed.success,`${field} ${offset}`).toBe(hours<=23&&minutes<=59);
-  if(parsed.success){ accepted.push(value); expect(Number.isNaN(Date.parse(value)),`${field} ${offset}`).toBe(false); }
+  const expected=hours<=23&&minutes<=59;
+  const unreadable=parsed.success&&Number.isNaN(Date.parse(value));
+  if(parsed.success!==expected||unreadable) mismatches.push({field,offset,expected,actual:parsed.success,...(unreadable?{unreadableValue:value}:{})});
+  if(parsed.success) accepted.push(value);
  }
+ expect(mismatches,`${mismatches.length} offset mismatches; first 10: ${JSON.stringify(mismatches.slice(0,10))}`).toEqual([]);
  expect(accepted).toHaveLength(2*2*24*60);
 });
 it("keeps valid offsets, fractional precision, Z and a null device time",()=>{

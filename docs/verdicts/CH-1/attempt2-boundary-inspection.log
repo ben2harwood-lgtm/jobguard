@@ -1,0 +1,6 @@
+Deterministic inspection only; not independent review.
+Base 92c4a406b1765f077cc12c977101d4b065c914cd
+Five specs equal exact import-path replacement; every other byte unchanged.
+Only ch-1 lane line changed; all 57 changed paths are allowed.
+Protected v1 files, count-agnostic tests and every merged migration byte-identical.
+24 final source/document hashes recorded (receipt/logs excluded).

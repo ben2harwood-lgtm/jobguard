@@ -1,0 +1,93 @@
+{
+  "head": "f1180b548157b7866a49e554ba130968434ce95e",
+  "files": {
+    "apps/api/src/recovery-case.application.ts": {
+      "sha256": "72c36d32268e104726b1ab63210c67957f4f4a6a2ec538279925a372f832f74c",
+      "bytes": 7371
+    },
+    "apps/api/src/recovery-case.contracts.ts": {
+      "sha256": "ff61194af5b9542703eaad6b23e31f92ac015f7847ac83f94b0a4368efb4d444",
+      "bytes": 8896
+    },
+    "apps/api/src/recovery-payment-payer.application.test.ts": {
+      "sha256": "8ae1aa0e623405243379d2cb2562e2234e26cf94401293f09b8f507d31a44943",
+      "bytes": 3670
+    },
+    "apps/web/e2e/CH-7.spec.ts": {
+      "sha256": "c0227bf740fac4e33c3c3b892b2a8802b7524a280762402682133ca8f97fc0ad",
+      "bytes": 9307
+    },
+    "docs/contracts/recovery-eligibility-v3.md": {
+      "sha256": "accf0c05b6a68cbc613acce3bcf0484eb986eddbfbaa7760f969afa16a34e8f2",
+      "bytes": 10315
+    },
+    "docs/verdicts/CH-7-INSURER/COMMANDS.md": {
+      "sha256": "c6309d6574f59943d78c44b8c6b6eac7ecb6238a1113e3aa5eb160c30ccc0a99",
+      "bytes": 10981
+    },
+    "docs/verdicts/CH-7-INSURER/ROUND_1_OPENAPI_GENERATOR_NOTE.md": {
+      "sha256": "8902278287d96e5f8e4549c3b2e7cd245aefe32077f5bb14861b2928b41c0da9",
+      "bytes": 642
+    },
+    "docs/verdicts/CH-7-INSURER/ROUND_1_UNCHANGED_FILES.json": {
+      "sha256": "edc8ba9a67377dd22548ecdfd53d8c484a3afc17f360b08d0dfaba6d5c7c3dd1",
+      "bytes": 1565
+    },
+    "docs/verdicts/CH-7-INSURER/ROUND_1_guard_recovery_eligibility_v3.diff": {
+      "sha256": "2bbc3f84728dcc818e90c1e075a4aee31277a9643103858d98bb6ca9b1ad0741",
+      "bytes": 3852
+    },
+    "docs/verdicts/CH-7-INSURER/ROUND_1_require_recovery_eligibility_v3_effect.diff": {
+      "sha256": "13ba6816be256c853cdcabac72aa157e0d1b06d14d7c53b56e2ef77852bc90a9",
+      "bytes": 2356
+    },
+    "packages/core/src/index.ts": {
+      "sha256": "6598783d7adf73b776276f2a0c8479c9c6cc6e00fbae6cb76f546a6a80a3b241",
+      "bytes": 2352
+    },
+    "packages/core/src/recovery-eligibility-v3.test.ts": {
+      "sha256": "fccdda47d1a416e2937b44f6a26c1d16615a756d757131e75ae09ab0b777bf11",
+      "bytes": 8407
+    },
+    "packages/core/src/recovery-eligibility-v3.ts": {
+      "sha256": "a69d2f53dbccd3b8f4eb23b95e4cf77dfa0e0158c272f9fcf7f471b2de5ab9e1",
+      "bytes": 9101
+    },
+    "packages/core/src/recovery-payment-payer.test.ts": {
+      "sha256": "a9e75a9e35ab8e261bc9fd183ddff0d636ea32311813f9b377e496510d1ecd94",
+      "bytes": 2073
+    },
+    "packages/core/src/recovery-payment-payer.ts": {
+      "sha256": "8d6c750cc33dcfc4819f300846288dd3bb64c96b34cce414fe8ce50acbaecfad",
+      "bytes": 1577
+    },
+    "packages/db/MIGRATIONS.md": {
+      "sha256": "b6248c78b69b53f97fa622f6b7f3f59c15466655a63987b925c76b06d0077c22",
+      "bytes": 108365
+    },
+    "packages/db/migrations/0142_recovery_insurer_money.sql": {
+      "sha256": "b3385c272396fda1ab813199579118e055a83bbd8c10bdf30560b3610ecd26e6",
+      "bytes": 28106
+    },
+    "packages/db/src/index.ts": {
+      "sha256": "871b7eb2e2a455203b963a6a843a81d2ce134fb3fec9b6260c50ca0002f542f8",
+      "bytes": 3636
+    },
+    "packages/db/src/migrate.ts": {
+      "sha256": "bc87f544eece1f4b79ca8bcc2c3c1bbdf51470827b50c1ea483b838b98827199",
+      "bytes": 6778
+    },
+    "packages/db/src/recovery-payment-payer-repository.ts": {
+      "sha256": "afdeb8256e30ebdd3c9bc50940c06a668392f62289c56936b3a598e9872033a0",
+      "bytes": 4343
+    },
+    "packages/db/test/recovery-insurer-money.integration.test.ts": {
+      "sha256": "aa2a8b344ace29384db93d46b74dda784a3230c4c37622e5a7fc2a6cdfa308a9",
+      "bytes": 37002
+    },
+    "packages/db/test/tenancy.integration.test.ts": {
+      "sha256": "d32418b01b6d6665ee7dda4052412ccf5cfe4349c8726b09f73103da1b85449e",
+      "bytes": 46023
+    }
+  }
+}

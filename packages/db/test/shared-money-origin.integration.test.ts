@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,11 +8,12 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { withTenant, type VerifiedTenantContext } from "../src/tenant-context.js";
-import { closeTestPools } from "./pool-test-utils.js";
+import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { SwitchJobLiveMutation } from "../src/activation-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
+import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
 const T=randomUUID(), OTHER=randomUUID(), M=randomUUID(), OTHER_M=randomUUID(), J=randomUUID(), V=randomUUID(), S=randomUUID(), R=randomUUID(), H="a".repeat(64);
-const ctx=(tenantId:string=T)=>({tenantId}) as VerifiedTenantContext;
+const ctx=(tenantId:string=T)=>testTenantContext(tenantId);
 let pg:EmbeddedPostgres, admin:Pool, runtime:Pool, dir:string, port:number;
 const migrationURL=MIGRATION_URLS.find(url=>url.pathname.endsWith("0053_shared_money_origin.sql"))!;
 async function seedIdentity(tenant:string,member:string) {
@@ -30,8 +32,8 @@ async function insertVariation(client:Pick<PoolClient,"query">,id:string,jobId:s
  await client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description,job_track,origin) VALUES($1,$2,$3,$4,'text','Fictional capture','Synthetic extra',$5,$6)",[id,tenant,jobId,scope,track,kind]);
 }
 beforeAll(async()=>{
- dir=await mkdtemp(join(tmpdir(),"sh-1-pg-"));port=59600+Math.floor(Math.random()*100);
- pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C"],onLog:()=>undefined});
+ dir=await mkdtemp(join(tmpdir(),"sh-1-pg-"));port=await freePort(59600,100);
+ pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
  await pg.initialise();await pg.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
  await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
  for(const url of MIGRATION_URLS.slice(0,MIGRATION_URLS.indexOf(migrationURL))) {
@@ -44,7 +46,7 @@ beforeAll(async()=>{
  await admin.query(`INSERT INTO app.variation_revision(id,tenant_id,job_id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version)
   VALUES($1,$2,$3,$4,$5,1,'Legacy reviewed extra','1','item',1000,1000,$6,$7,'human_entered','synthetic://original-price',$6,'legacy-price-v1')`,[R,T,J,V,S,H,M]);
  await admin.query("UPDATE app.variation SET state='priced',current_revision_id=$1 WHERE tenant_id=$2 AND id=$3",[R,T,V]);
- await migrate(admin);
+ await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  await admin.query("CREATE ROLE sh1_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO sh1_login");
  runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"sh1_login",password:"synthetic",max:4});
 },60000);
@@ -61,6 +63,10 @@ async function commandOrigin(db:PoolClient,jobId:string,id:string,kind="site_use
 async function contractorJob() {
  const id=await job(randomUUID(),"draft");
  await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'contractor','synthetic_demo','work_order_import')",[T,id]);return id;
+}
+function adoption(id:string,customerRevisionId:string,siteRevisionId:string) {const input={version:"adopt-job.v1" as const,jobId:id,baselineId:randomUUID(),title:"Fictional import",lifecyclePoint:"live" as const,provenance:"imported" as const,lineageStrength:"builder_attested_weaker" as const,baselineHash:H,baselineDescription:"Synthetic baseline",acceptedNetValuePence:10000,recoveryCapPence:150,acceptedValueSource:"builder_attestation" as const,attestedByMembershipId:M,attestedAt:new Date("2026-09-01T00:00:00Z"),importTermsVersion:"synthetic_import_terms_candidate.v1" as const,feePolicyVersion:"reference_fee_policy_v1" as const,mode:"synthetic_candidate" as const,parties:{customerRevisionId,siteRevisionId}};
+   const command={version:"command.v1" as const,commandId:randomUUID(),commandType:"job.adopt_in_flight",semanticKey:`import:${id}`,actorMembershipId:M,subjectType:"job",subjectRef:id,action:{actionType:"job.adopt_in_flight",recipient:null,contentHash:H,aggregateRevision:0,amountPence:10000,currency:"GBP" as const,policyVersion:input.importTermsVersion,expiresAt:new Date(Date.now()+60000)}};
+ return {command,mutation:new AdoptInFlightJobMutation(T,"synthetic_candidate",input)};
 }
 describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
  it("upgrades existing synthetic rows without losing identity, source or time; reruns backfill idempotently",async()=>{
@@ -88,7 +94,8 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
  it("fails reads/writes closed for missing, malformed and other-tenant contexts",async()=>{
   expect((await runtime.query("SELECT * FROM app.extra_origin")).rows).toEqual([]);
   expect((await withTenant(runtime,ctx(OTHER),db=>db.$client.query("SELECT * FROM app.extra_origin WHERE variation_id=$1",[V]))).rows).toEqual([]);
-  await expect(withTenant(runtime,ctx("malformed"),async()=>undefined)).rejects.toMatchObject({code:"INVALID_TENANT_CONTEXT"});
+  // Deliberately unstamped so the malformed context reaches withTenant's refusal path.
+  await expect(withTenant(runtime,{tenantId:"malformed"} as VerifiedTenantContext,async()=>undefined)).rejects.toMatchObject({code:"INVALID_TENANT_CONTEXT"});
   await expect(insertVariation(runtime as unknown as PoolClient,randomUUID(),J)).rejects.toMatchObject({code:"42501"});
   expect((await runtime.query("SELECT * FROM app.job_commercial_track")).rows).toEqual([]);
  });
@@ -132,7 +139,7 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
  it("maps every raising command to exactly one allowed origin, including command-backed builder capture",async()=>{
   const contractor=await contractorJob();
   for(const [track,kind,type] of [
-   ["small_builder","builder_logged","LogBuilderExtra"],["small_builder","final_review","AddFinalReviewExtra"],["small_builder","jobguard_catch","ConfirmJobGuardCatch"],
+   ["small_builder","builder_logged","LogBuilderExtra"],["small_builder","final_review","AddFinalReviewExtra"],
    ["contractor","site_user","LogSiteExtra"],["contractor","jobguard_surfaced_confirmed","ConfirmPrompt"],["contractor","office_entry","RecordOfficeExtra"],["contractor","client_instruction","RecordClientInstruction"],
   ] as const) {
    const id=randomUUID(),command=randomUUID(),target=track==="small_builder"?J:contractor;
@@ -145,6 +152,37 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
    });
    expect((await admin.query("SELECT kind,command_id,provenance FROM app.extra_origin WHERE variation_id=$1",[id])).rows).toEqual([{kind,command_id:command,provenance:"command"}]);
   }
+  // SV-2 (lane amendment for this one row): a ConfirmJobGuardCatch origin must name a real shadow signal and is
+  // never written through the runtime role. Runtime is refused with the probe barrier's identical error whatever
+  // source id it offers; the ConfirmJobGuardCatch -> jobguard_catch mapping is proven by a privileged
+  // (migration-role) insert tied to a real shadow_commercial_signal on the same job.
+  const signal=randomUUID();
+  await admin.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band)
+   VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-v1',clock_timestamp(),'Fictional outside tap','low')`,[T,J,signal,randomUUID()]);
+  const catchOrigin=async(db:Pick<PoolClient,"query">,id:string,command:string,source:string|null,type="ConfirmJobGuardCatch")=>{
+   await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,$3,$4,$5,'processing',$6)",[T,command,type,`extra-origin:${J}:${id}`,H,M]);
+   await insertVariation(db,id,J,"small_builder","jobguard_catch");
+   await db.query(`INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,provenance,source_signal_id)
+    VALUES($1,$2,$3,'small_builder','jobguard_catch',$4,$5,'owner','command',$6)`,[T,J,id,command,M,source]);
+   await db.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[T,command]);
+  };
+  const runtimeRefusal=async(source:string|null)=>{
+   try{await withTenant(runtime,ctx(),db=>catchOrigin(db.$client,randomUUID(),randomUUID(),source));throw new Error("runtime catch succeeded")}
+   catch(e){const p=e as {code:string;message:string;detail?:string;constraint?:string};return {code:p.code,message:p.message,detail:p.detail,constraint:p.constraint}}
+  };
+  const refusedReal=await runtimeRefusal(signal);
+  expect(refusedReal).toEqual(await runtimeRefusal(randomUUID()));expect(refusedReal).toEqual(await runtimeRefusal(null));
+  expect(refusedReal).toMatchObject({code:"42501",message:"shadow origin unavailable through runtime"});
+  const privileged=async(source:string|null,type?:string)=>{
+   const client=await admin.connect(),id=randomUUID(),command=randomUUID();
+   try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true)",[T]);await client.query("SET LOCAL ROLE jobguard_migration");
+    await catchOrigin(client,id,command,source,type);await client.query("COMMIT");return {id,command};
+   }catch(e){await client.query("ROLLBACK");throw e}finally{client.release()}
+  };
+  await expect(privileged(signal,"LogBuilderExtra")).rejects.toMatchObject({code:"23514"});
+  await expect(privileged(null)).rejects.toMatchObject({code:"23514"});
+  const {id:catchId,command:catchCommand}=await privileged(signal);
+  expect((await admin.query("SELECT kind,command_id,provenance,source_signal_id FROM app.extra_origin WHERE variation_id=$1",[catchId])).rows).toEqual([{kind:"jobguard_catch",command_id:catchCommand,provenance:"command",source_signal_id:signal}]);
  });
  it("creates exactly one legacy origin atomically and preserves it after pricing/state updates",async()=>{
   const id=randomUUID();await withTenant(runtime,ctx(),db=>insertVariation(db.$client,id,J));
@@ -153,13 +191,47 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
   await withTenant(runtime,ctx(),db=>db.$client.query("UPDATE app.variation SET state='rejected' WHERE id=$1",[id]));
   expect((await admin.query("SELECT * FROM app.extra_origin WHERE variation_id=$1",[id])).rows).toEqual(before);
  });
- it("new adoption import binds inside its transaction, and rollback removes both job and binding",async()=>{
+ it("new adoption import binds inside its transaction, and invalid parties leave no job or binding",async()=>{
   const imported=randomUUID(),rolled=randomUUID();
-  const adopt=(db:PoolClient,id:string)=>db.query("SELECT app.adopt_in_flight_job($1,$2,$3,'Fictional import','live',$4,'Synthetic baseline',10000,150,'reference_fee_policy_v1','synthetic_import_terms_candidate.v1',$5,'2026-09-01T00:00:00Z')",[T,id,randomUUID(),H,M]);
-  await withTenant(runtime,ctx(),db=>adopt(db.$client,imported));
-  expect((await admin.query("SELECT job_track,environment FROM app.job_commercial_track WHERE job_id=$1",[imported])).rows).toEqual([{job_track:"small_builder",environment:"synthetic_demo"}]);
-  await expect(withTenant(runtime,ctx(),async db=>{await adopt(db.$client,rolled);throw new Error("synthetic fault after import");})).rejects.toThrow("synthetic fault");
-  for(const table of ["job","job_commercial_track","imported_job_baseline"])expect((await admin.query(`SELECT * FROM app.${table} WHERE ${table==="job"?"id":"job_id"}=$1`,[rolled])).rowCount).toBe(0);
+  const source=await job(randomUUID(),"draft"),parties=(await admin.query("SELECT b.customer_revision_id,b.site_revision_id FROM app.job_party_current c JOIN app.job_party_binding b ON (b.tenant_id,b.job_id,b.id)=(c.tenant_id,c.job_id,c.binding_id) WHERE c.tenant_id=$1 AND c.job_id=$2",[T,source])).rows[0];
+  const adopt=(id:string,siteRevisionId:string)=>{const {command,mutation}=adoption(id,parties.customer_revision_id as string,siteRevisionId);return new UserCommandDispatcher(runtime).dispatch(ctx(),command,mutation);};
+  await admin.query("ALTER TABLE app.job DISABLE TRIGGER aaa_explicit_test_fixture");
+  try {
+   await adopt(imported,parties.site_revision_id as string);
+   expect((await admin.query("SELECT job_track,environment FROM app.job_commercial_track WHERE job_id=$1",[imported])).rows).toEqual([{job_track:"small_builder",environment:"synthetic_demo"}]);
+   await expect(adopt(rolled,randomUUID())).rejects.toThrow("JOB_PARTIES_REQUIRED");
+   for(const table of ["job","job_party_binding","job_party_current","job_commercial_track","imported_job_baseline"])expect((await admin.query(`SELECT * FROM app.${table} WHERE ${table==="job"?"id":"job_id"}=$1`,[rolled])).rowCount).toBe(0);
+  } finally { await admin.query("ALTER TABLE app.job ENABLE TRIGGER aaa_explicit_test_fixture"); }
+ });
+ it("a valid adoption that throws after its writes rolls back the job, parties, track and baseline",async()=>{
+  const source=await job(randomUUID(),"draft"),rolled=randomUUID();
+  const parties=(await admin.query("SELECT b.customer_revision_id,b.site_revision_id FROM app.job_party_current c JOIN app.job_party_binding b ON (b.tenant_id,b.job_id,b.id)=(c.tenant_id,c.job_id,c.binding_id) WHERE c.tenant_id=$1 AND c.job_id=$2",[T,source])).rows[0];
+  const {command,mutation}=adoption(rolled,parties.customer_revision_id as string,parties.site_revision_id as string);
+  const tables=["job","job_party_binding","job_party_current","job_commercial_track","imported_job_baseline"];
+  let authorizationId:string|undefined;
+  // The normal adoption routine supplies its own parties; the earlier-suite
+  // fixture trigger must not insert a competing binding for this imported job.
+  await admin.query("ALTER TABLE app.job DISABLE TRIGGER aaa_explicit_test_fixture");
+  try {
+   await expect(new UserCommandDispatcher(runtime).dispatch(ctx(),command,{
+    async mutate(db,effectiveCommand){
+     authorizationId=effectiveCommand.authorizationId;
+     expect(authorizationId).toBeTypeOf("string");
+     await mutation.mutate(db,effectiveCommand);
+     // Prove every business effect exists before injecting the fault. A refusal
+     // before writes cannot satisfy this test's sentinel-error assertion.
+     for(const table of tables)expect((await db.$client.query(`SELECT * FROM app.${table} WHERE tenant_id=$1 AND ${table==="job"?"id":"job_id"}=$2`,[T,rolled])).rowCount).toBe(1);
+     throw new Error("synthetic fault after valid adoption writes");
+    },
+    auditEvents:mutation.auditEvents.bind(mutation),
+   })).rejects.toThrow("synthetic fault after valid adoption writes");
+   for(const table of tables)expect((await admin.query(`SELECT * FROM app.${table} WHERE tenant_id=$1 AND ${table==="job"?"id":"job_id"}=$2`,[T,rolled])).rowCount).toBe(0);
+   expect((await admin.query("SELECT * FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[T,command.commandId])).rowCount).toBe(0);
+   expect(authorizationId).toBeDefined();
+   expect((await admin.query("SELECT * FROM app.action_authorization WHERE tenant_id=$1 AND id=$2",[T,authorizationId])).rowCount).toBe(0);
+   expect((await admin.query("SELECT * FROM app.decision WHERE tenant_id=$1 AND subject_ref=$2",[T,rolled])).rowCount).toBe(0);
+   expect((await admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2",[T,rolled])).rowCount).toBe(0);
+  } finally { await admin.query("ALTER TABLE app.job ENABLE TRIGGER aaa_explicit_test_fixture"); }
  });
  it("the real switch-live command binds atomically; a conflicting track rolls everything back",async()=>{
   const make=async()=>{

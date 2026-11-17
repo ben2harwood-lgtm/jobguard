@@ -1,0 +1,24 @@
+Listing tests:
+  [mobile-360] › CH-1.spec.ts:9:5 › CH-1 new job persists v3 terms across reload, Jobs and a second context
+  [mobile-360] › CH-1.spec.ts:21:5 › CH-1 saved v1 sample retains labelled historic pricing
+  [mobile-360] › CH-1.spec.ts:27:5 › CH-1 copy audit covers issued customer documents and stored projections
+  [mobile-360] › fee-statement.spec.ts:3:5 › shows a non-collectible transparent per-job fee illustration
+  [mobile-360] › switch-live.spec.ts:4:5 › switch live freezes the accepted baseline in the no-charge pilot
+  [mobile-360] › UIWIRE-13.spec.ts:4:5 › missing proof stays at zero and cannot be approved
+  [mobile-360] › UIWIRE-13.spec.ts:5:5 › complete generated sources permit one exact simulated approval
+  [mobile-360] › UIWIRE-14.spec.ts:4:5 › persisted statement and isolated exact what-if calculations
+  [mobile-360] › UIWIRE-5.spec.ts:8:5 › starts the same practice job once with a frozen no-charge baseline
+  [mobile-360] › UIWIRE-5.spec.ts:9:5 › labels the optional isolated base obligation as simulated and unpaid
+  [mobile-360] › UIWIRE-5.spec.ts:10:5 › does not offer activation for an unaccepted quote
+  [desktop] › CH-1.spec.ts:9:5 › CH-1 new job persists v3 terms across reload, Jobs and a second context
+  [desktop] › CH-1.spec.ts:21:5 › CH-1 saved v1 sample retains labelled historic pricing
+  [desktop] › CH-1.spec.ts:27:5 › CH-1 copy audit covers issued customer documents and stored projections
+  [desktop] › fee-statement.spec.ts:3:5 › shows a non-collectible transparent per-job fee illustration
+  [desktop] › switch-live.spec.ts:4:5 › switch live freezes the accepted baseline in the no-charge pilot
+  [desktop] › UIWIRE-13.spec.ts:4:5 › missing proof stays at zero and cannot be approved
+  [desktop] › UIWIRE-13.spec.ts:5:5 › complete generated sources permit one exact simulated approval
+  [desktop] › UIWIRE-14.spec.ts:4:5 › persisted statement and isolated exact what-if calculations
+  [desktop] › UIWIRE-5.spec.ts:8:5 › starts the same practice job once with a frozen no-charge baseline
+  [desktop] › UIWIRE-5.spec.ts:9:5 › labels the optional isolated base obligation as simulated and unpaid
+  [desktop] › UIWIRE-5.spec.ts:10:5 › does not offer activation for an unaccepted quote
+Total: 22 tests in 6 files

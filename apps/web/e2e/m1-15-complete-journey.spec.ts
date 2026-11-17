@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 async function click(page:Page,name:string){const button=page.getByRole("button",{name,exact:true});await expect(button).toBeVisible();await expect(button).toBeEnabled();await button.click();}
 import { openQuote } from "./helpers/capture-journey";
+import { openSampleFeeExample } from "./helpers/v1-sample-job";
 
 test("M1-15 complete synthetic journey retains the job spine and accepted scope", async ({ page }) => {
   test.setTimeout(60_000);
@@ -62,8 +63,7 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   await click(page, "Record remaining £750");
   await expect(page.getByRole("heading", { name: "Payment: paid" })).toBeVisible();
 
-  await page.goto("/");
-  await click(page, "See the fee example");
+  await openSampleFeeExample(page);
   await expect(page.getByRole("heading", { name: "Exact fee illustration" })).toBeVisible();
   const illustrative = page.getByText("ILLUSTRATIVE ONLY — NOT A PLATFORM TAX INVOICE");
   const preparefee = page.getByRole("button", { name: "Prepare recovery-18800 illustration", exact: true });

@@ -1,0 +1,13 @@
+
+> @jobguard/web@0.0.0 test /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/web
+> vitest run
+
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/web
+
+
+ Test Files  19 passed (19)
+      Tests  350 passed (350)
+   Start at  06:48:17
+   Duration  7.45s (transform 12.00s, setup 0ms, import 21.30s, tests 6.07s, environment 2ms)
+

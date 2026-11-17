@@ -1,6 +1,8 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { withTenant, type VerifiedTenantContext } from "@jobguard/db";
+import type { Pool } from "pg";
 import { AuthError, MemoryAuthProvider, rolePermits } from "./auth-provider.js";
 import { resolveVerifiedTenantContext } from "./principal-bridge.js";
 import { TenantAuthGuard } from "./tenant-auth.guard.js";
@@ -95,6 +97,19 @@ describe("principal to tenant bridge", () => {
     await expect(resolveVerifiedTenantContext(provider, request, ORIGIN)).rejects.toMatchObject({ code: "TENANT_FORBIDDEN" });
   });
 
+  it("freezes every minted context and throws on mutation in strict mode", async () => {
+    const { provider, session, membership } = await signup();
+    const context = await resolveVerifiedTenantContext(provider, {
+      sessionToken: session.sessionToken, csrfToken: session.csrfToken,
+      origin: ORIGIN, requestedTenantId: membership.tenantId,
+    }, ORIGIN);
+    expect(Object.isFrozen(context)).toBe(true);
+    // ESM is strict; this mutable view exercises runtime protection rather than TypeScript's readonly check.
+    const mutable: { tenantId: string } = context;
+    expect(() => { mutable.tenantId = "20000000-0000-4000-8000-000000000002"; }).toThrow(TypeError);
+    expect(context.tenantId).toBe(membership.tenantId);
+  });
+
   it("keeps the db context constructor call confined to the principal bridge", async () => {
     const authDirectory = new URL(".", import.meta.url);
     const files = (await readdir(authDirectory)).filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"));
@@ -106,11 +121,90 @@ describe("principal to tenant bridge", () => {
     expect(callers).toEqual(["principal-bridge.ts"]);
   });
 
+  it("forwards the original context through a non-replaceable request getter", async () => {
+    const { provider, session, membership } = await signup();
+    const request = {
+      cookies: { jobguard_session: session.sessionToken },
+      headers: { origin: ORIGIN, "x-tenant-id": membership.tenantId, "x-csrf-token": session.csrfToken },
+    };
+    const execution = { switchToHttp: () => ({ getRequest: () => request }) } as ExecutionContext;
+    await expect(new TenantAuthGuard(provider, ORIGIN).canActivate(execution)).resolves.toBe(true);
+    const descriptor = Object.getOwnPropertyDescriptor(request, "verifiedTenantContext")!;
+    const original = descriptor.get!();
+    expect(original).toEqual({ tenantId: membership.tenantId });
+    expect(Object.isFrozen(original)).toBe(true);
+    expect(descriptor.get!()).toBe(original);
+    expect(descriptor.set).toBeUndefined();
+    expect(descriptor.configurable).toBe(false);
+    expect(() => Object.assign(request, { verifiedTenantContext: { tenantId: "20000000-0000-4000-8000-000000000002" } })).toThrow(TypeError);
+    expect(descriptor.get!()).toBe(original);
+  });
+
   it("makes the Nest guard reject a bypassed web route without a session", async () => {
     const { provider, membership } = await signup();
     const request = { headers: { origin: ORIGIN, "x-tenant-id": membership.tenantId } };
     const context = { switchToHttp: () => ({ getRequest: () => request }) } as ExecutionContext;
     await expect(new TenantAuthGuard(provider, ORIGIN).canActivate(context)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  });
+
+  it("passes the principal bridge's stamped context to the same package module's database boundary", async () => {
+    const { provider, session, membership } = await signup();
+    const ctx = await resolveVerifiedTenantContext(provider, {
+      sessionToken: session.sessionToken, csrfToken: session.csrfToken,
+      requestedTenantId: membership.tenantId, origin: ORIGIN,
+    }, ORIGIN);
+    const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [] }));
+    const connect = vi.fn(async () => ({ query, release: vi.fn() }));
+    await withTenant({ connect } as unknown as Pool, ctx, async () => undefined);
+    expect(connect).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledWith("SELECT set_config('app.tenant_id', $1, true)", [membership.tenantId]);
+  });
+
+  it.each(["O11 Promise.resolve", "R8 Promise.all", "R10 generic patch"])("refuses a substituted context after %s before connecting", async form => {
+    const { provider, session, membership } = await signup();
+    const context = await resolveVerifiedTenantContext(provider, {
+      sessionToken: session.sessionToken, csrfToken: session.csrfToken,
+      requestedTenantId: membership.tenantId, origin: ORIGIN,
+    }, ORIGIN);
+    const tenantId = "20000000-0000-4000-8000-000000000002";
+    // This opaque generic signature models R10's imported helper; no context-specific type or mutation is needed.
+    const patch = <T extends object>(value: T, change: Partial<T>): T => ({ ...value, ...change });
+    let substituted: VerifiedTenantContext;
+    if (form === "O11 Promise.resolve") {
+      const copy = await Promise.resolve(context);
+      substituted = { ...copy, tenantId };
+    } else if (form === "R8 Promise.all") {
+      const [copy] = await Promise.all([Promise.resolve(context)]);
+      substituted = { ...copy, tenantId };
+    } else {
+      substituted = patch(context, { tenantId });
+    }
+    expect(substituted.tenantId).toBe(tenantId);
+    expect(context.tenantId).toBe(membership.tenantId);
+    const connect = vi.fn();
+    const work = vi.fn();
+    await expect(withTenant({ connect } as unknown as Pool, substituted, work)).rejects.toMatchObject({ code: "INVALID_TENANT_CONTEXT" });
+    expect(connect).not.toHaveBeenCalled();
+    expect(work).not.toHaveBeenCalled();
+  });
+
+  it("allows only the worker to call the queued-system-job context constructor", async () => {
+    const root = new URL("../../../../", import.meta.url);
+    const callers: string[] = [];
+    async function inspect(directory: string): Promise<void> {
+      for (const entry of await readdir(join(root.pathname, directory), { withFileTypes: true })) {
+        if (["node_modules", "dist", ".next"].includes(entry.name)) continue;
+        const path = `${directory}/${entry.name}`;
+        if (entry.isDirectory()) await inspect(path);
+        else if (/\.(?:[cm]?[jt]s|tsx)$/u.test(entry.name) && !/\.(?:test|spec)\./u.test(entry.name)) {
+          // The definition and public re-export are not constructor callers.
+          if (["packages/db/src/tenant-context.ts", "packages/db/src/index.ts"].includes(path)) continue;
+          if ((await readFile(join(root.pathname, path), "utf8")).includes("verifiedTenantContextForQueuedJob")) callers.push(path);
+        }
+      }
+    }
+    for (const directory of ["apps", "packages", "tools"]) await inspect(directory);
+    expect(callers.sort()).toEqual(["apps/api/src/worker.ts"]);
   });
 });
 

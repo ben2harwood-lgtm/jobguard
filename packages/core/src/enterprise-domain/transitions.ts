@@ -1,6 +1,15 @@
 import { enterpriseTransitionV1, originForCommand, readEnterprise, covers, refuse, assertExtraProvenance, enterpriseRoles, type EnterpriseExtra } from "./contracts.js";
 import { approvalSnapshotValid, assertDuplicateGroup, captureSatisfied } from "./origin.js";
 
+// The three recording lists follow the founder's answer of 11 Oct 2026 (card jobguard-ent4b-who-records-extras-2026-10-11); ConfirmPrompt and ImportOrderLine keep the BUILD_PLAN §9.1.4 rows.
+const raisingRoles = {
+  LogSiteExtra: ["operative", "supervisor", "surveyor"],
+  RecordOfficeExtra: ["finance", "admin", "owner"],
+  RecordClientInstruction: ["commercial_manager", "admin", "owner"],
+  ConfirmPrompt: ["supervisor", "surveyor", "commercial_manager"],
+  ImportOrderLine: ["surveyor", "commercial_manager", "connector"],
+} as const satisfies Record<string, readonly (typeof enterpriseRoles[number])[]>;
+
 /** Pure projection/assertion over supplied server facts; no role grants, commands, effects or approvals are executed. */
 export function transitionExtra(raw: unknown): EnterpriseExtra {
   const input = readEnterprise(enterpriseTransitionV1, raw), { command, actor } = input;
@@ -13,7 +22,7 @@ export function transitionExtra(raw: unknown): EnterpriseExtra {
   const result = (state: EnterpriseExtra["state"], patch: Partial<EnterpriseExtra> = {}): EnterpriseExtra => ({ ...e, ...patch, state });
   if (["LogSiteExtra", "ConfirmPrompt", "RecordOfficeExtra", "RecordClientInstruction", "ImportOrderLine"].includes(command)) {
     if (input.extra !== null || input.creation.state !== "logged" || e.revision.approvals.length !== 0 || e.exportLineId !== null || e.exportedAt !== null || e.billingFacts.length !== 0 || e.duplicateOf !== null) return refuse("INVALID_TRANSITION");
-    const roles = command === "LogSiteExtra" ? ["operative", "supervisor"] : command === "ConfirmPrompt" ? ["supervisor", "surveyor", "commercial_manager"] : command === "RecordOfficeExtra" ? ["supervisor", "surveyor", "commercial_manager", "admin"] : ["surveyor", "commercial_manager", "connector"];
+    const roles = raisingRoles[command as keyof typeof raisingRoles];
     permit(roles);
     const expected = originForCommand(command, "contractor");
     if (e.origin.origin.jobTrack !== expected.jobTrack || e.origin.origin.kind !== expected.kind || e.raisingCommand.type !== command ||

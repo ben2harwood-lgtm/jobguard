@@ -1,0 +1,10 @@
+work-order-import exit=0 secs=22  Test Files 1 passed (1); Tests 49 passed (49);
+job-scheduling exit=0 secs=5  Test Files 1 passed (1); Tests 9 passed (9);
+contractor exit=0 secs=9  Test Files 1 passed (1); Tests 19 passed (19);
+contractor-parties exit=0 secs=4  Test Files 1 passed (1); Tests 19 passed (19);
+tenancy exit=0 secs=3  Test Files 1 passed (1); Tests 9 passed (9);
+UIWIRE-12 exit=0 secs=2  Test Files 1 passed (1); Tests 22 passed (22);
+demo-bootstrap exit=0 secs=2  Test Files 1 passed (1); Tests 4 passed (4);
+work-order-concurrency exit=0 secs=6  Test Files 1 passed (1); Tests 6 passed (6);
+sor-pricing exit=0 secs=3  Test Files 1 passed (1); Tests 9 passed (9);
+DONE

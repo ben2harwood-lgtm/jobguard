@@ -1,0 +1,33 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-2/packages/db
+
+ ❯ test/contractor.integration.test.ts (19 tests | 1 failed | 18 skipped) 2173ms
+   × ENT-2 conformance: the work-order import, SoR import, register, batch, revision, assignment, visit, price-list and resident reads agree with the pure role and scope rules, per client in two branches 762ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/contractor.integration.test.ts > ENT-2 conformance: the work-order import, SoR import, register, batch, revision, assignment, visit, price-list and resident reads agree with the pure role and scope rules, per client in two branches
+AssertionError: admin@branch: revision of the clientB order (client B) through the import: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ test/contractor.integration.test.ts:421:188
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 18 skipped (19)
+   Start at  16:25:24
+   Duration  3.03s (transform 414ms, setup 0ms, import 767ms, tests 2.17s, environment 0ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ent-2/packages/db:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run --maxWorkers=1 test/contractor.integration.test.ts -t ENT-2 conformance
+~/.local/bin/heavy-slot ent-2 pnpm --filter @jobguard/db exec vitest run   -t  2.80s user 1.19s system 89% cpu 4.446 total

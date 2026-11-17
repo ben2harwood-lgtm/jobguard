@@ -1,4 +1,5 @@
-import { closeTestPools } from "./pool-test-utils.js";
+import { testTenantContext } from "./tenant-context-test-utils.js";
+import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,11 +8,10 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   appendAuditBatch, exportAuditCheckpoints, migrate, verifyAuditChain,
-  type AuditEvent, type AuditEventInput, type VerifiedTenantContext, withTenant,
-} from "../src/index.js";
+  type AuditEvent, type AuditEventInput, withTenant} from "../src/index.js";
 
 const TENANT = "30000000-0000-4000-8000-000000000003";
-const context = { tenantId: TENANT } as VerifiedTenantContext;
+const context = testTenantContext(TENANT);
 const event = (n: number): AuditEventInput => ({
   id: `40000000-0000-4000-8000-${n.toString().padStart(12, "0")}`,
   version: "audit.v1", actorRef: "user:synthetic", eventType: "account.changed",
@@ -38,7 +38,7 @@ async function readChain(): Promise<AuditEvent[]> {
 
 beforeAll(async () => {
   databaseDir = await mkdtemp(join(tmpdir(), "jobguard-audit-pg16-"));
-  port = 56000 + Math.floor(Math.random() * 500);
+  port = await freePort(56000, 500);
   postgres = new EmbeddedPostgres({ databaseDir, port,
     user: "postgres", password: "synthetic-test-only", persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });

@@ -3,13 +3,14 @@ import { z } from "zod";
 export const supplierFixtureIds = ["materials-B-delivery", "materials-B-invoice", "materials-B-revised-invoice", "materials-320-invoice", "materials-B-credit", "pending", "corrupt", "oversized", "unreadable", "password-protected", "multi-page-invoice"] as const;
 export const supplierDocumentIntakeV1 = z.object({
   version: z.literal("supplier-document-intake.v1"),
+  commandId: z.string().uuid().optional(),
   fixtureId: z.enum(supplierFixtureIds),
   channel: z.enum(["picker", "fixture_mail"]),
   alias: z.string().max(200).optional(),
   expectedRevision: z.number().int().nonnegative(),
   remoteUrl: z.never().optional(), attachmentPath: z.never().optional(), partial: z.literal(false).optional(),
 }).strict();
-export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),accepted:z.string().regex(/^\d+(?:\.\d+)?$/),rejected:z.string().regex(/^\d+(?:\.\d+)?$/),expectedRevision:z.number().int().nonnegative()}).strict();
+export const goodsReceiptV1 = z.object({version:z.literal("goods-receipt.v1"),commandId:z.string().uuid().optional(),accepted:z.string().regex(/^\d+(?:\.\d+)?$/),rejected:z.string().regex(/^\d+(?:\.\d+)?$/),expectedRevision:z.number().int().nonnegative()}).strict();
 export type SupplierDocumentIntake=z.infer<typeof supplierDocumentIntakeV1>;
 
 export const supplierFixtures = {

@@ -1,6 +1,1279 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/auth/scim/{connectionId}/deactivations": {
+      "post": {
+        "operationId": "ScimController_deactivate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "eventId",
+                  "subject",
+                  "active"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "scim-deactivation.v1"
+                    ]
+                  },
+                  "eventId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "active": {
+                    "type": "boolean",
+                    "enum": [
+                      false
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "scim-deactivation-result.v1; deactivated, ignored or owner protected; synthetic only"
+          },
+          "400": {
+            "description": "INVALID_SCIM_INPUT"
+          },
+          "403": {
+            "description": "SCIM_REFUSED; identical for every unproved caller"
+          },
+          "409": {
+            "description": "SCIM_EVENT_CONFLICT"
+          },
+          "503": {
+            "description": "SCIM_UNAVAILABLE; no deactivation committed"
+          }
+        },
+        "summary": "Record a proved synthetic provider deactivation and immediately revoke company access",
+        "tags": [
+          "scim"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/site-extras": {
+      "post": {
+        "operationId": "SiteExtraController_log",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "note",
+                      "description"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "log-site-extra.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 5000,
+                        "pattern": "\\S"
+                      },
+                      "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "note",
+                      "description",
+                      "siteVisitId"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "log-site-extra.v2"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 5000,
+                        "pattern": "\\S"
+                      },
+                      "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "pattern": "\\S"
+                      },
+                      "siteVisitId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The caller's own open visit on this job"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "note",
+                      "description"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "log-site-extra.v3"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 5000,
+                        "pattern": "\\S"
+                      },
+                      "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "pattern": "\\S"
+                      },
+                      "photoEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "residentConfirmation": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "shownContentSha256"
+                        ],
+                        "properties": {
+                          "shownContentSha256": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "201": {
+            "description": "Site extra logged, or the identical stored result replayed"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept site extras. IDEMPOTENCY_CONFLICT: command id reused with a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "PHOTO_NOT_ACCEPTED: the photo is not a verified site photo of this job. CONFIRMATION_MISMATCH: the hash shown is not the server's content hash.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "version",
+                    "code"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "enum": [
+                        "site-extra-error.v1"
+                      ]
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "PHOTO_NOT_ACCEPTED",
+                        "CONFIRMATION_MISMATCH"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Log a site extra in synthetic_demo (v1 note only, v2 with an open visit, or v3 with a verified photo and a resident confirmation); persisted session and database authority only",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/site-extras/sor": {
+      "post": {
+        "operationId": "SiteExtraPricingController_logSor",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "sorCode",
+                  "quantity",
+                  "note"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "log-sor-site-extra.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "sorCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "quantity": {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$"
+                  },
+                  "orderLineScopeItemId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 5000,
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Schedule-item site extra logged and priced by the server, or the identical stored result replayed"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept site extras. IDEMPOTENCY_CONFLICT: command id reused with a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Log a schedule-of-rates site extra in synthetic_demo; the server compares it with the order and prices the extra quantity alone",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/sor-items": {
+      "get": {
+        "operationId": "SiteExtraPricingController_sorItems",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "description": "1 to 80 characters after trimming",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Items of this job's price list whose code or description contains the text (at most 50)"
+          }
+        },
+        "summary": "Search the price list of this job's work order",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/order-check": {
+      "get": {
+        "operationId": "SiteExtraPricingController_orderCheck",
+        "parameters": [
+          {
+            "name": "orderLine",
+            "required": false,
+            "in": "query",
+            "description": "scope item id of the order line, when the code is on more than one line",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "quantity",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sorCode",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "already_on_order, more_than_ordered (with the extra quantity) or new"
+          }
+        },
+        "summary": "Compare a schedule item and a total quantity with the order, before logging",
+        "tags": [
+          "contractor-site-extras"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/site-visits/start": {
+      "post": {
+        "operationId": "SiteVisitController_start",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "start-site-visit.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Visit started, or the identical stored result replayed"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept visit commands. IDEMPOTENCY_CONFLICT: command id reused with a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start a site visit in synthetic_demo; persisted session and database authority only",
+        "tags": [
+          "contractor-site-visits"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/site-visits/{visitId}/complete": {
+      "post": {
+        "operationId": "SiteVisitController_complete",
+        "parameters": [
+          {
+            "name": "visitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "closeoutAnswer"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "complete-site-visit.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "closeoutAnswer": {
+                    "type": "string",
+                    "enum": [
+                      "yes",
+                      "no"
+                    ],
+                    "description": "Did the resident ask for anything extra?"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Visit completed with its close-out answer, or the identical stored result replayed"
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept visit commands. IDEMPOTENCY_CONFLICT: command id reused with a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Complete a site visit with the close-out answer in synthetic_demo; a visit cannot be completed without one",
+        "tags": [
+          "contractor-site-visits"
+        ]
+      }
+    },
+    "/contractor/site/jobs": {
+      "get": {
+        "operationId": "SiteVisitController_assignedJobs",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The caller's assigned jobs, with their own open visit"
+          }
+        },
+        "summary": "List the jobs the caller is named on (site worker); no money, resident or address",
+        "tags": [
+          "contractor-site-visits"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/order-lines": {
+      "get": {
+        "operationId": "SiteVisitController_orderLines",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The lines of the order's current revision, without prices"
+          }
+        },
+        "summary": "List the order lines of one assigned job (site worker); no money",
+        "tags": [
+          "contractor-site-visits"
+        ]
+      }
+    },
+    "/contractor/practice/session/revoke": {
+      "post": {
+        "operationId": "ContractorPracticeSessionController_revoke",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "contractor-practice-session-revoke.v1"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "End only the caller's contractor practice session; home practice is unchanged",
+        "tags": [
+          "contractor-practice-session"
+        ]
+      }
+    },
+    "/auth/sso-required": {
+      "get": {
+        "operationId": "SsoRequiredController_view",
+        "parameters": [
+          {
+            "name": "requested_tenant_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "sso-required-view.v1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "sso-required-state.v1; administrator, origin and CSRF required"
+          }
+        },
+        "summary": "Read persisted synthetic single sign-on requirement",
+        "tags": [
+          "sso-required"
+        ]
+      },
+      "post": {
+        "operationId": "SsoRequiredController_command",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "requested_tenant_id",
+                  "required",
+                  "expectedRevision",
+                  "reason"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "sso-required-command.v1"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483646
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Persisted switch and audit in one transaction; synthetic only"
+          }
+        },
+        "summary": "Append an SSO requirement revision from a bound administrator session",
+        "tags": [
+          "sso-required"
+        ]
+      }
+    },
+    "/auth/sso-required/emergency": {
+      "post": {
+        "operationId": "SsoRequiredController_emergency",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "requested_tenant_id",
+                  "email",
+                  "code",
+                  "reason"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "sso-emergency.v1"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{8}$"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "403": {
+            "description": "SSO_EMERGENCY_REFUSED; identical for every cause; no session"
+          }
+        },
+        "summary": "Mailbox-proven emergency access; approver rule held, every request refused",
+        "tags": [
+          "sso-required"
+        ]
+      }
+    },
+    "/auth/sso/{connectionId}/start": {
+      "get": {
+        "operationId": "SsoController_view",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "sso-admin-view.v1; tenant scoped; current admin and CSRF required"
+          }
+        },
+        "summary": "Read persisted synthetic contractor SAML administration",
+        "tags": [
+          "sso"
+        ]
+      },
+      "post": {
+        "operationId": "SsoController_start",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "action"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "sso-admin.v1",
+                      "sso-start.v1"
+                    ]
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "connection.create",
+                      "domain.verify",
+                      "mapping.set",
+                      "signin"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "connectionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "idpCert": {
+                    "type": "string"
+                  },
+                  "domain": {
+                    "type": "string"
+                  },
+                  "proof": {
+                    "type": "string"
+                  },
+                  "group": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "operative",
+                      "supervisor",
+                      "surveyor",
+                      "commercial_manager",
+                      "finance",
+                      "read_only"
+                    ]
+                  },
+                  "scope": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "tenant",
+                          "region",
+                          "branch",
+                          "team"
+                        ]
+                      },
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "linkExisting": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Persisted admin view or sso-started.v1 plus Secure HttpOnly browser-state cookie; no provider outbound"
+          }
+        },
+        "summary": "Administer a synthetic SAML connection or issue a database-backed sign-in request",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/auth/sso/{connectionId}/callback": {
+      "post": {
+        "operationId": "SsoController_callback",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "SAMLResponse",
+                  "relayState"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "sso-callback.v1"
+                    ]
+                  },
+                  "SAMLResponse": {
+                    "type": "string",
+                    "maxLength": 262144
+                  },
+                  "relayState": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{43}$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "sso-signed-in.v1; opaque token only in Secure HttpOnly cookie; unsolicited Responses refused"
+          }
+        },
+        "summary": "Validate solicited double-signed SAML, consume assertion once and issue bounded persisted session",
+        "tags": [
+          "sso"
+        ]
+      }
+    },
+    "/contractor/audit-exports": {
+      "get": {
+        "operationId": "AuditExportController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List persisted single-tenant signed audit exports; current tenant-wide owner/admin only",
+        "tags": [
+          "audit-exports"
+        ]
+      },
+      "post": {
+        "operationId": "AuditExportController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "audit-export-request.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Create audit-export-request.v1 in synthetic_demo with restricted checkpoint handoff. The signature proves export integrity only",
+        "tags": [
+          "audit-exports"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/follow-ups": {
+      "get": {
+        "operationId": "RecoveryFollowUpController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the saved practice follow-ups, their displayed state and the run's fake clock for a recovery case",
+        "tags": [
+          "recovery-follow-ups"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryFollowUpController_schedule",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Schedule a practice follow-up for the delivered message and case revision the builder reviewed; exact replays return the current state",
+        "tags": [
+          "recovery-follow-ups"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/follow-ups/{followUpId}/commands": {
+      "post": {
+        "operationId": "RecoveryFollowUpController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Advance practice time, open the reminder review, approve the exact reminder or cancel a follow-up by an exact versioned command; exact replays return the current state",
+        "tags": [
+          "recovery-follow-ups"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/messages": {
+      "get": {
+        "operationId": "RecoveryMessageController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read the saved practice messages, delivery state and practice sink for a recovery case",
+        "tags": [
+          "recovery-messages"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryMessageController_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview the exact factual practice message bound to the attachment-approved evidence pack; exact replays return current case/message state",
+        "tags": [
+          "recovery-messages"
+        ]
+      }
+    },
+    "/recovery-cases/{id}/messages/{messageId}/commands": {
+      "post": {
+        "operationId": "RecoveryMessageController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Approve, revoke, advance or reconcile a practice message by an exact versioned command; exact replays return current case/message state",
+        "tags": [
+          "recovery-messages"
+        ]
+      }
+    },
+    "/jobs/{id}/prevention-checks": {
+      "get": {
+        "operationId": "PreventionCheckController_view",
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "Missing or invalid practice session"
+          },
+          "404": {
+            "description": "Job absent or owned by another practice session"
+          }
+        },
+        "summary": "Read persisted cited prevention checks and the saved paying party; synthetic only",
+        "tags": [
+          "prevention-checks"
+        ]
+      }
+    },
+    "/jobs/{id}/prevention-checks/{action}": {
+      "post": {
+        "operationId": "PreventionCheckController_command",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "commandId",
+                  "action",
+                  "expectedBindingId",
+                  "scenarioNow",
+                  "fixture"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "prevention-command.v1"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "property",
+                      "company",
+                      "start_watch",
+                      "stop_watch",
+                      "evaluate_watch"
+                    ]
+                  },
+                  "expectedBindingId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "scenarioNow": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "fixture": {
+                    "type": "string",
+                    "enum": [
+                      "mixed",
+                      "fresh",
+                      "stale",
+                      "missing"
+                    ]
+                  },
+                  "expectedWatchRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Required for watch commands"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid strict command or not a registered company"
+          },
+          "409": {
+            "description": "Command, binding or watch revision conflict"
+          }
+        },
+        "summary": "Explicit synthetic property/company check or start, stop, evaluate a customer watch; no sends, Decisions or fees",
+        "tags": [
+          "prevention-checks"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "HealthController_health",
@@ -269,6 +1542,21 @@
         ]
       }
     },
+    "/jobs/{id}/quotes/preview": {
+      "post": {
+        "operationId": "QuoteController_preview",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Preview a quote with its immutable customer, paying party and site revisions",
+        "tags": [
+          "quotes"
+        ]
+      }
+    },
     "/jobs/{id}/variations": {
       "get": {
         "operationId": "VariationController_get",
@@ -358,6 +1646,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused with a different request, including saved-response and legacy replays.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -638,6 +1948,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Append a synthetic purchase-order draft revision",
@@ -653,6 +1985,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Authorize one exact simulated purchase-order placement",
@@ -683,6 +2037,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Ingest one generated merchant fixture",
@@ -698,6 +2074,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Append an actual synthetic goods receipt",
@@ -713,6 +2111,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Confirm or correct cited supplier facts",
@@ -741,6 +2161,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Create a deterministic source match proposal",
@@ -756,6 +2198,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Append a human source-match correction",
@@ -792,6 +2256,21 @@
         ]
       }
     },
+    "/jobs/{id}/recovery-cases/terms": {
+      "post": {
+        "operationId": "RecoveryCaseController_terms",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record owner agreement to proposed synthetic case fee terms",
+        "tags": [
+          "recovery-cases"
+        ]
+      }
+    },
     "/jobs/{id}/recovery-cases/eligibility": {
       "post": {
         "operationId": "RecoveryCaseController_eligibility",
@@ -801,7 +2280,7 @@
             "description": ""
           }
         },
-        "summary": "Review or approve synthetic reference D03 eligibility",
+        "summary": "Review v1/v3 synthetic D03 candidates or approve a v1 review",
         "tags": [
           "recovery-cases"
         ]
@@ -829,6 +2308,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Evaluate confirmed matched facts with a versioned pure rule",
@@ -844,6 +2345,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Dismiss or dispute a finding with a reason",
@@ -859,6 +2382,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Approve a confirmed source-backed replacement bill",
@@ -889,6 +2434,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused with a different request, including saved-response and legacy replays.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Confirm an immutable synthetic work-plan revision",
@@ -904,6 +2471,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused with a different request, including saved-response and legacy replays.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Advance the per-run scenario clock and deduplicate the due review",
@@ -934,6 +2523,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Record deterministic synthetic findings",
@@ -964,6 +2575,28 @@
         "responses": {
           "201": {
             "description": ""
+          },
+          "409": {
+            "description": "JOB_NOT_LIVE: only live jobs accept watchdog inputs. IDEMPOTENCY_CONFLICT: command identity was reused.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "JOB_NOT_LIVE",
+                        "IDEMPOTENCY_CONFLICT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Dismiss one job-bound advisory Decision idempotently",
@@ -1071,6 +2704,1595 @@
         },
         "tags": [
           "evidence-packs"
+        ]
+      }
+    },
+    "/contractor/practice": {
+      "post": {
+        "operationId": "ContractorController_start",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Generate an isolated synthetic contractor organisation; no sends or charges",
+        "tags": [
+          "contractor-organisation"
+        ]
+      }
+    },
+    "/contractor": {
+      "get": {
+        "operationId": "ContractorController_read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read contractor organisation or scoped immutable client contracts",
+        "tags": [
+          "contractor-organisation"
+        ]
+      }
+    },
+    "/contractor/commands": {
+      "post": {
+        "operationId": "ContractorController_command",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Execute an audited versioned contractor administration command",
+        "tags": [
+          "contractor-organisation"
+        ]
+      }
+    },
+    "/contractor/clients/{clientId}/customer-link": {
+      "post": {
+        "operationId": "ContractorPartiesController_link",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Append an audited synthetic client to customer link; organisation.manage required",
+        "tags": [
+          "contractor-parties"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/resident-contact": {
+      "get": {
+        "operationId": "ContractorPartiesController_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read resident contact only through persisted contractor job scope; unknown scope returns 404",
+        "tags": [
+          "contractor-parties"
+        ]
+      }
+    },
+    "/contractor/work-order-imports": {
+      "get": {
+        "operationId": "WorkOrderController_overview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Office register of work-order import batches and orders, with the selectable generated files; organisation.manage or data.import required",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      },
+      "post": {
+        "operationId": "WorkOrderController_import",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import a generated synthetic work-order file (work-order-import.v1); organisation.manage or data.import required, no arbitrary upload",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/work-order-imports/{batchId}": {
+      "get": {
+        "operationId": "WorkOrderController_batch",
+        "parameters": [
+          {
+            "name": "batchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "One import batch with its per-row receipts and typed errors",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/work-orders/{workOrderId}/revisions": {
+      "get": {
+        "operationId": "WorkOrderController_revisions",
+        "parameters": [
+          {
+            "name": "workOrderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Immutable revisions of one work order with diffs and stable line identities; resident contact is never included",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/sor-versions": {
+      "get": {
+        "operationId": "WorkOrderController_sorVersions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Immutable schedule-of-rates versions; contract.read required",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      },
+      "post": {
+        "operationId": "WorkOrderController_importSor",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Import an immutable schedule-of-rates version (sor-version-import.v1); contract.manage required",
+        "tags": [
+          "contractor-work-orders"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/assignments": {
+      "get": {
+        "operationId": "SchedulingController_assignments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The team and operatives assigned to a work-order job; job.read through the job's own scope, else the same 404 as an unknown job",
+        "tags": [
+          "contractor-scheduling"
+        ]
+      }
+    },
+    "/contractor/jobs/{id}/site-visits": {
+      "get": {
+        "operationId": "SchedulingController_siteVisits",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Recorded site visits (server times) of a work-order job; empty until ENT-3 records visits",
+        "tags": [
+          "contractor-scheduling"
+        ]
+      }
+    },
+    "/jobs/{id}/parties": {
+      "get": {
+        "operationId": "JobPartiesController_view",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted customer, paying party, site and recognition projection"
+          }
+        },
+        "summary": "Read job-parties-workspace.v1 with tenant-scoped identity suggestions",
+        "tags": [
+          "job-parties"
+        ]
+      },
+      "post": {
+        "operationId": "JobPartiesController_command",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Typed revision, identity or idempotency conflict"
+          }
+        },
+        "summary": "Execute job-parties-command.v1 (operational; no commercial approval)",
+        "tags": [
+          "job-parties"
+        ]
+      }
+    },
+    "/jobs/{id}/parties/import": {
+      "post": {
+        "operationId": "JobPartiesController_adopt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "JOB_PARTIES_REQUIRED or stale source binding"
+          }
+        },
+        "summary": "Adopt the supplied fictional job using the exact saved party binding",
+        "tags": [
+          "job-parties"
+        ]
+      }
+    },
+    "/job-parties/jobs": {
+      "get": {
+        "operationId": "JobPartiesListController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read job-parties-list.v1 including captured jobs and saved customer/site labels",
+        "tags": [
+          "job-parties"
+        ]
+      }
+    },
+    "/jobs/{id}/practice-feed": {
+      "get": {
+        "operationId": "PracticeFeedController_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted practice-feed-view.v1; synthetic movement facts only, never an allocation"
+          },
+          "401": {
+            "description": "No practice session"
+          },
+          "403": {
+            "description": "Synthetic environment or client-selected tenant forbidden"
+          },
+          "404": {
+            "description": "Job missing, unbound or owned by another practice session"
+          }
+        },
+        "summary": "Read session-owned synthetic settled movement facts without connecting any provider",
+        "tags": [
+          "practice-feed"
+        ]
+      },
+      "post": {
+        "operationId": "PracticeFeedController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "connect"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "disconnect"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement",
+                      "step"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "advance"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-384",
+                          "receipt-3000",
+                          "receipt-41280",
+                          "receipt-24000",
+                          "receipt-17280",
+                          "receipt-960",
+                          "supplier-refund-540"
+                        ]
+                      },
+                      "step": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "settled",
+                          "replay",
+                          "page_overlap",
+                          "alternate_representation",
+                          "unknown_duplicate"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "reconcile_duplicate"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-384",
+                          "receipt-3000",
+                          "receipt-41280",
+                          "receipt-24000",
+                          "receipt-17280",
+                          "receipt-960",
+                          "supplier-refund-540"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement",
+                      "paymentId"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-feed-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "match_receipt"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-384",
+                          "receipt-3000",
+                          "receipt-41280",
+                          "receipt-24000",
+                          "receipt-17280",
+                          "receipt-960"
+                        ]
+                      },
+                      "paymentId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Persisted practice-feed-view.v1; settlement never allocates money"
+          },
+          "400": {
+            "description": "Invalid or forged command"
+          },
+          "401": {
+            "description": "No authenticated practice session"
+          },
+          "404": {
+            "description": "Job missing, unbound or owned by another practice session"
+          },
+          "409": {
+            "description": "Stale revision, conflicting replay, unsettled or mismatched receipt, or disconnected feed"
+          }
+        },
+        "summary": "Connect, advance a generated movement, reconcile a duplicate, match a builder-attested receipt, or disconnect the practice feed",
+        "tags": [
+          "practice-feed"
+        ]
+      }
+    },
+    "/auth/request": {
+      "post": {
+        "operationId": "IdentityController_request",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "email",
+                  "purpose"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "identity-request.v1"
+                    ]
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "enum": [
+                      "signup",
+                      "signin",
+                      "invitation"
+                    ]
+                  },
+                  "invitationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Non-enumerating acknowledgement; synthetic code shown only for .invalid fixtures"
+          }
+        },
+        "summary": "Request an entered identity code; fixture transport only until D04",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/auth/verify": {
+      "post": {
+        "operationId": "IdentityController_verify",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "email",
+                  "purpose",
+                  "code"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "identity-verify.v1"
+                    ]
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "enum": [
+                      "signup",
+                      "signin",
+                      "invitation"
+                    ]
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[0-9]{8}$"
+                  },
+                  "invitationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Opaque HttpOnly Secure SameSite=strict cookie; no token in JSON"
+          }
+        },
+        "summary": "Consume an entered code atomically and set a secure session cookie",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "operationId": "IdentityController_session",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "identity-session.v1; never honours a synthetic cookie"
+          }
+        },
+        "summary": "Read persisted session and current memberships",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/auth/invitations": {
+      "post": {
+        "operationId": "IdentityController_invite",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "requested_tenant_id",
+                  "email",
+                  "role"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "identity-invitation.v1"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "estimator",
+                      "foreman",
+                      "operative",
+                      "finance",
+                      "read_only"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Immutable invitation; no real email dispatch"
+          }
+        },
+        "summary": "Owner-authorized invitation binds email, tenant and role",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/jobs/{id}/practice-facts": {
+      "get": {
+        "operationId": "PracticeFactsController_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted practice-facts-view.v1; synthetic movement facts only, never an allocation"
+          },
+          "401": {
+            "description": "No practice session"
+          },
+          "403": {
+            "description": "Synthetic environment or client-selected tenant forbidden"
+          },
+          "404": {
+            "description": "Job missing, unbound or owned by another practice session"
+          }
+        },
+        "summary": "Read session-owned synthetic settled movement facts without connecting any provider",
+        "tags": [
+          "practice-facts"
+        ]
+      },
+      "post": {
+        "operationId": "PracticeFactsController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement",
+                      "step"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-facts-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "advance"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-12000",
+                          "receipt-14640",
+                          "supplier-payment-600",
+                          "supplier-payment-840",
+                          "receipt-interest-120",
+                          "receipt-compensation-70"
+                        ]
+                      },
+                      "step": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "settled",
+                          "replay",
+                          "page_overlap",
+                          "alternate_representation",
+                          "unknown_duplicate"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-facts-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "reconcile_duplicate"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-12000",
+                          "receipt-14640",
+                          "supplier-payment-600",
+                          "supplier-payment-840",
+                          "receipt-interest-120",
+                          "receipt-compensation-70"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedRevision",
+                      "action",
+                      "movement",
+                      "paymentId"
+                    ],
+                    "properties": {
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "practice-facts-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedRevision": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "match_receipt"
+                        ]
+                      },
+                      "movement": {
+                        "type": "string",
+                        "enum": [
+                          "receipt-12000",
+                          "receipt-14640",
+                          "receipt-interest-120",
+                          "receipt-compensation-70"
+                        ]
+                      },
+                      "paymentId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Persisted practice-facts-view.v1; settlement never allocates money"
+          },
+          "400": {
+            "description": "Invalid or forged command"
+          },
+          "401": {
+            "description": "No authenticated practice session"
+          },
+          "404": {
+            "description": "Job missing, unbound or owned by another practice session"
+          },
+          "409": {
+            "description": "Stale revision, conflicting replay, unsettled or mismatched receipt, or disconnected feed"
+          }
+        },
+        "summary": "Advance an extra synthetic movement, reconcile its duplicate or match an exact customer receipt",
+        "tags": [
+          "practice-facts"
+        ]
+      }
+    },
+    "/jobs/{id}/final-account/lock": {
+      "get": {
+        "operationId": "FinalAccountLockController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read final-account completion without shadow content",
+        "tags": [
+          "final-account lock"
+        ]
+      },
+      "post": {
+        "operationId": "FinalAccountLockController_lock",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Complete final account or issue an exact lock-bound synthetic invoice",
+        "tags": [
+          "final-account lock"
+        ]
+      }
+    },
+    "/jobs/{id}/final-account/dispositions": {
+      "post": {
+        "operationId": "FinalAccountLockController_disposition",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Record baseline scope disposition",
+        "tags": [
+          "final-account lock"
+        ]
+      }
+    },
+    "/jobs/{id}/final-account/terms": {
+      "post": {
+        "operationId": "FinalAccountLockController_terms",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Accept the closed synthetic Final Check terms",
+        "tags": [
+          "final-account lock"
+        ]
+      }
+    },
+    "/jobs/{id}/final-account/review-extras": {
+      "post": {
+        "operationId": "FinalAccountLockController_extra",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Add a builder capture during final review",
+        "tags": [
+          "final-account lock"
+        ]
+      }
+    },
+    "/jobs/{id}/recovery-allocations": {
+      "get": {
+        "operationId": "RecoveryAllocationController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "recovery-allocation-view.v1; exact rational line amounts, no fees"
+          }
+        },
+        "summary": "Read persisted synthetic receipt allocation and reversal facts",
+        "tags": [
+          "recovery-allocations"
+        ]
+      },
+      "post": {
+        "operationId": "RecoveryAllocationController_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "caseId",
+                      "paymentId",
+                      "evidenceId"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "review"
+                        ]
+                      },
+                      "caseId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "paymentId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "evidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "caseId",
+                      "paymentId",
+                      "evidenceId",
+                      "approvalHash"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "allocate"
+                        ]
+                      },
+                      "caseId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "paymentId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "evidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "approvalHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "allocationId"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "creditNoteId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "review_reverse"
+                        ]
+                      },
+                      "allocationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "allocationId",
+                      "approvalHash"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "creditNoteId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "reverse"
+                        ]
+                      },
+                      "allocationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "approvalHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "recovery-allocation-view.v1; reviewed or approved artifact"
+          },
+          "409": {
+            "description": "Changed approval, stale case, unavailable cash or missing proof"
+          }
+        },
+        "summary": "Review or approve an exact receipt-to-case allocation",
+        "tags": [
+          "recovery-allocations"
+        ]
+      }
+    },
+    "/jobs/{id}/recovery-allocations/reversals": {
+      "post": {
+        "operationId": "RecoveryAllocationController_reverse",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "allocationId"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "creditNoteId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "review_reverse"
+                        ]
+                      },
+                      "allocationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "version",
+                      "commandId",
+                      "expectedCaseRevision",
+                      "grossPence",
+                      "action",
+                      "allocationId",
+                      "approvalHash"
+                    ],
+                    "properties": {
+                      "remittanceEvidenceId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "creditNoteId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "version": {
+                        "type": "string",
+                        "enum": [
+                          "recovery-allocation-command.v1"
+                        ]
+                      },
+                      "commandId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "expectedCaseRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "grossPence": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000000
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "reverse"
+                        ]
+                      },
+                      "allocationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "approvalHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Append-only reversal facts; original allocations retained"
+          }
+        },
+        "summary": "Review or approve allocation reversal against a recorded refund, credit or receipt reversal",
+        "tags": [
+          "recovery-allocations"
         ]
       }
     }

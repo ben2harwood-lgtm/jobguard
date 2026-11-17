@@ -1,3 +1,4 @@
+import { seedSyntheticPartyFixture } from "./synthetic-party-fixture.js";
 import { createHash } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { migrate } from "./migrate.js";
@@ -22,6 +23,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_migration NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
   await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_runtime LOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
   await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_infrastructure NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
+  await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_identity NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
   await admin.query(`ALTER ROLE jobguard_migration NOLOGIN NOCREATEROLE NOINHERIT`);
   await admin.query(`ALTER ROLE jobguard_runtime LOGIN PASSWORD ${quoteLiteral(runtimePassword)} NOCREATEROLE NOINHERIT`);
   await admin.query(`ALTER ROLE jobguard_infrastructure NOLOGIN NOCREATEROLE NOINHERIT`);
@@ -33,7 +35,33 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       runtimeRole.rolcreatedb || runtimeRole.rolcreaterole || runtimeRole.rolinherit || !runtimeRole.rolcanlogin) {
     throw new Error("jobguard_runtime does not have the required least-privilege posture");
   }
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access"]) {
+    await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${name}') THEN
+      CREATE ROLE ${name} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+      END IF; END $$`);
+    const posture = (await admin.query(`SELECT rolsuper,rolbypassrls,rolcreatedb,rolcreaterole,rolinherit,rolcanlogin,
+      EXISTS(SELECT 1 FROM pg_auth_members WHERE member=pg_roles.oid) AS member
+      FROM pg_roles WHERE rolname=$1`, [name])).rows[0];
+    if (!posture || Object.values(posture).some(value => value !== false)) {
+      throw new Error(`${name} does not have the required least-privilege posture`);
+    }
+  }
   const owner = (await admin.query<{ current_user: string }>("SELECT current_user")).rows[0]!.current_user;
+  // PostgreSQL 16 gives a non-superuser (CREATEROLE) creator an automatic membership in every role it
+  // creates: ADMIN OPTION only, with no INHERIT and no SET, recorded as granted by the bootstrap superuser.
+  // The creator cannot remove it: its own REVOKE finds no grant it made, and GRANTED BY the superuser is
+  // superuser-only. So it stays. It carries no privileges of the role (pg_has_role USAGE and SET are false,
+  // which is why the support route checks USAGE), but it is the one holder bootstrap cannot appoint or
+  // remove. Accept exactly that shape and nothing else: any other member, or any holder that can use or
+  // assume the role, fails closed. Neither bootstrap nor the migration appoints a support holder.
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access"]) {
+    const holders = await admin.query<{ member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean }>(
+      `SELECT pg_get_userbyid(m.member) AS member,m.admin_option,m.inherit_option,m.set_option
+       FROM pg_auth_members m WHERE m.roleid=(SELECT oid FROM pg_roles WHERE rolname=$1)`, [name]);
+    if (holders.rows.some(row => row.member !== owner || !row.admin_option || row.inherit_option || row.set_option)) {
+      throw new Error(`${name} has a holder other than the PostgreSQL 16 ADMIN-only creator membership`);
+    }
+  }
   await admin.query(`GRANT jobguard_migration TO ${quoteIdentifier(owner)}`);
   await admin.query(`GRANT jobguard_runtime TO ${quoteIdentifier(owner)}`);
   await admin.query(`GRANT jobguard_infrastructure TO ${quoteIdentifier(owner)}`);
@@ -69,7 +97,16 @@ async function seedDatabase(client: PoolClient) {
     await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Practice kitchen','quoting') ON CONFLICT DO NOTHING", [DEMO_JOB_ID, DEMO_TENANT_ID]);
-    await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',$1,'Kitchen extension','live'),('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',$1,'Loft conversion','quoting') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
+    await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',$1,'Kitchen extension','quoting'),('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',$1,'Loft conversion','quoting') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
+    await client.query("SET LOCAL ROLE jobguard_migration");
+    for(const jobId of [DEMO_JOB_ID,"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"]) await seedSyntheticPartyFixture(client,DEMO_TENANT_ID,jobId);
+    // SH-1's legacy binder runs on INSERT, whereas this fixture enters live by UPDATE.
+    // Use the existing migration-owned binding path in the same fixture transaction.
+    await client.query(`INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id)
+      VALUES($1,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','small_builder','synthetic_demo','legacy_synthetic_live_fixture','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+      ON CONFLICT(tenant_id,job_id) DO NOTHING`, [DEMO_TENANT_ID]);
+    await client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND status='quoting'",[DEMO_TENANT_ID]);
+    await client.query("SET LOCAL ROLE jobguard_runtime");
     await seedDemo("synthetic_demo", { execute: async (command: DemoSeedCommand) => {
       const result = await client.query(
         `INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)

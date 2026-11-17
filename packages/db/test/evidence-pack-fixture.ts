@@ -18,6 +18,7 @@ export async function seedEvidencePackFixture(admin: Pool, options: { withVariat
   try {
     await db.query("BEGIN");
     await db.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [tenantId, otherTenantId]);
+    await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
     await db.query("INSERT INTO identity.identity_user(id) VALUES($1)", [identityId]);
     await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Evidence fixture builder')", [accountId, tenantId]);
     await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [memberId, tenantId, accountId, identityId]);
@@ -27,8 +28,17 @@ export async function seedEvidencePackFixture(admin: Pool, options: { withVariat
     await db.query("INSERT INTO app.quote_revision(id,tenant_id,job_id,quote_draft_id,revision,currency,tax_policy_version,subtotal_pence,discount_pence,net_pence,tax_pence,total_pence,issuable,blockers) VALUES($1,$2,$3,$4,1,'GBP','candidate_m1_standard_v1',1880000,0,1880000,376000,2256000,true,'[]')", [quoteRevisionId, tenantId, jobId, quoteDraftId]);
     await db.query("INSERT INTO app.quote_document_version(id,tenant_id,job_id,quote_revision_id,document_version,reference,content_hash,object_key,object_version_id,pdf_byte_length,issuer,customer,snapshot) VALUES($1,$2,$3,$4,1,'FIXTURE-QUOTE-1',$5,'fixture/quote','quote-object-v1',1,'{}','{}',$6)", [quoteId, tenantId, jobId, quoteRevisionId, hash("quote immutable fixture"), {netPence:1880000,taxPence:376000,totalPence:2256000}]);
     await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,1880000,'accepted')", [quoteId, tenantId, jobId, hash("quote immutable fixture")]);
-    await db.query("UPDATE app.job SET accepted_quote_version_id=$1,status='accepted' WHERE tenant_id=$2 AND id=$3", [quoteId,tenantId,jobId]);
+    // The real lifecycle routine (the one the quote and switch-live commands use), never a direct status write: the job is accepted here,
+    // switched live before its watchdog inputs are recorded (the CH-2 guard), and invoiced afterwards, where billing begins.
+    const transition = (job: string, expected: number, to: string, reason: string, quote: string | null = null, net: number | null = null, policy: string | null = null, cap: number | null = null) =>
+      db.query("SELECT app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)", [tenantId, job, expected, to, reason, quote, net, policy, cap]);
+    await transition(jobId, 0, "quoting", "start_quote"); await transition(jobId, 1, "accepted", "accept_quote", quoteId);
     await db.query("INSERT INTO app.quote_acceptance(id,tenant_id,job_id,document_id,document_version,document_hash,accepted_total_pence,currency,acceptance_kind,actor_membership_id,stated_customer_name,stated_method,accepted_at) VALUES($1,$2,$3,$4,1,$5,2256000,'GBP','builder_attestation',$6,'Fictional Customer','verbal','2026-09-20T12:00:00Z')", [acceptanceId, tenantId, jobId, quoteId, hash("quote immutable fixture"), memberId]);
+    await transition(jobId, 2, "live", "switch_live", quoteId, 1880000, "reference_fee_policy_v1", 28200);
+    const otherQuoteId = randomUUID();
+    await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,100000,'accepted')", [otherQuoteId, tenantId, otherJobId, hash("unrelated quote fixture")]);
+    await transition(otherJobId, 0, "quoting", "start_quote"); await transition(otherJobId, 1, "accepted", "accept_quote", otherQuoteId);
+    await transition(otherJobId, 2, "live", "switch_live", otherQuoteId, 100000, "reference_fee_policy_v1", 1500);
     await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,'fixture/proof',$5,'image/png',$6,'standard_evidence','verified','proof-object-v1',now(),now()+interval '1 hour')", [uploadId, tenantId, jobId, scopeId, proofHash, proofBytes.length]);
     await db.query("INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes) VALUES($1,$2,$3,$4,'fixture/proof','proof-object-v1','synthetic_demo','image/png',$5)", [tenantId, uploadId, jobId, scopeId, proofBytes]);
     await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'original','site_photo','fixture/proof','proof-object-v1',$6,$7,'image/png','standard_evidence',now(),now())", [proofId, tenantId, uploadId, jobId, scopeId, proofHash, proofBytes.length]);
@@ -50,6 +60,7 @@ export async function seedEvidencePackFixture(admin: Pool, options: { withVariat
       await db.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status) VALUES($1,$2,$3,'fictional-merchant',$4,$5,$6,'ready')", [id,tenantId,sourceJob,type,number,contentHash]);
       await db.query("INSERT INTO app.supplier_document_version(id,tenant_id,job_id,document_id,version,media_type,byte_length,content_hash,page_count) VALUES($1,$2,$3,$4,1,'text/plain',1,$5,1)", [versionId,tenantId,sourceJob,id,contentHash]);
     }
+    await transition(jobId, 3, "invoiced", "issue_invoice");
     const finalDraft = randomUUID(), finalRevision = randomUUID(), decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
     await db.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [finalDraft,tenantId,jobId]);
     await db.query("INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings) VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',1880000,376000,2256000,false,'[]')", [finalRevision,tenantId,jobId,finalDraft,hash("final account fixture"),quoteId]);

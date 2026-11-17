@@ -1,0 +1,44 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core
+
+ ❯ src/receipt-allocation.test.ts (34 tests | 2 failed) 24727ms
+     × 2000 lines of distinct 12-digit amounts aggregate exactly, within the contract size, and round once 7779ms
+     × the working size is bounded: more distinct denominators than the documented limit fail closed 9003ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/receipt-allocation.test.ts > allocator totals enter the fee kernel > 2000 lines of distinct 12-digit amounts aggregate exactly, within the contract size, and round once
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/receipt-allocation.test.ts:125:21
+    123|   return Number(twice>divisor||(twice===divisor&&quotient%2n===1n)?quo…
+    124|  };
+    125|  it.each([1000,2000])("%i lines of distinct 12-digit amounts aggregate…
+       |                     ^
+    126|   const lines=wide(count),out=allocateReceiptToLines(input(1_000_000,l…
+    127|   const folded=out.reduce((t,a)=>addExactPence(t,a.net),exactPence(0n)…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/receipt-allocation.test.ts > balances whose exact total reduces to a short value > the working size is bounded: more distinct denominators than the documented limit fail closed
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/receipt-allocation.test.ts:212:2
+    210|   return Array.from({length:count},()=>{let digits=String(1+next()%9);…
+    211|  };
+    212|  it("the working size is bounded: more distinct denominators than the …
+       |  ^
+    213|   const lines=hundredDigits(1_600).map((d,i)=>withBalance(`w${i}`,frac…
+    214|   for(const gross of [0n,1n]) expect(()=>allocateReceiptToLines(raw(gr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  2 failed | 58 passed (60)
+   Start at  06:35:37
+   Duration  30.10s (transform 971ms, setup 0ms, import 1.65s, tests 25.50s, environment 1ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/activation-v3.test.ts src/activation.test.ts src/fee.test.ts src/receipt-allocation.test.ts --maxWorkers=1

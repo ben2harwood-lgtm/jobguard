@@ -1,0 +1,36 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core
+
+ ❯ src/activation-v3.test.ts (14 tests | 1 failed) 41ms
+     × returns the frozen baseline document version and hash 34ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/activation-v3.test.ts > CH-1 immutable activation contracts > returns the frozen baseline document version and hash
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/activation-v3.test.ts:15:56
+     13|   it("returns the frozen baseline document version and hash", () => {
+     14|     const bound={...terms,baselineDocumentVersion:1,baselineDocumentHa…
+     15|     expect(activationTermsV1.safeParse(bound).success).toBe(true);
+       |                                                        ^
+     16|     expect(activationTermsV1.safeParse({...bound,baselineDocumentVersi…
+     17|     expect(activationTermsV1.safeParse({...bound,baselineDocumentHash:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 25 passed (26)
+   Start at  06:35:13
+   Duration  2.84s (transform 2.26s, setup 0ms, import 3.03s, tests 649ms, environment 42ms)
+
+undefined
+/Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/packages/core:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/activation-v3.test.ts src/activation.test.ts src/fee.test.ts

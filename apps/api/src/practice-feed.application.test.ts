@@ -1,0 +1,183 @@
+import { createHash, randomUUID } from "node:crypto";
+import type { Pool } from "pg";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { assessAttestedReceipt, generatedPracticeFeedEvents, practiceMovementCatalogueV1, projectPracticeFeedMovements, type PracticeFeedStep } from "@jobguard/core";
+import { DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, PracticeAccessError } from "@jobguard/db";
+import { PracticeAccess } from "./practice-access.js";
+import { PracticeFeedApplication } from "./practice-feed.application.js";
+import { practiceFeedCommandV1, practiceFeedReceiptAssessmentV1, practiceFeedResponseV1 } from "./practice-feed.contracts.js";
+import { practiceFeedHttpError, practiceFeedHttpQuery, practiceFeedSession } from "./practice-feed.http.js";
+
+const jobId = randomUUID();
+const sessionId = randomUUID();
+// What SBOX's authenticatePracticeSession derives from the cookie, and the only form of the session the repository may receive.
+const digest = createHash("sha256").update(sessionId).digest("hex");
+const response = {
+  version: "practice-feed-view.v1" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, jobId,
+  accountId: null, feedState: "not_connected" as const, consent: null, revision: 0, catalogue: practiceMovementCatalogueV1.map((entry) => ({ ...entry })),
+  movementCount: 0, movements: [], receipts: [], allocatedEligibleNetPence: 0 as const, eventCount: 0, nextCursor: null,
+};
+const command = () => ({ version: "practice-feed-command.v1", commandId: randomUUID(), expectedRevision: 0, action: "connect" });
+function fixture() {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  vi.spyOn(PracticeAccess.prototype, "job").mockResolvedValue({ context: { tenantId: DEMO_TENANT_ID }, digest, membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID } as never);
+  const repository = { view: vi.fn().mockResolvedValue(response), command: vi.fn().mockResolvedValue(response) };
+  return { repository, application: new PracticeFeedApplication({} as Pool, repository) };
+}
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+
+describe("practice feed API boundary (the repository is a unit-test double)", () => {
+  it("refuses a stranger before snapshot or connect even when no feed owner exists", async () => {
+    const { repository, application } = fixture();
+    const access = vi.spyOn(PracticeAccess.prototype, "job").mockRejectedValue(new PracticeAccessError("NOT_FOUND"));
+    await expect(application.view(randomUUID(), jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(application.command(randomUUID(), jobId, command())).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(access).toHaveBeenCalledTimes(2);
+    expect(repository.view).not.toHaveBeenCalled();
+    expect(repository.command).not.toHaveBeenCalled();
+  });
+
+  it("passes a server-selected principal, SBOX's session digest and the job to the persistence authority, for both transports", async () => {
+    const { repository, application } = fixture();
+    expect(await application.view(sessionId, jobId)).toEqual(response);
+    expect(repository.view).toHaveBeenCalledWith({ tenantId: DEMO_TENANT_ID }, { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID }, digest, jobId, { version: "practice-feed-query.v1", limit: 20 });
+    const input = command();
+    expect(await application.command(sessionId, jobId, input)).toEqual(response);
+    expect(repository.command).toHaveBeenCalledWith({ tenantId: DEMO_TENANT_ID }, { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID }, digest, jobId, input);
+  });
+
+  it("never hands the raw 7-day bearer token to the repository, only its digest", async () => {
+    const { repository, application } = fixture();
+    await application.view(sessionId, jobId);
+    await application.command(sessionId, jobId, command());
+    const arguments_ = [...repository.view.mock.calls, ...repository.command.mock.calls];
+    expect(arguments_).toHaveLength(2);
+    expect(JSON.stringify(arguments_)).not.toContain(sessionId);
+    expect(JSON.stringify(arguments_)).toContain(digest);
+    expect(digest).toMatch(/^[0-9a-f]{64}$/u);
+  });
+
+  it("requires persisted session authentication even for a UUID-shaped cookie", async () => {
+    const { repository, application } = fixture();
+    vi.spyOn(PracticeAccess.prototype, "job").mockRejectedValue(new PracticeAccessError("UNAUTHENTICATED"));
+    await expect(application.view(sessionId, jobId)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    await expect(application.command(sessionId, jobId, command())).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    expect(repository.view).not.toHaveBeenCalled();
+    expect(repository.command).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, "not-a-session", "", "123"])("refuses an absent or malformed session %s before accessing facts", async (session) => {
+    const { repository, application } = fixture();
+    await expect(application.view(session, jobId)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    await expect(application.command(session, jobId, command())).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    expect(repository.view).not.toHaveBeenCalled();
+    expect(repository.command).not.toHaveBeenCalled();
+  });
+
+  it.each(["production", "production_billing", "pilot_no_charge", "pilot", "provider_sandbox", "development", "unconfigured"])("refuses synthetic consumption under server mode %s", async (mode) => {
+    const { repository, application } = fixture();
+    vi.stubEnv("JOBGUARD_ENV", mode);
+    await expect(application.view(sessionId, jobId)).rejects.toMatchObject({ code: "SYNTHETIC_ONLY" });
+    // A client that forges a mode flag changes nothing: the server environment decides.
+    await expect(application.command(sessionId, jobId, { ...command(), environment: "synthetic_demo" })).rejects.toMatchObject({ code: "SYNTHETIC_ONLY" });
+    expect(repository.view).not.toHaveBeenCalled();
+    expect(repository.command).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { tenantId: randomUUID() }, { requestedTenantId: randomUUID() }, { accountId: randomUUID() }, { event: { state: "settled", grossPence: 38400 } },
+    { eventId: "settled-receipt-384" }, { grossPence: 38400 }, { amount: "384.00" }, { state: "settled" }, { environment: "synthetic_demo" },
+    { eligibleForAllocation: true }, { allocatedEligibleNetPence: 38400 }, { signature: "x" },
+  ])("rejects browser-supplied authority %j before invoking the deterministic adapter", async (forgery) => {
+    const { repository, application } = fixture();
+    await expect(application.command(sessionId, jobId, { ...command(), action: "advance", movement: "receipt-384", step: "settled", ...forgery })).rejects.toMatchObject({ code: "INVALID_COMMAND" });
+    expect(repository.command).not.toHaveBeenCalled();
+  });
+
+  it("requires valid pagination and rejects tenant/environment injection into the query", async () => {
+    const { repository, application } = fixture();
+    for (const forged of [{ tenantId: randomUUID() }, { environment: "production" }, { limit: 0 }, { limit: 51 }, { cursor: "-1" }, { cursor: "secret" }, { version: "v2" }]) {
+      await expect(application.view(sessionId, jobId, { version: "practice-feed-query.v1", ...forged })).rejects.toMatchObject({ code: "INVALID_QUERY" });
+    }
+    expect(repository.view).not.toHaveBeenCalled();
+    await application.view(sessionId, jobId, { version: "practice-feed-query.v1", cursor: "1", limit: "1" });
+    expect(repository.view).toHaveBeenCalledWith(expect.anything(), expect.anything(), digest, jobId, { version: "practice-feed-query.v1", cursor: "1", limit: 1 });
+  });
+
+  it("preserves repository authorization and conflict failures without pretending they are successful states", async () => {
+    const { repository, application } = fixture();
+    for (const code of ["PRACTICE_FEED_FORBIDDEN", "PRACTICE_FEED_STALE_REVISION", "IDEMPOTENCY_PAYLOAD_CONFLICT", "PRACTICE_FEED_DISCONNECTED", "PRACTICE_FEED_MOVEMENT_NOT_SETTLED"]) {
+      const error = Object.assign(new Error(code), { code });
+      repository.command.mockRejectedValueOnce(error);
+      await expect(application.command(sessionId, jobId, command())).rejects.toBe(error);
+    }
+  });
+
+  it("validates the persisted response shape and never admits an allocation from this leaf", async () => {
+    const { repository, application } = fixture();
+    repository.view.mockResolvedValueOnce({ ...response, environment: "production" });
+    await expect(application.view(sessionId, jobId)).rejects.toThrow();
+    const movement = { id: "a:receipt-384", movementKey: "receipt-384", underlyingMovementId: "receipt-384", kind: "customer_receipt", fixture: "recovery-18800", label: "£384.00 customer receipt (recovery-18800)",
+      grossPence: 38400, currency: "GBP", state: "settled", allocatedEligibleNetPence: 0, eligibleForAllocation: true, eventIds: [], sourceHashes: [] };
+    expect(practiceFeedResponseV1.safeParse({ ...response, movements: [movement] }).success).toBe(true);
+    expect(practiceFeedResponseV1.safeParse({ ...response, movements: [{ ...movement, allocatedEligibleNetPence: 1 }] }).success).toBe(false);
+    expect(practiceFeedResponseV1.safeParse({ ...response, movements: [{ ...movement, grossPence: Infinity }] }).success).toBe(false);
+    expect(practiceFeedResponseV1.safeParse({ ...response, allocatedEligibleNetPence: 1 }).success).toBe(false);
+    expect(practiceFeedResponseV1.safeParse({ ...response, realExternalActions: 1 }).success).toBe(false);
+  });
+
+  it("the response contract admits every reason the pure assessment can give, and nothing else", () => {
+    const acct = "11111111-1111-4111-8111-111111111111", pay = "22222222-2222-4222-8222-222222222222", other = "33333333-3333-4333-8333-333333333333";
+    const moves = (steps: PracticeFeedStep[], reconciled: Array<"receipt-384"> = []) => projectPracticeFeedMovements(acct,
+      steps.flatMap((step) => generatedPracticeFeedEvents("receipt-384", step)).map((event) => ({ ...event, sourceHash: "a".repeat(64) })), reconciled);
+    const r = (amountPence: number, reversed = false) => ({ paymentId: pay, amountPence, currency: "GBP" as const, reversed });
+    const m = (paymentId: string, paymentReversed = false) => [{ paymentId, movementKey: "receipt-384" as const, paymentReversed }];
+    const seen = new Set<string>();
+    for (const assessment of [
+      assessAttestedReceipt(r(38_500), moves(["settled"]), []), assessAttestedReceipt(r(38_400), [], []), assessAttestedReceipt(r(38_400), moves(["pending"]), []),
+      assessAttestedReceipt(r(38_400), moves(["settled", "unknown_duplicate"]), []), assessAttestedReceipt(r(38_400), moves(["settled"]), m(other)),
+      assessAttestedReceipt(r(38_400), moves(["settled"]), m(other, true)), assessAttestedReceipt(r(38_400), moves(["settled"]), []),
+      assessAttestedReceipt(r(38_400), moves(["settled"]), m(pay)), assessAttestedReceipt(r(38_400, true), moves(["settled"]), m(pay)),
+      assessAttestedReceipt(r(38_400), moves(["settled", "unknown_duplicate"]), m(pay)),
+    ]) { expect(practiceFeedReceiptAssessmentV1.parse(assessment)).toEqual(assessment); seen.add(assessment.reason); }
+    expect([...seen].sort()).toEqual(["duplicate_held", "matched", "movement_already_matched", "movement_used_by_reversed_receipt", "no_generated_amount", "no_movement_yet", "pending", "ready_to_match", "reversed"]);
+    expect(practiceFeedReceiptAssessmentV1.safeParse({ status: "qualifies", reason: "invented", canMatch: false, candidateMovementKey: null, matchedMovementKey: null }).success).toBe(false);
+  });
+
+  it("rejects malformed job identifiers without database access", async () => {
+    const { repository, application } = fixture();
+    await expect(application.view(sessionId, "not-a-job")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(repository.view).not.toHaveBeenCalled();
+  });
+
+  it("limits advance to the fixed catalogue and steps, and requires a nonnegative expected revision", () => {
+    expect(practiceFeedCommandV1.safeParse({ ...command(), action: "advance", movement: "receipt-384", step: "live_bank_feed" }).success).toBe(false);
+    expect(practiceFeedCommandV1.safeParse({ ...command(), action: "advance", movement: "receipt-385", step: "settled" }).success).toBe(false);
+    expect(practiceFeedCommandV1.safeParse({ ...command(), expectedRevision: -1 }).success).toBe(false);
+    expect(practiceFeedCommandV1.safeParse({ ...command(), action: "advance", movement: "receipt-384", step: "settled" }).success).toBe(true);
+  });
+});
+
+describe("practice feed HTTP error and cookie contract", () => {
+  it("gives exact statuses for known typed errors and redacts internal failures", () => {
+    expect(practiceFeedHttpError({ code: "UNAUTHENTICATED" })).toEqual({ status: 401, body: { version: "practice-feed-error.v1", code: "UNAUTHENTICATED" } });
+    expect(practiceFeedHttpError({ code: "PRACTICE_FEED_STALE_REVISION" }).status).toBe(409);
+    expect(practiceFeedHttpError({ code: "PRACTICE_FEED_MOVEMENT_NOT_SETTLED" }).status).toBe(409);
+    expect(practiceFeedHttpError({ code: "PRACTICE_FEED_RECEIPT_MISMATCH" }).status).toBe(409);
+    expect(practiceFeedHttpError({ code: "PRACTICE_FEED_FORBIDDEN" }).status).toBe(403);
+    expect(practiceFeedHttpError({ code: "SYNTHETIC_ONLY" }).status).toBe(403);
+    expect(practiceFeedHttpError({ code: "INVALID_COMMAND" }).status).toBe(400);
+    expect(practiceFeedHttpError(new Error("private connection string"))).toEqual({ status: 503, body: { version: "practice-feed-error.v1", code: "DATABASE_UNAVAILABLE" } });
+    expect(practiceFeedHttpError({ code: "42P01", message: "relation detail" }).status).toBe(503);
+  });
+  it("refuses duplicate HTTP query fields instead of silently selecting one", () => {
+    expect(practiceFeedHttpQuery(new URLSearchParams("limit=1&cursor=0"))).toEqual({ version: "practice-feed-query.v1", limit: "1", cursor: "0" });
+    expect(() => practiceFeedHttpQuery(new URLSearchParams("limit=1&limit=2"))).toThrow("INVALID_QUERY");
+  });
+  it("reads one exact cookie and rejects ambiguous session cookies", () => {
+    expect(practiceFeedSession(`another=value; jg_session=${sessionId}; theme=dark`)).toBe(sessionId);
+    expect(practiceFeedSession(`jg_session=${sessionId}; jg_session=${randomUUID()}`)).toBeUndefined();
+    expect(practiceFeedSession("not_jg_session=one")).toBeUndefined();
+    expect(practiceFeedSession(undefined)).toBeUndefined();
+  });
+});

@@ -1,0 +1,182 @@
+# CH-3a structured job parties
+
+Implementation contract; synthetic construction only. D04/D07/D12 and the
+real-data release gates remain proposed/held. No approval is recorded here.
+
+`customer.v1` has one of the seven task-card types. `isIndividual(customer)` is
+computed solely from `type === 'person'`. Client `isIndividual`, tenant and
+provenance fields are discarded. Optional contacts/company number belong to the
+private revision, never an audit payload. `site.v1` normalizes UK postcodes to
+uppercase with one space, accepts digits-only UPRNs, and records an explicit
+optional unit. Its deterministic JSON match key normalizes case/spacing and
+uses UPRN when present, retaining the unit; the database recomputes this key on
+INSERT. Exact and near matches propose reuse, which requires a human confirmation.
+Different or unresolved units cannot be reused through a claimed match.
+Each address-line string must contain no CR or LF, checked before trimming;
+invalid command inputs return `INVALID_PARTIES`. Migration 0095 enforces the same
+restriction for direct SQL writes. Editing any site field clears the editor's
+reuse selection and confirmation, including when a postcode edit hides suggestions.
+
+`job-parties.v1` references customer/site revisions; a null paying-party revision
+means the same exact revision as the customer. Identities may span several jobs
+in one tenant. Tenant-qualified revision FKs prevent foreign identity links.
+One current pointer per tenant/job references one immutable binding. Binding
+increments the existing job revision under its row lock; concurrent expected
+revisions conflict. After live/invoiced/paid, the correction action needs a reason:
+the routine requires the correction flag to be exactly true and the reason non-null
+with JavaScript trim/UTF-16 length semantics (1–500), so a null or false flag is refused for those jobs, with the whole transaction rolled back.
+Old bindings, activation/import references, quote artifacts and issued invoice
+bytes/hashes remain immutable. Revising a customer never silently changes a job.
+
+The operational `job-parties-command.v1` accepts create/revise customer, create
+site (with optional explicit reuse), bind and correct. Commands authenticate the
+persisted owner membership, claim the existing durable command receipt, persist
+domain/result changes, and append identities/request hashes to the audit chain as
+the last business lock. Replay is one result; changed payload conflicts. These
+edits create no Decision approval, outbox work, obligation or financial posting.
+The import button uses the existing M1-17 synthetic consequential dispatcher;
+its exact generated baseline has no historic billing or external action. No
+commercial-policy decision record is approved by either path.
+
+Next and Nest use `JobPartiesApplication` through the shared workspace seam:
+
+- GET/POST `/api/jobs/:id/parties` maps to Nest `/jobs/:id/parties` (workspace and
+  command schemas; versioned command result).
+- POST `/api/jobs/:id/parties/import` maps to Nest `/jobs/:id/parties/import`
+  (`job-parties-import.v1` / `job-parties-import-result.v1`). It adopts the supplied
+  fictional £1,000.00 job using the saved binding. Missing details/stale binding
+  refuse; source binding is checked again under a share lock in the command
+  transaction. Replay retains the same job/baseline identities.
+- The authenticated existing Next `/api/jobs` adapter composes
+  `job-parties-list.v1`; Nest exposes `/job-parties/jobs`. The earlier filtered
+  fixture reader keeps its old semantics. List customer/site labels come from
+  current bindings, including captured jobs. For newly listed jobs, document/payment
+  details not supplied by the existing shell projection are labelled unknown,
+  rather than asserted to be absent or not due.
+
+The workspace response also carries `currentIds` (binding, customer, paying party
+and site identities behind `current`) so an editor can reload its draft from what
+is saved. The Customer and site panel records what it was edited against and, when
+saving, re-reads the server first. Unrelated job progress (scope confirmed, quote
+saved) only refreshes the expected job revision. If the binding, the job's
+live/not-live phase, or a customer or site revision the draft uses has changed,
+nothing is written: the panel shows a typed conflict message, reloads the draft
+from the saved details, and the user chooses again. A server-side
+`REVISION_CONFLICT` (two writers on one revision) takes the same path. A quote
+preview shows the customer frozen into its own document; sending a preview whose
+binding is no longer current is refused (`QUOTE_CHANGED`) until it is previewed
+and approved again. The check also runs inside the send transaction under the
+job lock, so a binding change racing with a send either commits first (the send is
+refused) or waits for the send. The panel's baseline (what the draft was edited
+against) is not advanced by background refreshes: a refresh that finds the binding
+or a referenced customer, payer or site revision changed reloads the draft at
+once, and a save is checked against the same baseline.
+
+The panel fills its draft from the saved parties when it first loads and again after every
+successful save, so reopening a job shows the saved customer, paying party and site, and
+saving them unchanged creates no new customer or site: an unchanged customer keeps its
+exact bound revision (a separate unchanged payer does too), a changed one is revised
+(same customer, next revision), and a site is created
+only when the user changed it or chose another place (an unchanged site keeps its saved
+identity and revision). Registry suggestions retain the latest revisions for explicit
+choices and
+stale-edit protection. Opening or successfully saving hydrates from `current`, never
+those suggestions. A saved payer revision absent from the latest registry remains a
+labelled option. Editing an older saved customer over a newer registry revision is
+refused before writing; the explained conflict reloads the latest registry draft and
+states that saving again uses that revision. The same explanation accompanies a
+customer/payer change detected while the panel is open. No conflict retry is automatic.
+
+A site's address is edited as the first line plus a further-lines
+box (one line per row, up to four lines in all); every saved line is shown and carried
+through an edit of any other field, and a fifth line is refused in words before anything
+is written.
+
+Every binding change made through a command stores that command's receipt id on
+the binding (one receipt, one binding effect) and cannot commit unless the receipt
+is completed with that binding as its result and an audit event for the job names
+the command and the binding; direct database calls are held to the same rule.
+
+The PostgreSQL live guard and switch-live/adoption routines reject missing
+parties with `JOB_PARTIES_REQUIRED`. The adoption routine is also a controlled
+write that validates the actor, command receipt and exact approved authorization
+inside the routine. Quote preview requires a binding and locks
+the job while creating the snapshot. New quote PDFs and synthetic invoice bytes
+contain the party snapshot before hashing. Older artifacts have nullable new
+snapshot columns and their original bytes/hashes.
+
+Recognition uses current customer/site identity equality within the tenant.
+Start timestamps come from server-recorded activation/import timestamps; known
+ends come from the first server-recorded invoice. Absent historical timestamps
+remain null; a correction's `updated_at` is not treated as a lifecycle interval.
+This is a recognition input, not a new subscription meter or billing policy.
+
+Retention classes are pending labels on the identity tables, inherited by their
+revisions/bindings/artifact references; this task establishes no retention period
+or deletion approval. Names, addresses, contacts and correction reasons stay out
+of audit payloads. The audit holds only command/identity references and hashes.
+RLS assumes an authenticated tenant context; it does not prove safety against a
+compromised application that can select a false context or privileged credentials.
+
+Earlier DB suites explicitly install generated party fixtures in their isolated
+test databases before existing lifecycle/document commands. Only superuser test
+setup can bridge missing context; runtime context and RLS attacks are unchanged.
+The CH-3a integration suite never installs that fixture trigger and exercises
+missing parties, upgrade/backfill, constraints, grants, replay and races directly.
+No existing assertion is removed or weakened.
+
+
+Round 11 session integration: Next and Nest pass the actual `jg_session` cookie
+through `PracticeAccess`; cookie shape alone is never authority. List authenticates
+the persisted session; view, command and adopt authorize job ownership before
+validation, reads or replay. Missing, invalid, revoked/expired or invented sessions
+return `UNAUTHENTICATED` (401); another session's job and an unknown job return the
+same `NOT_FOUND` (404) without labels. The existing foreign-tenant request remains
+`FORBIDDEN` (403) after authentication. Adapters preserve SBOX's `practiceFailure`
+and global `PracticeErrorsFilter` mapping.
+
+The practice list, identity suggestions and recognition projection are limited to
+the caller's jobs. Unbound customer/site identities are scoped by their immutable
+creation audit event; bindings permit reuse within that session. Forged identity
+references on an otherwise owned job fail `NOT_FOUND` before revision/idempotency
+checks or writes. Direct non-practice repository callers retain the tenant-wide
+registry; this is the authenticated application trust boundary, not protection
+against stolen database credentials.
+
+Migration 0095 is unchanged. Its adoption routine creates an imported job without
+a digest, while 0094 prohibits a later ownership assignment. The adoption's existing
+append-only audit event now carries `references.sourceJobId` in the same command
+transaction. Practice authorization inherits the source job's session ownership
+through that event, including repeated imports; it never claims legacy jobs on
+first access. The list and recognition use the same ownership relation. This is
+an additive audit reference, with no names, labels, contacts or cookie tokens.
+Existing imports without that reference remain unowned, like SBOX's unowned
+legacy fixtures. No migration, schema, privilege or approval policy is changed.
+
+
+Round 13 practice issuance: 0095 adds a narrow invoker trigger before the live
+party guard. 0094's unchanged issuer runs as `jobguard_migration`, creates only
+fixed synthetic home scenarios, and installs the fixed tenant context. The
+trigger requires that server role identity, the fixed tenant/home/live fields,
+and a persisted valid synthetic session. Runtime cannot assume that role; a row
+field or GUC cannot forge `current_user`. The trigger supplies generated parties
+for the live Kitchen extension before the original INSERT. Its deferred job FK
+completes when that job is inserted. The live guard and SH-1's AFTER INSERT track
+hook still run. No merged routine/migration, ownership rule or grant is changed.
+Quoting/capture examples still need user details before preview or live.
+
+A generated fixture binding on another job does not by itself populate a practice
+workspace's reuse suggestions. Its own job shows the saved default parties, and
+explicit human bindings or creation commands make identities normal suggestions.
+The identity authorization predicate still accepts all bindings owned by the
+session, including those defaults, and rejects other sessions. List labels and
+recognition continue to derive from current bindings. Non-practice registry reads
+retain their existing tenant-wide behavior.
+
+The round-11 recursive adoption ownership relation remains required: imports
+have no directly stored digest, and the immutable same-command source audit
+reference grants their source session access. Removing it would hide successful
+imports from that session. Unowned legacy jobs and other sessions remain refused.
+SBOX's direct quote/evidence-pack test supplies explicit generated party fixtures
+and tenant context before constructing its old quote snapshot; no assertion or
+runtime guard is relaxed.

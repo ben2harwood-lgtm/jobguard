@@ -1,0 +1,74 @@
+[
+  {
+    "path": "packages/core/src/activation.ts",
+    "baseSha256": "b45400b1b076ddcece5252236610c9acd47f685190639ceff74b736806866fab",
+    "workingTreeSha256": "b45400b1b076ddcece5252236610c9acd47f685190639ceff74b736806866fab",
+    "byteIdentical": true
+  },
+  {
+    "path": "packages/core/src/fee.ts",
+    "baseSha256": "2cc034d0388837e9ec4611e350ba37f61af375f374ae27840593b021111b5542",
+    "workingTreeSha256": "2cc034d0388837e9ec4611e350ba37f61af375f374ae27840593b021111b5542",
+    "byteIdentical": true
+  },
+  {
+    "path": "packages/core/src/activation.test.ts",
+    "baseSha256": "42fba84be3af6b0abe46b6f2b3be3a3fab537bcf3e8ea4163c36c89168877bec",
+    "workingTreeSha256": "42fba84be3af6b0abe46b6f2b3be3a3fab537bcf3e8ea4163c36c89168877bec",
+    "byteIdentical": true
+  },
+  {
+    "path": "packages/core/src/fee.test.ts",
+    "baseSha256": "116796a0bb8684b52e2afe11d6a356f1ea525a1f6bf71752aea8ef6542eb35df",
+    "workingTreeSha256": "116796a0bb8684b52e2afe11d6a356f1ea525a1f6bf71752aea8ef6542eb35df",
+    "byteIdentical": true
+  },
+  {
+    "path": "packages/core/src/fee-what-if.test.ts",
+    "baseSha256": "2dfac66d04dbe016c084a1a9991758084af0b604d33c00b3da4e35cbb0655512",
+    "workingTreeSha256": "2dfac66d04dbe016c084a1a9991758084af0b604d33c00b3da4e35cbb0655512",
+    "byteIdentical": true
+  },
+  {
+    "path": "packages/db/test/activation.integration.test.ts",
+    "baseSha256": "0dedddd6f144df4e77b5ebd42b78ea2bec6a29272d65f1420f1dffbd28de23d7",
+    "workingTreeSha256": "0dedddd6f144df4e77b5ebd42b78ea2bec6a29272d65f1420f1dffbd28de23d7",
+    "byteIdentical": true
+  },
+  {
+    "path": "apps/api/src/workspace/fee-illustration.application.test.ts",
+    "baseSha256": "118a0a9662a82f43af10133ded732ec6d82e391da3802e8b0fed3b8b16da5b04",
+    "workingTreeSha256": "118a0a9662a82f43af10133ded732ec6d82e391da3802e8b0fed3b8b16da5b04",
+    "byteIdentical": true
+  },
+  {
+    "path": "apps/web/e2e/UIWIRE-8.spec.ts",
+    "baseSha256": "78a525cff67a60795d61799afc84d93b5a77fb43cccf6bd520436f0a30028a73",
+    "workingTreeSha256": "78a525cff67a60795d61799afc84d93b5a77fb43cccf6bd520436f0a30028a73",
+    "byteIdentical": true
+  },
+  {
+    "path": "apps/web/e2e/UIWIRE-15.spec.ts",
+    "baseSha256": "a4fd84365229c59e1542b3d6657da600efe8fdf700d114a69756d2ca7d3e09a8",
+    "workingTreeSha256": "a4fd84365229c59e1542b3d6657da600efe8fdf700d114a69756d2ca7d3e09a8",
+    "byteIdentical": true
+  },
+  {
+    "path": "apps/web/e2e/VALUE-1.spec.ts",
+    "baseSha256": "6ce1b68827db915103de8639e16ef7bf9e27663a095bcb0ea671dcdb0174353c",
+    "workingTreeSha256": "6ce1b68827db915103de8639e16ef7bf9e27663a095bcb0ea671dcdb0174353c",
+    "byteIdentical": true
+  },
+  {
+    "path": "apps/web/e2e/m1-15-complete-journey.spec.ts",
+    "baseSha256": "da488ec249883f2685a8ef3e2768bff2d3a7a2277e404f2d6bb9f4e2d54a904f",
+    "workingTreeSha256": "da488ec249883f2685a8ef3e2768bff2d3a7a2277e404f2d6bb9f4e2d54a904f",
+    "byteIdentical": true
+  },
+  {
+    "path": "apps/web/e2e/helpers/capture-journey.ts",
+    "baseSha256": "4e079f110fba2f829797c7920458005ccfce055eac91cd88cbf19013c5424199",
+    "workingTreeSha256": "4e079f110fba2f829797c7920458005ccfce055eac91cd88cbf19013c5424199",
+    "byteIdentical": true
+  }
+]

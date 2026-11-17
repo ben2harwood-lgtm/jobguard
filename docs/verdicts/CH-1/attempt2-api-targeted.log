@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/ch-1/apps/api
+
+
+ Test Files  3 passed (3)
+      Tests  128 passed (128)
+   Start at  06:48:17
+   Duration  11.65s (transform 2.86s, setup 0ms, import 9.58s, tests 1.58s, environment 0ms)
+

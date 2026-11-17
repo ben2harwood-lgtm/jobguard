@@ -4,12 +4,14 @@ import { z } from "zod";
 export const challengeRequestV1 = z.object({
   email: z.string().email().max(320),
   purpose: z.enum(["signup", "signin", "invitation"]),
+  invitationId: z.string().uuid().optional(),
   ip: z.string().min(1).max(64),
 }).strict();
 
 export const verifyCodeV1 = z.object({
   email: z.string().email().max(320),
   purpose: z.enum(["signup", "signin", "invitation"]),
+  invitationId: z.string().uuid().optional(),
   code: z.string().regex(/^\d{8}$/u),
 }).strict();
 

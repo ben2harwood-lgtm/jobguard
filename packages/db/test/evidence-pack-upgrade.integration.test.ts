@@ -7,7 +7,7 @@ import EmbeddedPostgres from 'embedded-postgres';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MIGRATION_URLS } from '../src/index.js';
-import { closeTestPools } from './pool-test-utils.js';
+import { closeTestPools, freePort } from './pool-test-utils.js';
 import { seedEvidencePackFixture } from './evidence-pack-fixture.js';
 
 // Upgrade path for 0042 on a database that is really at 0041, applied by the same
@@ -35,7 +35,7 @@ const evidencePackState = async () => (await admin.query(`SELECT to_regclass('ap
 
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), 'jg-evidence-upgrade-'));
-  const port = 60600 + Math.floor(Math.random() * 200);
+  const port = await freePort(60600, 200);
   const postgresLog: string[] = [];
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C'], onLog: message => { postgresLog.push(message); } });
   try { await postgres.initialise(); await postgres.start(); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }
