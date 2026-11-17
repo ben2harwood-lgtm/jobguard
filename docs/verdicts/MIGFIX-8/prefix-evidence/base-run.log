@@ -1,0 +1,371 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+ RUN  v4.1.11 /Users/benharwood/Claude/Projects/my-new-project/.worktrees/migfix-8-base/packages/db
+
+stdout | test/migfix-8.integration.test.ts > MIGFIX-8 > MIGFIX-8.CATALOG private trigger helper gives runtime and infrastructure no callable capability
+2026-10-14 13:19:31.018 BST [60889] ERROR:  function app.recovery_follow_up_run_fence() does not exist at character 8
+2026-10-14 13:19:31.018 BST [60889] HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+2026-10-14 13:19:31.018 BST [60889] STATEMENT:  SELECT app.recovery_follow_up_run_fence()
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts > MIGFIX-8 upgrade > MIGFIX-8.UPGRADE own-step preservation, repeat application, later migrations twice and full types
+2026-10-14 13:19:31.280 BST [60872] WARNING:  there is no transaction in progress
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+The files belonging to this database system will be owned by user "benharwood".
+This user must also own the server process.
+
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+The database cluster will be initialized with locale "C".
+The default text search configuration will be set to "english".
+
+Data page checksums are disabled.
+
+fixing permissions on existing directory /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/jg-migfix-8-upgrade-1yEpGJ ... ok
+creating subdirectories ... 
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+ok
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+selecting dynamic shared memory implementation ... 
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+posix
+selecting default max_connections ... 
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+100
+selecting default shared_buffers ... 
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+128MB
+selecting default time zone ... 
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+Europe/London
+creating configuration files ... 
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+ok
+running bootstrap script ... 
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+ok
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+performing post-bootstrap initialization ... 
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+ok
+syncing data to disk ... 
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+ok
+
+Success. You can now start the database server using:
+
+    '/Users/benharwood/Claude/Projects/my-new-project/.worktrees/migfix-8-base/node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64/native/bin/pg_ctl' -D /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/jg-migfix-8-upgrade-1yEpGJ -l logfile start
+
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:30.288 BST [60865] LOG:  starting PostgreSQL 16.10 on x86_64-apple-darwin23.6.0, compiled by Apple clang version 16.0.0 (clang-1600.0.26.6), 64-bit
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:30.289 BST [60865] LOG:  listening on IPv6 address "::1", port 62449
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:30.289 BST [60865] LOG:  listening on IPv4 address "127.0.0.1", port 62449
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:30.290 BST [60865] LOG:  listening on Unix socket "/tmp/.s.PGSQL.62449"
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:30.291 BST [60868] LOG:  database system was shut down at 2026-10-14 13:19:30 BST
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:30.293 BST [60865] LOG:  database system is ready to accept connections
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:31.309 BST [60865] LOG:  received fast shutdown request
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:31.309 BST [60865] LOG:  aborting any active transactions
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:31.310 BST [60865] LOG:  background worker "logical replication launcher" (PID 60871) exited with exit code 1
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:31.311 BST [60866] LOG:  shutting down
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:31.311 BST [60866] LOG:  checkpoint starting: shutdown immediate
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:31.342 BST [60866] LOG:  checkpoint complete: wrote 1612 buffers (9.8%); 0 WAL file(s) added, 0 removed, 1 recycled; write=0.009 s, sync=0.022 s, total=0.032 s; sync files=1214, longest=0.001 s, average=0.001 s; distance=13920 kB, estimate=13920 kB; lsn=0/22A54B8, redo lsn=0/22A54B8
+
+
+stdout | test/migfix-8-upgrade.integration.test.ts
+2026-10-14 13:19:31.344 BST [60865] LOG:  database system is shut down
+
+
+ ❯ test/migfix-8-upgrade.integration.test.ts (1 test | 1 failed) 4349ms
+     × MIGFIX-8.UPGRADE own-step preservation, repeat application, later migrations twice and full types 988ms
+stdout | test/migfix-8.integration.test.ts > MIGFIX-8 > MIGFIX-8.4 two repository schedulers and advancement serialize without duplicate due effects or deadlock
+2026-10-14 13:19:31.696 BST [60897] WARNING:  there is no transaction in progress
+
+
+stdout | test/migfix-8.integration.test.ts > MIGFIX-8 > MIGFIX-8.3 sandbox repository concurrent final advances and restart preserve the three-step clock and zero external actions
+2026-10-14 13:19:31.915 BST [60891] ERROR:  duplicate key value violates unique constraint "audit_event_tenant_id_id_uq"
+2026-10-14 13:19:31.915 BST [60891] STATEMENT:  INSERT INTO app.audit_event (id, tenant_id, sequence, version, actor_ref, event_type,
+	       subject_type, subject_ref, occurred_at, payload, payload_hash, previous_hash, event_hash)
+	       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13)
+
+
+stdout | test/migfix-8.integration.test.ts
+The files belonging to this database system will be owned by user "benharwood".
+This user must also own the server process.
+
+
+
+stdout | test/migfix-8.integration.test.ts
+The database cluster will be initialized with locale "C".
+The default text search configuration will be set to "english".
+
+Data page checksums are disabled.
+
+fixing permissions on existing directory /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/jg-migfix-8-zsWtLe ... ok
+creating subdirectories ... 
+
+stdout | test/migfix-8.integration.test.ts
+ok
+
+
+stdout | test/migfix-8.integration.test.ts
+selecting dynamic shared memory implementation ... posix
+selecting default max_connections ... 
+
+stdout | test/migfix-8.integration.test.ts
+100
+selecting default shared_buffers ... 
+
+stdout | test/migfix-8.integration.test.ts
+128MB
+selecting default time zone ... 
+
+stdout | test/migfix-8.integration.test.ts
+Europe/London
+creating configuration files ... 
+
+stdout | test/migfix-8.integration.test.ts
+ok
+running bootstrap script ... 
+
+stdout | test/migfix-8.integration.test.ts
+ok
+
+
+stdout | test/migfix-8.integration.test.ts
+performing post-bootstrap initialization ... 
+
+stdout | test/migfix-8.integration.test.ts
+ok
+syncing data to disk ... 
+
+stdout | test/migfix-8.integration.test.ts
+ok
+
+Success. You can now start the database server using:
+
+    '/Users/benharwood/Claude/Projects/my-new-project/.worktrees/migfix-8-base/node_modules/.pnpm/@embedded-postgres+darwin-arm64@16.10.0-beta.15/node_modules/@embedded-postgres/darwin-arm64/native/bin/pg_ctl' -D /var/folders/nh/lx6ycbfd1l937f5qhj0cdvhh0000gn/T/jg-migfix-8-zsWtLe -l logfile start
+
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:30.306 BST [60864] LOG:  starting PostgreSQL 16.10 on x86_64-apple-darwin23.6.0, compiled by Apple clang version 16.0.0 (clang-1600.0.26.6), 64-bit
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:30.306 BST [60864] LOG:  listening on IPv6 address "::1", port 62337
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:30.306 BST [60864] LOG:  listening on IPv4 address "127.0.0.1", port 62337
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:30.307 BST [60864] LOG:  listening on Unix socket "/tmp/.s.PGSQL.62337"
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:30.308 BST [60875] LOG:  database system was shut down at 2026-10-14 13:19:30 BST
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:30.310 BST [60864] LOG:  database system is ready to accept connections
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:31.941 BST [60864] LOG:  received fast shutdown request
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:31.942 BST [60864] LOG:  aborting any active transactions
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:31.942 BST [60864] LOG:  background worker "logical replication launcher" (PID 60878) exited with exit code 1
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:31.943 BST [60873] LOG:  shutting down
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:31.943 BST [60873] LOG:  checkpoint starting: shutdown immediate
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:32.014 BST [60873] LOG:  checkpoint complete: wrote 2359 buffers (14.4%); 0 WAL file(s) added, 0 removed, 1 recycled; write=0.041 s, sync=0.030 s, total=0.072 s; sync files=1450, longest=0.001 s, average=0.001 s; distance=17633 kB, estimate=17633 kB; lsn=0/2645900, redo lsn=0/2645900
+
+
+stdout | test/migfix-8.integration.test.ts
+2026-10-14 13:19:32.016 BST [60864] LOG:  database system is shut down
+
+
+ ❯ test/migfix-8.integration.test.ts (7 tests | 6 failed) 5025ms
+     × MIGFIX-8.CATALOG private trigger helper gives runtime and infrastructure no callable capability 15ms
+     × MIGFIX-8.1 scheduling races the final advance without losing the due transition 263ms
+     × MIGFIX-8.2 clock winner refuses a tick-2 schedule as stale and persists no unreachable intent 158ms
+     × MIGFIX-8.3 repeat advance and recreated repositories leave one due effect and zero sends 128ms
+     × MIGFIX-8.4 two repository schedulers and advancement serialize without duplicate due effects or deadlock 126ms
+     × MIGFIX-8.3 sandbox repository concurrent final advances and restart preserve the three-step clock and zero external actions 8ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/migfix-8-upgrade.integration.test.ts > MIGFIX-8 upgrade > MIGFIX-8.UPGRADE own-step preservation, repeat application, later migrations twice and full types
+AssertionError: own migration registered: expected undefined to be defined
+ ❯ test/migfix-8-upgrade.integration.test.ts:159:47
+    157|       const before = await Promise.all(tables.map(table => snapshot(db…
+    158|       const own = MIGRATION_URLS.find(url => nameOf(url) === ownName);
+    159|       expect(own, "own migration registered").toBeDefined();
+       |                                               ^
+    160|       await db.query("SET ROLE jobguard_migration");
+    161|       await db.query(await readFile(own!, "utf8"));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  test/migfix-8.integration.test.ts > MIGFIX-8 > MIGFIX-8.CATALOG private trigger helper gives runtime and infrastructure no callable capability
+AssertionError: expected error: function app.recovery_follow_up_ru… { …(15) } to match object { code: '42501' }
+(17 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "code": "42501",
++ DatabaseError {
++   "code": "42883",
+  }
+
+ ❯ test/migfix-8.integration.test.ts:159:76
+    157| describe("MIGFIX-8", () => {
+    158|   it("MIGFIX-8.CATALOG private trigger helper gives runtime and infras…
+    159|     await expect(runtime.query("SELECT app.recovery_follow_up_run_fenc…
+       |                                                                            ^
+    160|     const catalog = (await admin.query(`SELECT pg_get_userbyid(proowne…
+    161|       has_function_privilege('jobguard_runtime',oid,'EXECUTE') AS runt…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  test/migfix-8.integration.test.ts > MIGFIX-8 > MIGFIX-8.1 scheduling races the final advance without losing the due transition
+Error: expected the competing transaction to wait on the run fence
+ ❯ waitBlocked test/migfix-8.integration.test.ts:154:9
+    152|     await new Promise<void>(resolve => setImmediate(resolve));
+    153|   }
+    154|   throw new Error("expected the competing transaction to wait on the r…
+       |         ^
+    155| }
+    156|
+ ❯ test/migfix-8.integration.test.ts:173:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  test/migfix-8.integration.test.ts > MIGFIX-8 > MIGFIX-8.2 clock winner refuses a tick-2 schedule as stale and persists no unreachable intent
+Error: expected the competing transaction to wait on the run fence
+ ❯ waitBlocked test/migfix-8.integration.test.ts:154:9
+    152|     await new Promise<void>(resolve => setImmediate(resolve));
+    153|   }
+    154|   throw new Error("expected the competing transaction to wait on the r…
+       |         ^
+    155| }
+    156|
+ ❯ test/migfix-8.integration.test.ts:188:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  test/migfix-8.integration.test.ts > MIGFIX-8 > MIGFIX-8.3 repeat advance and recreated repositories leave one due effect and zero sends
+Error: expected the competing transaction to wait on the run fence
+ ❯ waitBlocked test/migfix-8.integration.test.ts:154:9
+    152|     await new Promise<void>(resolve => setImmediate(resolve));
+    153|   }
+    154|   throw new Error("expected the competing transaction to wait on the r…
+       |         ^
+    155| }
+    156|
+ ❯ test/migfix-8.integration.test.ts:204:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  test/migfix-8.integration.test.ts > MIGFIX-8 > MIGFIX-8.4 two repository schedulers and advancement serialize without duplicate due effects or deadlock
+Error: expected the competing transaction to wait on the run fence
+ ❯ waitBlocked test/migfix-8.integration.test.ts:154:9
+    152|     await new Promise<void>(resolve => setImmediate(resolve));
+    153|   }
+    154|   throw new Error("expected the competing transaction to wait on the r…
+       |         ^
+    155| }
+    156|
+ ❯ test/migfix-8.integration.test.ts:224:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  test/migfix-8.integration.test.ts > MIGFIX-8 > MIGFIX-8.3 sandbox repository concurrent final advances and restart preserve the three-step clock and zero external actions
+error: duplicate key value violates unique constraint "audit_event_tenant_id_id_uq"
+ ❯ ../../node_modules/.pnpm/pg@8.16.3/node_modules/pg/lib/client.js:545:17
+ ❯ appendAuditBatch src/audit.ts:64:5
+     62|     const event = { ...input, tenantId, sequence: ++sequence, occurred…
+     63|     const eventHash = canonicalAuditHash(event);
+     64|     await database.$client.query(
+       |     ^
+     65|       `INSERT INTO app.audit_event (id, tenant_id, sequence, version, …
+     66|        subject_type, subject_ref, occurred_at, payload, payload_hash, …
+ ❯ src/sandbox-repository.ts:36:1280
+ ❯ withTenant src/tenant-context.ts:88:20
+ ❯ test/migfix-8.integration.test.ts:256:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  7 failed | 1 passed (8)
+   Start at  13:19:26
+   Duration  5.70s (transform 684ms, setup 0ms, import 1.24s, tests 9.37s, environment 0ms)
+
