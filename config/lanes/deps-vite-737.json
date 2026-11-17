@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "deps-vite-737": {
+      "branches": [
+        "codex/sandbox/deps-vite-737"
+      ],
+      "allow": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "docs/verdicts/DEPS-VITE-737/BUILDER_RECEIPT.md"
+      ],
+      "receipt": "docs/verdicts/DEPS-VITE-737/BUILDER_RECEIPT.md",
+      "note": "Dependency security patch only; no web workflow (C1). Package and lock ownership is exclusive; no demo changes."
+    }
+  }
+}
