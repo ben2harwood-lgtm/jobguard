@@ -63,3 +63,15 @@ it("fails closed on cross-company reads, stale approval and private database err
   mocks.context.mockRejectedValueOnce(new Error("hidden tenant secret")); const result = await call();
   expect(await result.json()).toEqual({ version: "enterprise-fee-error.v1", code: "OUTCOME_UNKNOWN" });
 });
+
+it("rechecks the server cap on replay and compares offset timestamps as instants", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-28T12:00:00Z"));
+  const command = { version: "enterprise-fee-approve-statement.v1", commandId: id, statementId: id,
+    contentHash: "a".repeat(64), totalDeltaPence: 806, expiresAt: "2026-10-28T13:15:00+01:00" };
+  mocks.approve.mockResolvedValue({ authorizationId: id, replayed: false });
+  expect((await call("approve", request(command))).status).toBe(200);
+  expect((await call("approve", request({ ...command, expiresAt: "2026-10-28T13:15:00.001+01:00" }))).status).toBe(400);
+  vi.setSystemTime(new Date("2026-10-28T12:15:00Z"));
+  expect((await call("approve", request(command))).status).toBe(400);
+  expect(mocks.approve).toHaveBeenCalledTimes(1);
+});

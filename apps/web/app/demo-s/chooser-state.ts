@@ -9,9 +9,9 @@ export function demoLink(tenantId: string, runId: string, snapshotId?: string) {
   return `/demo-s?${new URLSearchParams({ tenantId, runId, ...(snapshotId ? { snapshotId } : {}) })}`;
 }
 export const journeyChoices = [
-  { scenario: "core-1000", journey: "DEMO-J1", title: "Core £1,000 job", reason: "The guided capture-to-correction journey and approved correction binding are not ready yet." },
+  { scenario: "core-1000", journey: "DEMO-J1", title: "Core £1,000 job", reason: "The separate core-1000 guide is available. Selection-linked launch and end-to-end completion are not ready yet." },
   { scenario: "recovery-18800", journey: "DEMO-J2", title: "Recovery £18,800 job", reason: "The guided recovery journey, collection, refund and money reconciliation bindings are not ready yet." },
-  { scenario: "shadow-30000", journey: "DEMO-J3", title: "Final Check £30,000 job", reason: "The guided Final Check journey, customer approvals and attribution bindings are not ready yet." },
+  { scenario: "shadow-30000", journey: "DEMO-J3", title: "Final Check £30,000 job", reason: "The guide, final-account lock and practice customer approval are available. Full end-to-end completion is not ready yet." },
   { scenario: "meter", journey: "DEMO-J4", title: "Jobs-on-the-go meter", reason: "Reference producer previews are available after saving. Persisted billing and trial journeys are not ready yet." },
   { scenario: "trial", journey: "DEMO-J5", title: "First-job trial", reason: "The guided trial, identity, card setup and reference clock bindings are not ready yet." },
 ] as const;
@@ -23,3 +23,6 @@ export const meterProfiles = [
   "DM-10 · Builder 13–17 places and track review", "DM-11 · Sustained use above seven",
   "DM-12 · Lifecycle and grouping", "DM-13 · Capacity and concurrent admissions",
 ] as const;
+
+// Enable only journeys whose real guide and result reader exist in this checkout.
+export function journeyAvailable(scenario: string) { return scenario === "shadow-30000"; }

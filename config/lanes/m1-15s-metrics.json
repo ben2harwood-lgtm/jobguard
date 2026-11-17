@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "m1-15s-metrics": {
+      "branches": ["codex/sandbox/m1-15s-metrics"],
+      "note": "RED M1-15S measurement instruments only; dark synthetic immutable fixture snapshots. No migration, route, provider or financial writes. This lane file is implicitly permitted by the lane checker.",
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/core/src/shadow-pilot-measurement.ts",
+        "packages/core/src/shadow-pilot-measurement.test.ts"
+      ]
+    }
+  }
+}

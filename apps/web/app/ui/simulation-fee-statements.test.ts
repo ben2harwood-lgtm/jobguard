@@ -43,3 +43,13 @@ it.each(["availability","statements"])("awaits the complete %s refusal body inst
  expect(await read).toEqual({available:refused==="statements",statements:[]});
  expect(fetch).toHaveBeenCalledTimes(refused==="statements"?2:1);
 });
+
+it("names simultaneous statement and collection errors without hiding either failure",()=>{
+ vi.stubGlobal("React",React);
+ const record={documentHash:"a".repeat(64),document:{statementId:jobId,number:"DEMO-FEE-000001",cumulativeFeePrincipal:{pence:28200},documentPrincipal:{pence:28200},qualifyingPrincipal:{numerator:"282000",denominator:"1"},sourceSnapshot:{sources:[],derivations:[],adjustments:{paymentReversalIds:[],creditNoteIds:[],evidenceInvalidationIds:[]}},postingHistory:[]}};
+ state.values=[true,[record],"This statement could not be saved or approved. Refresh the source review and try again.",false,null,null,false,"Collection records could not be loaded."];
+ const html=renderToStaticMarkup(React.createElement(SimulationFeeStatements,{jobId}));
+ expect(html.match(/role="alert"/gu)).toHaveLength(2);
+ expect(html).toContain('role="alert" aria-label="Simulation statement error">This statement could not be saved or approved. Refresh the source review and try again.</p>');
+ expect(html).toContain('role="alert" aria-label="Simulation collection error">Collection records could not be loaded.</p>');
+});
