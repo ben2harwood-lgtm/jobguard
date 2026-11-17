@@ -4,21 +4,23 @@ import { describe, expect, it, vi } from "vitest";
 import { smallBuilderDemoRunV1, smallBuilderDemoReportV1, previewDemoMeter } from "@jobguard/core";
 import { MeterPreview } from "./meter-preview";
 import { DemoChooser, LifecycleReport } from "./chooser";
-import { demoLink, journeyChoices, meterProfiles, pendingKey, readPending } from "./chooser-state";
+import { demoLink, journeyChoices, meterProfiles, journeyAvailable, pendingKey, readPending } from "./chooser-state";
 vi.stubGlobal("React", React);
 const id = "d1500000-0000-4000-8000-000000000001";
 const facts = { version: "small-builder-demo-run.v1", environment: "synthetic_demo", runId: id, scenario: "shadow-30000", revision: 1, status: "blocked", reason: "Not ready yet: Final Check journey execution is unavailable.", createdAt: "2026-10-28T00:00:00Z", archivedAt: null, predecessorId: null, successorId: null };
 describe("DEMO-S chooser and honest lifecycle report", () => {
-  it("covers J1–J5 and every meter profile without executable or expected-money claims", () => {
+  it("enables only the guide and report reader present on main", () => {
     expect(journeyChoices.map(item => item.journey)).toEqual(["DEMO-J1", "DEMO-J2", "DEMO-J3", "DEMO-J4", "DEMO-J5"]);
+    expect(new Set(journeyChoices.map(item => item.scenario)).size).toBe(5);
     expect(meterProfiles).toHaveLength(13); expect(meterProfiles[9]).toContain("13–17");
+    expect(journeyChoices.filter(item => journeyAvailable(item.scenario)).map(item => item.scenario)).toEqual(["shadow-30000"]);
     for (const item of journeyChoices) expect(item.reason).toContain("not ready yet");
   });
   it("links only persisted lifecycle identities and records missing A1 and observations", () => {
     const report = smallBuilderDemoReportV1.parse({ version: "small-builder-demo-report.v1", snapshotId: id, facts });
     const html = renderToStaticMarkup(<LifecycleReport report={report} tenantId={id} />);
     expect(html).toContain("Final Check journey execution is unavailable");
-    expect(html).toContain("The product journey has not run"); expect(html).toContain("DEMO-A1 is not ready yet");
+    expect(html).toContain("It does not record whether a product journey ran"); expect(html).toContain("DEMO-A1 is not ready yet");
     expect(html).toContain("0 of 2"); expect(html).toContain("snapshotId="); expect(html).toContain("Revision");
     expect(html).not.toMatch(/£800|£80|£720|£34,400|PASS|settled|signals found/);
   });
@@ -38,6 +40,8 @@ describe("DEMO-S chooser and honest lifecycle report", () => {
   it("renders no saved company or hidden data before authentication", () => {
     const html = renderToStaticMarkup(<DemoChooser />);
     expect(html).toContain("Checking your signed-in business");
+    expect(html).toContain('href="/demo-s/core-1000"');
+    expect(html).toContain('href="/demo-s/shadow-30000"');
     expect(html).not.toContain("Saved selection report"); expect(html).not.toContain(id);
   });
   it("restores only exact metadata intents, keeping replay IDs and owner storage scopes separate", () => {
