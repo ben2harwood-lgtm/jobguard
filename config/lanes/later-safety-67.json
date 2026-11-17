@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-67": {
+      "branches": ["codex/sandbox/later-safety-67"],
+      "allow": [
+        "apps/api/src/fee-collection/executor.ts",
+        "apps/api/src/fee-collection/executor.test.ts"
+      ]
+    }
+  }
+}

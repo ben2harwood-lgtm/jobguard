@@ -251,6 +251,32 @@ describe("M4-12 dark card collection and shared balance reservation", () => {
     await expect(f.executor.execute(ctx, id(20))).rejects.toThrow("COLLECTION_REFUSED");
     expect(f.book().attempts[1]?.state).toBe("reserved");
   });
+  it("reserves a full settled refund including VAT and refuses any excess", async () => {
+    const f = fixture(); await f.settle();
+    expect(f.book().attempts[0]).toMatchObject({ state: "settled", principalPence: 500, amountPence: 600 });
+    f.credit.amountPence = f.credit.approvedAmountPence = 601;
+    await expect(f.executor.reserveRefund(ctx, { ...f.refund, amountPence: 601 })).rejects.toThrow("COLLECTION_REFUSED");
+    f.credit.amountPence = f.credit.approvedAmountPence = 600;
+    await expect(f.executor.reserveRefund(ctx, { ...f.refund, amountPence: 600 }))
+      .resolves.toMatchObject({ state: "reserved", amountPence: 600, settlementCommandId: f.intent.commandId });
+    f.credit.creditNoteId = id(22); f.credit.amountPence = f.credit.approvedAmountPence = 1;
+    await expect(f.executor.reserveRefund(ctx, { ...f.refund, commandId: id(23), creditNoteId: id(22), amountPence: 1 }))
+      .rejects.toThrow("COLLECTION_REFUSED");
+    expect(f.book().attempts.filter(a => a.kind === "refund")).toHaveLength(1);
+  });
+  it("reserves two partial refunds up to the settled amount including VAT and refuses a third", async () => {
+    const f = fixture(); await f.settle();
+    f.credit.amountPence = f.credit.approvedAmountPence = 300;
+    await expect(f.executor.reserveRefund(ctx, { ...f.refund, amountPence: 300 }))
+      .resolves.toMatchObject({ state: "reserved", amountPence: 300 });
+    f.credit.creditNoteId = id(22);
+    await expect(f.executor.reserveRefund(ctx, { ...f.refund, commandId: id(23), creditNoteId: id(22), amountPence: 300 }))
+      .resolves.toMatchObject({ state: "reserved", amountPence: 300 });
+    f.credit.creditNoteId = id(24); f.credit.amountPence = f.credit.approvedAmountPence = 1;
+    await expect(f.executor.reserveRefund(ctx, { ...f.refund, commandId: id(25), creditNoteId: id(24), amountPence: 1 }))
+      .rejects.toThrow("COLLECTION_REFUSED");
+    expect(f.book().attempts.filter(a => a.kind === "refund")).toHaveLength(2);
+  });
   it("caps approved refunds at immutable settled principal, excluding tax", async () => {
     const f = fixture(); await f.settle();
     f.credit.amountPence = f.credit.approvedAmountPence = 501;

@@ -126,7 +126,7 @@ export class DarkFeeCollectionExecutor {
         || credit.actorMembershipId !== actorMembershipId || credit.invoiceHash !== original.invoiceHash || credit.creditNoteId !== intent.creditNoteId || credit.creditHash !== intent.creditHash
         || credit.settlementCommandId !== original.commandId || credit.approvedAmountPence !== intent.amountPence
         || credit.amountPence !== intent.amountPence || Date.parse(credit.expiresAt) <= this.now().getTime()
-        || BigInt(intent.amountPence) + used > BigInt(original.principalPence)
+        || BigInt(intent.amountPence) + used > BigInt(original.amountPence)
         || book.attempts.some(a => a.kind === "refund" && a.creditNoteId === intent.creditNoteId && a.state !== "released")) return refuse();
       const attempt: Attempt = { kind: "refund", commandId: intent.commandId, fingerprint: fingerprint(intent),
         actorMembershipId, principalPence: intent.amountPence,
