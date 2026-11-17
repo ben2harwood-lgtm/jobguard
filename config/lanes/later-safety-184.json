@@ -10,7 +10,9 @@
         "apps/api/src/contractor/site-extra.application.ts",
         "apps/api/src/contractor/site-extra-pricing.application.test.ts",
         "packages/db/src/extra-approval-chain-repository.ts",
-        "packages/db/test/site-extra-priced-submit-recovery.integration.test.ts"
+        "packages/db/test/site-extra-priced-submit-recovery.integration.test.ts",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]
     }
   }
