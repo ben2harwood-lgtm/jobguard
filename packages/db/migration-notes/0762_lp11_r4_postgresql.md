@@ -2164,6 +2164,16 @@ nice -n 9 pnpm --filter @jobguard/db exec vitest run test/sor-suggestion-confirm
 nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/migration-proof-loader.test.ts --maxWorkers=1 --reporter=default
 ```
 
+## r5 SCIM permission and worker fixture checks
+
+The permission probes now use the actual fixture company member, which makes the before-revocation positives and after-revocation negatives exercise the same bound company. The queued-execution probes invoke the separate LP-10 worker login and preserve the existing no-attempt, no-adapter-call and persisted outbox assertions. The forced-policy and immutability checks bind that company only at the positive control or before the authorized owner's mutation attempt. Missing, malformed and foreign caller settings still carry no binding.
+
+Both PostgreSQL SCIM files passed all 37 tests. The checked-product run had 10 failures in SCIM access and two failures in SCIM deactivation. Both groups now have zero failures in the focused run.
+
+```sh
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/scim-deactivation.integration.test.ts test/scim-deactivation-access.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-scim-bound-results.json
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

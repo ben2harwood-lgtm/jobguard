@@ -99,6 +99,8 @@
         "packages/db/test/later-recovery-message-attempt.integration.test.ts",
         "packages/db/test/shadow-detection.integration.test.ts",
         "packages/db/test/shadow-persistence.integration.test.ts",
+        "packages/db/test/scim-deactivation-access.integration.test.ts",
+        "packages/db/test/scim-deactivation.integration.test.ts",
         "packages/db/test/stored-receipt-case-fixture.ts",
         "packages/db/test/sv5pre-completion.integration.test.ts",
         "packages/db/test/sv5pre-fixtures.ts",
