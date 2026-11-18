@@ -2189,6 +2189,14 @@ node tools/commercial-integrity-current-source-guard.mjs
 node tools/commercial-integrity-boundary.mjs
 ```
 
+## r5 synthetic tenant-key registry fixtures
+
+The assurance-only registry tests now bind independently seeded owners for the two companies after checking the empty predecessor. The assurance login gets the existing request-binding functions inside the test cluster and retains its independent role. Its cross-company controls exercise the actual visible and proposed rows with the original exact errors. All eight tests passed on PostgreSQL, up from one passing and seven failing in the checked-product round.
+
+```sh
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/tenant-key-registry.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-tenant-keys-results.json
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)
