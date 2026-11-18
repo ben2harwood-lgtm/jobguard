@@ -137,13 +137,19 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(receiptHelpers).toHaveLength(1);
   expect(receiptHelpers[0]?.definition?.split("$function$")[1]).toEqual(
     receiptGate.split("FUNCTION app.require_receipt_final_check(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
-  // 0655 replaces only the emergency capability body; pin the complete reviewed replacement.
-  const emergency = await readFile(new URL("../migrations/0655_emergency_token_minted.sql", import.meta.url), "utf8");
-  const emergencyBody = emergency.split("FUNCTION identity.dark_emergency(")[1]!.split("AS $$")[1]!.split("$$;")[0];
-  const emergencyRoutines = live.filter(row => row.nspname === "identity" && row.proname === "dark_emergency"
-    && row.args === "s text, csrf text, t uuid, p jsonb");
-  expect(emergencyRoutines).toHaveLength(1);
-  expect(emergencyRoutines[0]?.definition?.split("$function$")[1]).toEqual(emergencyBody);
+  // 0762 preserves the distinct human emergency, mailbox and machine entry points.
+  for (const [name, args] of [
+    ["dark_emergency", "s text, csrf text, t uuid, p jsonb"],
+    ["emergency_owner", "s text, csrf text, t uuid"],
+    ["sso_emergency_use", "u uuid, p jsonb"],
+    ["scim2_configure", "s text, csrf text, t uuid, b uuid, c uuid, is_enabled boolean, credential_hash text"],
+    ["scim2_machine", "b uuid, token text, p jsonb"],
+  ]) {
+    const body = lp11Sql.split(`FUNCTION identity.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
+    const routines = live.filter(row => row.nspname === "identity" && row.proname === name && row.args === args);
+    expect(routines).toHaveLength(1);
+    expect(routines[0]?.definition?.split("$function$")[1]).toEqual(body);
+  }
   // 0709 replaces only this exact overload on 0656's body; pin its entire body, including all predecessor guards.
   const feeResult = await readFile(new URL("../migrations/0742_fee_webhook_receipt_binding.sql", import.meta.url), "utf8");
   const feeResultBody = feeResult.split("CREATE OR REPLACE FUNCTION app.replace_fee_reservation_book")[1]!.split("AS $$")[1]!.split("$$;")[0];

@@ -2174,6 +2174,21 @@ Both PostgreSQL SCIM files passed all 37 tests. The checked-product run had 10 f
 nice -n 8 pnpm --filter @jobguard/db exec vitest run test/scim-deactivation.integration.test.ts test/scim-deactivation-access.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-scim-bound-results.json
 ```
 
+## r5 emergency sign-in and SCIM machine authentication
+
+The dual-owner route was trying to read company membership before it could establish a normal request binding during an SSO outage. Its private scope now starts from the locked, live session and exact CSRF credential, then checks the selected company's active owner under the existing advisory lock. The mailbox route likewise derives its company from the proved identity's active membership and rechecks under the lock. The scope is available only inside the existing synthetic identity entry points. The business and audit predicates check the stored scope, and the audit predicates also match the exact event, subject and actor. Scope cleanup leaves the existing emergency business operations insert-only.
+
+SCIM provisioning now selects the one requested binding under a private lookup, proves the token, expiry and enabled state, and rechecks them under the company lock. Writes and replay reads for SCIM resources and receipts are restricted to that binding. Revocation can reach the existing SCIM deactivation routine only for the authenticated binding's connection. The machine login and its system audit attribution stay distinct from human requests.
+
+The PostgreSQL identity batch passed all 55 tests, including every LP-6a binding test and its exact relation-lock assertion. The checked-product run had 34 failures in the five emergency and enterprise files. There were six enterprise-access, seven emergency-token, 11 emergency-window, eight owner-emergency and two concurrency failures. Each group passed in the focused rerun. The exact ownership check now expects `jobguard_session_lookup` for the read-only SSO state projection and `jobguard_migration` for the checked detail routine. The catalogue, migration and all permissive policy checks passed 89 of 89. The proof records 1,366 effective-privilege changes, 752 upgrade changes and 634 policy changes.
+
+```sh
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/enterprise-access.integration.test.ts test/sso-emergency-token.integration.test.ts test/sso-emergency-window.integration.test.ts test/sso-emergency.integration.test.ts test/sso-emergency-concurrency.integration.test.ts test/lp6a-binding.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-identity-emergency-final-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/migration-proof-loader.test.ts --maxWorkers=1 --reporter=default
+node tools/commercial-integrity-current-source-guard.mjs
+node tools/commercial-integrity-boundary.mjs
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

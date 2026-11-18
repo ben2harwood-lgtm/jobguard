@@ -299,7 +299,8 @@ CREATE OR REPLACE FUNCTION identity.sso_required_state(t uuid)
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE latest identity.sso_required_event; window_row identity.sso_emergency_window; is_open boolean:=false; prior control_plane.lp11_identity_scope; BEGIN
  IF t IS NULL OR ((app.lp11_identity_scope()).tenant_id IS DISTINCT FROM t
-  AND app.lp11_policy_tenant() IS DISTINCT FROM t)
+  AND app.lp11_policy_tenant() IS DISTINCT FROM t
+  AND app.lp11_sso_tenant(ARRAY['dark_emergency','mailbox_emergency'],NULL) IS DISTINCT FROM t)
  THEN RAISE EXCEPTION 'SSO_REQUIRED_FORBIDDEN' USING ERRCODE='42501'; END IF;
  prior:=app.lp11_identity_scope();
  PERFORM app.lp11_set_identity_scope(t,prior.session_id);
@@ -629,10 +630,16 @@ REVOKE CREATE ON SCHEMA app,identity,control_plane FROM jobguard_session_lookup;
 -- scope, and they close it before returning to the identity login.
 CREATE UNLOGGED TABLE control_plane.lp11_sso_scope (
  transaction_id xid8 PRIMARY KEY,
- tenant_id uuid NOT NULL,
- connection_id uuid NOT NULL,
- operation text NOT NULL CHECK(operation IN ('cache','complete','scim','audit','worker_authorize')),
- login name NOT NULL
+ tenant_id uuid,
+ authority_id uuid NOT NULL,
+ operation text NOT NULL CHECK(operation IN ('cache','complete','scim','audit','worker_authorize','dark_emergency','mailbox_emergency','scim2_configure','scim2_lookup','scim2_machine')),
+ login name NOT NULL,
+ emergency_actor uuid,
+ emergency_event text,
+ emergency_subject uuid,
+ scim_connection uuid,
+ CHECK((operation='scim2_lookup')=(tenant_id IS NULL)),
+ CHECK((operation IN ('dark_emergency','mailbox_emergency','scim2_configure'))=(emergency_actor IS NOT NULL))
 );
 ALTER TABLE control_plane.lp11_sso_scope OWNER TO jobguard_migration;
 REVOKE ALL ON control_plane.lp11_sso_scope FROM PUBLIC;
@@ -641,6 +648,14 @@ CREATE FUNCTION identity.lp11_open_sso_scope(c uuid, operation text) RETURNS uui
  LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
 DECLARE t uuid; connection jsonb;
 BEGIN
+ IF operation='scim' AND pg_has_role(session_user,'jobguard_scim','USAGE') THEN
+  -- Only the machine's checked binding can enter the existing revocation routine.
+  UPDATE control_plane.lp11_sso_scope scope SET operation='scim',authority_id=c,scim_connection=NULL
+   WHERE scope.transaction_id=pg_current_xact_id_if_assigned() AND scope.login=session_user
+    AND scope.operation='scim2_machine' AND scope.scim_connection=c
+   RETURNING scope.tenant_id INTO t;
+  IF FOUND THEN RETURN t; END IF;
+ END IF;
  IF NOT pg_has_role(session_user,'jobguard_identity','USAGE') THEN
   RAISE EXCEPTION 'SSO_FORBIDDEN' USING ERRCODE='42501';
  END IF;
@@ -651,7 +666,8 @@ BEGIN
  IF app.lp6e_request_binding_present() THEN
   IF t IS DISTINCT FROM app.current_tenant() THEN RAISE EXCEPTION 'SSO_FORBIDDEN' USING ERRCODE='42501'; END IF;
  ELSE
-  INSERT INTO control_plane.lp11_sso_scope VALUES(pg_current_xact_id(),t,c,operation,session_user);
+  INSERT INTO control_plane.lp11_sso_scope(transaction_id,tenant_id,authority_id,operation,login)
+  VALUES(pg_current_xact_id(),t,c,operation,session_user);
  END IF;
  RETURN t;
 END $$;
@@ -662,13 +678,430 @@ CREATE FUNCTION app.lp11_sso_tenant(operations text[], connection uuid) RETURNS 
  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
  SELECT s.tenant_id FROM control_plane.lp11_sso_scope s
  WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
-  AND s.operation=ANY(operations) AND (connection IS NULL OR s.connection_id=connection)
+  AND s.operation=ANY(operations) AND (connection IS NULL OR s.authority_id=connection)
 $$;
 ALTER FUNCTION app.lp11_sso_tenant(text[],uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp11_sso_tenant(text[],uuid) FROM PUBLIC;
 -- These callers share policies with migration-owned routines. An ordinary
 -- request has no row in the private scope, even when it is already bound.
-GRANT EXECUTE ON FUNCTION app.lp11_sso_tenant(text[],uuid) TO jobguard_runtime,jobguard_identity,jobguard_audit_writer;
+GRANT EXECUTE ON FUNCTION app.lp11_sso_tenant(text[],uuid) TO jobguard_runtime,jobguard_identity,jobguard_audit_writer,jobguard_session_lookup;
+
+-- The dual-owner emergency route deliberately works during an SSO outage.
+-- Prove its existing session and CSRF before reading company-owned rows.
+CREATE OR REPLACE FUNCTION identity.emergency_owner(s text, csrf text, t uuid) RETURNS uuid
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE x identity.session; a uuid; bound_tenant uuid:=app.lp11_policy_tenant(); BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR NOT pg_has_role(session_user,'jobguard_identity','USAGE')
+  OR t IS NULL OR (bound_tenant IS NOT NULL AND bound_tenant IS DISTINCT FROM t)
+ THEN RAISE EXCEPTION 'EMERGENCY_REFUSED' USING ERRCODE='42501'; END IF;
+ SELECT * INTO x FROM identity.session se WHERE se.token_digest=s AND se.csrf_token=csrf
+  AND se.revoked_at IS NULL AND se.expires_at>clock_timestamp() AND se.environment='synthetic_demo' FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'EMERGENCY_REFUSED' USING ERRCODE='42501'; END IF;
+ SELECT m.id INTO a FROM identity.current_memberships(x.user_id) m WHERE m.tenant_id=t AND m.role='owner';
+ IF a IS NULL OR (bound_tenant IS NOT NULL AND a IS DISTINCT FROM app.current_actor())
+ THEN RAISE EXCEPTION 'EMERGENCY_REFUSED' USING ERRCODE='42501'; END IF;
+ INSERT INTO control_plane.lp11_sso_scope(transaction_id,tenant_id,authority_id,operation,login,emergency_actor)
+ VALUES(pg_current_xact_id(),t,x.id,'dark_emergency',session_user,a);
+ PERFORM 1 FROM app.membership m WHERE (m.tenant_id,m.id,m.identity_user_id)=(t,a,x.user_id)
+  AND m.role='owner' AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp()) FOR SHARE;
+ IF NOT FOUND OR x.expires_at<=clock_timestamp()
+ THEN RAISE EXCEPTION 'EMERGENCY_REFUSED' USING ERRCODE='42501'; END IF;
+ RETURN a;
+END $$;
+
+CREATE FUNCTION app.lp11_identity_operation_audit_tenant(event text,kind text,subject text,actor text) RETURNS uuid
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_sso_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+  AND (s.emergency_event,s.emergency_subject::text)=(event,subject)
+  AND CASE s.operation
+   WHEN 'dark_emergency' THEN actor='membership:'||s.emergency_actor::text
+    AND kind=CASE WHEN event='sso.emergency.notices' THEN 'membership' ELSE 'emergency_request' END
+   WHEN 'scim2_configure' THEN actor='membership:'||s.emergency_actor::text AND kind='scim_binding'
+   WHEN 'scim2_machine' THEN actor='machine:scim:'||s.authority_id::text AND kind='scim_binding'
+   ELSE false END
+$$;
+ALTER FUNCTION app.lp11_identity_operation_audit_tenant(text,text,text,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_identity_operation_audit_tenant(text,text,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_identity_operation_audit_tenant(text,text,text,text) TO jobguard_audit_writer;
+
+CREATE OR REPLACE FUNCTION identity.dark_emergency(s text, csrf text, t uuid, p jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE a uuid; u uuid; r identity.emergency_request; op text:=p->>'operation'; rid uuid;
+ now_ts timestamptz; notices jsonb; result jsonb; target uuid; raw_token text; previous_context text:=current_setting('app.tenant_id',true); BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
+ a:=identity.emergency_owner(s,csrf,t);
+ PERFORM set_config('app.tenant_id',t::text,true);
+ IF jsonb_typeof(p) IS DISTINCT FROM 'object' OR p->>'version' IS DISTINCT FROM 'emergency.v1'
+ OR (p-ARRAY['version','operation','requestId','reasonHash','token','targetMembershipId'])<>'{}'::jsonb
+ THEN RAISE EXCEPTION 'EMERGENCY_INVALID' USING ERRCODE='22023'; END IF;
+ IF op='notices' THEN
+  -- All owners see every action, including approvals, opening, and subsequent use. No dismiss/delete path.
+  SELECT coalesce(jsonb_agg(to_jsonb(e)||jsonb_build_object('ownerName',n.email) ORDER BY e.created_at,e.id),'[]'::jsonb) INTO notices
+   FROM identity.emergency_action e JOIN app.membership m ON(m.tenant_id,m.id)=(e.tenant_id,e.actor)
+   JOIN identity.user_email n ON n.user_id=m.identity_user_id WHERE e.tenant_id=t;
+  UPDATE control_plane.lp11_sso_scope SET emergency_event='sso.emergency.notices',emergency_subject=a
+   WHERE transaction_id=pg_current_xact_id_if_assigned();
+  PERFORM app.ef_audit(a,'sso.emergency.notices','membership',a,
+   jsonb_build_object('references',jsonb_build_object('membershipId',a::text),'classifications',jsonb_build_object('data','security')));
+  DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+  PERFORM set_config('app.tenant_id',coalesce(previous_context,''),true);
+  RETURN jsonb_build_object('notices',notices);
+ END IF;
+ rid:=(p->>'requestId')::uuid;
+ IF rid IS NULL THEN RAISE EXCEPTION 'EMERGENCY_INVALID' USING ERRCODE='22023'; END IF;
+ now_ts:=clock_timestamp();
+ SELECT * INTO r FROM identity.emergency_request WHERE tenant_id=t AND id=rid;
+ IF op='request' THEN
+  IF r.id IS NOT NULL OR coalesce(p->>'reasonHash','') !~ '^[a-f0-9]{64}$'
+   THEN RAISE EXCEPTION 'EMERGENCY_REPLAY' USING ERRCODE='23505'; END IF;
+  INSERT INTO identity.emergency_request VALUES(t,rid,a,p->>'reasonHash',now_ts,now_ts+interval '15 minutes');
+ ELSIF r.id IS NULL THEN RAISE EXCEPTION 'EMERGENCY_REFUSED' USING ERRCODE='42501';
+ ELSIF op IN('approve','open') THEN
+  IF r.expires_at<=now_ts OR EXISTS(SELECT 1 FROM identity.emergency_session WHERE tenant_id=t AND request_id=rid)
+   THEN RAISE EXCEPTION 'EMERGENCY_EXPIRED_OR_USED' USING ERRCODE='42501'; END IF;
+  IF op='approve' THEN
+   SELECT identity_user_id INTO u FROM app.membership WHERE tenant_id=t AND id=a;
+   IF a=r.requester OR EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=t AND id=r.requester AND identity_user_id=u)
+    THEN RAISE EXCEPTION 'EMERGENCY_SELF_APPROVAL' USING ERRCODE='42501'; END IF;
+   INSERT INTO identity.emergency_approval VALUES(t,rid,a,u);
+  ELSE
+   IF a<>r.requester OR p ? 'token'
+    OR (SELECT count(DISTINCT ap.approver_user) FROM identity.emergency_approval ap JOIN app.membership m
+      ON(m.tenant_id,m.id,m.identity_user_id)=(ap.tenant_id,ap.approver,ap.approver_user)
+      WHERE ap.tenant_id=t AND ap.request_id=rid AND m.role='owner' AND m.revoked_at IS NULL
+      AND (m.expires_at IS NULL OR m.expires_at>now_ts)
+      AND m.id<>r.requester AND m.identity_user_id<>(SELECT identity_user_id FROM app.membership WHERE tenant_id=t AND id=r.requester))<2
+    THEN RAISE EXCEPTION 'EMERGENCY_TWO_OWNERS_REQUIRED' USING ERRCODE='42501'; END IF;
+   -- Two independently generated UUIDv4 values provide 244 random bits without an extension or new grants.
+   raw_token:=replace(gen_random_uuid()::text||gen_random_uuid()::text,'-','');
+   INSERT INTO identity.emergency_session VALUES(t,rid,encode(sha256(convert_to(raw_token,'UTF8')),'hex'),now_ts,now_ts+interval '1 hour');
+   result:=jsonb_build_object('expiresAt',now_ts+interval '1 hour','token',raw_token);
+  END IF;
+ ELSIF op IN('inspect','revoke_member') THEN
+  IF a<>r.requester OR coalesce(p->>'token','') !~ '^[a-f0-9]{64}$' OR NOT EXISTS(SELECT 1 FROM identity.emergency_session WHERE tenant_id=t AND request_id=rid
+    AND token_hash=encode(sha256(convert_to(p->>'token','UTF8')),'hex') AND expires_at>now_ts)
+   THEN RAISE EXCEPTION 'EMERGENCY_REFUSED' USING ERRCODE='42501'; END IF;
+  IF op='inspect' THEN
+   SELECT jsonb_build_object('required',required,'revision',revision) INTO result FROM identity.sso_required_state(t);
+  ELSE
+   target:=(p->>'targetMembershipId')::uuid;
+   -- Restricted recovery only: never change an owner, journals, evidence, Decisions or the SSO-required switch.
+   IF NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=t AND id=target AND role<>'owner' AND revoked_at IS NULL)
+    THEN RAISE EXCEPTION 'EMERGENCY_OWNER_PROTECTED' USING ERRCODE='42501'; END IF;
+   UPDATE app.membership SET revoked_at=now_ts WHERE tenant_id=t AND id=target AND role<>'owner';
+   INSERT INTO app.role_grant_revocation(tenant_id,id,grant_id)
+    SELECT t,gen_random_uuid(),g.id FROM app.role_grant g WHERE g.tenant_id=t AND g.membership_id=target
+    AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation v WHERE v.tenant_id=t AND v.grant_id=g.id);
+  END IF;
+ ELSE RAISE EXCEPTION 'EMERGENCY_INVALID' USING ERRCODE='22023'; END IF;
+ INSERT INTO identity.emergency_action(tenant_id,id,request_id,actor,operation) VALUES(t,gen_random_uuid(),rid,a,op);
+ -- Final lock: effect, visible notice and chain seal commit atomically. Audit failure rolls everything back.
+ UPDATE control_plane.lp11_sso_scope SET emergency_event='sso.emergency.'||op,emergency_subject=rid
+  WHERE transaction_id=pg_current_xact_id_if_assigned();
+ PERFORM app.ef_audit(a,'sso.emergency.'||op,'emergency_request',rid,
+  jsonb_build_object('references',jsonb_build_object('requestId',rid::text),'hashes',jsonb_build_object('request',app.final_lock_hash(p)),
+   'classifications',jsonb_build_object('data','security')));
+ DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ PERFORM set_config('app.tenant_id',coalesce(previous_context,''),true);
+ RETURN coalesce(result,'{}'::jsonb)||jsonb_build_object('requestId',rid,'operation',op);
+END $$;
+
+-- The server identity role reaches this path after verifying mailbox control.
+CREATE FUNCTION identity.lp11_close_mailbox_scope() RETURNS void
+ LANGUAGE sql VOLATILE SET search_path=pg_catalog,pg_temp AS $$
+ DELETE FROM control_plane.lp11_sso_scope s WHERE s.transaction_id=pg_current_xact_id_if_assigned()
+  AND s.login=session_user AND s.operation='mailbox_emergency'
+$$;
+ALTER FUNCTION identity.lp11_close_mailbox_scope() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION identity.lp11_close_mailbox_scope() FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION identity.sso_emergency_use(u uuid,p jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid; member record; actor uuid; owner_role text; event record; approval identity.sso_emergency_approval;
+ rule uuid; command uuid; minutes integer; now_ts timestamptz;
+ cause text:='EMERGENCY_REFUSED'; result jsonb; outcome jsonb; prior_tenant text:=current_setting('app.tenant_id',true); BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR NOT pg_has_role(session_user,'jobguard_identity','USAGE') THEN RETURN jsonb_build_object('used',false,'cause','SSO_ROUTE_BLOCKED'); END IF;
+ IF jsonb_typeof(p) IS DISTINCT FROM 'object' THEN RETURN jsonb_build_object('used',false,'cause','EMERGENCY_INPUT_INVALID'); END IF;
+ IF (p->>'version') IS DISTINCT FROM 'sso-emergency.v2'
+  OR jsonb_typeof(p->'requested_tenant_id') IS DISTINCT FROM 'string'
+  OR coalesce(p->>'requested_tenant_id','') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+  OR jsonb_typeof(p->'commandId') IS DISTINCT FROM 'string'
+  OR coalesce(p->>'commandId','') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+  OR jsonb_typeof(p->'reason') IS DISTINCT FROM 'string' OR length(coalesce(p->>'reason','')) NOT BETWEEN 20 AND 500
+  OR (p-ARRAY['version','requested_tenant_id','commandId','windowMinutes','reason'])<>'{}'::jsonb
+ THEN RETURN jsonb_build_object('used',false,'cause','EMERGENCY_INPUT_INVALID'); END IF;
+ t:=(p->>'requested_tenant_id')::uuid; command:=(p->>'commandId')::uuid;
+ -- Authentication proved mailbox control before calling. Derive membership through the merged routine;
+ -- an untrusted tenant UUID alone never grants authority to append a company's audit or emergency log.
+ FOR member IN SELECT * FROM identity.current_memberships(u) LOOP
+  IF member.tenant_id=t THEN actor:=member.id; END IF;
+ END LOOP;
+ IF actor IS NULL THEN RETURN jsonb_build_object('used',false,'cause','EMERGENCY_MEMBER_NOT_ACTIVE'); END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
+ -- Re-read the same membership under the company lock: an owner may have been
+ -- downgraded, revoked or expired while this use waited. Never cache its role before waiting.
+ SELECT m.role INTO owner_role FROM identity.current_memberships(u) m WHERE m.tenant_id=t AND m.id=actor;
+ IF owner_role IS NULL OR (app.lp11_policy_tenant() IS NOT NULL AND
+   (t IS DISTINCT FROM app.current_tenant() OR actor IS DISTINCT FROM app.current_actor()))
+ THEN RETURN jsonb_build_object('used',false,'cause','EMERGENCY_PERMISSION_REFUSED'); END IF;
+ INSERT INTO control_plane.lp11_sso_scope(transaction_id,tenant_id,authority_id,operation,login,emergency_actor)
+ VALUES(pg_current_xact_id(),t,u,'mailbox_emergency',session_user,actor);
+ PERFORM set_config('app.tenant_id',t::text,true);
+ <<checked_use>> BEGIN
+ -- Recheck under the tenant lock, using the existing permission/active-member contract.
+ IF (app.contractor_allowed(actor,'organisation.manage',t)) IS NOT TRUE THEN
+  outcome:=jsonb_build_object('used',false,'cause','EMERGENCY_PERMISSION_REFUSED'); EXIT checked_use;
+ END IF;
+ SELECT * INTO event FROM identity.sso_required_state(t);
+ IF event.required IS FALSE THEN
+  -- A competing use sees the committed OFF revision under the same tenant lock.
+  IF event.actor_kind='emergency' AND event.window_open IS TRUE AND EXISTS(SELECT 1 FROM identity.sso_emergency_use used JOIN identity.sso_emergency_approval a
+    ON(a.tenant_id,a.id)=(used.tenant_id,used.approval_id)
+    WHERE used.tenant_id=t AND used.event_id=event.event_id AND a.membership_id=actor) THEN
+   INSERT INTO identity.sso_emergency_event(tenant_id,id,membership_id,outcome,cause_code,reason)
+    VALUES(t,gen_random_uuid(),actor,'refused','EMERGENCY_ALREADY_USED',p->>'reason');
+   outcome:=jsonb_build_object('used',false,'cause','EMERGENCY_ALREADY_USED','connectionId',event.connection_id,'actorMembershipId',actor);
+   EXIT checked_use;
+  END IF;
+  outcome:=jsonb_build_object('used',false,'cause','EMERGENCY_SWITCH_OFF'); EXIT checked_use;
+ END IF;
+ IF owner_role IS DISTINCT FROM 'owner' THEN cause:='EMERGENCY_NOT_OWNER';
+ ELSIF NOT EXISTS(SELECT 1 FROM identity.sso_emergency_approver_rule r WHERE r.version='company-owner-only.v1') THEN cause:='EMERGENCY_APPROVER_RULE_UNSET';
+ ELSIF (CASE WHEN jsonb_typeof(p->'windowMinutes')='number'
+  THEN (p->>'windowMinutes')::numeric BETWEEN 15 AND 240 AND (p->>'windowMinutes')::numeric=trunc((p->>'windowMinutes')::numeric)
+  ELSE false END) IS NOT TRUE THEN cause:='EMERGENCY_WINDOW_INVALID';
+ ELSIF EXISTS(SELECT 1 FROM identity.sso_emergency_window w WHERE w.tenant_id=t AND w.command_id=command) THEN cause:='EMERGENCY_COMMAND_REPLAYED';
+ ELSE
+  SELECT r.id INTO rule FROM identity.sso_emergency_approver_rule r WHERE r.version='company-owner-only.v1';
+  minutes:=(p->>'windowMinutes')::numeric::integer; now_ts:=clock_timestamp();
+  INSERT INTO identity.sso_emergency_approval(tenant_id,id,membership_id,rule_id,approver_ref,reason_hash,approved_at,expires_at)
+   VALUES(t,gen_random_uuid(),actor,rule,'membership:'||actor::text,encode(sha256(convert_to(p->>'reason','UTF8')),'hex'),now_ts,now_ts+interval '1 minute') RETURNING * INTO approval;
+  result:=identity.sso_required_append(t,event.connection_id,actor,'emergency',false,p->>'reason',event.revision);
+  INSERT INTO identity.sso_emergency_use(tenant_id,approval_id,event_id) VALUES(t,approval.id,(result->>'eventId')::uuid);
+  INSERT INTO identity.sso_emergency_window(tenant_id,approval_id,event_id,command_id,owner_membership_id,window_minutes,opened_at,closes_at)
+   VALUES(t,approval.id,(result->>'eventId')::uuid,command,actor,minutes,now_ts,now_ts+make_interval(mins=>minutes));
+  cause:='EMERGENCY_USED';
+ END IF;
+ INSERT INTO identity.sso_emergency_event(tenant_id,id,membership_id,outcome,cause_code,reason)
+  VALUES(t,gen_random_uuid(),actor,(CASE WHEN result IS NULL THEN 'refused' ELSE 'used' END),cause,p->>'reason');
+ outcome:=jsonb_build_object('used',result IS NOT NULL,'cause',cause,'connectionId',event.connection_id,'actorMembershipId',actor)
+  ||(CASE WHEN result IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('eventId',result->>'eventId','windowMinutes',minutes,
+   'closesAt',to_char((now_ts+make_interval(mins=>minutes)) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) END);
+ END checked_use;
+ PERFORM identity.lp11_close_mailbox_scope();
+ PERFORM set_config('app.tenant_id',coalesce(prior_tenant,''),true);
+ RETURN outcome;
+END $$;
+
+CREATE FUNCTION app.lp11_scim_binding_lookup(b uuid) RETURNS boolean
+ LANGUAGE sql VOLATILE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT EXISTS(SELECT FROM control_plane.lp11_sso_scope s
+  WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+   AND s.operation='scim2_lookup' AND s.authority_id=b)
+$$;
+ALTER FUNCTION app.lp11_scim_binding_lookup(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_scim_binding_lookup(uuid) FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_scim_connection_tenant(operations text[],c uuid) RETURNS uuid
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_sso_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+  AND s.operation=ANY(operations) AND s.scim_connection=c
+$$;
+ALTER FUNCTION app.lp11_scim_connection_tenant(text[],uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_scim_connection_tenant(text[],uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_scim_connection_tenant(text[],uuid) TO jobguard_identity,jobguard_runtime,jobguard_session_lookup;
+
+CREATE OR REPLACE FUNCTION identity.scim2_configure(s text, csrf text, t uuid, b uuid, c uuid, is_enabled boolean, credential_hash text) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE a uuid; prior_tenant text:=current_setting('app.tenant_id',true); BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
+ a:=identity.emergency_owner(s,csrf,t);
+ UPDATE control_plane.lp11_sso_scope SET operation='scim2_configure',authority_id=b,scim_connection=c
+  WHERE transaction_id=pg_current_xact_id_if_assigned();
+ PERFORM set_config('app.tenant_id',t::text,true);
+ IF credential_hash IS NULL OR credential_hash !~ '^[a-f0-9]{64}$' OR is_enabled IS NULL
+ OR NOT EXISTS(SELECT 1 FROM identity.sso_connection WHERE tenant_id=t AND id=c)
+ THEN RAISE EXCEPTION 'SCIM_REFUSED' USING ERRCODE='42501'; END IF;
+ INSERT INTO identity.scim2_binding VALUES(t,b,c,is_enabled,credential_hash,clock_timestamp()+interval '1 day')
+ ON CONFLICT(tenant_id,id) DO UPDATE SET enabled=EXCLUDED.enabled,token_hash=EXCLUDED.token_hash,expires_at=EXCLUDED.expires_at
+ WHERE scim2_binding.connection_id=EXCLUDED.connection_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'SCIM_REFUSED' USING ERRCODE='42501'; END IF;
+ UPDATE control_plane.lp11_sso_scope SET emergency_event='sso.scim.configured',emergency_subject=b
+  WHERE transaction_id=pg_current_xact_id_if_assigned();
+ PERFORM app.ef_audit(a,'sso.scim.configured','scim_binding',b,jsonb_build_object('references',jsonb_build_object('bindingId',b::text),
+  'classifications',jsonb_build_object('data','security')));
+ DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ PERFORM set_config('app.tenant_id',coalesce(prior_tenant,''),true);
+END $$;
+
+CREATE OR REPLACE FUNCTION identity.scim2_machine(b uuid, token text, p jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE binding identity.scim2_binding; t uuid; old identity.scim2_resource; rid uuid; event uuid;
+ resource_kind text:=p->>'kind'; method text:=p->>'method'; doc jsonb:=p->'document'; result jsonb; previous identity.scim2_receipt;
+ actor uuid; person uuid; member uuid; account uuid; address text; sh text; response jsonb; request_hash text;
+ entry jsonb; rev integer;
+ caller_tenant text:=current_setting('app.tenant_id',true); BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR NOT pg_has_role(session_user,'jobguard_scim','USAGE')
+  OR b IS NULL OR token IS NULL OR app.lp6e_request_binding_present()
+ THEN RAISE EXCEPTION 'SCIM_REFUSED' USING ERRCODE='42501'; END IF;
+ INSERT INTO control_plane.lp11_sso_scope(transaction_id,authority_id,operation,login)
+ VALUES(pg_current_xact_id(),b,'scim2_lookup',session_user);
+ SELECT * INTO binding FROM identity.scim2_binding WHERE id=b;
+ IF binding.id IS NULL OR token IS NULL OR binding.token_hash IS DISTINCT FROM encode(sha256(convert_to(token,'UTF8')),'hex')
+ OR NOT binding.enabled OR binding.expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'SCIM_REFUSED' USING ERRCODE='42501'; END IF;
+ t:=binding.tenant_id;
+ UPDATE control_plane.lp11_sso_scope SET tenant_id=t,operation='scim2_machine',scim_connection=binding.connection_id
+  WHERE transaction_id=pg_current_xact_id_if_assigned();
+ PERFORM set_config('app.tenant_id',t::text,true);
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
+ -- Recheck after serializing with rotation/disabling; do not cache authorization before the lock.
+ SELECT * INTO binding FROM identity.scim2_binding WHERE tenant_id=t AND id=b FOR SHARE;
+ IF NOT FOUND OR NOT binding.enabled OR binding.expires_at<=clock_timestamp() OR binding.token_hash IS DISTINCT FROM encode(sha256(convert_to(token,'UTF8')),'hex')
+ THEN RAISE EXCEPTION 'SCIM_REFUSED' USING ERRCODE='42501'; END IF;
+ IF jsonb_typeof(p) IS DISTINCT FROM 'object' OR p->>'version' IS DISTINCT FROM 'scim2-machine.v1'
+ OR (p-ARRAY['version','method','kind','id','eventId','expectedRevision','document'])<>'{}'::jsonb
+ OR resource_kind NOT IN('Users','Groups') OR method NOT IN('GET','POST','PUT','PATCH','DELETE') OR resource_kind IS NULL OR method IS NULL
+ THEN RAISE EXCEPTION 'SCIM_INVALID' USING ERRCODE='22023'; END IF;
+ rid:=(p->>'id')::uuid;
+ IF method='GET' THEN
+  IF rid IS NULL THEN
+   SELECT jsonb_build_object('schemas',jsonb_build_array('urn:ietf:params:scim:api:messages:2.0:ListResponse'),
+    'totalResults',count(*),'startIndex',1,'itemsPerPage',count(*),'Resources',coalesce(jsonb_agg(document ORDER BY id),'[]'::jsonb))
+    INTO response FROM identity.scim2_resource WHERE tenant_id=t AND binding_id=b AND scim2_resource.kind=resource_kind AND NOT deleted;
+  ELSE
+   SELECT document INTO response FROM identity.scim2_resource WHERE tenant_id=t AND binding_id=b AND id=rid AND scim2_resource.kind=resource_kind AND NOT deleted;
+   IF response IS NULL THEN RAISE EXCEPTION 'SCIM_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  END IF;
+  UPDATE control_plane.lp11_sso_scope SET emergency_event='sso.scim.get',emergency_subject=b
+   WHERE transaction_id=pg_current_xact_id_if_assigned();
+  PERFORM identity.scim2_audit(b,'sso.scim.get','scim_binding',b,
+   jsonb_build_object('classifications',jsonb_build_object('data','security')));
+  PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true);
+  DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+  RETURN response;
+ END IF;
+ event:=(p->>'eventId')::uuid;
+ IF event IS NULL OR rid IS NULL THEN RAISE EXCEPTION 'SCIM_INVALID' USING ERRCODE='22023'; END IF;
+ request_hash:=app.final_lock_hash(p);
+ SELECT * INTO previous FROM identity.scim2_receipt WHERE tenant_id=t AND binding_id=b AND id=event;
+ IF FOUND THEN
+  IF previous.request_hash<>request_hash THEN RAISE EXCEPTION 'SCIM_CONFLICT' USING ERRCODE='23505'; END IF;
+  PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true);
+  DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+  RETURN previous.response;
+ END IF;
+ SELECT * INTO old FROM identity.scim2_resource WHERE tenant_id=t AND binding_id=b AND id=rid;
+ IF method='POST' THEN
+  IF old.id IS NOT NULL THEN RAISE EXCEPTION 'SCIM_CONFLICT' USING ERRCODE='23505'; END IF;
+  rev:=1;
+ ELSE
+  IF old.id IS NULL OR old.kind<>resource_kind OR old.deleted THEN RAISE EXCEPTION 'SCIM_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  IF (p->>'expectedRevision')::integer IS DISTINCT FROM old.revision THEN RAISE EXCEPTION 'SCIM_STALE' USING ERRCODE='40001'; END IF;
+  rev:=old.revision+1;
+ END IF;
+ IF method='PATCH' THEN
+  IF jsonb_typeof(doc) IS DISTINCT FROM 'object' OR (doc-ARRAY['schemas','Operations'])<>'{}'::jsonb
+   OR doc->'schemas' IS DISTINCT FROM '["urn:ietf:params:scim:api:messages:2.0:PatchOp"]'::jsonb
+   OR jsonb_typeof(doc->'Operations') IS DISTINCT FROM 'array' OR jsonb_array_length(doc->'Operations') NOT BETWEEN 1 AND 20
+   THEN RAISE EXCEPTION 'SCIM_INVALID' USING ERRCODE='22023'; END IF;
+  result:=old.document-ARRAY['id','meta'];
+  FOR entry IN SELECT value FROM jsonb_array_elements(doc->'Operations') LOOP
+   IF jsonb_typeof(entry) IS DISTINCT FROM 'object' OR (entry-ARRAY['op','path','value'])<>'{}'::jsonb
+    OR coalesce(entry->>'op','') NOT IN('add','replace','remove') OR coalesce(entry->>'path','') NOT IN('active','displayName','members')
+    THEN RAISE EXCEPTION 'SCIM_INVALID' USING ERRCODE='22023'; END IF;
+   IF entry->>'op'='remove' THEN
+    IF entry->>'path'<>'members' THEN RAISE EXCEPTION 'SCIM_INVALID' USING ERRCODE='22023'; END IF;
+    result:=jsonb_set(result,'{members}','[]'::jsonb);
+   ELSIF entry->>'path'='members' AND entry->>'op'='add' THEN
+    IF jsonb_typeof(entry->'value') IS DISTINCT FROM 'array' THEN RAISE EXCEPTION 'SCIM_INVALID' USING ERRCODE='22023'; END IF;
+    result:=jsonb_set(result,'{members}',coalesce(result->'members','[]'::jsonb)||(entry->'value'));
+   ELSE
+    IF NOT entry ? 'value' THEN RAISE EXCEPTION 'SCIM_INVALID' USING ERRCODE='22023'; END IF;
+    result:=jsonb_set(result,ARRAY[entry->>'path'],entry->'value');
+   END IF;
+  END LOOP;
+  doc:=result;
+ END IF;
+ IF resource_kind='Users' THEN
+  IF method='DELETE' THEN doc:=(old.document-ARRAY['id','meta'])||'{"active":false}'::jsonb; END IF;
+  IF jsonb_typeof(doc) IS DISTINCT FROM 'object' OR (doc-ARRAY['schemas','externalId','userName','active','displayName'])<>'{}'::jsonb
+   OR doc->'schemas' IS DISTINCT FROM '["urn:ietf:params:scim:schemas:core:2.0:User"]'::jsonb
+   OR jsonb_typeof(doc->'active') IS DISTINCT FROM 'boolean'
+   OR jsonb_typeof(doc->'externalId') IS DISTINCT FROM 'string' OR length(doc->>'externalId') NOT BETWEEN 1 AND 200
+   OR jsonb_typeof(doc->'userName') IS DISTINCT FROM 'string'
+   OR length(doc->>'userName')>320 OR doc->>'userName'<>lower(doc->>'userName')
+   OR doc->>'userName' !~ '^[^@[:space:]]+@[^@[:space:]]+\.invalid$'
+   OR (doc ? 'displayName' AND (jsonb_typeof(doc->'displayName')<>'string' OR length(doc->>'displayName')>200))
+   THEN RAISE EXCEPTION 'SCIM_INVALID' USING ERRCODE='22023'; END IF;
+  address:=doc->>'userName'; sh:=encode(sha256(convert_to(doc->>'externalId','UTF8')),'hex');
+  IF NOT EXISTS(SELECT 1 FROM identity.verified_domain WHERE tenant_id=t AND connection_id=binding.connection_id AND domain=split_part(address,'@',2))
+   THEN RAISE EXCEPTION 'SCIM_DOMAIN_UNVERIFIED' USING ERRCODE='42501'; END IF;
+  IF method='POST' THEN
+   -- No email-code account linking, even for this tenant. Linking requires the existing explicit human flow.
+   IF EXISTS(SELECT 1 FROM identity.user_email WHERE email=address) OR EXISTS(SELECT 1 FROM identity.sso_subject
+      WHERE tenant_id=t AND connection_id=binding.connection_id AND subject_hash=sh)
+    THEN RAISE EXCEPTION 'SCIM_LINK_REQUIRED' USING ERRCODE='42501'; END IF;
+   person:=gen_random_uuid(); member:=gen_random_uuid();
+   SELECT id INTO account FROM app.account WHERE tenant_id=t ORDER BY created_at,id LIMIT 1;
+   INSERT INTO identity.identity_user(id) VALUES(person);
+   INSERT INTO identity.user_email VALUES(address,person);
+   INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES(member,t,account,person,'read_only');
+   INSERT INTO identity.membership_locator VALUES(person,t,member);
+   INSERT INTO app.contractor_member VALUES(t,member,NULL,address);
+   INSERT INTO identity.sso_subject(tenant_id,connection_id,subject_hash,email_hash,user_id,membership_id)
+    VALUES(t,binding.connection_id,sh,encode(sha256(convert_to(address,'UTF8')),'hex'),person,member);
+  ELSE
+   member:=old.membership_id;
+   IF old.document->>'externalId' IS DISTINCT FROM doc->>'externalId' OR old.document->>'userName' IS DISTINCT FROM address
+    THEN RAISE EXCEPTION 'SCIM_IDENTITY_IMMUTABLE' USING ERRCODE='42501'; END IF;
+   IF EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=t AND id=member AND role='owner')
+    OR EXISTS(SELECT 1 FROM identity.emergency_approval WHERE tenant_id=t AND approver=member)
+    THEN RAISE EXCEPTION 'SCIM_OWNER_PROTECTED' USING ERRCODE='42501'; END IF;
+   IF doc->>'active'='true' AND EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=t AND id=member AND revoked_at IS NOT NULL)
+    THEN RAISE EXCEPTION 'SCIM_REACTIVATION_REFUSED' USING ERRCODE='42501'; END IF;
+  END IF;
+  IF doc->>'active'='false' THEN
+   -- Existing controlled routine revokes membership, grants and bound sessions in this same transaction.
+   result:=identity.scim_deactivate(binding.connection_id,jsonb_build_object('version','scim-deactivation.v1',
+    'eventId',event,'subjectHash',sh,'eventHash',request_hash));
+   IF result->>'outcome'='refused' THEN RAISE EXCEPTION 'SCIM_OWNER_PROTECTED' USING ERRCODE='42501'; END IF;
+   INSERT INTO control_plane.lp11_sso_scope(transaction_id,tenant_id,authority_id,operation,login,scim_connection)
+   VALUES(pg_current_xact_id(),t,b,'scim2_machine',session_user,binding.connection_id);
+  END IF;
+ ELSE
+  IF method='DELETE' THEN doc:=old.document-ARRAY['id','meta']; END IF;
+  IF jsonb_typeof(doc) IS DISTINCT FROM 'object' OR (doc-ARRAY['schemas','displayName','members','externalId'])<>'{}'::jsonb
+   OR doc->'schemas' IS DISTINCT FROM '["urn:ietf:params:scim:schemas:core:2.0:Group"]'::jsonb
+   OR jsonb_typeof(doc->'displayName') IS DISTINCT FROM 'string' OR length(doc->>'displayName') NOT BETWEEN 1 AND 200
+   OR jsonb_typeof(doc->'members') IS DISTINCT FROM 'array' OR jsonb_array_length(doc->'members')>200
+   THEN RAISE EXCEPTION 'SCIM_INVALID' USING ERRCODE='22023'; END IF;
+  FOR entry IN SELECT value FROM jsonb_array_elements(doc->'members') LOOP
+   IF jsonb_typeof(entry) IS DISTINCT FROM 'object' OR (entry-ARRAY['value'])<>'{}'::jsonb OR NOT entry ? 'value'
+    OR NOT EXISTS(SELECT 1 FROM identity.scim2_resource WHERE tenant_id=t AND binding_id=b AND kind='Users'
+      AND id=(entry->>'value')::uuid AND NOT deleted AND document->>'active'='true')
+    THEN RAISE EXCEPTION 'SCIM_MEMBER_REFUSED' USING ERRCODE='42501'; END IF;
+  END LOOP;
+  -- Directory groups never create authority. Existing audited SSO group mapping remains the only role-mapping path.
+ END IF;
+ response:=doc||jsonb_build_object('id',rid::text,'meta',jsonb_build_object('resourceType',CASE WHEN resource_kind='Users' THEN 'User' ELSE 'Group' END,'version','W/"'||rev::text||'"'));
+ INSERT INTO identity.scim2_resource VALUES(t,b,rid,resource_kind,rev,response,member,method='DELETE')
+ ON CONFLICT(tenant_id,binding_id,id) DO UPDATE SET revision=EXCLUDED.revision,document=EXCLUDED.document,deleted=EXCLUDED.deleted;
+ INSERT INTO identity.scim2_receipt VALUES(t,b,event,request_hash,response);
+ -- Machine audit actor is a dedicated reference, never an alleged human owner.
+ UPDATE control_plane.lp11_sso_scope SET emergency_event='sso.scim.'||lower(method),emergency_subject=b
+  WHERE transaction_id=pg_current_xact_id_if_assigned();
+ PERFORM identity.scim2_audit(b,'sso.scim.'||lower(method),'scim_binding',b,
+  jsonb_build_object('references',jsonb_build_object('bindingId',b::text,'machine','scim2'),
+  'hashes',jsonb_build_object('request',request_hash),'classifications',jsonb_build_object('data','security')));
+ PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true);
+  DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+  RETURN response;
+EXCEPTION WHEN OTHERS THEN
+ PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true);
+  RAISE;
+END $$;
 
 -- A revocation must be auditable even when the exact credential can no
 -- longer make a normal request. The revoker records one specific audit fact.
@@ -2699,6 +3132,34 @@ BEGIN
      'coalesce(app.lp11_policy_tenant(),CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_sso_tenant(ARRAY[''complete'',''scim''],NULL) END)');
    END IF;
   END IF;
+  IF (policy_row.nspname='identity' AND policy_row.relname IN ('emergency_request','emergency_approval','emergency_session','emergency_action')
+   OR policy_row.nspname='app' AND policy_row.relname IN ('membership','role_grant','role_grant_revocation'))
+   AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
+   authority_expression:=format('coalesce(%s,CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_sso_tenant(ARRAY[''dark_emergency''],NULL)::text END)',authority_expression);
+  END IF;
+  IF (policy_row.nspname,policy_row.relname)=('audit_control','audit_head')
+   AND 'jobguard_audit_writer'::regrole::oid=ANY(policy_row.polroles) THEN
+   authority_expression:=format('coalesce(%s,CASE WHEN current_user=''jobguard_audit_writer'' THEN app.lp11_sso_tenant(ARRAY[''dark_emergency'',''scim2_configure'',''scim2_machine''],NULL)::text END)',authority_expression);
+  END IF;
+  IF policy_row.nspname='identity' AND policy_row.relname IN ('sso_required_event','sso_emergency_approval',
+    'sso_emergency_use','sso_emergency_window','sso_emergency_event')
+   AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
+   authority_expression:=format('coalesce(%s,CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_sso_tenant(ARRAY[''mailbox_emergency''],NULL)::text END)',authority_expression);
+  END IF;
+  IF policy_row.nspname='identity' AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
+   IF policy_row.relname IN ('scim2_binding','scim2_resource','scim2_receipt') THEN
+    authority_expression:=format('coalesce(%s,CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_sso_tenant(ARRAY[''scim2_configure'',''scim2_machine''],%s)::text END)',authority_expression,
+     CASE WHEN policy_row.relname='scim2_binding' THEN 'id' ELSE 'binding_id' END);
+   ELSIF policy_row.relname IN ('verified_domain','sso_subject') THEN
+    authority_expression:=format('coalesce(%s,CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_scim_connection_tenant(ARRAY[''scim2_machine''],connection_id)::text END)',authority_expression);
+   ELSIF policy_row.relname='sso_connection' THEN
+    authority_expression:=format('coalesce(%s,CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_scim_connection_tenant(ARRAY[''scim2_configure''],id)::text END)',authority_expression);
+   END IF;
+  END IF;
+  IF policy_row.nspname='app' AND policy_row.relname IN ('account','membership','contractor_member')
+   AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
+   authority_expression:=format('coalesce(%s,CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_sso_tenant(ARRAY[''scim2_machine''],NULL)::text END)',authority_expression);
+  END IF;
   -- Only checked customer routines open this scope. Match the exact job,
   -- customer, grant, session or sponsor in each participating relation.
   IF policy_row.nspname='app' AND policy_row.relname IN (
@@ -2812,6 +3273,17 @@ BEGIN
    expression_using:=regexp_replace(expression_using,'app\.lp11_policy_tenant\(\)',
     'coalesce(app.lp11_policy_tenant(),CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_shadow_evidence_tenant(evidence_id) END)','g');
   END IF;
+  IF policy_row.nspname='app' AND policy_row.relname IN ('membership','contractor_member','contractor_membership_revocation',
+   'commercial_track_assignment','contractor_agreement_status_revision','role_grant','role_grant_revocation')
+   AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
+   expression_using:=regexp_replace(expression_using,'app\.lp11_policy_tenant\(\)',
+    'coalesce(app.lp11_policy_tenant(),CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_sso_tenant(ARRAY[''mailbox_emergency''],NULL) END)','g');
+  END IF;
+  IF (policy_row.nspname,policy_row.relname)=('identity','emergency_approval')
+   AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
+   expression_using:=regexp_replace(expression_using,'app\.lp11_policy_tenant\(\)',
+    'coalesce(app.lp11_policy_tenant(),CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_sso_tenant(ARRAY[''scim2_machine''],NULL) END)','g');
+  END IF;
   -- The worker reads only sources for the approved recovery action. Its
   -- source-validation reads never relax the proposed-row checks.
   IF policy_row.nspname='app' AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles)
@@ -2886,6 +3358,7 @@ ALTER POLICY practice_membership_lookup ON app.membership USING (
 ALTER POLICY lp4_audit_writer ON app.audit_event USING (
  tenant_id=coalesce(app.lp11_policy_tenant(),app.lp11_worker_tenant(NULL),
   CASE WHEN subject_type='sso-connection' AND event_type LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END,
+  app.lp11_identity_operation_audit_tenant(event_type,subject_type,subject_ref,actor_ref),
   CASE WHEN subject_type='connector' AND event_type='connector.input_staged'
    THEN app.lp11_connector_audit_tenant(subject_ref,actor_ref) END,
   CASE WHEN subject_type='audit-checkpoint' AND event_type='audit.checkpoint.handed_off'
@@ -2903,6 +3376,7 @@ ALTER POLICY lp4_audit_writer ON app.audit_event USING (
 ) WITH CHECK (
  tenant_id=coalesce(app.lp11_policy_tenant(),app.lp11_worker_tenant(NULL),
   CASE WHEN subject_type='sso-connection' AND event_type LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END,
+  app.lp11_identity_operation_audit_tenant(event_type,subject_type,subject_ref,actor_ref),
   CASE WHEN subject_type='connector' AND event_type='connector.input_staged'
    THEN app.lp11_connector_audit_tenant(subject_ref,actor_ref) END,
   CASE WHEN subject_type='audit-checkpoint' AND event_type='audit.checkpoint.handed_off'
@@ -2951,8 +3425,7 @@ ALTER POLICY firm_profile_update ON app.firm_profile
 -- pre-request roles. A bound request cannot broad-read a different tenant
 -- through those permissive alternatives inside a definer.
 ALTER POLICY binding_lookup ON identity.scim2_binding USING (
- id=nullif(current_setting('app.scim2_binding',true),'')::uuid
- AND CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant() ELSE true END
+ app.lp11_scim_binding_lookup(id)
 );
 ALTER POLICY connection_lookup ON identity.sso_connection USING (
  id=nullif(current_setting('app.sso_connection_id',true),'')::uuid
