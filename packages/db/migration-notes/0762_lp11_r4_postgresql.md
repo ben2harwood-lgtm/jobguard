@@ -2836,6 +2836,29 @@ nice -n 8 pnpm --filter @jobguard/db exec vitest run test/m57-sso-conformance.in
 nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/migration-proof-loader.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-paynow-upgrades-results.json
 ```
 
+## r5 deferred activation and job-permit checks
+
+| Group | Failed at 5ef7a5b87 | Failed in the focused rerun |
+| --- | ---: | ---: |
+| Trial lifecycle | 5 | 0 |
+| Adoption and job permits | 5 | 0 |
+| Meter track review | 5 | 0 |
+| LP-4 audit chain fixture | 4 | 0 |
+
+The trial-admission trigger checks the inserted activation against the protected request. An administrative transaction without a request can inspect only the inserted tenant's verification and the matching job and activation. The private permit trigger reads only the permit that passed the original insert check, using its tenant, job, backend and transaction. Both triggers close their scopes before returning. The PostgreSQL regression changes the caller's tenant setting before commit and still requires `TRIAL_CHECKED_ACTIVATION_REQUIRED`. The unused-permit test still requires an exact `JOB_INSERT_PERMIT_UNCONSUMED` at commit.
+
+The populated adoption, meter and audit fixtures use the existing verified actor for writes that require one. The two malformed-card controls still remove one predicate in their rolled-back fixture, and both still require the distinct before and after errors. The meter suite first had three passing cases and two 120-second runner timeouts. The same five assertions passed with a 300-second runner budget, with the two slow cases taking 128 and 140 seconds. The test file keeps its original assertion and timeout definitions.
+
+Fourteen trial and admission checks, 75 adoption, policy and job-door checks, 25 LP-4 audit checks, and 106 strict upgrade, trial, worker and proof-loader checks passed. The PostgreSQL catalogue proof contains 1,418 effective-privilege changes, 794 upgrade changes and 663 policy changes.
+
+```sh
+nice -n 5 pnpm --filter @jobguard/db exec vitest run test/free-first-job-lifecycle.integration.test.ts test/free-first-job-admission.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-trial-deferred-results.json
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/lp-adoption-boundary.integration.test.ts test/lp-job-doors.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-lp2-deferred-results.json
+pnpm --filter @jobguard/db exec vitest run test/meter-track-review.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-meter-final-results.json
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/lp4-audit.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-lp4-bound-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/migration-proof-loader.test.ts test/free-first-job-lifecycle.integration.test.ts test/lp-10-worker-login.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-deferred-upgrades-results.json
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

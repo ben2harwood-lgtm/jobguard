@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
+import { withTenant } from "../src/tenant-context.js";
 import { firstTrialFixture } from "./free-first-job-lifecycle-fixtures.js";
 import { activateMeterJob } from "./meter-journey-fixtures.js";
 import { boundaryLock, closeWorkFixture, createWorkFixture, seedWorkJob, workTenant, type WorkFixture, type WorkJob } from "./job-work-state-fixtures.js";
@@ -33,11 +34,11 @@ describe("MON-1 immediate grace and track Decisions (RED)", () => {
   const staged = await activateMeterJob(f, a, false, true);
   await f.admin.query("ALTER TABLE app.job_activation_terms ENABLE ALWAYS TRIGGER mon1_live_admission");
   try {
-   await workTenant(f.admin, a.tenantId, async db => {
+   await withTenant(f.admin, a.context, async ({ $client: db }) => {
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("SET LOCAL ROLE jobguard_migration");
     await db.query(staged.sql, staged.values);
-   }, { membershipId: a.actorId, bindRequest: false });
+   });
   } finally { await f.admin.query("ALTER TABLE app.job_activation_terms ENABLE TRIGGER mon1_live_admission"); }
  }
  it("13 is grace; 14 immediately raises one track Decision, 15–17 remain admitted and capped", async () => {
@@ -84,11 +85,11 @@ describe("MON-1 immediate grace and track Decisions (RED)", () => {
   const closed = await work(a, "close", 0, { reason: "other", note: "Fictional pause" });
   expect(await decisions(a)).toEqual([]);
   // Decision insertion shares the business transaction, including rollback.
-  await expect(workTenant(f.admin, a.tenantId, async db => {
+  await expect(withTenant(f.admin, a.context, async ({ $client: db }) => {
    await db.query("SET LOCAL ROLE jobguard_migration");
    await db.query("SELECT app.ch4_admit_place($1,$2,'reopen')", [a.tenantId, a.jobId]);
    throw new Error("Fictional transaction failure");
-  }, { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("Fictional transaction failure");
+  })).rejects.toThrow("Fictional transaction failure");
   expect(await decisions(a)).toEqual([]);
   const id = randomUUID(), extra = { closeEventId: closed.events[0]!.id };
   await Promise.all([work(a, "reopen", 1, extra, id), work(a, "reopen", 1, extra, id)]);

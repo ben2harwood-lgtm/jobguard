@@ -1395,8 +1395,14 @@ CREATE UNLOGGED TABLE control_plane.lp11_maintenance_job (
  source_evidence_id uuid,
  customer_revision_ids uuid[],
  site_revision_id uuid,
+ trial_activation_id uuid,
+ permit_backend integer,
+ permit_transaction xid8,
  track_write boolean NOT NULL DEFAULT false,
- CHECK(job_id IS NOT NULL OR source_evidence_id IS NOT NULL)
+ CHECK(job_id IS NOT NULL OR source_evidence_id IS NOT NULL),
+ CHECK(trial_activation_id IS NULL OR job_id IS NOT NULL),
+ CHECK((permit_backend IS NULL AND permit_transaction IS NULL)
+   OR (permit_backend IS NOT NULL AND permit_transaction IS NOT NULL AND job_id IS NOT NULL))
 );
 ALTER TABLE control_plane.lp11_maintenance_job OWNER TO jobguard_migration;
 REVOKE ALL ON control_plane.lp11_maintenance_job FROM PUBLIC;
@@ -1428,6 +1434,38 @@ $$;
 ALTER FUNCTION app.lp11_maintenance_job_tenant(uuid,uuid,uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp11_maintenance_job_tenant(uuid,uuid,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.lp11_maintenance_job_tenant(uuid,uuid,uuid) TO jobguard_runtime;
+
+CREATE FUNCTION app.lp11_trial_activation_tenant(j uuid,a uuid) RETURNS uuid
+ LANGUAGE sql VOLATILE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_maintenance_job s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.trial_activation_id IS NOT NULL
+  AND ((j IS NULL AND a IS NULL) OR (s.job_id,s.trial_activation_id)=(j,a))
+$$;
+ALTER FUNCTION app.lp11_trial_activation_tenant(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_trial_activation_tenant(uuid,uuid) FROM PUBLIC;
+
+-- Latest definition: 0373_free_first_job_eligibility.sql. The deferred check
+-- trusts its trigger row and the original maintenance login, or the protected
+-- request binding. Its checks cannot disappear when a setting is changed.
+CREATE OR REPLACE FUNCTION app.mon3_require_registered_admission() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
+BEGIN
+ IF maintenance THEN
+  INSERT INTO control_plane.lp11_maintenance_job(transaction_id,tenant_id,job_id,trial_activation_id)
+  VALUES(pg_current_xact_id(),NEW.tenant_id,NEW.job_id,NEW.id);
+ ELSIF NEW.tenant_id IS DISTINCT FROM app.lp11_policy_tenant() THEN
+  RAISE EXCEPTION 'TRIAL_CHECKED_ACTIVATION_REQUIRED' USING ERRCODE='23514';
+ END IF;
+ IF EXISTS(SELECT 1 FROM app.trial_business_verification WHERE tenant_id=NEW.tenant_id)
+ AND NOT EXISTS(SELECT 1 FROM app.trial_admission WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND activation_id=NEW.id) THEN
+  RAISE EXCEPTION 'TRIAL_CHECKED_ACTIVATION_REQUIRED' USING ERRCODE='23514';
+ END IF;
+ IF maintenance THEN
+  DELETE FROM control_plane.lp11_maintenance_job WHERE transaction_id=pg_current_xact_id_if_assigned();
+ END IF;
+ RETURN NULL;
+END $$;
 
 CREATE FUNCTION app.lp11_maintenance_evidence_tenant(evidence uuid) RETURNS uuid
  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
@@ -1596,6 +1634,29 @@ BEGIN
   WHERE transaction_id=pg_current_xact_id_if_assigned();
  END IF;
  RETURN current_job;
+END $$;
+
+CREATE FUNCTION app.lp11_deferred_permit_tenant(j uuid,b integer,x xid8) RETURNS uuid
+ LANGUAGE sql VOLATILE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_maintenance_job s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned()
+  AND (s.job_id,s.permit_backend,s.permit_transaction)=(j,b,x)
+$$;
+ALTER FUNCTION app.lp11_deferred_permit_tenant(uuid,integer,xid8) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_deferred_permit_tenant(uuid,integer,xid8) FROM PUBLIC;
+
+-- Latest definition: 0356_unchecked_job_doors.sql. The private AFTER trigger
+-- can inspect only the specific permit whose INSERT already passed RLS.
+CREATE OR REPLACE FUNCTION app.lp_job_permit_consumed() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ INSERT INTO control_plane.lp11_maintenance_job(transaction_id,tenant_id,job_id,permit_backend,permit_transaction)
+ VALUES(pg_current_xact_id(),NEW.tenant_id,NEW.job_id,NEW.backend_pid,NEW.transaction_id);
+ IF EXISTS(SELECT 1 FROM app.lp_job_insert_permit p WHERE
+   (p.backend_pid,p.transaction_id,p.tenant_id,p.job_id)=(NEW.backend_pid,NEW.transaction_id,NEW.tenant_id,NEW.job_id))
+ THEN RAISE EXCEPTION 'JOB_INSERT_PERMIT_UNCONSUMED' USING ERRCODE='23514'; END IF;
+ DELETE FROM control_plane.lp11_maintenance_job WHERE transaction_id=pg_current_xact_id_if_assigned();
+ RETURN NULL;
 END $$;
 
 CREATE OR REPLACE FUNCTION app.bind_small_builder_track() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
@@ -3943,6 +4004,13 @@ CREATE POLICY lp11_customer_billing_read ON app.customer_payment FOR SELECT TO j
  USING (tenant_id=app.lp11_customer_tenant('billing_job',job_id));
 CREATE POLICY lp11_customer_billing_read ON app.customer_payment_reversal FOR SELECT TO jobguard_migration
  USING (tenant_id=app.lp11_customer_tenant('billing_job',job_id));
+
+CREATE POLICY lp11_trial_activation_read ON app.trial_business_verification FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_trial_activation_tenant(NULL,NULL));
+CREATE POLICY lp11_trial_activation_read ON app.trial_admission FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_trial_activation_tenant(job_id,activation_id));
+CREATE POLICY lp11_deferred_permit_read ON app.lp_job_insert_permit FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_deferred_permit_tenant(job_id,backend_pid,transaction_id));
 
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.

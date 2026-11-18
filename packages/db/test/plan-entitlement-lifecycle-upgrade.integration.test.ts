@@ -112,7 +112,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
         " -- LP6D_THIRD_PARTY (repair 12): the visit's operative is a third party with no request of its own; its\n -- current visit authority is read through the private copy, never through the caller's binding.\n IF EXISTS(SELECT 1 FROM app.lp6d_visit_authority_of(visit_row.membership_id,p_job)"));
   const lp11Sql = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
   for (const signature of ["infrastructure.discover_readiness_plans()", "app.serialize_final_check_evidence()",
-    "identity.customer_practice_pay_now(uuid,uuid,uuid,text)"]) {
+    "identity.customer_practice_pay_now(uuid,uuid,uuid,text)", "app.mon3_require_registered_admission()", "app.lp_job_permit_consumed()"]) {
     const source = lp11Sql.split(`CREATE OR REPLACE FUNCTION ${signature.split("(")[0]}(`)[1]!
       .split("AS $$")[1]!.split("$$;")[0];
     expect((await c.admin.query("SELECT prosrc FROM pg_proc WHERE oid=$1::regprocedure", [signature])).rows)

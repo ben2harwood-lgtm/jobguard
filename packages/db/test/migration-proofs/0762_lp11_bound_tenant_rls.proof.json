@@ -11498,6 +11498,133 @@
           "identity.customer_portal_use"
         ]
       }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.lp_job_insert_permit|lp11_deferred_permit_read|PERMISSIVE|SELECT|jobguard_migration|83440faa1fb00f8c"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.trial_admission|lp11_trial_activation_read|PERMISSIVE|SELECT|jobguard_migration|b000c7ca1329b859"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.trial_business_verification|lp11_trial_activation_read|PERMISSIVE|SELECT|jobguard_migration|3567f4b347d8ef55"
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_deferred_permit_tenant(uuid,integer,xid8)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "c294fe9b53112bf331df3707445650ca705c2bb9889612bd8799a15827f3d218",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_trial_activation_tenant(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "3e2e94cde5aa52164444c6d9439f44a0ed485379fd5b400640841697cca3c801",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp_job_permit_consumed()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.lp_job_permit_consumed()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "23060f6de298078d216117fbc4b76fe6278c42baa54627336c7b2de81bf66203",
+        "staticWrites": [
+          "control_plane.lp11_maintenance_job"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.mon3_require_registered_admission()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.mon3_require_registered_admission()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "de7c4671a57452d9580502a4e6fbfdf08728c8c55aeb2bc5d8471151b764325d",
+        "staticWrites": [
+          "control_plane.lp11_maintenance_job"
+        ],
+        "staticCalls": [
+          "app.lp11_policy_tenant",
+          "app.lp6d_maintenance_login",
+          "app.lp6e_request_binding_present"
+        ]
+      }
     }
   ],
   "upgrade": [
@@ -28136,6 +28263,78 @@
         "cmd": "SELECT",
         "qual": "(tenant_id = app.lp11_customer_tenant('billing_job'::text, job_id))",
         "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "lp_job_insert_permit",
+        "policyname": "lp11_deferred_permit_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_deferred_permit_tenant(job_id, backend_pid, transaction_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "trial_admission",
+        "policyname": "lp11_trial_activation_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_trial_activation_tenant(job_id, activation_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "trial_business_verification",
+        "policyname": "lp11_trial_activation_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_trial_activation_tenant(NULL::uuid, NULL::uuid))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_deferred_permit_tenant",
+        "args": "j uuid, b integer, x xid8",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_trial_activation_tenant",
+        "args": "j uuid, a uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
       }
     }
   ],

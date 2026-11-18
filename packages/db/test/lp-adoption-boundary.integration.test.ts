@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 import { adoptionAuthority, adoptionFixture, callAdoption, importedShape, insertJob, jobDoorCounts, jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 
 let db: JobDoorsDatabase;
@@ -32,7 +32,10 @@ describe("LP-2 imported insertion boundary", () => {
 
   it.each(["customer", "site", "payer"] as const)("[LP2-A05] missing %s refuses before a job or party effect", async name => {
     const f = await adoptionAuthority(db), before = await jobDoorCounts(db.owner, f.actor.tenant);
-    await expect(transaction(db.owner, f.actor.tenant, client => callAdoption(client, f, { [name]: randomUUID() }))).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
+    await expect(transaction(db.owner, f.actor.tenant, async client => {
+      await bindTestClient(db.owner, client, f.actor.tenant, f.actor.member);
+      return callAdoption(client, f, { [name]: randomUUID() });
+    })).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
     expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
   });
 
@@ -135,6 +138,7 @@ describe("LP-2 private permit consumption", () => {
   it.each(["job", "shape", "backend", "transaction"])("[LP2-A04] a permit bound to another %s cannot authorize insertion", async field => {
     const actor = await jobDoorsActor(db.owner), job = randomUUID();
     await expect(transaction(db.owner, actor.tenant, async client => {
+      await bindTestClient(db.owner, client, actor.tenant, actor.member);
       await mint(client, actor.tenant, job, actor.member, field === "job" ? { job: randomUUID() }
         : field === "shape" ? { shape: true } : field === "backend" ? { backend: 0 } : { transaction: "1" });
       await client.query("SET LOCAL ROLE jobguard_migration");
@@ -145,6 +149,7 @@ describe("LP-2 private permit consumption", () => {
   it("[LP2-A04] [LP2-A10] an exact permit is consumed once and rollback restores both insertion and permit atomically", async () => {
     const actor = await jobDoorsActor(db.owner), job = randomUUID(), before = await jobDoorCounts(db.owner, actor.tenant);
     await expect(transaction(db.owner, actor.tenant, async client => {
+      await bindTestClient(db.owner, client, actor.tenant, actor.member);
       await mint(client, actor.tenant, job, actor.member);
       // The unchanged work-order guard independently requires the migration role.
       await client.query("SET LOCAL ROLE jobguard_migration");
