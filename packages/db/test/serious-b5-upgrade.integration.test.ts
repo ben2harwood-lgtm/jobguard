@@ -1,6 +1,7 @@
 import { lp5ReadTables, lp5bReadTables, lp5RegistryRows, abandonedSiteVisitRegistryRow, lp5Signatures, lp5bRoutines, lp5bReadViews } from "./lp5-command-catalog.js";
 import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 import { catalogueAdditions } from "./upgrade-proof-utils.js";
+import { lp11EmptyTables } from "./later-empty-tables.js";
 // Dispatcher/CI only: upgrade/data/catalogue evidence requires real PostgreSQL.
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -1656,12 +1657,29 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await lp4AuditAdditions(expected));
  Object.assign(expected, await lp5CommandAdditions(expected));
 
+ const connectorPolicies = async () => (await f.admin.query(
+  "SELECT * FROM pg_policies WHERE schemaname='connector' ORDER BY tablename,policyname",
+ )).rows;
  if (proofs.length) {
   expect(await snapshot()).toEqual(expected);
   await migrate(f.admin);
  }
  const owners = (await f.admin.query("SELECT rolname, oid FROM pg_roles")).rows;
- const withProofs = applyUpgradeProofs(expected, proofs, Object.fromEntries(owners.map(r => [r.rolname, r.oid])));
+ const ownerOids = Object.fromEntries(owners.map(r => [r.rolname, r.oid]));
+ const isConnectorPolicy = (change: typeof proofs[number]["upgrade"][number]) =>
+  change.section === "policies" && (change.before ?? change.after)?.schemaname === "connector";
+ const connectorProofs = proofs.map(proof => ({ ...proof, upgrade: proof.upgrade.filter(isConnectorPolicy) }));
+ const cutover = connectorProofs.find(proof => proof.migration === "0762_lp11_bound_tenant_rls.sql");
+ const connectorBefore = cutover?.upgrade.flatMap(change => change.before ? [change.before] : []) ?? [];
+ // The connector schema was added by proof-bearing migrations. Its reviewed
+ // 0762 predecessor records cover all seven policies, including their ACLs.
+ expect(connectorBefore).toHaveLength(7);
+ const withProofs = applyUpgradeProofs(expected, proofs.map(proof => ({
+  ...proof, upgrade: proof.upgrade.filter(change => !isConnectorPolicy(change)),
+ })), ownerOids);
+ const connectorExpected = applyUpgradeProofs({ rows: {}, routines: [], relations: [], policies: connectorBefore },
+  connectorProofs, ownerOids).policies;
+ withProofs.rows = { ...lp11EmptyTables, ...withProofs.rows };
  // snapshot() never covers the infrastructure schema; 0732's infrastructure.final_check_cycle_exhausted
  // proof row is pinned exactly (owner, ACL, body) by real-fc-typed-recovery instead, as migfix-7 does.
  withProofs.routines = withProofs.routines.filter(row => row.nspname !== "infrastructure");
@@ -1677,8 +1695,10 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
   withProofs[section] = sorted.rows.map(r => r.value);
  }
  expect(await snapshot()).toEqual(withProofs);
+ expect(await connectorPolicies()).toEqual(connectorExpected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(withProofs);
+ expect(await connectorPolicies()).toEqual(connectorExpected);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [own])).rows[0].n).toBe(1);
 }, 180000);
 

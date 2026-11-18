@@ -3169,6 +3169,34 @@ nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migration-proof-loader
 
 The combined shadow fixture run recorded 18 passes and three failures. The final-account reveal and final-check access suites passed on that run. The value allocator passed after correcting the proof predecessor record. The application workspace read with a hidden signal and the evidence-pack activation task still have a separate request-binding failure.
 
+## r5 bound workspace projection and strict historical upgrade checks
+
+The workspace service now uses the verified practice context it obtained while authorizing the exact saved job. The job repository binds that context in the projection transaction and reads the confirmed scope identities in the same SQL snapshot as the job. That cleared the two query-log failures in the 3e89a0416 run with the original positive control and exact response and statement comparison. The API service and unchanged S9 scanner passed 152/152. The source-pinned synthetic helper remains unchanged.
+
+The historical upgrade suites retype `command_receipt.semantic_key` and `audit_event.event_type` inside rolled-back comparisons. PostgreSQL previously refused to perform those control statements after the cutover because the new policies depended on individual columns. Migration 0762 now reads the fields through owner-scoped composite-row accessors. All predicates and role restrictions remain enforced. Two upgrade suites passed 3/3 together, and the third passed its full F17 upgrade case after the post-upgrade check used its persisted practice credential in its own disposable synthetic database. The old malformed-setting assertion still expects `22P02` when an unbound query sets a GUC. The converted policy returns zero rows independently of the setting. The exact populated upgrade, policy, audit, readiness and WORM runs passed 123/123. The 0762 proof records 1,476 LP0 objects, 833 populated upgrade objects and 684 policy changes.
+
+The full SERIOUS-B5 historical comparison passes on both replays. It verifies all seven connector policies against their committed before and after records and requires the exact new scope tables to be empty. No existing row, privilege or type comparison was removed. The capture fixture authenticates its synthetic owner, clearing two capture failures. The proposal totals fixture seeds its draft through the administrator and retains every runtime call and assertion about proposals and money. Both proposal checks passed, and the shared company final-check fixture still drains its pool sockets before shutdown. The proposal and company suites passed 12/12.
+
+The complete API run passed 4,508 of 4,509 tests across 261 files. The third real final-account isolation case was skipped when its 60-second fixture setup timed out in the concurrent run. An independent invocation of that exact file passed 3/3 including the skipped case. Together the two commands exercised all 4,509 API tests successfully. The full web command passed 3,618/3,618 in 252 files. The meter snapshot passed workspace typecheck 7/7, both commercial guards reported zero diagnostics, and the 253 guard tests passed. These are complete application results for that run plus focused verification of the new workspace route.
+
+```sh
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/later-decisions-upgrade.integration.test.ts test/recovery-eligibility-v3.integration.test.ts test/site-visit-upgrade.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-policy-types-results.json
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/recovery-eligibility-v3.integration.test.ts -t '0130 upgrade from 0119' --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-policy-recovery-final-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/lp11-bound-tenant-rls.integration.test.ts test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/migration-proof-loader.test.ts test/audit.integration.test.ts test/readiness-timer.integration.test.ts test/worm-command.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-policy-types-exact-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/serious-b5-upgrade.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-serious-b5-rows-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/later-proposal-totals.integration.test.ts test/company-final-check-authority.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-proposal-fixture-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/capture.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-capture-fixture-results.json
+nice -n 6 pnpm --filter @jobguard/api exec vitest run src/workspace/workspace.service.test.ts src/auth/context-boundary.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-workspace-scanner-exact-results.json
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/shadow-isolation-query-log.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-workspace-query-log-results.json
+nice -n 9 pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --testTimeout=30000 --exclude '**/*.integration.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-meter-api-results.json
+nice -n 3 pnpm --filter @jobguard/api exec vitest run src/final-account-lock.isolation.test.ts --maxWorkers=1 --testTimeout=30000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-api-final-account-detail-results.json
+nice -n 8 pnpm --filter @jobguard/web test --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/database.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-meter-web-results.json
+nice -n 9 pnpm typecheck
+nice -n 8 node tools/commercial-integrity-current-source-guard.mjs
+nice -n 8 node tools/commercial-integrity-boundary.mjs
+nice -n 10 node --test --test-concurrency=1 tools/commercial-integrity-{current-source-guard,boundary}.test.mjs
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

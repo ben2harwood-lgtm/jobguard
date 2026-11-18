@@ -15,8 +15,8 @@ import { verifiedTenantContextFromMembership, type AuthenticatedMembership } fro
 import { practiceMaterialPool } from "../src/practice-session.js";
 import {freePort,closeTestDatabase,installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
 export const FINAL_CHECK_TENANT="11111111-1111-4111-8111-111111111111",FINAL_CHECK_ACTOR="d1500000-0000-4000-8000-000000000003",FINAL_CHECK_USER="d1500000-0000-4000-8000-000000000001";
-export type FinalCheckFixture={postgres:EmbeddedPostgres;admin:Pool;runtime:Pool;shadow:Pool;directory:string;logs:string[];waitForConnectionEnds():Promise<void>};
-export async function createFinalCheckFixture(install=true):Promise<FinalCheckFixture>{
+export type FinalCheckFixture={postgres:EmbeddedPostgres;admin:Pool;runtime:Pool;shadow:Pool;directory:string;logs:string[];waitForConnectionEnds?():Promise<void>};
+export async function createFinalCheckFixture(install=true){
  const directory=await mkdtemp(join(tmpdir(),"sv5-pg16-")),port=await freePort(58000,200),credential=randomUUID(),logs:string[]=[];
  const postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:credential,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:line=>logs.push(line)});
  await postgres.initialise();await postgres.start();
@@ -41,7 +41,7 @@ export async function createFinalCheckFixture(install=true):Promise<FinalCheckFi
 export async function closeFinalCheckFixture(f:FinalCheckFixture|undefined){
  if(!f)return;
  await closeTestDatabase({stop:async()=>{
-  await f.waitForConnectionEnds();
+  await f.waitForConnectionEnds?.();
   await f.postgres.stop();
  }},f.directory,f.runtime,f.shadow,f.admin);
 }

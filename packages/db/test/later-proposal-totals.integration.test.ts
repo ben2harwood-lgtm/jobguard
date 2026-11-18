@@ -19,7 +19,7 @@ afterAll(async () => { await closeWorkFixture(fixture); });
 
 async function reserved() {
   const repository = new JobRepository(fixture.runtime), jobId = randomUUID();
-  await repository.create(context, ["job:update"], { id: jobId, title: "Fictional money boundary job" });
+  await fixture.admin.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Fictional money boundary job')", [jobId, tenantId]);
   const row = await repository.reserveProposal(context, ["quote:edit"], {
     jobId, sourceHash: "a".repeat(64), sourceReference: "synthetic:proposal:1",
   });

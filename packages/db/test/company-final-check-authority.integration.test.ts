@@ -6,7 +6,7 @@ import { FinalAccountCommandService } from "../src/final-account-repository.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { seedWorkPractice, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
-import { createFinalCheckFixture, closeFinalCheckFixture, type FinalCheckFixture } from "./final-check-fixture.js";
+import { createFinalCheckFixture, closeFinalCheckFixture } from "./final-check-fixture.js";
 import { FinalCheckWorker } from "../../../apps/api/src/final-check.worker.js";
 import { executeFinalCheckTask } from "../../../apps/api/src/final-check-task-executor.js";
 import { FinalCheckCompletionRepository } from "../src/shadow-detection-repository.js";
@@ -16,7 +16,7 @@ import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
 import { preparedTrialFixture } from "./free-first-job-lifecycle-fixtures.js";
 
 let f: WorkFixture;
-let fixture: FinalCheckFixture;
+let fixture: Awaited<ReturnType<typeof createFinalCheckFixture>>;
 let repository: CompanyFinalCheckRepository;
 beforeAll(async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");

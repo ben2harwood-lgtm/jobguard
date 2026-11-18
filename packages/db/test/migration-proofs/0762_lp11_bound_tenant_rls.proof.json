@@ -7451,7 +7451,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.audit_event|lp4_audit_writer|PERMISSIVE|ALL|jobguard_audit_writer|bf5f309d1da71065"
+      "after": "app.audit_event|lp4_audit_writer|PERMISSIVE|ALL|jobguard_audit_writer|7e001d81408c0325"
     },
     {
       "section": "policies",
@@ -7461,7 +7461,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.audit_event|migration_audit_integrity|PERMISSIVE|SELECT|jobguard_migration|fcca669f76f401a2"
+      "after": "app.audit_event|migration_audit_integrity|PERMISSIVE|SELECT|jobguard_migration|b1f7b42ae22b7b03"
     },
     {
       "section": "policies",
@@ -7601,7 +7601,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.command_receipt|lp11_legacy_origin_command|PERMISSIVE|SELECT|jobguard_migration|f3c0bfa2086b1f8f"
+      "after": "app.command_receipt|lp11_legacy_origin_command|PERMISSIVE|SELECT|jobguard_migration|68c3b061f1cdfe1b"
     },
     {
       "section": "policies",
@@ -11288,7 +11288,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.audit_event|lp11_readiness_audit|PERMISSIVE|ALL|jobguard_audit_writer|01ed2384d0e2a4b3"
+      "after": "app.audit_event|lp11_readiness_audit|PERMISSIVE|ALL|jobguard_audit_writer|3441120b8222a61f"
     },
     {
       "section": "policies",
@@ -11631,7 +11631,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.audit_event|lp11_worm_audit|PERMISSIVE|ALL|jobguard_audit_writer|758b711048bf5869"
+      "after": "app.audit_event|lp11_worm_audit|PERMISSIVE|ALL|jobguard_audit_writer|afbd74b10e08646b"
     },
     {
       "section": "policies",
@@ -12449,6 +12449,64 @@
         "staticCalls": [
           "app.lp11_policy_tenant"
         ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_audit_event_type(app.audit_event)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_audit_writer"
+        ],
+        "definitionSha256": "bc9eaa7f86428f3479e9d10687465aaeaefc1cafa9c751d4c09b7b7e8a0bad81",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_legacy_origin_command(app.command_receipt)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "7bcd08d77b1b6bc5dd24efa30bbbbb172002c0956024f12ab2d9d3da347827e6",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp11_legacy_origin_tenant"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_audit_event_type(app.audit_event)|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_audit_event_type(app.audit_event)|jobguard_migration",
+        "group": "a-lp11-bound-tenant-r3"
       }
     }
   ],
@@ -14963,8 +15021,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_audit_writer}",
         "cmd": "ALL",
-        "qual": "((tenant_id = COALESCE(app.lp11_policy_tenant(), app.lp11_worker_tenant(NULL::uuid),\nCASE\n    WHEN (((subject_type)::text = 'sso-connection'::text) AND ((event_type)::text ~~ 'sso.%'::text)) THEN app.lp11_sso_tenant(ARRAY['audit'::text], (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_identity_operation_audit_tenant((event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text),\nCASE\n    WHEN (((subject_type)::text = 'connector'::text) AND ((event_type)::text = 'connector.input_staged'::text)) THEN app.lp11_connector_audit_tenant((subject_ref)::text, (actor_ref)::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'audit-checkpoint'::text) AND ((event_type)::text = 'audit.checkpoint.handed_off'::text)) THEN app.lp11_audit_handoff_tenant((subject_ref)::text, (actor_ref)::text, (payload #>> '{references,priorSequence}'::text[]), (payload #>> '{hashes,priorHead}'::text[]))\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = ANY ((ARRAY['customer_portal.signed_in'::character varying, 'customer_portal.signed_out'::character varying])::text[]))) OR (((subject_type)::text = 'quote_document'::text) AND ((event_type)::text = 'quote.acceptance.customer_authenticated'::text)) OR (((subject_type)::text = 'job'::text) AND ((event_type)::text = ANY ((ARRAY['job_source.customer_message_recorded'::character varying, 'customer_portal.message_recorded'::character varying])::text[])))) THEN app.lp11_customer_tenant('audit'::text, NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = 'customer_portal.stage_acknowledged'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('stage_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = 'customer_portal.variation_approved'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('variation_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND (((event_type)::text ~~ 'final_check.%'::text) OR ((event_type)::text = ANY ((ARRAY['shadow.disclosed'::character varying, 'shadow.must_surface_fired'::character varying, 'shadow.emergency_read'::character varying])::text[]))) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_shadow_job_tenant((subject_ref)::uuid, NULL::text, 'audit'::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((event_type)::text = 'command.succeeded'::text) AND pg_input_is_valid(((payload -> 'references'::text) ->> 'commandId'::text), 'uuid'::text)) THEN app.lp11_customer_tenant('command'::text, (((payload -> 'references'::text) ->> 'commandId'::text))::uuid)\n    ELSE NULL::uuid\nEND)) OR app.lp11_practice_revoke_event(tenant_id, (event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text))",
-        "with_check": "((tenant_id = COALESCE(app.lp11_policy_tenant(), app.lp11_worker_tenant(NULL::uuid),\nCASE\n    WHEN (((subject_type)::text = 'sso-connection'::text) AND ((event_type)::text ~~ 'sso.%'::text)) THEN app.lp11_sso_tenant(ARRAY['audit'::text], (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_identity_operation_audit_tenant((event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text),\nCASE\n    WHEN (((subject_type)::text = 'connector'::text) AND ((event_type)::text = 'connector.input_staged'::text)) THEN app.lp11_connector_audit_tenant((subject_ref)::text, (actor_ref)::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'audit-checkpoint'::text) AND ((event_type)::text = 'audit.checkpoint.handed_off'::text)) THEN app.lp11_audit_handoff_tenant((subject_ref)::text, (actor_ref)::text, (payload #>> '{references,priorSequence}'::text[]), (payload #>> '{hashes,priorHead}'::text[]))\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = ANY ((ARRAY['customer_portal.signed_in'::character varying, 'customer_portal.signed_out'::character varying])::text[]))) OR (((subject_type)::text = 'quote_document'::text) AND ((event_type)::text = 'quote.acceptance.customer_authenticated'::text)) OR (((subject_type)::text = 'job'::text) AND ((event_type)::text = ANY ((ARRAY['job_source.customer_message_recorded'::character varying, 'customer_portal.message_recorded'::character varying])::text[])))) THEN app.lp11_customer_tenant('audit'::text, NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = 'customer_portal.stage_acknowledged'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('stage_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = 'customer_portal.variation_approved'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('variation_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND (((event_type)::text ~~ 'final_check.%'::text) OR ((event_type)::text = ANY ((ARRAY['shadow.disclosed'::character varying, 'shadow.must_surface_fired'::character varying, 'shadow.emergency_read'::character varying])::text[]))) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_shadow_job_tenant((subject_ref)::uuid, NULL::text, 'audit'::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((event_type)::text = 'command.succeeded'::text) AND pg_input_is_valid(((payload -> 'references'::text) ->> 'commandId'::text), 'uuid'::text)) THEN app.lp11_customer_tenant('command'::text, (((payload -> 'references'::text) ->> 'commandId'::text))::uuid)\n    ELSE NULL::uuid\nEND)) OR app.lp11_practice_revoke_event(tenant_id, (event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text))"
+        "qual": "((tenant_id = COALESCE(app.lp11_policy_tenant(), app.lp11_worker_tenant(NULL::uuid),\nCASE\n    WHEN (((subject_type)::text = 'sso-connection'::text) AND (app.lp11_audit_event_type(audit_event.*) ~~ 'sso.%'::text)) THEN app.lp11_sso_tenant(ARRAY['audit'::text], (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_identity_operation_audit_tenant(app.lp11_audit_event_type(audit_event.*), (subject_type)::text, (subject_ref)::text, (actor_ref)::text),\nCASE\n    WHEN (((subject_type)::text = 'connector'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'connector.input_staged'::text)) THEN app.lp11_connector_audit_tenant((subject_ref)::text, (actor_ref)::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'audit-checkpoint'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'audit.checkpoint.handed_off'::text)) THEN app.lp11_audit_handoff_tenant((subject_ref)::text, (actor_ref)::text, (payload #>> '{references,priorSequence}'::text[]), (payload #>> '{hashes,priorHead}'::text[]))\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((((subject_type)::text = 'customer_portal'::text) AND (app.lp11_audit_event_type(audit_event.*) = ANY (ARRAY['customer_portal.signed_in'::text, 'customer_portal.signed_out'::text]))) OR (((subject_type)::text = 'quote_document'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'quote.acceptance.customer_authenticated'::text)) OR (((subject_type)::text = 'job'::text) AND (app.lp11_audit_event_type(audit_event.*) = ANY (ARRAY['job_source.customer_message_recorded'::text, 'customer_portal.message_recorded'::text])))) THEN app.lp11_customer_tenant('audit'::text, NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'customer_portal.stage_acknowledged'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('stage_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'customer_portal.variation_approved'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('variation_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((app.lp11_audit_event_type(audit_event.*) ~~ 'final_check.%'::text) OR (app.lp11_audit_event_type(audit_event.*) = ANY (ARRAY['shadow.disclosed'::text, 'shadow.must_surface_fired'::text, 'shadow.emergency_read'::text]))) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_shadow_job_tenant((subject_ref)::uuid, NULL::text, 'audit'::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'command.succeeded'::text) AND pg_input_is_valid(((payload -> 'references'::text) ->> 'commandId'::text), 'uuid'::text)) THEN app.lp11_customer_tenant('command'::text, (((payload -> 'references'::text) ->> 'commandId'::text))::uuid)\n    ELSE NULL::uuid\nEND)) OR app.lp11_practice_revoke_event(tenant_id, app.lp11_audit_event_type(audit_event.*), (subject_type)::text, (subject_ref)::text, (actor_ref)::text))",
+        "with_check": "((tenant_id = COALESCE(app.lp11_policy_tenant(), app.lp11_worker_tenant(NULL::uuid),\nCASE\n    WHEN (((subject_type)::text = 'sso-connection'::text) AND (app.lp11_audit_event_type(audit_event.*) ~~ 'sso.%'::text)) THEN app.lp11_sso_tenant(ARRAY['audit'::text], (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_identity_operation_audit_tenant(app.lp11_audit_event_type(audit_event.*), (subject_type)::text, (subject_ref)::text, (actor_ref)::text),\nCASE\n    WHEN (((subject_type)::text = 'connector'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'connector.input_staged'::text)) THEN app.lp11_connector_audit_tenant((subject_ref)::text, (actor_ref)::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'audit-checkpoint'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'audit.checkpoint.handed_off'::text)) THEN app.lp11_audit_handoff_tenant((subject_ref)::text, (actor_ref)::text, (payload #>> '{references,priorSequence}'::text[]), (payload #>> '{hashes,priorHead}'::text[]))\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((((subject_type)::text = 'customer_portal'::text) AND (app.lp11_audit_event_type(audit_event.*) = ANY (ARRAY['customer_portal.signed_in'::text, 'customer_portal.signed_out'::text]))) OR (((subject_type)::text = 'quote_document'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'quote.acceptance.customer_authenticated'::text)) OR (((subject_type)::text = 'job'::text) AND (app.lp11_audit_event_type(audit_event.*) = ANY (ARRAY['job_source.customer_message_recorded'::text, 'customer_portal.message_recorded'::text])))) THEN app.lp11_customer_tenant('audit'::text, NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'customer_portal.stage_acknowledged'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('stage_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'customer_portal.variation_approved'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('variation_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((app.lp11_audit_event_type(audit_event.*) ~~ 'final_check.%'::text) OR (app.lp11_audit_event_type(audit_event.*) = ANY (ARRAY['shadow.disclosed'::text, 'shadow.must_surface_fired'::text, 'shadow.emergency_read'::text]))) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_shadow_job_tenant((subject_ref)::uuid, NULL::text, 'audit'::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'command.succeeded'::text) AND pg_input_is_valid(((payload -> 'references'::text) ->> 'commandId'::text), 'uuid'::text)) THEN app.lp11_customer_tenant('command'::text, (((payload -> 'references'::text) ->> 'commandId'::text))::uuid)\n    ELSE NULL::uuid\nEND)) OR app.lp11_practice_revoke_event(tenant_id, app.lp11_audit_event_type(audit_event.*), (subject_type)::text, (subject_ref)::text, (actor_ref)::text))"
       }
     },
     {
@@ -15009,7 +15067,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "SELECT",
-        "qual": "(\nCASE\n    WHEN app.lp6e_request_binding_present() THEN (tenant_id = app.current_tenant())\n    ELSE pg_has_role(SESSION_USER, 'jobguard_migration'::name, 'SET'::text)\nEND OR app.lp11_practice_revoke_event(tenant_id, (event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text))",
+        "qual": "(\nCASE\n    WHEN app.lp6e_request_binding_present() THEN (tenant_id = app.current_tenant())\n    ELSE pg_has_role(SESSION_USER, 'jobguard_migration'::name, 'SET'::text)\nEND OR app.lp11_practice_revoke_event(tenant_id, app.lp11_audit_event_type(audit_event.*), (subject_type)::text, (subject_ref)::text, (actor_ref)::text))",
         "with_check": null
       }
     },
@@ -15635,7 +15693,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "SELECT",
-        "qual": "(((command_type)::text = 'LogBuilderExtra'::text) AND (tenant_id = app.lp11_legacy_origin_tenant(NULL::uuid, NULL::uuid, (semantic_key)::text)))",
+        "qual": "app.lp11_legacy_origin_command(command_receipt.*)",
         "with_check": null
       }
     },
@@ -28906,8 +28964,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_audit_writer}",
         "cmd": "ALL",
-        "qual": "(((subject_type)::text = 'job'::text) AND ((event_type)::text = 'readiness.scheduled_proposal_recorded'::text) AND ((actor_ref)::text = 'system:readiness-rule'::text) AND\nCASE\n    WHEN (pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,taskId}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_readiness_tenant('worker'::text, (subject_ref)::uuid, ((payload #>> '{references,taskId}'::text[]))::uuid))\n    ELSE false\nEND)",
-        "with_check": "(((subject_type)::text = 'job'::text) AND ((event_type)::text = 'readiness.scheduled_proposal_recorded'::text) AND ((actor_ref)::text = 'system:readiness-rule'::text) AND\nCASE\n    WHEN (pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,taskId}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_readiness_tenant('worker'::text, (subject_ref)::uuid, ((payload #>> '{references,taskId}'::text[]))::uuid))\n    ELSE false\nEND)"
+        "qual": "(((subject_type)::text = 'job'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'readiness.scheduled_proposal_recorded'::text) AND ((actor_ref)::text = 'system:readiness-rule'::text) AND\nCASE\n    WHEN (pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,taskId}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_readiness_tenant('worker'::text, (subject_ref)::uuid, ((payload #>> '{references,taskId}'::text[]))::uuid))\n    ELSE false\nEND)",
+        "with_check": "(((subject_type)::text = 'job'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'readiness.scheduled_proposal_recorded'::text) AND ((actor_ref)::text = 'system:readiness-rule'::text) AND\nCASE\n    WHEN (pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,taskId}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_readiness_tenant('worker'::text, (subject_ref)::uuid, ((payload #>> '{references,taskId}'::text[]))::uuid))\n    ELSE false\nEND)"
       }
     },
     {
@@ -29172,8 +29230,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_audit_writer}",
         "cmd": "ALL",
-        "qual": "(((subject_type)::text = 'evidence'::text) AND ((event_type)::text = ANY ((ARRAY['worm.executing'::character varying, 'worm.cancelled'::character varying, 'worm.applied'::character varying, 'worm.pending'::character varying, 'worm.outcome_unknown'::character varying, 'worm.refused'::character varying, 'worm.reconciled'::character varying])::text[])) AND\nCASE\n    WHEN (pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,command}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_worm_tenant('audit'::text, ((payload #>> '{references,command}'::text[]))::uuid, (subject_ref)::uuid))\n    ELSE false\nEND)",
-        "with_check": "(((subject_type)::text = 'evidence'::text) AND ((event_type)::text = ANY ((ARRAY['worm.executing'::character varying, 'worm.cancelled'::character varying, 'worm.applied'::character varying, 'worm.pending'::character varying, 'worm.outcome_unknown'::character varying, 'worm.refused'::character varying, 'worm.reconciled'::character varying])::text[])) AND\nCASE\n    WHEN (pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,command}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_worm_tenant('audit'::text, ((payload #>> '{references,command}'::text[]))::uuid, (subject_ref)::uuid))\n    ELSE false\nEND)"
+        "qual": "(((subject_type)::text = 'evidence'::text) AND (app.lp11_audit_event_type(audit_event.*) = ANY (ARRAY['worm.executing'::text, 'worm.cancelled'::text, 'worm.applied'::text, 'worm.pending'::text, 'worm.outcome_unknown'::text, 'worm.refused'::text, 'worm.reconciled'::text])) AND\nCASE\n    WHEN (pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,command}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_worm_tenant('audit'::text, ((payload #>> '{references,command}'::text[]))::uuid, (subject_ref)::uuid))\n    ELSE false\nEND)",
+        "with_check": "(((subject_type)::text = 'evidence'::text) AND (app.lp11_audit_event_type(audit_event.*) = ANY (ARRAY['worm.executing'::text, 'worm.cancelled'::text, 'worm.applied'::text, 'worm.pending'::text, 'worm.outcome_unknown'::text, 'worm.refused'::text, 'worm.reconciled'::text])) AND\nCASE\n    WHEN (pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,command}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_worm_tenant('audit'::text, ((payload #>> '{references,command}'::text[]))::uuid, (subject_ref)::uuid))\n    ELSE false\nEND)"
       }
     },
     {
@@ -29676,6 +29734,36 @@
         "relacl": null,
         "relrowsecurity": false,
         "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_audit_event_type",
+        "args": "event app.audit_event",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_audit_writer=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_legacy_origin_command",
+        "args": "receipt app.command_receipt",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
       }
     }
   ],

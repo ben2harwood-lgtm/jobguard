@@ -1555,8 +1555,15 @@ ALTER FUNCTION app.lp11_legacy_origin_tenant(uuid,uuid,text) OWNER TO jobguard_m
 REVOKE ALL ON FUNCTION app.lp11_legacy_origin_tenant(uuid,uuid,text) FROM PUBLIC;
 CREATE POLICY lp11_legacy_origin_insert ON app.extra_origin FOR INSERT TO jobguard_migration
  WITH CHECK (provenance='legacy_synthetic_capture' AND tenant_id=app.lp11_legacy_origin_tenant(job_id,variation_id,NULL));
+CREATE FUNCTION app.lp11_legacy_origin_command(receipt app.command_receipt) RETURNS boolean
+ LANGUAGE sql VOLATILE SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT receipt.command_type='LogBuilderExtra'
+  AND receipt.tenant_id=app.lp11_legacy_origin_tenant(NULL,NULL,receipt.semantic_key)
+$$;
+ALTER FUNCTION app.lp11_legacy_origin_command(app.command_receipt) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_legacy_origin_command(app.command_receipt) FROM PUBLIC;
 CREATE POLICY lp11_legacy_origin_command ON app.command_receipt FOR SELECT TO jobguard_migration
- USING (command_type='LogBuilderExtra' AND tenant_id=app.lp11_legacy_origin_tenant(NULL,NULL,semantic_key));
+ USING (app.lp11_legacy_origin_command(command_receipt));
 
 CREATE OR REPLACE FUNCTION app.record_legacy_builder_origin() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
@@ -3641,61 +3648,70 @@ ALTER POLICY practice_membership_lookup ON app.membership USING (
  AND CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant() ELSE true END
 );
 
+-- A row accessor preserves the event predicates across a column type change.
+CREATE FUNCTION app.lp11_audit_event_type(event app.audit_event) RETURNS text
+ LANGUAGE sql IMMUTABLE STRICT SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT event.event_type::text
+$$;
+ALTER FUNCTION app.lp11_audit_event_type(app.audit_event) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_audit_event_type(app.audit_event) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_audit_event_type(app.audit_event) TO jobguard_audit_writer;
+
 -- The audit owners can perform maintenance from a migration login. Request
 -- and worker sessions do not gain the owner's unbound maintenance authority.
 ALTER POLICY lp4_audit_writer ON app.audit_event USING (
  tenant_id=coalesce(app.lp11_policy_tenant(),app.lp11_worker_tenant(NULL),
-  CASE WHEN subject_type='sso-connection' AND event_type LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END,
-  app.lp11_identity_operation_audit_tenant(event_type,subject_type,subject_ref,actor_ref),
-  CASE WHEN subject_type='connector' AND event_type='connector.input_staged'
+  CASE WHEN subject_type='sso-connection' AND app.lp11_audit_event_type(audit_event) LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END,
+  app.lp11_identity_operation_audit_tenant(app.lp11_audit_event_type(audit_event),subject_type,subject_ref,actor_ref),
+  CASE WHEN subject_type='connector' AND app.lp11_audit_event_type(audit_event)='connector.input_staged'
    THEN app.lp11_connector_audit_tenant(subject_ref,actor_ref) END,
-  CASE WHEN subject_type='audit-checkpoint' AND event_type='audit.checkpoint.handed_off'
+  CASE WHEN subject_type='audit-checkpoint' AND app.lp11_audit_event_type(audit_event)='audit.checkpoint.handed_off'
    THEN app.lp11_audit_handoff_tenant(subject_ref,actor_ref,payload#>>'{references,priorSequence}',payload#>>'{hashes,priorHead}') END,
-  CASE WHEN (subject_type='customer_portal' AND event_type IN('customer_portal.signed_in','customer_portal.signed_out'))
-     OR (subject_type='quote_document' AND event_type='quote.acceptance.customer_authenticated')
-     OR (subject_type='job' AND event_type IN('job_source.customer_message_recorded','customer_portal.message_recorded'))
+  CASE WHEN (subject_type='customer_portal' AND app.lp11_audit_event_type(audit_event) IN('customer_portal.signed_in','customer_portal.signed_out'))
+     OR (subject_type='quote_document' AND app.lp11_audit_event_type(audit_event)='quote.acceptance.customer_authenticated')
+     OR (subject_type='job' AND app.lp11_audit_event_type(audit_event) IN('job_source.customer_message_recorded','customer_portal.message_recorded'))
    THEN app.lp11_customer_tenant('audit',NULL) END,
-  CASE WHEN subject_type='customer_portal' AND event_type='customer_portal.stage_acknowledged'
+  CASE WHEN subject_type='customer_portal' AND app.lp11_audit_event_type(audit_event)='customer_portal.stage_acknowledged'
     AND pg_input_is_valid(subject_ref,'uuid')
    THEN app.lp11_customer_tenant('stage_command',subject_ref::uuid) END,
-  CASE WHEN subject_type='customer_portal' AND event_type='customer_portal.variation_approved'
+  CASE WHEN subject_type='customer_portal' AND app.lp11_audit_event_type(audit_event)='customer_portal.variation_approved'
     AND pg_input_is_valid(subject_ref,'uuid')
    THEN app.lp11_customer_tenant('variation_command',subject_ref::uuid) END,
-  CASE WHEN subject_type='job' AND (event_type LIKE 'final_check.%' OR event_type IN ('shadow.disclosed','shadow.must_surface_fired','shadow.emergency_read')) AND pg_input_is_valid(subject_ref,'uuid')
+  CASE WHEN subject_type='job' AND (app.lp11_audit_event_type(audit_event) LIKE 'final_check.%' OR app.lp11_audit_event_type(audit_event) IN ('shadow.disclosed','shadow.must_surface_fired','shadow.emergency_read')) AND pg_input_is_valid(subject_ref,'uuid')
    THEN app.lp11_shadow_job_tenant(subject_ref::uuid,NULL,'audit') END,
-  CASE WHEN subject_type='job' AND event_type='command.succeeded'
+  CASE WHEN subject_type='job' AND app.lp11_audit_event_type(audit_event)='command.succeeded'
     AND pg_input_is_valid(payload->'references'->>'commandId','uuid')
    THEN app.lp11_customer_tenant('command',(payload->'references'->>'commandId')::uuid) END)
- OR app.lp11_practice_revoke_event(tenant_id,event_type,subject_type,subject_ref,actor_ref)
+ OR app.lp11_practice_revoke_event(tenant_id,app.lp11_audit_event_type(audit_event),subject_type,subject_ref,actor_ref)
 ) WITH CHECK (
  tenant_id=coalesce(app.lp11_policy_tenant(),app.lp11_worker_tenant(NULL),
-  CASE WHEN subject_type='sso-connection' AND event_type LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END,
-  app.lp11_identity_operation_audit_tenant(event_type,subject_type,subject_ref,actor_ref),
-  CASE WHEN subject_type='connector' AND event_type='connector.input_staged'
+  CASE WHEN subject_type='sso-connection' AND app.lp11_audit_event_type(audit_event) LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END,
+  app.lp11_identity_operation_audit_tenant(app.lp11_audit_event_type(audit_event),subject_type,subject_ref,actor_ref),
+  CASE WHEN subject_type='connector' AND app.lp11_audit_event_type(audit_event)='connector.input_staged'
    THEN app.lp11_connector_audit_tenant(subject_ref,actor_ref) END,
-  CASE WHEN subject_type='audit-checkpoint' AND event_type='audit.checkpoint.handed_off'
+  CASE WHEN subject_type='audit-checkpoint' AND app.lp11_audit_event_type(audit_event)='audit.checkpoint.handed_off'
    THEN app.lp11_audit_handoff_tenant(subject_ref,actor_ref,payload#>>'{references,priorSequence}',payload#>>'{hashes,priorHead}') END,
-  CASE WHEN (subject_type='customer_portal' AND event_type IN('customer_portal.signed_in','customer_portal.signed_out'))
-     OR (subject_type='quote_document' AND event_type='quote.acceptance.customer_authenticated')
-     OR (subject_type='job' AND event_type IN('job_source.customer_message_recorded','customer_portal.message_recorded'))
+  CASE WHEN (subject_type='customer_portal' AND app.lp11_audit_event_type(audit_event) IN('customer_portal.signed_in','customer_portal.signed_out'))
+     OR (subject_type='quote_document' AND app.lp11_audit_event_type(audit_event)='quote.acceptance.customer_authenticated')
+     OR (subject_type='job' AND app.lp11_audit_event_type(audit_event) IN('job_source.customer_message_recorded','customer_portal.message_recorded'))
    THEN app.lp11_customer_tenant('audit',NULL) END,
-  CASE WHEN subject_type='customer_portal' AND event_type='customer_portal.stage_acknowledged'
+  CASE WHEN subject_type='customer_portal' AND app.lp11_audit_event_type(audit_event)='customer_portal.stage_acknowledged'
     AND pg_input_is_valid(subject_ref,'uuid')
    THEN app.lp11_customer_tenant('stage_command',subject_ref::uuid) END,
-  CASE WHEN subject_type='customer_portal' AND event_type='customer_portal.variation_approved'
+  CASE WHEN subject_type='customer_portal' AND app.lp11_audit_event_type(audit_event)='customer_portal.variation_approved'
     AND pg_input_is_valid(subject_ref,'uuid')
    THEN app.lp11_customer_tenant('variation_command',subject_ref::uuid) END,
-  CASE WHEN subject_type='job' AND (event_type LIKE 'final_check.%' OR event_type IN ('shadow.disclosed','shadow.must_surface_fired','shadow.emergency_read')) AND pg_input_is_valid(subject_ref,'uuid')
+  CASE WHEN subject_type='job' AND (app.lp11_audit_event_type(audit_event) LIKE 'final_check.%' OR app.lp11_audit_event_type(audit_event) IN ('shadow.disclosed','shadow.must_surface_fired','shadow.emergency_read')) AND pg_input_is_valid(subject_ref,'uuid')
    THEN app.lp11_shadow_job_tenant(subject_ref::uuid,NULL,'audit') END,
-  CASE WHEN subject_type='job' AND event_type='command.succeeded'
+  CASE WHEN subject_type='job' AND app.lp11_audit_event_type(audit_event)='command.succeeded'
     AND pg_input_is_valid(payload->'references'->>'commandId','uuid')
    THEN app.lp11_customer_tenant('command',(payload->'references'->>'commandId')::uuid) END)
- OR app.lp11_practice_revoke_event(tenant_id,event_type,subject_type,subject_ref,actor_ref)
+ OR app.lp11_practice_revoke_event(tenant_id,app.lp11_audit_event_type(audit_event),subject_type,subject_ref,actor_ref)
 );
 ALTER POLICY migration_audit_integrity ON app.audit_event USING (
  CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant()
  ELSE pg_has_role(session_user,'jobguard_migration','SET') END
- OR app.lp11_practice_revoke_event(tenant_id,event_type,subject_type,subject_ref,actor_ref)
+ OR app.lp11_practice_revoke_event(tenant_id,app.lp11_audit_event_type(audit_event),subject_type,subject_ref,actor_ref)
 );
 ALTER POLICY migration_integrity ON app.audit_export USING (
  CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant()
@@ -4024,12 +4040,12 @@ CREATE POLICY lp11_readiness_audit_head ON audit_control.audit_head TO jobguard_
  USING (tenant_id=app.lp11_readiness_tenant('worker',NULL,NULL))
  WITH CHECK (tenant_id=app.lp11_readiness_tenant('worker',NULL,NULL));
 CREATE POLICY lp11_readiness_audit ON app.audit_event TO jobguard_audit_writer USING (
- subject_type='job' AND event_type='readiness.scheduled_proposal_recorded' AND actor_ref='system:readiness-rule'
+ subject_type='job' AND app.lp11_audit_event_type(audit_event)='readiness.scheduled_proposal_recorded' AND actor_ref='system:readiness-rule'
  AND CASE WHEN pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,taskId}','uuid')
   THEN tenant_id=app.lp11_readiness_tenant('worker',subject_ref::uuid,(payload#>>'{references,taskId}')::uuid)
   ELSE false END
 ) WITH CHECK (
- subject_type='job' AND event_type='readiness.scheduled_proposal_recorded' AND actor_ref='system:readiness-rule'
+ subject_type='job' AND app.lp11_audit_event_type(audit_event)='readiness.scheduled_proposal_recorded' AND actor_ref='system:readiness-rule'
  AND CASE WHEN pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,taskId}','uuid')
   THEN tenant_id=app.lp11_readiness_tenant('worker',subject_ref::uuid,(payload#>>'{references,taskId}')::uuid)
   ELSE false END
@@ -4161,10 +4177,10 @@ CREATE POLICY lp11_worm_actor ON app.contractor_membership_revocation FOR SELECT
 CREATE POLICY lp11_worm_audit_head ON audit_control.audit_head TO jobguard_audit_writer
  USING (tenant_id=app.lp11_worm_tenant('audit_head',NULL)) WITH CHECK (tenant_id=app.lp11_worm_tenant('audit_head',NULL));
 CREATE POLICY lp11_worm_audit ON app.audit_event TO jobguard_audit_writer
- USING (subject_type='evidence' AND event_type IN ('worm.executing','worm.cancelled','worm.applied','worm.pending','worm.outcome_unknown','worm.refused','worm.reconciled')
+ USING (subject_type='evidence' AND app.lp11_audit_event_type(audit_event) IN ('worm.executing','worm.cancelled','worm.applied','worm.pending','worm.outcome_unknown','worm.refused','worm.reconciled')
   AND CASE WHEN pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,command}','uuid')
    THEN tenant_id=app.lp11_worm_tenant('audit',(payload#>>'{references,command}')::uuid,subject_ref::uuid) ELSE false END)
- WITH CHECK (subject_type='evidence' AND event_type IN ('worm.executing','worm.cancelled','worm.applied','worm.pending','worm.outcome_unknown','worm.refused','worm.reconciled')
+ WITH CHECK (subject_type='evidence' AND app.lp11_audit_event_type(audit_event) IN ('worm.executing','worm.cancelled','worm.applied','worm.pending','worm.outcome_unknown','worm.refused','worm.reconciled')
   AND CASE WHEN pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,command}','uuid')
    THEN tenant_id=app.lp11_worm_tenant('audit',(payload#>>'{references,command}')::uuid,subject_ref::uuid) ELSE false END);
 

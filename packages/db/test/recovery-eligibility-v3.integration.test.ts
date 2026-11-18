@@ -12,6 +12,7 @@ import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEM
 import { appendAuditBatch } from "../src/audit.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import * as mo4Proof from "./upgrade-proof-utils.js";
+import { closeWorkFixture, createWorkFixture } from "./job-work-state-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import type { TenantTransaction } from "../src/tenant-context.js";
 import { evaluateRecoveryEligibilityV3 } from "@jobguard/core";
@@ -448,9 +449,11 @@ async function replaceRoutine(db:Queryable,routine:string,note:string){
 it("0130 upgrade from 0119 preserves an existing saved F17 candidate byte-for-byte without backfill",async()=>{
  const names=MIGRATION_URLS.map(u=>basename(fileURLToPath(u))),oldIndex=names.indexOf("0119_recovery_eligibility_v3.sql"),newIndex=names.indexOf("0130_recovery_eligibility_v3_f17_timing.sql");
  expect(oldIndex).toBeGreaterThanOrEqual(0);expect(newIndex).toBeGreaterThan(oldIndex);expect(names).toEqual([...names].sort());
- const database=`ch7_f17_upgrade_${randomUUID().replaceAll("-","")}`;
- await admin.query(`CREATE DATABASE ${database}`);
- const upgradeAdmin=new Pool({...admin.options,password:"synthetic",database}),upgradeRuntime=new Pool({...runtime.options,password:"synthetic",database});
+ const upgrade=await createWorkFixture(false),upgradeAdmin=upgrade.admin;
+ const password=randomUUID();
+ const upgradeRuntime=new Pool({...upgradeAdmin.options,user:"ch7_upgrade_login",password});
+ const connectionEnds: Promise<void>[]=[];
+ upgradeRuntime.on("connect",client=>{connectionEnds.push(new Promise<void>(resolve=>client.once("end",resolve)));});
  try{
   await upgradeAdmin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   // Everything registered before 0130 (its index is found by name above, so a later renumbering of the file is a mechanical change), as the runner records it.
@@ -458,6 +461,7 @@ it("0130 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
    await upgradeAdmin.query(await readFile(url,"utf8"));
    await upgradeAdmin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[basename(fileURLToPath(url))]);
   }
+  await upgradeAdmin.query(`CREATE ROLE ch7_upgrade_login LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${password}'; GRANT jobguard_runtime TO ch7_upgrade_login`);
   expect((await upgradeAdmin.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(names.slice(0,newIndex));
   await upgradeAdmin.query("INSERT INTO control_plane.tenant(id)VALUES($1)",[T]);await upgradeAdmin.query("INSERT INTO identity.identity_user(id)VALUES($1)",[U]);
   await upgradeAdmin.query("INSERT INTO app.account(id,tenant_id,name)VALUES($1,$2,'F17 upgrade synthetic')",[A,T]);await upgradeAdmin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES($1,$2,$3,$4,'owner')",[M,T,A,U]);
@@ -571,14 +575,16 @@ it("0130 upgrade from 0119 preserves an existing saved F17 candidate byte-for-by
   const repo=new RecoveryEligibilityV3Repository(practiceMaterialPool(upgradeRuntime,auth.digest),"synthetic_demo");
   // The corrected review is appended against the case revision (read by the case repository's own reader) and the review revision the database holds now, so a case or
   // review a later migration appended is allowed, and any number of reviews may exist.
-  const caseNow=(await cases.listForMember(ctx,jobId,actor)).find(x=>x.id===c.id);expect(caseNow?.revision).toBe(await currentCaseRevision(upgradeAdmin,jobId,c.id));
+  const caseNow=(await cases.listForMember(auth.context,jobId,actor)).find(x=>x.id===c.id);expect(caseNow?.revision).toBe(await currentCaseRevision(upgradeAdmin,jobId,c.id));
   const current=await currentReviewRevision(upgradeAdmin,c.id);expect(current).toBeGreaterThanOrEqual(saved);
-  const corrected=await repo.review(ctx,jobId,review({id:c.id,revision:caseNow!.revision},"F17",current),actor,auth.digest);
+  const corrected=await repo.review(auth.context,jobId,review({id:c.id,revision:caseNow!.revision},"F17",current),actor,auth.digest);
   expect(corrected.result).toMatchObject({outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason:"Paid before you opened this case"});
   expect(corrected.revision).toBe(current+1);
   expect(await proofDifferences(upgradeAdmin,proof)).toEqual({rows:[],types:[]});
  }finally{
-  await closeTestPools(upgradeRuntime,upgradeAdmin);await admin.query(`DROP DATABASE ${database}`);
+  await upgradeRuntime.end();
+  await Promise.all(connectionEnds);
+  await closeWorkFixture(upgrade);
  }
 });
 
