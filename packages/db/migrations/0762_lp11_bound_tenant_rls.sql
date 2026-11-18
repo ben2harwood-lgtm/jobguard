@@ -2776,6 +2776,12 @@ BEGIN
    expression_using:=regexp_replace(expression_using,'app\.lp11_policy_tenant\(\)',
     'coalesce(app.lp11_policy_tenant(),CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_maintenance_evidence_tenant(id) END)','g');
   END IF;
+  -- Final-check workers must apply the same closed-job check as requests.
+  IF (policy_row.nspname,policy_row.relname)=('app','job_work_state_event')
+   AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
+   expression_using:=regexp_replace(expression_using,'app\.lp11_policy_tenant\(\)',
+    'coalesce(app.lp11_policy_tenant(),CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_shadow_job_tenant(job_id,NULL,''job'') END)','g');
+  END IF;
   expression_check := regexp_replace(policy_row.predicate_check,
    tenant_setting_pattern, authority_expression, 'g');
 

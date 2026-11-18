@@ -2131,6 +2131,39 @@ node tools/commercial-integrity-boundary.mjs
 node --test --test-concurrency=1 tools/commercial-integrity-{current-source-guard,boundary}.test.mjs
 ```
 
+## r5 closed-job check and bound fixture controls
+
+A shadow worker with an authorized job could see its final-check rows but could not see the job's `job_work_state_event`. PostgreSQL therefore allowed `app.begin_final_check` to open a rerun for a closed job. The migration-owned reader now uses the existing exact-job shadow scope for that visibility check. The policy's proposed-row check is unchanged. Direct fixture calls that exercise the invoice gate and locked evidence invalidation now bind the recorded practice owner, and shadow controls use the checked job scope before supplying the deliberately invalid lock or cutoff.
+
+The LP-1 membership and merchant-ingestion setups now use the membership actually seeded for the relevant tenant. The managed-recovery setup establishes the synthetic account and member in the administrative context before using that member's existing session to import a job. Its raw competing transaction binds the same session. The recovery-terms tests keep their negative same-UUID control by binding tenant B separately before seeding its own case. The message race tests bind the existing fixture owner before completing the competing command receipt. All original assertions continue to run.
+
+| Cohort | Before focused repair | After focused repair |
+| --- | --- | --- |
+| Recovery follow-up | 73 failed assertions in the checked-product run | 79 passed together and the remaining audit-parity case passed on its isolated rerun |
+| Recovery messages | 108 skipped due to setup, then 31 failed with setup fixed | 106 passed together and both remaining receipt races passed on their isolated rerun |
+| Recovery case terms | 2 failed assertions in the first isolated run | 48 passed |
+| Final-check reruns | 7 failed assertions in the checked-product run | 7 passed |
+| Final-check invalidation lock | 5 failed assertions in the checked-product run | 5 passed |
+| Practice invoice audit | 6 failed assertions in the checked-product run | 6 passed |
+| LP-1 membership, merchant ingestion and managed recovery | 3 files stopped during setup in the checked-product run | 5, 7 and 24 passed respectively |
+
+The catalogue, upgrade and tenant-policy rerun passed 89 of 89.
+
+The snapshot used for the 23520e9cc whole run omitted the generated DB CLI build and one AI workspace dependency link. Its measured counts retain those errors. The corrected worktree passed the offline audit CLI's 14 tests and the SOR suggestion confirmation test using the same source and actual build outputs.
+
+```sh
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/lp1-membership-account.integration.test.ts test/merchant-ingestion.integration.test.ts test/managed-recovery.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-admin-seed-results.json
+nice -n 9 pnpm --filter @jobguard/db exec vitest run test/final-check-invalidation-lock.integration.test.ts test/final-check-rerun.integration.test.ts test/practice-invoice-audit.integration.test.ts test/managed-recovery.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-invalidation-managed-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/final-check-rerun.integration.test.ts test/recovery-case-terms.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-closed-final-check-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/recovery-follow-up.integration.test.ts -t 'R1 parity \(first entry\)' --maxWorkers=1 --reporter=default
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/recovery-messages.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-recovery-message-terms-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/recovery-messages.integration.test.ts -t 'a recovery command id is claimed tenant-wide' --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db build
+nice -n 9 pnpm --filter @jobguard/db exec vitest run test/verify-audit-export-cli.test.ts --maxWorkers=1 --reporter=default
+nice -n 9 pnpm --filter @jobguard/db exec vitest run test/sor-suggestion-confirmation.test.ts --maxWorkers=1 --reporter=default
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/migration-proof-loader.test.ts --maxWorkers=1 --reporter=default
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

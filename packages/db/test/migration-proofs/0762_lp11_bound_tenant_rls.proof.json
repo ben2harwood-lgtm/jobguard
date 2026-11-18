@@ -8779,7 +8779,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.job_work_state_event|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|e48ab61c76e7b3b7"
+      "after": "app.job_work_state_event|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|e066dd2f2e9f5f14"
     },
     {
       "section": "policies",
@@ -18871,7 +18871,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration,jobguard_runtime}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF(COALESCE((app.lp11_policy_tenant())::text, (\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_maintenance_job_tenant(job_id, NULL::uuid, NULL::uuid)\n    ELSE NULL::uuid\nEND)::text), ''::text))::uuid)",
+        "qual": "(tenant_id = (NULLIF(COALESCE((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_shadow_job_tenant(job_id, NULL::text, 'job'::text)\n    ELSE NULL::uuid\nEND))::text, (\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_maintenance_job_tenant(job_id, NULL::uuid, NULL::uuid)\n    ELSE NULL::uuid\nEND)::text), ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
       }
     },

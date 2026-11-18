@@ -1322,6 +1322,7 @@ describe('a recovery command id is claimed tenant-wide (Codex P2)', () => {
     try {
       // The shared dispatcher's order: claim the receipt, then the approval mutation takes the case lock.
       await dispatcher.query('BEGIN');
+      await bindTestClient(admin, dispatcher, fixture.tenantId, actor.membershipId);
       await dispatcher.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'recovery.message.approve',$3,repeat('b',64),'processing',$4)",
         [command.commandId, fixture.tenantId, command.commandId, actor.membershipId]);
       const outcome = repo.preview(context, caseId, command, actor).then(() => 'committed', (error: { code?: string; message?: string }) => error.code ?? error.message);
@@ -1338,6 +1339,7 @@ describe('a recovery command id is claimed tenant-wide (Codex P2)', () => {
     const holder = await admin.connect();
     try {
       await holder.query('BEGIN');
+      await bindTestClient(admin, holder, fixture.tenantId, actor.membershipId);
       await holder.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'other.family',$3,repeat('a',64),'processing',$4)",
         [command.commandId, fixture.tenantId, command.commandId, actor.membershipId]);
       const outcome = repo.preview(context, caseId, command, actor).then(() => 'committed', (error: { code?: string }) => error.code);
