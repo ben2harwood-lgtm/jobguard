@@ -84,7 +84,7 @@ export type TenantTransaction = NodePgDatabase<typeof schema> & { $client: PoolC
 /** Exact retained compatibility boundaries; no caller-controlled mode is accepted. */
 type DeferredBinding = "identity-sso" | "identity-oidc" | "identity-sso-required" | "shadow-persist"
   | "practice-switch-off" | "contractor-session-revoke" | "commercial-integrity-read" | "commercial-integrity-read-family"
-  | "evidence-pack-approval";
+  | "evidence-pack-approval" | "audit-export-refusal";
 type LateBinding = { complete: boolean };
 // Routing hint only: SQL still validates the binding, including expiry and tenant.
 const requestTransactions = new WeakSet<TenantTransaction>();
@@ -93,11 +93,13 @@ export function isRequestTransaction(database: TenantTransaction): boolean {
 }
 const lateBindings = new WeakMap<TenantTransaction, WeakMap<VerifiedTenantContext, LateBinding>>();
 
-async function bindRequest(client: PoolClient, context: VerifiedTenantContext): Promise<void> {
+async function bindRequest(client: PoolClient, context: VerifiedTenantContext, practiceRead = false): Promise<void> {
   const session = sessionReferences.get(context);
   if (!session) return;
   try {
-    await client.query("SELECT app.bind_request($1, $2, $3)", [session.kind, session.credential, context.tenantId]);
+    await client.query("SELECT app.bind_request($1, $2, $3)",
+      [practiceRead && session.kind === "practice" ? "practice_read" : session.kind, session.credential, context.tenantId]);
+    if (practiceRead) await client.query("SET TRANSACTION READ ONLY");
     const bound = (await client.query<{ actor: string; tenant: string }>(
       "SELECT app.current_actor() actor, app.current_tenant() tenant",
     )).rows[0];
@@ -119,12 +121,12 @@ export async function bindIssuedCredential(client: PoolClient, context: Verified
 }
 
 /** Only the exact audit-refusal routine may consume a contractor credential without binding it. */
-export async function recordAuditExportRefusal(pool: Pool, context: VerifiedTenantContext,
+export async function recordAuditExportRefusal(database: TenantTransaction, context: VerifiedTenantContext,
   actor: { membershipId: string; identityUserId: string }, action: "create" | "list"): Promise<void> {
   const session = sessionReferences.get(context);
   if (session?.kind !== "contractor_practice" || session.membershipId !== actor.membershipId)
     throw new RequestBindingRefusedError("contractor_practice");
-  await pool.query("SELECT app.lp11_record_audit_export_refusal($1,$2,$3,$4,$5)",
+  await database.$client.query("SELECT app.lp11_record_audit_export_refusal($1,$2,$3,$4,$5)",
     [session.credential, context.tenantId, actor.membershipId, actor.identityUserId, action]);
 }
 
@@ -152,12 +154,15 @@ export async function withTenant<T>(
 
   if (deferredBinding !== undefined && !["identity-sso", "identity-oidc", "identity-sso-required", "shadow-persist",
     "practice-switch-off", "contractor-session-revoke", "commercial-integrity-read", "commercial-integrity-read-family",
-    "evidence-pack-approval"].includes(deferredBinding)) throw new InvalidTenantContextError();
+    "evidence-pack-approval", "audit-export-refusal"].includes(deferredBinding)) throw new InvalidTenantContextError();
   const client = await pool.connect();
   let database: TenantTransaction | undefined;
   try {
     await client.query("BEGIN");
     if (deferredBinding === undefined) await bindRequest(client, context);
+    if (deferredBinding === "commercial-integrity-read" || deferredBinding === "commercial-integrity-read-family") {
+      await bindRequest(client, context, true);
+    }
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [context.tenantId]);
     database = drizzle(client, { schema }) as TenantTransaction;
     if (sessionReferences.has(context)) requestTransactions.add(database);

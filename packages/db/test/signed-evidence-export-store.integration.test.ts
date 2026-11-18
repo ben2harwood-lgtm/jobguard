@@ -156,7 +156,7 @@ it("actual catalogs and RLS deny foreign reads, key writes, updates, deletes and
 it("direct insertion cannot substitute an unrelated audit event", async () => {
   const f = await provision(); await approve(f);
   const eventId = randomUUID(), p = f.bundle.payload;
-  await withTenant(admin, testTenantContext(f.tenantId), db => appendAuditBatch(db, [{
+  await withTenant(admin, testTenantContext(f.tenantId, { membershipId: f.request.actorMembershipId }), db => appendAuditBatch(db, [{
     id: eventId, version: "audit.v1", actorRef: `membership:${f.request.actorMembershipId}`,
     eventType: "fixture.recorded", subjectType: "audit-export", subjectRef: p.exportId, payload: {},
   }]));

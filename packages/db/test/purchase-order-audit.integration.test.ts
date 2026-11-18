@@ -43,7 +43,8 @@ beforeAll(async () => {
   // migration through the normal runner. Fresh install is covered by tenancy's runner.
   await migrate({ query: async (sql: string, values?: unknown[]) => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
-      && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+      && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
+        "_lp11_bound_tenant_rls.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -556,9 +557,15 @@ it("refuses direct manual attestations outside the demo database; dropping the g
     // restores both the trigger and every inserted row even if an assertion fails.
     await rolledBack(outside, async db => {
       await db.query("DROP TRIGGER a_manual_attestation_synthetic ON app.purchase_order_manual_attestation");
-      await db.query("SET LOCAL SESSION AUTHORIZATION jobguard_runtime");
+      await db.query("SET LOCAL ROLE jobguard_runtime");
       await bindIssuedCredential(db, context);
-      expect((await db.query("SELECT app.current_tenant() tenant")).rows).toEqual([{ tenant:f.auth.context.tenantId }]);
+      expect((await db.query("SELECT app.lp11_policy_tenant() tenant")).rows).toEqual([{ tenant:f.auth.context.tenantId }]);
+      expect((await db.query(`SELECT roles::text[],qual,with_check FROM pg_policies
+        WHERE schemaname='app' AND tablename='purchase_order_manual_attestation'`)).rows).toEqual([{
+        roles:["jobguard_runtime"],
+        qual:"(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
+        with_check:"(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
+      }]);
       expect((await insert(db)).rows).toEqual([{ id }]);
     });
     expect(await counts()).toEqual(before);

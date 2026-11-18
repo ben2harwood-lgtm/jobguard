@@ -124,6 +124,25 @@ it("issues and binds a synthetic home session through the normal SQL entry point
     await client.query("SELECT app.bind_request('practice',$1,$2)", [credential, DEMO_TENANT_ID]);
     expect((await client.query("SELECT app.current_actor() actor,app.current_tenant() tenant")).rows)
       .toEqual([{ actor: DEMO_MEMBERSHIP_ID, tenant: DEMO_TENANT_ID }]);
+    await client.query("ROLLBACK");
+    const foreign = await session();
+    await client.query("BEGIN");
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [foreign.tenant]);
+    await refused(client, "SELECT app.bind_request('practice_read',$1,$2)", [credential, foreign.tenant]);
+    await client.query("SELECT app.bind_request('practice_read',$1,$2)", [credential, DEMO_TENANT_ID]);
+    await refused(client, "SELECT app.current_tenant()");
+    await refused(client, "SELECT app.bind_request('practice',$1,$2)", [credential, DEMO_TENANT_ID]);
+    await client.query("SET TRANSACTION READ ONLY");
+    expect((await client.query("SELECT app.current_actor() actor,app.current_tenant() tenant")).rows)
+      .toEqual([{ actor: DEMO_MEMBERSHIP_ID, tenant: DEMO_TENANT_ID }]);
+    expect((await client.query("SELECT id FROM app.account WHERE id=ANY($1::uuid[])", [[DEMO_ACCOUNT_ID, foreign.account]])).rows)
+      .toEqual([{ id: DEMO_ACCOUNT_ID }]);
+    await client.query("SAVEPOINT write_probe");
+    await expect(client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional read-only probe')", [randomUUID(), DEMO_TENANT_ID]))
+      .rejects.toMatchObject({ code: "25006" });
+    await client.query("ROLLBACK TO write_probe; RELEASE write_probe");
+    await client.query("COMMIT");
+    expect((await client.query("SELECT id FROM app.account")).rows).toEqual([]);
   } finally { await client.query("ROLLBACK"); client.release(); }
 });
 

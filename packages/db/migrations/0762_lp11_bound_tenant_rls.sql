@@ -1,12 +1,44 @@
 BEGIN;
+-- Commercial integrity reads keep the normal protected binding without locking
+-- the practice session row. A read binding is usable only in READ ONLY mode.
+-- Latest binding reader: 0562_lp6a_request_binding.sql.
+ALTER TABLE control_plane.request_binding DROP CONSTRAINT request_binding_credential_kind_check;
+ALTER TABLE control_plane.request_binding ADD CONSTRAINT request_binding_credential_kind_check
+ CHECK (credential_kind IN ('real','practice','contractor_practice','customer_portal_delegated','practice_read'));
+CREATE OR REPLACE FUNCTION app.lp6_bound_request() RETURNS control_plane.request_binding
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE bound control_plane.request_binding;
+BEGIN
+ SELECT * INTO bound FROM control_plane.request_binding b
+  WHERE b.environment_id=(extract(epoch FROM pg_postmaster_start_time())::text||':'||(SELECT d.oid::text FROM pg_catalog.pg_database d WHERE d.datname=current_database())) AND b.transaction_id=pg_current_xact_id_if_assigned();
+ IF NOT FOUND OR bound.expires_at<=clock_timestamp()
+  OR (bound.credential_kind='practice_read' AND current_setting('transaction_read_only') IS DISTINCT FROM 'on') THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+ IF bound.credential_kind='practice_read' THEN bound.credential_kind:='practice'; END IF;
+ RETURN bound;
+END $$;
 -- Forward fix only: keep tenant authority in protected transaction state.
 -- An unbound query matches no row. Expired and delegated request checks stay
 -- with the existing LP-6 accessors.
 GRANT CREATE ON SCHEMA app TO jobguard_binding_owner;
+-- The LP-6e presence accessor retains its exact worker contract. RLS and
+-- pre-binding ports also need a probe that never allocates an XID for an
+-- anonymous reader. Expired and read-only bindings still count as present.
+CREATE FUNCTION app.lp11_request_binding_present() RETURNS boolean
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+ SELECT EXISTS(SELECT 1 FROM control_plane.request_binding b
+  WHERE b.environment_id=extract(epoch FROM pg_postmaster_start_time())::text||':'||(SELECT d.oid::text FROM pg_catalog.pg_database d WHERE d.datname=current_database())
+   AND b.transaction_id=pg_current_xact_id_if_assigned())
+$$;
+ALTER FUNCTION app.lp11_request_binding_present() OWNER TO jobguard_binding_owner;
+REVOKE ALL ON FUNCTION app.lp11_request_binding_present() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_request_binding_present() TO jobguard_migration;
+
 CREATE FUNCTION app.lp11_policy_tenant() RETURNS uuid
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 BEGIN
- IF pg_current_xact_id_if_assigned() IS NULL OR NOT app.lp6e_request_binding_present() THEN
+ IF pg_current_xact_id_if_assigned() IS NULL OR NOT app.lp11_request_binding_present() THEN
   RETURN NULL;
  END IF;
  RETURN app.current_tenant();
@@ -36,7 +68,7 @@ CREATE FUNCTION app.lp11_open_worker_scope(p_action uuid) RETURNS uuid
 DECLARE t uuid;
 BEGIN
  PERFORM app.lp10_assert_worker();
- IF app.lp6e_request_binding_present() THEN
+ IF app.lp11_request_binding_present() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
  SELECT s.tenant_id INTO t FROM infrastructure.outbox_signal s WHERE s.action_id=p_action;
@@ -85,7 +117,7 @@ GRANT EXECUTE ON FUNCTION app.lp11_worker_tenant(uuid) TO jobguard_audit_writer,
 -- for a tenant minted by the same database transaction.
 CREATE FUNCTION app.lp11_new_tenant(t uuid) RETURNS boolean
  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
- SELECT NOT app.lp6e_request_binding_present() AND EXISTS(
+ SELECT NOT app.lp11_request_binding_present() AND EXISTS(
   SELECT FROM control_plane.tenant x WHERE x.id=t AND x.xmin=pg_current_xact_id_if_assigned()::xid)
 $$;
 ALTER FUNCTION app.lp11_new_tenant(uuid) OWNER TO jobguard_migration;
@@ -155,6 +187,7 @@ CREATE OR REPLACE FUNCTION app.lp10_lock_action(p_action uuid) RETURNS app.actio
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE t uuid; item app.action_outbox;
 BEGIN
+ IF app.lp6e_request_binding_present() THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
  t:=app.lp11_open_worker_scope(p_action);
  PERFORM set_config('app.tenant_id',t::text,true);
  PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
@@ -494,6 +527,17 @@ ALTER FUNCTION app.lp11_practice_digest_kind(text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp11_practice_digest_kind(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.lp11_practice_digest_kind(text) TO jobguard_session_lookup;
 
+-- Keep the underlying LP-6d projection inaccessible to all other owners.
+-- Credential lookup gets only the effective principal for its checked tenant.
+CREATE FUNCTION app.lp11_effective_contractor_principal(s uuid,t uuid)
+ RETURNS TABLE(tenant_id uuid,membership_id uuid,identity_user_id uuid)
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT principal.* FROM app.lp6d_contractor_session_identity(s) principal WHERE principal.tenant_id=t
+$$;
+ALTER FUNCTION app.lp11_effective_contractor_principal(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_effective_contractor_principal(uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_effective_contractor_principal(uuid,uuid) TO jobguard_session_lookup;
+
 CREATE OR REPLACE FUNCTION app.lp6_session_authority(p_kind text,p_credential text,p_tenant uuid)
  RETURNS TABLE(session_ref text,actor_id uuid,expires_at timestamptz)
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
@@ -502,7 +546,7 @@ DECLARE linked record; real_session identity.session; home control_plane.practic
  selected_ref text; deadline timestamptz; practice_kind text; saved_tenant text:=current_setting('app.tenant_id',true);
  saved_sso text:=current_setting('app.sso_session_id',true);
 BEGIN
- IF p_kind='practice' THEN practice_kind:=app.lp11_practice_digest_kind(p_credential); END IF;
+ IF p_kind IN ('practice','practice_read') THEN practice_kind:=app.lp11_practice_digest_kind(p_credential); END IF;
  IF practice_kind='namespace' THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
@@ -529,8 +573,12 @@ BEGIN
   SELECT m.id INTO selected_actor FROM identity.sso_session_memberships(real_session.user_id,real_session.id) m
    WHERE m.tenant_id=p_tenant;
   selected_ref:=real_session.id::text; deadline:=real_session.expires_at;
- ELSIF p_kind='practice' AND current_database()='jobguard_synthetic_demo' AND p_credential ~ '^[0-9a-f]{64}$' THEN
-  SELECT * INTO home FROM control_plane.practice_session s WHERE s.token_digest=p_credential FOR SHARE;
+ ELSIF p_kind IN ('practice','practice_read') AND current_database()='jobguard_synthetic_demo' AND p_credential ~ '^[0-9a-f]{64}$' THEN
+  IF p_kind='practice_read' THEN
+   SELECT * INTO home FROM control_plane.practice_session s WHERE s.token_digest=p_credential;
+  ELSE
+   SELECT * INTO home FROM control_plane.practice_session s WHERE s.token_digest=p_credential FOR SHARE;
+  END IF;
   IF NOT FOUND OR home.environment<>'synthetic_demo' OR home.revoked_at IS NOT NULL OR home.expires_at<=clock_timestamp() THEN
    RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
   END IF;
@@ -556,7 +604,7 @@ BEGIN
     AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE (r.tenant_id,r.membership_id)=(base.tenant_id,base.id))) THEN
    RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
   END IF;
-  SELECT m.id INTO selected_actor FROM app.lp6d_contractor_session_identity(p_credential::uuid) effective
+  SELECT m.id INTO selected_actor FROM app.lp11_effective_contractor_principal(p_credential::uuid,p_tenant) effective
    JOIN app.membership m ON (m.tenant_id,m.id,m.identity_user_id)=(effective.tenant_id,effective.membership_id,effective.identity_user_id)
    WHERE m.tenant_id=p_tenant
     AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
@@ -651,7 +699,7 @@ GRANT EXECUTE ON FUNCTION app.lp6_session_authority(text,text,uuid), app.anonymo
  TO jobguard_migration;
 GRANT EXECUTE ON FUNCTION app.lp11_policy_tenant() TO jobguard_session_lookup;
 GRANT EXECUTE ON FUNCTION app.linked_practice_authority(text),app.authenticate_practice_session(text,uuid),app.contractor_member_active(uuid),
- app.lp6d_contractor_session_identity(uuid),app.contractor_practice_session_digest(uuid),
+ app.contractor_practice_session_digest(uuid),
  app.contractor_practice_session_live(uuid),
  app.contractor_practice_home_deadline(character,timestamptz) TO jobguard_session_lookup;
 GRANT EXECUTE ON FUNCTION app.lp6d_refused_contractor_principal(uuid) TO jobguard_migration;
@@ -694,7 +742,7 @@ BEGIN
   WHERE base.revoked_at IS NULL AND (base.expires_at IS NULL OR base.expires_at>clock_timestamp())
    AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE (r.tenant_id,r.membership_id)=(base.tenant_id,base.id)));
  SELECT effective.tenant_id,effective.membership_id,effective.identity_user_id INTO answer
-  FROM app.lp6d_contractor_session_identity(s) effective
+  FROM app.lp11_effective_contractor_principal(s,selected_tenant) effective
   JOIN app.membership m ON (m.tenant_id,m.id,m.identity_user_id)=(effective.tenant_id,effective.membership_id,effective.identity_user_id)
   WHERE m.tenant_id=selected_tenant
    AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
@@ -780,7 +828,7 @@ BEGIN
  t:=(CASE WHEN connection->>'protocol'='oidc' THEN connection#>>'{config,tenantId}'
           ELSE connection->>'tenantId' END)::uuid;
  IF t IS NULL THEN RAISE EXCEPTION 'SSO_NOT_FOUND' USING ERRCODE='P0002'; END IF;
- IF app.lp6e_request_binding_present() THEN
+ IF app.lp11_request_binding_present() THEN
   IF t IS DISTINCT FROM app.current_tenant() THEN RAISE EXCEPTION 'SSO_FORBIDDEN' USING ERRCODE='42501'; END IF;
  ELSE
   INSERT INTO control_plane.lp11_sso_scope(transaction_id,tenant_id,authority_id,operation,login)
@@ -1061,7 +1109,7 @@ DECLARE binding identity.scim2_binding; t uuid; old identity.scim2_resource; rid
  entry jsonb; rev integer;
  caller_tenant text:=current_setting('app.tenant_id',true); BEGIN
  IF current_database()<>'jobguard_synthetic_demo' OR NOT pg_has_role(session_user,'jobguard_scim','USAGE')
-  OR b IS NULL OR token IS NULL OR app.lp6e_request_binding_present()
+  OR b IS NULL OR token IS NULL OR app.lp11_request_binding_present()
  THEN RAISE EXCEPTION 'SCIM_REFUSED' USING ERRCODE='42501'; END IF;
  INSERT INTO control_plane.lp11_sso_scope(transaction_id,authority_id,operation,login)
  VALUES(pg_current_xact_id(),b,'scim2_lookup',session_user);
@@ -1515,7 +1563,7 @@ BEGIN
  IF t IS NULL OR j IS NULL OR NOT app.lp6d_maintenance_login() THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
- IF app.lp6e_request_binding_present() THEN
+ IF app.lp11_request_binding_present() THEN
   IF t IS DISTINCT FROM coalesce(app.current_tenant(),app.lp11_delegated_job_tenant(j)) THEN
    RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
   END IF;
@@ -1551,7 +1599,7 @@ REVOKE ALL ON FUNCTION app.lp11_trial_activation_tenant(uuid,uuid) FROM PUBLIC;
 -- request binding. Its checks cannot disappear when a setting is changed.
 CREATE OR REPLACE FUNCTION app.mon3_require_registered_admission() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
+DECLARE maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp11_request_binding_present();
 BEGIN
  IF maintenance THEN
   INSERT INTO control_plane.lp11_maintenance_job(transaction_id,tenant_id,job_id,trial_activation_id)
@@ -1614,7 +1662,7 @@ DECLARE maintenance boolean;
 BEGIN
  IF NEW.current_revision_id IS DISTINCT FROM OLD.current_revision_id
     OR NEW.revision IS DISTINCT FROM OLD.revision THEN
-  maintenance:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
+  maintenance:=app.lp6d_maintenance_login() AND NOT app.lp11_request_binding_present();
   IF maintenance AND NEW.current_revision_id IS NOT NULL THEN
    INSERT INTO control_plane.lp11_maintenance_draft_revision(transaction_id,tenant_id,draft_id,revision_id)
    VALUES(pg_current_xact_id(),NEW.tenant_id,NEW.id,NEW.current_revision_id);
@@ -1668,7 +1716,7 @@ CREATE POLICY lp11_legacy_origin_command ON app.command_receipt FOR SELECT TO jo
  USING (app.lp11_legacy_origin_command(command_receipt));
 
 CREATE OR REPLACE FUNCTION app.record_legacy_builder_origin() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
-DECLARE maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
+DECLARE maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp11_request_binding_present();
 BEGIN
  IF NEW.job_track<>'small_builder' OR NEW.origin<>'builder_logged' THEN RETURN NEW; END IF;
  IF maintenance THEN
@@ -1712,7 +1760,7 @@ CREATE OR REPLACE FUNCTION app.transition_job(p_tenant uuid,p_job uuid,p_expecte
  p_quote uuid DEFAULT NULL,p_net bigint DEFAULT NULL,p_policy varchar DEFAULT NULL,p_cap bigint DEFAULT NULL)
 RETURNS app.job LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE current_job app.job;
- maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
+ maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp11_request_binding_present();
 BEGIN
  IF maintenance AND p_tenant IS NOT NULL AND p_job IS NOT NULL THEN
   INSERT INTO control_plane.lp11_maintenance_job_transition(transaction_id,tenant_id,job_id)
@@ -1900,7 +1948,7 @@ END $$;
 
 CREATE OR REPLACE FUNCTION app.ch4_guard_new_site_work() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE applies boolean:=true; job app.job;
- maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
+ maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp11_request_binding_present();
 BEGIN
  IF maintenance THEN PERFORM app.lp11_open_maintenance_job(NEW.tenant_id,NEW.job_id); END IF;
  IF TG_TABLE_NAME='supplier_document' THEN applies:=NEW.document_type='invoice'; END IF;
@@ -2086,7 +2134,7 @@ BEGIN
   SELECT * INTO i FROM identity.invitation WHERE id=c.invitation_id AND email=c.email
    AND accepted_at IS NULL AND expires_at>clock_timestamp() FOR UPDATE;
   IF NOT FOUND THEN RETURN NULL; END IF;
-  IF app.lp6e_request_binding_present() AND i.tenant_id IS DISTINCT FROM app.current_tenant() THEN
+  IF app.lp11_request_binding_present() AND i.tenant_id IS DISTINCT FROM app.current_tenant() THEN
    RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
   END IF;
   IF NOT (SELECT allowed FROM identity.sso_invitation_accept_allowed(i.id)) THEN RETURN NULL; END IF;
@@ -2155,7 +2203,7 @@ END $$;
 CREATE FUNCTION app.lp11_delegated_job_tenant(j uuid) RETURNS uuid
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 BEGIN
- IF NOT app.lp6e_request_binding_present() THEN RETURN NULL; END IF;
+ IF NOT app.lp11_request_binding_present() THEN RETURN NULL; END IF;
  RETURN (SELECT b.tenant_id FROM app.lp6_bound_request() b
   WHERE b.credential_kind='customer_portal_delegated'
    AND b.scope_command_type='JobSource.customer_message' AND b.scope_job_id=j);
@@ -2325,7 +2373,7 @@ BEGIN
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
  SELECT * INTO s FROM identity.session WHERE token_digest=digest AND environment='synthetic_demo' AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR SHARE;
  IF s.id IS NULL THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
- IF NOT app.lp6e_request_binding_present() THEN
+ IF NOT app.lp11_request_binding_present() THEN
   BEGIN
    PERFORM app.bind_request('real',digest,t);
   EXCEPTION WHEN insufficient_privilege THEN
@@ -3119,7 +3167,7 @@ ALTER FUNCTION app.lp11_shadow_decision_tenant(text) OWNER TO jobguard_migration
 REVOKE ALL ON FUNCTION app.lp11_shadow_decision_tenant(text) FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION app.serialize_final_check_invalidation() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
-DECLARE source_job uuid;unbound_maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
+DECLARE source_job uuid;unbound_maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp11_request_binding_present();
 BEGIN
  -- Preserve the existing privileged maintenance/fixture write path, as for evidence registration.
  -- Ordinary sessions still require their own tenant context before any lookup or lock.
@@ -3489,7 +3537,7 @@ BEGIN
   OR session_user::text IS DISTINCT FROM (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database())
   OR NOT pg_has_role(session_user,'jobguard_migration','MEMBER')
   OR NOT pg_has_role(session_user,'jobguard_runtime','MEMBER')
-  OR app.lp6e_request_binding_present()
+  OR app.lp11_request_binding_present()
   OR t IS NULL OR seq IS NULL OR seq<1 OR hash IS NULL OR hash !~ '^[a-f0-9]{64}$'
   OR operator IS NULL OR operator !~ '^[a-zA-Z0-9._-]{1,64}$' OR event_id IS NULL
  THEN RAISE EXCEPTION 'AUDIT_CHECKPOINT_FORBIDDEN' USING ERRCODE='42501'; END IF;
@@ -3784,7 +3832,7 @@ ALTER POLICY practice_membership_lookup ON app.membership USING (
  current_database()='jobguard_synthetic_demo'
  AND (tenant_id,id) IN (('11111111-1111-4111-8111-111111111111'::uuid,'d1500000-0000-4000-8000-000000000003'::uuid),
   ('33333333-3333-4333-8333-333333333333'::uuid,'33333333-3333-4333-8333-333333333335'::uuid))
- AND CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant() ELSE true END
+ AND CASE WHEN app.lp11_request_binding_present() THEN tenant_id=app.current_tenant() ELSE true END
 );
 
 -- A row accessor preserves the event predicates across a column type change.
@@ -3848,22 +3896,22 @@ ALTER POLICY lp4_audit_writer ON app.audit_event USING (
  OR app.lp11_practice_revoke_event(tenant_id,app.lp11_audit_event_type(audit_event),subject_type,subject_ref,actor_ref)
 );
 ALTER POLICY migration_audit_integrity ON app.audit_event USING (
- CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant()
+ CASE WHEN app.lp11_request_binding_present() THEN tenant_id=app.current_tenant()
  ELSE pg_has_role(session_user,'jobguard_migration','SET') END
  OR app.lp11_practice_revoke_event(tenant_id,app.lp11_audit_event_type(audit_event),subject_type,subject_ref,actor_ref)
 );
 ALTER POLICY migration_integrity ON app.audit_export USING (
- CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant()
+ CASE WHEN app.lp11_request_binding_present() THEN tenant_id=app.current_tenant()
  ELSE pg_has_role(session_user,'jobguard_migration','SET') END
 ) WITH CHECK (
- CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant()
+ CASE WHEN app.lp11_request_binding_present() THEN tenant_id=app.current_tenant()
  ELSE pg_has_role(session_user,'jobguard_migration','SET') END
 );
 ALTER POLICY migration_integrity ON app.audit_export_checkpoint USING (
- CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant()
+ CASE WHEN app.lp11_request_binding_present() THEN tenant_id=app.current_tenant()
  ELSE pg_has_role(session_user,'jobguard_migration','SET') END
 ) WITH CHECK (
- CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant()
+ CASE WHEN app.lp11_request_binding_present() THEN tenant_id=app.current_tenant()
  ELSE pg_has_role(session_user,'jobguard_migration','SET') END
 );
 ALTER POLICY firm_profile_bound_reader ON app.firm_profile
@@ -3884,15 +3932,15 @@ ALTER POLICY binding_lookup ON identity.scim2_binding USING (
 );
 ALTER POLICY connection_lookup ON identity.sso_connection USING (
  id=nullif(current_setting('app.sso_connection_id',true),'')::uuid
- AND CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant() ELSE true END
+ AND CASE WHEN app.lp11_request_binding_present() THEN tenant_id=app.current_tenant() ELSE true END
 );
 ALTER POLICY session_lookup ON identity.sso_session_binding USING (
  session_id=nullif(current_setting('app.sso_session_id',true),'')::uuid
- AND CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant() ELSE true END
+ AND CASE WHEN app.lp11_request_binding_present() THEN tenant_id=app.current_tenant() ELSE true END
 );
 DO $connector$
 DECLARE table_name text; policy_name text;
- bound_check constant text := 'CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant() ELSE true END';
+ bound_check constant text := 'CASE WHEN app.lp11_request_binding_present() THEN tenant_id=app.current_tenant() ELSE true END';
 BEGIN
  FOREACH table_name IN ARRAY ARRAY['binding','machine_capability','machine_command','machine_connection','machine_key','machine_nonce'] LOOP
   policy_name:=CASE WHEN table_name='binding' THEN 'binding_lookup' ELSE 'machine_control' END;
@@ -4260,7 +4308,7 @@ BEGIN
  IF current_database()<>'jobguard_synthetic_demo' OR t IS NULL
   OR purpose IS NULL OR purpose NOT IN ('execute','recover','alerts')
   OR (purpose='alerts') IS DISTINCT FROM (cid IS NULL)
-  OR pg_has_role(session_user,'jobguard_runtime','USAGE') OR app.lp6e_request_binding_present()
+  OR pg_has_role(session_user,'jobguard_runtime','USAGE') OR app.lp11_request_binding_present()
   OR (CASE WHEN purpose='execute' THEN NOT pg_has_role(session_user,'jobguard_worm_executor','USAGE')
            ELSE NOT pg_has_role(session_user,'jobguard_worm_operator','USAGE') END)
   OR NOT EXISTS(SELECT FROM control_plane.tenant WHERE id=t)
@@ -4464,7 +4512,7 @@ CREATE FUNCTION app.lp11_bind_meter_source(t uuid,s uuid) RETURNS boolean
 DECLARE stored app.meter_lifecycle_source;
 BEGIN
  IF t IS NULL OR s IS NULL OR NOT pg_has_role(session_user,'jobguard_meter','USAGE')
-  OR pg_has_role(session_user,'jobguard_runtime','USAGE') OR app.lp6e_request_binding_present()
+  OR pg_has_role(session_user,'jobguard_runtime','USAGE') OR app.lp11_request_binding_present()
  THEN RETURN false; END IF;
  INSERT INTO control_plane.lp11_meter_source_scope(transaction_id,login,tenant_id,source_id)
  VALUES(pg_current_xact_id(),session_user,t,s) ON CONFLICT (transaction_id) DO NOTHING;
@@ -4834,7 +4882,7 @@ CREATE OR REPLACE FUNCTION infrastructure.discover_retention_reviews() RETURNS T
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid;
 BEGIN
- IF current_database()<>'jobguard_synthetic_demo' OR app.lp6e_request_binding_present()
+ IF current_database()<>'jobguard_synthetic_demo' OR app.lp11_request_binding_present()
   OR NOT pg_has_role(session_user,'jobguard_infrastructure','USAGE') THEN RETURN; END IF;
  -- The protected iteration reads only one registered tenant's profile and review rows.
  FOR t IN SELECT id FROM control_plane.tenant ORDER BY id LOOP
@@ -4878,7 +4926,7 @@ DECLARE caller_tenant text:=current_setting('app.tenant_id',true); stored jsonb;
 BEGIN
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'RETENTION_DARK'; END IF;
  PERFORM app.lp10_assert_worker();
- IF t IS NULL OR app.lp6e_request_binding_present() OR NOT EXISTS(SELECT FROM control_plane.tenant WHERE id=t)
+ IF t IS NULL OR app.lp11_request_binding_present() OR NOT EXISTS(SELECT FROM control_plane.tenant WHERE id=t)
  THEN RAISE EXCEPTION 'RETENTION_NOT_FOUND'; END IF;
  INSERT INTO control_plane.lp11_retention_scope(transaction_id,login,tenant_id,job_id,purpose)
  VALUES(pg_current_xact_id(),session_user,t,j,CASE WHEN j IS NULL THEN 'list' ELSE 'timer' END);
@@ -4976,7 +5024,7 @@ CREATE FUNCTION app.lp11_open_pack_request(t uuid,cid uuid) RETURNS app.evidence
  LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE r app.evidence_pack_v3_request; requested_member uuid;
 BEGIN
- IF current_database()<>'jobguard_synthetic_demo' OR app.lp6e_request_binding_present()
+ IF current_database()<>'jobguard_synthetic_demo' OR app.lp11_request_binding_present()
   OR NOT pg_has_role(session_user,'jobguard_shadow','USAGE') OR pg_has_role(session_user,'jobguard_runtime','USAGE')
   OR NOT EXISTS(SELECT FROM infrastructure.evidence_pack_v3_request WHERE (tenant_id,command_id)=(t,cid))
  THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;

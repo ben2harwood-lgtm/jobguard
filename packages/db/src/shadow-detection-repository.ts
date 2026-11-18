@@ -19,7 +19,7 @@ function withShadowJob<T>(pool: Pool, context: VerifiedTenantContext, jobId: str
   return withTenant(pool, context, async db => {
     await db.$client.query("SELECT app.lp11_bind_shadow_job($1,$2)", [context.tenantId, jobId]);
     return work(db);
-  }, "shadow-persist");
+  });
 }
 /** Server-only; this pool's login holds jobguard_shadow only. No business-table reads. */
 export class ShadowDetectionRepository {
@@ -29,7 +29,8 @@ export class ShadowDetectionRepository {
     const b = (()=>{try{return {...parsed.data,proposals:parsed.data.proposals.map(p=>shadowProposalV1.parse(p)),observations:parsed.data.observations.map(o=>observationV1.parse(o)),captures:parsed.data.captures.map(c=>shadowCaptureV1.parse(c))}}catch{throw new ShadowDetectionError("INVALID_DETECTION_BATCH")}})();
     if ([...b.proposals, ...b.observations, ...b.captures].some(o => o.tenantId !== context.tenantId || o.jobId !== b.jobId)) throw new ShadowDetectionError("DETECTION_BINDING_MISMATCH");
     const groups = groupShadowProposals(b.proposals, b.observations, b.captures);
-    await withShadowJob(this.pool, context, b.jobId, async db => {
+    await withTenant(this.pool, context, async db => {
+      await db.$client.query("SELECT app.lp11_bind_shadow_job($1,$2)", [context.tenantId, b.jobId]);
       // Serializes detection snapshots for this tenant/job, without any business-table privilege.
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`shadow-detection:${context.tenantId}:${b.jobId}`]);
       for (const g of groups) {
@@ -75,7 +76,7 @@ export class ShadowDetectionRepository {
       // firing holds the job row until commit, fencing later same-job disclosure
       // and final-account locks; later firings reuse our already-held signal locks.
       for (const group of groups) await this.surface(db, context, group);
-    });
+    }, "shadow-persist");
     return groups;
   }
   private async surface(db: TenantTransaction, context: VerifiedTenantContext, g: DetectionGroup): Promise<void> {

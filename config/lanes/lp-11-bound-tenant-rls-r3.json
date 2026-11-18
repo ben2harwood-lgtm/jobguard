@@ -250,7 +250,27 @@
         "packages/db/test/upgrade-proof-utils.ts",
         "packages/db/test/variation-post-lock.integration.test.ts",
         "packages/db/test/workspace-read.integration.test.ts",
-        "packages/db/tools/synthetic-restore.mjs"
+        "packages/db/tools/synthetic-restore.mjs",
+        "packages/db/test/ch7-f21-reason-upgrade.integration.test.ts",
+        "packages/db/test/commercial-integrity-v3-query-isolation.integration.test.ts",
+        "packages/db/test/contractor-admin-owner-guard.integration.test.ts",
+        "packages/db/test/contractor-owner-grant.integration.test.ts",
+        "packages/db/test/extra-origin-upgrade.integration.test.ts",
+        "packages/db/test/final-check-lock-run.integration.test.ts",
+        "packages/db/test/job-work-state-commands.integration.test.ts",
+        "packages/db/test/meter-trip-upgrade.integration.test.ts",
+        "packages/db/test/migfix-5.integration.test.ts",
+        "packages/db/test/operative-entitlements-upgrade.integration.test.ts",
+        "packages/db/test/pay-now-attempt.integration.test.ts",
+        "packages/db/test/real-fc-ordinary-words-saved-estimate.integration.test.ts",
+        "packages/db/test/receipt-proposal-historical-capacity.integration.test.ts",
+        "packages/db/test/recovery-case-terms-upgrade.integration.test.ts",
+        "packages/db/test/shadow-demo-guide.integration.test.ts",
+        "packages/db/test/shared-money-origin.integration.test.ts",
+        "packages/db/test/signed-evidence-export-store.integration.test.ts",
+        "packages/db/test/sv5pre-completion-isolation.integration.test.ts",
+        "packages/db/test/sv5pre-legacy-invoice.integration.test.ts",
+        "packages/db/test/worker-login-fixture.ts"
       ]
     }
   }

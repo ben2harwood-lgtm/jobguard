@@ -3794,6 +3794,35 @@ PostgreSQL focused evidence includes 12/12 practice-approval tests, 39/39 contra
 
 The web unit suite before this round passed 252 files and 3,618 tests. The API suite recorded 4,504 passing tests, four timeouts and one skip across 261 files. The four affected files passed 29/29 on the serial rerun. The S9 file passed 146/146 on its own run. The repository typecheck passed all seven package tasks. The two commercial guards emitted zero diagnostics and the serial guard suite passed 253/253.
 
+## r5 read-only binding and final PostgreSQL witnesses
+
+The 878-file run at `5470e1e60` remains the most recent completed full run. Its 244 non-held failures are reduced below in focused PostgreSQL evidence, with the newer full runs recorded separately. Four Northside tests now reach the held fixture directly and are listed by name below.
+
+| Focused failure group | Failed before | Failed after | What changed |
+| --- | ---: | ---: | --- |
+| Commercial integrity concurrent family and source reads | 1 | 0 | The existing two approved read paths bind a distinct `practice_read` request from the persisted credential without a `FOR SHARE` on the anonymous session. `app.lp6_bound_request` accepts it only while PostgreSQL enforces `READ ONLY`. A non-read binding cannot replace it. The exact test still requires all three readers to finish while a writer holds the membership, session and job rows. On each reader the exact non-`AccessShareLock` set is `RowExclusiveLock` on the identity-scope table, its primary index and the request-binding table, plus the reader's own `ExclusiveLock` on its transaction ID. Those are the only writes used to qualify the credential and record its transaction scope. No business relation lock, credential-row lock or waiting lock can pass this comparison. |
+| LP-6b deferred call sites and LP-6d private boundaries | 3 | 0 | The audit refusal stays at its already-reviewed tenant transaction call site and still consumes only the exact protected credential. Shadow detection keeps its reviewed persist scope. A separate non-allocating binding check detects existing and expired bindings through the private store while preserving the original worker probe and its exact callers. The inspected private switched-session projection stays private. Its narrower tenant-matching wrapper serves the NOLOGIN lookup role. |
+| Purchase order synthetic gate | 1 | 0 | The historical runtime-fixture setup now installs the held feature migrations before 0762. The copied non-demo database has the exact bound policy. The same bound runtime insert is refused with the synthetic gate present, succeeds when only the gate is removed, and leaves unchanged rows after rollback. |
+| Contractor owner grant, job role and legacy variation probes | 5 | 0 | The exact administratively created members and immutable historical fixtures are bound before the positive setup write or protected probe. Original trigger/FK refusals, lock race and equality checks stay exact. |
+| Historical F21, meter trip and shared-money origin | 3 | 0 | Exact existing membership credentials expose only their original facts to the historical replay and negative control. No caller setting supplies authority. |
+| Final-check, receipt and entitlement witnesses | 6 | 0 | The final-check lock, raw worker status and receipt-capacity controls use their actual actor or worker job. The signed-export witness uses the original exporting actor while preserving the unrelated-event refusal. Populated recovery-case terms keep the exact positive per-role policies and worker-only read alternative. |
+| Shadow redaction and imported credit note | 2 | 0 | The unchanged 0650 redaction SQL is exercised inside a rollback-safe administrative fixture transaction with the only affected tenant bound. Imported invoice setup resolves the genuine job ancestry and terms. |
+| Pay-now and zero-versus-25 hidden signals | 2 | 0 | The fake pay-now command fixture binds the real member who owns the historical origin. The isolation test cold-restores the same stopped synthetic cluster twice, so both datasets use the real allowed database name and the same database identity. The completeness observer rolls back its bookkeeping before the comparison. Both runs still compare every committed non-shadow table byte for byte, while the private result digests must differ. |
+| Saved-estimate immediate-predecessor upgrade | 1 | 0 | The deliberately old fixture routes the later application's scope hand-off through the actual predecessor's worker manifest and tenant-visible job. It compares the unchanged predecessor catalogue, exact saved-estimate migration body, completed rows and retained failure history. |
+
+The exact scope test additionally proves an unsealed request refuses tenant authority, a foreign credential/tenant combination and ordinary rebinding refuse, and a sealed request reads only its own account despite the legacy setting and cannot insert (`25006`). Its post-commit runtime sees zero rows. The populated migration and policy proofs record 1,569 LP-0 entries, 903 upgrade entries, and 736 policy entries. Neither the LP-6b/LP-6d scanners nor the S9 files or hashes changed.
+
+Final Check fixture pool shutdown observes each worker connection's end event before stopping its synthetic PostgreSQL instance. The shutdown rerun passed all 25 tests across the shadow demo, SCIM conformance and LP-1 lock suites, with zero unhandled errors. The `pg_dump` test remains separately named below.
+
+The four latest direct held failures are in `test/northside-demo.integration.test.ts`. Each stack reaches the held insert at `work-order-fixtures.ts:71`.
+
+- `CLIENT-ISOLATION permits a second client's own extra and denies cross-client presentation, view and decision`
+- `SWITCH-REFERENCE rejects invented, cross-actor, cross-session and out-of-window references without masking the existing switch TRUNCATE guard`
+- `SETTINGS-SNAPSHOT retains the stored definition, contract references and immutable requirement snapshots`
+- `RESET-HISTORY starts a new run while retaining earlier attribution, settings, evidence, origins and the audit prefix`
+
+Focused evidence includes 70/70 across the private presence, contractor practice, LP-10 and LP-11 checks, 112/112 across the LP-6d source, recovery catalogue and proof loader, 37/37 purchase order, 73/73 across the six original relation and owner witnesses across the first run and recovery-catalogue retest, 53/53 across the seven final-check/receipt/credit/operative/signed-export/redaction files, 17/17 saved-estimate and 7/7 pay-now/cold isolation. The seven-test commercial isolation file and exact LP-6a relation-lock file passed. The two guards returned zero diagnostics, all 253 guard tests passed, and all seven typecheck tasks passed. Whole-suite confirmation on the latest candidate remains in progress.
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

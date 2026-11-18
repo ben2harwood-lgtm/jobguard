@@ -1,4 +1,4 @@
-import { testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -109,7 +109,9 @@ describe("MIGFIX-5 customer billing integrity", () => {
     const v1 = await addFixtureCapture(f, a, 80000);
     const approval = await f.admin.connect();
     try {
-      await approval.query("BEGIN"); await approval.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]); await approveOn(approval, a, v1);
+      await approval.query("BEGIN");
+      await bindTestClient(f.admin, approval, a.tenantId, LOCK_OWNER);
+      await approval.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]); await approveOn(approval, a, v1);
       const racing = withTenant(f.runtime, a.context, db=>lockSql(f,a,a.revisionId,1)(db.$client)); const settled = racing.then(() => "locked", (e: Error) => e.message);
       await blocked(); await approval.query("COMMIT");
       expect(await settled).toContain("STALE_OR_BLOCKED_FINAL_ACCOUNT");
@@ -123,7 +125,7 @@ describe("MIGFIX-5 customer billing integrity", () => {
     try {
       await testBoundTenantContext(f.admin,b.tenantId,LOCK_OWNER);
       await locking.query("BEGIN"); await locking.query("SELECT app.bind_request('real',encode(sha256(convert_to($1,'UTF8')),'hex'),$2)",[`lp6-test:${b.tenantId}:${LOCK_OWNER}`,b.tenantId]); await locking.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]); await lockSql(f, b, b.revisionId, 1)(locking);
-      const late = asFixtureTenant(f.admin, b.tenantId, db => approveOn(db, b, v2))
+      const late = asFixtureTenant(f.admin, b.tenantId, db => approveOn(db, b, v2), { owner: f.admin, membershipId: LOCK_OWNER })
         .then(() => { approvalDone = true; return null; }, error => error);
       await blocked(); expect(approvalDone).toBe(false); await locking.query("COMMIT");
       expect(await late).toMatchObject({ code: "42501", message: "VARIATION_LOCKED_BY_FINAL_ACCOUNT" });
