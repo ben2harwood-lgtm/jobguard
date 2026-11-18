@@ -18,7 +18,7 @@ function interrupted(kind: 'started' | 'reconcile_started') {
     approving_membership_id: actor.membershipId, attempts: 1 };
   const pool = { connect: async () => ({ release() {}, query: async (sql: string) => {
     if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql) || sql.includes('set_config')) return { rows: [], rowCount: 0 };
-    if (sql.includes('FROM app.action_outbox')) return { rows: [{ status: row.outbox_status, claimed_at: null }], rowCount: 1 };
+    if (sql.includes('FROM app.lock_outbox_for_history(')) return { rows: [{ status: row.outbox_status, claimed_at: null }], rowCount: 1 };
     if (sql.includes('FROM app.recovery_message_event')) return { rows: history.map((kind, i) => ({ message_id: row.id, revision: i + 1, kind, command_id: id(50), request_hash: 'c'.repeat(64), actor_membership_id: actor.membershipId })), rowCount: history.length };
     if (sql.includes('FROM app.action_attempt')) return { rows: [{ id: id(90), attempt_number: 1, outcome: 'succeeded' }], rowCount: 1 };
     throw new Error(`Unexpected SQL in service double: ${sql}`);
@@ -98,8 +98,8 @@ describe('terminal changed-source refusal normalisation (Sol 3)', () => {
       content_hash: 'a'.repeat(64), approving_membership_id: actor.membershipId };
     service.messageRows = async () => [row];
     const db = { $client: { query: async (sql: string) => {
-      if (sql.startsWith('UPDATE app.action_outbox')) return { rows: [], rowCount: 1 };
-      if (sql.includes('FROM app.action_outbox')) return { rows: [{ status: 'dead_letter', claimed_at: null }], rowCount: 1 };
+      if (sql.startsWith('SELECT app.control_outbox(')) return { rows: [{ changed: true }], rowCount: 1 };
+      if (sql.includes('FROM app.lock_outbox_for_history(')) return { rows: [{ status: 'dead_letter', claimed_at: null }], rowCount: 1 };
       if (sql.includes('FROM app.recovery_message_event')) return { rows: history.map((kind, i) => ({ kind, revision: i + 1, command_id: id(50), request_hash: 'c'.repeat(64), actor_membership_id: actor.membershipId })), rowCount: history.length };
       if (sql.includes('FROM app.action_attempt')) return { rows: [{ id: id(90), attempt_number: 5, outcome: 'failed', error_code: 'FAKE_BLOCKED_CHANGED' }], rowCount: 1 };
       throw new Error(`Unexpected SQL: ${sql}`);

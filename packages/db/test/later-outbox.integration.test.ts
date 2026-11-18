@@ -110,7 +110,8 @@ beforeAll(async () => {
   });
   await postgres.initialise();
   await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: adminCredential });
+  await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: adminCredential });
   await migrate(admin);
   await admin.query(`
     INSERT INTO control_plane.tenant(id) VALUES('${TENANT}');
@@ -123,8 +124,8 @@ beforeAll(async () => {
     CREATE ROLE outbox_infrastructure LOGIN PASSWORD '${infrastructureCredential}' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
     GRANT jobguard_infrastructure TO outbox_infrastructure;
   `);
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "outbox_runtime", password: runtimeCredential, application_name: "outbox-test-business-worker", max: 5 });
-  infrastructure = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "outbox_infrastructure", password: infrastructureCredential });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "outbox_runtime", password: runtimeCredential, application_name: "outbox-test-business-worker", max: 5 });
+  infrastructure = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "outbox_infrastructure", password: infrastructureCredential });
   admin.on("error", () => undefined);
   runtime.on("error", () => undefined);
   infrastructure.on("error", () => undefined);
@@ -262,7 +263,7 @@ describe("LATER-B9 PostgreSQL outcome guarantees", () => {
     expect(calls).toBe(0); expect(await events(action.id)).toHaveLength(0);
     await admin.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1", [action.id]);
     await Promise.all([executor.execute(context, action.id), executor.execute(context, action.id)]);
-    expect(calls).toBe(1); expect(await events(action.id)).toHaveLength(1);
+    expect(calls).toBe(1); expect((await events(action.id)).map(event => event.event_type)).toEqual(["outbox.claimed", "outbox.succeeded"]);
   });
   it("L019 safeRetry cannot release unknown; concurrent reconciliation records evidence once", async () => {
     const action = await appendAction();
@@ -275,15 +276,15 @@ describe("LATER-B9 PostgreSQL outcome guarantees", () => {
     fake.reconcile = async () => { if (++arrived === 2) release(); await barrier; return "not_found"; };
     await Promise.all([reconcileOutbox(runtime, context, action.id, fake), reconcileOutbox(runtime, context, action.id, fake)]);
     expect(await statusOf(action.id)).toBe("retryable");
-    const history = await events(action.id); expect(history).toHaveLength(2);
-    expect(history[1].payload.references.reconciliation).toBe("not_found");
+    const history = await events(action.id); expect(history.map(event => event.event_type)).toEqual(["outbox.claimed", "outbox.outcome_unknown", "outbox.retryable"]);
+    expect(history[2].payload.references.reconciliation).toBe("not_found");
   });
-  it.each(["succeeded", "retryable", "outcome_unknown"] as const)("L020 committed %s has one event; duplicate execution has none", async kind => {
+  it.each(["succeeded", "retryable", "outcome_unknown"] as const)("L020 committed %s has one outcome event; duplicate execution has none", async kind => {
     const action = await appendAction();
     const fake = adapter(async () => kind === "succeeded" ? { kind, providerReference: "synthetic" } : { kind, code: "synthetic" });
     const executor = new ActionExecutor(runtime, new Map([[fake.name, fake]]), telemetry);
     await executor.execute(context, action.id); await executor.execute(context, action.id);
-    expect(await events(action.id)).toEqual([{ event_type: `outbox.${kind}`, payload: expect.any(Object) }]);
+    expect(await events(action.id)).toEqual([{ event_type: "outbox.claimed", payload: expect.any(Object) }, { event_type: `outbox.${kind}`, payload: expect.any(Object) }]);
   });
   it("L020 refusal is audited and invalid operator command rolls back with no event", async () => {
     const action = await appendAction({ expiresAt: "2000-01-01T00:00:00Z" });
@@ -296,11 +297,11 @@ describe("LATER-B9 PostgreSQL outcome guarantees", () => {
   it("L020 audit failure rolls back durable outcome and attempt together", async () => {
     const action = await appendAction();
     await admin.query(`CREATE FUNCTION app.later_b9_reject_audit() RETURNS trigger LANGUAGE plpgsql AS $$
-      BEGIN IF NEW.subject_ref='${action.id}' THEN RAISE EXCEPTION 'synthetic audit failure'; END IF; RETURN NEW; END $$;
+      BEGIN IF NEW.subject_ref='${action.id}' AND NEW.event_type='outbox.succeeded' THEN RAISE EXCEPTION 'synthetic audit failure'; END IF; RETURN NEW; END $$;
       CREATE TRIGGER later_b9_reject_audit BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION app.later_b9_reject_audit()`);
     const fake = adapter(async () => ({ kind: "succeeded", providerReference: "synthetic" }));
     await expect(new ActionExecutor(runtime, new Map([[fake.name, fake]]), telemetry).execute(context, action.id)).rejects.toThrow("synthetic audit failure");
-    expect(await statusOf(action.id)).toBe("executing"); expect(await events(action.id)).toHaveLength(0);
+    expect(await statusOf(action.id)).toBe("executing"); expect((await events(action.id)).map(event => event.event_type)).toEqual(["outbox.claimed"]);
     const attempts = await admin.query("SELECT outcome FROM app.action_attempt WHERE action_id=$1", [action.id]);
     expect(attempts.rows).toEqual([{ outcome: "started" }]);
   });

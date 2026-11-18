@@ -230,3 +230,6 @@ export * from "./northside-photo-storage.js";
 export * from "./firm-profile-repository.js";
 
 export * from "./job-proof-statement.js";
+
+export * from "./worker-action-executor.js";
+export { closeOutboundWorkerPool } from "./worker-pool.js";

@@ -1,68 +1,25 @@
-import type { AuditEvent } from "./audit.js";
-import { fakeAuditAppend, fakeOutboxAuditProbe } from "./audit-protocol-test-fixture.js";
+import { workerProtocolFixture } from "./worker-protocol-test-fixture.js";
+import { outboundWorkerPool } from "./worker-pool.js";
 import { randomUUID } from "node:crypto";
-import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 import { ActionExecutor, operateOutbox, reconcileOutbox, type FakeDeliveryResult, type OutboundAdapter } from "./outbox.js";
 import { verifiedTenantContextForQueuedJob, verifiedTenantContextFromMembership, type AuthenticatedMembership } from "./tenant-context.js";
 
-// Transaction protocol double; PostgreSQL predicates and concurrency are covered separately.
-function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succeeded", providerReference: "synthetic" }, installed = false, bound = false) {
-  const tenant = randomUUID(), id = randomUUID();
-  const member = randomUUID();
-  const context = bound ? verifiedTenantContextFromMembership({ tenantId: tenant, membershipId: member, identityUserId: randomUUID() } as AuthenticatedMembership, { kind: "real", credential: "a".repeat(64) }) : verifiedTenantContextForQueuedJob(tenant);
-  const row = { id, status, adapter: "fake_capture", authorization_id: randomUUID(),
-    provider_effect_key: "synthetic", action_type: "send_quote", recipient: null,
-    content_hash: "a".repeat(64), immutable_content: "synthetic", aggregate_revision: 1,
-    amount_pence: null, currency: null, policy_version: "synthetic.v1",
-    authorization_expires_at: new Date("2099-01-01"), created_at: new Date(),
-    next_attempt_at: new Date(0), claimed_at: new Date(0), updated_at: new Date(0) };
-  let audit: AuditEvent[] = [], snapshot: { row: typeof row; audit: AuditEvent[] };
-  let inTransaction = false, failAudit = false, claimsEnabled = true;
-  const query = vi.fn(async (sql: string, values: unknown[] = []) => {
-    if (sql === "SELECT app.bind_request($1, $2, $3)") return { rows: [] };
-    if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: member, tenant }] };
-    if (sql === "BEGIN") { snapshot = { row: { ...row }, audit: [...audit] }; inTransaction = true; }
-    if (sql === "COMMIT") inTransaction = false;
-    if (sql === "ROLLBACK") { Object.assign(row, snapshot.row); audit = snapshot.audit; inTransaction = false; }
-    if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: claimsEnabled }] };
-    if (sql.startsWith("SELECT o.*")) {
-      const dueGuard = sql.includes("o.next_attempt_at<=clock_timestamp()");
-      return { rows: dueGuard && row.status !== "executing" && row.next_attempt_at.getTime() > Date.now() ? [] : [{ ...row }], rowCount: 1 };
-    }
-    if (sql.startsWith("SELECT status") || sql.startsWith("SELECT provider_effect_key")) return { rows: [{ ...row }], rowCount: 1 };
-    if (sql.startsWith("SELECT count(*)")) return { rows: [{ n: 0 }], rowCount: 1 };
-    if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return { rows: [], rowCount: 1 };
-    if (sql.startsWith("SELECT nullif")) return { rows: [{ tenant_id: tenant }], rowCount: 1 };
-    const probe = fakeOutboxAuditProbe(sql, installed);
-    if (probe) return probe;
-    const bridge = sql === "SELECT * FROM app.lp6e_append_outbox_audit($1::jsonb)";
-    if ((installed && bridge) || sql.includes("FROM app.append_audit(")) {
-      if (failAudit) throw new Error("synthetic audit failure");
-      const events = fakeAuditAppend(bridge ? JSON.stringify([JSON.parse(String(values[0]))]) : String(values[0]), tenant);
-      if (installed) for (const event of events) {
-        event.version = "audit.v3";
-        event.actorRef = "system:outbox";
-        event.payload.references = { ...event.payload.references, auditActorKind: bound ? "bound_member" : "system", auditActorRef: bound ? `membership:${member}` : "system:database:fixture_worker" };
-      }
-      audit.push(...events);
-      return { rows: events, rowCount: events.length };
-    }
-    if (sql.startsWith("UPDATE app.action_outbox")) {
-      if (sql.includes("AND status='outcome_unknown'") && row.status !== "outcome_unknown") return { rows: [], rowCount: 0 };
-      row.status = sql.includes("SET status=$2") ? String(values[1]) : /SET status='([^']+)'/u.exec(sql)![1]!;
-    }
-    if (/^(BEGIN|COMMIT|ROLLBACK|UPDATE |INSERT |SELECT set_config)/u.test(sql)) return { rows: [], rowCount: 1 };
-    throw new Error(`Unexpected SQL: ${sql}`);
-  });
-  const pool = { connect: async () => ({ query, release: () => undefined }) } as unknown as Pool;
+vi.mock("./worker-pool.js", () => ({ outboundWorkerPool: vi.fn() }));
+function fixture(status = "pending", result: FakeDeliveryResult = { kind: "succeeded", providerReference: "synthetic" }, bound = false) {
+  const tenant = randomUUID(), membershipId = randomUUID();
+  const context = bound ? verifiedTenantContextFromMembership(
+    { tenantId: tenant, membershipId, identityUserId: randomUUID() } as AuthenticatedMembership,
+    { kind: "real", credential: "a".repeat(64) },
+  ) : verifiedTenantContextForQueuedJob(tenant);
+  const f = workerProtocolFixture({ tenant_id: tenant, status }, bound ? membershipId : undefined);
+  vi.mocked(outboundWorkerPool).mockResolvedValue(f.pool);
   const adapter: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false,
-    deliver: vi.fn(async () => { expect(inTransaction).toBe(false); return result; }),
-    reconcile: vi.fn(async () => { expect(inTransaction).toBe(false); return "not_found" as const; }) };
-  return { row, context, id, pool, adapter, query, audit: () => audit,
-    failAudit: () => { failAudit = true; },
-    pause: () => { claimsEnabled = false; },
-    execute: () => new ActionExecutor(pool, new Map([[adapter.name, adapter]]), { emit: () => undefined }).execute(context, id) };
+    deliver: vi.fn(async () => { expect(f.state.inTransaction).toBe(false); return result; }),
+    reconcile: vi.fn(async () => { expect(f.state.inTransaction).toBe(false); return "not_found" as const; }) };
+  return { ...f, context, id: f.row.id, adapter, audit: () => f.audit,
+    failAudit: () => { f.state.auditFailure = true; }, pause: () => { f.state.enabled = false; },
+    execute: () => new ActionExecutor(f.pool, new Map([[adapter.name, adapter]]), { emit: () => undefined }).execute(context, f.row.id) };
 }
 
 describe("LATER-B9 synthetic outcome protocol", () => {
@@ -82,24 +39,34 @@ describe("LATER-B9 synthetic outcome protocol", () => {
     const f = fixture("retryable"); f.row.next_attempt_at = new Date("2099-01-01");
     await f.execute(); expect(f.adapter.deliver).not.toHaveBeenCalled(); expect(f.audit()).toHaveLength(0);
   });
-  it.each<FakeDeliveryResult>([{ kind: "succeeded", providerReference: "synthetic" }, { kind: "retryable", code: "temporary" }, { kind: "outcome_unknown", code: "timeout" }])("L020 each committed outcome has one audit event: $kind", async result => {
+  it.each<FakeDeliveryResult>([{ kind: "succeeded", providerReference: "synthetic" }, { kind: "retryable", code: "temporary" }, { kind: "outcome_unknown", code: "timeout" }])("L020 each committed outcome has claim and result audit events: $kind", async result => {
     const f = fixture("pending", result); await f.execute();
-    expect(f.row.status).toBe(result.kind); expect(f.audit()).toHaveLength(1);
-    expect(f.audit()[0]!.eventType).toBe(`outbox.${result.kind}`);
+    expect(f.row.status).toBe(result.kind); expect(f.audit()).toHaveLength(2);
+    expect(f.audit()[1]!.eventType).toBe(`outbox.${result.kind}`);
   });
-  it("uses the installed bridge for unbound queue work", async () => {
-    const f = fixture("pending", undefined, true); await f.execute();
-    expect(f.audit()).toHaveLength(1);
-    expect(f.audit()[0]).toMatchObject({ version: "audit.v3", actorRef: "system:outbox",
-      eventType: "outbox.succeeded", payload: { references: { auditTrust: "lower_trust", auditActorKind: "system" } } });
-    expect(f.query).toHaveBeenCalledWith("SELECT * FROM app.lp6e_append_outbox_audit($1::jsonb)", [expect.any(String)]);
+  it("seals an unbound queue outcome through the checked worker", async () => {
+    const f = fixture();
+    await f.execute();
+    expect(f.audit().map(event => event.eventType)).toEqual(["outbox.claimed", "outbox.succeeded"]);
+    expect(f.audit()[1]!.payload.references).toMatchObject({ auditActorKind: "system" });
+    expect(f.query).toHaveBeenCalledWith("SELECT app.claim_worker_action($1::uuid,$2::text[]) AS claim", [f.id, [f.adapter.name]]);
+    expect(f.query).toHaveBeenCalledWith(
+      "SELECT app.complete_worker_action($1::uuid,$2::uuid,$3::text,$4::text,$5::text) AS completed",
+      [f.id, f.token, "succeeded", "synthetic", null],
+    );
     expect(f.query.mock.calls.some(([sql]) => sql.includes("FROM app.append_audit("))).toBe(false);
   });
-  it.each(["execute", "cancel", "retry", "reconcile"])("routes bound %s through ordinary append without the worker probe", async operation => {
-    const f = fixture(operation === "reconcile" ? "outcome_unknown" : operation === "execute" ? "pending" : "retryable", undefined, true, true);
+  it.each(["execute", "reconcile"] as const)("routes bound %s through the separate worker without appending as the request actor", async operation => {
+    const f = fixture(operation === "reconcile" ? "outcome_unknown" : "pending", undefined, true);
     if (operation === "execute") await f.execute();
-    else if (operation === "reconcile") await reconcileOutbox(f.pool, f.context, f.id, f.adapter);
-    else await operateOutbox(f.pool, f.context, f.id, operation as "cancel" | "retry");
+    else await reconcileOutbox(f.pool, f.context, f.id, f.adapter);
+    expect(f.audit().at(-1)!.payload.references).toMatchObject({auditActorKind: "system"});
+    expect(f.query.mock.calls.some(([sql]) => sql.includes("FROM app.append_audit("))).toBe(false);
+    expect(outboundWorkerPool).toHaveBeenCalledWith(f.pool);
+  });
+  it.each(["cancel", "retry"] as const)("routes bound %s through ordinary append without the worker probe", async operation => {
+    const f = fixture("retryable", undefined, true);
+    await operateOutbox(f.pool, f.context, f.id, operation);
     expect(f.audit()).toHaveLength(1);
     expect(f.audit()[0]!.payload.references).toMatchObject({auditActorKind:"bound_member"});
     expect(f.query.mock.calls.some(([sql]) => sql.includes("to_regprocedure") || sql.includes("FROM app.lp6e_append_outbox_audit("))).toBe(false);
@@ -112,9 +79,9 @@ describe("LATER-B9 synthetic outcome protocol", () => {
   it("L020 stale claim becomes unknown with one audit event", async () => {
     const f = fixture("executing"); await f.execute(); expect(f.row.status).toBe("outcome_unknown"); expect(f.audit()).toHaveLength(1);
   });
-  it.each([false, true])("L020 audit failure rolls back outcome (bridge installed=%s)", async installed => {
-    const f = fixture("pending", undefined, installed); f.failAudit(); await expect(f.execute()).rejects.toThrow("synthetic audit failure");
-    expect(f.row.status).toBe("executing"); expect(f.audit()).toHaveLength(0);
+  it.each([false, true])("L020 audit failure rolls back claim (bound=%s)", async bound => {
+    const f = fixture("pending", undefined, bound); f.failAudit(); await expect(f.execute()).rejects.toThrow("synthetic audit failure");
+    expect(f.row.status).toBe("pending"); expect(f.audit()).toHaveLength(0);
   });
   it.each(["retry", "cancel"] as const)("L020 operator %s commits one audit event", async command => {
     const f = fixture("retryable"); await operateOutbox(f.pool, f.context, f.id, command); expect(f.audit()).toHaveLength(1);

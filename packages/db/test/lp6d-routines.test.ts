@@ -123,7 +123,8 @@ it("converts the invitation bridge and withdraws direct authorization revocation
     "acl|routine|function:app.lp6e_request_binding_present()|jobguard_migration|EXECUTE|-",
     "owner|routine|function:app.lp6e_request_binding_present()|jobguard_binding_owner",
   ]);
-  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding" && !presenceEntries.includes(e))).toHaveLength(30); // r11: + ClientViewExtra binder and scope check (owner + EXECUTE each) and the escalation worker (owner + runtime EXECUTE); LP-10 sink hold: + the actor-less recovery delivery worker (owner + runtime EXECUTE)
+  expect(inventory.entries.filter(e => e.group === "a-lp6d-routine-binding" && !presenceEntries.includes(e))).toHaveLength(28);
+  expect(inventory.entries.some(e => e.key === "acl|routine|function:app.lp6d_recovery_message_sink_worker(uuid,text)|jobguard_runtime|EXECUTE|-")).toBe(false);
   expect(inventory.entries.some(e => e.key.startsWith("acl|routine|function:app.lp6_delegated_actor(") && e.key.includes("|jobguard_migration|"))).toBe(false);
 });
 

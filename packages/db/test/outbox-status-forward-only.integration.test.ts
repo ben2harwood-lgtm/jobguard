@@ -11,9 +11,9 @@ import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const tenant = randomUUID(), account = randomUUID(), user = randomUUID(), member = randomUUID();
-const context = testTenantContext(tenant);
+const context = testTenantContext(tenant, { membershipId: member });
 const trigger = "action_outbox_status_forward_only";
-let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, databaseDir: string;
+let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, statusProbe: Pool, databaseDir: string;
 
 beforeAll(async () => {
   databaseDir = await mkdtemp(join(tmpdir(), "jobguard-outbox-forward-"));
@@ -32,13 +32,19 @@ beforeAll(async () => {
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [member, tenant, account, user]);
   await admin.query(`CREATE ROLE outbox_forward_runtime LOGIN PASSWORD 'runtime-only'
     NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
-    GRANT jobguard_runtime TO outbox_forward_runtime`);
+    GRANT jobguard_runtime TO outbox_forward_runtime;
+    CREATE ROLE outbox_forward_probe LOGIN PASSWORD 'probe-only'
+    NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
+    GRANT jobguard_runtime TO outbox_forward_probe;
+    GRANT UPDATE(status) ON app.action_outbox TO outbox_forward_probe`);
   runtime = new Pool({ host: "127.0.0.1", port, database: "postgres",
     user: "outbox_forward_runtime", password: "runtime-only", max: 2 });
+  statusProbe = new Pool({ host: "127.0.0.1", port, database: "postgres",
+    user: "outbox_forward_probe", password: "probe-only", max: 1 });
 }, 120_000);
 
 afterAll(async () => {
-  await closeTestPools(runtime, admin);
+  await closeTestPools(statusProbe, runtime, admin);
   await postgres?.stop();
   if (databaseDir) await rm(databaseDir, { recursive: true, force: true });
 });
@@ -69,10 +75,12 @@ function worker(deliver: OutboundAdapter["deliver"], reconcile: OutboundAdapter[
 }
 const snapshot = (id: string) => withTenant(runtime, context, async db =>
   (await db.$client.query("SELECT * FROM app.action_outbox WHERE id=$1", [id])).rows[0]);
-const due = (id: string) => withTenant(runtime, context, async db => {
+const due = (id: string) => withTenant(admin, context, async db => {
   await db.$client.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1", [id]);
 });
-const changeStatus = (id: string, status: string) => withTenant(runtime, context, async db => {
+// LP-10 withdraws runtime status writes. The probe tests the trigger itself
+// with a column grant and without the migration owner's maintenance exemption.
+const changeStatus = (id: string, status: string) => withTenant(statusProbe, context, async db => {
   await db.$client.query("UPDATE app.action_outbox SET status=$2 WHERE id=$1", [id, status]);
 });
 
@@ -147,7 +155,7 @@ describe("LATER-SAFETY-125 outbox status transitions", () => {
   it.each(["succeeded", "cancelled", "dead_letter"] as const)("refuses %s reset without changing the row or repeating an effect", async status => {
     const action = await terminalAction(status);
     const before = await snapshot(action.id), calls = action.calls();
-    await refusesReset((sql, params) => withTenant(runtime, context, db => db.$client.query(sql, params)), action.id);
+    await refusesReset((sql, params) => withTenant(statusProbe, context, db => db.$client.query(sql, params)), action.id);
     expect(await snapshot(action.id)).toEqual(before);
     await action.executor.execute(context, action.id);
     expect(action.calls()).toBe(calls);
@@ -189,7 +197,7 @@ describe("LATER-SAFETY-125 outbox status transitions", () => {
       // Isolated transactional scratch schema state; rollback restores trigger and row.
       await scratch.query("BEGIN");
       await scratch.query(`DROP TRIGGER ${trigger} ON app.action_outbox`);
-      await scratch.query("SET LOCAL ROLE jobguard_runtime");
+      await scratch.query("SET LOCAL SESSION AUTHORIZATION outbox_forward_probe");
       await scratch.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
       await expect(refusesReset((sql, params) => scratch.query(sql, params), action.id))
         .rejects.toThrow(/promise resolved/u);
@@ -199,6 +207,6 @@ describe("LATER-SAFETY-125 outbox status transitions", () => {
       scratch.release();
     }
     expect(await snapshot(action.id)).toEqual(before);
-    await refusesReset((sql, params) => withTenant(runtime, context, db => db.$client.query(sql, params)), action.id);
+    await refusesReset((sql, params) => withTenant(statusProbe, context, db => db.$client.query(sql, params)), action.id);
   });
 });

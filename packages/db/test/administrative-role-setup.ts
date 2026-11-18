@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { expect, vi } from "vitest";
+import { closeWorkerFixtureCluster, registerWorkerFixtureCluster, workerFixturePool } from "./worker-login-fixture.js";
 
 // Tests that execute migration SQL directly still need the administrative
 // prerequisite. This starts real PostgreSQL and provisions cluster roles only;
@@ -15,6 +16,12 @@ const clusterAdmins = new Map<number, {user:string;password:string}>();
 // not per filename/migration list, so mixed old/current databases stay honest.
 // Protocol/unit doubles retain the unwrapped production module.
 if (testPath?.endsWith(".integration.test.ts")) {
+  // Existing journey assertions execute against a genuinely separate, table-free
+  // worker login. The fixture supplies credentials; no production code derives them.
+  vi.doMock("../src/worker-pool.js", async () => {
+    const actual = await vi.importActual<typeof import("../src/worker-pool.js")>("../src/worker-pool.js");
+    return { ...actual, outboundWorkerPool: workerFixturePool };
+  });
   vi.doMock("../src/tenant-context.js", async () => {
     const actual = await vi.importActual<typeof import("../src/tenant-context.js")>("../src/tenant-context.js");
     const scopes = new WeakMap<object, Map<string, object>>();
@@ -127,14 +134,27 @@ if (testPath?.endsWith(".integration.test.ts")) {
 }
 if (testPath) {
   const start = EmbeddedPostgres.prototype.start;
+  const stop = EmbeddedPostgres.prototype.stop;
+  const clusterPort = (postgres: EmbeddedPostgres) =>
+    (postgres as unknown as { options: { port: number } }).options.port;
+  EmbeddedPostgres.prototype.stop = async function () {
+    const port = clusterPort(this);
+    clusterAdmins.delete(port);
+    try {
+      await closeWorkerFixtureCluster(port);
+    } finally {
+      await stop.call(this);
+    }
+  };
   EmbeddedPostgres.prototype.start = async function () {
     await start.call(this);
     const { port, user, password } = (this as unknown as { options: { port: number; user: string; password: string } }).options;
     clusterAdmins.set(port,{user,password});
+    registerWorkerFixtureCluster(port, {user,password});
     if (readFileSync(testPath, "utf8").includes("bootstrapSyntheticDemo")) return;
     const admin = new Pool({ host: "127.0.0.1", port, user, password, database: "postgres" });
     try {
-      for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) {
+      for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_worker"]) {
         await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN
           CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
           END IF; END $$`);

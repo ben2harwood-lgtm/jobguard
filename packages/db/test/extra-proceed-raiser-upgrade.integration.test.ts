@@ -66,7 +66,7 @@ it("populated upgrade retains a colleague's old statement byte-for-byte and its 
   [s.jobId, s.extraId, a.membershipId, JSON.stringify(ownBody)])).rows[0].result)).toEqual(own);
  const after = await snapshot(db.admin);
  await migrate(db.admin); await migrate(db.admin);
- expect(await snapshot(db.admin)).toEqual(after);
+ expect(await snapshot(db.admin)).toEqual({ ...after, "control_plane.worker_action_binding": [] });
  expect(await breaches()).toEqual([s.requestId]);
 }, 300_000);
 
