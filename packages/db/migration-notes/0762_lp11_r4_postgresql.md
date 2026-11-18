@@ -2084,6 +2084,53 @@ The table follows original r4 non-held assertion failures by file and test name.
 
 The 11 setup failures include `test/sor-suggestion-confirmation.test.ts`, which could not resolve `@jobguard/core` from the frozen worktree. The subsequent worktree has the workspace dependency link. The measured setup count includes this tooling failure. The held exceptions were identical by count to the preceding full round.
 
+## r5 recovery worker terms and predecessor fixtures
+
+The recovery-message worker claimed the approved action, but `app.guard_recovery_pursuit_terms` refused the sink insert with `RECOVERY_TERMS_NOT_APPROVED`. Its query could see the case and job but could not see the case's persisted `recovery_case_terms_approval`. The existing committed-signal and worker-binding check now covers that SELECT only for the action's exact job and case. The tenant policy retains its role membership, mode and proposed-row check. The delivery and first follow-up test passed, and the PostgreSQL migration, catalogue and tenant-policy batch passed 89 of 89. The full checked-product round had 79 `RECOVERY_MESSAGE_BLOCKED` assertions across three files. The current recovery batch measures what remains after the terms check passes.
+
+Two predecessor fixture paths were running the post-0762 shadow binder against a schema from before that routine existed. They now seed certificates and manifests with the predecessor's shadow role and original triggers. All four focused upgrade assertions passed, including the cross-job movement attacks and the populated final-check snapshot.
+
+```sh
+nice -n 5 pnpm --filter @jobguard/db exec vitest run test/recovery-follow-up.integration.test.ts -t 'is a reviewed act bound' --maxWorkers=1 --reporter=default
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/migration-proof-loader.test.ts --maxWorkers=1 --reporter=default
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/final-check-upgrade.integration.test.ts test/receipt-movement-job-fk-upgrade.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-historical-shadow-fixture-results.json
+```
+
+### Bound setup and mutation controls
+
+Fixtures use the owner membership they seeded when seeding recovery messages, source evidence and outbox rows. The recovery activation proxies reuse an existing binding only when both its tenant and actor match the fixture. The outbox-discovery wrong-company case still runs as an independently bound owner of the foreign company. Raw recovery clock and immutability checks likewise bind their exact fixture actor before running the original operations under the original database roles.
+
+- Recovery message attempt isolation passed 2 of 2, job source authority and isolation passed 9 of 9, and outbox discovery passed 5 of 5. These files previously stopped during setup.
+- UIWIRE-10 and UIWIRE-11 passed 4 of 4 after their synthetic worker fixture used the synthetic database. Their authority checks and PostgreSQL roles are unchanged.
+- Recovery-record immutability passed 34 of 34, including scratch removals that prove the exact refusal assertions reach the immutable triggers. Before the bound owner change, 32 assertions failed after the delivery fixture began working.
+- MIGFIX-8 passed 7 of 7. Before the bound runtime fixture change, five race assertions failed when the raw clock writer or scheduler reached tenant RLS with only a caller setting.
+- Variation state and cross-tenant isolation passed 6 of 6 using the actual fixture owner for each tenant. The customer-evidence approval fixture passed 9 of 9 using its bound owner for source setup, with all six exact refusal assertions preserved.
+- The initial recovery-message fixture rerun completed its setup and exposed 31 failed assertions of 108 before the worker terms patch was loaded. The later run measures the effect of that patch independently.
+
+```sh
+nice -n 9 pnpm --filter @jobguard/db exec vitest run test/recovery-messages.integration.test.ts test/later-recovery-message-attempt.integration.test.ts test/outbox-discovery.integration.test.ts test/job-sources-authority.integration.test.ts test/job-sources-isolation.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-fixture-activation-final-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/UIWIRE-10.integration.test.ts test/UIWIRE-11.integration.test.ts test/recovery-record-immutable.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-uiwire-immutable-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/recovery-record-immutable.integration.test.ts --maxWorkers=1 --reporter=default
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migfix-8.integration.test.ts --maxWorkers=1 --reporter=default
+nice -n 9 pnpm --filter @jobguard/db exec vitest run test/variation-state-transition.integration.test.ts test/later-variation-isolation.integration.test.ts test/customer-evidence-approval.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-variation-scope-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/customer-evidence-approval.integration.test.ts --maxWorkers=1 --reporter=default
+```
+
+## r5 application and guard verification
+
+At `6c07625f3`, the API unit suite passed 4,507 of 4,509 tests across 261 files. The two failures in `apps/api/src/auth/context-boundary.test.ts` both report the inherited LP-10 predecessor-delivery callback at `packages/db/src/demo-seed.ts:107`, introduced by `7d3938aa3`. The assertions are **holds for the real repository: only the bridge, its definition, the worker queue, the retained synthetic sandbox and the rehearsal construct a tenant context** and **pins the approved list to files that exist and still construct, and it covers every file the real tree constructs in**. The pinned scanner and its hashes are unchanged.
+
+The web unit suite passed 3,618 of 3,618 tests in 252 files. Workspace typecheck passed 7 of 7 tasks. The commercial-integrity guards each returned zero diagnostics, and all 253 guard tests passed.
+
+```sh
+nice -n 4 pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --testTimeout=30000 --exclude '**/*.integration.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-final-code-api-results.json
+nice -n 4 pnpm --filter @jobguard/web test --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/database.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-final-code-web-results.json
+pnpm typecheck
+node tools/commercial-integrity-current-source-guard.mjs
+node tools/commercial-integrity-boundary.mjs
+node --test --test-concurrency=1 tools/commercial-integrity-{current-source-guard,boundary}.test.mjs
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

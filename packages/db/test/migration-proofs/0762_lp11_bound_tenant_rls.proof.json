@@ -9499,7 +9499,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.recovery_case_terms_approval|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|4433767ed92661df"
+      "after": "app.recovery_case_terms_approval|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|e2bfb1cf63d32bdb"
     },
     {
       "section": "policies",
@@ -21973,7 +21973,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration,jobguard_runtime}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_recovery_worker_tenant(job_id, case_id, NULL::uuid, NULL::uuid, 'row'::text)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
       }
     },

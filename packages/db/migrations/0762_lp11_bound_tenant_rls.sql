@@ -2810,6 +2810,7 @@ BEGIN
   -- source-validation reads never relax the proposed-row checks.
   IF policy_row.nspname='app' AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles)
    AND policy_row.relname IN('recovery_message','recovery_case','recovery_claim_revision','recovery_case_event',
+    'recovery_case_terms_approval',
     'landing_allocation','landing_reversal','quote_acceptance','quote_acceptance_sequence','quote_document_version',
     'evidence_object','evidence_upload','evidence_invalidation','synthetic_evidence_original','variation_revision',
     'variation_approval','supplier_document','supplier_document_version','customer_invoice','evidence_pack_revision',
@@ -2825,6 +2826,7 @@ BEGIN
       WHEN 'recovery_follow_up_reminder' THEN 'job_id,case_id,message_id,NULL,''row'''
       WHEN 'recovery_claim_revision' THEN 'job_id,case_id,NULL,NULL,''row'''
       WHEN 'recovery_case_event' THEN 'job_id,case_id,NULL,NULL,''row'''
+      WHEN 'recovery_case_terms_approval' THEN 'job_id,case_id,NULL,NULL,''row'''
       WHEN 'landing_allocation' THEN 'job_id,case_id,NULL,NULL,''row'''
       WHEN 'evidence_pack_revision' THEN 'job_id,case_id,NULL,NULL,''row'''
       WHEN 'evidence_pack_attachment_approval' THEN 'job_id,case_id,NULL,NULL,''row'''

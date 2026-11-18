@@ -106,7 +106,16 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  const classifications:FinalCheckClassification[]=kind==="F7"?signals.map(signalId=>({signalId,expectedRevision:signalRevisions?.get(signalId)??0,outcome:signalId===hiddenSignal?"not_enough_evidence" as const:"reveal" as const,references:[],comparisons:{baselineItemIds:[scope],captureIds:[],lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}})):[];
  const run=await worker.reconcile(workerContext,jobId,manifest.id,classifications) as {runId:string;lockId:string};
  // Reconciliation makes the result available; publication authorizes invoicing.
- await new FinalCheckCompletionRepository(f.shadow).publish(workerContext,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
+ const checkId=randomUUID();
+ const boundShadow=(await f.admin.query("SELECT to_regprocedure('app.lp11_bind_shadow_job(uuid,uuid)') IS NOT NULL installed")).rows[0].installed;
+ if(boundShadow){
+  await new FinalCheckCompletionRepository(f.shadow).publish(workerContext,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId});
+ } else {
+  // Upgrade fixtures seed the predecessor's certificate with its original trigger and role.
+  await finalCheckTenant(f.shadow,context.tenantId,db=>db.query(
+   "INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,run_id,status) VALUES($1,$2,$3,$4,'completed')",
+   [context.tenantId,jobId,checkId,run.runId]));
+ }
  const issue=async(invoiceKind:"final"|"supplementary")=>locks.issueInvoice(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind,recipient:"practice-customer@example.invalid",issuedOn:"2026-10-28"});
  let main=sv6?.combined?null:await issue("final");let invoiceId=main?.invoiceId??"";
  if(kind==="F7"){

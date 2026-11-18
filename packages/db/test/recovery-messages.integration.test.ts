@@ -36,9 +36,13 @@ const reviewerOf = async () => ({ membershipId: fixture.memberId, identityUserId
  * owner, accepted document, authorization and lifecycle before binding v3. */
 async function activatePursuitFixture(client: import("pg").PoolClient, tenant: string, job: string, expected: number) {
   const row = (await client.query("SELECT d.id,d.document_version,d.content_hash,m.id actor FROM app.quote_document_version d JOIN app.membership m ON m.tenant_id=d.tenant_id AND m.role='owner' AND m.revoked_at IS NULL WHERE d.tenant_id=$1 AND d.job_id=$2", [tenant, job])).rows[0];
-  const credential = createHash('sha256').update(randomUUID()).digest('hex');
-  await testBoundTenantContext(client as unknown as Pool, tenant, row.actor, credential);
-  await client.query("SELECT app.bind_request('real',$1,$2)",[credential,tenant]);
+  const { bound } = (await client.query("SELECT app.lp6e_request_binding_present() bound")).rows[0];
+  if (bound) {
+    const { matches } = (await client.query("SELECT (app.current_tenant(), app.current_actor())=($1::uuid,$2::uuid) matches", [tenant, row.actor])).rows[0];
+    if (!matches) throw new Error("Evidence fixture is bound to a different actor");
+  } else {
+    await bindTestClient(client, client, tenant, row.actor);
+  }
   const command = randomUUID(), significant = {version:'command.v1',commandId:command,commandType:'job.switch_live',semanticKey:`pursuit-fixture:${job}`,actorMembershipId:row.actor,subjectType:'job',subjectRef:job,
     action:{actionType:'job.switch_live',recipient:null,contentHash:row.content_hash,aggregateRevision:row.document_version,amountPence:null,currency:null,policyVersion:'synthetic_demo_activation.v3',expiresAt:new Date(Date.now()+3600000).toISOString()}};
   const claim=(await client.query("SELECT app.begin_command($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb) result",['command.v1',command,'job.switch_live',significant.semanticKey,{tenantId:tenant,actorMembershipId:row.actor,subjectType:'job',subjectRef:job},{aggregateRevision:row.document_version},significant])).rows[0].result;
@@ -63,7 +67,6 @@ async function seedPursuitFixture() {
             expect(args[7]).toBe('reference_fee_policy_v1');
             return activatePursuitFixture(target, String(args[0]), String(args[1]), Number(args[2]));
           }
-          if (sql.startsWith('INSERT INTO app.job_commercial_track(')) sql += ' ON CONFLICT DO NOTHING';
           return target.query(sql, args);
         };
       } });
