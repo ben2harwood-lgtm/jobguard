@@ -1,13 +1,15 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { EnterpriseIdentityRepository, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, prepareActivationFixtureV3, QuoteAcceptanceRepository, ActionExecutor, FakeRecoveryMessageAdapter, RecoveryMessageRepository, EvidencePackRepository, EvidenceService, FinalAccountLockRepository, PracticeInvoiceRepository, ProofCommandService, verifiedTenantContextFromMembership, verifiedTenantContextForQueuedJob, withTenant, type AuthenticatedMembership } from "../src/index.js";
+import { EnterpriseIdentityRepository, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, prepareActivationFixtureV3, QuoteAcceptanceRepository, FakeRecoveryMessageAdapter, RecoveryMessageRepository, EvidencePackRepository, EvidenceService, FinalAccountLockRepository, PracticeInvoiceRepository, ProofCommandService, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/index.js";
 import { LOCK_OWNER, LOCK_USER, seedAccount, publishFixtureCompletion } from "./sv5pre-fixtures.js";
 import { installLegacySyntheticPartyFixtures as installLegacyFixtures } from "./pool-test-utils.js";
 import { MemoryStorage, pngBytes } from "./site-extra-evidence-fixtures.js";
 import { auditActorAttribution, verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
+import { WorkerActionExecutor } from "../src/worker-action-executor.js";
+import { workerFixturePool } from "./worker-login-fixture.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 // The legacy fixture creates a trigger, so install it at most once per database.
 const legacyFixtureDatabases = new WeakSet<Pool>();
@@ -260,7 +262,11 @@ it("keeps product invoice, payment and proof writes compatible after 0758", asyn
     await locks.disposition(context,{jobId:a.jobId,actorMembershipId:LOCK_OWNER,commandId:randomUUID(),scopeItemId:a.scopeItemId,disposition:"done"});
     await locks.lock(context,a.input);
     // Only the synthetic detector result is fixture work; product writes use runtime.
-    await publishFixtureCompletion(practice.owner,practice.owner,a.tenantId,a.jobId);
+    const worker = `lp6e_shadow_${randomBytes(6).toString("hex")}`, password = randomBytes(32).toString("hex");
+    await practice.owner.query(`CREATE ROLE ${worker} LOGIN INHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '${password}'; GRANT jobguard_shadow TO ${worker}`);
+    const shadow = new Pool({...practice.owner.options,user:worker,password,max:1});
+    try { await publishFixtureCompletion(shadow,practice.owner,a.tenantId,a.jobId); }
+    finally { await shadow.end(); }
     const invoices = new PracticeInvoiceRepository(practice.runtime);
     const invoice = await invoices.issue(context,{jobId:a.jobId,finalAccountRevisionId:a.revisionId,
       actorMembershipId:LOCK_OWNER,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-11-06"});
@@ -345,13 +351,13 @@ it.each(["approval", "outbox success"])("commits recovery message %s through the
     const adapter = {name:fake.name,supportsProviderDeduplication:fake.supportsProviderDeduplication,
       deliver:(action:Parameters<typeof fake.deliver>[1]) => fake.deliver(context,action),
       reconcile:(key:string) => fake.reconcile(context,key)};
-    const executor = new ActionExecutor(db.runtime,new Map([[adapter.name,adapter]]),{emit:() => undefined});
+    const executor = new WorkerActionExecutor(await workerFixturePool(db.runtime),new Map([[adapter.name,adapter]]),{emit:() => undefined});
     const beforeWorker = (await chain(fixture.tenantId)).filter(e => e.eventType === "outbox.succeeded");
     expect(beforeWorker).toHaveLength(0);
-    await executor.execute(verifiedTenantContextForQueuedJob(fixture.tenantId),outboxId);
+    await executor.execute(outboxId);
     const afterWorker = await chain(fixture.tenantId);
     expect(afterWorker.filter(e => e.eventType === "outbox.succeeded")).toHaveLength(1);
-    await executor.execute(verifiedTenantContextForQueuedJob(fixture.tenantId),outboxId);
+    await executor.execute(outboxId);
     expect(await chain(fixture.tenantId)).toEqual(afterWorker);
     await messages.read(context,fixture.caseId);
     expect((await db.owner.query("SELECT status FROM app.action_outbox WHERE id=$1",[outboxId])).rows).toEqual([{status:"succeeded"}]);

@@ -2,7 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { appendAuditBatch, type AuditEventInput } from "../src/audit.js";
 import type { RecoveryMessageActor, RecoveryMessageView } from "../src/recovery-message-repository.js";
-import { verifiedTenantContextForQueuedJob, withTenant } from "../src/tenant-context.js";
+import { withTenant } from "../src/tenant-context.js";
+import { testTenantContext } from "./tenant-context-test-utils.js";
 
 /** Populate an approved message's historical facts before the worker routines exist.
  * The predecessor's guards validate every insert. The current repository exercises
@@ -18,7 +19,7 @@ export async function seedPredecessorRecoveryMessage(
   const command = randomUUID();
   const requestHash = createHash("sha256").update(command).digest("hex");
   const reference = `fake-recovery:${action}`;
-  await withTenant(owner, verifiedTenantContextForQueuedJob(tenant), async db => {
+  await withTenant(owner, testTenantContext(tenant, { membershipId: actor.membershipId }), async db => {
     const client = db.$client;
     let revision = view.revision;
     const audits: AuditEventInput[] = [];

@@ -52,13 +52,13 @@ describe("SV5PRE final-check registration", () => {
     vi.doMock("graphile-worker", async () => ({ ...await vi.importActual<Record<string, unknown>>("graphile-worker"), run: registered }));
     vi.doMock("@jobguard/db", async () => ({
       ...await vi.importActual<Record<string, unknown>>("@jobguard/db"),
-      ActionExecutor: class { execute = async () => undefined; },
+      WorkerActionExecutor: class { execute = async () => undefined; },
       ShadowObservationReader: class { assertTermsRelation = async () => undefined; },
       ShadowDetectionRepository: class {}, FixtureObservationSources: class {},
       FinalCheckRepository: class { manifest = unavailablePorts.read; begin = begin; },
     }));
     const listeners = vi.spyOn(process, "once").mockReturnValue(process);
-    for (const name of ["GRAPHILE_DATABASE_URL", "RUNTIME_DATABASE_URL", "SHADOW_DATABASE_URL"]) vi.stubEnv(name, "postgresql://localhost/sv5pre");
+    for (const name of ["GRAPHILE_DATABASE_URL", "RUNTIME_DATABASE_URL", "SHADOW_DATABASE_URL", "WORKER_DATABASE_URL"]) vi.stubEnv(name, "postgresql://localhost/sv5pre");
     vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
     try {
       vi.useFakeTimers({ toFake: ["Date"] });

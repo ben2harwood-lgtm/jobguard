@@ -25,7 +25,7 @@ beforeAll(async () => {
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin); fixture = await seedEvidencePackFixture(admin);
   await admin.query("CREATE ROLE evidence_pack_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO evidence_pack_login");
   runtime = new Pool({ host: '127.0.0.1', port, user: 'evidence_pack_login', password: 'synthetic', database: 'postgres' });
-  context = testTenantContext(fixture.tenantId);
+  context = testTenantContext(fixture.tenantId, { membershipId:fixture.memberId });
   repo = new EvidencePackRepository(runtime);
 }, 60_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); if (directory) await rm(directory, { recursive: true, force: true }); });

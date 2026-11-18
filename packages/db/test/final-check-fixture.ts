@@ -42,6 +42,7 @@ export async function seedFinalCheckJob(f:FinalCheckFixture){
  await f.admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional SV-5 builder')",[accountId,tenantId]);
  await f.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[FINAL_CHECK_ACTOR,tenantId,accountId,FINAL_CHECK_USER]);
  await f.admin.query("SELECT app.issue_practice_session($1)",[digest]);
+ const boundPolicies=(await f.admin.query("SELECT to_regprocedure('app.lp11_policy_tenant()') installed")).rows[0].installed;
  await finalCheckTenant(f.admin,tenantId,async db=>{
   await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional final check','draft',$3,'capture')",[jobId,tenantId,digest]);
   // Explicit fixture setup also works in browser clusters without legacy hooks.
@@ -54,7 +55,7 @@ export async function seedFinalCheckJob(f:FinalCheckFixture){
   await db.query("INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings) VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',100000,20000,120000,false,'[]')",[revisionId,tenantId,jobId,draftId,hash,baselineId]);
   await db.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional kitchen work',100000,1)",[lineId,tenantId,jobId,revisionId,baselineId,scopeItemId]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3",[revisionId,tenantId,draftId]);
- });
+ },boundPolicies ? {practiceDigest:digest} : undefined);
  // Upgrade suites also seed predecessor schemas without request binding or firm scope.
  const scoped=(await f.admin.query("SELECT to_regprocedure('app.final_check_request_scope(uuid)') IS NOT NULL installed")).rows[0].installed;
  const bindable=(await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed;

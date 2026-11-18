@@ -7,7 +7,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ActionExecutor, appendOutboundAction, ContractorRepository, EnterpriseIdentityRepository, IdentityRepository, MIGRATION_URLS, migrate, withTenant, verifyAuditChain, type OutboundAction, type OutboundAdapter, type AuditEvent, type AuthenticatedMembership } from "../src/index.js";
+import { ActionExecutor, appendOutboundAction, ContractorRepository, EnterpriseIdentityRepository, IdentityRepository, MIGRATION_URLS, migrate, withTenant, verifyAuditChain, isRequestBindingRefusal, verifiedTenantContextFromMembership, type OutboundAction, type OutboundAdapter, type AuditEvent, type AuthenticatedMembership } from "../src/index.js";
 import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
 import { resolveVerifiedTenantContext } from "../../../apps/api/src/auth/principal-bridge.js";
@@ -84,11 +84,20 @@ async function sessionMember(sessionToken: string, tenantId: string) {
   expect(principal).toBeDefined();
   const member = (await auth.findMembership(principal, tenantId))!;
   expect(member).toBeDefined();
-  return { tenantId, membershipId: member.id, identityUserId: principal.identityUserId } as AuthenticatedMembership;
+  const membership = { tenantId, membershipId: member.id, identityUserId: principal.identityUserId } as AuthenticatedMembership;
+  const context = verifiedTenantContextFromMembership(membership, { kind:"real", credential: auth.digest(`session:${sessionToken}`) });
+  return { ...membership, context };
 }
 
-async function permitted(member: AuthenticatedMembership, permission: string) {
-  return (await withTenant(runtime, testTenantContext(member.tenantId), db => db.$client.query<{ allowed: boolean }>("SELECT app.contractor_allowed($1,$2,$3) allowed", [member.membershipId, permission, member.tenantId]))).rows[0]!.allowed;
+async function permitted(member: Awaited<ReturnType<typeof sessionMember>>, permission: string) {
+  try {
+    return (await withTenant(runtime, member.context, db => db.$client.query<{ allowed: boolean }>(
+      "SELECT app.contractor_allowed($1,$2,$3) allowed", [member.membershipId, permission, member.tenantId],
+    ))).rows[0]!.allowed;
+  } catch (error) {
+    if (isRequestBindingRefusal(error)) return false;
+    throw error;
+  }
 }
 
 describe("ENT-10a / actual PostgreSQL identity trust boundary", () => {
@@ -154,7 +163,7 @@ describe("ENT-10a / actual PostgreSQL identity trust boundary", () => {
       await malformed.query("BEGIN; SET LOCAL ROLE jobguard_migration");
       expect((await malformed.query("SELECT * FROM identity.sso_connection")).rows).toEqual([]);
       await malformed.query("ROLLBACK");
-    } finally { malformed.release(); }
+    } finally { await malformed.query("ROLLBACK"); malformed.release(); }
     await expect(admin.query("INSERT INTO identity.verified_domain(tenant_id,connection_id,domain) VALUES($1,$2,$3)", [a.principal.tenantId, b.connectionId, `cross.${randomUUID()}.invalid`])).rejects.toMatchObject({ code: "23503" });
   });
 
@@ -372,7 +381,7 @@ describe("ENT-10a / actual PostgreSQL identity trust boundary", () => {
     const expiresAt = new Date(Date.now() + 600000);
     await admin.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'send_quote','customer@synthetic.invalid',$6,1,'synthetic.v1',$7)", [authorizationId, member.tenantId, decisionId, resolutionId, member.membershipId, contentHash, expiresAt]);
     const action: OutboundAction = { version: "outbound-action.v1", id: randomUUID(), authorizationId, adapter: "fake_capture", providerEffectKey: randomUUID(), actionType: "send_quote", recipient: "customer@synthetic.invalid", contentHash, immutableContent: content, aggregateRevision: 1, amountPence: null, currency: null, policyVersion: "synthetic.v1", authorizationExpiresAt: expiresAt };
-    await withTenant(runtime, testTenantContext(member.tenantId), db => appendOutboundAction(db, member.tenantId, action));
+    await withTenant(runtime, member.context, db => appendOutboundAction(db, member.tenantId, action));
     await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [member.tenantId, member.membershipId]);
     let calls = 0;
     const fake: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false, deliver: async () => { calls++; return { kind: "succeeded", providerReference: "synthetic:unexpected" }; }, reconcile: async () => "unknown" };

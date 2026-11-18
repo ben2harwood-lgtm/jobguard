@@ -10,7 +10,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { MIGRATION_URLS, migrate, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryEligibilityV3Repository, RecoveryPaymentPayerRepository, PracticeFeedRepository, withTenant, appendAuditBatch, readRecoveryEligibilityV3, type VerifiedTenantContext, type RecoveryEligibilityV3Review } from "../src/index.js";
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { evaluateRecoveryEligibilityV3, recoveryEligibilityCommandV3, recoveryEligibilityViewV3, recoveryFixtureDefinitionV3, RecoveryEligibilityV3Error } from "@jobguard/core";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
@@ -153,6 +153,9 @@ async function fixture(type="withheld_customer_payment",insurer=true,before=fals
  try{
   await evidenceClient.query("BEGIN");await evidenceClient.query("SET LOCAL ROLE jobguard_migration");
   await evidenceClient.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true)",[T,auth.digest]);
+  if ((await evidenceClient.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed) {
+   await evidenceClient.query("SELECT app.bind_request('practice',$1,$2)",[auth.digest,T]);
+  }
   await evidenceClient.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES($1,$2,$3,$4,$5,'application/pdf',1,'standard_evidence','verified','stored-version',now(),now()+interval '1 day')",[upload,T,jobId,objectKey,"a".repeat(64)]);
   await evidenceClient.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES($1,$2,$3,$4,'original','synthetic_bank_receipt',$5,'stored-version',$6,1,'application/pdf','standard_evidence',now(),now())",[evidence,T,upload,jobId,objectKey,"a".repeat(64)]);
   await evidenceClient.query("COMMIT");
@@ -378,7 +381,13 @@ it("[A4 DB12] an existing original evidence file from another tenant is refused 
  const client=await admin.connect();try{
   await client.query("BEGIN");await client.query("INSERT INTO control_plane.tenant(id)VALUES($1)",[tenant]);
   await client.query("INSERT INTO app.job(id,tenant_id,title)VALUES($1,$2,'Foreign evidence control')",[job,tenant]);
+  const account=randomUUID(),user=randomUUID(),membership=randomUUID(),credential=createHash("sha256").update(randomUUID()).digest("hex");
+  await client.query("INSERT INTO identity.identity_user(id) VALUES($1)",[user]);
+  await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional foreign evidence firm')",[account,tenant]);
+  await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[membership,tenant,account,user]);
+  await testBoundTenantContext(client,tenant,membership,credential);
   await client.query("SET LOCAL ROLE jobguard_migration");await client.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  await client.query("SELECT app.bind_request('real',$1,$2)",[credential,tenant]);
   await client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES($1,$2,$3,$4,$5,'application/pdf',1,'standard_evidence','verified','foreign-version',now(),now()+interval '1 day')",[upload,tenant,job,objectKey,"a".repeat(64)]);
   await client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES($1,$2,$3,$4,'original','synthetic_bank_receipt',$5,'foreign-version',$6,1,'application/pdf','standard_evidence',now(),now())",[evidence,tenant,upload,job,objectKey,"a".repeat(64)]);
   await client.query("COMMIT");

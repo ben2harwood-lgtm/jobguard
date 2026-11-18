@@ -12,12 +12,12 @@ import { RecoveryCaseRepository, RecoveryJoinError, type RecoveryCaseView } from
 import { appendAuditBatch, verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { withTenant, type TenantTransaction } from "../src/tenant-context.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 
 const tenantA = randomUUID(), tenantB = randomUUID(), jobA = randomUUID(), jobB = randomUUID(), otherJobA = randomUUID();
-const ctxA = testTenantContext(tenantA), ctxB = testTenantContext(tenantB);
 const member = () => ({ membershipId: randomUUID(), identityUserId: randomUUID() });
 const ownerA = member(), ownerB = member();
+const ctxA = testTenantContext(tenantA, ownerA), ctxB = testTenantContext(tenantB, ownerB);
 const login = "recovery_join_login", passphrase = randomUUID();
 const oldEnvironment = process.env.JOBGUARD_ENV;
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, repo: RecoveryCaseRepository, directory: string, port: number;
@@ -65,6 +65,7 @@ const tx = (client: PoolClient): TenantTransaction => ({ $client: client }) as T
 async function begin(client: PoolClient, tenant = tenantA) {
   await client.query("BEGIN");
   await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenant]);
+  await bindTestClient(admin, client, tenant, tenant === tenantA ? ownerA.membershipId : ownerB.membershipId);
 }
 async function callerFact(db: TenantTransaction, id: string) {
   await db.$client.query("INSERT INTO public.m4_8_s_pre_caller_fact(id,note) VALUES($1,'Synthetic caller row')", [id]);
@@ -256,8 +257,7 @@ it.each(["unset", "empty", "foreign", "malformed"] as const)(
       expect(await head()).toEqual(auditHead);
 
       // Every rejected-setting case has its own valid UUID control on the same client and command.
-      await client.query("BEGIN");
-      await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantA]);
+      await begin(client);
       await callerFact(db, factId);
       expect(await repo.commandInTransaction(db, ctxA, jobA, input, ownerA)).toEqual({ caseId: view.id, replayed: false });
       await assertJoinedVisible(db, view, input, factId);

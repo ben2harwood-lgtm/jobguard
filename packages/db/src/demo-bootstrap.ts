@@ -164,12 +164,15 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
     throw error;
   } finally {
     await client.query("RESET ROLE");
-    try { await client.query("REVOKE jobguard_session_lookup,jobguard_binding_owner FROM jobguard_migration"); }
+    try { await client.query("REVOKE jobguard_session_lookup FROM jobguard_migration"); }
     finally {
-      try { await client.query("REVOKE jobguard_command_writer FROM jobguard_migration"); }
+      try { await client.query("REVOKE jobguard_binding_owner FROM jobguard_migration"); }
       finally {
-        try { await client.query("REVOKE jobguard_audit_writer FROM jobguard_migration"); }
-        finally { await assertBindingOwnerHolders(client, administrator); }
+        try { await client.query("REVOKE jobguard_command_writer FROM jobguard_migration"); }
+        finally {
+          try { await client.query("REVOKE jobguard_audit_writer FROM jobguard_migration"); }
+          finally { await assertBindingOwnerHolders(client, administrator); }
+        }
       }
     }
   }
@@ -178,35 +181,27 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
 async function seedDatabase(client: PoolClient) {
   await client.query("BEGIN");
   try {
-    await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     await client.query("SET LOCAL ROLE jobguard_migration");
-    await client.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
-    await client.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_EMPTY_TENANT_ID]);
+    const createdDemo = await client.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
+    const createdEmpty = await client.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_EMPTY_TENANT_ID]);
     await client.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
-    await client.query("SET LOCAL ROLE jobguard_migration");
-    await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'JobGuard synthetic demo') ON CONFLICT DO NOTHING", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
-    // app.account's key is id alone, so a demo account left by an older demo tenant (before 15 Sep 2026 the demo
-    // tenant was d1500000-...-0015) makes the insert above a silent no-op. Refuse clearly instead of failing on the FK.
-    if (!(await client.query("SELECT 1 FROM app.account WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_ACCOUNT_ID])).rowCount) {
-      throw new DemoBootstrapSafetyError("The demo account id already belongs to an older demo tenant in this database. It is not the database the current demo was set up on; use that database's address instead.");
+    const verifyDemoAccount = async () => {
+      // app.account's key is id alone. An old fixture in a different tenant
+      // cannot satisfy the canonical account check.
+      if (!(await client.query("SELECT 1 FROM app.account WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_ACCOUNT_ID])).rowCount) {
+        throw new DemoBootstrapSafetyError("The demo account id already belongs to an older demo tenant in this database. It is not the database the current demo was set up on; use that database's address instead.");
+      }
+    };
+    if (createdDemo.rowCount) {
+      await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'JobGuard synthetic demo') ON CONFLICT DO NOTHING", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
+      await verifyDemoAccount();
+      await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
     }
-    await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
-    await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_EMPTY_TENANT_ID]);
-    await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Empty Workshop') ON CONFLICT DO NOTHING", [DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_TENANT_ID]);
-    await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
-    // Explicit owner-connected seed setup; runtime cannot manufacture a quoting job.
-    await client.query("SET LOCAL ROLE jobguard_migration");
+    if (createdEmpty.rowCount) {
+      await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Empty Workshop')", [DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_TENANT_ID]);
+      await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
+    }
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
-    await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Practice kitchen','quoting') ON CONFLICT DO NOTHING", [DEMO_JOB_ID, DEMO_TENANT_ID]);
-    await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',$1,'Kitchen extension','quoting'),('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',$1,'Loft conversion','quoting') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
-    await client.query("SET LOCAL ROLE jobguard_migration");
-    for(const jobId of [DEMO_JOB_ID,"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"]) await seedSyntheticPartyFixture(client,DEMO_TENANT_ID,jobId);
-    // SH-1's legacy binder runs on INSERT, whereas this fixture enters live by UPDATE.
-    // Use the existing migration-owned binding path in the same fixture transaction.
-    await client.query(`INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id)
-      VALUES($1,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','small_builder','synthetic_demo','legacy_synthetic_live_fixture','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
-      ON CONFLICT(tenant_id,job_id) DO NOTHING`, [DEMO_TENANT_ID]);
-    await client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND status='quoting'",[DEMO_TENANT_ID]);
     // Seed through a protected real session in the synthetic environment. This
     // internal credential is revoked before commit; no practice sample trigger fires.
     const seedDigest = randomBytes(32).toString("hex");
@@ -216,7 +211,25 @@ async function seedDatabase(client: PoolClient) {
     await client.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
       VALUES(gen_random_uuid(),$2,'synthetic_demo',$1,'synthetic-seed',clock_timestamp()+interval '1 hour')`, [seedDigest, DEMO_IDENTITY_USER_ID]);
     await client.query("SET LOCAL ROLE jobguard_runtime");
-    await client.query("SELECT app.bind_request('real',$1,$2)", [seedDigest, DEMO_TENANT_ID]);
+    try {
+      await client.query("SELECT app.bind_request('real',$1,$2)", [seedDigest, DEMO_TENANT_ID]);
+    } catch (error) {
+      if ((error as { code?: string }).code !== "42501" || !(error instanceof Error) || error.message !== "REQUEST_BINDING_REFUSED") throw error;
+      throw new DemoBootstrapSafetyError("The demo membership or account is unavailable. If the account belongs to an older demo tenant, use that database's address.");
+    }
+    await client.query("SET LOCAL ROLE jobguard_migration");
+    await verifyDemoAccount();
+    // Explicit owner-connected seed setup; runtime cannot manufacture a quoting job.
+    await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Practice kitchen','quoting') ON CONFLICT DO NOTHING", [DEMO_JOB_ID, DEMO_TENANT_ID]);
+    await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',$1,'Kitchen extension','quoting'),('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',$1,'Loft conversion','quoting') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
+    for(const jobId of [DEMO_JOB_ID,"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"]) await seedSyntheticPartyFixture(client,DEMO_TENANT_ID,jobId);
+    // SH-1's legacy binder runs on INSERT, whereas this fixture enters live by UPDATE.
+    // Use the existing migration-owned binding path in the same fixture transaction.
+    await client.query(`INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id)
+      VALUES($1,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','small_builder','synthetic_demo','legacy_synthetic_live_fixture','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+      ON CONFLICT(tenant_id,job_id) DO NOTHING`, [DEMO_TENANT_ID]);
+    await client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND status='quoting'",[DEMO_TENANT_ID]);
+    await client.query("SET LOCAL ROLE jobguard_runtime");
     const pendingSeedCommands: string[] = [];
     await seedDemo("synthetic_demo", { execute: async (command: DemoSeedCommand) => {
       const db = { $client: client } as TenantTransaction;

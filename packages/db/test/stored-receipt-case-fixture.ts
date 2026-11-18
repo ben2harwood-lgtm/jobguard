@@ -90,7 +90,7 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  await locks.disposition(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),scopeItemId:scope,disposition:"done"});
  const signal=randomUUID(), hiddenSignal=randomUUID(), otherCatchSignal=randomUUID();
  const signals=mixedFinalCheck?[signal,hiddenSignal,otherCatchSignal]:twoCatches?[signal,otherCatchSignal]:[signal];
- if(kind==="F7")for(const signalId of signals)await finalCheckTenant(f.shadow,DEMO_TENANT_ID,async db=>{
+ if(kind==="F7")for(const signalId of signals)await finalCheckTenant(f.admin,DEMO_TENANT_ID,async db=>{
   await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),$5,'low','held_for_final_check')",[DEMO_TENANT_ID,jobId,signalId,signalId===signal?workId:randomUUID(),signalId===hiddenSignal?'CH8-R1 unrevealed description':signalId===otherCatchSignal?'CH8-R1 other catch proof':'Fictional catch']);
   const e=(await f.admin.query("SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,evidence])).rows[0];
   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[DEMO_TENANT_ID,jobId,signalId,evidence,e.object_version_id,e.sha256,e.received]);

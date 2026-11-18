@@ -1,8 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { readJobSourceObservations } from "./job-source-observation-reader.js";
 import { z } from "zod";
 import type { Pool } from "pg";
 import { FINAL_CHECK_TERMS_VERSION, observationV1, parseObservation, shadowCaptureV1, type Observation, type ShadowCapture } from "@jobguard/core";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 const readV1 = z.object({ version: z.literal("shadow-observation-read.v1"), jobId: z.guid({ error: "Invalid uuid" }) }).strict();
 export class ShadowObservationReadError extends Error {
   constructor(readonly code: "INVALID_OBSERVATION_READ" | "OBSERVATION_JOB_UNAVAILABLE" | "TERMS_RELATION_UNAVAILABLE" | "TERMS_NOT_ACCEPTED" | "SOURCE_NOT_FINALIZED" | "DETECTION_LOCKED_JOB") { super(code); }
@@ -22,7 +23,21 @@ export class FixtureObservationSources implements ObservationSourcePort {
 }
 /** Ordinary runtime login + RLS only. This reader never issues a shadow statement. */
 export class ShadowObservationReader {
-  constructor(private readonly pool: Pool, private readonly sources: ObservationSourcePort) {}
+  constructor(private readonly pool: Pool, private readonly sources: ObservationSourcePort, private readonly shadowAuthority?: Pool) {}
+  private async readJob<T>(context: VerifiedTenantContext, jobId: string, read: (db: TenantTransaction) => Promise<T>) {
+    let permit: string | undefined;
+    if (this.shadowAuthority) {
+      permit = randomBytes(32).toString("hex");
+      await this.shadowAuthority.query("SELECT app.lp11_issue_observation_permit($1,$2,$3)", [context.tenantId, jobId, permit]);
+    }
+    return withTenant(this.pool, context, async db => {
+      if (permit) {
+        await db.$client.query("SELECT app.lp11_bind_observation_read($1,$2,$3)", [context.tenantId, jobId, permit]);
+        await db.$client.query("SET TRANSACTION READ ONLY");
+      }
+      return read(db);
+    });
+  }
   async assertTermsRelation(): Promise<void> {
     const exists = (await this.pool.query<{ available: boolean }>("SELECT to_regclass('app.final_check_terms_acceptance') IS NOT NULL AS available")).rows[0]?.available;
     if (!exists) throw new ShadowObservationReadError("TERMS_RELATION_UNAVAILABLE");
@@ -30,12 +45,17 @@ export class ShadowObservationReader {
   async hasAcceptedTerms(context: VerifiedTenantContext, jobId: string): Promise<boolean> {
     // SV-4 owns this append-only record. An absent relation is a startup error, never a permissive fallback.
     await this.assertTermsRelation();
-    return withTenant(this.pool, context, async db => (await db.$client.query<{ accepted: boolean }>("SELECT app.final_check_runtime_job_terms($1,$2) AS accepted", [jobId, FINAL_CHECK_TERMS_VERSION])).rows[0]?.accepted === true);
+    if (this.shadowAuthority) {
+      return (await this.shadowAuthority.query<{ accepted: boolean }>(
+        "SELECT app.lp11_shadow_job_has_terms($1,$2) AS accepted", [context.tenantId, jobId],
+      )).rows[0]?.accepted === true;
+    }
+    return this.readJob(context, jobId, async db => (await db.$client.query<{ accepted: boolean }>("SELECT app.final_check_runtime_job_terms($1,$2) AS accepted", [jobId, FINAL_CHECK_TERMS_VERSION])).rows[0]?.accepted === true);
   }
   async read(context: VerifiedTenantContext, raw: unknown): Promise<{ observations: readonly Observation[]; captures: readonly ShadowCapture[] }> {
     const parsed = readV1.safeParse(raw); if (!parsed.success) throw new ShadowObservationReadError("INVALID_OBSERVATION_READ");
     const jobId = parsed.data.jobId;
-    return withTenant(this.pool, context, async db => {
+    return this.readJob(context, jobId, async db => {
       const job = (await db.$client.query<{ id: string }>("SELECT j.id FROM app.job j JOIN app.job_commercial_track t ON (t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2 AND j.status='live' AND j.provenance='system_generated_quote' AND t.job_track='small_builder' AND t.environment='synthetic_demo'", [context.tenantId,jobId])).rows[0];
       if (!job) throw new ShadowObservationReadError("OBSERVATION_JOB_UNAVAILABLE");
       const locksAvailable=(await db.$client.query<{available:boolean}>("SELECT to_regclass('app.final_account_lock') IS NOT NULL AS available")).rows[0]?.available;

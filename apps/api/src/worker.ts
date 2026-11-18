@@ -39,7 +39,7 @@ const posture=(await shadowPool.query<{safe:boolean}>(`SELECT NOT r.rolsuper AND
  AS safe FROM pg_roles r WHERE r.rolname=session_user`)).rows[0];
 if(posture?.safe!==true)throw new Error("SHADOW_POOL_ROLE_UNSAFE");
 const corpus=shadowFixtureCorpusV1.parse(JSON.parse(await readFile(new URL("../../../docs/fixtures/ai/shadow-observations.v1.json",import.meta.url),"utf8")));
-const observationReader=new ShadowObservationReader(runtimePool,new FixtureObservationSources(corpus.cases.flatMap(c=>c.observations)));
+const observationReader=new ShadowObservationReader(runtimePool,new FixtureObservationSources(corpus.cases.flatMap(c=>c.observations)),shadowPool);
 const detectionRepository=new ShadowDetectionRepository(shadowPool);
 const fixtureProposer=new ShadowFixtureProposer(Object.assign({},...corpus.cases.map(c=>c.responses)));
 const detectionWorker=new ShadowDetectionWorker({assertTermsRelation:()=>observationReader.assertTermsRelation(),hasAcceptedTerms:(context,jobId)=>observationReader.hasAcceptedTerms(context,jobId),read:(context,request)=>observationReader.read(context,request),propose:(o,id,at)=>fixtureProposer.propose(o,id,at),persist:(context,request)=>detectionRepository.persist(context,request)},process.env.JOBGUARD_ENV??"disabled");
@@ -75,7 +75,7 @@ registerPracticeFinalCheckTasks(tasks,async parsed=>executePracticeFinalCheck(qu
 },finalCheckEnvironment));
 // Demo-only DEMO-J3 guide step: the practice builder asks, this worker holds signals from saved sources before lock.
 const practicePhotoHash=(fixture:"completion-photo"|"j3-drainage-photo")=>createHash("sha256").update(generatePracticePng(fixture)).digest("hex");
-const practiceHoldReader=new ShadowObservationReader(runtimePool,{async decode(source){return source.kind==="completion_photo"?decodePracticePhoto(source.sha256,practicePhotoHash("completion-photo"),practicePhotoHash("j3-drainage-photo")):null;}});
+const practiceHoldReader=new ShadowObservationReader(runtimePool,{async decode(source){return source.kind==="completion_photo"?decodePracticePhoto(source.sha256,practicePhotoHash("completion-photo"),practicePhotoHash("j3-drainage-photo")):null;}},shadowPool);
 const demoHoldTaskV1=z.object({version:z.literal("demo-source-hold.v1"),requestId:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" })}).strict();
 tasks.discover_demo_source_holds=async(_payload,helpers)=>{
  await helpers.withPgClient(async client=>{

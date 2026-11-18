@@ -110,6 +110,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]!
       .replace(" IF EXISTS(SELECT 1 FROM app.ent3b_visit_authority(visit_row.membership_id,p_job)",
         " -- LP6D_THIRD_PARTY (repair 12): the visit's operative is a third party with no request of its own; its\n -- current visit authority is read through the private copy, never through the caller's binding.\n IF EXISTS(SELECT 1 FROM app.lp6d_visit_authority_of(visit_row.membership_id,p_job)"));
+  const lp11Sql = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
   const recoverySql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql", import.meta.url), "utf8");
   for (const [name,args] of [
     ["final_check_read_authority","t uuid, j uuid, d text, locking boolean"],
@@ -119,7 +120,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   ]) {
     const routines = live.filter(row => row.nspname === "app" && row.proname === name && row.args === args);
     expect(routines).toHaveLength(1);
-    expect(routines[0]?.definition?.split("$function$")[1]).toBe(recoverySql.split(`FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]);
+    const source = name === "final_check_cycle_finish" ? lp11Sql : recoverySql;
+    expect(routines[0]?.definition?.split("$function$")[1]).toBe(source.split(`FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]);
   }
   // 0692 adds one owner-only helper; pin its complete body as well as successor metadata.
   const receiptGate = await readFile(new URL("../migrations/0692_final_check_post_invoice_receipt_gate.sql", import.meta.url), "utf8");
@@ -310,7 +312,6 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const presenceSql = await readFile(new URL("../migrations/0753_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
   for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis))
     lp6dBodies.set(m[1]!, [m[4]!]);
-  const lp11Sql = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
   for (const match of lp11Sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
     lp6dBodies.set(match[1]!, [match[3]!]);
   for (const prior of security) {

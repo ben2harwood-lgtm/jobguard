@@ -6,6 +6,286 @@ The full run started before the upgrade replay assertion was updated to expect t
 
 The accepted exceptions account for one pg_dump failure and 842 failed assertions that reached the held work-order fixture. Another 21 files stopped during setup at that fixture. The full run also recorded 2,111 other failed assertions and 43 other file-level failures outside test bodies.
 
+## r4 regression triage
+
+The counts below exclude the 842 direct work-order failures and the missing pg_dump. An error is grouped by the first diagnostic in the test result. A shared error can be raised by several routines.
+
+| First diagnostic | Failed assertions | Refusing route or observed boundary |
+| --- | ---: | --- |
+| error: JOB_PARTIES_REQUIRED | 1081 | app.require_job_parties and app.lp6d_job_parties_maintenance read job_party_current or job_party_snapshot as the migration owner. The unbound policy hides the seeded party records. |
+| error: JOB_NOT_FOUND | 304 | The watchdog evidence triggers and app.lp6d_watchdog_live_maintenance account for the dominant stored-receipt fixture stack. The app.job policy hides the live job from the unbound maintenance owner. The same diagnostic also comes from unrelated job lookups. |
+| Assertion mismatch | 90 | The reporter groups exact catalogue differences, unexpected refusals, empty results and state mismatches here. These require individual checks. |
+| error: NOT_FOUND | 59 | The first frames include commercial-integrity invoice setup, line allocation and evidence pack calls. The error alone does not identify the refusing routine. |
+| error: CUSTOMER_REFUSED | 55 | Customer portal authentication and LP-6c delegation check job, grant and session rows before a regular request binding. |
+| Error: RECOVERY_REVIEWER_FORBIDDEN | 49 | RecoveryCaseRepository.commandBody cannot see the reviewer membership on the current fixture transaction. |
+| error: new row violates row-level security policy for table "fee_reservation_book" | 39 | The proposed-row policy on fee_reservation_book refused the write. |
+| error: SSO_REQUIRED_FORBIDDEN | 38 | IdentityApplication.invite enters identity.sso_invite_member before the checked session or invitation establishes tenant scope. |
+| error: new row violates row-level security policy for table "evidence_upload" | 37 | The proposed-row policy on evidence_upload refused the write. |
+| error: new row violates row-level security policy for table "membership" | 33 | The proposed-row policy on membership refused the write. |
+| PracticeFeedRepositoryError: PRACTICE_FEED_FORBIDDEN | 19 | PracticeFeedRepository.authorize refuses the fixture scope at its guarded practice read. |
+| TypeError: Cannot read properties of undefined (reading 'id') | 18 | The dominant stack is a contractor entitlement fixture reading an empty assignment result. |
+| error: new row violates row-level security policy for table "audit_event" | 17 | The proposed-row policy on audit_event refused the write. |
+| error: job not found | 17 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| OidcError: OIDC_REFUSED | 16 | The OIDC application wraps an identity routine refusal. The protocol uses its own request cache before issuing a binding. |
+| Error: promise rejected "SsoError: SSO_FORBIDDEN { code: 'SSO…' }" instead of resolving | 13 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: UNAUTHENTICATED | 13 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: new row violates row-level security policy for table "action_outbox" | 12 | The proposed-row policy on action_outbox refused the write. |
+| error: new row violates row-level security policy for table "input_event" | 9 | The proposed-row policy on input_event refused the write. |
+| SsoError: SSO_FORBIDDEN | 9 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: UNAUTHENTICATED | 9 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: EMERGENCY_REFUSED | 7 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| WormCommandError: WORM_REFUSED | 7 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| SsoRequiredError: SSO_EMERGENCY_REFUSED | 6 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: FORBIDDEN | 5 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: new row violates row-level security policy for table "job" | 5 | The proposed-row policy on job refused the write. |
+| error: INVALID_TRANSITION | 5 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: ACCESS_REFUSED | 5 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| WatchdogError: JOB_NOT_LIVE | 5 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: Synthetic tenant key registry operation refused | 5 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: NOT_FOUND | 4 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: promise resolved "Result{ command: 'SELECT', …(9) }" instead of rejecting | 4 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| TypeError: Cannot destructure property 'f' of 'world' as it is undefined. | 4 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: new row violates row-level security policy for table "account" | 4 | The proposed-row policy on account refused the write. |
+| Error: promise resolved "Result{ command: 'UPDATE', …(9) }" instead of rejecting | 4 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: new row violates row-level security policy for table "commercial_track_assignment" | 3 | The proposed-row policy on commercial_track_assignment refused the write. |
+| Error: promise rejected "error: SSO_REQUIRED_FORBIDDEN { …(15) }" instead of resolving | 3 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: new row violates row-level security policy for table "job_commercial_track" | 3 | The proposed-row policy on job_commercial_track refused the write. |
+| Error: expected error: FORBIDDEN { length: 311, …(14) } to match object { code: '22023', …(1) } | 3 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| TypeError: Cannot read properties of undefined (reading 'status') | 3 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: new row violates row-level security policy for table "capture_source" | 2 | The proposed-row policy on capture_source refused the write. |
+| Error: promise rejected "error: new row violates row-level securit… { …(15) }" instead of resolving | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: '23503' } | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: '42501', …(1) } | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: jobguard_session_lookup does not have the required least-privilege posture | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: cannot execute INSERT in a read-only transaction | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'EVIDENCE_PACK_V3_SOURCE_CONFLICT' but got 'cannot execute INSERT in a read-only …' | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: new row violates row-level security policy for table "shadow_commercial_signal" | 2 | The proposed-row policy on shadow_commercial_signal refused the write. |
+| Error: expected [Function] to throw error including 'FINAL_CHECK_SOURCE_CHANGED' but got 'JOB_NOT_FOUND' | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| ReadinessSeamError: INVALID_READINESS_PLAN | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'RECOVERY_SOURCE_NOT_RECOGNISED' but got 'RECOVERY_REVIEWER_FORBIDDEN' | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| TypeError: Cannot read properties of undefined (reading 'revision') | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected Error: RECOVERY_REVIEWER_FORBIDDEN { code: '…' } to match object { Object (code) } | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: invalid reversal | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: FORBIDDEN | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: STALE_SSO_REQUIRED | 2 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: MEMBERSHIP_FORBIDDEN | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| TypeError: Cannot convert undefined or null to object | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| TypeError: Cannot read properties of undefined (reading 'practice_session_digest') | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: ELIGIBILITY_REVIEWER_FORBIDDEN | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'fixture audit failure' but got 'new row violates row-level security p…' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: STALE_REVISION | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| TypeError: Cannot read properties of undefined (reading 'identity_user_id') | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: STACK_TRACE_ERROR | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: new row violates row-level security policy for table "scope_identity" | 1 | The proposed-row policy on scope_identity refused the write. |
+| Error: expected [Function] to throw error including 'synthetic migration failure' but got 'jobguard_session_lookup does not have…' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'REQUEST_BINDING_REFUSED' but got 'jobguard_session_lookup does not have…' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| TypeError: Cannot read properties of undefined (reading 'connect') | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { …(2) } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| AssertionError [ERR_ASSERTION]: PREFLIGHT_FIXTURE_ACCOUNT_REQUIRED | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: permission denied for table jobguard_schema_migration | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'EVIDENCE_PACK_V3_DEPENDENCY_HELD' but got 'cannot execute INSERT in a read-only …' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: cannot execute INSERT in a read-on… { …(15) } to match object { …(2) } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'NOT_FOUND' but got 'cannot execute INSERT in a read-only …' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'TEST-WORKER-pending' but got 'cannot execute INSERT in a read-only …' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'UNAUTHENTICATED' but got 'cannot execute INSERT in a read-only …' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: cannot execute INSERT in a read-on… { …(15) } to match object { Object (code) } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| ExtraPersistenceError: NOT_FOUND | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: query returned no rows { …(15) } to match object { code: '23514' } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: 'COLLECTION_REFUSED' } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: 'AGREEMENT_INELIGIBLE' } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'rollback' but got 'new row violates row-level security p…' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: FINAL_CHECK_FORBIDDEN | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'PRE_ADOPTION_SOURCE_EXCLUDED' but got 'insert or update on table "shadow_sig…' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'JOB_NOT_LIVE' but got 'JOB_NOT_FOUND' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: INVALID_JOB_LINK { …(15) } to match object { …(2) } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'POST_LOCK_WORK_REQUIRES_LINKED_JOB' but got 'JOB_SOURCE_FORBIDDEN' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'JOB_WORK_CLOSED' but got 'FINAL_CHECK_LOCK_BINDING_INVALID' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'LP2 permit rollback' but got 'JOB_INSERT_PERMIT_REQUIRED' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: promise resolved "undefined" instead of rejecting | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: '23505' } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: COMMAND_CONFLICT | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: SMALL_TRIP_FORBIDDEN | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'synthetic rollback' but got 'new row violates row-level security p…' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: new row violates row-level security policy for table "provider_event_inbox" | 1 | The proposed-row policy on provider_event_inbox refused the write. |
+| error: new row violates row-level security policy for table "merchant" | 1 | The proposed-row policy on merchant refused the write. |
+| TypeError: Cannot read properties of undefined (reading 'payload') | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: promise rejected "Error: UNAUTHENTICATED { code: 'UNAU…' }" instead of resolving | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'RECOVERY_CASE_NOT_FOUND' but got 'RECOVERY_REVIEWER_FORBIDDEN' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'IDEMPOTENCY_PAYLOAD_CONFLICT' but got 'RECOVERY_REVIEWER_FORBIDDEN' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: synthetic live job required | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: cannot alter type of a column used in a policy definition | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| RecoveryMessageError: RECOVERY_MESSAGE_BLOCKED | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected undefined to deeply equal { kind: 'cancelled', …(1) } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: Dispatch did not block behind contractor revocation | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: before allowance mismatch: ["connector","binding","binding_lookup"] | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: FORBIDDEN { length: 139, …(14) } to match object { code: '23514' } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| TypeError: Cannot read properties of undefined (reading 'cause_code') | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'SYNC_AUTHORITY_REQUIRED' but got 'SYNC_UNAVAILABLE' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected [Function] to throw error including 'synthetic failure' but got 'new row violates row-level security p…' | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected error: JOB_NOT_FOUND { …(15) } to match object { code: '23505' } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| error: WORM_REFUSED | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+| Error: expected WormCommandError: WORM_REFUSED { …(1) } to match object { code: 'WORM_UNCONFIRMED', …(1) } | 1 | The diagnostic is secondary or shared across routes. The first refusing SQL operation remains unconfirmed. |
+
+The 43 other failed files without a failed assertion reported 18 JOB_PARTIES_REQUIRED, seven NOT_FOUND, five job RLS violations, one action_outbox RLS violation, one COMMAND_CONFLICT, one FORBIDDEN, one undefined result, and nine without a first diagnostic. The 21 work-order setup failures are listed below. Vitest also recorded one unhandled watchdog rejection.
+
+## r5 first complete PostgreSQL run
+
+The first repair round ran every database test file on embedded PostgreSQL 16.10. It reported 493 passing and 385 failing files out of 878. The 8,011 tests included 4,919 passed, 2,405 failed, 668 skipped and 19 todo. The failed assertions included 842 direct traces through the held work-order fixture and one missing `pg_dump`. The remaining 1,562 assertion failures and 26 setup-only failures require further repair. Vitest also reported an unhandled watchdog transition refusal and two PostgreSQL connection-termination exceptions.
+
+The table follows the original r4 failing assertions by file and test name. A test may expose a different failure after its first blocker is repaired.
+
+| r4 diagnostic | r4 failures | Passed in round one | Failed in round one | Skipped or absent |
+| --- | ---: | ---: | ---: | ---: |
+| error: JOB_PARTIES_REQUIRED | 1081 | 512 | 568 | 1 |
+| error: JOB_NOT_FOUND | 304 | 6 | 298 | 0 |
+| Assertion mismatch | 90 | 3 | 87 | 0 |
+| error: NOT_FOUND | 59 | 23 | 36 | 0 |
+| error: CUSTOMER_REFUSED | 55 | 0 | 55 | 0 |
+| Error: RECOVERY_REVIEWER_FORBIDDEN | 49 | 9 | 40 | 0 |
+| error: new row violates row-level security policy for table "fee_reservation_book" | 39 | 0 | 39 | 0 |
+| error: SSO_REQUIRED_FORBIDDEN | 38 | 32 | 6 | 0 |
+| error: new row violates row-level security policy for table "evidence_upload" | 37 | 0 | 37 | 0 |
+| error: new row violates row-level security policy for table "membership" | 33 | 0 | 33 | 0 |
+| PracticeFeedRepositoryError: PRACTICE_FEED_FORBIDDEN | 19 | 0 | 19 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'id') | 18 | 0 | 18 | 0 |
+| error: job not found | 17 | 0 | 17 | 0 |
+| error: new row violates row-level security policy for table "audit_event" | 17 | 1 | 16 | 0 |
+| OidcError: OIDC_REFUSED | 16 | 0 | 16 | 0 |
+| Error: UNAUTHENTICATED | 13 | 0 | 13 | 0 |
+| Error: promise rejected "SsoError: SSO_FORBIDDEN { code: 'SSO…' }" instead of resolving | 13 | 0 | 13 | 0 |
+| error: new row violates row-level security policy for table "action_outbox" | 12 | 0 | 12 | 0 |
+| SsoError: SSO_FORBIDDEN | 9 | 0 | 9 | 0 |
+| error: UNAUTHENTICATED | 9 | 0 | 9 | 0 |
+| error: new row violates row-level security policy for table "input_event" | 9 | 0 | 9 | 0 |
+| WormCommandError: WORM_REFUSED | 7 | 0 | 7 | 0 |
+| error: EMERGENCY_REFUSED | 7 | 0 | 7 | 0 |
+| SsoRequiredError: SSO_EMERGENCY_REFUSED | 6 | 0 | 6 | 0 |
+| Error: ACCESS_REFUSED | 5 | 0 | 5 | 0 |
+| Error: Synthetic tenant key registry operation refused | 5 | 0 | 5 | 0 |
+| WatchdogError: JOB_NOT_LIVE | 5 | 5 | 0 | 0 |
+| error: FORBIDDEN | 5 | 0 | 5 | 0 |
+| error: INVALID_TRANSITION | 5 | 0 | 5 | 0 |
+| error: new row violates row-level security policy for table "job" | 5 | 0 | 5 | 0 |
+| Error: NOT_FOUND | 4 | 3 | 1 | 0 |
+| Error: promise resolved "Result{ command: 'SELECT', …(9) }" instead of rejecting | 4 | 0 | 4 | 0 |
+| Error: promise resolved "Result{ command: 'UPDATE', …(9) }" instead of rejecting | 4 | 1 | 3 | 0 |
+| TypeError: Cannot destructure property 'f' of 'world' as it is undefined. | 4 | 0 | 4 | 0 |
+| error: new row violates row-level security policy for table "account" | 4 | 1 | 3 | 0 |
+| Error: expected error: FORBIDDEN { length: 311, …(14) } to match object { code: '22023', …(1) } | 3 | 0 | 3 | 0 |
+| Error: promise rejected "error: SSO_REQUIRED_FORBIDDEN { …(15) }" instead of resolving | 3 | 3 | 0 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'status') | 3 | 0 | 3 | 0 |
+| error: new row violates row-level security policy for table "commercial_track_assignment" | 3 | 0 | 3 | 0 |
+| error: new row violates row-level security policy for table "job_commercial_track" | 3 | 0 | 3 | 0 |
+| Error: FORBIDDEN | 2 | 0 | 2 | 0 |
+| Error: expected Error: RECOVERY_REVIEWER_FORBIDDEN { code: '…' } to match object { Object (code) } | 2 | 0 | 2 | 0 |
+| Error: expected [Function] to throw error including 'EVIDENCE_PACK_V3_SOURCE_CONFLICT' but got 'cannot execute INSERT in a read-only …' | 2 | 2 | 0 | 0 |
+| Error: expected [Function] to throw error including 'FINAL_CHECK_SOURCE_CHANGED' but got 'JOB_NOT_FOUND' | 2 | 0 | 2 | 0 |
+| Error: expected [Function] to throw error including 'RECOVERY_SOURCE_NOT_RECOGNISED' but got 'RECOVERY_REVIEWER_FORBIDDEN' | 2 | 0 | 2 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: '23503' } | 2 | 1 | 1 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: '42501', …(1) } | 2 | 0 | 2 | 0 |
+| Error: jobguard_session_lookup does not have the required least-privilege posture | 2 | 0 | 2 | 0 |
+| Error: promise rejected "error: new row violates row-level securit… { …(15) }" instead of resolving | 2 | 0 | 2 | 0 |
+| ReadinessSeamError: INVALID_READINESS_PLAN | 2 | 0 | 2 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'revision') | 2 | 0 | 2 | 0 |
+| error: STALE_SSO_REQUIRED | 2 | 0 | 2 | 0 |
+| error: cannot execute INSERT in a read-only transaction | 2 | 1 | 1 | 0 |
+| error: invalid reversal | 2 | 0 | 2 | 0 |
+| error: new row violates row-level security policy for table "capture_source" | 2 | 0 | 2 | 0 |
+| error: new row violates row-level security policy for table "shadow_commercial_signal" | 2 | 0 | 2 | 0 |
+| AssertionError [ERR_ASSERTION]: PREFLIGHT_FIXTURE_ACCOUNT_REQUIRED | 1 | 0 | 1 | 0 |
+| Error: Dispatch did not block behind contractor revocation | 1 | 0 | 1 | 0 |
+| Error: ELIGIBILITY_REVIEWER_FORBIDDEN | 1 | 0 | 1 | 0 |
+| Error: FINAL_CHECK_FORBIDDEN | 1 | 0 | 1 | 0 |
+| Error: MEMBERSHIP_FORBIDDEN | 1 | 0 | 1 | 0 |
+| Error: STACK_TRACE_ERROR | 1 | 0 | 1 | 0 |
+| Error: before allowance mismatch: ["connector","binding","binding_lookup"] | 1 | 0 | 1 | 0 |
+| Error: expected WormCommandError: WORM_REFUSED { …(1) } to match object { code: 'WORM_UNCONFIRMED', …(1) } | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'EVIDENCE_PACK_V3_DEPENDENCY_HELD' but got 'cannot execute INSERT in a read-only …' | 1 | 1 | 0 | 0 |
+| Error: expected [Function] to throw error including 'IDEMPOTENCY_PAYLOAD_CONFLICT' but got 'RECOVERY_REVIEWER_FORBIDDEN' | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'JOB_NOT_LIVE' but got 'JOB_NOT_FOUND' | 1 | 1 | 0 | 0 |
+| Error: expected [Function] to throw error including 'JOB_WORK_CLOSED' but got 'FINAL_CHECK_LOCK_BINDING_INVALID' | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'LP2 permit rollback' but got 'JOB_INSERT_PERMIT_REQUIRED' | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'NOT_FOUND' but got 'cannot execute INSERT in a read-only …' | 1 | 1 | 0 | 0 |
+| Error: expected [Function] to throw error including 'POST_LOCK_WORK_REQUIRES_LINKED_JOB' but got 'JOB_SOURCE_FORBIDDEN' | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'PRE_ADOPTION_SOURCE_EXCLUDED' but got 'insert or update on table "shadow_sig…' | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'RECOVERY_CASE_NOT_FOUND' but got 'RECOVERY_REVIEWER_FORBIDDEN' | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'REQUEST_BINDING_REFUSED' but got 'jobguard_session_lookup does not have…' | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'SYNC_AUTHORITY_REQUIRED' but got 'SYNC_UNAVAILABLE' | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'TEST-WORKER-pending' but got 'cannot execute INSERT in a read-only …' | 1 | 1 | 0 | 0 |
+| Error: expected [Function] to throw error including 'UNAUTHENTICATED' but got 'cannot execute INSERT in a read-only …' | 1 | 1 | 0 | 0 |
+| Error: expected [Function] to throw error including 'fixture audit failure' but got 'new row violates row-level security p…' | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'rollback' but got 'new row violates row-level security p…' | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'synthetic failure' but got 'new row violates row-level security p…' | 1 | 1 | 0 | 0 |
+| Error: expected [Function] to throw error including 'synthetic migration failure' but got 'jobguard_session_lookup does not have…' | 1 | 0 | 1 | 0 |
+| Error: expected [Function] to throw error including 'synthetic rollback' but got 'new row violates row-level security p…' | 1 | 0 | 1 | 0 |
+| Error: expected error: FORBIDDEN { length: 139, …(14) } to match object { code: '23514' } | 1 | 0 | 1 | 0 |
+| Error: expected error: INVALID_JOB_LINK { …(15) } to match object { …(2) } | 1 | 0 | 1 | 0 |
+| Error: expected error: JOB_NOT_FOUND { …(15) } to match object { code: '23505' } | 1 | 1 | 0 | 0 |
+| Error: expected error: cannot execute INSERT in a read-on… { …(15) } to match object { Object (code) } | 1 | 1 | 0 | 0 |
+| Error: expected error: cannot execute INSERT in a read-on… { …(15) } to match object { …(2) } | 1 | 1 | 0 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: '23505' } | 1 | 0 | 1 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: 'AGREEMENT_INELIGIBLE' } | 1 | 0 | 1 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: 'COLLECTION_REFUSED' } | 1 | 0 | 1 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { …(2) } | 1 | 0 | 1 | 0 |
+| Error: expected error: query returned no rows { …(15) } to match object { code: '23514' } | 1 | 0 | 1 | 0 |
+| Error: expected undefined to deeply equal { kind: 'cancelled', …(1) } | 1 | 0 | 1 | 0 |
+| Error: promise rejected "Error: UNAUTHENTICATED { code: 'UNAU…' }" instead of resolving | 1 | 0 | 1 | 0 |
+| Error: promise resolved "undefined" instead of rejecting | 1 | 0 | 1 | 0 |
+| ExtraPersistenceError: NOT_FOUND | 1 | 0 | 1 | 0 |
+| RecoveryMessageError: RECOVERY_MESSAGE_BLOCKED | 1 | 0 | 1 | 0 |
+| TypeError: Cannot convert undefined or null to object | 1 | 0 | 1 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'cause_code') | 1 | 0 | 1 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'connect') | 1 | 0 | 1 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'identity_user_id') | 1 | 0 | 1 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'payload') | 1 | 0 | 1 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'practice_session_digest') | 1 | 0 | 1 | 0 |
+| error: COMMAND_CONFLICT | 1 | 0 | 1 | 0 |
+| error: SMALL_TRIP_FORBIDDEN | 1 | 0 | 1 | 0 |
+| error: STALE_REVISION | 1 | 0 | 1 | 0 |
+| error: WORM_REFUSED | 1 | 0 | 1 | 0 |
+| error: cannot alter type of a column used in a policy definition | 1 | 0 | 1 | 0 |
+| error: new row violates row-level security policy for table "merchant" | 1 | 0 | 1 | 0 |
+| error: new row violates row-level security policy for table "provider_event_inbox" | 1 | 0 | 1 | 0 |
+| error: new row violates row-level security policy for table "scope_identity" | 1 | 0 | 1 | 0 |
+| error: permission denied for table jobguard_schema_migration | 1 | 0 | 1 | 0 |
+| error: synthetic live job required | 1 | 0 | 1 | 0 |
+
+The first-round PostgreSQL command was:
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=4 --passWithNoTests --exclude '**/lp11-proof-capture.tmp.integration.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-db-results.json
+```
+
+## r5 repairs after the first full run
+
+- Administrative job maintenance reads the exact job and its recorded party revisions for the duration of the trigger. Evidence invalidation derives the job from the stored evidence object before checking certification and invoice history.
+- Sign-in authorizes invitations, OIDC requests and customer portal grants through stored session or grant identifiers. Customer portal delegation stays on the exact job and command. The credential reader uses the nullable LP-6 tenant accessor and leaves the private LP-6e presence helper's executor list intact.
+- Shadow detection, disclosure and emergency reads bind their stored synthetic job through the dedicated worker or support login. Its runtime reader consumes a one-use, job-scoped permit. A later binding to a different tenant closes the earlier read permit in the same transaction. A connection reused after commit has no tenant authority.
+- Recovery delivery reads the approved case and its job's immutable sources after the committed outbox signal, worker claim and stored approval agree. The additional visibility applies to `USING` only.
+- Test fixtures that only seed data now use their existing administrative connection or the exact persisted fixture member. The held work-order fixture and its pins remain byte-identical.
+
+## r5 focused validation
+
+The latest SQL and fixtures passed 126 PostgreSQL tests across the protected tenant policy, request binding, worker login, customer message and exact migration upgrade suites. Another 32 PostgreSQL tests passed across shadow detection, shadow persistence, trial admission and trial Final Check. The previous focused recovery worker and operative sign-in run passed both selected cases. The latest catalogue recording contains 1,323 LP-0 changes, 719 upgrade changes and 623 policy changes.
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=1 test/migration-proof-loader.test.ts test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/lp-10-worker-login.integration.test.ts test/lp6a-binding.integration.test.ts test/customer-portal-message.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/shadow-detection.integration.test.ts test/shadow-persistence.integration.test.ts test/free-first-job-admission.integration.test.ts test/free-first-job-final-check.integration.test.ts
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=2 test/lp6e-audit.integration.test.ts test/customer-signin.integration.test.ts -t 'commits recovery message outbox success|operative cannot issue'
+```
+
+The two commercial guard CLIs each returned zero diagnostics. All 253 guard tests and all 3,618 web unit tests passed on the preceding build of the same application TypeScript. The database, API and web typechecks passed.
+
+```sh
+node tools/commercial-integrity-current-source-guard.mjs
+node tools/commercial-integrity-boundary.mjs
+node --test --test-concurrency=1 tools/commercial-integrity-{current-source-guard,boundary}.test.mjs
+pnpm --filter @jobguard/db --filter @jobguard/api --filter @jobguard/web typecheck
+pnpm --filter @jobguard/web test --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/database.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-more-web-results.json
+```
+
+Some inherited expectations still require the retired setting. The LP-6e tests for generic unbound audit writes supply no protected tenant authority, and the identity and evidence-pack tests expect a malformed unbound setting to raise `22P02`. The protected policy leaves those requests unscoped. These cases count as failures outside the held work-order fixture.
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

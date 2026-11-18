@@ -11,7 +11,7 @@ import { Pool, type PoolClient } from "pg";
 import { recoveryAttributionRevisionV1, attributionPredicates, candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
-import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { unattributedTermsHistory } from "./sv5pre-fixtures.js";
 export const LOCK_OWNER = "40000000-0000-4000-8000-000000000004";
@@ -53,7 +53,10 @@ export async function seedAccount(admin: Pool, tenantId: string = randomUUID(), 
  const account = randomUUID();
  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic SV-4')", [account, tenantId]);
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [LOCK_OWNER, tenantId, account, LOCK_USER]);
+ const requiresBinding=(await admin.query("SELECT to_regprocedure('app.lp11_policy_tenant()') installed")).rows[0].installed;
  await asFixtureTenant(admin, tenantId, async db => {
+  if(requiresBinding && practiceDigest!==null) await db.query("SELECT app.bind_request('practice',$1,$2)",[practiceDigest,tenantId]);
+  else if(requiresBinding) await bindTestClient(admin,db,tenantId,LOCK_OWNER);
   if (practiceDigest !== null && (await db.query("SELECT to_regclass('app.lp_job_insert_permit') IS NOT NULL installed")).rows[0].installed) await permitPracticeHomeJob(db, {tenantId,jobId,actorMembershipId:LOCK_OWNER,
    title:"Fictional final account",status:"live",practiceSessionDigest:practiceDigest});
   await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional final account','live',$3::text,CASE WHEN $3::text IS NULL THEN NULL ELSE 'home' END)", [jobId, tenantId, practiceDigest]);

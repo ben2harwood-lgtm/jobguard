@@ -53,7 +53,8 @@ export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 33
  const account = randomUUID();
  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic SV-4')", [account, tenantId]);
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [LOCK_OWNER, tenantId, account, LOCK_USER]);
- const context=(await admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(admin,tenantId,LOCK_OWNER) : testTenantContext(tenantId);
+ const bindingInstalled=(await admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed;
+ const context=bindingInstalled ? await testBoundTenantContext(admin,tenantId,LOCK_OWNER) : testTenantContext(tenantId);
  await asFixtureTenant(admin, tenantId, async db => {
   await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional final account','live')", [jobId, tenantId]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeItemId, tenantId, jobId]);
@@ -72,7 +73,7 @@ export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 33
    FROM app.variation_approval a JOIN app.variation_revision r ON(r.tenant_id,r.id)=(a.tenant_id,a.revision_id)
    WHERE a.tenant_id=$1 AND a.job_id=$2`, [tenantId, jobId, revisionId]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3", [revisionId, tenantId, draftId]);
- });
+ },bindingInstalled ? {owner:admin,membershipId:LOCK_OWNER} : undefined);
  return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context, input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
 }
 export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof seedAccount>>) {
