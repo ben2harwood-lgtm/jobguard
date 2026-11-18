@@ -1770,6 +1770,16 @@ node tools/commercial-integrity-boundary.mjs
 node --test --test-concurrency=1 tools/commercial-integrity-{current-source-guard,boundary}.test.mjs
 ```
 
+## r5 recovery-attribution fixture follow-up
+
+The four focused recovery-attribution files went from 23 failures to zero on PostgreSQL 16.10. Their earlier failures included 21 rejected `recovery_attribution_revision` writes and an unbound shadow fixture. The private persistence fixture binds its seeded owner before assuming its restricted database role. The read controls exercise a bound practice owner, a separately bound foreign tenant, and an unbound request. The same policy mutation still has to fail each negative assertion. The pre-lock shadow control uses the established administrative seed because its draft job is outside the worker's admissible states.
+
+```sh
+pnpm --filter @jobguard/db exec vitest run test/recovery-attribution.integration.test.ts test/recovery-attribution-access.integration.test.ts test/recovery-attribution-replay.integration.test.ts test/recovery-attribution-figures.integration.test.ts --maxWorkers=1 --reporter=default
+```
+
+All 29 tests passed, including the exact fixture and mutation controls. The full checked-product run began before these fixture-only changes.
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

@@ -45,6 +45,14 @@ export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db
  try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
  catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
+/** Retain the restricted writer role with the fixture owner's actual request binding. */
+export async function boundAttributionOwner<T>(f:LockFixture,tenantId:string,work:(db:PoolClient)=>Promise<T>):Promise<T>{
+ return asFixtureTenant(f.admin,tenantId,async db=>{
+  await bindTestClient(f.admin,db,tenantId,LOCK_OWNER);
+  await db.query("SET LOCAL ROLE jobguard_migration");
+  return work(db);
+ });
+}
 export async function seedAccount(admin: Pool, tenantId: string = randomUUID(), net = 3360000, practiceDigest: string | null = null) {
  const tax=candidateM1TaxPolicy.calculateGroup(money(net),"standard_rate_20"),gross=addMoney(money(net),tax);
  const jobId = randomUUID(), scopeItemId = randomUUID(), baselineId = randomUUID(), draftId = randomUUID(), revisionId = randomUUID(), lineId = randomUUID();
