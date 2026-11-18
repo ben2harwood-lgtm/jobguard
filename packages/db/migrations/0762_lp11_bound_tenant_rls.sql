@@ -985,6 +985,115 @@ ALTER FUNCTION app.lp11_maintenance_track_tenant(uuid) OWNER TO jobguard_migrati
 REVOKE ALL ON FUNCTION app.lp11_maintenance_track_tenant(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.lp11_maintenance_track_tenant(uuid) TO jobguard_runtime;
 
+-- Direct maintenance advances only the next revision of the same draft.
+CREATE UNLOGGED TABLE control_plane.lp11_maintenance_draft_revision (
+ transaction_id xid8 PRIMARY KEY,
+ tenant_id uuid NOT NULL,
+ draft_id uuid NOT NULL,
+ revision_id uuid NOT NULL
+);
+ALTER TABLE control_plane.lp11_maintenance_draft_revision OWNER TO jobguard_migration;
+REVOKE ALL ON control_plane.lp11_maintenance_draft_revision FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_maintenance_draft_revision_tenant(draft uuid,revision uuid) RETURNS uuid
+ LANGUAGE sql VOLATILE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_maintenance_draft_revision s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned()
+  AND (s.draft_id,s.revision_id)=(draft,revision)
+$$;
+ALTER FUNCTION app.lp11_maintenance_draft_revision_tenant(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_maintenance_draft_revision_tenant(uuid,uuid) FROM PUBLIC;
+CREATE POLICY lp11_maintenance_draft_revision ON app.final_account_revision FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_maintenance_draft_revision_tenant(final_account_draft_id,id));
+
+CREATE OR REPLACE FUNCTION app.guard_final_account_draft_advance() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE maintenance boolean;
+BEGIN
+ IF NEW.current_revision_id IS DISTINCT FROM OLD.current_revision_id
+    OR NEW.revision IS DISTINCT FROM OLD.revision THEN
+  maintenance:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
+  IF maintenance AND NEW.current_revision_id IS NOT NULL THEN
+   INSERT INTO control_plane.lp11_maintenance_draft_revision(transaction_id,tenant_id,draft_id,revision_id)
+   VALUES(pg_current_xact_id(),NEW.tenant_id,NEW.id,NEW.current_revision_id);
+  END IF;
+  IF NEW.revision IS DISTINCT FROM OLD.revision + 1
+     OR NOT EXISTS (
+      SELECT 1 FROM app.final_account_revision r
+      WHERE r.tenant_id=NEW.tenant_id AND r.id=NEW.current_revision_id
+       AND r.final_account_draft_id=NEW.id AND r.revision=NEW.revision
+       AND r.previous_revision_id IS NOT DISTINCT FROM OLD.current_revision_id
+     ) THEN
+   RAISE EXCEPTION 'INVALID_TRANSITION' USING ERRCODE='23514';
+  END IF;
+  IF maintenance THEN
+   DELETE FROM control_plane.lp11_maintenance_draft_revision
+   WHERE transaction_id=pg_current_xact_id_if_assigned();
+  END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+
+-- The retired transition remains private. A maintenance invocation may change
+-- only its exact job, and the nested triggers keep their own narrower scopes.
+CREATE UNLOGGED TABLE control_plane.lp11_maintenance_job_transition (
+ transaction_id xid8 PRIMARY KEY,
+ tenant_id uuid NOT NULL,
+ job_id uuid NOT NULL
+);
+ALTER TABLE control_plane.lp11_maintenance_job_transition OWNER TO jobguard_migration;
+REVOKE ALL ON control_plane.lp11_maintenance_job_transition FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_maintenance_job_transition_tenant(j uuid) RETURNS uuid
+ LANGUAGE sql VOLATILE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_maintenance_job_transition s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.job_id=j
+$$;
+ALTER FUNCTION app.lp11_maintenance_job_transition_tenant(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_maintenance_job_transition_tenant(uuid) FROM PUBLIC;
+CREATE POLICY lp11_maintenance_job_transition_read ON app.job FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_maintenance_job_transition_tenant(id));
+CREATE POLICY lp11_maintenance_job_transition_update ON app.job FOR UPDATE TO jobguard_migration
+ USING (tenant_id=app.lp11_maintenance_job_transition_tenant(id))
+ WITH CHECK (tenant_id=app.lp11_maintenance_job_transition_tenant(id));
+
+CREATE OR REPLACE FUNCTION app.transition_job(p_tenant uuid,p_job uuid,p_expected integer,p_to varchar,p_reason varchar,
+ p_quote uuid DEFAULT NULL,p_net bigint DEFAULT NULL,p_policy varchar DEFAULT NULL,p_cap bigint DEFAULT NULL)
+RETURNS app.job LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE current_job app.job;
+ maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
+BEGIN
+ IF maintenance AND p_tenant IS NOT NULL AND p_job IS NOT NULL THEN
+  INSERT INTO control_plane.lp11_maintenance_job_transition(transaction_id,tenant_id,job_id)
+  VALUES(pg_current_xact_id(),p_tenant,p_job);
+ END IF;
+ SELECT * INTO current_job FROM app.job WHERE tenant_id=p_tenant AND id=p_job FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'job not found' USING ERRCODE='P0002'; END IF;
+ IF current_job.revision<>p_expected THEN RAISE EXCEPTION 'expected revision conflict' USING ERRCODE='40001'; END IF;
+ IF NOT ((current_job.status='draft' AND p_to='quoting' AND p_reason='start_quote') OR
+  (current_job.status='quoting' AND p_to='accepted' AND p_reason='accept_quote' AND p_quote IS NOT NULL) OR
+  (current_job.status='quoting' AND p_to='lost' AND p_reason='quote_lost') OR
+  (current_job.status='accepted' AND p_to='quoting' AND p_reason='cancel_acceptance') OR
+  (current_job.status='accepted' AND p_to='live' AND p_reason='switch_live' AND p_quote IS NOT NULL AND p_net IS NOT NULL AND p_policy IS NOT NULL AND p_cap IS NOT NULL) OR
+  (current_job.status='lost' AND p_to='quoting' AND p_reason='reopen_quote') OR
+  (current_job.status='live' AND p_to='invoiced' AND p_reason='issue_invoice') OR
+  (current_job.status='invoiced' AND p_to='paid' AND p_reason='balance_settled') OR
+  (current_job.status='paid' AND p_to='invoiced' AND p_reason IN ('payment_reversal','additional_amount_due')))
+ THEN RAISE EXCEPTION 'illegal job transition' USING ERRCODE='22023'; END IF;
+ UPDATE app.job SET status=p_to,revision=revision+1,updated_at=transaction_timestamp(),
+  accepted_quote_version_id=CASE WHEN p_to='accepted' THEN p_quote WHEN p_reason='cancel_acceptance' THEN NULL ELSE accepted_quote_version_id END,
+  baseline_quote_version_id=CASE WHEN p_to='live' THEN p_quote ELSE baseline_quote_version_id END,
+  accepted_net_value_pence=CASE WHEN p_to='live' THEN p_net ELSE accepted_net_value_pence END,
+  fee_policy_version=CASE WHEN p_to='live' THEN p_policy ELSE fee_policy_version END,
+  recovery_cap_pence=CASE WHEN p_to='live' THEN p_cap ELSE recovery_cap_pence END
+ WHERE tenant_id=p_tenant AND id=p_job RETURNING * INTO current_job;
+ IF maintenance THEN
+  DELETE FROM control_plane.lp11_maintenance_job_transition
+  WHERE transaction_id=pg_current_xact_id_if_assigned();
+ END IF;
+ RETURN current_job;
+END $$;
+
 CREATE OR REPLACE FUNCTION app.bind_small_builder_track() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE j uuid; mode_value varchar; source_value varchar; maintenance boolean:=app.lp6d_maintenance_login();
 BEGIN
@@ -1113,6 +1222,54 @@ BEGIN
     (NEW.state,NEW.object_version_id,NEW.server_verified_at) IS DISTINCT FROM (OLD.state,OLD.object_version_id,OLD.server_verified_at)
   THEN IF app.lp6d_maintenance_login() THEN PERFORM app.lp11_watchdog_live_maintenance(NEW.tenant_id,NEW.job_id); ELSE PERFORM app.require_watchdog_live(NEW.job_id); END IF; END IF;
   RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION app.ch4_guard_new_site_work() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE applies boolean:=true; job app.job;
+ maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
+BEGIN
+ IF maintenance THEN PERFORM app.lp11_open_maintenance_job(NEW.tenant_id,NEW.job_id); END IF;
+ IF TG_TABLE_NAME='supplier_document' THEN applies:=NEW.document_type='invoice'; END IF;
+ IF TG_TABLE_NAME='supplier_document_intake' THEN applies:=EXISTS(SELECT 1 FROM app.supplier_document d WHERE (d.tenant_id,d.job_id,d.id)=(NEW.tenant_id,NEW.job_id,NEW.document_id) AND d.document_type='invoice'); END IF;
+ IF TG_TABLE_NAME='variation' THEN applies:=NEW.origin='builder_logged' AND NEW.job_track='small_builder'; END IF;
+ IF TG_TABLE_NAME='evidence_upload' THEN
+  applies:=NEW.expected_content_type IN('image/png','image/jpeg','image/webp');
+  -- The existing begin-upload replay still reaches INSERT ... ON CONFLICT. Match only the existing request contract.
+  IF TG_OP='INSERT' AND EXISTS(SELECT 1 FROM app.evidence_upload u WHERE (u.tenant_id,u.job_id,u.id)=(NEW.tenant_id,NEW.job_id,NEW.id)
+   AND u.scope_item_id IS NOT DISTINCT FROM NEW.scope_item_id AND u.object_key=NEW.object_key AND u.expected_sha256=NEW.expected_sha256 AND u.expected_content_type=NEW.expected_content_type
+   AND u.maximum_bytes=NEW.maximum_bytes AND u.retention_class=NEW.retention_class AND u.device_captured_at IS NOT DISTINCT FROM NEW.device_captured_at) THEN applies:=false; END IF;
+  IF TG_OP='UPDATE' AND NEW.state NOT IN('quarantined','verified') THEN applies:=false; END IF;
+  IF TG_OP='UPDATE' AND NEW.state=OLD.state AND NEW.object_version_id IS NOT DISTINCT FROM OLD.object_version_id THEN applies:=false; END IF;
+ END IF;
+ IF TG_TABLE_NAME='scope_progress' THEN applies:=NEW.stage IN('in_progress','complete') AND NEW.stage IS DISTINCT FROM OLD.stage; END IF;
+ -- Proof evidence types: packages/core/src/proof.ts (proofEvidenceTypeSchema).
+ IF TG_TABLE_NAME='evidence_object' THEN applies:=NEW.kind='original' AND NEW.evidence_type IN('pre_cover_photo','completion_photo','excavation_photo','electrical_certificate'); END IF;
+ IF applies THEN
+  IF maintenance THEN
+   applies:=EXISTS(SELECT 1 FROM app.job_commercial_track
+    WHERE (tenant_id,job_id)=(NEW.tenant_id,NEW.job_id)
+     AND job_track='small_builder' AND environment='synthetic_demo');
+   IF applies THEN
+    SELECT * INTO job FROM app.job WHERE (tenant_id,id)=(NEW.tenant_id,NEW.job_id) FOR SHARE;
+    IF NOT FOUND OR (job.practice_session_digest IS NOT NULL AND NOT EXISTS(
+      SELECT 1 FROM app.authenticate_practice_session(job.practice_session_digest,NEW.tenant_id))) THEN
+     RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501';
+    END IF;
+   END IF;
+  ELSE
+   applies:=app.ch4_source_job(NEW.tenant_id,NEW.job_id);
+  END IF;
+ END IF;
+ IF applies THEN
+ IF EXISTS(SELECT 1 FROM app.final_account_lock WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id) THEN
+  RAISE EXCEPTION 'POST_LOCK_WORK_REQUIRES_LINKED_JOB' USING ERRCODE='P0001', DETAIL=(SELECT jsonb_build_object('version','job-linked-offer.v1','code','POST_LOCK_WORK_REQUIRES_LINKED_JOB','message','Start a linked job for this customer and site','jobId',NEW.job_id,'customerId',b.customer_id,'siteId',b.site_id)::text FROM app.job_party_current c JOIN app.job_party_binding b ON(b.tenant_id,b.job_id,b.id)=(c.tenant_id,c.job_id,c.binding_id) WHERE c.tenant_id=NEW.tenant_id AND c.job_id=NEW.job_id);
+ END IF;
+ PERFORM app.ch4_require_open(NEW.tenant_id,NEW.job_id);
+ END IF;
+ IF maintenance THEN
+  DELETE FROM control_plane.lp11_maintenance_job WHERE transaction_id=pg_current_xact_id_if_assigned();
+ END IF;
+ RETURN NEW;
 END $$;
 
 CREATE OR REPLACE FUNCTION app.job_source_insert_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
@@ -1994,7 +2151,8 @@ REVOKE CREATE ON SCHEMA app,control_plane FROM jobguard_session_lookup;
 DO $observation$ DECLARE relation text; BEGIN
  FOREACH relation IN ARRAY ARRAY[
   'job_commercial_track','final_account_lock','evidence_object','evidence_upload','job_record_proposal',
-  'supplier_document_version','supplier_fact_proposal','purchase_order_revision','job_source_original',
+  'supplier_document','supplier_document_version','supplier_fact_proposal','purchase_order_revision','purchase_order_draft',
+  'material_requirement','job_source_original',
   'job_diary_entry','customer_message_source','quote_document_version','quote_line','variation','variation_withdrawal'
  ] LOOP
   EXECUTE format('CREATE POLICY lp11_observation_reader ON app.%I FOR SELECT TO jobguard_runtime,jobguard_migration
@@ -2222,7 +2380,7 @@ BEGIN
   END IF;
   expression_using := regexp_replace(policy_row.predicate_using,
    tenant_setting_pattern, authority_expression, 'g');
-  IF policy_row.nspname='app' AND policy_row.relname IN ('job','job_party_current','job_party_binding','customer_revision','site_revision','evidence_upload','final_account_lock','evidence_object','final_check_manifest','final_check_manifest_source','customer_invoice','final_account_invoice_binding')
+  IF policy_row.nspname='app' AND policy_row.relname IN ('job','job_party_current','job_party_binding','customer_revision','site_revision','evidence_upload','final_account_lock','evidence_object','final_check_manifest','final_check_manifest_source','customer_invoice','final_account_invoice_binding','job_commercial_track','supplier_document','job_work_state_event')
    AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
    expression_using := regexp_replace(policy_row.predicate_using,tenant_setting_pattern,
     format('coalesce(%s,CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_maintenance_job_tenant(%s) END::text)',

@@ -3,7 +3,8 @@ import type { Pool } from "pg";
 import { jobSourceTextV1, parsePoundsToPence, type Observation } from "@jobguard/core";
 import type { FinalCheckManifest } from "./final-check-repository.js";
 import { decodeJobSourceFixture } from "./job-source-fixtures.js";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import type { VerifiedTenantContext } from "./tenant-context.js";
+import { ShadowObservationReadError, withObservationRead } from "./shadow-observation-reader.js";
 
 type Proposal = Pick<Observation, "text" | "facts" | "citations">;
 export type TypedTextResult = { status: "invalid" } | { status: "readable" } | { status: "proposal"; proposal: Proposal; ambiguousPrice?: boolean };
@@ -78,10 +79,10 @@ export function decodeFinalCheckTypedText(text: string, reference: string | null
 
 /** Runtime-only SELECTs: exact current original + intake + verified upload and
  * frozen evidence row. No hidden-table grant or caller-created evidence identity. */
-export async function readFinalCheckTypedText(pool: Pool, context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]): Promise<TypedTextResult> {
+export async function readFinalCheckTypedText(pool: Pool, context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number], shadowAuthority: Pool): Promise<TypedTextResult> {
   if (m.comparisons.tenantId !== context.tenantId || !s.processable || !s.evidenceId || s.sourceRef !== s.evidenceId ||
     !["job_diary_text", "customer_message_text"].includes(s.sourceKind)) return { status: "invalid" };
-  return withTenant(pool, context, async db => {
+  return withObservationRead<TypedTextResult>(pool, context, m.comparisons.jobId, async db => {
     const row = (await db.$client.query<{ bytes: Buffer; byte_length: number; sha256: string; synthetic_fixture_ref: string | null }>(`
       SELECT o.bytes,o.byte_length,o.sha256,o.synthetic_fixture_ref FROM app.job_source_original o
       JOIN (SELECT tenant_id,job_id,id,source_kind,evidence_id,object_version_id,sha256,source_received_at FROM app.job_diary_entry
@@ -117,5 +118,8 @@ export async function readFinalCheckTypedText(pool: Pool, context: VerifiedTenan
     // Unsupported extra-bearing originals remain pending, including unsafe
     // trailing clauses. Readability alone is not evidence of commercial absence.
     return result.status === "readable" && /\b(extra|additional|added|as well|on top)\b/iu.test(text) ? { status: "invalid" } : result;
+  }, shadowAuthority).catch((error: unknown): TypedTextResult => {
+    if (error instanceof ShadowObservationReadError && error.code === "OBSERVATION_JOB_UNAVAILABLE") return { status: "invalid" };
+    throw error;
   });
 }

@@ -3,7 +3,8 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { supplierFixtures, purchaseOrderAuthorityContent, purchaseOrderNet } from "@jobguard/core";
 import type { FinalCheckManifest } from "./final-check-repository.js";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import type { VerifiedTenantContext } from "./tenant-context.js";
+import { ShadowObservationReadError, withObservationRead } from "./shadow-observation-reader.js";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 const sha = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -47,12 +48,12 @@ export function decodePracticeStructuredSource(kind: string, input: unknown, doc
 }
 
 /** Called only by the shadow worker's ports. Ordinary source reads use the separate runtime login. */
-export async function readPracticeStructuredSource(pool: Pool, context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]) {
+export async function readPracticeStructuredSource(pool: Pool, context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number], shadowAuthority: Pool) {
   if (m.comparisons.tenantId !== context.tenantId || s.evidenceId !== null || !s.processable) return null;
   const table = s.sourceKind === "unlinked_supplier_version" ? "supplier_document_version"
     : s.sourceKind === "unlinked_supplier_document" ? "supplier_document" : s.sourceKind === "unlinked_purchase_order" ? "purchase_order_revision" : null;
   if (!table) return null;
-  return withTenant(pool, context, async db => {
+  return withObservationRead(pool, context, m.comparisons.jobId, async db => {
     const lockedScopeIds = [...m.comparisons.baselineItemIds, ...m.comparisons.lines.map(line => line.scopeItemId)];
     // A fresh source/track check also makes direct port calls fail closed outside synthetic practice.
     const row = (await db.$client.query<{ input: unknown; document: unknown }>(`SELECT to_jsonb(v) input,
@@ -64,5 +65,8 @@ export async function readPracticeStructuredSource(pool: Pool, context: Verified
        AND j.practice_session_digest IS NOT NULL AND j.provenance<>'imported' AND tr.job_track='small_builder' AND tr.environment='synthetic_demo'`,
     [context.tenantId, m.comparisons.jobId, s.sourceRef, JSON.stringify(s.input), m.cutoff, lockedScopeIds])).rows[0];
     return row ? decodePracticeStructuredSource(s.sourceKind, row.input, row.document) : null;
+  }, shadowAuthority).catch((error: unknown) => {
+    if (error instanceof ShadowObservationReadError && error.code === "OBSERVATION_JOB_UNAVAILABLE") return null;
+    throw error;
   });
 }

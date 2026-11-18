@@ -35,6 +35,16 @@ export async function closeFinalCheckFixture(f:FinalCheckFixture|undefined){if(!
 /** `as` binds this raw transaction to one fixture member's own request (LP-6d), as main's tests do. */
 // LP-6d: a raw fixture call binds its own actor: a member's persisted fixture credential, or the practice owner's session digest.
 export async function finalCheckTenant<T>(pool:Pool,tenantId:string,work:(client:PoolClient)=>Promise<T>,as?:{owner:Pool;membershipId:string}|{practiceDigest:string}|{realDigest:string}):Promise<T>{const db=await pool.connect();try{await db.query('BEGIN');await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);if(as&&'practiceDigest' in as)await db.query("SELECT app.bind_request('practice',$1,$2)",[as.practiceDigest,tenantId]);else if(as&&'realDigest' in as)await db.query("SELECT app.bind_request('real',$1,$2)",[as.realDigest,tenantId]);else if(as)await bindTestClient(as.owner,db,tenantId,as.membershipId);const result=await work(db);await db.query('COMMIT');return result;}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}}
+/** Raw positive fixtures and predecessor upgrade tests use the schema's own shadow authorization. */
+export async function finalCheckShadowJob<T>(pool:Pool,tenantId:string,jobId:string,work:(client:PoolClient)=>Promise<T>):Promise<T>{
+ return finalCheckTenant(pool,tenantId,async db=>{
+  const binding=(await db.query<{installed:boolean}>(
+   "SELECT to_regprocedure('app.lp11_bind_shadow_job(uuid,uuid)') IS NOT NULL AS installed"
+  )).rows[0]?.installed;
+  if(binding)await db.query("SELECT app.lp11_bind_shadow_job($1,$2)",[tenantId,jobId]);
+  return work(db);
+ });
+}
 export async function seedFinalCheckJob(f:FinalCheckFixture){
  const tenantId=FINAL_CHECK_TENANT,jobId=randomUUID(),scopeItemId=randomUUID(),baselineId=randomUUID(),draftId=randomUUID(),revisionId=randomUUID(),lineId=randomUUID(),accountId=randomUUID(),sessionId=randomUUID(),digest=createHash('sha256').update(sessionId).digest('hex'),hash="a".repeat(64);
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[tenantId]);
@@ -73,7 +83,7 @@ export async function insertFinalCheckEvidence(f:FinalCheckFixture,a:FinalCheckJ
  await db.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_verified_at) VALUES($1,$2,$3,$4,$5,$6,$8,100,'standard_evidence',clock_timestamp()+interval '1 day','verified',$7,clock_timestamp())",[upload,a.tenantId,a.jobId,a.scopeItemId,`synthetic/${evidence}`,hash,objectVersion,contentType]);
  await db.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at,device_captured_at) VALUES($1,$2,$3,$4,$5,'original',$9,$6,$7,$8,$11,$10,'standard_evidence',clock_timestamp(),clock_timestamp(),'2020-01-01')",[evidence,a.tenantId,upload,a.jobId,a.scopeItemId,`synthetic/${evidence}`,objectVersion,hash,evidenceType,contentType,byteLength]);
  });return evidence;}
-export async function finalCheckProposal(f:FinalCheckFixture,a:FinalCheckJob,evidence:string,scopeItemId:string|null=null){const signalId=randomUUID();await finalCheckTenant(f.shadow,a.tenantId,async db=>{
+export async function finalCheckProposal(f:FinalCheckFixture,a:FinalCheckJob,evidence:string,scopeItemId:string|null=null){const signalId=randomUUID();await finalCheckShadowJob(f.shadow,a.tenantId,a.jobId,async db=>{
  await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state,matched_scope_item_id) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Outside tap','low','held_for_final_check',$5)",[a.tenantId,a.jobId,signalId,randomUUID(),scopeItemId]);
  // The shadow role cannot read original evidence rows; the fixture reads the exact row as admin and writes its values.
  const row=(await f.admin.query("SELECT id,object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[a.tenantId,a.jobId,evidence])).rows[0];

@@ -184,7 +184,7 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
   });
   const repo=await prepareLock(f,a);
   expect((await repo.read(a.context,a.jobId)).captures.map(c=>c.id)).toEqual(expect.arrayContaining([logged,reviewed,...ids]));
-  const head=await asFixtureTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT current_revision_id,revision FROM app.final_account_draft WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0]!);
+  const head=await withTenant(f.runtime,a.context,async db=>(await db.$client.query("SELECT current_revision_id,revision FROM app.final_account_draft WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0]!);
   await repo.lock(a.context,{...a.input,finalAccountRevisionId:head.current_revision_id,expectedRevision:Number(head.revision)});const row=await lockRow(f,a.tenantId,a.jobId),captures=createLockSnapshot(row.snapshot).snapshot.captureRegister;
   const extras=captures.filter(c=>c.kind!=='baseline'); expect(extras.reduce((n,c)=>n+(c.valuePence??0),0)).toBe(360000);
   expect(captures.every(c=>c.kind!=='baseline')).toBe(true);expect(captureRegisterNetPence(row.snapshot)).toBe(360000);
@@ -265,7 +265,9 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
   await insertFixtureOriginalEvidence(f.admin,a.tenantId,a.jobId,a.scopeItemId,evidence,objectVersion);
   const first=await repo.lock(a.context,a.input),zeroLocked=JSON.stringify(await repo.read(a.context,a.jobId));
   const received=(await f.admin.query("SELECT server_received_at::text time FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[a.tenantId,evidence])).rows[0].time;
-  await asFixtureTenant(f.shadow,a.tenantId,async db=>{for(let index=0;index<25;index++){
+  await asFixtureTenant(f.shadow,a.tenantId,async db=>{
+   await db.query("SELECT app.lp11_bind_shadow_job($1,$2)",[a.tenantId,a.jobId]);
+   for(let index=0;index<25;index++){
    const signal=randomUUID();await db.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
     VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-sv4.v1',$5::timestamptz,'Fictional held evidence','low','held_for_final_check')`,[a.tenantId,a.jobId,signal,randomUUID(),first.lockedAt]);
    await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[a.tenantId,a.jobId,signal,evidence,objectVersion,LOCK_HASH,received]);
@@ -279,7 +281,9 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
   const unlocked=await seedAccount(f.admin,a.tenantId),unlockedRepo=await prepareLock(f,unlocked);const review=JSON.stringify(await unlockedRepo.read(unlocked.context,unlocked.jobId)),ownEvidence=randomUUID(),ownVersion=randomUUID();
   await insertFixtureOriginalEvidence(f.admin,a.tenantId,unlocked.jobId,unlocked.scopeItemId,ownEvidence,ownVersion);
   const ownReceived=(await f.admin.query("SELECT server_received_at::text time FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[a.tenantId,ownEvidence])).rows[0].time;
-  await asFixtureTenant(f.shadow,a.tenantId,async db=>{for(let index=0;index<25;index++){
+  await asFixtureTenant(f.shadow,a.tenantId,async db=>{
+   await db.query("SELECT app.lp11_bind_shadow_job($1,$2)",[unlocked.tenantId,unlocked.jobId]);
+   for(let index=0;index<25;index++){
    const signal=randomUUID();await db.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
     VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-sv4.v1',clock_timestamp(),'Fictional held evidence','low','held_for_final_check')`,[a.tenantId,unlocked.jobId,signal,randomUUID()]);
    await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[a.tenantId,unlocked.jobId,signal,ownEvidence,ownVersion,LOCK_HASH,ownReceived]);
@@ -358,7 +362,7 @@ if (expect.getState().testPath === fileURLToPath(import.meta.url)) describe("SV-
   const same=await seedAccount(f.admin,a.tenantId),foreign=await seedAccount(f.admin);
   for(const target of [same,foreign]){
    await repo.acceptTerms(target.context,{actorMembershipId:LOCK_OWNER,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
-   await expect(asFixtureTenant(f.admin,target.tenantId,db=>db.query(`INSERT INTO app.final_account_lock SELECT (jsonb_populate_record(NULL::app.final_account_lock,to_jsonb(l)||jsonb_build_object('id',$3::uuid,'tenant_id',$4::uuid,'job_id',$5::uuid,'locked_at',clock_timestamp()))).* FROM app.final_account_lock l WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId,randomUUID(),target.tenantId,target.jobId]))).rejects.toMatchObject({code:'23503'});
+   await expect(withTenant(f.admin,target.context,db=>db.$client.query(`INSERT INTO app.final_account_lock SELECT (jsonb_populate_record(NULL::app.final_account_lock,to_jsonb(l)||jsonb_build_object('id',$3::uuid,'tenant_id',$4::uuid,'job_id',$5::uuid,'locked_at',clock_timestamp()))).* FROM app.final_account_lock l WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId,randomUUID(),target.tenantId,target.jobId]))).rejects.toMatchObject({code:'23503'});
    await expect(asFixtureTenant(f.admin,target.tenantId,db=>db.query(`INSERT INTO app.final_account_scope_disposition SELECT (jsonb_populate_record(NULL::app.final_account_scope_disposition,to_jsonb(d)||jsonb_build_object('id',$3::uuid,'command_id',$4::uuid,'tenant_id',$5::uuid,'job_id',$6::uuid))).* FROM app.final_account_scope_disposition d WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId,randomUUID(),randomUUID(),target.tenantId,target.jobId]))).rejects.toMatchObject({code:'23503'});
   }
  });

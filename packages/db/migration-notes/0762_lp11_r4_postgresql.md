@@ -1683,6 +1683,35 @@ The held source trace was the customer insert at `packages/db/src/work-order-fix
 </details>
 
 
+## r5 follow-up on final-check and job maintenance
+
+The full-run baseline above still controls the landing decision. The following figures come from real PostgreSQL 16.10 focused reruns. The matching baseline counts use the same assertion names and include only the files in the table.
+
+| Regression and refusing route | Baseline failures in focused files | Focused failures after repair |
+| --- | ---: | ---: |
+| Final-check readers queried current originals, material documents and purchase orders on a queued runtime transaction without tenant authority. The runtime now consumes the existing one-use shadow permit for the exact synthetic job. | 29 | 0 |
+| The final-check worker used an unbound shadow read for persisted optional estimates. It now uses the same checked shadow job transaction as detection and publication. The original text-worker cases are included in the previous row. | included above | 0 |
+| Administrative post-lock evidence could pass `ch4_guard_new_site_work` because its owner could no longer see the stored commercial track and final-account lock. The checked maintenance path reads the exact triggering job. The focused recovery allocation tests also cover the private transition path. | 12 | 0 |
+| Raw shadow signals and test publication lacked the checked shadow transaction. The positive fixtures now bind the seeded job. `guard_final_account_draft_advance` separately reads the exact next revision during legitimate maintenance. | 7 | 0 |
+| The draft-advance trigger could not see the target revision under FORCE RLS in administrative invoice setup. The exact revision scope is cleared after validation. | 25 | 1 |
+| The historical practice-facts fixture called the private transition without a protected job scope. It now uses the existing maintenance login gate and exact row checks for the read, write and proposed row. | 10 | 0 |
+| The lock fixture performed an unbound draft lookup, synthetic shadow seed and target-tenant terms check. These operations now bind their original actors or exact shadow job. | 3 | 0 |
+| The trial fixture installed an admission as the migration role without first binding the seeded company owner. | 3 | 0 |
+
+The one remaining audit setup case in that cohort is `audit-dbsrc-03.integration.test.ts` → **home read survives unrelated workspace revocation**. The imported-job paid-shape fixture reached its deferred import-record witness after the transition and then failed with `IMPORT_RECORD_REQUIRED`. These remain outside the held work-order cases.
+
+The exact focused PostgreSQL commands were:
+
+```sh
+pnpm --filter @jobguard/db exec vitest run test/final-check-practice-readers.integration.test.ts test/real-fc-ordinary-words.integration.test.ts src/final-check-typed-text.test.ts test/recovery-line-allocation.integration.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db exec vitest run test/audit-dbsrc-03.integration.test.ts test/commercial-integrity-v3-published.integration.test.ts test/invoice-later.integration.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db exec vitest run test/imported-job-paid-shape.integration.test.ts test/recovery-line-allocation.integration.test.ts test/practice-facts.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/final-account-lock.integration.test.ts test/customer-portal-message.integration.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db exec vitest run test/migration-proof-loader.test.ts test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/lp-10-worker-login.integration.test.ts test/lp6a-binding.integration.test.ts test/free-first-job-conversion.integration.test.ts test/customer-portal-message.integration.test.ts --maxWorkers=1 --reporter=default
+```
+
+The source, recovery allocation and unit batch passed 163 of 163. The invoice, publication and audit batch passed 31 of 32. The snapshot and upgrade rerun passed 24 of 24. Free-first-job conversion passed 4 of 4, LP‑11 policy isolation passed 10 of 10, and LP‑6a binding including its exact relation-lock set passed 14 of 14. The populated catalogue capture produced 1,334 effective-privilege changes and 731 upgrade changes, of which 629 were policies. The two new maintenance relations are empty in the exact replay inventory.
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)
