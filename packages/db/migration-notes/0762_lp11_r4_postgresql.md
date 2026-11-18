@@ -2493,6 +2493,38 @@ nice -n 7 node tools/commercial-integrity-current-source-guard.mjs
 nice -n 7 node tools/commercial-integrity-boundary.mjs
 ```
 
+## r5 bound operative and job-source fixtures
+
+Seven failures outside the hold in the retained-workspace, operative and server-entitlement suites fell to zero. Six were rejected track setup writes under `jobguard_migration`. The seventh used an unbound INSERT SELECT, which read no membership and therefore never exercised the agreement lock. The fixture now binds its original contractor before taking the same migration role, so inserts reach the target policy and the lock assertions remain exact. One denial query used SQL AND, which could skip the feature guard after the membership read returned false. The test now checks both outcomes separately and still requires the same `42501 REQUEST_BINDING_REFUSED` from the feature guard.
+
+The PostgreSQL run passed 19 of 23. The other four reached the held customer insert and are already [listed by name](#tests-that-reached-the-held-work-order-fixture).
+
+All eight failures in the CH-4 source tests fell to zero. Reads of stored source receipts and writes in the copied database fixture now bind the exact job owner. The original stage and shadow roles, source checks, row comparisons and commitment order are exercised. All 14 assertions passed.
+
+```sh
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/contractor-retained-read-boundaries.integration.test.ts test/operative-entitlements.integration.test.ts test/server-entitlements.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-operative-bound-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/job-work-state-sources.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-work-sources-results.json
+```
+
+## r5 application and guard reruns at 5ef7a5b87
+
+The API unit run passed 4,507 of 4,509 tests in 260 of 261 files. Both failing checks in `apps/api/src/auth/context-boundary.test.ts` detect the tenant-context constructor call at `packages/db/src/demo-seed.ts:107` from LP-10 commit `7d3938aa3`. The context scanner, its reviewed file set and the held fixture remain untouched.
+
+- `holds for the real repository: only the bridge, its definition, the worker queue, the retained synthetic sandbox and the rehearsal construct a tenant context`
+- `pins the approved list to files that exist and still construct, and it covers every file the real tree constructs in`
+
+The web unit suite passed 3,618 of 3,618 tests in 252 files. Workspace typecheck passed in all seven packages. Both guard CLIs returned zero diagnostics and all 253 guard tests passed.
+
+```sh
+nice -n 4 pnpm --filter @jobguard/db build
+nice -n 4 pnpm typecheck
+nice -n 4 pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --testTimeout=30000 --exclude '**/*.integration.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-identity-api-results.json
+nice -n 4 pnpm --filter @jobguard/web test --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/database.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-identity-web-results.json
+node tools/commercial-integrity-current-source-guard.mjs
+node tools/commercial-integrity-boundary.mjs
+nice -n 9 node --test --test-concurrency=1 tools/commercial-integrity-{current-source-guard,boundary}.test.mjs
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)
