@@ -1,5 +1,6 @@
 import { withTenant } from "../src/tenant-context.js";
 // REAL-OWN-JOB-PROMISE: real PostgreSQL, exact practice originals, no seeded signals.
+import { withTenant } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -87,12 +88,23 @@ it("reveals the omitted hallway work with both originals; replay creates just on
     expect(await count(a, table), table).toBe(0);
 });
 
-it.each(["I also painted the cupboard", diary + "."])("unsupported own words keep completion and invoice blocked: %s", async text => {
+it.each(["I also painted the cupboard", diary + "."])("ordinary own words are examined and permit publication: %s", async text => {
+  const a = await ownJob(); await originals(a, text);
+  await a.lock(); const task = await run(a), result = await task.execute() as { runId: string };
+  await new FinalCheckCompletionRepository(f.shadow).publish(testTenantContext(a.tenantId), { version: "final-check-publication.v1", jobId: a.jobId, runId: result.runId, checkId: randomUUID() });
+  const fresh = await new FinalCheckRepository(f.shadow).manifest(testTenantContext(a.tenantId), a.jobId, task.manifest.id);
+  expect(fresh.sources.filter(s => s.sourceKind !== "builder_capture_not_scanned").every(s => ["zero_result", "detected"].includes(s.status))).toBe(true);
+  expect((await new FinalCheckRepository(f.runtime).read(a.context, a.jobId, a.digest)).state).toBe("completed");
+});
+
+it("invalidated evidence keeps completion, publication and invoice blocked", async () => {
   const a = await ownJob(); await originals(a);
-  await new JobSourceRepository(f.runtime).intake(a.context, a.jobId, a.digest, "diary", { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: false, text });
-  await a.lock(); const task = await run(a);
+  await a.lock();
+  await finalCheckTenant(f.admin, a.tenantId, db => db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) SELECT $1,tenant_id,evidence_id,$3,'verification_invalid' FROM app.job_source_original WHERE tenant_id=$2 AND job_id=$4 AND source_kind='diary'", [randomUUID(), a.tenantId, a.membershipId, a.jobId]));
+  const task = await run(a);
   await expect(task.execute()).rejects.toMatchObject({ code: "FINAL_CHECK_PENDING" });
   const fresh = await new FinalCheckRepository(f.shadow).manifest(testTenantContext(a.tenantId, { bound: false }), a.jobId, task.manifest.id);
+  await expect(new FinalCheckCompletionRepository(f.shadow).publish(testTenantContext(a.tenantId, { bound: false }), { version: "final-check-publication.v1", jobId: a.jobId, runId: randomUUID(), checkId: randomUUID() })).rejects.toThrow();
   expect(fresh.result).toBeNull(); expect(fresh.sources.some(s => s.status === "unsupported")).toBe(true);
   expect(await new FinalCheckRepository(f.runtime).read(a.context, a.jobId, a.digest)).toMatchObject({ state: "failed", items: [] });
   await expect(withTenant(practiceMaterialPool(f.runtime, a.digest), a.context, db => db.$client.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$5,$3,$4,'final','fictional@example.invalid','2026-11-09'::date,$6)", [a.tenantId, a.jobId, a.membershipId, randomUUID(), a.revisionId, "a".repeat(64)]))).rejects.toThrow(/FINAL_CHECK/u);

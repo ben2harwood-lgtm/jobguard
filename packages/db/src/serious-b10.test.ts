@@ -1,3 +1,4 @@
+import { fakeOutboxAuditProbe } from "./audit-protocol-test-fixture.js";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 import { ActionExecutor, type OutboundAdapter } from "./outbox.js";

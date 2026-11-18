@@ -91,3 +91,6 @@ export type DirectDebitPaymentState = "pending_submission" | "submitted" | "conf
 
 /** Routing context only; provider signature and account/tenant binding authenticate events. */
 export type DirectDebitWebhookContext = Readonly<{ tenantId: string; environment: "synthetic_demo" }>;
+
+/** Exact inbox identity computed after verifying a synthetic webhook. */
+export type FeeWebhookReceiptEvent = Readonly<{ key: string; hash: string }>;

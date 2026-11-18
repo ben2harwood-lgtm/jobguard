@@ -1,0 +1,6 @@
+{
+  "migration": "0760_extra_proceed_raiser_authority.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

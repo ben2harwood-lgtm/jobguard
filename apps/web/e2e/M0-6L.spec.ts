@@ -84,8 +84,13 @@ test("entered code persists a server-owned tenant, rejects replay and real email
  await expect(page.getByTestId("identity-tenant")).toHaveText(tenant!);
  const wrongTenant=await api(page,"/api/auth/invitations",{method:"POST",headers:{"x-csrf-token":session.body.csrfToken,"x-tenant-id":crypto.randomUUID()},data:{version:"identity-invitation.v1",email:"invitee@practice.invalid",requested_tenant_id:tenant,role:"foreman"}});expect(wrongTenant.status).toBe(403);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
- // Jobs still uses its separately scoped demo session; returning to identity preserves its own tenant.
- await page.getByRole("link",{name:"Open my jobs"}).click();await page.goto("/sign-in");await expect(page.getByTestId("identity-tenant")).toHaveText(tenant!);
+ // Explicit entry opens the linked practice firm; returning preserves the identity tenant.
+ await page.getByRole("button",{name:"Open my jobs",exact:true}).click();await page.waitForURL("**/practice-company");await page.goto("/sign-in");await expect(page.getByTestId("identity-tenant")).toHaveText(tenant!);
+ await page.getByRole("button",{name:"Sign out",exact:true}).click();
+ await expect(page.getByRole("heading",{name:"You're signed in.",exact:true})).toHaveCount(0);
+ await expect(page.getByRole("button",{name:"Request code",exact:true})).toBeVisible();
+ expect((await api(page,"/api/auth/session")).status).toBe(401);
+ await page.reload();await expect(page.getByRole("button",{name:"Request code",exact:true})).toBeVisible();
 });
 // The web adapter shares ONE identity request bucket ("web-bootstrap": 10 requests per 10 minutes) across the whole run, and
 // a code can be re-requested for the same email and purpose only after 60 s. This file therefore spends its requests

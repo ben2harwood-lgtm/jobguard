@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import * as React from "react";
+import { CustomerInvoices } from "./customer-invoices";
 import { JobFinalAccount } from "./job-final-account";
 
 // Use the real source contract before workspace dist artifacts have been built.
@@ -111,4 +112,14 @@ it.each(["network", "http", "invalid-json"])("releases the guard after %s failur
   (findButton(tree)!.props.onClick as () => void)();
   await tick();
   expect(fetch).toHaveBeenCalledTimes(3);
+});
+
+it("does not assemble on a variation save; explicit rebuilding passes the saved descendant to invoice controls",async()=>{
+ const {fetch,render,button}=await setup();
+ const account={id:"11111111-1111-4111-8111-111111111112",revision:2,sourceHash:"a".repeat(64),taxPolicyVersion:"reference",totals:{net:{pence:18000,currency:"GBP"},tax:{pence:3600,currency:"GBP"},total:{pence:21600,currency:"GBP"}},issueBlocked:false,findings:[],lines:[],proof:[],pending:[]};
+ vi.stubGlobal("window",new EventTarget());window.dispatchEvent(new CustomEvent("job-saved",{detail:{jobId}}));await tick();expect(fetch).toHaveBeenCalledTimes(1);
+ fetch.mockResolvedValueOnce({ok:true,json:async()=>({...view,account})});(button.props.onClick as ()=>void)();await tick();
+ function all(node:React.ReactNode):Node[]{if(Array.isArray(node))return node.flatMap(all);if(!React.isValidElement<Record<string,unknown>>(node))return [];return [node,...all(node.props.children as React.ReactNode)];}
+ const invoice=all(render()).find(node=>node.type===CustomerInvoices)!;
+ expect(invoice.props).toMatchObject({jobId,finalAccount:{id:account.id,sourceHash:account.sourceHash}});
 });

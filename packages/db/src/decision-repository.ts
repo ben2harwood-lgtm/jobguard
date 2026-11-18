@@ -1,3 +1,4 @@
+import { readJobProofStatement } from "./job-proof-statement.js";
 import { randomUUID } from "node:crypto";
 import { applyInitialSuppression, runJobChecks, type Finding, type JobFactSnapshot } from "@jobguard/core";
 import { z } from "zod";
@@ -12,7 +13,7 @@ export async function listDecisionInbox(database:TenantTransaction,jobId?:string
  // Keep the reviewed ownership helper unchanged. Its tenant placeholder is
  // supplied by withTenant's verified transaction setting; $1 remains the job filter.
  const ownedJobsSql=practiceOwnedJobsSql("$2").replaceAll("$1", "current_setting('app.tenant_id', true)::uuid");
- return(await database.$client.query(`${ownedJobsSql} SELECT f.*,
+ const rows=(await database.$client.query(`${ownedJobsSql} SELECT f.*,
   CASE WHEN f.classification='mandatory' AND f.kind='required_proof' THEN NULL ELSE r.resolution END resolution,r.resolved_at,
   CASE f.kind WHEN 'required_proof' THEN 'proof.requirement.electrical-certificate' ELSE 'materials.review.generic' END rule_id,
   'finding-rules.v1' rule_version,j.title job_title,
@@ -39,7 +40,15 @@ export async function listDecisionInbox(database:TenantTransaction,jobId?:string
      AND u.state='verified' AND u.object_version_id=e.object_version_id
      AND NOT EXISTS (SELECT 1 FROM app.evidence_invalidation i WHERE (i.tenant_id,i.evidence_id)=(e.tenant_id,e.id))))
  AND ($1::uuid IS NULL OR f.job_id=$1) AND ($2::text IS NULL OR j.id IN (SELECT id FROM practice_owned_job))
- ORDER BY (f.classification='mandatory') DESC,f.created_at,f.fingerprint`,[jobId??null,practiceSessionDigest??null])).rows;}
+ ORDER BY (f.classification='mandatory') DESC,f.created_at,f.fingerprint`,[jobId??null,practiceSessionDigest??null])).rows;
+ const retired=new Set<string>();
+ for(const id of new Set(rows.map(row=>row.job_id as string))) {
+  const requirement=await readJobProofStatement(database,id);
+  if(requirement.statement?.includesElectricalWork===false) {
+   for(const row of (await database.$client.query<{id:string}>("SELECT app.retired_job_proof_findings($1) id",[id])).rows) retired.add(row.id);
+  }
+ }
+ return rows.filter(row=>!retired.has(row.id));}
 
 const checkCommandV1 = z.object({ version: z.literal("finding-evaluation-command.v1"), commandId: z.guid({ error: "Invalid uuid" }),
  tenantId: z.guid({ error: "Invalid uuid" }), jobId: z.guid({ error: "Invalid uuid" }) }).strict();
@@ -65,16 +74,18 @@ export async function evaluateDecisionChecks<T>(database: TenantTransaction, raw
    AND u.object_version_id=e.object_version_id
    AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE (i.tenant_id,i.evidence_id)=(e.tenant_id,e.id))`,
   [command.tenantId, command.jobId])).rows;
+ const statement=await readJobProofStatement(database,command.jobId);
  const firstScope = scopes[0], secondScope = scopes[1] ?? firstScope;
  const snapshot: JobFactSnapshot = { version: "job-fact-snapshot.v1", tenantId: command.tenantId, jobId: command.jobId,
   revision: job.revision, unresolvedQuestions: [], scopes: firstScope ? [
-   { scopeItemId: firstScope.id, proofRule: "electrical", verifiedProofTypes: proofs.filter(p => p.scope_item_id===firstScope.id).map(p => p.evidence_type), materialsIncluded: false, valuePence: 20000 },
+   { scopeItemId: firstScope.id, proofRule: statement.statement?.includesElectricalWork===false?"completion_photo":"electrical", verifiedProofTypes: proofs.filter(p => p.scope_item_id===firstScope.id).map(p => p.evidence_type), materialsIncluded: false, valuePence: 20000 },
    { scopeItemId: secondScope!.id, proofRule: null, verifiedProofTypes: [], materialsIncluded: true, valuePence: 20000 },
   ] : [] };
  const selected = applyInitialSuppression(runJobChecks(snapshot), { minimumAdvisoryValuePence: 0, minimumSuggestionConfidence: 0, dailyAdvisoryBudget: 1 },
   Object.fromEntries(snapshot.scopes.map(scope => [scope.scopeItemId, scope.valuePence])));
  const evaluation = z.object({ created: z.number().int().nonnegative(), replayed: z.number().int().nonnegative() }).strict()
   .parse(await invoke("persist", { findings: [...selected.visible, ...selected.suppressed], suppressed: selected.suppressed.map(f => f.fingerprint) }));
+ if(statement.statement) await database.$client.query("SELECT app.retire_replaced_job_proof_findings($1,$2)",[command.jobId,command.commandId]);
  const response = { ...project(await listDecisionInbox(database, command.jobId, digest)), evaluation };
  await invoke("finish", { response });
  return response;

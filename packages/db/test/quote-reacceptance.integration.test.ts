@@ -24,7 +24,7 @@ beforeAll(async () => {
   await pg.initialise(); await pg.start();
   admin = await syntheticOwnerPool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
   await migrate(admin);
-  await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1550000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1550000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1550000-0000-4000-8000-000000000002','d1550000-0000-4000-8000-000000000001','owner');CREATE ROLE rq_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO rq_login;`);
+  await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('d1500000-0000-4000-8000-000000000001');INSERT INTO app.account(id,tenant_id,name)VALUES('d1550000-0000-4000-8000-000000000002','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','d1550000-0000-4000-8000-000000000002','d1500000-0000-4000-8000-000000000001','owner');CREATE ROLE rq_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO rq_login;`);
 context = await testBoundTenantContext(admin, T, M, bindingDigest);
   runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "rq_login", password: "synthetic", max: 6 });
   acceptance = new QuoteAcceptanceRepository(runtime);

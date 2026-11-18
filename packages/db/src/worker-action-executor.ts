@@ -42,6 +42,11 @@ export class WorkerActionExecutor {
         await client.query("COMMIT");
         return { kind: "cancelled" as const, code: "AUTHORIZATION_REVOKED" as const };
       }
+      if (z.object({ stale: z.literal(true) }).strict().safeParse(raw).success) {
+        await client.query("COMMIT");
+        this.telemetry.emit("outbox.unknown_outcome", { actionId: id, reason: "stale_claim" });
+        return;
+      }
       claimed = claimV1.parse(raw);
       const row = claimed.action;
       action = outboundActionV1Schema.parse({ version: "outbound-action.v1", id: row.id,

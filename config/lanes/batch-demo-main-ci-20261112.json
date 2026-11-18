@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-demo-main-ci-20261112": {
+      "branches": [
+        "codex/sandbox/batch-demo-main-ci-20261112"
+      ],
+      "allow": [
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough-pace.test.ts",
+        "apps/web/app/ui/walkthrough/walkthrough.tsx",
+        "apps/web/e2e/real-own-job-promise.spec.ts"
+      ]
+    }
+  }
+}

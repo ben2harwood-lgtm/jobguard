@@ -169,9 +169,16 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       for (const role of ["jobguard_worker", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"]) {
         expect(queries.some(({ sql }) => sql.includes(`CREATE ROLE ${role} NOLOGIN`) && sql.includes("NOINHERIT"))).toBe(true);
         expect(queries.some(({ sql, values }) => sql.includes("SELECT rolsuper,rolbypassrls") && values[0] === role)).toBe(true);
-        expect(queries.some(({ sql, values }) => sql.includes("FROM pg_auth_members m WHERE m.roleid=") && values[0] === role)).toBe(true);
+        if (role !== "jobguard_worker") {
+          expect(queries.some(({ sql, values }) => sql.includes("FROM pg_auth_members m WHERE m.roleid=") && values[0] === role)).toBe(true);
+        }
       }
       const migrationRole = queries.findIndex(({ sql }) => sql === 'SET ROLE jobguard_migration');
+      const workerCheck = queries.findIndex(({ sql }) => sql.includes("WHERE m.roleid='jobguard_worker'::regrole") &&
+        sql.includes("m.inherit_option AND NOT m.admin_option") && sql.includes("WHERE held.member=r.oid)=1"));
+      const workerRole = queries.findIndex(({ sql }) => sql.includes("CREATE ROLE jobguard_worker NOLOGIN"));
+      expect(workerCheck).toBeGreaterThan(workerRole);
+      expect(workerCheck).toBeLessThan(migrationRole);
       for (const role of ['jobguard_outbound_operator', 'jobguard_connector', 'jobguard_scim']) {
         const created = queries.findIndex(({ sql }) => sql.includes(`CREATE ROLE ${role}`));
         expect(created).toBeGreaterThanOrEqual(0);

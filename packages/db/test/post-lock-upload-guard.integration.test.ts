@@ -1,17 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { FinalCheckRepository } from "../src/final-check-repository.js";
-import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, finalCheckTenant, type FinalCheckFixture, type FinalCheckJob } from "./final-check-fixture.js";
+import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, finalCheckTenant, FINAL_CHECK_ACTOR, type FinalCheckFixture, type FinalCheckJob } from "./final-check-fixture.js";
+import { bindTestClient } from "./tenant-context-test-utils.js";
 
 let f: FinalCheckFixture;
 beforeAll(async () => { f = await createFinalCheckFixture(); }, 60000);
 afterAll(async () => { await closeFinalCheckFixture(f); });
+// LP-6d: the raw runtime upload writes are the fixture owner's own bound request.
+const asOwner = () => ({ owner: f.admin, membershipId: FINAL_CHECK_ACTOR });
 async function upload(a: FinalCheckJob, expired = true) {
  const id = randomUUID();
  await finalCheckTenant(f.runtime, a.tenantId, db => db.query(`INSERT INTO app.evidence_upload
   (id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
   VALUES($1,$2,$3,$4,$5,repeat('a',64),'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day')`,
- [id,a.tenantId,a.jobId,a.scopeItemId,`sv5-guard/${id}`]));
+ [id,a.tenantId,a.jobId,a.scopeItemId,`sv5-guard/${id}`]), asOwner());
  if (expired) await finalCheckTenant(f.admin, a.tenantId, db => db.query("UPDATE app.evidence_upload SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2", [a.tenantId,id]));
  return id;
 }
@@ -19,7 +22,7 @@ async function transition(a: FinalCheckJob, id: string, state: string) {
  return finalCheckTenant(f.runtime, a.tenantId, db => db.query(`UPDATE app.evidence_upload SET state=$3::varchar,
   server_verified_at=CASE WHEN $3::varchar='verified' THEN clock_timestamp() ELSE NULL END,
   object_version_id=CASE WHEN $3::varchar='verified' THEN 'post-lock.v1' ELSE NULL END,
-  rejection_code=CASE WHEN $3::varchar='rejected' THEN 'SYNTHETIC_EXPIRED' ELSE NULL END WHERE tenant_id=$1 AND id=$2`, [a.tenantId,id,state]));
+  rejection_code=CASE WHEN $3::varchar='rejected' THEN 'SYNTHETIC_EXPIRED' ELSE NULL END WHERE tenant_id=$1 AND id=$2`, [a.tenantId,id,state]), asOwner());
 }
 it.each(['quarantined','verified'])("C248 runtime refuses expired pre-lock pending -> %s in the lock-to-freeze window", async state => {
  const a=await seedFinalCheckJob(f),id=await upload(a);
@@ -42,7 +45,7 @@ it.each([false,true])("C248 SV-5 completes with an excluded expired source (reje
  const audit=(await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='final_check.sources_excluded'",[a.tenantId,a.jobId])).rows;
  expect(audit).toHaveLength(1);
  const binding=(await f.admin.query("SELECT lock_id,app.final_lock_hash($3::jsonb) digest FROM app.final_check_manifest WHERE tenant_id=$1 AND id=$2",[a.tenantId,m.id,JSON.stringify(m.excludedUploads)])).rows[0];
- expect(audit).toEqual([{payload:{references:{auditTrust:'checked_operation',manifestId:m.id,lockId:binding.lock_id},hashes:{exclusions:binding.digest}}}]);
+ expect(audit).toEqual([{payload:{references:{auditTrust:'checked_operation',auditActorKind:'system',auditActorRef:expect.stringMatching(/^system:database:[A-Za-z0-9_]+$/u),manifestId:m.id,lockId:binding.lock_id},hashes:{exclusions:binding.digest}}}]);
  // Replays retain the first frozen manifest and do not duplicate the exclusion audit.
  expect((await worker.begin(a.workerContext,a.jobId)).id).toBe(m.id);
  expect((await f.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='final_check.sources_excluded'",[a.tenantId,a.jobId])).rows[0].n).toBe(1);
@@ -87,6 +90,8 @@ it.each([
  try {
   await db.query(`BEGIN ISOLATION LEVEL ${isolation}`);
   await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+  // LP-6d: the caller is the fixture owner's own bound request (bound inside the pinned snapshot).
+  await bindTestClient(f.admin,db,a.tenantId,FINAL_CHECK_ACTOR);
   expect((await db.query('SELECT state FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2',[a.tenantId,id])).rows).toEqual([{state:initial}]);
   expect((await db.query('SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows[0].n).toBe(0);
   await a.lock();

@@ -1,0 +1,434 @@
+{
+  "migration": "0758_lp6e_audit_attribution.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-lp6e-audit-attribution",
+        "title": "LP-6e bound audit attribution",
+        "description": "Protected audit attribution; exact recorded definitions updated by this ruled LP-6e change. Presence helper EXECUTE is migration-only under the 16 Nov ruling.",
+        "cards": [
+          "LP-6e",
+          "LP-6d",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6e": "Stamp protected session attribution in audit seals.",
+          "LP-6d": "Bind remaining checked callers before activation.",
+          "LP-12": "Review private audit owner custody."
+        },
+        "sources": [
+          "packages/db/migrations/0758_lp6e_audit_attribution.sql"
+        ],
+        "tests": [
+          "packages/db/src/lp6e-audit.test.ts",
+          "packages/db/test/lp6e-audit.integration.test.ts"
+        ],
+        "gaps": [
+          "Main predecessor 8e5e90c3f994e722779e3bc23950da7358a3436f includes LP-6d 0749. PostgreSQL/browser CI and independent exact-head RED review remain required.",
+          "Migration SHA-256: d2f11a5f574756a0f5affcbba4bf588d8b6e03a1c9299d81d617626a89b36d09",
+          "16 Nov ruling: presence helper EXECUTE only for jobguard_migration plus binding owner; PUBLIC and runtime revoked.",
+          "LP-6e-LEGACY-WRITERS and authority-consumer closure remain named follow-ups; existing queue-tenant-trust hold until LP-10.",
+          "R4 authored only: requires #825 / 0754 first; router must merge prerequisite and regenerate observed PostgreSQL proof before acceptance."
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_actor()|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp6e-audit-attribution"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.current_tenant()|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp6e-audit-attribution"
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-lp6e-audit-attribution",
+        "title": "LP-6e bound audit attribution",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Current-main integration candidate; protected pins, real PostgreSQL CI and independent RED review remain required."
+        },
+        "cards": [
+          "LP-6e",
+          "LP-6d",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6e": "Stamp protected session attribution in audit seals.",
+          "LP-6d": "Bind remaining checked callers before activation.",
+          "LP-12": "Review private audit owner custody."
+        },
+        "downstream": "Owner-only actor and tenant lookups. Runtime cannot select checked trust. Protected sealer pin refresh remains held for its authorized owner.",
+        "sources": [
+          "packages/db/migrations/0758_lp6e_audit_attribution.sql"
+        ],
+        "tests": [
+          "packages/db/src/lp6e-audit.test.ts",
+          "packages/db/test/lp6e-audit.integration.test.ts"
+        ],
+        "gaps": [
+          "Main predecessor 8e5e90c3f994e722779e3bc23950da7358a3436f includes LP-6d 0749. PostgreSQL/browser CI and independent exact-head RED review remain required.",
+          "Migration SHA-256: d2f11a5f574756a0f5affcbba4bf588d8b6e03a1c9299d81d617626a89b36d09",
+          "16 Nov ruling: presence helper EXECUTE only for jobguard_migration plus binding owner; PUBLIC and runtime revoked.",
+          "LP-6e-LEGACY-WRITERS and authority-consumer closure remain named follow-ups; existing queue-tenant-trust hold until LP-10.",
+          "R4 authored only: requires #825 / 0754 first; router must merge prerequisite and regenerate observed PostgreSQL proof before acceptance."
+        ],
+        "path": "ap-lp6e-audit-attribution"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.current_actor()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_command_writer",
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      },
+      "after": {
+        "identity": "function:app.current_actor()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_audit_writer",
+          "jobguard_command_writer",
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.current_tenant()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_command_writer",
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      },
+      "after": {
+        "identity": "function:app.current_tenant()",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_audit_writer",
+          "jobguard_command_writer",
+          "jobguard_migration"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp6_bound_request"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp6e_append_outbox_audit(jsonb)|jobguard_runtime|EXECUTE|-",
+        "group": "a-lp6e-audit-attribution"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp6e_append_outbox_audit(jsonb)|jobguard_migration",
+        "group": "a-lp6e-audit-attribution"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp4_seal_audit(jsonb,text)",
+        "owner": "jobguard_audit_writer",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_command_writer",
+          "jobguard_migration"
+        ],
+        "definitionSha256": "ddad34ee09aeb9ad16503ad6a3f8f077cca9f80e31fbdb6ce8fb8c3fd80e6eb1",
+        "staticWrites": [
+          "app.audit_event",
+          "audit_control.audit_head"
+        ],
+        "staticCalls": [
+          "app.final_lock_canonical"
+        ]
+      },
+      "after": {
+        "identity": "function:app.lp4_seal_audit(jsonb,text)",
+        "owner": "jobguard_audit_writer",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_command_writer",
+          "jobguard_migration"
+        ],
+        "definitionSha256": "b284107216d8a262a3708295cc81e62fc1d2015288cc297d2674a293fb786509",
+        "staticWrites": [
+          "app.audit_event",
+          "audit_control.audit_head"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "app.final_lock_canonical",
+          "app.lp6e_audit_context"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp5_check_command_completion()",
+        "owner": "jobguard_command_writer",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "ded8855175424981e409a3f7a1f2b59994fbec2e1f4eb39f8d7b9d1b701cdeb7",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp5_command_result"
+        ]
+      },
+      "after": {
+        "identity": "function:app.lp5_check_command_completion()",
+        "owner": "jobguard_command_writer",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "1bf4c30ea92057cd0ae7964db874e44b548b7fc93b54fe6ff7fed7741bc37371",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp5_command_result"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6e_audit_context()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_audit_writer"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "app.lp6e_request_binding_present"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp6e_audit_context()|jobguard_migration",
+        "group": "a-lp6e-audit-attribution"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp6e_audit_context()|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp6e-audit-attribution"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp6e_append_outbox_audit(jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp4_seal_audit",
+          "app.lp6d_request_bound",
+          "app.lp6e_request_binding_present"
+        ]
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "current_actor",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "current_actor",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_audit_writer=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "current_tenant",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "current_tenant",
+        "args": "",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_runtime=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner,jobguard_command_writer=X/jobguard_binding_owner,jobguard_audit_writer=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6e_append_outbox_audit",
+        "args": "p_event jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp6e_audit_context",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_audit_writer=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

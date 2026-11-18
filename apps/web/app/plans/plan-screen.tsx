@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
-import { subscriptionPlanView, type SubscriptionPlanView } from "@jobguard/core";
+import { getSubscriptionCatalogue, subscriptionAnnualAvailable, subscriptionPounds, subscriptionPlanView, type SubscriptionPlanView } from "@jobguard/core";
 import { SubscriptionOnboarding } from "./subscription-onboarding";
 
 type CompanyMembership = { tenantId: string; name?: string };
@@ -30,20 +30,35 @@ export async function submitSubscriptionAction(tenantId: string, commandId: stri
   const response = await fetcher("/api/subscriptions/commands", { method: "POST", credentials: "same-origin", cache: "no-store",
     headers: { "content-type": "application/json", "x-csrf-token": session.csrfToken, "x-tenant-id": tenantId },
     body: JSON.stringify({ version: "subscription-http-command.v1", commandId, command }) });
+  if (!response.ok && (await response.clone().json().catch(() => null))?.code === "SUBSCRIPTION_PENDING_CHANGE") {
+    throw new Error("A downgrade is already pending. Reload to see its saved effective date.");
+  }
   if (!response.ok) throw new Error("The subscription action could not be completed. Reload to check the saved result before trying again.");
   return await response.json() as { status?: string; effectiveDate?: string; paymentStatus?: string; executionStatus?: "unavailable" };
 }
-export function PlanDetails({ view }: { view: SubscriptionPlanView }) {
+function PublicCatalogue() {
+  const plans = getSubscriptionCatalogue({ version: "subscription-catalogue-request.v1", policyVersion: "subscription_pricing_policy_v4" });
   return <>
     <p>Prices and period amounts are principal, excluding VAT.</p>
-    <section aria-label="Plans"><h2>Solo and Builder</h2>{view.plans.map(plan => <article key={plan.plan}>
-      <h3>{plan.plan}</h3><p>{plan.monthlyLabel} per month · {plan.includedPlaces} jobs on the go included</p>
-      <p>Monthly maximum: {plan.maximumLabel}</p>{view.annualAvailable && plan.annualLabel && <p>{plan.annualLabel} per year</p>}
+    <section aria-label="Plans"><h2>Solo and Builder</h2>{plans.map(plan => <article key={plan.plan}>
+      <h3>{plan.plan}</h3><p>{subscriptionPounds(plan.monthlyPence)} per month · {plan.included} jobs on the go included</p>
+      <p>Monthly maximum: {subscriptionPounds(plan.maximumPence)}</p>{subscriptionAnnualAvailable && <p>{subscriptionPounds(plan.annualPence)} per year</p>}
     </article>)}</section>
-    <section aria-label="Your subscription"><h2>Your subscription</h2>{view.billingDay !== null && <p>Your billing day: the {view.billingDay}</p>}{view.agreement ? <>
+  </>;
+}
+function formatBillingDay(day: number): string {
+  if (day >= 11 && day <= 13) return `${day}th`;
+  const suffix = day % 10 === 1 ? "st" : day % 10 === 2 ? "nd" : day % 10 === 3 ? "rd" : "th";
+  return `${day}${suffix}`;
+}
+export function PlanDetails({ view, showCatalogue = true }: { view: SubscriptionPlanView; showCatalogue?: boolean }) {
+  return <>
+    {showCatalogue && <PublicCatalogue />}
+    <section aria-label="Your subscription"><h2>Your subscription</h2>{view.billingDay !== null && <p>Your billing day: the {formatBillingDay(view.billingDay)}</p>}{view.agreement ? <>
       <p>{view.agreement.plan} · {view.agreement.cadence} · effective {view.agreement.effectiveDate}</p>
       <p>Monthly maximum: {view.agreement.maximumLabel}.</p>
     </> : <p>No accepted subscription agreement.</p>}</section>
+    {view.pendingDowngrade && <p role="status">Downgrade to Solo pending for {view.pendingDowngrade.effectiveDate}; capacity and approval are checked again when due.</p>}
     <section aria-label="Subscription periods"><h2>Subscription periods</h2>{view.periods.length === 0 ? <p>No issued subscription periods.</p>
       : view.periods.map(period => <article key={period.id}>
         <h3>{period.startDate} to {period.endDateExclusive} (end date excluded)</h3>
@@ -103,20 +118,21 @@ export function PlanScreen({ consentTerms, consentText }: { consentTerms?: React
     return () => { active = false; };
   }, []);
   return <main className="workspace-page"><h1>Plans and subscription</h1>
-    <p><a href="/meter">Jobs on the go</a></p>
+    <p><a className="workspace-back" href="/meter">Jobs on the go</a></p>
     <p>Synthetic demonstration with made-up company data. Figures are hypothetical. No real payments are taken.</p>
+    <PublicCatalogue />
     {memberships.length > 0 && <label>Company <select aria-label="Company" value={tenantId} disabled={busy} onChange={e => void switchCompany(e.target.value)}>
       {memberships.map(m => <option key={m.tenantId} value={m.tenantId}>{m.name ?? m.tenantId}</option>)}
     </select></label>}
-    {error ? <p role="alert">{error === "sign-in" ? <>Sign in to an authorised company to read its subscription. <a href="/sign-in">Company sign-in</a></>
+    {error ? <p role="alert">{error === "sign-in" ? <>Sign in to an authorised company to read its subscription. <a className="workspace-back" href="/sign-in">Company sign-in</a></>
       : "Subscription details are unavailable. Reload to try again."}</p>
-      : view ? <><PlanDetails view={view} />
+      : view ? <><PlanDetails view={view} showCatalogue={false} />
         {!view.agreement && <SubscriptionOnboarding />}
         <section aria-label="Manage subscription"><h2>Manage subscription</h2>
           {consentTerms}
           <label>Plan <select aria-label="Plan" value={plan} disabled={busy} onChange={e => { setPlan(e.target.value as "Solo" | "Builder"); setConsent(false); }}><option>Solo</option><option>Builder</option></select></label>
           <label><input type="checkbox" checked={consent} disabled={busy} onChange={e => setConsent(e.target.checked)} />I accept these monthly terms and the selected plan's monthly maximum for this made-up company.</label>
-          <button type="button" disabled={busy || !consentTerms || !consentText || !consent || view.billingDay === null || view.agreement?.plan === plan}
+          <button type="button" disabled={busy || !consentTerms || !consentText || !consent || view.billingDay === null || view.agreement?.plan === plan || (plan === "Solo" && view.pendingDowngrade !== null)}
             onClick={() => void act({ version: "subscription-command.v1", kind: view.agreement ? "change" : "accept", plan, cadence: "monthly",
               anchorDay: view.billingDay, termsVersion: "subscription_terms_v1", catalogueVersion: "subscription_pricing_policy_v4",
               consentText, maximumPence: plan === "Solo" ? 4900 : 16900, expectedRevision: view.revision })}>

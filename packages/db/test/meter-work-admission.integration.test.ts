@@ -260,4 +260,27 @@ describe("MON-1 work admission attacks", () => {
   expect(definitions).toHaveLength(6);
   for (const row of definitions) { expect(row.runtime).toBe(false); expect(row.definition).not.toMatch(/app\.(shadow|finding|recovery|eligibility)/u); }
  });
+ it("REAL-PROOF company diary restart still calls capacity admission after finished", async () => {
+  const { JobSourceRepository } = await import("../src/job-source-repository.js");
+  const a = await company(); await activation(a);
+  await command(a, "finish", 0);
+  // Owner-only historical clock fixture: this job's finish tail has expired.
+  await workTenant(f.admin, a.tenantId, async db => {
+   await db.query("SET LOCAL session_replication_role='replica'");
+   await db.query("UPDATE app.job_activation SET activated_at=clock_timestamp()-interval '70 days' WHERE tenant_id=$1 AND job_id=$2", [a.tenantId,a.jobId]);
+   await db.query("UPDATE app.job_work_state_event SET fact_at=clock_timestamp()-interval '10 days',recorded_at=clock_timestamp()-interval '10 days' WHERE tenant_id=$1 AND job_id=$2 AND kind='finished_on_site'", [a.tenantId,a.jobId]);
+  }, { membershipId: a.actorId });
+  const occupants=[];
+  for(let i=0;i<6;i++){const b=await seedWorkJob(f,a.tenantId);await activation(b);occupants.push(b);}
+  const before=await events(a), ledger=await snapshots(a);
+  const input={version:"job-diary-input.v1",commandId:randomUUID(),entryMode:"typed",onSite:true,text:"Fictional renewed site work."};
+  const intake=()=>new JobSourceRepository(f.runtime).intake(a.context,a.jobId,a.actorId,"diary",input);
+  await expect(intake()).rejects.toThrow("METER_UPGRADE_REQUIRED");
+  expect(await events(a)).toEqual(before);expect(await snapshots(a)).toEqual(ledger);
+  await command(occupants[0]!,"close",0,{reason:"other",note:"Fictional place released"});
+  await intake();
+  expect((await events(a)).map(e=>e.kind)).toEqual(["finished_on_site","finished_cancelled","first_site_evidence"]);
+  expect(await currentCommitment(a)).toBe(true);
+ });
+
 });

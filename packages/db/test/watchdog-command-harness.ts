@@ -7,9 +7,10 @@ import { deflateSync } from "node:zlib";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
+import type { SupplierLineMatchInput } from "@jobguard/core";
 import {
   DiscrepancyRepository, EvidenceService, InboxRelevanceRepository, MaterialRepository, ProofCommandService, PurchaseOrderRepository, ReadinessRepository,
-  SupplierDocumentRepository, SupplierMatchRepository, JobWorkStateRepository, JobSourceRepository, migrate,
+  SupplierDocumentRepository, SupplierMatchRepository, SupplierLineCorrectionRepository, JobWorkStateRepository, JobSourceRepository, migrate, requireLiveJob, withTenant,
 } from "../src/index.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
@@ -207,6 +208,33 @@ const cases: Case[] = [
 ];
 const caseKeys = cases.map(c => c.key);
 
+// The supplier-lines route holds this guard while its repository transaction commits.
+// Keep this post-0624 seam out of the pre-0096 legacy command-id cases.
+async function supplierLines(jobId: string) {
+  const identityUserId = (await admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [tenant, member])).rows[0].identity_user_id as string;
+  const actor = { membershipId: member, identityUserId }, repo = new SupplierLineCorrectionRepository(runtime);
+  const line = () => ({ lineId: randomUUID(), versionId: randomUUID(), documentVersionId: randomUUID(),
+    sourceHash: pngHash, page: 1, sku: "TIMBER", orderReference: "FICTIONAL-PO", unit: "each", baseUnit: "each", unitsPerPack: "1" });
+  const facts: SupplierLineMatchInput = { version: "supplier-line-match-input.v1", environment: "synthetic_demo",
+    tenantId: tenant, jobId, merchantId: randomUUID(),
+    orders: [{ ...line(), quantity: "10", unitNetPence: 100, discountBps: 0, rateVersionId: randomUUID(), validFrom: "2030-01-01", validTo: "2030-01-31" }],
+    receipts: [{ ...line(), acceptedQuantity: "8" }],
+    bills: [{ ...line(), kind: "invoice", documentReference: "FICTIONAL-INV", quantity: "10", netPence: 1000,
+      taxBasis: "net", supplyDate: "2030-01-02", creditsInvoiceVersionId: null }], aliases: [], mappings: [] };
+  const input = { version: "supplier-line-snapshot.v1", commandId: randomUUID(), snapshotId: randomUUID(), facts };
+  const correction = { version: "supplier-line-correction.v1", commandId: randomUUID(), snapshotId: input.snapshotId,
+    expectedRevision: 0, sourceVersionId: facts.bills[0]!.versionId, orderVersionId: facts.orders[0]!.versionId };
+  const guarded = <T>(run: () => Promise<T>) => withTenant(runtime, ctx, async db => {
+    await requireLiveJob(db, jobId);
+    return run();
+  });
+  return { input, correction,
+    confirm: (raw: unknown = input) => guarded(() => repo.create(ctx, actor, raw)),
+    correct: (raw: unknown = correction) => guarded(() => repo.correct(ctx, actor, jobId, raw)),
+    read: () => repo.read(ctx, actor, { version: "supplier-line-match-read.v1", jobId, snapshotId: input.snapshotId }),
+  };
+}
+
 async function boot() {
   dir = await mkdtemp(join(tmpdir(), `jg-${label}-`));
   const port = await freePort(portBase, 400);
@@ -237,7 +265,7 @@ const probeJob = async (c: Case) => { let job = probes.get(c.key); if (!job) { j
 
 
   return {
-    label, tenant, member, otherMember, get ctx() { return ctx; }, RULE, DAY, NEXT, CONFLICT, cases, caseKeys, live, probeJob, norm, pre, st, confirm, correction, orderInput, placeCommand, png, pngHash, storage,
+    label, tenant, member, otherMember, get ctx() { return ctx; }, RULE, DAY, NEXT, CONFLICT, cases, caseKeys, live, probeJob, norm, pre, st, confirm, correction, orderInput, placeCommand, png, pngHash, storage, supplierLines,
     get admin() { return admin; }, get runtime() { return runtime; }, get observed() { return observed; },
     get repos() { return { po, docs, match, checks, readiness, inbox, evidence, proof, materials }; },
     get skuId() { return skuId; }, boot, stop,

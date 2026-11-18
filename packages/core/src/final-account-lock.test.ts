@@ -44,7 +44,7 @@ describe("SV-4 final-account lock", () => {
         expect(FINAL_ACCOUNT_DECLARATION).toBe("I've reviewed the work and extras on this job and this is my complete final account.");
         expect(FINAL_ACCOUNT_REVIEW_PROMPT).toBe("Anything else to add before you finish this job?");
         expect(FINAL_CHECK_RUNNING_TEXT).toBe("Running JobGuard's final check");
-        expect(FINAL_CHECK_TERMS_STATEMENTS).toEqual(["analyses job records;", "may identify possible unrecorded extras;", "compares them independently with the completed final account;", "may earn the success fee on paid recoveries that qualify."]);
+        expect(FINAL_CHECK_TERMS_STATEMENTS).toEqual(["Practice wording only — this records this practice firm's choice to try Final Check with made-up job records. It is not legal terms, authorisation to charge, or permission to use real customer data.", "analyses job records;", "may identify possible unrecorded extras;", "compares them independently with the completed final account;", "may earn the success fee on paid recoveries that qualify."]);
     });
     it("delegates to the SV-1 snapshot and verifies all source bindings", () => {
         const s = source(), lock = createFinalAccountLockSnapshot(s);

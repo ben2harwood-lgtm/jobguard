@@ -18,10 +18,24 @@ test("own blank-firm job finds omitted hallway work and confirms only a draft ex
   await click(page, "Make my draft");
   await click(page, "Check and edit my draft");
   await click(page, "Save customer and site");
+  // Scope confirmation must wait for the normal save to reload its persisted binding.
+  await expect(page.getByTestId("party-customer")).toHaveText("Practice Customer");
+  await expect(page.getByTestId("party-site")).toHaveText("14 Fictional Street, London, SW1A 1AA");
+  await expect(page.getByRole("form", { name: "Customer and site details" }).getByText(/^Saved at /u)).toBeVisible();
   await click(page, "Accept Paint walls");
   await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
   await click(page, "Confirm scope");
   await click(page, "Price the work");
+  await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
+  await expect(page.locator(".quote-line")).toHaveCount(1);
+  await expect(page.getByLabel("Quantity Paint walls", { exact: true })).toHaveValue("1");
+  await expect(page.getByLabel("Unit Paint walls", { exact: true })).toHaveValue("item");
+  await expect(page.getByLabel("Unit rate Paint walls", { exact: true })).toHaveValue("200.00");
+  await expect(page.getByTestId("quote-net")).toHaveText("GBP 200.00");
+  const coverage = page.getByRole("region", { name: "Coverage diff" });
+  await expect(coverage).toContainText("Unpriced captured scope: 0");
+  await expect(coverage).toContainText("Blocking questions: 0");
+  await expect(page.getByRole("button", { name: "Preview immutable quote", exact: true })).toBeEnabled();
   await startWatchdogJob(page);
   const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
   // Reopen the saved job so the site-work and Final Check panels load current state (as REAL-OWN-JOB-TO-PAID does).

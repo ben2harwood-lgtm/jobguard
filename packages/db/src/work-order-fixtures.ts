@@ -1,10 +1,11 @@
+import type { AuthenticatedMembership } from "./tenant-context.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { encodeWorkOrderCsv, referenceApprovalRulesV1, type WorkOrderSampleId } from "@jobguard/core";
 import { ContractorPartyRepository } from "./contractor-party-repository.js";
 import { ContractorRepository } from "./contractor-repository.js";
 import { SorRepository } from "./sor-repository.js";
-import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "./tenant-context.js";
+import { verifiedTenantContextFromMembership, withTenant } from "./tenant-context.js";
 
 /**
  * Generated, fictional fixtures for ENT-2 (C3): the demo organisation's housing association, contract, schedule of rates, sites and operative,
@@ -25,11 +26,16 @@ export type WorkOrderDemo = {
 };
 const contractDocument = (sorVersionId: string) => ({ version: "client-contract.v1", reference: "FICTIONAL-HA-2026", startsOn: "2026-01-01", endsOn: null, sorVersionIds: [sorVersionId], tenderedAdjustment: { numerator: "-35", denominator: "1000" }, photoRule: "required", vatCode: "synthetic-unreviewed", exportedNotBilledAlertDays: 30 });
 
-/** Idempotent per organisation; safe to call from two browsers at once (one tenant-level session lock). */
+/** Idempotent per organisation; safe to call from two browsers at once (one tenant-level transaction lock). */
 export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedMembership, options: { siteCount?: number } = {}): Promise<WorkOrderDemo> {
   const lock = await pool.connect();
+  let failed = false;
+  let discard = false;
   try {
-    await lock.query("SELECT pg_advisory_lock(hashtextextended($1,56))", [principal.tenantId]);
+    // Keep this coordinator connection pinned under transaction-mode pooling.
+    // Business commands retain their separate transactions on the existing pool.
+    await lock.query("BEGIN");
+    await lock.query("SELECT pg_advisory_xact_lock(hashtextextended($1,56))", [principal.tenantId]);
     const contractors = new ContractorRepository(pool), parties = new ContractorPartyRepository(pool), rates = new SorRepository(pool);
     const view = () => contractors.query(principal, { version: "contractor-query.v1", tenantId: principal.tenantId, resource: "organisation" });
     const command = async (fields: Record<string, unknown>) => contractors.command(principal, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view()).revision, ...fields });
@@ -74,9 +80,20 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedM
     await parties.linkCustomer(principal, clientId, { version: "contractor-customer-link.v1", environment: "synthetic_demo", commandId: randomUUID(), customerRevisionId });
     const operativeMembershipId = (await command({ kind: "member.invite", role: "operative", email: "demo.operative@fictional.invalid", scope: { kind: "team", id: team.id }, clientId: null, contractId: null })).id;
     return { clientId, contractId, contractVersionId, scheduleId, sorVersionId: sor.versionId, siteRevisionIds, teamId: team.id, branchId: team.branch_id, operativeMembershipId, adjustment: { numerator: "-35", denominator: "1000" }, issuedOn: "2026-10-08" };
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
-    await lock.query("SELECT pg_advisory_unlock(hashtextextended($1,56))", [principal.tenantId]).catch(() => undefined);
-    lock.release();
+    // This transaction owns only the coordinator lock, so rollback also handles
+    // early returns and acquisition failures without changing partial seed writes.
+    try {
+      await lock.query("ROLLBACK");
+    } catch (error) {
+      discard = true;
+      if (!failed) throw error;
+    } finally {
+      lock.release(discard);
+    }
   }
 }
 

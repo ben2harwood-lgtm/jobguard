@@ -74,6 +74,24 @@ it("a live customer message stores its sponsor, delegated kind, evidence and cus
   expect(await message(w,raw)).toEqual(receipt);
 });
 
+it("the evidence live guard accepts only the customer's bound message job and tenant", async () => {
+  const w = await customer();
+  await transaction(async c => {
+    await c.query("SET LOCAL ROLE jobguard_migration");
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [w.t]);
+    await refuse(c, "SELECT app.require_watchdog_live($1)", [w.j]);
+    await bind(c, w);
+    // Delegation does not expose the sponsor through ordinary actor accessors.
+    expect((await c.query("SELECT app.current_actor() actor")).rows[0].actor).toBeNull();
+    await c.query("SELECT app.require_watchdog_live($1)", [w.j]);
+    await refuse(c, "SELECT app.require_watchdog_live($1)", [randomUUID()]);
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [randomUUID()]);
+    await refuse(c, "SELECT app.require_watchdog_live($1)", [w.j]);
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [w.t]);
+    await c.query("SELECT app.require_watchdog_live($1)", [w.j]);
+  });
+});
+
 it("every other non-superuser role, including login roles, is denied both private helpers", async()=>{
   const roles=(await f.admin.query<{rolname:string}>(`SELECT rolname FROM pg_roles WHERE NOT rolsuper
     AND (rolname LIKE 'jobguard_%' OR rolcanlogin)

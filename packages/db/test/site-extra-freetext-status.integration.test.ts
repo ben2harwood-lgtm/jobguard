@@ -25,7 +25,7 @@ it("free-text statuses replay one immutable server statement, remain unpriced, a
   expect(await read()).toEqual(stored);
   const audit = await c.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='contractor.extra.work_status_recorded'", [f.p.tenantId, first.variationId]);
   expect(audit.rows).toEqual([{ payload: {
-   references: { job: f.jobId, extra: first.variationId, command: raw.commandId, workStatus, source: "operative_statement", auditTrust: "checked_operation" },
+   references: { job: f.jobId, extra: first.variationId, command: raw.commandId, workStatus, source: "operative_statement", auditTrust: "checked_operation", auditActorKind: "bound_member", auditActorRef: expect.stringMatching(/^membership:[a-f0-9-]{36}$/u) },
    classifications: { action: "operational" },
   } }]);
   expect((await c.admin.query("SELECT kind FROM app.extra_event WHERE tenant_id=$1 AND variation_id=$2 ORDER BY sequence", [f.p.tenantId, first.variationId])).rows).toEqual([{ kind: "logged" }]);

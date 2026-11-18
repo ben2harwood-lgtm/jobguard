@@ -27,10 +27,10 @@ export class ShadowObservationReader {
     const exists = (await this.pool.query<{ available: boolean }>("SELECT to_regclass('app.final_check_terms_acceptance') IS NOT NULL AS available")).rows[0]?.available;
     if (!exists) throw new ShadowObservationReadError("TERMS_RELATION_UNAVAILABLE");
   }
-  async hasAcceptedTerms(context: VerifiedTenantContext): Promise<boolean> {
+  async hasAcceptedTerms(context: VerifiedTenantContext, jobId: string): Promise<boolean> {
     // SV-4 owns this append-only record. An absent relation is a startup error, never a permissive fallback.
     await this.assertTermsRelation();
-    return withTenant(this.pool, context, async db => (await db.$client.query("SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1 AND terms_version=$2 LIMIT 1", [context.tenantId, FINAL_CHECK_TERMS_VERSION])).rowCount === 1);
+    return withTenant(this.pool, context, async db => (await db.$client.query<{ accepted: boolean }>("SELECT app.final_check_runtime_job_terms($1,$2) AS accepted", [jobId, FINAL_CHECK_TERMS_VERSION])).rows[0]?.accepted === true);
   }
   async read(context: VerifiedTenantContext, raw: unknown): Promise<{ observations: readonly Observation[]; captures: readonly ShadowCapture[] }> {
     const parsed = readV1.safeParse(raw); if (!parsed.success) throw new ShadowObservationReadError("INVALID_OBSERVATION_READ");

@@ -6,9 +6,9 @@
     "deployment": "local-only"
   },
   "implementationSha256": {
-    "packages/core/src/capture.ts": "299efdbcca2376fb61f2da3a9ca75dbb8c0c4ccd3492d117c3ffaff83633757a",
+    "packages/core/src/capture.ts": "2984cfba0f8866f96a1a648f8fd6f5fd9866195d5fd7dc047ad581dd5fbc8254",
     "packages/ai/src/capture.ts": "febb8a6c3a8a8328ff8d6742cf63ab5e9b1148c057c902ab3a63a4b9aa36c3dc",
-    "packages/ai/src/capture-fixture-parser.ts": "9fa351dd37ac02eef3dead8c35520cd4f78bc313746346ed7bce28fd166b91d7",
+    "packages/ai/src/capture-fixture-parser.ts": "04493e34fd8993abe766d82b7fa3584d3f308bcce9a787ce4e277a2451216241",
     "packages/ai/src/fixture-provider.ts": "c4b11ef40797f2dfd3ced96cad708e1f450e42e055f3af1d7a1fcb5565573d1d",
     "packages/ai/src/gateway.ts": "eb5a784b9fa2f604ef27204fdcb9495a32704528e8fa696cfadfc7e04b6ddeb4",
     "packages/ai/src/types.ts": "5ec490f7e93cecadb3c6e672beb9eebf23e53f2acaf99bfde83e5f585b4b0911",
@@ -31,7 +31,7 @@
   },
   "hashes": {
     "datasetSha256": "5af8e52d50338febf261ef2fae2ef01b24795ed43885ecaf5eaf0a94fe8a830f",
-    "labelsSha256": "783ff1e46e41edf5d80e85a73b8d87ca9b54da75fd029714d17b2c0839ca74e3"
+    "labelsSha256": "a844950e1da946b351af66b3a7d8314327453c4b9fca535a12202d9b39e7c811"
   },
   "targets": {
     "scopeIntentRecallPercent": 95,
@@ -447,7 +447,7 @@
       },
       "errors": [],
       "sourceSha256": "3ef3b99f70e73ee5e198db26b942cdb7211d7b3d68f37a0b1334cf8b16fbd8de",
-      "predictionSha256": "1056acfffb0726145b0764e57d6bd1053050fdaea778686bfa88aebb8351a841"
+      "predictionSha256": "3e0ac39c24d625d2f56942fe6429994da9ac4af7dd42231e885d08cda620e266"
     },
     {
       "id": "walk-19",

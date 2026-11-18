@@ -1,7 +1,7 @@
 import { directDebitMandateNext } from "@jobguard/core";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import { FeeCollectionError, parse, pence, type Attempt } from "./contracts.js";
+import { FeeCollectionError, parse, pence, type FeeWebhookReceiptEvent, type Attempt } from "./contracts.js";
 import type { CollectionRail, RailEvent } from "./executor.js";
 const id = z.string().uuid();
 const mandateState = z.enum(["created", "pending_submission", "active", "cancelled", "failed", "expired"]);
@@ -96,8 +96,9 @@ export class FakeGoCardlessRail implements CollectionRail {
     return mandate?.state === "cancelled" ? "MANDATE_REVOKED" : "MANDATE_NOT_ACTIVE";
   }
   /** Signed synthetic store fixture, distinct from either provider's protocol. */
-  signStoreResult(tenantId: string, attempt: Readonly<Attempt>) {
-    const body = JSON.stringify({ version: "fake-fee-result.v1", environment: "synthetic_demo", tenantId, attempt });
+  signStoreResult(tenantId: string, attempt: Readonly<Attempt>, event?: FeeWebhookReceiptEvent) {
+    const body = JSON.stringify({ version: event ? "fake-fee-result.v2" : "fake-fee-result.v1",
+      environment: "synthetic_demo", tenantId, attempt, ...(event ? { event } : {}) });
     return { body, signature: createHmac("sha256", this.testSigningSecret).update(body).digest("hex") };
   }
   async submit(tenantId: string, attempt: Readonly<Attempt>) {

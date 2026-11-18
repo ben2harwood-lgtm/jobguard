@@ -8,7 +8,7 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { bootstrapSyntheticDemo, SYNTHETIC_DATABASE_NAME } from "../src/demo-bootstrap.js";
 import { runAuditCheckpointHandoff } from "../src/audit-checkpoint-handoff.js";
-import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, appendAuditBatch, verifyAuditChain, verifySignedAuditExport, verifiedTenantContextFromMembership, type AuthenticatedMembership, type AuditEvent, type AuditCheckpoint, type TenantTransaction } from "../src/index.js";
+import { AuditExportRepository, ContractorRepository, requireContractorRequestContext, exportAuditCheckpoints, appendAuditBatch, verifyAuditChain, verifySignedAuditExport, verifiedTenantContextFromMembership, type AuthenticatedMembership, type AuditEvent, type AuditCheckpoint, type TenantTransaction } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, directory: string, admin: Pool, owner: Pool, runtime: Pool, ownerUrl: string, runtimeUrl: string, alternateUrl: string;
@@ -45,7 +45,8 @@ async function ordinary(p: AuthenticatedMembership) {
   await contractor.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: view.revision, kind: "member.invite", role: "supervisor", email: `${randomUUID()}@fictional.invalid`, scope: { kind: "tenant", id: p.tenantId }, clientId: null, contractId: null });
 }
 async function exportFor(p: AuthenticatedMembership) {
-  return new AuditExportRepository(runtime).create(verifiedTenantContextFromMembership(p), { membershipId: p.membershipId, identityUserId: p.identityUserId }, { version: "audit-export-request.v1", commandId: randomUUID() });
+  // LP-6d: the export is the practice owner's own bound request (its session principal's request context).
+  return new AuditExportRepository(runtime).create(requireContractorRequestContext(p), { membershipId: p.membershipId, identityUserId: p.identityUserId }, { version: "audit-export-request.v1", commandId: randomUUID() });
 }
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
@@ -223,7 +224,8 @@ it("[A6] only A advances with the exact hand-off event, operator and stored serv
   for (const table of ["app.audit_event", "audit_control.checkpoint", "app.audit_export_checkpoint"]) expect((afterA[table] as unknown[]).length).toBe((beforeA[table] as unknown[]).length + 1);
   const { entries, rows } = await verify(a.tenantId); await verify(b.tenantId);
   const event = entries.at(-1)!;
-  expect(event).toMatchObject({ version: "audit.v2", actorRef: "operations:audit-checkpoint-handoff", eventType: "audit.checkpoint.handed_off", subjectType: "audit-checkpoint", subjectRef: a.tenantId, payload: { references: { auditTrust: "lower_trust", environment: "synthetic_demo", priorSequence: h.sequence, operator, sessionUser: "fixture_owner" }, hashes: { priorHead: h.event_hash }, classifications: { action: "security" } } });
+  // LP-6e 0758: new events are audit.v3; the operator job is sealed as system work, never a person.
+  expect(event).toMatchObject({ version: "audit.v3", actorRef: "operations:audit-checkpoint-handoff", eventType: "audit.checkpoint.handed_off", subjectType: "audit-checkpoint", subjectRef: a.tenantId, payload: { references: { auditTrust: "lower_trust", auditActorKind: "system", auditActorRef: "system:database:fixture_owner", environment: "synthetic_demo", priorSequence: h.sequence, operator, sessionUser: "fixture_owner" }, hashes: { priorHead: h.event_hash }, classifications: { action: "security" } } });
   expect(event.occurredAt).toBeInstanceOf(Date); expect(rows.at(-1)).toMatchObject({ sequence: event.sequence, eventHash: event.eventHash });
   expect(rows).toHaveLength(2); expect(await snapshot(b.tenantId)).toEqual(beforeB);
 });

@@ -4,10 +4,10 @@ import { afterEach, expect, it, vi } from "vitest";
 import { WorkspaceShell } from "./workspace-shell";
 import type { CaptureWorkspaceResponse } from "@jobguard/api/capture-contracts";
 
-const state = vi.hoisted(() => ({ values: [] as unknown[], effects: [] as (() => unknown)[], live: false, editor: null as React.ReactNode }));
+const state = vi.hoisted(() => ({ values: [] as unknown[], effects: [] as (() => unknown)[], setters: [] as ReturnType<typeof vi.fn>[], live: false, editor: null as React.ReactNode }));
 vi.mock("react", async original => ({
- ...await original<typeof React>(),
- useState: (initial: unknown) => [state.values.length ? state.values.shift() : typeof initial === "function" ? initial() : initial, vi.fn()],
+ ...await original<typeof React>(), useContext: () => 0,
+ useState: (initial: unknown) => { const setter=vi.fn();state.setters.push(setter);return [state.values.length ? state.values.shift() : typeof initial === "function" ? initial() : initial,setter]; },
  useRef: (current: unknown) => ({ current }),
  useCallback: (fn: unknown) => fn,
  useEffect: (effect: () => unknown) => { state.effects.push(effect); },
@@ -32,17 +32,17 @@ vi.mock("./job-final-account", async original => {
 });
 afterEach(() => vi.unstubAllGlobals());
 const jobId = "11111111-1111-4111-8111-111111111112";
-function workspace(status: CaptureWorkspaceResponse["status"], fragment = "") {
+function workspace(status: CaptureWorkspaceResponse["status"], fragment = "", initialPricing = false, savedJobId = jobId) {
  vi.stubGlobal("React", React);
  const capture: CaptureWorkspaceResponse = {
-  version: 1, environment: "synthetic_demo", captureId: jobId, jobId, proposalId: jobId, reviewId: jobId,
+  version: 1, environment: "synthetic_demo", captureId: savedJobId, jobId: savedJobId, proposalId: savedJobId, reviewId: savedJobId,
   status, source: { text: "Fictional room", version: 1, kind: "text", acquisition: null, audioByteLength: 0 },
   proposal: { title: "Fictional decorating job", lines: [], questions: [] }, review: null,
  };
- state.live = status === "live";
- state.effects = [];
+ state.live = ["live", "invoiced", "paid"].includes(status);
+ state.effects = [];state.setters=[];
  state.values = [null, capture, null, false, fragment];
- return WorkspaceShell({ jobId });
+ return WorkspaceShell({ jobId: savedJobId, initialPricing });
 }
 function ids(html: string, attribute: string) {
  return [...new Set([...html.matchAll(new RegExp(`(?:^|\\s)${attribute}="([^"]+)"`, "gu"))].map(match => match[1]))].sort();
@@ -53,10 +53,25 @@ it("puts the job title, continue card and customer/site before scope and practic
  expect(positions.every(position => position >= 0)).toBe(true);
  expect(positions).toEqual([...positions].sort((a,b) => a-b));
 });
+it.each(["draft", "quoting", "live"] as const)("keeps the %s Scope link ahead of the journey, after any pre-live proof", status => {
+ const html = renderToStaticMarkup(workspace(status));
+ const nav = html.indexOf('<nav class="workspace-stages"');
+ expect(nav).toBeGreaterThanOrEqual(0);
+ const first = html.slice(nav).match(/<(?:a|button|input|select|textarea)\b[^>]*>/u)?.[0];
+ expect(first).toBe('<a href="#scope">');
+ if (status === "live") expect(html).not.toContain('id="work-proof"');
+ else expect(html.indexOf('id="work-proof"')).toBeLessThan(nav);
+ expect(html.indexOf('aria-label="Saved job sections"')).toBeLessThan(html.indexOf('data-testid="uiwire15-journey"'));
+});
+it.each(["draft", "quoting", "accepted", "live", "invoiced", "paid"] as const)("renders one proof stage in the %s editor view", status => {
+ const html = renderToStaticMarkup(workspace(status, "#quote"));
+ expect(html.match(/id="work-proof"/gu)).toHaveLength(1);
+ expect(html.match(/>Attach generated practice image<\/button>/gu)).toHaveLength(1);
+});
 it("keeps the data-testid set rendered by the live job before reordering", () => {
  const html = renderToStaticMarkup(workspace("live", "#quote"));
  // Captured from unmodified HEAD with this same loaded live-job fixture.
- expect(ids(html, "data-testid")).toEqual(["accepted-net", "accepted-revision", "activation-policy", "base-credit", "confirmed-bill-reduction", "customer-messages", "final-account-lock", "final-baseline", "final-check-reveal", "final-gross", "final-net", "final-source-hash", "final-variation-net", "final-vat", "job-diary", "job-status", "job-work-state", "mandatory-decision-count", "prevention-panel", "proof-state", "quote-delivery", "quote-gross", "quote-net", "quote-revision", "quote-vat", "real-external-actions", "recovery-allocation-workbench", "stage-status", "supplier-debt-recognized", "supplier-document-identities", "supplier-document-status", "supplier-invoice-identities", "ttc-eligible-recovery-principal", "uiwire15-journey", "watchdog-panel", "workspace-job-id"]);
+ expect(ids(html, "data-testid")).toEqual(["accepted-net", "accepted-revision", "activation-policy", "base-credit", "confirmed-bill-reduction", "customer-messages", "final-account-lock", "final-baseline", "final-check-reveal", "final-gross", "final-net", "final-source-hash", "final-variation-net", "final-vat", "job-diary", "job-status", "job-work-state", "mandatory-decision-count", "prevention-panel", "proof-state", "proof-statement-loading", "quote-delivery", "quote-gross", "quote-net", "quote-revision", "quote-vat", "real-external-actions", "recovery-allocation-workbench", "stage-status", "supplier-debt-recognized", "supplier-document-identities", "supplier-document-status", "supplier-invoice-identities", "ttc-eligible-recovery-principal", "uiwire15-journey", "watchdog-panel", "workspace-job-id"]);
  for (const id of ["captured-job-workspace", "commercial-integrity", "customer-messages", "customer-messages-title", "diary-mode", "diary-text", "final-check", "final-check-title", "job-diary", "job-diary-title", "materials", "next-workday-readiness", `parties-${jobId}`, "practice-facts", "practice-facts-title", "practice-receipts", "practice-receipts-title", "purchase-orders", "recovery-allocations", "recovery-allocation-title", "recovery-cases", "relevance-inbox", "site-work", "site-work-title", "supplier-documents", "supplier-match", "things-to-check"]) expect(ids(html, "id")).toContain(id);
 });
 it.each(["draft", "quoting", "accepted", "live", "invoiced", "paid", "lost"] as const)("provides real scope and quote anchors for %s", status => {
@@ -109,18 +124,27 @@ it.each(["#quote", "#job-diary", "#customer-messages", "#variations-title", "#fi
  expect(html).toContain(`data-job-id="${jobId}"`);
 });
 
-it("keeps the review key stable when a command advances a plain job URL", () => {
- function reviewKey(status: CaptureWorkspaceResponse["status"]) {
-  const tree = workspace(status);
+it.each(["", "#quote", "#work-proof", "#final-account-title", "#job-diary"])("keeps the review mounted across status snapshots at %s", fragment => {
+ function review(status: CaptureWorkspaceResponse["status"]) {
+  const tree = workspace(status, fragment);
   function find(node: React.ReactNode): React.ReactElement | undefined {
    if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return;
    if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node;
    return React.Children.toArray(node.props.children).map(find).find(Boolean);
   }
-  return find(tree)?.key;
+  return find(tree) as React.ReactElement<{ initialPricing: boolean }>;
  }
- expect(reviewKey("quoting")).toBeTruthy();
- expect(reviewKey("live")).toBe(reviewKey("quoting"));
+ // A draft-to-quoting read can arrive after the user has opened pricing locally.
+ // Changing the initial view must not reset that local state or the editor's fields.
+ const key = review("draft").key;
+ expect(key).toBeTruthy();
+ for (const status of ["draft", "quoting", "accepted", "live", "invoiced", "paid"] as const) {
+  expect(review(status).key).toBe(key);
+ }
+ if (fragment === "#quote") {
+  expect(review("draft").props.initialPricing).toBe(false);
+  expect(review("quoting").props.initialPricing).toBe(true);
+ }
 });
 
 
@@ -152,4 +176,204 @@ it("does not put live job controls inside the quote fieldset or sidebar", () => 
  }
  inspect(state.editor);
  expect(activationFound).toBe(true);
+});
+
+it("reloads saved projections on real hash navigation", () => {
+ workspace("quoting");
+ const listeners = new Map<string, () => void>();
+ vi.stubGlobal("fetch", vi.fn(async()=>({ok:false,status:403})));
+ vi.stubGlobal("window", { location:{hash:"#final-account-title"},
+  addEventListener:(name:string,fn:()=>void)=>listeners.set(name,fn), removeEventListener:vi.fn() });
+ const cleanup=state.effects[1]!() as ()=>void;
+ listeners.get("hashchange")!();
+ expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/proposal`, expect.objectContaining({cache:"no-store"}));
+ expect(state.setters[3]).toHaveBeenCalledWith(true);
+ expect(state.setters[0]).toHaveBeenCalledWith(null);
+ expect(state.setters[1]).toHaveBeenCalledWith(null);
+ cleanup();
+});
+it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"])("keeps the same job editor identity for %s navigation", fragment => {
+ function review(node:React.ReactNode):React.ReactElement | undefined {
+  if (Array.isArray(node)) return node.map(review).find(Boolean);
+  if (!React.isValidElement<{children?:React.ReactNode}>(node)) return;
+  if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node;
+  return review(node.props.children);
+ }
+ expect(review(workspace("live",fragment))!.key).toBe(jobId);
+});
+
+
+it.each(["", "#scope", "#quote", "#final-account-title", "#recovery-cases"])("uses main’s final-account mounting inside pricing at %s", fragment => {
+ const html = renderToStaticMarkup(workspace("live", fragment));
+ const pricing = fragment !== "" && fragment !== "#scope";
+ expect(html.match(/data-testid="final-account-lock"/gu) ?? []).toHaveLength(pricing ? 1 : 0);
+ expect(html.match(/data-testid="final-check-reveal"/gu)).toHaveLength(1);
+ if (pricing) expect(html.indexOf('id="final-account-title"')).toBeLessThan(html.indexOf('id="practice-tools"'));
+ // Once pricing has mounted the account, ordinary navigation keeps the same
+ // review key and the account tree. The browser test checks the live DOM identity.
+ const mounted = renderToStaticMarkup(workspace("live", fragment, true));
+ expect(mounted.match(/data-testid="final-account-lock"/gu)).toHaveLength(1);
+ expect(mounted.match(/data-testid="final-check-reveal"/gu)).toHaveLength(1);
+});
+
+
+it("opens tour pricing without running the shell fragment scroll", () => {
+ const tree = workspace("quoting", "", true);
+ vi.stubGlobal("document", { getElementById: vi.fn() });
+ // The fragment-focus effect must exit before looking for an anchor.
+ state.effects[3]!();
+ expect(document.getElementById).not.toHaveBeenCalled();
+ const html = renderToStaticMarkup(tree);
+ expect(html).toContain('class="quote-editor"');
+ expect(html.match(/Attach generated practice image/gu)).toHaveLength(1);
+});
+
+it.each(["accepted", "live", "invoiced", "paid"] as const)("renders one proof stage when activation loads before the %s shell snapshot", status => {
+ const tree = workspace(status, "#quote");
+ // The editor has received activation; the shell can still have its pre-live snapshot.
+ state.live = true;
+ const html = renderToStaticMarkup(tree);
+ expect(html).toContain('aria-label="Live activation"');
+ expect(html.match(/id="work-proof"/gu)).toHaveLength(1);
+ expect(html.match(/Attach generated practice image/gu)).toHaveLength(1);
+ const proof = html.indexOf('id="work-proof"');
+ const editor = html.indexOf('class="quote-editor"');
+ expect(proof < editor).toBe(status === "accepted");
+});
+
+it("isolates editor identity when navigating to a different saved job", () => {
+ function keys(node: React.ReactNode): string[] {
+  if (Array.isArray(node)) return node.flatMap(keys);
+  if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return [];
+  if (typeof node.type === "function" && node.type.name === "ReviewProposal") return [String(node.key)];
+  return keys(node.props.children);
+ }
+ expect(keys(workspace("quoting", "#quote"))).toEqual([jobId]);
+ const otherJob = "22222222-2222-4222-8222-222222222222";
+ expect(keys(workspace("quoting", "#quote", false, otherJob))).toEqual([otherJob]);
+});
+
+it("a committed snapshot supersedes a pending section refresh even if fetch ignores abort", async () => {
+ let complete!: (response: unknown) => void;
+ const fetch = vi.fn(() => new Promise(resolve => { complete = resolve; }));
+ vi.stubGlobal("fetch", fetch);
+ const listeners = new Map<string, () => void>();
+ vi.stubGlobal("window", { location: { hash: "#quote" }, addEventListener: (name: string, fn: () => void) => listeners.set(name, fn), removeEventListener: vi.fn() });
+ function review(node: React.ReactNode): React.ReactElement<{ result: CaptureWorkspaceResponse; onSnapshot: (snapshot: CaptureWorkspaceResponse) => void }> | undefined {
+  if (Array.isArray(node)) return node.map(review).find(Boolean);
+  if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return;
+  if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node as ReturnType<typeof review>;
+  return review(node.props.children);
+ }
+ const editor = review(workspace("quoting", "#quote"))!;
+ const cleanup = state.effects[1]!() as () => void;
+ listeners.get("hashchange")!();
+ const committed = { ...editor.props.result, status: "accepted" as const };
+ editor.props.onSnapshot(committed);
+ expect((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].signal!.aborted).toBe(true);
+ complete({ ok: true, json: async () => editor.props.result });
+ await new Promise<void>(resolve => setImmediate(resolve));
+ expect(state.setters[1]!.mock.calls).toEqual([[null], [committed]]);
+ cleanup();
+});
+it("a denied section refresh fails closed without disguising it as an absent capture", async () => {
+ const fetch = vi.fn(async () => ({ ok: false, status: 403 }));
+ vi.stubGlobal("fetch", fetch);
+ let navigate!: () => void;
+ vi.stubGlobal("window", { location: { hash: "#quote" }, addEventListener: (_: string, fn: () => void) => { navigate = fn; }, removeEventListener: vi.fn() });
+ workspace("quoting");
+ const cleanup = state.effects[1]!() as () => void;
+ navigate(); await new Promise<void>(resolve => setImmediate(resolve));
+ expect(fetch).toHaveBeenCalledTimes(1);
+ expect(state.setters[2]).toHaveBeenCalledWith("forbidden");
+ cleanup();
+});
+
+it("hides the old job immediately when the job prop changes before its load effect", () => {
+ vi.stubGlobal("React", React);
+ state.effects = []; state.setters = [];
+ state.values = [null, { jobId, status: "quoting" }, null, false, "#quote"];
+ const html = renderToStaticMarkup(WorkspaceShell({ jobId: "22222222-2222-4222-8222-222222222222" }));
+ expect(html).toContain("Loading your job…");
+ expect(html).not.toContain('data-testid="workspace-job-id"');
+});
+
+
+it.each(["", "#scope", "#quote", "#work-proof"])("passes explicit section navigation %s to the nested quote editor", fragment => {
+ function review(node: React.ReactNode): React.ReactElement<{ sectionNavigationKey: string }> | undefined {
+  if (Array.isArray(node)) return node.map(review).find(Boolean);
+  if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return;
+  if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node as ReturnType<typeof review>;
+  return review(node.props.children);
+ }
+ expect(review(workspace("accepted", fragment))!.props.sectionNavigationKey).toBe(fragment);
+});
+
+it("keeps section clicks and Continue mounted while ordinary URL navigation refreshes", () => {
+ const tree=workspace("live");
+ function find(node:React.ReactNode, predicate:(element:React.ReactElement<Record<string,unknown>>)=>boolean):React.ReactElement<Record<string,unknown>>|undefined {
+  if(Array.isArray(node))return node.map(child=>find(child,predicate)).find(Boolean);
+  if(!React.isValidElement<Record<string,unknown>>(node))return;
+  if(predicate(node))return node;
+  return find(node.props.children as React.ReactNode,predicate);
+ }
+ vi.stubGlobal("fetch",vi.fn());vi.stubGlobal("history",{replaceState:vi.fn()});
+ vi.stubGlobal("location",{pathname:`/jobs/${jobId}`,search:""});
+ const link=find(tree,node=>node.type==="a"&&node.props.href==="#final-account-title")!;
+ const preventDefault=vi.fn();
+ (link.props.onClick as (event:{preventDefault:()=>void})=>void)({preventDefault});
+ expect(preventDefault).toHaveBeenCalled();
+ const journey=find(tree,node=>typeof node.type==="function"&&node.type.name==="PracticeJourney")!;
+ (journey.props.onNavigate as (target:string)=>void)("#quote");
+ expect(state.setters[4]).toHaveBeenCalledWith("#final-account-title");
+ expect(state.setters[4]).toHaveBeenCalledWith("#quote");
+ expect(history.replaceState).toHaveBeenLastCalledWith(null,"",`/jobs/${jobId}#quote`);
+ expect(fetch).not.toHaveBeenCalled();
+ expect(state.setters[1]).not.toHaveBeenCalled();expect(state.setters[3]).not.toHaveBeenCalled();
+});
+
+it("keeps Continue focus on the current account control instead of its sibling heading", () => {
+ const action = {};
+ const panel = { contains: (node: unknown) => node === action };
+ const heading = { matches: () => true, closest: () => panel, focus: vi.fn(), scrollIntoView: vi.fn() };
+ const root = { contains: () => true, querySelector: vi.fn(() => heading) };
+ vi.stubGlobal("document", { activeElement: action, body: {}, getElementById: () => root });
+ workspace("live", "#final-account-title"); state.effects[3]!();
+ expect(heading.focus).not.toHaveBeenCalled();
+ expect(heading.scrollIntoView).not.toHaveBeenCalled();
+});
+
+it("does not steal recovery action focus when its capture revalidates", () => {
+ const root={querySelector:vi.fn()};
+ vi.stubGlobal("document",{getElementById:()=>root});
+ workspace("live","#recovery-cases");state.effects[3]!();
+ expect(root.querySelector).not.toHaveBeenCalled();
+});
+
+it("scrolls the focused Start control into view rather than focusing the quote anchor", () => {
+ const action={scrollIntoView:vi.fn()};
+ const target={contains:(node:unknown)=>node===action,focus:vi.fn(),scrollIntoView:vi.fn()};
+ const root={contains:()=>true,querySelector:()=>target};
+ vi.stubGlobal("document",{activeElement:action,body:{},getElementById:()=>root});
+ workspace("accepted","#quote");state.effects[3]!();
+ expect(action.scrollIntoView).toHaveBeenCalledWith({block:"center"});
+ expect(target.focus).not.toHaveBeenCalled();
+ expect(target.scrollIntoView).not.toHaveBeenCalled();
+});
+
+it("reveals the region before focusing and leaves the redirected Start control as the last scroll", () => {
+ const events:string[]=[];
+ const action={scrollIntoView:vi.fn(({block}:{block:string})=>events.push(`control:${block}`))};
+ const doc:{activeElement:unknown;body:object;getElementById?:()=>unknown}={activeElement:{},body:{}};
+ const target={contains:(node:unknown)=>node===action,
+  focus:vi.fn(()=>{events.push("focus");doc.activeElement=action;action.scrollIntoView({block:"center"});}),
+  scrollIntoView:vi.fn(({block}:{block:string})=>events.push(`region:${block}`))};
+ const root={contains:()=>true,querySelector:()=>target};
+ doc.getElementById=()=>root;vi.stubGlobal("document",doc);
+ workspace("accepted","#quote");state.effects[3]!();
+ expect(events[0]).toBe("region:start");
+ expect(events.at(-1)).toBe("control:center");
+ expect(doc.activeElement).toBe(action);
+ expect(target.focus).toHaveBeenCalledWith({preventScroll:true});
+ expect(target.scrollIntoView).toHaveBeenCalledExactlyOnceWith({block:"start"});
 });

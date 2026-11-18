@@ -1,3 +1,4 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { installAuditCommandWriterRoles } from "./pool-test-utils.js";
 import {createHash,randomUUID} from "node:crypto";
@@ -10,6 +11,8 @@ import {migrate} from "../src/migrate.js";
 import {FinalAccountLockRepository} from "../src/final-account-lock-repository.js";
 import {FinalCheckRepository,type FinalCheckClassification} from "../src/final-check-repository.js";
 import {testTenantContext,testBoundTenantContext} from "./tenant-context-test-utils.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
+import { practiceMaterialPool } from "../src/practice-session.js";
 import {freePort,closeTestDatabase,installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
 export const FINAL_CHECK_TENANT="11111111-1111-4111-8111-111111111111",FINAL_CHECK_ACTOR="d1500000-0000-4000-8000-000000000003",FINAL_CHECK_USER="d1500000-0000-4000-8000-000000000001";
 export type FinalCheckFixture={postgres:EmbeddedPostgres;admin:Pool;runtime:Pool;shadow:Pool;directory:string;logs:string[]};
@@ -29,7 +32,9 @@ export async function createFinalCheckFixture(install=true):Promise<FinalCheckFi
  return {postgres,admin,runtime:new Pool({...config,database:"jobguard_synthetic_demo",user:runtimeLogin}),shadow:new Pool({...config,database:"jobguard_synthetic_demo",user:shadowLogin}),directory,logs};
 }
 export async function closeFinalCheckFixture(f:FinalCheckFixture|undefined){if(!f)return;await closeTestDatabase(f.postgres,f.directory,f.runtime,f.shadow,f.admin);}
-export async function finalCheckTenant<T>(pool:Pool,tenantId:string,work:(client:PoolClient)=>Promise<T>):Promise<T>{const db=await pool.connect();try{await db.query('BEGIN');await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);const result=await work(db);await db.query('COMMIT');return result;}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}}
+/** `as` binds this raw transaction to one fixture member's own request (LP-6d), as main's tests do. */
+// LP-6d: a raw fixture call binds its own actor: a member's persisted fixture credential, or the practice owner's session digest.
+export async function finalCheckTenant<T>(pool:Pool,tenantId:string,work:(client:PoolClient)=>Promise<T>,as?:{owner:Pool;membershipId:string}|{practiceDigest:string}|{realDigest:string}):Promise<T>{const db=await pool.connect();try{await db.query('BEGIN');await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);if(as&&'practiceDigest' in as)await db.query("SELECT app.bind_request('practice',$1,$2)",[as.practiceDigest,tenantId]);else if(as&&'realDigest' in as)await db.query("SELECT app.bind_request('real',$1,$2)",[as.realDigest,tenantId]);else if(as)await bindTestClient(as.owner,db,tenantId,as.membershipId);const result=await work(db);await db.query('COMMIT');return result;}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}}
 export async function seedFinalCheckJob(f:FinalCheckFixture){
  const tenantId=FINAL_CHECK_TENANT,jobId=randomUUID(),scopeItemId=randomUUID(),baselineId=randomUUID(),draftId=randomUUID(),revisionId=randomUUID(),lineId=randomUUID(),accountId=randomUUID(),sessionId=randomUUID(),digest=createHash('sha256').update(sessionId).digest('hex'),hash="a".repeat(64);
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[tenantId]);
@@ -50,8 +55,13 @@ export async function seedFinalCheckJob(f:FinalCheckFixture){
   await db.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional kitchen work',100000,1)",[lineId,tenantId,jobId,revisionId,baselineId,scopeItemId]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3",[revisionId,tenantId,draftId]);
  });
- const context=(await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(f.admin,tenantId,FINAL_CHECK_ACTOR) : testTenantContext(tenantId, { membershipId: FINAL_CHECK_ACTOR }),locks=new FinalAccountLockRepository(f.runtime);
- if(!(await f.admin.query("SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1",[tenantId])).rowCount)await locks.acceptTerms(context,{actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
+ // Upgrade suites also seed predecessor schemas without request binding or firm scope.
+ const scoped=(await f.admin.query("SELECT to_regprocedure('app.final_check_request_scope(uuid)') IS NOT NULL installed")).rows[0].installed;
+ const bindable=(await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed;
+ if(scoped)process.env.JOBGUARD_ENV="synthetic_demo";
+ const context=scoped?verifiedTenantContextFromMembership({tenantId,membershipId:FINAL_CHECK_ACTOR,identityUserId:FINAL_CHECK_USER} as AuthenticatedMembership,{kind:"practice",credential:digest}):bindable?await testBoundTenantContext(f.admin,tenantId,FINAL_CHECK_ACTOR):testTenantContext(tenantId, { membershipId: FINAL_CHECK_ACTOR }),locks=new FinalAccountLockRepository(scoped?practiceMaterialPool(f.runtime,digest):f.runtime);
+ const accepted=await f.admin.query(scoped?"SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1 AND practice_session_digest=$2":"SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1",scoped?[tenantId,digest]:[tenantId]);
+ if(!accepted.rowCount)await locks.acceptTerms(context,{actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(context,{jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),scopeItemId,disposition:"done"});
  // Test-only queued shadow work has no member session; use the synthetic helper,
  // leaving the production queued-context constructor confined to its allowlist.

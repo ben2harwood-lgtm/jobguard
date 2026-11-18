@@ -1,3 +1,4 @@
+import { fakeOutboxAuditProbe } from "../src/audit-protocol-test-fixture.js";
 import { outboundWorkerPool } from "../src/worker-pool.js";
 vi.mock("../src/worker-pool.js", () => ({ outboundWorkerPool: vi.fn() }));
 import { fakeAuditAppend } from "./audit-protocol-fixture.js";
@@ -31,6 +32,8 @@ function fixture(claimsEnabled = true) {
   let liveFailure: Error | undefined;
   const actor = { sessionDigest: "a".repeat(64) }, otherMember = randomUUID();
   const query = vi.fn(async (sql: string, values: any[] = []) => {
+    const probe = fakeOutboxAuditProbe(sql);
+    if (probe) return probe;
     const result = (rows: any[] = [], rowCount = rows.length) => ({ rows, rowCount });
     if (sql === "BEGIN") { snapshot = structuredClone(state); active = true; return result(); }
     if (sql === "ROLLBACK") { state = snapshot; active = false; return result(); }

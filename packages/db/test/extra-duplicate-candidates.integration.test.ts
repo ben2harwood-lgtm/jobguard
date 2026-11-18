@@ -1,10 +1,10 @@
-import { testActorContext } from "./tenant-context-test-utils.js";
+import { testActorContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { readFileSync } from "node:fs";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { resolveExtraDuplicateCandidates } from "../src/extra-duplicate-candidates.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { ExtraApprovalRepository, ExtraRepository, readExtraDuplicateCandidates, withTenant } from "../src/index.js";
+import { ContractorRepository, requireContractorRequestContext, ExtraApprovalRepository, ExtraRepository, readExtraDuplicateCandidates, withTenant } from "../src/index.js";
 import { cluster, world, code, type World } from "./contractor-billing-fixtures.js";
 import { direct, invite } from "./site-extra-fixtures.js";
 import { approveInput } from "./extra-approval-chain-fixtures.js";
@@ -43,7 +43,9 @@ it("two operatives remain separate and priced; linking and unlinking agree with 
  expect(await approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, mark)).toEqual(linked);
  expect(await code(approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, { ...mark, canonicalId: w.s.extraId }))).toBe("COMMAND_CONFLICT");
  expect((await agreement(w)).groups).toEqual([]);
- const candidates = await withTenant(c.runtime, w.ctx, async db => (await db.$client.query("SELECT app.cb_candidates($1,$2,$3) lines", [w.session, w.s.jobId, w.contract])).rows[0]!.lines as Array<{ extraId: string }>);
+ // LP-6d: the billing read is bound to the finance session's own context, as the billing route binds it.
+ const financeCtx = requireContractorRequestContext(await new ContractorRepository(c.runtime).resolveSession(w.session));
+ const candidates = await withTenant(c.runtime, financeCtx, async db => (await db.$client.query("SELECT app.cb_candidates($1,$2,$3) lines", [w.session, w.s.jobId, w.contract])).rows[0]!.lines as Array<{ extraId: string }>);
  expect(candidates.filter(x => x.extraId === b)).toHaveLength(1);
  expect(candidates.some(x => x.extraId === a)).toBe(false);
  const group = await new ExtraRepository(c.runtime).readDuplicateGroup(w.ctx, w.s.jobId, b);
@@ -187,7 +189,11 @@ it("ENT-3 relink refuses a forged actor, uncovered grant, wrong role and foreign
  expect(await code(approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),w.w.members.supervisor.member,{...mark,actorMembershipId:w.w.members.owner.member.membershipId}))).toBe("INVALID_COMMAND");
  expect(await code(approvals.markDuplicate(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),w.w.members.supervisor.member,{...mark,canonicalId:foreign.s.extraId}))).toBe("NOT_FOUND");
  // Prove the database itself binds p_actor to the receipt, even if the repository is bypassed.
+ // LP-6d: the call is bound to the forged p_actor's own credential, so the receipt check (not the binding) refuses it.
+ const forged = w.w.supervisor2.member.membershipId;
+ await testBoundTenantContext(c.admin, w.w.p.tenantId, forged);
  await expect(ownerTx(c,w.w.p.tenantId,async db => {
+  await db.$client.query("SELECT app.bind_request('real',$1,$2)", [createHash("sha256").update(`lp6-test:${w.w.p.tenantId}:${forged}`).digest("hex"), w.w.p.tenantId]);
   const commandId = await receipt(db,w.w.p.tenantId,w.s.jobId,a,w.w.members.supervisor.member.membershipId,"MarkDuplicate");
   await db.$client.query("SELECT app.xa_mark_duplicate($1,$2,$3,$4,$5,$6)",
    [w.s.jobId,a,b,commandId,w.w.supervisor2.member.membershipId,randomUUID()]);
@@ -232,6 +238,10 @@ it("ENT-3 reversal never promotes a duplicate-dismissed pending approval to appr
  expect(lines.some(x=>x.extraId===extraId)).toBe(false);
 },120000);
 
+// LP-6d: contractor_session binds its own credential, so a session command runs in that session's own request, as the route does.
+const ctxOf = async (session: string) => requireContractorRequestContext(await new ContractorRepository(c.runtime).resolveSession(session));
+const resolveAs = async (_w: World, session: string, job: string, raw: unknown) =>
+ resolveExtraDuplicateCandidates(c.runtime, await ctxOf(session).catch(() => _w.ctx), session, job, raw);
 async function sessionFor(w: World, actor = w.w.members.supervisor.member) {
  const session = randomUUID();
  await c.admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) VALUES($1,$2,$3,$4,$5,clock_timestamp(),clock_timestamp()+interval '1 day')", [session, actor.tenantId, actor.membershipId, actor.identityUserId, digestOf(session)]);
@@ -247,7 +257,7 @@ async function commercial(w: World) {
 it("dismissal is exact, append-only and reversible; replay is inert and export keeps distinct approved lines", async () => {
  const w = await world(c), [a,b] = await pair(w), session = await sessionFor(w);
  const group = (await agreement(w)).groups[0]!, input = disposition(group), before = await commercial(w);
- const run = (raw: unknown) => resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,raw);
+ const run = async (raw: unknown) => resolveExtraDuplicateCandidates(c.runtime,await ctxOf(session),session,w.s.jobId,raw);
  const result = await run(input), written = await facts(w);
  expect(await run(input)).toEqual(result); expect(await facts(w)).toEqual(written);
  expect(await code(run({ ...input, reasonCode: "different_location" }))).toBe("COMMAND_CONFLICT");
@@ -266,7 +276,7 @@ it("dismissal is exact, append-only and reversible; replay is inert and export k
 it("table owner cannot truncate append-only duplicate dispositions and all rows remain", async () => {
  const w = await world(c); await pair(w);
  const group = (await agreement(w)).groups[0]!, session = await sessionFor(w);
- await resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,disposition(group));
+ await resolveExtraDuplicateCandidates(c.runtime,await ctxOf(session),session,w.s.jobId,disposition(group));
  const rows = () => c.admin.query("SELECT * FROM app.extra_duplicate_disposition ORDER BY tenant_id,id").then(result => result.rows);
  const before = await rows();
  expect(before.some(row => row.tenant_id === w.w.p.tenantId)).toBe(true);
@@ -282,22 +292,22 @@ it("refuses reporters, pricers, forged actor, foreign tenant, uncovered and wron
  const w=await world(c); const [a]=await pair(w); const group=(await read(w)).groups[0]!;
  for(const [actor, expected] of [[w.w.members.surveyor.member,"SELF_DISMISSAL"],[w.w.members.operative.member,"PERMISSION_DENIED"],[w.w.members.owner.member,"PERMISSION_DENIED"],[w.w.members.finance.member,"PERMISSION_DENIED"],[w.w.otherSupervisor.member,"PERMISSION_DENIED"]] as const) {
   const session=await sessionFor(w,actor), before=await facts(w);
-  expect(await code(resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,disposition(group)))).toBe(expected); expect(await facts(w)).toEqual(before);
+  expect(await code(resolveExtraDuplicateCandidates(c.runtime,await ctxOf(session),session,w.s.jobId,disposition(group)))).toBe(expected); expect(await facts(w)).toEqual(before);
  }
  const own = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member),direct(w.w,w.w.members.supervisor,{jobId:w.s.jobId,sorItem:{versionId:w.w.demo.sorVersionId,code:"CLEAR-GUTTER"}}));
  expect(own.variationId).not.toBe(a);
  const session=await sessionFor(w), current=(await read(w)).groups[0]!, before=await facts(w);
- expect(await code(resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,disposition(current)))).toBe("SELF_DISMISSAL");
- expect(await code(resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,{...disposition(current),actorMembershipId:w.w.members.commercial_manager.member.membershipId}))).toBe("INVALID_COMMAND");
+ expect(await code(resolveExtraDuplicateCandidates(c.runtime,await ctxOf(session),session,w.s.jobId,disposition(current)))).toBe("SELF_DISMISSAL");
+ expect(await code(resolveExtraDuplicateCandidates(c.runtime,await ctxOf(session),session,w.s.jobId,{...disposition(current),actorMembershipId:w.w.members.commercial_manager.member.membershipId}))).toBe("INVALID_COMMAND");
  expect(await code(resolveExtraDuplicateCandidates(c.runtime,w.ctx,randomUUID(),w.s.jobId,disposition(current)))).toBe("PERMISSION_DENIED");
  const other=await world(c), foreign=await sessionFor(other);
- expect(await code(resolveExtraDuplicateCandidates(c.runtime,w.ctx,foreign,w.s.jobId,disposition(current)))).toBe("PERMISSION_DENIED");
- expect(await code(resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,other.s.jobId,disposition(current)))).toBe("PERMISSION_DENIED");
+ expect(await code(resolveExtraDuplicateCandidates(c.runtime,await ctxOf(foreign),foreign,w.s.jobId,disposition(current)))).toBe("PERMISSION_DENIED");
+ expect(await code(resolveExtraDuplicateCandidates(c.runtime,await ctxOf(session),session,other.s.jobId,disposition(current)))).toBe("PERMISSION_DENIED");
  expect(await facts(w)).toEqual(before);
 },120000);
 it("revision changes and a new extra racing dismissal raise the group again and keep export refused",async()=>{
  const w=await world(c), [a]=await pair(w), session=await sessionFor(w);
- const run=(raw:unknown)=>resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,raw);
+ const run=async(raw:unknown)=>resolveExtraDuplicateCandidates(c.runtime,await ctxOf(session),session,w.s.jobId,raw);
  const group=(await agreement(w)).groups[0]!; await run(disposition(group));
  await new ExtraApprovalRepository(c.runtime).reviseExtra(await testActorContext(c.admin, w.ctx, w.w.members.surveyor.member),w.w.members.surveyor.member,{version:"revise-extra.v1",commandId:randomUUID(),jobId:w.s.jobId,extraId:a,netPence:339});
  const revised=(await agreement(w)).groups[0]!; expect(revised.fingerprint).not.toBe(group.fingerprint);
@@ -316,7 +326,7 @@ it("dismisses one group only; every other group still refuses export and concurr
  for(let n=0;n<2;n++) await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, w.ctx, w.w.members.operative.member),direct(w.w,w.w.members.operative,{jobId:w.s.jobId,sorItem:{versionId:w.w.demo.sorVersionId,code:codeRow.code}}));
  const groups=(await agreement(w)).groups; expect(groups).toHaveLength(2);
  const session=await sessionFor(w), input=disposition(groups[0]!), before=await facts(w);
- const run=()=>resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,input);
+ const run=async()=>resolveExtraDuplicateCandidates(c.runtime,await ctxOf(session),session,w.s.jobId,input);
  const [left,right]=await Promise.all([run(),run()]); expect(left).toEqual(right);
  const after=await facts(w); expect(Number(after.facts)-Number(before.facts)).toBe(1); expect(Number(after.receipts)-Number(before.receipts)).toBe(1); expect(Number(after.audits)-Number(before.audits)).toBe(1);
  expect((await agreement(w)).groups.map(g=>g.id)).toEqual([groups[1]!.id]); expect(await code(w.exported())).toBe("BILLING_DUPLICATES_UNRESOLVED");
@@ -327,9 +337,9 @@ it("independent surveyors and commercial managers may dismiss with a covering gr
  const independent=await invite(c,w.w,"surveyor",{kind:"team",id:w.w.demo.teamId});
  for(const actor of [independent.member,w.w.members.commercial_manager.member]){
   const session=await sessionFor(w,actor);
-  await resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,disposition(group));
+  await resolveExtraDuplicateCandidates(c.runtime,await ctxOf(session),session,w.s.jobId,disposition(group));
   expect((await agreement(w)).groups).toEqual([]);
-  await resolveExtraDuplicateCandidates(c.runtime,w.ctx,session,w.s.jobId,disposition(group,{disposition:"reopen",reasonCode:"review_changed"}));
+  await resolveExtraDuplicateCandidates(c.runtime,await ctxOf(session),session,w.s.jobId,disposition(group,{disposition:"reopen",reasonCode:"review_changed"}));
   expect((await agreement(w)).groups).toHaveLength(1);
  }
 },120000);
@@ -341,7 +351,8 @@ it("refuses disposition/reason mismatches without changing receipts, facts, audi
  const before = await facts(w), history = await commercial(w);
  for (const [kind, reasonCode] of [["not_duplicates", "review_changed"], ["reopen", "different_work"], ["reopen", "different_location"]]) {
   const input = disposition(group, { disposition: kind, reasonCode });
-  await expect(withTenant(c.runtime, w.ctx, db => db.$client.query(
+  // LP-6d: the direct SQL call runs in the session's own bound request, so the writer (not the binding) refuses.
+  await expect(withTenant(c.runtime, await ctxOf(session), db => db.$client.query(
    "SELECT app.extra_duplicate_resolve($1,$2,$3::jsonb)", [session, w.s.jobId, JSON.stringify(input)]
   ))).rejects.toMatchObject({ code: "23514", message: "INVALID_COMMAND" });
   expect(await facts(w)).toEqual(before); expect(await commercial(w)).toEqual(history);
@@ -354,27 +365,97 @@ it("accepts both distinct-work reasons and review-changed reopening through the 
  const w = await world(c); await pair(w);
  const session = await sessionFor(w), group = (await agreement(w)).groups[0]!;
  for (const reasonCode of ["different_work", "different_location"]) {
-  await resolveExtraDuplicateCandidates(c.runtime, w.ctx, session, w.s.jobId, disposition(group, { reasonCode }));
+  await resolveExtraDuplicateCandidates(c.runtime, await ctxOf(session),session, w.s.jobId, disposition(group, { reasonCode }));
   expect((await agreement(w)).groups).toEqual([]);
-  await resolveExtraDuplicateCandidates(c.runtime, w.ctx, session, w.s.jobId,
+  await resolveExtraDuplicateCandidates(c.runtime, await ctxOf(session),session, w.s.jobId,
    disposition(group, { disposition: "reopen", reasonCode: "review_changed" }));
   expect((await agreement(w)).groups).toEqual([group]);
  }
 }, 120000);
 
-it("records the landing hold: the registered duplicate command cannot begin with repository-style input", async () => {
+it("begins the registered duplicate command with repository-style input", async () => {
  const w = await world(c); await pair(w);
  const group = (await agreement(w)).groups[0]!, input = disposition(group);
  const before = await facts(w);
- // Matching the registry version still enters the commercial-action schema in
- // begin_command; repository-command.v1 instead has no registry row for this type.
+ const actor = w.w.members.supervisor.member.membershipId;
+ const content = { actor, job: w.s.jobId, body: input };
+ // 0729 registers ResolveDuplicateCandidates, so a begin-only probe now claims; LP-6c (0723) requires the
+ // request to be bound to the acting supervisor, as on main.
  await expect(withTenant(c.admin, await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), async db => {
   await db.$client.query("SET LOCAL ROLE jobguard_migration");
-  return db.$client.query(
-  "SELECT app.begin_command($1,$2,'ResolveDuplicateCandidates',$3,$4::jsonb,'{}'::jsonb,$5::jsonb)",
-  [input.version, input.commandId, `duplicate-disposition:${w.s.jobId}:${input.commandId}`,
-   JSON.stringify({ tenantId: w.w.p.tenantId, actorMembershipId: w.w.members.supervisor.member.membershipId, subjectType: "job", subjectRef: w.s.jobId }),
-   JSON.stringify({ version: input.version, actorMembershipId: w.w.members.supervisor.member.membershipId, input, legacyJson: JSON.stringify(input) })]
- ); })).rejects.toMatchObject({ code: "23514", message: "AUTHORIZATION_INVALID" });
+  await db.$client.query("SAVEPOINT begin_probe");
+  const result = await db.$client.query(
+   "SELECT app.begin_command($1,$2,'ResolveDuplicateCandidates',$3,$4::jsonb,'{}'::jsonb,$5::jsonb) claim",
+   ["repository-command.v1", input.commandId, `duplicate-disposition:${w.s.jobId}:${input.commandId}`,
+    JSON.stringify({ tenantId: w.w.p.tenantId, actorMembershipId: actor, subjectType: "job", subjectRef: w.s.jobId }),
+    JSON.stringify({ version: "repository-command.v1", actorMembershipId: actor, input: content, legacyJson: JSON.stringify(content) })]
+  );
+  // A begin-only probe must not commit an unfinished receipt.
+  await db.$client.query("ROLLBACK TO SAVEPOINT begin_probe");
+  return result.rows[0]!.claim;
+ })).resolves.toMatchObject({ kind: "claim" });
  expect(await facts(w)).toEqual(before);
+}, 120000);
+
+it("completes only the exact fresh disposition fact after a processing receipt", async () => {
+ const w = await world(c); await pair(w);
+ const group = (await agreement(w)).groups[0]!, input = disposition(group);
+ const actor = w.w.members.supervisor.member.membershipId, fact = randomUUID();
+ const content = { actor, job: w.s.jobId, body: input };
+ // LP-6c (0723) requires the request to be bound to the acting supervisor, as the begin probe above.
+ await withTenant(c.admin, await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), async db => {
+  await db.$client.query("SET LOCAL ROLE jobguard_migration");
+  await db.$client.query(
+   "SELECT app.begin_command('repository-command.v1',$1,'ResolveDuplicateCandidates',$2,$3::jsonb,'{}'::jsonb,$4::jsonb)",
+   [input.commandId, `duplicate-disposition:${w.s.jobId}:${input.commandId}`,
+    JSON.stringify({ tenantId: w.w.p.tenantId, actorMembershipId: actor, subjectType: "job", subjectRef: w.s.jobId }),
+    JSON.stringify({ version: "repository-command.v1", actorMembershipId: actor, input: content, legacyJson: JSON.stringify(content) })]
+  );
+  expect((await db.$client.query("SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [w.w.p.tenantId, input.commandId])).rows[0]).toEqual({ status: "processing" });
+  await db.$client.query("SAVEPOINT absent_effect");
+  await expect(db.$client.query("SELECT app.complete_command($1,'{}'::jsonb)", [input.commandId])).rejects.toMatchObject({ code: "23514" });
+  await db.$client.query("ROLLBACK TO SAVEPOINT absent_effect");
+  await db.$client.query("RELEASE SAVEPOINT absent_effect");
+  await db.$client.query(`INSERT INTO app.extra_duplicate_disposition(tenant_id,id,job_id,command_id,actor_membership_id,group_id,snapshot,fingerprint,disposition,reason_code,sequence)
+   SELECT $1,$2,$3,$4,$5,x.group_id,x.snapshot,$7,$8,$9,1 FROM app.extra_duplicate_groups($1,$3) x WHERE x.group_id=$6`,
+   [w.w.p.tenantId, fact, w.s.jobId, input.commandId, actor, group.id, group.fingerprint, input.disposition, input.reasonCode]);
+  const result = (await db.$client.query("SELECT app.complete_command($1,$2::jsonb) result", [input.commandId, JSON.stringify({ id: randomUUID() })])).rows[0]!.result;
+  expect(result).toEqual({ version: "duplicate-disposition-result.v1", factId: fact, groupId: group.id, fingerprint: group.fingerprint, disposition: input.disposition });
+  expect((await db.$client.query("SELECT status,result FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [w.w.p.tenantId, input.commandId])).rows[0]).toEqual({ status: "succeeded", result });
+ });
+}, 120000);
+
+it("the checked writer creates a lifecycle claim and one command audit, and replays the stored result", async () => {
+ const w = await world(c); await pair(w);
+ const group = (await agreement(w)).groups[0]!, input = disposition(group), session = await sessionFor(w);
+ const before = await facts(w);
+ const result = await resolveAs(w, session, w.s.jobId, input);
+ const rows = (await c.admin.query(`SELECT r.status,r.result,l.version,l.significant_input FROM app.command_receipt r
+  JOIN app.command_lifecycle_claim l USING(tenant_id,command_id) WHERE r.tenant_id=$1 AND r.command_id=$2`, [w.w.p.tenantId, input.commandId])).rows;
+ expect(rows).toHaveLength(1);
+ expect(rows[0]).toMatchObject({ status: "succeeded", result, version: "repository-command.v1", significant_input: { input: { body: input } } });
+ const after = await facts(w);
+ expect(Number(after.audits)-Number(before.audits)).toBe(1);
+ expect(await resolveAs(w, session, w.s.jobId, input)).toEqual(result);
+ expect(await facts(w)).toEqual(after);
+}, 120000);
+
+it("replays pre-lifecycle receipts with their historical digest and refuses changed payloads", async () => {
+ const w = await world(c); await pair(w);
+ const group = (await agreement(w)).groups[0]!, input = disposition(group), session = await sessionFor(w);
+ const actor = w.w.members.supervisor.member.membershipId, fact = randomUUID();
+ const stored = { version: "duplicate-disposition-result.v1", factId: fact, groupId: group.id, fingerprint: group.fingerprint, disposition: input.disposition };
+ await ownerTx(c, w.w.p.tenantId, async db => {
+  await db.$client.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at)
+   VALUES($1,$2,'ResolveDuplicateCandidates',$3,app.final_lock_hash(jsonb_build_object('actor',$4::uuid,'job',$5::uuid,'body',$6::jsonb)),'succeeded',$4,$7::jsonb,clock_timestamp())`,
+   [w.w.p.tenantId, input.commandId, `duplicate-disposition:${w.s.jobId}:${input.commandId}`, actor, w.s.jobId, JSON.stringify(input), JSON.stringify(stored)]);
+  await db.$client.query(`INSERT INTO app.extra_duplicate_disposition(tenant_id,id,job_id,command_id,actor_membership_id,group_id,snapshot,fingerprint,disposition,reason_code,sequence)
+   SELECT $1,$2,$3,$4,$5,x.group_id,x.snapshot,$7,$8,$9,1 FROM app.extra_duplicate_groups($1,$3) x WHERE x.group_id=$6`,
+   [w.w.p.tenantId, fact, w.s.jobId, input.commandId, actor, group.id, group.fingerprint, input.disposition, input.reasonCode]);
+ });
+ const before = await facts(w);
+ expect(await resolveAs(w, session, w.s.jobId, input)).toEqual(stored);
+ expect(await code(resolveAs(w, session, w.s.jobId, { ...input, reasonCode: "different_location" }))).toBe("COMMAND_CONFLICT");
+ expect(await facts(w)).toEqual(before);
+ expect((await c.admin.query("SELECT count(*)::integer n FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2", [w.w.p.tenantId, input.commandId])).rows[0]).toEqual({ n: 0 });
 }, 120000);

@@ -1,3 +1,4 @@
+import { seedPredecessorRecoveryMessage } from "./recovery-message-predecessor-data.js";
 import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import { seedLegacySandbox } from "./lp-legacy-sandbox-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -128,7 +129,8 @@ async function historicalFixture() {
   const view = state.latest!;
   state = await messages.command(ctx, caseId, { version: "recovery-message-command.v1", action: "approve", commandId: randomUUID(), messageId: view.id, expectedRevision: view.revision,
     recipient: view.message.recipient, body: view.message.body, amountPence: view.message.amountPence, packId: view.message.packId, contentHash: view.message.contentHash }, actor);
-  state = await messages.command(ctx, caseId, { version: "recovery-message-command.v1", action: "advance", commandId: randomUUID(), messageId: state.latest!.id, expectedRevision: state.latest!.revision, outcome: "success" }, actor);
+  await seedPredecessorRecoveryMessage(admin, f.tenantId, caseId, state.latest!, actor, "succeeded");
+  state = await messages.read(ctx, caseId);
   const sandbox = new SandboxRepository(runtime), runId = await seedLegacySandbox(admin, session);
   await new RecoveryFollowUpRepository(runtime).schedule(ctx, caseId, { version: "recovery-follow-up-command.v1", action: "schedule", commandId: randomUUID(), sourceMessageId: state.latest!.id, expectedCaseRevision: state.readiness.caseRevision }, actor);
   await sandbox.advance(session, runId, randomUUID()); // Pre-existing due Decision, event, and audit as well as waiting intent history.

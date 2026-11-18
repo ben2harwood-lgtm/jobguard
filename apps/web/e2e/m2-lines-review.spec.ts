@@ -1,12 +1,16 @@
 import { expect, test } from "@playwright/test";
-import { openReview } from "./helpers/capture-journey";
+import { openQuotingWatchdogJob, openReview, startWatchdogJob } from "./helpers/capture-journey";
 
 test.setTimeout(180_000);
 test("human confirmation and reproducible corrections retain group flags and session isolation", async ({ page, context, browser }) => {
   const capture = page.waitForResponse(r => r.url().endsWith("/api/jobs/capture") && r.request().method() === "POST");
-  await openReview(page);
+  await openQuotingWatchdogJob(page);
   const { jobId } = await (await capture).json();
   const endpoint = `/api/jobs/${jobId}/supplier-lines`;
+  const refused = await context.request.post(endpoint, { data: {} });
+  expect(refused.status()).toBe(409);
+  expect(await refused.json()).toEqual({ code: "JOB_NOT_LIVE" });
+  await startWatchdogJob(page);
   await page.goto(`/jobs/${jobId}/supplier-lines`);
   await expect(page.getByText("Revision 0 · Unconfirmed proposal")).toBeVisible();
   await expect(page.getByText(/Overall matching state: complete/)).toBeVisible();

@@ -86,6 +86,11 @@ type DeferredBinding = "identity-sso" | "identity-oidc" | "identity-sso-required
   | "practice-switch-off" | "contractor-session-revoke" | "commercial-integrity-read" | "commercial-integrity-read-family"
   | "evidence-pack-approval";
 type LateBinding = { complete: boolean };
+// Routing hint only: SQL still validates the binding, including expiry and tenant.
+const requestTransactions = new WeakSet<TenantTransaction>();
+export function isRequestTransaction(database: TenantTransaction): boolean {
+  return requestTransactions.has(database);
+}
 const lateBindings = new WeakMap<TenantTransaction, WeakMap<VerifiedTenantContext, LateBinding>>();
 
 async function bindRequest(client: PoolClient, context: VerifiedTenantContext): Promise<void> {
@@ -101,6 +106,16 @@ async function bindRequest(client: PoolClient, context: VerifiedTenantContext): 
     if ((error as { code?: string }).code === "42501") throw new RequestBindingRefusedError(session.kind);
     throw error;
   }
+}
+
+/**
+ * A caller-managed transaction that issues its own credential (contractor practice start)
+ * binds it through the same check as withTenant before any guarded read or audit.
+ */
+export async function bindIssuedCredential(client: PoolClient, context: VerifiedTenantContext): Promise<void> {
+  // Only the stamped constructor records a session reference, so this needs no second stamp-list read.
+  if (!sessionReferences.has(context)) throw new InvalidTenantContextError();
+  await bindRequest(client, context);
 }
 
 /** Only an active approval transaction may bind after its established locks. */
@@ -135,6 +150,7 @@ export async function withTenant<T>(
     if (deferredBinding === undefined) await bindRequest(client, context);
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [context.tenantId]);
     database = drizzle(client, { schema }) as TenantTransaction;
+    if (sessionReferences.has(context)) requestTransactions.add(database);
     const late = deferredBinding === "evidence-pack-approval" ? { complete: false } : undefined;
     if (late) {
       const contexts = new WeakMap<VerifiedTenantContext, LateBinding>();

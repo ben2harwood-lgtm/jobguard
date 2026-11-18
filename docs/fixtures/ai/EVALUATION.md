@@ -69,3 +69,51 @@ Review the record diff alongside the implementation and tests. Fixture success
 still cannot authorize release or serve as a live-model golden run. D04 route
 approval, founder-authorized spending and persisted-citation live evidence remain
 separate release gates; `eval:live` continues to refuse execution.
+
+## real-words-natural-items — 10 November 2026 (RED, builder receipt)
+
+Base inspected: `a5613d56b`, clean `codex/sandbox/real-words-natural-items`.
+This deterministic extension recognises comma/and work boundaries, decorating
+woodwork, approximate overall amounts and standalone durations. It retains
+related objects and finish details. The pure `suggestCapturePartyClause` export
+returns only customer/site text and UTF-16 offsets for one narrow unambiguous
+`for <name> at <numbered address>` clause; it makes no registry or identity write.
+Descriptions joined around that clause are inferred; unchanged descriptions and
+exact per-item prices retain original-source spans. Unsupported wording remains
+one editable unpriced line with the explicit Split/review prompt. This does not
+establish general language understanding or repair Split's existing behaviour.
+No schema, migration, provider, live gate or stored format changes.
+
+Before: executing the untouched HEAD parser copied to `/tmp/real-words-base-parser.ts`
+with the exact decorating sentence returned one unpriced line, a default title
+and the old fallback question; the two-work-item assertion exited 1. This is a
+pure-parser failure, **not** the required before-browser failure.
+
+Local execution used installed binaries because the `pnpm` wrapper stalled on
+its version switch and reported an unavailable registry/signature fetch. No
+packages were installed and no package-manager configuration was changed:
+
+- `node_modules/.bin/tsc -p packages/core/tsconfig.json` — passed.
+- `node_modules/.bin/tsc -p packages/ai/tsconfig.json` — passed.
+- `node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit` — passed.
+- From `packages/core`, `node_modules/.bin/vitest run --maxWorkers=1 src/capture.test.ts` — 4 passed.
+- From `packages/ai`, `node_modules/.bin/vitest run --maxWorkers=1 src/capture-plain-words.test.ts src/capture-evaluation.test.ts src/golden-run-record.test.ts` — 102 passed across 3 files.
+- From `apps/web`, `node_modules/.bin/playwright test --list real-words-natural-items.spec.ts --project=mobile-360 --project=desktop --workers=1` — 8 cases discovered; listing only, no browser execution.
+
+The golden record was regenerated explicitly using the documented procedure
+above after compiling core and AI. Its diff was inspected: only the core/parser
+implementation hashes, label hash and walk-18 prediction hash changed. All
+32 cases, 41/41 intents, 119/119 valid citations and 63/63 ambiguity checks remain
+passing; targets and every other prediction are unchanged. Only walk-18's
+fallback-question label changed; its title, unpriced line, quantities and intent
+remain intact.
+
+Pending outside this sandbox: required `pnpm typecheck`, `pnpm lint`, `pnpm test`,
+`pnpm build`, `pnpm eval`, and the actual PostgreSQL/browser run:
+`pnpm --filter @jobguard/web test:e2e real-words-natural-items.spec.ts --project=mobile-360 --project=desktop --workers=1`.
+The named `walk 2 ordinary words become reviewable work` must still be executed
+on base and candidate. Phone cases explicitly use 390×844; overflow assertions
+are written but have not run. An independent RED reviewer must assess the exact
+committed head with that real PostgreSQL/browser evidence before acceptance.
+No independent review, CI pass, commit, push, PR, merge or deployment is claimed.
+Practice data only; D04 and G1–G5 remain closed.

@@ -9,16 +9,16 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/demo-seed.ts",
-    "line": 93,
-    "fingerprint": "6452587a177430d30e266983504305f1dae4ebbcea3f42215b7ba39bb46ebefb",
+    "line": 102,
+    "fingerprint": "a6028c98b4d93ba41ec6bea63ccf6ec68bd33ebbb7d40e9af6cfa28866057a9b",
     "reason": "Quote delivery execute receives context/job/document arguments; terminal execute is conservatively covered and unresolved."
   },
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/practice-session.ts",
-    "line": 63,
-    "fingerprint": "37cf6d1cbae38bc6b0f702c19be3bddf52c560f9c6c824a7415a8cbb0698ab37",
-    "reason": "v1 adoption receipt read inside the recursive ownership CTE; non-advisory, definer-written command receipt required by the ACCEPT-V1-RECEIPT ruling; Ben approved 7 Nov"
+    "line": 72,
+    "fingerprint": "1ea4ea16ab6f51f8084908cce319d68c15b69108c6b084ded676a0a4c9b66937",
+    "reason": "v1 adoption receipt read inside the recursive ownership CTE; non-advisory, definer-written command receipt required by the ACCEPT-V1-RECEIPT ruling; Ben approved 7 Nov (re-pointed 15 Nov 2026 with Ben's yes: line reshaped, no behaviour change)"
   },
   {
     "code": "UNRESOLVED_COVERED_EDGE",
@@ -30,15 +30,15 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/quote-delivery-repository.ts",
-    "line": 43,
-    "fingerprint": "2cead0e0b611ce6d4d66d5b7b040ac089c10a4a4c0f52876a899599a0323d5e2",
+    "line": 86,
+    "fingerprint": "ae7aca791ee76f9558c531fff8705b2fd9cbc88abbcd1e4f2ab331af72a9ca36",
     "reason": "Business ActionExecutor.execute(context,id) is a terminal execute call; its first argument is not static SQL."
   },
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/quote-delivery-repository.ts",
-    "line": 44,
-    "fingerprint": "b45a28a9a69b397d36834ff45ccde77734ae8d992c8b2b32f69b69df07b5e046",
+    "line": 87,
+    "fingerprint": "3da1ca4d0927f19050352d9ff4d924cc3d34554e488633e46635d903f2e8f5b3",
     "reason": "Second business ActionExecutor.execute(context,id) call has the same unresolved syntactic boundary."
   },
   {
@@ -65,8 +65,8 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/extra-approval-chain-repository.ts",
-    "line": 94,
-    "fingerprint": "a2152ab0e4c54d80c5b08e6884e852d11613f2fdece5ab6140a8c790d0e9a5ff",
-    "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results."
+    "line": 96,
+    "fingerprint": "75ac7f2070c202f25456367911f233bc644d9bbb3a64be712eaa8a6c36e11a7d",
+    "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results. (LP-6d r11, 14 Nov 2026: escalateOverdue now calls app.lp6d_escalate_overdue_worker(); helper unchanged)"
   }
 ]

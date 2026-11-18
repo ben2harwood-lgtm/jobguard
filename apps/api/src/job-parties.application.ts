@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, JobPartiesRepository, JobPartiesError, UserCommandDispatcher, AdoptInFlightJobMutation, CommandError, withTenant } from "@jobguard/db";
-import { jobPartiesCommandV1, jobPartiesImportV1, jobPartiesImportResultV1 } from "@jobguard/core";
+import { jobPartiesCommandV1, partiesFieldErrors, jobPartiesImportV1, jobPartiesImportResultV1 } from "@jobguard/core";
 import { PracticeAccess } from "./practice-access.js";
 export { JobPartiesError } from "@jobguard/db";
 export type PartiesPrincipal = { sessionId: string; requestedTenantId?: string } | null;
@@ -19,7 +19,9 @@ export class JobPartiesApplication {
   async command(principal: PartiesPrincipal, jobId: string, raw: unknown) {
     const practice = await this.access(principal, jobId);
     const input = jobPartiesCommandV1.safeParse(raw);
-    if (!input.success || ((input.data.action === "create_customer" || input.data.action === "revise_customer") && input.data.customer.email && !input.data.customer.email.endsWith(".invalid"))) throw new JobPartiesError("INVALID_PARTIES");
+    if (!input.success) throw new JobPartiesError("INVALID_PARTIES", partiesFieldErrors(input.error.issues));
+    if ((input.data.action === "create_customer" || input.data.action === "revise_customer" || input.data.action === "save_form")
+      && input.data.customer.email && !input.data.customer.email.endsWith(".invalid")) throw new JobPartiesError("INVALID_PARTIES", partiesFieldErrors([{ path: ["customer", "email"] }]));
     return this.repository.command(practice.context, practice.membershipId, jobId, input.data, practice.digest);
   }
   async adopt(principal: PartiesPrincipal, sourceJobId: string, raw: unknown) {

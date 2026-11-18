@@ -29,3 +29,28 @@ An upgrade proof proves ITS OWN migration only: install everything before N, sna
 Upgrade comparison uses canonical named-column text, full types and captured primary-key identities. A rolled-back microsecond mutation and retype fail; a later nullable column, replaced function and insert pass. No historical rows are rewritten. Disable new handlers and issue an additive forward fix; never delete evidence, receipts, dispositions or audit history. Independent verdict and technical acceptance are separate and have not been recorded by the builder.
 
 C239 (24 October 2026): 0204 owns both shared manifest tables unchanged. 0205 adds nullable manifest metadata and a separate owner-only `final_check_processing_source` inventory for exact evidence snapshots and unsupported unlinked sources. SQL retains `final-check-manifest.v1`; the versioned API projection remains `final-check.manifest.v1`. The worker manifest optionally exposes `excludedUploads` with upload ID, terminal state and recorded reason. Rejected/expired exclusions come from 0204's audited generated inventory and never require a successful source result. C135 still blocks in-progress photo/quarantine uploads before lock. Invalidated verified evidence continues to block completion. Prerequisite-only manifests are retained and use their original proof path; #181 refuses them pending rather than mutating their immutable metadata.
+
+REAL-FC-TYPED-SOURCES: the actual practice worker ports now read diary/message
+originals through runtime-only SELECTs, rechecking the current intake, evidence,
+upload and synthetic small-builder job, live practice session, and the exact
+frozen tenant/job/source/version/hash/byte length/receive time (including
+microseconds). Missing/changed bytes, invalid UTF-8, invalidation or broken frozen
+bindings remain unsupported and block completion/publication/invoicing. No new
+role, migration, hidden-table access or production permission is introduced.
+
+Reviewed fixtures decode first, including their must-surface facts and refusal
+rules. A bounded whole-text grammar then recognises paint/painted, fit/fitted and
+install/installed requests or completions for simple ceiling/wall/door/tap/hatch/
+shelf/cupboard/skirting descriptions, optionally qualified by a listed room or
+location. It supports case/punctuation, optional “also”, and short customer-request
+suffixes. Hallway paint requests and completions retain `practice:hallway-ceiling`
+for compatibility and coalesce with the existing hallway fixtures. Explicit
+`Estimated extra` sentences accept pounds, £ or quid using the existing exact
+bounded GBP parser; hours are not prices, conflicting/malformed amounts stay
+unknown, and an estimate grants no approval or authoritative price. Readable
+verified text outside this grammar produces an examined `zero_result`, distinct
+from invalid/unsupported evidence. This is no claim of arbitrary trade, negation,
+safety or legal understanding. Existing captures, baseline matching, immutable
+lock/cutoff, attempts, disclosure rules, invoice approval and production gates
+remain authoritative. Automatic invoice-guard refresh, retry UI and displayed
+estimates remain separate work. D04 and G1–G5 remain closed.

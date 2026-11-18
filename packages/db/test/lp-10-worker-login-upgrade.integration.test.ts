@@ -4,27 +4,29 @@ import { migrate } from "../src/migrate.js";
 
 let cluster: Cluster | undefined;
 afterAll(async () => { await cluster?.close(); });
-it("0980 preserves populated predecessor rows and routine bodies while closing web worker writes", async () => {
-  cluster = await startBeforeMigration("0980_worker_login.sql");
+it("0761 preserves populated predecessor rows and routine bodies while closing web worker writes", async () => {
+  cluster = await startBeforeMigration("0761_worker_login.sql");
   const db = cluster.admin;
   const before = await snapshot(db);
   const definitions = async () => (await db.query(`SELECT p.oid,p.proname,pg_get_functiondef(p.oid) definition
     FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname IN('app','identity','control_plane','audit_control','outbound_control') AND p.prokind='f' ORDER BY p.oid`)).rows;
   const routines = await definitions();
-  await applyMigration(cluster, "0980_worker_login.sql");
+  await applyMigration(cluster, "0761_worker_login.sql");
   expect(await snapshot(db)).toEqual({ ...before, "control_plane.worker_action_binding": [] });
   const after = await definitions();
   for (const prior of routines) {
     const current = after.find(row => row.oid === prior.oid);
+    let expected = prior.definition;
     if (prior.proname === "guard_recovery_message_sink") {
-      const { readFile } = await import("node:fs/promises");
-      const sql = await readFile(new URL("../migrations/0980_worker_login.sql", import.meta.url), "utf8");
-      const body = sql.match(/CREATE OR REPLACE FUNCTION app.guard_recovery_message_sink\(\)[\s\S]*?AS \$\$([\s\S]*?)\$\$;/u)![1];
-      expect(current.definition.split("$function$")[1]).toBe(body);
-      expect(current.definition).toContain("SECURITY DEFINER");
-      expect(current.definition).toContain("SET search_path TO 'pg_catalog', 'pg_temp'");
-    } else expect(current).toEqual(prior);
+      expect(expected).toContain("FOR SHARE OF mem,o)");
+      expected = expected.replace("FOR SHARE OF mem,o)", "FOR SHARE OF mem)");
+    }
+    if (["lp6d_share_sink_authorization", "lp6d_share_sink_authorization_worker"].includes(prior.proname)) {
+      expect(expected).toContain("FOR SHARE OF a;");
+      expected = expected.replace("FOR SHARE OF a;", "FOR SHARE OF a;\n PERFORM 1 FROM app.action_outbox WHERE tenant_id=p_tenant AND id=p_outbox FOR SHARE;");
+    }
+    expect(current).toEqual({ ...prior, definition: expected });
   }
   expect((await db.query(`SELECT
     has_column_privilege('jobguard_runtime','app.action_outbox','status','UPDATE') web_update,

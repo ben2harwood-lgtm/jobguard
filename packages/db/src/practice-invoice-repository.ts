@@ -1,3 +1,4 @@
+import { practiceOwnedJobsSql, PracticeAccessError } from "./practice-session.js";
 import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
@@ -24,6 +25,28 @@ export class PracticeInvoiceRepository {
  }
  async list(context:VerifiedTenantContext,jobId:string) {
   return withTenant(this.pool,context,async db=>(await db.$client.query<any>(`SELECT i.*,${amounts} FROM app.customer_invoice i WHERE i.tenant_id=$1 AND i.job_id=$2 ORDER BY i.created_at,i.id`,[context.tenantId,jobId])).rows.map(row=>this.map(row)));
+ }
+ async listForJobs(context:VerifiedTenantContext,jobIds:readonly string[],digest:string) {
+  if(!/^[0-9a-f]{64}$/u.test(digest))throw new PracticeAccessError("UNAUTHENTICATED");
+  if(jobIds.length===0)return [];
+  return withTenant(this.pool,context,async db=>{
+   // The owned job anchors the LEFT JOIN: an authorized empty group is a fact,
+   // whereas absent ownership never manufactures an empty invoice list.
+   const rows=(await db.$client.query<any>(`${practiceOwnedJobsSql("$2")}
+    SELECT j.id group_job_id,i.*,${amounts} FROM app.job j
+    LEFT JOIN app.customer_invoice i ON(i.tenant_id,i.job_id)=(j.tenant_id,j.id)
+    WHERE j.tenant_id=$1 AND j.id=ANY($3::uuid[]) AND j.id IN(SELECT id FROM practice_owned_job)
+    AND NOT EXISTS(SELECT 1 FROM app.sandbox_run r WHERE(r.tenant_id,r.job_id)=(j.tenant_id,j.id))
+    ORDER BY j.id,i.created_at,i.id`,[context.tenantId,digest,jobIds])).rows;
+   const groups=new Map<string,ReturnType<PracticeInvoiceRepository["map"]>[]>();
+   for(const row of rows){
+    const invoices=groups.get(row.group_job_id)??[];
+    if(row.id!==null)invoices.push(this.map(row));
+    groups.set(row.group_job_id,invoices);
+   }
+   if(jobIds.some(id=>!groups.has(id)))throw new PracticeAccessError("NOT_FOUND");
+   return [...groups].map(([jobId,invoices])=>({jobId,invoices}));
+  });
  }
  async issue(context:VerifiedTenantContext,input:{jobId:string;finalAccountRevisionId:string;actorMembershipId:string;commandId:string;recipient:string;issuedOn:string}) {
   return withTenant(this.pool,context,async db=>{

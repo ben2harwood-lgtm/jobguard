@@ -1,3 +1,4 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -84,9 +85,11 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
         await db.query(`INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance)
           VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')`, [auth.context.tenantId, id]);
       }
-      await db.query(`INSERT INTO app.final_check_terms_acceptance(tenant_id,id,terms_version,accepting_membership_id,accepted_at,command_id,audit_event_id)
-        VALUES($1,$2,'synthetic_final_check_terms.v1',$3,clock_timestamp(),$4,$5)`,
-      [auth.context.tenantId, randomUUID(), auth.membershipId, randomUUID(), randomUUID()]);
+      // 0735: practice acceptance belongs to the accepting firm (this fixture's own session).
+      const perFirm = (await db.query("SELECT to_regprocedure('app.final_check_job_scope(uuid,uuid)') IS NOT NULL installed")).rows[0].installed;
+      await db.query(`INSERT INTO app.final_check_terms_acceptance(tenant_id,id,terms_version,accepting_membership_id,accepted_at,command_id,audit_event_id${perFirm ? ",practice_session_digest" : ""})
+        VALUES($1,$2,'synthetic_final_check_terms.v1',$3,clock_timestamp(),$4,$5${perFirm ? ",$6" : ""})`,
+      [auth.context.tenantId, randomUUID(), auth.membershipId, randomUUID(), randomUUID(), ...(perFirm ? [auth.digest] : [])]);
       const merchant = randomUUID();
       await db.query("INSERT INTO app.merchant(id,tenant_id,name) VALUES($1,$2,'Fictional ancestry supplier')", [merchant, auth.context.tenantId]);
       await db.query(`INSERT INTO app.merchant_sku(id,tenant_id,merchant_id,sku,description,base_unit,practice_session_digest)
@@ -206,7 +209,7 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
       expect(weakened).not.toBe(original);
       await client.query(weakened);
       await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]);
-      await client.query("SET LOCAL ROLE jobguard_runtime");
+      await client.query("SELECT app.bind_request('practice',$1,nullif(current_setting('app.tenant_id',true),'')::uuid)",[auth.digest]);await client.query("SET LOCAL ROLE jobguard_runtime");
       if (removed === "receipt") {
         await expect(client.query("SELECT app.ch4_read_work_facts($1,$2,$3)",
           [auth.context.tenantId, v1Job, auth.digest])).rejects.toThrow("WORK_STATE_FORBIDDEN");
@@ -233,7 +236,7 @@ describe("LATER-SAFETY-109 import ancestry — real PostgreSQL", () => {
       const weakened = original.replace(anchor, "");
       expect(weakened).not.toBe(original);
       await client.query(weakened);
-      await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]);
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]); await bindOwnSession(client, auth.digest);
       await client.query("SET LOCAL ROLE jobguard_runtime");
       // Confirm this is a successful unauthorized read, rather than an unrelated
       // fixture/permission error that also trips the rejection assertion.

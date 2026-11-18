@@ -29,6 +29,7 @@ test("UI-DESIGN-JOBS main screens and job tabs open in the design", async ({ pag
 test("UI-DESIGN-JOBS a job started from the design opens in its designed Work tab", async ({ page }) => {
   await signIn(page);
   await page.goto("/jobs/new");
+  await page.getByLabel("Work details").fill("Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves");
   await page.getByRole("button", { name: "Make my draft", exact: true }).click();
   await page.getByRole("button", { name: "Check and edit my draft", exact: true }).click();
   await expect(page).toHaveURL(/\/jobs\/[0-9a-f-]{36}\/work$/u, { timeout: 30_000 });

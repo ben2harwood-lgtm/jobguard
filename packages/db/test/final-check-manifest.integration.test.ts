@@ -1,3 +1,4 @@
+import { practiceMaterialPool } from "../src/practice-session.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {randomUUID} from "node:crypto";
@@ -69,7 +70,7 @@ it.each(['rejected','expired'] as const)("C204 %s pre-lock upload is audited, ex
  await assertLp4SealedEvents(f.admin, a.tenantId, "final_check.completed");
  const exclusions=[{uploadId:upload,state:terminal,reason:terminal==='rejected'?'verification_invalid':'expired_unswept'}];
  const digest=(await f.admin.query("SELECT app.final_lock_hash($1::jsonb) hash",[JSON.stringify(exclusions)])).rows[0].hash;
- expect(events).toEqual([{payload:{references:{manifestId:m.id,lockId:expect.any(String),auditTrust:'checked_operation'},hashes:{exclusions:digest}}}]);
+ expect(events).toEqual([{payload:{references:{manifestId:m.id,lockId:expect.any(String),auditTrust:'checked_operation',auditActorKind:'system',auditActorRef:expect.stringMatching(/^system:database:[A-Za-z0-9_]+$/u)},hashes:{exclusions:digest}}}]);
  expect((await f.admin.query("SELECT id FROM app.final_check_manifest WHERE tenant_id=$1 AND id=$2",[a.tenantId,m.id])).rows).toEqual([{id:m.id}]);
 });
 
@@ -144,7 +145,7 @@ it('SB-06: Double lock, replayed lock, or a later revision edits the lock', asyn
  const a=await seedFinalCheckJob(f);
  const { FinalAccountLockRepository } = await import('../src/final-account-lock-repository.js');
  const { FINAL_CHECK_ACTOR } = await import('./final-check-fixture.js');
- const repo=new FinalAccountLockRepository(f.runtime), input={jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:'final_account_declaration.v1' as const};
+ const repo=new FinalAccountLockRepository(practiceMaterialPool(f.runtime,a.digest)), input={jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:a.revisionId,expectedRevision:1,declarationVersion:'final_account_declaration.v1' as const};
  const first=await repo.lock(a.context,input);
  expect(await repo.lock(a.context,input)).toEqual(first);
  const read=async()=> (await f.admin.query('SELECT row_to_json(l)::text bytes FROM app.final_account_lock l WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows;

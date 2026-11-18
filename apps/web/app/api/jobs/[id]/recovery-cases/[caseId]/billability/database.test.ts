@@ -8,7 +8,10 @@ import { StoredReceiptCaseAllocationRepository } from "../../../../../../../../.
 import { RecoveryBillabilityRepository } from "../../../../../../../../../packages/db/src/recovery-billability-repository.js";
 const state=vi.hoisted(()=>({pool:undefined as unknown,practice:"",identity:"",tenant:"",member:"",digest:""}));
 vi.mock("server-only",()=>({}));
-vi.mock("@jobguard/api/identity",()=>({resolveVerifiedTenantContext:async()=>testTenantContext(state.tenant)}));
+vi.mock("@jobguard/api/identity",()=>({resolveVerifiedTenantContext:async (_provider:unknown, credentials:{csrfToken?:string})=>{
+ if(credentials.csrfToken!=="synthetic-csrf") throw new Error("ORIGIN_FORBIDDEN");
+ return testTenantContext(state.tenant);
+}}));
 vi.mock("next/headers",()=>({cookies:async()=>({get:(key:string)=>({value:key==="jg_session"?state.practice:state.identity})})}));
 vi.mock("../../../../../../lib/synthetic-server",()=>({syntheticPool:()=>state.pool}));
 vi.mock("@jobguard/db",()=>import("../../../../../../../../../packages/db/src/index.js"));
@@ -32,12 +35,14 @@ async function ready(){
  await allocator.command(x.context,x.jobId,x.auth.digest,{...p,action:"approve",commandId:randomUUID(),reviewId:review.reviewId,approvalHash:review.approvalHash});
  return {x,command:{version:"recovery-billability-command.v1",action:"review",commandId:randomUUID(),caseId:x.caseId,workId:x.workId,lineId:x.line,expectedCaseRevision:revision,claimedEligiblePrincipalPence:80000,reasons:"Fictional review via web route"}};
 }
-function send(x:Fixture,body:unknown){return POST(new Request("http://example.invalid",{method:"POST",headers:{origin:"http://example.invalid","x-csrf-token":state.identity?"synthetic-csrf":createHash("sha256").update(`billability-csrf.v1:${x.auth.digest}`).digest("hex"),"content-type":"application/json"},body:JSON.stringify(body)}),{params:Promise.resolve({id:x.jobId,caseId:x.caseId})});}
+function send(x:Fixture,body:unknown,csrfToken?:string){return POST(new Request("http://example.invalid",{method:"POST",headers:{origin:"http://example.invalid","x-csrf-token":csrfToken ?? (state.identity?"synthetic-csrf":createHash("sha256").update(`billability-csrf.v1:${x.auth.digest}`).digest("hex")),"content-type":"application/json"},body:JSON.stringify(body)}),{params:Promise.resolve({id:x.jobId,caseId:x.caseId})});}
 async function owner(x:Fixture,same=false){
  const user=same?x.actor.identityUserId:randomUUID(),member=same?x.actor.membershipId:randomUUID();state.identity=randomUUID();state.digest=createHash("sha256").update(state.identity).digest("hex");state.member=member;
  await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING",[user]);
  if(!same)await finalCheckTenant(f.admin,x.context.tenantId,async db=>{const account=(await db.query("SELECT account_id FROM app.membership WHERE tenant_id=$1 AND id=$2",[x.context.tenantId,x.actor.membershipId])).rows[0].account_id;await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[member,x.context.tenantId,account,user]);});
  await f.admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')",[randomUUID(),user,state.digest,randomUUID()]);
+ await f.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING",[`${user}@fictional.invalid`,user]);
+ await f.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",[user,x.context.tenantId,member]);
 }
 const approve=(command:Awaited<ReturnType<typeof ready>>["command"])=>{const {claimedEligiblePrincipalPence:_amount,reasons:_reasons,...base}=command;return {...base,action:"approve",commandId:randomUUID(),reviewCommandId:command.commandId};};
 it("route records one review and one approval under duplicate/replay and serves the stored review to the second person",async()=>{
@@ -45,6 +50,31 @@ it("route records one review and one approval under duplicate/replay and serves 
  await owner(x);const view=await GET(new Request("http://example.invalid"),{params:Promise.resolve({id:x.jobId,caseId:x.caseId})});expect(view.status).toBe(200);expect((await view.json()).reviews[0].review.command.reasons).toBe(command.reasons);
  const p=approve(command);const first=await send(x,p),replay=await send(x,p);expect(first.status).toBe(200);expect(await replay.json()).toEqual(await first.json());
  expect((await f.admin.query("SELECT count(*)::int n FROM app.recovery_billability_command WHERE tenant_id=$1 AND job_id=$2",[state.tenant,x.jobId])).rows[0].n).toBe(2);
+},120000);
+it("dual-cookie action reads prepare review then different-person approval without GET mutations or real fees",async()=>{
+ const {x,command}=await ready();await owner(x);
+ const params={params:Promise.resolve({id:x.jobId,caseId:x.caseId})};
+ const count=async()=>Number((await f.admin.query("SELECT count(*) n FROM app.recovery_billability_command WHERE tenant_id=$1 AND job_id=$2",[state.tenant,x.jobId])).rows[0].n);
+ const read=async(action:string)=>{
+  const before=await count();
+  const response=await GET(new Request(`http://example.invalid?action=${action}`),params);
+  expect(response.status).toBe(200);expect(await count()).toBe(before);
+  return response.json();
+ };
+ const reviewView=await read("review");
+ expect(reviewView.csrfToken).toBe(createHash("sha256").update(`billability-csrf.v1:${x.auth.digest}`).digest("hex"));
+ expect((await send(x,command,"synthetic-csrf")).status).toBe(403);
+ const reviewed=await send(x,command,reviewView.csrfToken);expect(reviewed.status).toBe(200);
+ expect((await reviewed.json()).command.claimedEligiblePrincipalPence).toBe(80000);
+ const approvalView=await read("approve");expect(approvalView.csrfToken).toBe("synthetic-csrf");
+ const approval=approve(command);
+ expect((await send(x,approval,reviewView.csrfToken)).status).toBe(403);
+ const approved=await send(x,approval,approvalView.csrfToken);expect(approved.status).toBe(200);
+ expect(await approved.json()).toMatchObject({productionEnabled:false});
+ expect(await count()).toBe(2);
+ const stored=await read("approve");expect(stored.reviews[0].approved).toBe(true);
+ expect(stored.reviews[0].review.command.claimedEligiblePrincipalPence).toBe(80000);
+ expect(Number((await f.admin.query("SELECT count(*) n FROM app.recovery_fee_journal WHERE tenant_id=$1 AND job_id=$2",[state.tenant,x.jobId])).rows[0].n)).toBe(0);
 },120000);
 it("stale revision changes nothing and exact command replay conflicts remain typed",async()=>{
  const {x,command}=await ready();expect((await send(x,{...command,expectedCaseRevision:command.expectedCaseRevision+1})).status).toBe(409);

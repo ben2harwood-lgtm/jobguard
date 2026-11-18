@@ -16,6 +16,11 @@ describe("SV5PRE completion access",()=>{
    {nspname:'app',proname:'read_final_check_manifest',args:'t uuid, j uuid, m uuid'},
    {nspname:'app',proname:'record_final_check_source_result',args:'t uuid, j uuid, m uuid, s uuid, attempt uuid, p jsonb'},
    {nspname:'app',proname:'complete_final_check',args:'t uuid, j uuid, m uuid, p jsonb'},
+   // 0732 (real-fc-typed-recovery): a deliberate, reviewed widening for the bounded recovery cycle. Both are
+   // tenant/role-checked and only count executions and set cycle_state for the exact lock/manifest/attempt/cycle;
+   // neither reads or writes shadow facts, and "completed" still requires the checked completion certificate.
+   {nspname:'app',proname:'final_check_cycle_claim',args:'t uuid, j uuid, l uuid, m uuid, a integer, c uuid'},
+   {nspname:'app',proname:'final_check_cycle_finish',args:'t uuid, j uuid, l uuid, m uuid, a integer, c uuid, succeeded boolean'},
   ];
   expect(callable.sort((a,b)=>a.proname.localeCompare(b.proname))).toEqual(allowed.sort((a,b)=>a.proname.localeCompare(b.proname)));
  });

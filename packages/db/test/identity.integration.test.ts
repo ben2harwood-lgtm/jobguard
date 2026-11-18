@@ -49,6 +49,47 @@ beforeAll(async()=>{
 afterAll(async()=>{await closeTestPools(identity,runtime,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});});
 
 describe("M0-6L persisted identity / actual PostgreSQL roles",()=>{
+ it("LATER-SAFETY-66 signs out durably, rejects the old cookie and is non-enumerating on replay",async()=>{
+  const owner=await signup(),app=new IdentityApplication(owner.provider,origin);
+  const controller=new (await import("../../../apps/api/src/auth/identity.controller.js")).IdentityController(()=>app);
+  const credentials={sessionToken:owner.session.sessionToken,csrfToken:owner.session.csrfToken,origin,requestedTenantId:owner.membership.tenantId};
+  const request={headers:{cookie:`jobguard_session=${owner.session.sessionToken}`,origin,"x-csrf-token":owner.session.csrfToken}};
+  expect(await controller.session(request)).toMatchObject({principal:{sessionId:owner.principal.sessionId}});
+  await expect(app.context(credentials)).resolves.toBeDefined();
+  const result=await controller.signout(request,{cookie:()=>undefined});
+  await expect(controller.session(request)).rejects.toMatchObject({status:401});
+  await expect(app.context(credentials)).rejects.toMatchObject({code:"UNAUTHENTICATED"});
+  expect((await admin.query("SELECT revoked_at FROM identity.session WHERE id=$1",[owner.principal.sessionId])).rows[0].revoked_at).toBeInstanceOf(Date);
+  for(const sessionToken of [owner.session.sessionToken,undefined,"unknown-fixture-token"]) {
+    expect(await app.signout({sessionToken,origin})).toEqual(result);
+  }
+  expect((await admin.query("SELECT count(*)::int n FROM identity.security_event WHERE subject_id=$1 AND event_type='session.revoked'",[owner.principal.sessionId])).rows[0].n).toBe(1);
+ });
+ it("LATER-SAFETY-66 refuses missing/wrong CSRF and disallowed/missing Origin without revoking",async()=>{
+  const owner=await signup(),app=new IdentityApplication(owner.provider,origin);
+  for(const credentials of [
+    {origin}, {origin,csrfToken:"wrong"},
+    {origin:"https://untrusted.invalid",csrfToken:owner.session.csrfToken}, {csrfToken:owner.session.csrfToken},
+  ]) {
+    await expect(app.signout({...credentials,sessionToken:owner.session.sessionToken})).rejects.toMatchObject({code:"ORIGIN_FORBIDDEN"});
+    await expect(app.session(owner.session.sessionToken)).resolves.toBeDefined();
+  }
+  expect((await admin.query("SELECT revoked_at FROM identity.session WHERE id=$1",[owner.principal.sessionId])).rows[0].revoked_at).toBeNull();
+  expect((await admin.query("SELECT count(*)::int n FROM identity.security_event WHERE subject_id=$1 AND event_type='session.revoked'",[owner.principal.sessionId])).rows[0].n).toBe(0);
+ });
+ it("LATER-SAFETY-66 invitation switch revokes the previous account before issuing its replacement",async()=>{
+  const owner=await signup(),previous=await signup(),recipient=email(),app=new IdentityApplication(owner.provider,origin);
+  const invitation=await app.invite({version:"identity-invitation.v1",requested_tenant_id:owner.membership.tenantId,email:recipient,role:"foreman"},{sessionToken:owner.session.sessionToken,csrfToken:owner.session.csrfToken,origin});
+  await owner.provider.requestCode({email:recipient,purpose:"invitation",invitationId:invitation.id,ip:randomUUID()});
+  const input={version:"identity-verify.v1",email:recipient,purpose:"invitation",code:"12345678",invitationId:invitation.id};
+  await expect(app.verify(input,origin,{sessionToken:previous.session.sessionToken})).rejects.toMatchObject({code:"ORIGIN_FORBIDDEN"});
+  expect(await previous.provider.authenticate(previous.session.sessionToken)).toBeDefined();
+  const next=await app.verify(input,origin,{sessionToken:previous.session.sessionToken,csrfToken:previous.session.csrfToken});
+  expect(await previous.provider.authenticate(previous.session.sessionToken)).toBeUndefined();
+  expect(await owner.provider.authenticate(next.sessionToken)).toBeDefined();
+  expect((await admin.query("SELECT revoked_at FROM identity.session WHERE id=$1",[previous.principal.sessionId])).rows[0].revoked_at).toBeInstanceOf(Date);
+  expect((await admin.query("SELECT count(*)::int n FROM identity.security_event WHERE subject_id=$1 AND event_type='session.revoked'",[previous.principal.sessionId])).rows[0].n).toBe(1);
+ });
  it("creates one tenant under concurrent use and survives a new provider instance",async()=>{
   const address=email(),provider=fixture();await provider.requestCode({email:address,purpose:"signup",ip:randomUUID()});
   const results=await Promise.allSettled([provider.verifyCode(address,"signup","12345678"),fixture().verifyCode(address,"signup","12345678")]);

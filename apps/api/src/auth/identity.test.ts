@@ -6,10 +6,34 @@ import { syntheticSessionAllowed } from "./synthetic-session.js";
 import { FixtureIdentityEmail } from "./identity-email.js";
 import { ApplicationAuthGuard } from "./application-auth.guard.js";
 import { identityCookieOptions, identityStatus } from "./identity-http.js";
-import { createIdentityApplication, identityRequestV1, identityVerifyV1 } from "./identity.application.js";
+import { IdentityApplication, createIdentityApplication, identityRequestV1, identityVerifyV1 } from "./identity.application.js";
 import { parseIdentityEnvironment } from "@jobguard/config";
 
 describe("M0-6L route, cookie and server composition boundaries",()=>{
+ it("LATER-SAFETY-66 clears the Nest session cookie only after successful sign-out",async()=>{
+  const {IdentityController}=await import("./identity.controller.js");
+  const signout=vi.fn(async()=>({version:"identity-signed-out.v1"}));
+  const controller=new IdentityController(()=>({signout}) as unknown as IdentityApplication),cookie=vi.fn();
+  const request={headers:{cookie:"jobguard_session=fixture-token",origin:"https://jobguard.invalid","x-csrf-token":"fixture-csrf"}};
+  await controller.signout(request,{cookie});
+  expect(signout).toHaveBeenCalledWith({sessionToken:"fixture-token",origin:"https://jobguard.invalid",csrfToken:"fixture-csrf"});
+  expect(cookie).toHaveBeenCalledWith("jobguard_session","",{...identityCookieOptions,maxAge:0});
+  cookie.mockClear();signout.mockRejectedValueOnce(new Error("storage unavailable"));
+  await expect(controller.signout(request,{cookie})).rejects.toMatchObject({status:503});
+  expect(cookie).not.toHaveBeenCalled();
+ });
+ it("LATER-SAFETY-66 clears the Next cookie with Max-Age=0 and preserves its attributes",async()=>{
+  const {runInNewContext}=await import("node:vm");
+  const {transpileModule,ModuleKind}=await import("typescript");
+  const signout=vi.fn(async()=>({version:"identity-signed-out.v1"})),set=vi.fn();
+  const credentials={sessionToken:"fixture-token",csrfToken:"fixture-csrf",origin:"https://jobguard.invalid"};
+  const adapters:Record<string,unknown>={"next/server":{NextResponse:{json:()=>({cookies:{set}})}},"@jobguard/api/identity":{identityCookieOptions,identityStatus},"../../../lib/identity-server":{identityApplication:()=>({signout}),identityCredentials:async()=>credentials}};
+  const exports:Record<string,any>={};
+  runInNewContext(transpileModule(await readFile(new URL("../../../web/app/api/auth/signout/route.ts",import.meta.url),"utf8"),{compilerOptions:{module:ModuleKind.CommonJS}}).outputText,{exports,require:(id:string)=>adapters[id]});
+  await exports.POST({});
+  expect(signout).toHaveBeenCalledWith(credentials);
+  expect(set).toHaveBeenCalledWith("jobguard_session","",{...identityCookieOptions,maxAge:0});
+ });
  it("keeps identity credentials separate with single-use Worker connections",async()=>{
   const environment={JOBGUARD_ENV:"synthetic_demo",IDENTITY_DATABASE_URL:"postgresql://jobguard_identity:fictional@db.invalid/jobguard_synthetic_demo",AUTH_CODE_SECRET:"fictional".repeat(8),AUTH_ALLOWED_ORIGIN:"https://jobguard.invalid"};
   const worker=createIdentityApplication(environment,{max:1,maxUses:1});
@@ -62,15 +86,25 @@ describe("M0-6L route, cookie and server composition boundaries",()=>{
  it("keeps practice mode guards ahead of cookies, pools and authenticated workspace work",async()=>{
   const {runInNewContext}=await import("node:vm");
   const {transpileModule,ModuleKind}=await import("typescript");
-  const pool=vi.fn(), authenticate=vi.fn(), workspace=vi.fn(), cookie=vi.fn(async()=>({get:()=>({value:"b690f3c7-0d23-4c83-bca2-5f60ce9a0f19"})}));
+  const pool=vi.fn(), authenticate=vi.fn(), workspace=vi.fn(), identity=vi.fn(), cookie=vi.fn(async()=>({get:()=>({value:"b690f3c7-0d23-4c83-bca2-5f60ce9a0f19"})}));
   const adapters:Record<string,unknown>={"server-only":{},"next/headers":{cookies:cookie},"next/server":{NextResponse:{json:Response.json}},"@jobguard/db":{authenticatePracticeSession:authenticate},"@jobguard/api/workspace":{createWorkspaceApplication:workspace},"pg":{Pool:pool}};
   const environment:Record<string,string|undefined>={DATABASE_URL:"postgresql://fixture.invalid/synthetic"};
-  const load=async(path:string)=>{
+  const load=async(path:string,imports:Record<string,unknown>=adapters)=>{
    const exports:Record<string,any>={};
    const js=transpileModule(await readFile(sourceFixtureUrl(`../../../web/app/${path}`, import.meta.url),"utf8"),{compilerOptions:{module:ModuleKind.CommonJS}}).outputText;
-   runInNewContext(js,{exports,require:(id:string)=>{if(!(id in adapters))throw new Error(`Unexpected practice import: ${id}`);return adapters[id]},Response,process:{env:environment}});
+   runInNewContext(js,{exports,require:(id:string)=>{if(!(id in imports))throw new Error(`Unexpected practice import: ${id}`);return imports[id]},Response,process:{env:environment}});
    return exports;
   };
+  // Load the real linked entry and identity dependency: import-time effects must
+  // remain visible to the same cookie/pool spies as the original guard check.
+  const identityApi={...(await import("@jobguard/api/identity")),createIdentityApplication:identity};
+  const identityServer=await load("lib/identity-server.ts",{...adapters,"@jobguard/api/identity":identityApi});
+  const linked=await load("lib/linked-practice-entry.ts",{
+   ...adapters,"node:crypto":await import("node:crypto"),"zod":await import("zod"),
+   "@jobguard/api/identity":identityApi,"./identity-server":identityServer,
+  });
+  adapters["./linked-practice-entry"]=linked;
+  adapters["../../lib/linked-practice-entry"]=linked;
   const synthetic=await load("lib/synthetic-server.ts");
   adapters["./synthetic-server"]=synthetic;
   adapters["../../lib/synthetic-server"]=synthetic;
@@ -91,6 +125,7 @@ describe("M0-6L route, cookie and server composition boundaries",()=>{
    expect(pool).not.toHaveBeenCalled();
    expect(authenticate).not.toHaveBeenCalled();
    expect(workspace).not.toHaveBeenCalled();
+   expect(identity).not.toHaveBeenCalled();
   }
  });
  it("confines real identity context construction to the authenticated principal bridge",async()=>{

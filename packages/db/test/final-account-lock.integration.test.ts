@@ -1,3 +1,5 @@
+import { practiceMaterialPool } from "../src/practice-session.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,7 +13,7 @@ import { migrate } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { approvePricedVariation, VariationRepository } from "../src/variation-repository.js";
-import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext, bindTestClient } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 export const LOCK_OWNER = "40000000-0000-4000-8000-000000000004";
@@ -36,9 +38,10 @@ export async function createLockFixture(install = true): Promise<LockFixture> {
  return { postgres, directory, port, credential, admin, runtime: pools[0]!, shadow: pools[1]!, owner: pools[2]! };
 }
 export async function closeLockFixture(f: LockFixture) { await closeTestPools(f.runtime, f.shadow, f.owner, f.admin); await f.postgres.stop(); await rm(f.directory, { recursive: true, force: true }); }
-export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>): Promise<T> {
+// LP-6d: `as` binds a raw fixture call to that member's own request (its persisted fixture credential).
+export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>, as?: { owner: Pool; membershipId: string }): Promise<T> {
  const db = await pool.connect();
- try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
+ try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); if (as) await bindTestClient(as.owner, db, tenantId, as.membershipId); const result = await work(db); await db.query("COMMIT"); return result; }
  catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
 type CaptureAccount = { tenantId: string; jobId: string; context: ReturnType<typeof testTenantContext> };
@@ -73,9 +76,16 @@ export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 33
  return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context, input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
 }
 export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof seedAccount>>) {
- const repo = new FinalAccountLockRepository(f.runtime);
- await repo.acceptTerms(a.context, { actorMembershipId: LOCK_OWNER, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
- await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
+ const digest=(await f.admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])).rows[0].practice_session_digest;
+ if(digest){
+  const principal=(await f.runtime.query("SELECT * FROM app.authenticate_practice_session($1,$2)",[digest,a.tenantId])).rows[0];
+  a.context=verifiedTenantContextFromMembership({tenantId:a.tenantId,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership,{kind:"practice",credential:digest});
+  // The bound practice session acts as its own member; lock with that same member.
+  a.input={...a.input,actorMembershipId:principal.membership_id};
+ }
+ const repo = new FinalAccountLockRepository(digest?practiceMaterialPool(f.runtime,digest):f.runtime);
+ await repo.acceptTerms(a.context, { actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+ await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
  return repo;
 }
 export async function addFixtureCapture(f: LockFixture, a: CaptureAccount, net: number | null, review = false) {

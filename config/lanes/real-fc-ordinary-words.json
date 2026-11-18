@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-fc-ordinary-words": {
+      "branches": [
+        "codex/sandbox/real-fc-ordinary-words"
+      ],
+      "allow": [
+        "apps/web/e2e/SV-5.spec.ts",
+        "apps/web/e2e/real-fc-ordinary-words.spec.ts",
+        "packages/db/src/final-check-typed-text.test.ts",
+        "packages/db/src/final-check-typed-text.ts",
+        "packages/db/src/shadow-detection-repository.ts",
+        "packages/db/test/real-fc-ordinary-words.integration.test.ts"
+      ]
+    }
+  }
+}

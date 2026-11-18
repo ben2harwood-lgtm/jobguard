@@ -64,15 +64,6 @@ describe("LP-10 real login authority", () => {
     expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0].status).toBe("pending");
     expect((await admin.query("SELECT * FROM app.action_attempt WHERE action_id=$1", [id])).rows).toEqual([]);
   });
-  it("durable operator pause prevents claims, without giving the worker pause authority", async () => {
-    const { id } = await enqueue();
-    await admin.query("UPDATE outbound_control.state SET paused=true");
-    try {
-      expect(await claim(id)).toBeNull();
-      await expect(worker.query("UPDATE outbound_control.state SET paused=false")).rejects.toMatchObject({ code: "42501" });
-      expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0].status).toBe("pending");
-    } finally { await admin.query("UPDATE outbound_control.state SET paused=false"); }
-  });
   it("keeps the current contractor entitlement guard at claim", async () => {
     const { id } = await enqueue("extra.client_approval_request.send");
     expect(await claim(id)).toBeNull();
@@ -152,9 +143,12 @@ describe("LP-10 real login authority", () => {
   it("lease expiry refuses blind reclaim and late completion", async () => {
     const { id } = await enqueue(), first = await claim(id);
     await admin.query("UPDATE app.action_outbox SET claimed_at=clock_timestamp()-interval '6 minutes' WHERE id=$1", [id]);
-    expect(await claim(id)).toBeNull(); expect(await claim(id)).toBeNull();
+    expect(await claim(id)).toEqual({ stale: true });
+    expect(await claim(id)).toBeNull();
     expect(await complete(id, first.token)).toBe(false);
     expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0].status).toBe("outcome_unknown");
+    expect((await admin.query("SELECT attempt_number,outcome,error_code FROM app.action_attempt WHERE action_id=$1", [id])).rows)
+      .toEqual([{ attempt_number: 1, outcome: "outcome_unknown", error_code: "lease_expired" }]);
   });
   it("audit failure rolls back the claim and attempt together", async () => {
     const { id } = await enqueue();
@@ -198,5 +192,13 @@ describe("LP-10 real login authority", () => {
     await admin.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp()-interval '1 second' WHERE id=$1", [id]);
     const second = await claim(id); expect(second.attempt).toBe(2); expect(second.token).not.toBe(first.token);
     expect(await complete(id, first.token)).toBe(false); expect(await complete(id, second.token)).toBe(true);
+  });
+  // The pause stays in force until this isolated fixture shuts down.
+  it("durable operator pause prevents claims, without giving the worker pause authority", async () => {
+    const { id } = await enqueue();
+    await admin.query("UPDATE outbound_control.state SET paused=true");
+    expect(await claim(id)).toBeNull();
+    await expect(worker.query("UPDATE outbound_control.state SET paused=false")).rejects.toMatchObject({ code: "42501" });
+    expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [id])).rows[0].status).toBe("pending");
   });
 });

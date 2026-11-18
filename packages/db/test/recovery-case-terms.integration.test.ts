@@ -1,3 +1,5 @@
+import { rolledBack } from "./upgrade-proof-utils.js";
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
@@ -11,7 +13,7 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { recoveryCaseTermsHash } from "@jobguard/core";
-import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U, RecoveryCaseTermsRepository, RecoveryCaseRepository, RecoveryMessageRepository, EvidencePackRepository, PracticeActivationRepository, PracticeInvoiceRepository, FinalAccountCommandService, prepareActivationFixtureV3, migrate, withTenant, verifyAuditChain, executeAuthorizedCommercialAction } from "../src/index.js";
+import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseTermsRepository, RecoveryCaseRepository, RecoveryMessageRepository, EvidencePackRepository, PracticeActivationRepository, PracticeInvoiceRepository, FinalAccountCommandService, prepareActivationFixtureV3, migrate, withTenant, verifyAuditChain, executeAuthorizedCommercialAction } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 let context=testTenantContext(T, { membershipId: M });
@@ -74,9 +76,9 @@ async function proofFixture(owner:Pool,j:string){
  });
  }
 }
-async function supplierFixture(){
+async function supplierFixture(owner:Pool){
  const merchant=randomUUID(),sku=randomUUID(),rate=randomUUID(),scope=(await admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 LIMIT 1",[T,job])).rows[0].id,refs=[rate];
- await withTenant(admin,context,async db=>{
+ await withTenant(owner,context,async db=>{
  await db.$client.query("INSERT INTO app.merchant(id,tenant_id,name) VALUES($1,$2,'Fictional supplier')",[merchant,T]);await db.$client.query("INSERT INTO app.merchant_sku(id,tenant_id,merchant_id,sku,description,base_unit) VALUES($1,$2,$3,'CH7-320','Fixture materials','each')",[sku,T,merchant]);await db.$client.query("INSERT INTO app.material_rate_revision(id,tenant_id,merchant_id,sku_id,version,price_pence,currency,price_unit,tax_basis,effective_from,source_label) VALUES($1,$2,$3,$4,1,2000,'GBP','each','net','2026-10-01','CH7 agreement')",[rate,T,merchant,sku]);await db.$client.query("INSERT INTO app.material_requirement(id,tenant_id,job_id,scope_item_id,sku_id,quantity_decimal,unit,revision) VALUES($1,$2,$3,$4,$5,'40','each',1)",[randomUUID(),T,job,scope,sku]);
  for(const type of ["invoice","delivery"]){const id=randomUUID();refs.push(id);await db.$client.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status) VALUES($1,$2,$3,'Fictional supplier',$4,$5,$6,'ready')",[id,T,job,type,'CH7-'+type,hash(type)]);await db.$client.query("INSERT INTO app.supplier_document_version(id,tenant_id,job_id,document_id,version,media_type,byte_length,content_hash,page_count) VALUES($1,$2,$3,$4,1,'text/plain',1,$5,1)",[randomUUID(),T,job,id,hash(type)]);}
  });return refs;
@@ -88,14 +90,16 @@ beforeAll(async()=>{
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[T]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[U]);const account=randomUUID();await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional builder')",[account,T]);await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[M,T,account,U]);
  await admin.query("CREATE ROLE terms_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO terms_login");
  runtime=new Pool({host:"127.0.0.1",port,user:"terms_login",password:"synthetic",database:"jobguard_synthetic_demo",max:4});
- context=await testBoundTenantContext(admin,T,M);
- job=await prepareActivationFixtureV3(admin,context,"CH7 terms",1880000,runtime);await new PracticeActivationRepository(runtime).start(context,job,{commandId:randomUUID(),scenario:"no_charge"});
- await proofFixture(admin,job);
- supplierRefs=await supplierFixture();
+ const session=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,session);
+ context=auth.context;runtime=practiceMaterialPool(runtime,auth.digest);
+ const materialOwner=practiceMaterialPool(admin,auth.digest);
+ job=await prepareActivationFixtureV3(admin,context,"CH7 terms",1880000,runtime,1880000,auth.digest);await new PracticeActivationRepository(runtime).start(context,job,{commandId:randomUUID(),scenario:"no_charge"});
+ await proofFixture(materialOwner,job);
+ supplierRefs=await supplierFixture(materialOwner);
  const final=await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:job,actorMembershipId:M});
  await prepareInvoicePrerequisites(admin,runtime,T,job,M,final.id);
  invoice=(await new PracticeInvoiceRepository(runtime).issue(context,{jobId:job,finalAccountRevisionId:final.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"})).id;
- unbound=await prepareActivationFixtureV3(admin,context,"No-policy control",1880000,runtime);await new PracticeActivationRepository(runtime).start(context,unbound,{commandId:randomUUID(),scenario:"no_charge"});await proofFixture(admin,unbound);
+ unbound=await prepareActivationFixtureV3(admin,context,"No-policy control",1880000,runtime,1880000,auth.digest);await new PracticeActivationRepository(runtime).start(context,unbound,{commandId:randomUUID(),scenario:"no_charge"});await proofFixture(materialOwner,unbound);
  const controlFinal=await new FinalAccountCommandService(runtime).assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId:unbound,actorMembershipId:M});await prepareInvoicePrerequisites(admin,runtime,T,unbound,M,controlFinal.id);unboundInvoice=(await new PracticeInvoiceRepository(runtime).issue(context,{jobId:unbound,finalAccountRevisionId:controlFinal.id,actorMembershipId:M,commandId:randomUUID(),recipient:"practice-customer@example.invalid",issuedOn:"2026-10-12"})).id;
  // Privileged negative-fixture setup only: construct the historical no-policy shape; all pursuit calls below still run as runtime.
  const fixtureClient=await admin.connect();try{await fixtureClient.query("BEGIN");await fixtureClient.query("SET LOCAL session_replication_role=replica");await fixtureClient.query("UPDATE app.job SET fee_policy_version=NULL,baseline_quote_version_id=NULL,accepted_net_value_pence=NULL WHERE tenant_id=$1 AND id=$2",[T,unbound]);await fixtureClient.query("COMMIT");}finally{fixtureClient.release();}
@@ -152,10 +156,15 @@ it("[T5] raw runtime writes on all three chase tables hit their added terms trig
  const id=await newCase();await attached(id);await new RecoveryCaseTermsRepository(runtime).approve(context,job,command(id),actor);const repo=new RecoveryMessageRepository(runtime),v=(await preview(id)).latest!;
  const queued=await repo.command(context,id,approveMessage(v),messageActor);await removeFixtureTerms(id);const before=await counts();
  // The message is the newest preview and its approval is pending. For the preview control temporarily cancel that outbox in rolled-back setup, so the old effect guard permits it.
- await expect(withTenant(runtime,context,async db=>{await db.$client.query("UPDATE app.action_outbox SET status='cancelled' WHERE tenant_id=$1 AND id=$2",[T,queued.latest!.approval!.outboxActionId]);return db.$client.query(`INSERT INTO app.recovery_message SELECT gen_random_uuid(),tenant_id,job_id,case_id,case_sequence+1,pack_id,pack_revision,manifest_hash,attachment_hash,attachment_approval_id,gen_random_uuid(),request_hash,case_type,case_revision,amount_pence,currency,sender,recipient,body,policy_version,content_hash,immutable_content,actor_membership_id,environment,created_at FROM app.recovery_message WHERE tenant_id=$1 AND id=$2`,[T,v.id]);})).rejects.toMatchObject({code:"23514",message:"RECOVERY_TERMS_NOT_APPROVED"});
+ await expect(withTenant(runtime,context,async db=>{expect((await db.$client.query("SELECT app.control_outbox($1,'cancel') changed",[queued.latest!.approval!.outboxActionId])).rows).toEqual([{changed:true}]);return db.$client.query(`INSERT INTO app.recovery_message SELECT gen_random_uuid(),tenant_id,job_id,case_id,case_sequence+1,pack_id,pack_revision,manifest_hash,attachment_hash,attachment_approval_id,gen_random_uuid(),request_hash,case_type,case_revision,amount_pence,currency,sender,recipient,body,policy_version,content_hash,immutable_content,actor_membership_id,environment,created_at FROM app.recovery_message WHERE tenant_id=$1 AND id=$2`,[T,v.id]);})).rejects.toMatchObject({code:"23514",message:"RECOVERY_TERMS_NOT_APPROVED"});
  await expect(withTenant(runtime,context,db=>db.$client.query("INSERT INTO app.recovery_message_approval SELECT * FROM app.recovery_message_approval WHERE tenant_id=$1 AND message_id=$2",[T,v.id]))).rejects.toMatchObject({code:"23514",message:"RECOVERY_TERMS_NOT_APPROVED"});
  // Put the already approved outbox in the executor's otherwise-valid state inside the rejected transaction.
- await expect(withTenant(runtime,context,async db=>{await db.$client.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[T,queued.latest!.approval!.outboxActionId]);return db.$client.query(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)`,[randomUUID(),T,job,id,v.id,queued.latest!.approval!.outboxActionId,v.message.recipient,v.message.body,v.message.contentHash,v.message.attachmentHash]);})).rejects.toMatchObject({code:"23514",message:"RECOVERY_TERMS_NOT_APPROVED"});
+ await expect(rolledBack(admin,async client=>{
+   await client.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[T,queued.latest!.approval!.outboxActionId]);
+   await client.query("SELECT set_config('app.tenant_id',$1,true)",[T]);
+   await bindTestClient(admin,client,T,M);
+   await client.query("SET LOCAL ROLE jobguard_runtime");
+   return client.query(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)`,[randomUUID(),T,job,id,v.id,queued.latest!.approval!.outboxActionId,v.message.recipient,v.message.body,v.message.contentHash,v.message.attachmentHash]);})).rejects.toMatchObject({code:"23514",message:"RECOVERY_TERMS_NOT_APPROVED"});
  expect(await counts()).toEqual(before);
  expect((await counts()).recovery_message_sink).toBe(before.recovery_message_sink);
 });

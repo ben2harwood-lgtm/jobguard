@@ -12,7 +12,7 @@ export type WalkthroughStep = {
   title: string;
   words: string;
   isDone: () => boolean;
-  autoAction: (target: HTMLElement, signal: AbortSignal) => void | Promise<void>;
+  autoAction: (target: HTMLElement, signal: AbortSignal, present?: (title: string, words: string) => Promise<void>) => void | Promise<void>;
 };
 type Box = { left: number; top: number; width: number; height: number };
 export function visibleTarget(selector: string): HTMLElement | null {
@@ -41,23 +41,19 @@ export function viewerPacing() {
   return !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 }
 
-/** Deadlines, target readiness, user input and cancellation all release the hold. */
-export function readingPause(ms: number, reduced: boolean, signal: AbortSignal, registerSkip: (skip: () => void) => void, ready?: () => boolean) {
+/** Only explicit Next or cancellation releases reading before its timer.
+ * Callers requesting a reduced-motion manual hold still wait for Next. */
+export function readingPause(ms: number, reduced: boolean, signal: AbortSignal, registerSkip: (skip: () => void) => void) {
   return new Promise<void>(resolve => {
-    let timer: ReturnType<typeof setTimeout> | undefined, poll: ReturnType<typeof setInterval> | undefined;
-    const events = ["pointerdown", "keydown", "input", "click", "wheel"] as const;
-    const input = () => finish();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = () => {
-      clearTimeout(timer); clearInterval(poll); signal.removeEventListener("abort", finish);
-      if (typeof document !== "undefined") for (const event of events) document.removeEventListener?.(event, input, true);
+      clearTimeout(timer); signal.removeEventListener("abort", finish);
       resolve();
     };
     registerSkip(finish);
-    if (signal.aborted || ready?.()) finish();
+    if (signal.aborted) finish();
     else {
       signal.addEventListener("abort", finish, { once: true });
-      if (typeof document !== "undefined") for (const event of events) document.addEventListener?.(event, input, true);
-      if (ready) poll = setInterval(() => { if (ready()) finish(); }, 50);
       if (!reduced) timer = setTimeout(finish, ms);
     }
   });
@@ -74,7 +70,7 @@ export function clearPhoneDock(target: HTMLElement, dock: HTMLElement) {
   else if (overlap > 0 && rect.height < bar.top - 12) window.scrollBy({ top: overlap, behavior: "instant" });
 }
 
-export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: readonly WalkthroughStep[]; onClose: () => void; initialIndex?: number }) {
+export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: readonly WalkthroughStep[]; onClose: (index: number) => void; initialIndex?: number }) {
   const [index, setIndex] = useState(initialIndex), [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false), [done, setDone] = useState(false), [error, setError] = useState("");
   const [box, setBox] = useState<Box | null>(null), [finished, setFinished] = useState(false), [waiting, setWaiting] = useState(false);
@@ -82,8 +78,16 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
   const instructionOnly = steps.every(step => step.id.startsWith("core-guide-"));
   const [expanded, setExpanded] = useState(instructionOnly), [holding, setHolding] = useState(false);
   const skip = useRef<(() => void) | null>(null);
+  const currentPlaying = useRef(playing);
+  const lastInput = useRef<number | null>(null);
+  const pointers = useRef(new Set<number>()), touches = useRef(new Set<number>());
+  currentPlaying.current = playing;
   const step = steps[index];
-  const stop = () => { action.current?.abort(); setPlaying(false); setHolding(false); };
+  const cancel = () => {
+    action.current?.abort(); action.current = null;
+    skip.current = null; running.current = false;
+  };
+  const stop = () => { cancel(); setBusy(false); setPlaying(false); setHolding(false); };
   const stopKey = (event: React.KeyboardEvent) => { if (event.key === " " || event.key === "Enter") stop(); };
   // Restore focus, page spacing and target styling on exit, including navigation/unmount.
   useEffect(() => {
@@ -92,7 +96,40 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     reserve();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(reserve);
     if (card.current) observer?.observe(card.current);
-    return () => { observer?.disconnect(); action.current?.abort(); document.body.style.paddingBottom = padding; if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
+    function pointer(event: PointerEvent) {
+      if (!event.isTrusted) return;
+      if (event.type === "pointerdown") { lastInput.current = performance.now(); pointers.current.add(event.pointerId); }
+      else pointers.current.delete(event.pointerId);
+    }
+    function touch(event: TouchEvent) {
+      if (!event.isTrusted) return;
+      if (event.type === "touchstart") lastInput.current = performance.now();
+      for (const contact of Array.from(event.changedTouches)) {
+        if (event.type === "touchstart") touches.current.add(contact.identifier);
+        else touches.current.delete(contact.identifier);
+      }
+    }
+    function key(event: KeyboardEvent) { if (event.isTrusted) lastInput.current = performance.now(); }
+    const blur = () => { pointers.current.clear(); touches.current.clear(); };
+    document.addEventListener("pointerdown", pointer, true);
+    document.addEventListener("pointerup", pointer, true);
+    document.addEventListener("pointercancel", pointer, true);
+    document.addEventListener("touchstart", touch, true);
+    document.addEventListener("touchend", touch, true);
+    document.addEventListener("touchcancel", touch, true);
+    document.addEventListener("keydown", key, true);
+    window.addEventListener("blur", blur);
+    return () => {
+      document.removeEventListener("pointerdown", pointer, true);
+      document.removeEventListener("pointerup", pointer, true);
+      document.removeEventListener("pointercancel", pointer, true);
+      document.removeEventListener("touchstart", touch, true);
+      document.removeEventListener("touchend", touch, true);
+      document.removeEventListener("touchcancel", touch, true);
+      document.removeEventListener("keydown", key, true);
+      window.removeEventListener("blur", blur); blur();
+      observer?.disconnect(); cancel(); document.body.style.paddingBottom = padding; if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
   }, []);
   useEffect(() => {
     if (!step) return;
@@ -101,16 +138,44 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     setDone(false); setError(""); setBox(null);
     card.current?.focus({ preventScroll: true });
     let highlighted: HTMLElement | null = null;
-    function update() {
+    let hadHighlight = false;
+    let settling: { top: number; height: number; equal: number; moved: boolean } | null = null;
+    function update(poll = false) {
       const root = visibleTarget(step!.target);
       const target = step!.spotlightTarget?.() ?? (root?.matches("button, input, textarea, select, a[href]") ? root : root?.querySelector<HTMLElement>("textarea, input, select, button, a[href]") ?? root);
       if (highlighted !== target) {
+        settling = null;
         highlighted?.classList.remove(styles.target!);
         highlighted = target;
         highlighted?.classList.add(styles.target!);
-        if (highlighted && card.current) clearPhoneDock(highlighted, card.current);
+        if (highlighted) {
+          const recentInput = lastInput.current !== null && performance.now() - lastInput.current < 1_000;
+          const manualInput = !running.current && !currentPlaying.current && (recentInput || pointers.current.size > 0 || touches.current.size > 0);
+          // Saving parties changes the target to preview. Only explicit navigation
+          // or playback may move this hand step, even after a slow save response.
+          if (card.current && (!hadHighlight || !manualInput) && !(hadHighlight && step!.id === "walk-3" && !running.current && !currentPlaying.current)) {
+            clearPhoneDock(highlighted, card.current);
+            const rect = highlighted.getBoundingClientRect();
+            settling = { top: rect.top + (window.scrollY ?? 0), height: rect.height, equal: 0, moved: false };
+          }
+          hadHighlight = true;
+        }
       }
       if (target) {
+        if (settling && poll) {
+          const recentInput = lastInput.current !== null && performance.now() - lastInput.current < 1_000;
+          const manualInput = !running.current && !currentPlaying.current && (recentInput || pointers.current.size > 0 || touches.current.size > 0);
+          const rect = target.getBoundingClientRect(), top = rect.top + (window.scrollY ?? 0);
+          // Only settle a newly highlighted control. Document coordinates ignore
+          // viewer scrolling; fresh manual input permanently cancels this retry.
+          if (manualInput) settling = null;
+          else if (top !== settling.top || rect.height !== settling.height) {
+            settling = { top, height: rect.height, equal: 0, moved: true };
+          } else if (++settling.equal === 2) {
+            const moved = settling.moved; settling = null;
+            if (moved && card.current) clearPhoneDock(target, card.current);
+          }
+        }
         const rect = target.getBoundingClientRect();
         setBox({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
         setDone(step!.isDone());
@@ -119,9 +184,10 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
     const target = visibleTarget(step.target);
     target?.scrollIntoView({ block: "center", behavior: "instant" });
     update();
-    const interval = window.setInterval(update, 200);
-    window.addEventListener("resize", update); window.addEventListener("scroll", update, true);
-    return () => { clearInterval(interval); highlighted?.classList.remove(styles.target!); window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); };
+    const interval = window.setInterval(() => update(true), 200);
+    const track = () => update();
+    window.addEventListener("resize", track); window.addEventListener("scroll", track, true);
+    return () => { clearInterval(interval); highlighted?.classList.remove(styles.target!); window.removeEventListener("resize", track); window.removeEventListener("scroll", track, true); };
   }, [step, finished]);
   function advance() {
     if (!step || !visibleTarget(step.target) || !step.isDone()) return;
@@ -131,13 +197,37 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
   }
   async function show() {
     if (!step || running.current) return;
+    // The input requesting tour execution must not outlive it as a manual hold.
+    lastInput.current = null;
     running.current = true; setBusy(true); setError("");
     const controller = new AbortController(); action.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), step.timeoutMs ?? 12_000);
+    let continueStep = false;
+    let remaining = step.timeoutMs ?? 12_000, started = performance.now();
+    let timeout = window.setTimeout(() => controller.abort(), remaining);
+    const present = async (title: string, words: string) => {
+      if (navigator.webdriver || controller.signal.aborted || continueStep) return;
+      clearTimeout(timeout); remaining -= performance.now() - started;
+      setHolding(true);
+      await readingPause(readingTime(title, words), matchMedia("(prefers-reduced-motion: reduce)").matches, controller.signal, next => { skip.current = () => {
+        // Autoplay Next releases this step, including later presentation holds.
+        // Completion still waits for the saved result below.
+        continueStep = playing; next();
+      }; });
+      controller.signal.throwIfAborted();
+      skip.current = null; setHolding(false);
+      started = performance.now(); timeout = window.setTimeout(() => controller.abort(), Math.max(0, remaining));
+    };
     if (playing && viewerPacing()) viewerPlayback.add(controller.signal);
     try {
-      const target = visibleTarget(step.target);
+      let target = visibleTarget(step.target);
+      // Autoplay can enter the next step before its saved screen has mounted.
+      // Keep the same deadline and cancellation boundary while it becomes visible.
+      while (!target && !controller.signal.aborted) {
+        await new Promise(resolve => window.setTimeout(resolve, 100));
+        target = visibleTarget(step.target);
+      }
       if (!target) throw new Error("This step's control is unavailable. Stop the tour or return when the screen is ready.");
+      if (controller.signal.aborted) return;
       if (!step.isDone()) {
         const delay = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 650;
         await new Promise<void>(resolve => {
@@ -146,33 +236,36 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
         });
         if (controller.signal.aborted) return;
         await Promise.race([
-          step.autoAction(target, controller.signal),
+          step.autoAction(target, controller.signal, present),
           new Promise<void>(resolve => controller.signal.addEventListener("abort", () => resolve(), { once: true })),
         ]);
       }
       while (!controller.signal.aborted && !step.isDone()) await new Promise(resolve => window.setTimeout(resolve, 100));
       if (!controller.signal.aborted && visibleTarget(step.target)) {
         clearTimeout(timeout);
-        if (viewerPlayback.has(controller.signal) && steps[index + 1]) {
+        if (viewerPlayback.has(controller.signal) && !continueStep) {
           setHolding(true);
-          await readingPause(readingTime(step.title, step.words), false, controller.signal, next => { skip.current = next; },
-            () => !!steps[index + 1] && !!visibleTarget(steps[index + 1]!.target));
-          skip.current = null; setHolding(false);
+          await readingPause(readingTime(step.title, step.words), false, controller.signal, next => { skip.current = next; });
+          if (action.current === controller) { skip.current = null; setHolding(false); }
         }
         if (!controller.signal.aborted) advance();
       }
       else throw new Error("Stopped. This step has not been confirmed; check the screen before continuing.");
-    } catch (failure) { setPlaying(false); setError(failure instanceof Error ? failure.message : "The step could not complete."); }
-    finally { viewerPlayback.delete(controller.signal); clearTimeout(timeout); running.current = false; setBusy(false); }
+    } catch (failure) {
+      if (action.current === controller) { setPlaying(false); setError(failure instanceof Error ? failure.message : "The step could not complete."); }
+    } finally {
+      viewerPlayback.delete(controller.signal); clearTimeout(timeout);
+      if (action.current === controller) { skip.current = null; running.current = false; setBusy(false); setHolding(false); }
+    }
   }
   useEffect(() => { if (waiting && done && !busy) advance(); }, [waiting, done, busy]);
   useEffect(() => { if (playing && !busy && !finished) void show(); }, [playing, busy, index, finished]); // one action at a time
   useEffect(() => {
     function escape(event: KeyboardEvent) {
       if (event.target instanceof Element && event.target.closest('dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]') || document.querySelector("dialog:modal")) return;
-      if (event.key === "Escape" && !event.defaultPrevented) { action.current?.abort(); setPlaying(false); onClose(); } }
+      if (event.key === "Escape" && !event.defaultPrevented) { stop(); onClose(index); } }
     window.addEventListener("keydown", escape); return () => window.removeEventListener("keydown", escape);
-  }, [onClose]);
+  }, [onClose, index]);
   if (!step) return null;
   return <>
     {box && !finished && <><div aria-hidden="true" className={styles.spotlight} style={box} />
@@ -187,7 +280,13 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
       {!box && !finished && <p role="status">Waiting for this step's control to become visible.</p>}
       {!finished && <div className={styles.controls}>
         <button className={styles.secondary} disabled={index === 0 || busy || playing} onClick={() => { stop(); setWaiting(false); setIndex(value => value - 1); }}>Back</button>
-        <button className={styles.secondary} disabled={busy || playing || !box} onClick={() => { setWaiting(true); visibleTarget(step.target)?.focus(); }}>I'll do it</button>
+        {step.id === "walk-3" && <button className={styles.secondary} disabled={busy || playing || !box} onClick={() => {
+          const target = step.spotlightTarget?.();
+          target?.scrollIntoView({ block: "center", behavior: "instant" });
+          if (target && card.current) clearPhoneDock(target, card.current);
+          target?.focus({ preventScroll: true });
+        }}>Go to customer/site or quote preview</button>}
+        <button className={styles.secondary} disabled={busy || playing || !box} onClick={() => { setWaiting(true); visibleTarget(step.target)?.focus({ preventScroll: true }); }}>I'll do it</button>
         <button className={holding ? styles.secondary : undefined} disabled={busy || playing || !box} onClick={() => void show()}>Show me</button>
         <button className={holding ? undefined : styles.secondary} disabled={!holding && (!done || busy || playing)} onClick={() => holding ? skip.current?.() : advance()}>Next</button>
         <button className={playing || busy ? styles.secondary : undefined} disabled={playing || busy || !box} onClick={() => setPlaying(true)}>Play the whole thing</button>
@@ -196,9 +295,9 @@ export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: reado
       </div>}
       {finished && <div className={styles.controls}>
         <button onClick={() => { stop(); location.assign("/jobs/new"); }}>Start my own job</button>
-        <button onClick={() => { stop(); onClose(); document.getElementById("walk-report")?.click(); }}>Read the report again</button>
+        <button onClick={() => { stop(); onClose(index); document.getElementById("walk-report")?.click(); }}>Read the report again</button>
       </div>}
-      <button className={styles.close} onPointerDown={stop} onKeyDown={stopKey} onClick={() => { stop(); onClose(); }}>Close walkthrough</button>
+      <button className={styles.close} onPointerDown={stop} onKeyDown={stopKey} onClick={() => { stop(); onClose(index); }}>Close walkthrough</button>
     </section>
   </>;
 }

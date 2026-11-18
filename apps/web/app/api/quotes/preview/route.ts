@@ -33,9 +33,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ code: "INVALID_QUOTE_DOCUMENT" }, { status: 400 });
 
   const pdf = renderQuotePdf(document);
+  const filenameReference = /^[A-Za-z0-9._-]+$/.test(document.reference) ? document.reference : "quote";
+  const filename = `${filenameReference}-v${document.documentVersion}.pdf`;
   return new Response(pdf, { headers: {
     "content-type": "application/pdf",
-    "content-disposition": `attachment; filename="${document.reference}-v${document.documentVersion}.pdf"`,
+    "content-disposition": `attachment; filename="${filename}"`,
     "cache-control": "no-store",
     "x-jobguard-processing-region": "supported-runtime",
   } });

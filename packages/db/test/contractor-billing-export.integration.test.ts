@@ -37,6 +37,19 @@ it("E6-05 E6-27 unresolved candidates block both racing exports, MarkDuplicate t
  await own.exported();expect((await own.repo.read(own.ctx,own.session,own.s.jobId)).exports.flatMap(b=>b.artifact.lines)).toHaveLength(1);
 });
 
+it("LATER-SAFETY-81 SQL export prefixes TAB and CR formulas and preserves existing escaping",async()=>{
+ const own=await world(c);await own.exported();
+ const view=await own.repo.read(own.ctx,own.session,own.s.jobId),artifact=view.exports[0]!.artifact;
+ for(const prefix of ["\t","\r","=","+","-","@","'"]){
+  const description=prefix+'SUM(1,2) "fictional"';
+  const modified={...JSON.parse(artifact.json),lines:artifact.lines.map(line=>({...line,description}))};
+  const csv=(await c.admin.query<{csv:string}>("SELECT app.cb_csv($1::jsonb) csv",[JSON.stringify(modified)])).rows[0]!.csv;
+  expect(csv).toContain(',"\''+description.replaceAll('"','""')+'",');
+  expect(modified.lines[0]!.description).toBe(description);
+ }
+ const plain=(await c.admin.query<{cell:string}>("SELECT app.cb_csv_cell($1) cell",['Fictional "plain", cell'])).rows[0]!.cell;
+ expect(plain).toBe('"Fictional ""plain"", cell"');
+});
 it("LATER-SAFETY-16 reconciliation restores an approved unlinked extra until its export", async () => {
  const own=await world(c,338),{ExtraRepository,ExtraApprovalRepository,readExtraDuplicateCandidates}=await import("../src/index.js"),{direct}=await import("./site-extra-fixtures.js");
  const extras=new ExtraRepository(c.runtime),approvals=new ExtraApprovalRepository(c.runtime),actor=own.w.members.supervisor.member;

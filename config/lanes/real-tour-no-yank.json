@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-tour-no-yank": {
+      "branches": ["codex/sandbox/real-tour-no-yank"],
+      "note": "Prevent recent trusted manual input from triggering spotlight re-target scrolling; preserve step entry and tour execution clearance.",
+      "allow": [
+        "apps/web/app/ui/walkthrough/walkthrough.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough-pace.test.ts"
+      ]
+    }
+  }
+}

@@ -16,8 +16,13 @@ function fixture(overrides = {}, name: `fake_${string}` = "fake_capture", digest
   return { ...f, adapter, telemetry, execute: () => new ActionExecutor(f.pool, new Map([[name, adapter]]), telemetry, digest).execute(context, f.row.id) };
 }
 describe("ActionExecutor adapter ownership", () => {
-  it.each(["pending", "retryable", "executing"])("leaves unsupported %s work untouched", async status => {
-    const f = fixture({ status, adapter: "fake_quote_delivery" }), before = { ...f.row };
+  it.each([
+    { status: "pending" },
+    { status: "pending", authorization_expires_at: new Date(0) },
+    { status: "retryable" },
+    { status: "executing", claimed_at: new Date(0) },
+  ])("leaves unsupported $status work untouched", async state => {
+    const f = fixture({ ...state, adapter: "fake_quote_delivery" }), before = { ...f.row };
     await f.execute();
     expect(f.row).toEqual(before); expect(f.adapter.deliver).not.toHaveBeenCalled();
     expect(f.audit).toEqual([]); expect(f.telemetry.emit).not.toHaveBeenCalled();

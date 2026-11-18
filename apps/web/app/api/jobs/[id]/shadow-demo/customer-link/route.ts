@@ -5,7 +5,7 @@ import { identityApplication } from "../../../../../lib/identity-server";
 import { syntheticPool } from "../../../../../lib/synthetic-server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-const headers = { "Cache-Control": "no-store" };
+const headers = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
 // Demo-only (DEMO-J3): the general customer-portal issue route still needs a signed-in identity.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
  if (process.env.JOBGUARD_ENV !== "synthetic_demo") return NextResponse.json({ code: "SYNTHETIC_MODE_REQUIRED" }, { status: 403, headers });

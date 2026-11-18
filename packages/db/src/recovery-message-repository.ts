@@ -228,7 +228,7 @@ export class RecoveryMessageRepository {
       if (await this.revisionOf(db, ctx.tenantId, messageId) !== input.expectedRevision) fail("RECOVERY_MESSAGE_STALE_REVISION");
       if (status === "previewed") fail("RECOVERY_MESSAGE_NOT_APPROVED");
       if (status !== "queued" && status !== "retryable") fail("RECOVERY_MESSAGE_NOT_REVOCABLE");
-      await db.$client.query("UPDATE app.action_authorization SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL", [ctx.tenantId, m.authorization_id]);
+      await db.$client.query("SELECT app.revoke_recovery_message_authorization($1,$2,$3,$4)", [ctx.tenantId, actor.membershipId, input.commandId, messageId]);
       const cancelled = await db.$client.query<{changed:boolean}>("SELECT app.control_outbox($1,'cancel') AS changed", [m.outbox_action_id]);
       if (!cancelled.rows[0]?.changed) fail("RECOVERY_MESSAGE_EXECUTION_PENDING");
       await this.event(db, ctx.tenantId, { id: messageId, jobId: m.job_id, caseId }, actor, "revoked", input.commandId, requestHash, input.expectedRevision);
@@ -461,7 +461,14 @@ export class RecoveryMessageRepository {
   private async finishHistory(db: TenantTransaction, tenantId: string, caseId: string) {
     const audits: AuditEventInput[] = [];
     for (const m of await this.messageRows(db, tenantId, caseId)) {
-      if (!m.outbox_action_id) continue;
+      // Pending actions have no execution facts to materialize.
+      if (!m.outbox_action_id || m.outbox_status === "pending") continue;
+      const history = (await db.$client.query<EventRow & { command_id: string; request_hash: string; actor_membership_id: string }>(
+        "SELECT * FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 ORDER BY revision", [tenantId, m.id])).rows;
+      let last = history.at(-1);
+      if (!last || ["succeeded", "failed", "reconciled", "revoked", "blocked"].includes(last.kind)) continue;
+      if (last.kind === "outcome_unknown" && m.outbox_status === "outcome_unknown" &&
+        !(await db.$client.query("SELECT 1 FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2 AND outcome='started'", [tenantId, m.outbox_action_id])).rowCount) continue;
       // Keep execution-result changes from racing the history's fact check. No business locks are taken after audit.
       const fact = (await db.$client.query<{ status: string; claimed_at: Date | null }>(
         "SELECT status,claimed_at FROM app.lock_outbox_for_history($2) WHERE tenant_id=$1", [tenantId, m.outbox_action_id])).rows[0];
@@ -473,10 +480,6 @@ export class RecoveryMessageRepository {
         const closed = await db.$client.query<{changed:boolean}>("SELECT app.control_outbox($1,'blocked') AS changed", [m.outbox_action_id]);
         if (closed.rows[0]?.changed) m.outbox_status = "cancelled";
       }
-      const history = (await db.$client.query<EventRow & { command_id: string; request_hash: string; actor_membership_id: string }>(
-        "SELECT * FROM app.recovery_message_event WHERE tenant_id=$1 AND message_id=$2 ORDER BY revision", [tenantId, m.id])).rows;
-      let last = history.at(-1);
-      if (!last) continue;
       const ref = { id: m.id, jobId: m.job_id, caseId };
       // These facts were produced by the outbox executor or reconciler, not by a person (AGENTS.md:123). The approving
       // membership stays on the event row and in the audit references as the authorisation, never as the actor.

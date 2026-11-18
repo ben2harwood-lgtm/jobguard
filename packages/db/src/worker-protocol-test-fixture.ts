@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { vi } from "vitest";
 import type { AuditEvent } from "./audit.js";
-export function workerProtocolFixture(overrides: Record<string, any> = {}) {
+export function workerProtocolFixture(overrides: Record<string, any> = {}, requestActor?: string) {
   const row = { id: randomUUID(), authorization_id: randomUUID(), adapter: "fake_capture", provider_effect_key: "fictional",
     action_type: "send_quote", recipient: null, immutable_content: "fictional", content_hash: createHash("sha256").update("fictional").digest("hex"),
     aggregate_revision: 1, amount_pence: null, currency: null, policy_version: "synthetic.v1",
@@ -11,14 +11,17 @@ export function workerProtocolFixture(overrides: Record<string, any> = {}) {
     claimed_at: new Date(0), updated_at: new Date(0), status: "pending", ...overrides };
   const state = { enabled: true, authorized: true, visible: true, auditFailure: false, attempt: 0, inTransaction: false,
     claimError: undefined as Error | undefined };
-  const audit: AuditEvent[] = [];
+  type ProtocolAudit = Pick<AuditEvent, "eventType" | "payload">;
+  const audit: ProtocolAudit[] = [];
   const token = randomUUID();
   const append = (event: string, references = {}) => {
     if (state.auditFailure) throw new Error("synthetic audit failure");
-    audit.push({ eventType: `outbox.${event}`, payload: { references } } as AuditEvent);
+    audit.push({ eventType: `outbox.${event}`, payload: { references: { ...references, auditActorKind: "system" } } });
   };
-  let snapshot: { row: typeof row; audit: AuditEvent[]; attempt: number };
+  let snapshot: { row: typeof row; audit: ProtocolAudit[]; attempt: number };
   const query = vi.fn(async (sql: string, values: any[] = []): Promise<{ rows: any[]; rowCount?: number }> => {
+    if (sql === "SELECT app.bind_request($1, $2, $3)") return { rows: [] };
+    if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: requestActor, tenant: overrides.tenant_id }] };
     if (sql === "BEGIN") { snapshot = { row: { ...row }, audit: [...audit], attempt: state.attempt }; state.inTransaction = true; }
     else if (sql === "COMMIT") state.inTransaction = false;
     else if (sql === "ROLLBACK") {
@@ -50,7 +53,11 @@ export function workerProtocolFixture(overrides: Record<string, any> = {}) {
       return { rows: [{ changed }] };
     } else if (sql.includes("FROM app.append_audit(")) {
       const { fakeAuditAppend } = await import("./audit-protocol-test-fixture.js");
-      const events = fakeAuditAppend(String(values[0]), overrides.tenant_id); audit.push(...events); return { rows: events };
+      const events = fakeAuditAppend(String(values[0]), overrides.tenant_id);
+      if (requestActor) for (const event of events) {
+        event.payload.references = { ...event.payload.references, auditActorKind: "bound_member" };
+      }
+      audit.push(...events); return { rows: events };
     } else if (sql.startsWith("SELECT nullif")) return { rows: [{ tenant_id: overrides.tenant_id }] };
     else if (!sql.startsWith("SELECT set_config")) throw new Error(`Unexpected worker protocol SQL: ${sql}`);
     return { rows: [] };

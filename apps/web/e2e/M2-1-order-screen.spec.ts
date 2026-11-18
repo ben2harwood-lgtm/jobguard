@@ -62,7 +62,11 @@ test("reviews a cited above-rate order and confirms exactly one practice effect"
     await screen.getByRole("button", { name: "Confirm this exact practice order" }).click();
     await expect(screen.locator('[role="alert"]')).toContainText("NOT_FOUND");
     await screen.getByRole("button", { name: "Review current merchant order" }).click();
+    // Clearing the previous error starts the review; its new preview arrives later.
+    // Do not change the order again while that review still reads the old revision.
+    await expect(screen).toHaveAttribute("aria-busy", "false");
     await expect(screen.locator('[role="alert"]')).toHaveCount(0);
+    await expect(screen.getByRole("button", { name: "Confirm this exact practice order" })).toBeEnabled();
   }
   const approve = screen.getByRole("button", { name: "Confirm this exact practice order" });
   const outbound = page.waitForRequest(request => request.url().endsWith("/purchase-orders/merchant-order") && request.postDataJSON().kind === "approve");

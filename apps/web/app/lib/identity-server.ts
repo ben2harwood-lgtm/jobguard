@@ -1,5 +1,5 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { createIdentityApplication, identityStatus, type IdentityApplication } from "@jobguard/api/identity";
 const registry=globalThis as typeof globalThis & {__jobguardIdentityApplication?:IdentityApplication};
@@ -21,8 +21,17 @@ export function identityClientAddress(request: Request): string {
 }
 export function identityApplication() {
   // Never retain a Worker socket between requests; release closes the connection.
-  if (process.env.JOBGUARD_HOSTING === "cloudflare") return createIdentityApplication(process.env,{max:1,maxUses:1});
-  return registry.__jobguardIdentityApplication??=createIdentityApplication(process.env);
+  if (process.env.JOBGUARD_HOSTING === "cloudflare") return webIdentityApplication(createIdentityApplication(process.env,{max:1,maxUses:1}));
+  return registry.__jobguardIdentityApplication??=webIdentityApplication(createIdentityApplication(process.env));
+}
+// The existing verify adapter supplies the origin; bind invitation switching to this request's old session too.
+function webIdentityApplication(application:IdentityApplication):IdentityApplication {
+  const verify=application.verify;
+  application.verify=async(raw,origin)=>verify.call(application,raw,origin,{
+    sessionToken:(await cookies()).get("jobguard_session")?.value,
+    csrfToken:(await headers()).get("x-csrf-token")??undefined,
+  });
+  return application;
 }
 export async function identityReply(work:()=>Promise<unknown>) {
   try {return NextResponse.json(await work(),{headers:{"Cache-Control":"no-store"}});}
