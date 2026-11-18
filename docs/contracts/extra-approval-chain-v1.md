@@ -139,7 +139,13 @@ This closes only the Q05 proceed hold; all other holds remain unchanged.
 `RecordExtraProceed` records one append-only operational statement, with the
 session-derived operative, server time, reason and exact priced request/revision.
 It uses the sibling reporting authority: a current operative with assigned job
-coverage and site-origin capture entitlement. The strict input accepts no actor,
+coverage and site-origin capture entitlement. In this synthetic slice (LATER-SAFETY-189),
+new statements and write replays additionally require that operative to be the
+extra’s original raising membership, matched on tenant, job and extra before any
+command claim or replay result. Existing operative reads and covered supervisor
+read-only history stay unchanged, including historical non-raiser statements and
+their breaches; supervisors gain no write authority. Parent ENT-5 remains incomplete.
+The strict input accepts no actor,
 tenant, clock, amount, requirement or approval. Current authority is checked on
 replay too. Supervisors may read history through their existing covered-job grant.
 Only a current priced, undecided request accepts a new statement; stale/unpriced

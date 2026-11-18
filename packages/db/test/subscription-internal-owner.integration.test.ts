@@ -175,8 +175,8 @@ describe("0744 populated predecessor upgrade (real PostgreSQL)", () => {
   const security = await metadata(), before = await snapshotRows(f.admin);
   await migrate(f.admin); await migrate(f.admin);
   expect(await metadata()).toEqual(security);
-  // LP-6d's later migration creates identity.lp6d_sso_grant_permit empty.
-  expect(await snapshotRows(f.admin)).toEqual({ ...before, "identity.lp6d_sso_grant_permit": [] });
+  // LP-6d and LP-10 add two empty private bookkeeping tables.
+  expect(await snapshotRows(f.admin)).toEqual({ ...before, "identity.lp6d_sso_grant_permit": [], "control_plane.worker_action_binding": [] });
   for (const scenario of cases) {
    await refusesWithoutWrites(fixture, scenario.a, scenario.value, scenario.id);
    await role(f, scenario.a, "owner");

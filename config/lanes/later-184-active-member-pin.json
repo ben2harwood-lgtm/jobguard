@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-184-active-member-pin": {
+      "branches": ["codex/sandbox/later-184-active-member-pin"],
+      "note": "LATER-184-ACTIVE-MEMBER-PIN RED: test-only pin of priced-submit recovery's active-member predicate; no product or migration changes.",
+      "allow": ["packages/db/test/site-extra-priced-submit-recovery.integration.test.ts"]
+    }
+  }
+}

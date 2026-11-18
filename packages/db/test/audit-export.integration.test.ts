@@ -275,8 +275,10 @@ describe("ENT-10b PostgreSQL audit exports", () => {
       .map(table => `policy app.${table}.customer_stage_source: permissive policy added`);
     // 0734 adds one flag-gated, tenant-scoped owner read for the proof guards.
     if (oldTables.has("app.synthetic_evidence_original")) customerStageFacts.push("policy app.synthetic_evidence_original.job_proof_source_read: permissive policy added");
+    const workerRecoveryFacts = oldTables.has("app.sandbox_run_event")
+      ? ["policy app.sandbox_run_event.worker_recovery_archived_run: permissive policy added"] : [];
     expect(upgrade.afterAllDifferences, "[MO5-e] exact reviewed meter, LP-4, LP-5a and MON-5 source additions on predecessor objects")
-      .toEqual([...reviewedMeterSources, ...writerFacts, ...customerStageFacts,
+      .toEqual([...reviewedMeterSources, ...writerFacts, ...customerStageFacts, ...workerRecoveryFacts,
         ...["identity.session", "control_plane.practice_session", "control_plane.contractor_practice_session"]
           .filter(table => oldTables.has(table))
           .map(table => `table ${table}: + grant jobguard_binding_owner SELECT`)].sort());

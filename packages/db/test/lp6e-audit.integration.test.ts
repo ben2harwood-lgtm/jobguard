@@ -17,7 +17,7 @@ async function installLegacySyntheticPartyFixtures(owner: Pool) {
 }
 import { createScimHarness, fixture as ssoFixture } from "./scim-fixtures.js";
 let db: JobDoorsDatabase;
-beforeAll(async () => { db = await jobDoorsDatabase(); }, 300_000);
+beforeAll(async () => { db = await jobDoorsDatabase(true); }, 300_000);
 afterAll(async () => { await db?.close(); });
 async function principal(tenant?: string) {
   const a = await jobDoorsActor(db.owner,tenant), credential = randomBytes(32).toString("hex");
@@ -390,9 +390,9 @@ it.each(["approval", "outbox success"])("commits recovery message %s through the
     expect(matching).toHaveLength(1);
     expect(matching[0]).toMatchObject({version:"audit.v3",
       // actor_ref keeps the domain writer claim; the sealed auditActorRef names the authenticated session.
-      actorRef:eventType === "outbox.succeeded" ? "system:outbox" : eventType === "recovery.message.succeeded" ? "system:recovery-message-executor" : actor.actorRef,
-      payload:{references:{auditTrust:"lower_trust",auditActorKind:eventType === "outbox.succeeded" ? "system" : "bound_member",
-        ...(eventType === "outbox.succeeded" ? {} : {auditActorRef:actor.actorRef})}}});
+      actorRef:eventType === "outbox.succeeded" ? "worker:lp10_fixture_worker" : eventType === "recovery.message.succeeded" ? "system:recovery-message-executor" : actor.actorRef,
+      payload:{references:{auditTrust:eventType === "outbox.succeeded" ? "checked_operation" : "lower_trust",auditActorKind:eventType === "outbox.succeeded" ? "system" : "bound_member",
+        ...(eventType === "outbox.succeeded" ? { auditActorRef: "system:database:lp10_fixture_worker", executingWorker: "lp10_fixture_worker", authorizingMembership: actor.membershipId } : {auditActorRef:actor.actorRef})}}});
   }
 });
 

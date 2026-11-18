@@ -265,7 +265,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["app.xa_withdraw(p_job uuid,p_variation uuid,p_command uuid,p_actor uuid,p_reason text)", "0636_extra_withdraw_roles.sql"],
     ["app.xa_requirement(p_rules jsonb,p_net bigint)", "0637_extra_working_day_wait.sql"],
     ["app.xa_escalate()", "0637_extra_working_day_wait.sql"],
-    ["app.xa_queue(p_member uuid)", "0637_extra_working_day_wait.sql"],
+    ["app.xa_queue(p_member uuid)", "0759_extra_queue_approver_eligibility.sql"],
     ["app.valid_approval_rules(d jsonb)", "0638_extra_rule_wait_schema.sql"],
     ["app.xa_client_view_authority(p_job uuid,p_request uuid,p_actor uuid,p_email text)", "0686_extra_client_authority_loss.sql"],
     ["app.xa_client_decide(p_job uuid,p_request uuid,p_command uuid,p_actor uuid,p_token_hash text,p_email text,p_hash text,p_net bigint,p_reject boolean,p_reason text,p_role_name text,p_tester text)", "0686_extra_client_authority_loss.sql"],
@@ -301,6 +301,12 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // LATER-SAFETY-183 is xa_price's sole successor; retain the full LP-6d binding prefix.
   const pricePermissionSql = await readFile(new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.xa_price", [pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!]);
+  // LATER-SAFETY-189: pin the complete own-extra writer without changing owner/ACL checks.
+  const proceedRaiserSql = await readFile(new URL("../migrations/0760_extra_proceed_raiser_authority.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_proceed", [proceedRaiserSql.split("AS $$")[1]!.split("$$;")[0]!]);
+  // 0761 is the complete Northside registration successor; retain every header and privilege comparison below.
+  const northsideSql = await readFile(new URL("../migrations/0762_northside_hosted_agreement.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.northside_register", [northsideSql.split("FUNCTION app.northside_register(")[1]!.split("AS $$")[1]!.split("$$;")[0]!]);
   // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
   lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);
   // LP6D-WORKER-PRESENCE: exact latest sources; historical 0749 assertions remain above.
@@ -515,6 +521,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       const body = migration.split("CREATE OR REPLACE FUNCTION app.mon3_activate")[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
       expect(current?.source).toBe(body);
+    } else if (prior.nspname === "app" && prior.proname === "guard_recovery_message_sink" && prior.args === "") {
+      const migration = await readFile(new URL("../migrations/0749_lp6d_remaining_routines.sql", import.meta.url), "utf8");
+      const lp6dBody = migration.split("CREATE OR REPLACE FUNCTION app.guard_recovery_message_sink()").at(-1)!.split("AS $$")[1]!.split("$$;")[0]!;
+      expect(lp6dBody).toContain("FOR SHARE OF mem,o)");
+      const body = lp6dBody.replace("FOR SHARE OF mem,o)", "FOR SHARE OF mem)");
+      expect(current?.definition).toEqual(prior.definition?.replace(prior.source, () => body));
+      expect(current?.source).toEqual(body);
     } else if (ent5Bodies.has(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`))) {
       expect(current?.definition?.split("$function$")[1]).toEqual(ent5Bodies.get(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`)));
     } else if (prior.nspname === "app" && billingBodies.has(`${prior.proname}|${prior.args}`)) {

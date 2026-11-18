@@ -1,0 +1,6 @@
+{
+  "migration": "0759_extra_queue_approver_eligibility.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

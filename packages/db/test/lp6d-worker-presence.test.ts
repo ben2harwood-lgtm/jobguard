@@ -45,9 +45,10 @@ it("inventories every latest worker refusal and pins the complete latest helper 
   const refusals = [...latest].filter(([name, body]) => name.includes("_worker(") && body.includes("IF app.lp6d_request_bound()"));
   expect(refusals.map(([name]) => name.split("(")[0]).sort()).toEqual([...workers].sort());
   for (const [, body] of refusals) expect(body).toContain(predicate);
-  // LP-6e 0758 adds exactly the migration-owned outbox bridge and private audit context resolver.
+  // Include the LP-6e audit routines and both LP-10 worker entry paths.
   expect([...latest].filter(([, body]) => body.includes("app.lp6e_request_binding_present()")).map(([name]) => name.split("(")[0]).sort())
-    .toEqual([...workers, "app.lp6e_append_outbox_audit", "app.lp6e_audit_context"].sort());
+    .toEqual([...workers, "app.lp6e_append_outbox_audit", "app.lp6e_audit_context",
+      "app.lp10_lock_action", "app.record_worker_recovery_message"].sort());
 });
 
 it("pins complete PostgreSQL definition hashes and registers every recreated routine in both upgrade suites", () => {

@@ -9,9 +9,16 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/demo-seed.ts",
-    "line": 102,
-    "fingerprint": "a6028c98b4d93ba41ec6bea63ccf6ec68bd33ebbb7d40e9af6cfa28866057a9b",
-    "reason": "Quote delivery execute receives context/job/document arguments; terminal execute is conservatively covered and unresolved."
+    "line": 108,
+    "fingerprint": "88a68d0e17be63addc2351d46796f8a72dfdc828dbb4595b832dd839de93aae5",
+    "reason": "The synthetic-demo tenant fixture calls QuoteDeliveryRepository.execute with a checked context, job and document for a simulated delivery. The repository uses the fake_quote_delivery adapter and the checked outbox, with no advisory data reads."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/outbox.ts",
+    "line": 35,
+    "fingerprint": "61b190ba5ae9f0ef247899985aea9adbb07f3017ed64d28657359cb3b4691afa",
+    "reason": "ActionExecutor delegates a tenant-visible action ID to WorkerActionExecutor on a separate worker login. The worker calls app.claim_worker_action before invoking the registered adapter and uses the claim token with app.complete_worker_action. Neither path reads advisory data."
   },
   {
     "code": "UNRESOLVED_COVERED_EDGE",
@@ -66,7 +73,7 @@
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/extra-approval-chain-repository.ts",
     "line": 96,
-    "fingerprint": "75ac7f2070c202f25456367911f233bc644d9bbb3a64be712eaa8a6c36e11a7d",
+    "fingerprint": "7bd6219701ae44bccf96bdaabb30e3cc04247ad805ca4076b878fb72010abe98",
     "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results. (LP-6d r11, 14 Nov 2026: escalateOverdue now calls app.lp6d_escalate_overdue_worker(); helper unchanged)"
   }
 ]

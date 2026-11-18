@@ -1,3 +1,5 @@
+import { rolledBack } from "./upgrade-proof-utils.js";
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { syntheticOwnerPool } from "./pool-test-utils.js";
 import { permitImportedJob } from "./lp-practice-home-job-fixture.js";
@@ -154,10 +156,15 @@ it("[T5] raw runtime writes on all three chase tables hit their added terms trig
  const id=await newCase();await attached(id);await new RecoveryCaseTermsRepository(runtime).approve(context,job,command(id),actor);const repo=new RecoveryMessageRepository(runtime),v=(await preview(id)).latest!;
  const queued=await repo.command(context,id,approveMessage(v),messageActor);await removeFixtureTerms(id);const before=await counts();
  // The message is the newest preview and its approval is pending. For the preview control temporarily cancel that outbox in rolled-back setup, so the old effect guard permits it.
- await expect(withTenant(runtime,context,async db=>{await db.$client.query("UPDATE app.action_outbox SET status='cancelled' WHERE tenant_id=$1 AND id=$2",[T,queued.latest!.approval!.outboxActionId]);return db.$client.query(`INSERT INTO app.recovery_message SELECT gen_random_uuid(),tenant_id,job_id,case_id,case_sequence+1,pack_id,pack_revision,manifest_hash,attachment_hash,attachment_approval_id,gen_random_uuid(),request_hash,case_type,case_revision,amount_pence,currency,sender,recipient,body,policy_version,content_hash,immutable_content,actor_membership_id,environment,created_at FROM app.recovery_message WHERE tenant_id=$1 AND id=$2`,[T,v.id]);})).rejects.toMatchObject({code:"23514",message:"RECOVERY_TERMS_NOT_APPROVED"});
+ await expect(withTenant(runtime,context,async db=>{expect((await db.$client.query("SELECT app.control_outbox($1,'cancel') changed",[queued.latest!.approval!.outboxActionId])).rows).toEqual([{changed:true}]);return db.$client.query(`INSERT INTO app.recovery_message SELECT gen_random_uuid(),tenant_id,job_id,case_id,case_sequence+1,pack_id,pack_revision,manifest_hash,attachment_hash,attachment_approval_id,gen_random_uuid(),request_hash,case_type,case_revision,amount_pence,currency,sender,recipient,body,policy_version,content_hash,immutable_content,actor_membership_id,environment,created_at FROM app.recovery_message WHERE tenant_id=$1 AND id=$2`,[T,v.id]);})).rejects.toMatchObject({code:"23514",message:"RECOVERY_TERMS_NOT_APPROVED"});
  await expect(withTenant(runtime,context,db=>db.$client.query("INSERT INTO app.recovery_message_approval SELECT * FROM app.recovery_message_approval WHERE tenant_id=$1 AND message_id=$2",[T,v.id]))).rejects.toMatchObject({code:"23514",message:"RECOVERY_TERMS_NOT_APPROVED"});
  // Put the already approved outbox in the executor's otherwise-valid state inside the rejected transaction.
- await expect(withTenant(runtime,context,async db=>{await db.$client.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[T,queued.latest!.approval!.outboxActionId]);return db.$client.query(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)`,[randomUUID(),T,job,id,v.id,queued.latest!.approval!.outboxActionId,v.message.recipient,v.message.body,v.message.contentHash,v.message.attachmentHash]);})).rejects.toMatchObject({code:"23514",message:"RECOVERY_TERMS_NOT_APPROVED"});
+ await expect(rolledBack(admin,async client=>{
+   await client.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2",[T,queued.latest!.approval!.outboxActionId]);
+   await client.query("SELECT set_config('app.tenant_id',$1,true)",[T]);
+   await bindTestClient(admin,client,T,M);
+   await client.query("SET LOCAL ROLE jobguard_runtime");
+   return client.query(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)`,[randomUUID(),T,job,id,v.id,queued.latest!.approval!.outboxActionId,v.message.recipient,v.message.body,v.message.contentHash,v.message.attachmentHash]);})).rejects.toMatchObject({code:"23514",message:"RECOVERY_TERMS_NOT_APPROVED"});
  expect(await counts()).toEqual(before);
  expect((await counts()).recovery_message_sink).toBe(before.recovery_message_sink);
 });
