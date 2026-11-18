@@ -11112,7 +11112,7 @@
         "otherExecute": [
           "jobguard_identity"
         ],
-        "definitionSha256": "3fd2d4a92a748b3d0d5091109896a3b3a8f0c7f293b1a841d35dc1285d646b0e",
+        "definitionSha256": null,
         "staticWrites": [
           "app.customer_variation_approval",
           "app.scope_progress",

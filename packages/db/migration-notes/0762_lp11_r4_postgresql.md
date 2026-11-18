@@ -2473,7 +2473,13 @@ nice -n 6 pnpm --filter @jobguard/db exec vitest run test/customer-stage-acknowl
 nice -n 7 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp-0-authz-record.test.ts test/lp11-bound-tenant-rls.integration.test.ts --maxWorkers=1 --reporter=default
 ```
 
-The third filename in the second command matched no file. The remaining three files ran all 12 tests. The programme's migration proof loader runs separately from those PostgreSQL comparisons.
+The third filename in the second command matched no file. The remaining three files ran all 12 tests. The separate loader initially rejected two comparisons where the new proof used a live routine digest in place of the predecessor's baseline metadata. After matching that metadata, all 77 loader tests passed. Both commercial-integrity guard commands completed with zero diagnostics.
+
+```sh
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migration-proof-loader.test.ts --maxWorkers=1 --reporter=default
+nice -n 6 node tools/commercial-integrity-current-source-guard.mjs
+nice -n 6 node tools/commercial-integrity-boundary.mjs
+```
 
 ## Missing pg_dump
 
