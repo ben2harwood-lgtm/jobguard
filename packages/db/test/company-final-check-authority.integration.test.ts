@@ -4,7 +4,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { CompanyFinalCheckRepository } from "../src/company-final-check-repository.js";
 import { FinalAccountCommandService } from "../src/final-account-repository.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
-import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
+import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { seedWorkPractice, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { createFinalCheckFixture, closeFinalCheckFixture, type FinalCheckFixture } from "./final-check-fixture.js";
 import { FinalCheckWorker } from "../../../apps/api/src/final-check.worker.js";
@@ -21,7 +21,7 @@ let repository: CompanyFinalCheckRepository;
 beforeAll(async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   fixture = await createFinalCheckFixture();
-  f = { ...fixture, waitForConnectionEnds: async () => undefined }; repository = new CompanyFinalCheckRepository(f.runtime);
+  f = fixture; repository = new CompanyFinalCheckRepository(f.runtime);
 }, 300_000);
 afterAll(async () => { await closeFinalCheckFixture(fixture); vi.unstubAllEnvs(); });
 async function company(assemble = true) {
@@ -158,7 +158,8 @@ it.each(["revoked", "expired"])("rechecks %s membership after waiting for the jo
 it("refuses practice-owned jobs and imported descendants, including company-session access", async () => {
   const a = await company(false), child = randomUUID();
   const practice = await seedWorkPractice(f), parent = practice.jobId;
-  await workTenant(f.admin, a.tenantId, async client => {
+  await withTenant(f.admin, a.context, async transaction => {
+    const client = transaction.$client;
     await permitImportedJob(client, { tenantId: a.tenantId, jobId: child, actorMembershipId: a.actorId,
       title: "Fictional imported child", feePolicyVersion: "reference_fee_policy_v3", netPence: 100000, capPence: 1500 });
     await client.query("INSERT INTO app.job(tenant_id,id,title,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) VALUES($1,$2,'Fictional imported child','imported',100000,'reference_fee_policy_v3',1500)", [a.tenantId, child]);
@@ -244,7 +245,7 @@ it("uses LS-142 request identities and reveals the latest completed attempt on t
     finalAccountRevisionId: a.draft!.id, expectedSourceHash: a.draft!.sourceHash,
     invoiceKind: "final", recipient: "fictional@example.invalid", issuedOn: "2026-11-08",
   });
-  await workTenant(f.runtime, a.tenantId, db => db.query(`INSERT INTO app.evidence_invalidation
+  await withTenant(f.runtime, a.context, db => db.$client.query(`INSERT INTO app.evidence_invalidation
     (id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')`,
     [randomUUID(), a.tenantId, source.evidenceId, a.actorId]));
   const secondRequest = await repository.requestRun(a.context, job(a));

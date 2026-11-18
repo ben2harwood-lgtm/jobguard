@@ -10,7 +10,7 @@
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/demo-seed.ts",
     "line": 108,
-    "fingerprint": "ae49bd8fdcac30a7bb4214356ee9fa3ef21b118b28065b3b3ce97459ec7ae623",
+    "fingerprint": "88a68d0e17be63addc2351d46796f8a72dfdc828dbb4595b832dd839de93aae5",
     "reason": "The synthetic-demo tenant fixture calls QuoteDeliveryRepository.execute with a checked context, job and document for a simulated delivery. The repository uses the fake_quote_delivery adapter and the checked outbox, with no advisory data reads."
   },
   {

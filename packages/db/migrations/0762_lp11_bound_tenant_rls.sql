@@ -4280,6 +4280,87 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,app AS $$
  ORDER BY a.created_at,c.id
 $$;
 
+-- The meter writer works on one immutable source revision per transaction.
+CREATE UNLOGGED TABLE control_plane.lp11_meter_source_scope (
+ transaction_id xid8 PRIMARY KEY,
+ login name NOT NULL,
+ tenant_id uuid NOT NULL,
+ source_id uuid NOT NULL,
+ scope_id uuid,
+ source_hash text
+);
+ALTER TABLE control_plane.lp11_meter_source_scope OWNER TO jobguard_migration;
+REVOKE ALL ON TABLE control_plane.lp11_meter_source_scope FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_meter_source_matches(t uuid,s uuid,scope uuid,hash text) RETURNS boolean
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT EXISTS(SELECT FROM control_plane.lp11_meter_source_scope x
+  WHERE x.transaction_id=pg_current_xact_id_if_assigned() AND x.login=session_user
+   AND (x.tenant_id,x.source_id)=(t,s)
+   AND (scope IS NULL OR x.scope_id=scope)
+   AND (hash IS NULL OR x.source_hash=hash))
+$$;
+ALTER FUNCTION app.lp11_meter_source_matches(uuid,uuid,uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_meter_source_matches(uuid,uuid,uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_meter_source_matches(uuid,uuid,uuid,text) TO jobguard_meter;
+
+CREATE FUNCTION app.lp11_bind_meter_source(t uuid,s uuid) RETURNS boolean
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE stored app.meter_lifecycle_source;
+BEGIN
+ IF t IS NULL OR s IS NULL OR NOT pg_has_role(session_user,'jobguard_meter','USAGE')
+  OR pg_has_role(session_user,'jobguard_runtime','USAGE') OR app.lp6e_request_binding_present()
+ THEN RETURN false; END IF;
+ INSERT INTO control_plane.lp11_meter_source_scope(transaction_id,login,tenant_id,source_id)
+ VALUES(pg_current_xact_id(),session_user,t,s) ON CONFLICT (transaction_id) DO NOTHING;
+ IF NOT FOUND THEN
+  RETURN EXISTS(SELECT FROM control_plane.lp11_meter_source_scope x
+   WHERE x.transaction_id=pg_current_xact_id_if_assigned()
+    AND (x.login,x.tenant_id,x.source_id)=(session_user,t,s) AND x.scope_id IS NOT NULL);
+ END IF;
+ SELECT * INTO stored FROM app.meter_lifecycle_source x WHERE (x.tenant_id,x.id)=(t,s);
+ IF NOT FOUND THEN
+  DELETE FROM control_plane.lp11_meter_source_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+  RETURN false;
+ END IF;
+ UPDATE control_plane.lp11_meter_source_scope SET scope_id=stored.scope_id,source_hash=stored.source_hash
+ WHERE transaction_id=pg_current_xact_id_if_assigned();
+ RETURN true;
+END $$;
+ALTER FUNCTION app.lp11_bind_meter_source(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_bind_meter_source(uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_bind_meter_source(uuid,uuid) TO jobguard_meter;
+
+CREATE FUNCTION app.lp11_clear_meter_source_scope() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ DELETE FROM control_plane.lp11_meter_source_scope WHERE transaction_id=NEW.transaction_id;
+ RETURN NULL;
+END $$;
+ALTER FUNCTION app.lp11_clear_meter_source_scope() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_clear_meter_source_scope() FROM PUBLIC;
+CREATE CONSTRAINT TRIGGER lp11_clear_meter_source_scope AFTER INSERT ON control_plane.lp11_meter_source_scope
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.lp11_clear_meter_source_scope();
+
+CREATE POLICY lp11_meter_source_lookup ON app.meter_lifecycle_source FOR SELECT TO jobguard_migration
+ USING (app.lp11_meter_source_matches(tenant_id,id,NULL,NULL));
+CREATE POLICY lp11_meter_source_read ON app.meter_lifecycle_source FOR SELECT TO jobguard_meter
+ USING (app.lp11_meter_source_matches(tenant_id,id,scope_id,source_hash));
+CREATE POLICY lp11_meter_computation_read ON app.meter_lifecycle_computation FOR SELECT TO jobguard_meter
+ USING (app.lp11_meter_source_matches(tenant_id,source_id,scope_id,NULL));
+CREATE POLICY lp11_meter_computation_insert ON app.meter_lifecycle_computation FOR INSERT TO jobguard_meter
+ WITH CHECK (status='counted' AND recipe_version='london-midnight-stops.v1'
+  AND app.lp11_meter_source_matches(tenant_id,source_id,scope_id,source_hash));
+CREATE POLICY lp11_meter_day_read ON app.meter_lifecycle_day_ledger FOR SELECT TO jobguard_meter
+ USING (EXISTS(SELECT FROM app.meter_lifecycle_computation c
+  WHERE (c.tenant_id,c.scope_id,c.id)=(meter_lifecycle_day_ledger.tenant_id,meter_lifecycle_day_ledger.scope_id,meter_lifecycle_day_ledger.computation_id)
+   AND app.lp11_meter_source_matches(c.tenant_id,c.source_id,c.scope_id,NULL)));
+CREATE POLICY lp11_meter_day_insert ON app.meter_lifecycle_day_ledger FOR INSERT TO jobguard_meter
+ WITH CHECK (status='counted' AND EXISTS(SELECT FROM app.meter_lifecycle_computation c
+  WHERE (c.tenant_id,c.scope_id,c.id,c.source_hash)=(meter_lifecycle_day_ledger.tenant_id,meter_lifecycle_day_ledger.scope_id,meter_lifecycle_day_ledger.computation_id,meter_lifecycle_day_ledger.source_hash)
+   AND c.status='counted' AND c.recipe_version='london-midnight-stops.v1'
+   AND app.lp11_meter_source_matches(c.tenant_id,c.source_id,c.scope_id,c.source_hash)));
+
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.
 ALTER VIEW app.ledger_balance SET (security_invoker=true);

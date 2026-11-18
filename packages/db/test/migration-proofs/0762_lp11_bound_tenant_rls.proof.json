@@ -12131,6 +12131,135 @@
         ],
         "staticCalls": []
       }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.meter_lifecycle_computation|lp11_meter_computation_insert|PERMISSIVE|INSERT|jobguard_meter|a314842430f774ba"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.meter_lifecycle_computation|lp11_meter_computation_read|PERMISSIVE|SELECT|jobguard_meter|3511639d35224476"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.meter_lifecycle_day_ledger|lp11_meter_day_insert|PERMISSIVE|INSERT|jobguard_meter|54e6a57818190946"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.meter_lifecycle_day_ledger|lp11_meter_day_read|PERMISSIVE|SELECT|jobguard_meter|6c3734ddc5d8ea23"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.meter_lifecycle_source|lp11_meter_source_lookup|PERMISSIVE|SELECT|jobguard_migration|a6980666b6531d4e"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.meter_lifecycle_source|lp11_meter_source_read|PERMISSIVE|SELECT|jobguard_meter|bb1e7ff5eced8299"
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_bind_meter_source(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_meter"
+        ],
+        "definitionSha256": "13cb42bd2befba2dc0d05fba3a732c52adca331fe0bc365f2970b942394f7b81",
+        "staticWrites": [
+          "control_plane.lp11_meter_source_scope"
+        ],
+        "staticCalls": [
+          "app.lp6e_request_binding_present"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_clear_meter_source_scope()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "79d60301b391d3d98486e5f29e525e964e0e96b17aa954d52b27240491314247",
+        "staticWrites": [
+          "control_plane.lp11_meter_source_scope"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_meter_source_matches(uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_meter"
+        ],
+        "definitionSha256": "274c9af097a95e30203f086fbb834e9352a5c23ad4af4221d807cd85d25ce1b1",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_bind_meter_source(uuid,uuid)|jobguard_meter|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_meter_source_matches(uuid,uuid,uuid,text)|jobguard_meter|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_bind_meter_source(uuid,uuid)|jobguard_migration",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_meter_source_matches(uuid,uuid,uuid,text)|jobguard_migration",
+        "group": "a-lp11-bound-tenant-r3"
+      }
     }
   ],
   "upgrade": [
@@ -29135,6 +29264,159 @@
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
         ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "meter_lifecycle_computation",
+        "policyname": "lp11_meter_computation_insert",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_meter}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "((status = 'counted'::text) AND (recipe_version = 'london-midnight-stops.v1'::text) AND app.lp11_meter_source_matches(tenant_id, source_id, scope_id, source_hash))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "meter_lifecycle_computation",
+        "policyname": "lp11_meter_computation_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_meter}",
+        "cmd": "SELECT",
+        "qual": "app.lp11_meter_source_matches(tenant_id, source_id, scope_id, NULL::text)",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "meter_lifecycle_day_ledger",
+        "policyname": "lp11_meter_day_insert",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_meter}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "((status = 'counted'::text) AND (EXISTS ( SELECT\n   FROM app.meter_lifecycle_computation c\n  WHERE (((c.tenant_id = meter_lifecycle_day_ledger.tenant_id) AND (c.scope_id = meter_lifecycle_day_ledger.scope_id) AND (c.id = meter_lifecycle_day_ledger.computation_id) AND (c.source_hash = meter_lifecycle_day_ledger.source_hash)) AND (c.status = 'counted'::text) AND (c.recipe_version = 'london-midnight-stops.v1'::text) AND app.lp11_meter_source_matches(c.tenant_id, c.source_id, c.scope_id, c.source_hash)))))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "meter_lifecycle_day_ledger",
+        "policyname": "lp11_meter_day_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_meter}",
+        "cmd": "SELECT",
+        "qual": "(EXISTS ( SELECT\n   FROM app.meter_lifecycle_computation c\n  WHERE (((c.tenant_id = meter_lifecycle_day_ledger.tenant_id) AND (c.scope_id = meter_lifecycle_day_ledger.scope_id) AND (c.id = meter_lifecycle_day_ledger.computation_id)) AND app.lp11_meter_source_matches(c.tenant_id, c.source_id, c.scope_id, NULL::text))))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "meter_lifecycle_source",
+        "policyname": "lp11_meter_source_lookup",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "app.lp11_meter_source_matches(tenant_id, id, NULL::uuid, NULL::text)",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "meter_lifecycle_source",
+        "policyname": "lp11_meter_source_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_meter}",
+        "cmd": "SELECT",
+        "qual": "app.lp11_meter_source_matches(tenant_id, id, scope_id, source_hash)",
+        "with_check": null
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_bind_meter_source",
+        "args": "t uuid, s uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_meter=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_clear_meter_source_scope",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_meter_source_matches",
+        "args": "t uuid, s uuid, scope uuid, hash text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_meter=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_meter_source_scope",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_meter_source_scope_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
       }
     }
   ],

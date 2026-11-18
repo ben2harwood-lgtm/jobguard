@@ -15,13 +15,19 @@ import { verifiedTenantContextFromMembership, type AuthenticatedMembership } fro
 import { practiceMaterialPool } from "../src/practice-session.js";
 import {freePort,closeTestDatabase,installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
 export const FINAL_CHECK_TENANT="11111111-1111-4111-8111-111111111111",FINAL_CHECK_ACTOR="d1500000-0000-4000-8000-000000000003",FINAL_CHECK_USER="d1500000-0000-4000-8000-000000000001";
-export type FinalCheckFixture={postgres:EmbeddedPostgres;admin:Pool;runtime:Pool;shadow:Pool;directory:string;logs:string[]};
+export type FinalCheckFixture={postgres:EmbeddedPostgres;admin:Pool;runtime:Pool;shadow:Pool;directory:string;logs:string[];waitForConnectionEnds():Promise<void>};
 export async function createFinalCheckFixture(install=true):Promise<FinalCheckFixture>{
  const directory=await mkdtemp(join(tmpdir(),"sv5-pg16-")),port=await freePort(58000,200),credential=randomUUID(),logs:string[]=[];
  const postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:credential,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:line=>logs.push(line)});
  await postgres.initialise();await postgres.start();
- const config={host:"127.0.0.1",port,user:"postgres",password:credential},bootstrap=new Pool({...config,database:"postgres"});
- await bootstrap.query('CREATE DATABASE jobguard_synthetic_demo');await bootstrap.end();const admin=new Pool({...config,database:"jobguard_synthetic_demo"});
+ const connectionEnds: Promise<void>[] = [];
+ const retainedPool = (settings: ConstructorParameters<typeof Pool>[0]) => {
+  const pool = new Pool(settings);
+  pool.on("connect", client => connectionEnds.push(new Promise<void>(resolve => client.once("end", resolve))));
+  return pool;
+ };
+ const config={host:"127.0.0.1",port,user:"postgres",password:credential},bootstrap=retainedPool({...config,database:"postgres"});
+ await bootstrap.query('CREATE DATABASE jobguard_synthetic_demo');await bootstrap.end();const admin=retainedPool({...config,database:"jobguard_synthetic_demo"});
  await installAuditCommandWriterRoles(admin);
  if(install){await migrate(admin);await installLegacySyntheticPartyFixtures(admin);}
  const runtimeLogin=`sv5_runtime_${randomUUID().replaceAll("-","")}`,shadowLogin=`sv5_shadow_${randomUUID().replaceAll("-","")}`;
@@ -29,9 +35,16 @@ export async function createFinalCheckFixture(install=true):Promise<FinalCheckFi
  for(const login of [runtimeLogin,shadowLogin])await admin.query(`DO $body$ BEGIN EXECUTE format('CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD %L', '${login}', '${credential}'); END $body$`);
  await admin.query("ALTER SYSTEM SET log_line_prefix='SV5:%u: '");await admin.query('SELECT pg_reload_conf()');await admin.query(`ALTER ROLE ${runtimeLogin} SET log_statement='all'`);
  if(install){await admin.query(`GRANT jobguard_runtime TO ${runtimeLogin}`);await admin.query(`GRANT jobguard_shadow TO ${shadowLogin}`);}
- return {postgres,admin,runtime:new Pool({...config,database:"jobguard_synthetic_demo",user:runtimeLogin}),shadow:new Pool({...config,database:"jobguard_synthetic_demo",user:shadowLogin}),directory,logs};
+ return {postgres,admin,runtime:retainedPool({...config,database:"jobguard_synthetic_demo",user:runtimeLogin}),shadow:retainedPool({...config,database:"jobguard_synthetic_demo",user:shadowLogin}),directory,logs,
+  async waitForConnectionEnds() { await Promise.all(connectionEnds); }};
 }
-export async function closeFinalCheckFixture(f:FinalCheckFixture|undefined){if(!f)return;await closeTestDatabase(f.postgres,f.directory,f.runtime,f.shadow,f.admin);}
+export async function closeFinalCheckFixture(f:FinalCheckFixture|undefined){
+ if(!f)return;
+ await closeTestDatabase({stop:async()=>{
+  await f.waitForConnectionEnds();
+  await f.postgres.stop();
+ }},f.directory,f.runtime,f.shadow,f.admin);
+}
 /** `as` binds this raw transaction to one fixture member's own request (LP-6d), as main's tests do. */
 // LP-6d: a raw fixture call binds its own actor: a member's persisted fixture credential, or the practice owner's session digest.
 export async function finalCheckTenant<T>(pool:Pool,tenantId:string,work:(client:PoolClient)=>Promise<T>,as?:{owner:Pool;membershipId:string}|{practiceDigest:string}|{realDigest:string}):Promise<T>{const db=await pool.connect();try{await db.query('BEGIN');await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);if(as&&'practiceDigest' in as)await db.query("SELECT app.bind_request('practice',$1,$2)",[as.practiceDigest,tenantId]);else if(as&&'realDigest' in as)await db.query("SELECT app.bind_request('real',$1,$2)",[as.realDigest,tenantId]);else if(as)await bindTestClient(as.owner,db,tenantId,as.membershipId);const result=await work(db);await db.query('COMMIT');return result;}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}}
