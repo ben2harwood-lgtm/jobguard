@@ -73,6 +73,14 @@ export class EnterpriseFeeRepository {
         [session, input.data.commandId, input.data.agreementVersionId, input.data.period])).rows[0].result);
     } catch (error) { enterpriseFeeDatabaseFailure(error); }
   }
+  /** Northside resolves its immutable fictional agreement inside the finance-checked SQL boundary. */
+  async deriveNorthside(context: VerifiedTenantContext, session: string, raw: unknown): Promise<{ derivationId: string; replayed: boolean }> {
+    const input = this.parse(enterpriseFeePrepareStatementV1.extend({ version: z.literal("northside-fee-derive.v1") }), raw, session);
+    try {
+      return await withTenant(this.pool, context, async db => (await db.$client.query("SELECT app.ef_derive_northside($1,$2,$3) result",
+        [session, input.commandId, input.period])).rows[0].result);
+    } catch (error) { enterpriseFeeDatabaseFailure(error); }
+  }
   /** Finance-only drill-down of one stored derivation. Display only; posting and approval are later steps. */
   async read(context: VerifiedTenantContext, session: string, derivationId: string): Promise<EnterpriseFeeDerivationRead> {
     if (!z.guid().safeParse(derivationId).success || !z.guid().safeParse(session).success) throw new EnterpriseFeeError("INVALID_FEE_INPUT");

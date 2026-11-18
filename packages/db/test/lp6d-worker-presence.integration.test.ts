@@ -242,9 +242,17 @@ it("fresh installs retain worker mode and role refusals", async () => {
       await c.query("BEGIN");
       await c.query("SELECT set_config('app.tenant_id',$1,true)", [randomUUID()]);
       await failure(c, "SELECT app.lp6e_request_binding_present()", [], { code: "42501", message: "permission denied for function lp6e_request_binding_present" });
-      for (const call of calls()) await failure(c, call.sql, call.args, { code: "42501", message: "MODE_FORBIDDEN" });
+      for (const call of calls()) {
+        const sink = call.sql.includes("lp6d_recovery_message_sink_worker");
+        await failure(c, call.sql, call.args, { code: "42501", message: sink
+          ? "permission denied for function lp6d_recovery_message_sink_worker" : "MODE_FORBIDDEN" });
+      }
     } finally { await c.query("ROLLBACK"); c.release(); }
-    for (const role of ["jobguard_identity", "jobguard_infrastructure", "jobguard_shadow"]) {
+    const { outboundWorkerPool } = await import("../src/worker-pool.js");
+    const worker = await outboundWorkerPool(fresh.runtime);
+    await expect(worker.query("SELECT app.record_worker_recovery_message($1)", [randomUUID()]))
+      .rejects.toMatchObject({ code: "42501", message: "MODE_FORBIDDEN" });
+    for (const role of ["jobguard_runtime", "jobguard_worker", "jobguard_identity", "jobguard_infrastructure", "jobguard_shadow"]) {
       expect((await fresh.owner.query("SELECT has_function_privilege($1,'app.lp6d_recovery_message_sink_worker(uuid,text)','EXECUTE') allowed", [role])).rows[0].allowed).toBe(false);
     }
   } finally { await fresh.close(); }

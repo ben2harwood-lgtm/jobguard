@@ -37,7 +37,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       runtimeRole.rolcreatedb || runtimeRole.rolcreaterole || runtimeRole.rolinherit || !runtimeRole.rolcanlogin) {
     throw new Error("jobguard_runtime does not have the required least-privilege posture");
   }
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_worker", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"]) {
     await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${name}') THEN
       CREATE ROLE ${name} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
       END IF; END $$`);
@@ -64,6 +64,13 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       throw new Error(`${name} has a holder other than the PostgreSQL 16 ADMIN-only creator membership`);
     }
   }
+  const workerHolders = await admin.query<{ safe: boolean }>(`
+    SELECT ((r.rolname=$1 AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option)
+      OR (r.rolcanlogin AND NOT (r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication OR r.rolbypassrls)
+        AND m.inherit_option AND NOT m.admin_option
+        AND (SELECT count(*) FROM pg_auth_members held WHERE held.member=r.oid)=1)) AS safe
+    FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.member WHERE m.roleid='jobguard_worker'::regrole`, [owner]);
+  if (workerHolders.rows.some(holder => !holder.safe)) throw new Error("jobguard_worker has an unsafe holder");
   await assertBindingOwnerHolders(admin, owner);
   await admin.query(`GRANT jobguard_migration TO ${quoteIdentifier(owner)}`);
   await admin.query(`GRANT jobguard_runtime TO ${quoteIdentifier(owner)}`);

@@ -1,3 +1,4 @@
+import { seedPredecessorRecoveryMessage } from "./recovery-message-predecessor-data.js";
 import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -119,8 +120,8 @@ beforeAll(async () => {
   const port = await freePort(61400, 200);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false,
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"] });
-  await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "postgres" });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic", database: "jobguard_synthetic_demo" });
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS) {
     const name = nameOf(url);
@@ -132,15 +133,19 @@ beforeAll(async () => {
   await applyOutboundPause(admin);
   await installLegacySyntheticPartyFixtures(admin);
   await admin.query("CREATE ROLE follow_up_upgrade_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO follow_up_upgrade_login");
-  runtime = new Pool({ host: "127.0.0.1", port, user: "follow_up_upgrade_login", password: "synthetic", database: "postgres" });
+  runtime = new Pool({ host: "127.0.0.1", port, user: "follow_up_upgrade_login", password: "synthetic", database: "jobguard_synthetic_demo" });
   repo = new RecoveryMessageRepository(runtime);
   const packs = new EvidencePackRepository(runtime);
   const fixture = await seedEvidencePackFixture(admin);
   for (const kind of ["previewed", "queued", "unknown", "delivered", "revoked"] as const) {
-    const context = testTenantContext(fixture.tenantId), caseId = kind === "previewed" ? fixture.customerCaseId : randomUUID();
+    const context = testTenantContext(fixture.tenantId, { membershipId: fixture.memberId }), caseId = kind === "previewed" ? fixture.caseId : randomUUID();
     if (kind !== "previewed") {
-      await admin.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,32000,'GBP','identified',0,true,'withheld_customer_payment','Fictional counterparty','builder_customer','customer_invoice',$4)",
-        [caseId, fixture.tenantId, fixture.jobId, JSON.stringify([fixture.invoiceId])]);
+      // A replacement preview after the head upgrade uses a supplier case. The
+      // historical customer cases still prove preservation, revocation and reconciliation.
+      const sourceCaseId = kind === "revoked" ? fixture.caseId : fixture.customerCaseId;
+      await admin.query(`INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs)
+        SELECT $1,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs
+        FROM app.recovery_case WHERE tenant_id=$2 AND id=$3`, [caseId, fixture.tenantId, sourceCaseId]);
       await admin.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,32000,'GBP','fixture-owner',$5)",
         [randomUUID(), fixture.tenantId, fixture.jobId, caseId, createHash("sha256").update(caseId).digest("hex")]);
     }
@@ -152,8 +157,11 @@ beforeAll(async () => {
     const ready = await repo.read(context, caseId);
     let state = await repo.preview(context, caseId, { version: "recovery-message-preview.v1", commandId: randomUUID(), expectedCaseRevision: ready.readiness.caseRevision, packId: pack.id }, actor);
     if (kind !== "previewed") state = await repo.command(context, caseId, approve(state.latest!), actor);
-    if (kind === "unknown" || kind === "delivered") state = await repo.command(context, caseId, command("advance", state.latest!, kind === "unknown" ? "response_lost" : "success"), actor);
-    if (kind === "revoked") state = await repo.command(context, caseId, command("revoke", state.latest!), actor);
+    if (kind === "unknown" || kind === "delivered" || kind === "revoked") {
+      await seedPredecessorRecoveryMessage(admin, fixture.tenantId, caseId, state.latest!, actor,
+        kind === "unknown" ? "outcome_unknown" : kind === "delivered" ? "succeeded" : "revoked");
+      state = await repo.read(context, caseId);
+    }
     legacy[kind] = { context, caseId, actor, view: state.latest! };
   }
 }, 120_000);
@@ -204,6 +212,19 @@ describe("M4-6-S-R1 populated upgrade proof", () => {
   }, 60_000);
 
   it("preserves preview/approve/revoke/deliver/reconcile and their refusals on upgraded messages without resending", async () => {
+    // The runner remains idempotent after the manual upgrade and takes the database on to the head of the registry, so every later migration
+    // runs over this populated database. Rows are compared by the VALUES of the columns that existed at 0115 (named in columnsAt0115): a later
+    // migration that only adds a nullable column no longer fails this proof, one that changes any existing value, drops or renames a column,
+    // or adds or removes a pre-existing row still does. The list is first pinned to the real 0115 catalogue, so it cannot drift.
+    // Row versions (xmin/ctid) are checked in the 0112/0115 step above, where no later migration runs; here a later backfill may legitimately rewrite a row.
+    // The TYPE of every listed column (name, atttypid, atttypmod) is pinned the same way and compared again after the head step.
+    expect(await liveColumns()).toEqual(columnsAt0115);
+    const history = await namedColumnRowsOf(columnsAt0115);
+    await migrate(admin); await migrate(admin);
+    expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration")).rows.map(row => row.migration_name as string).sort()).toEqual(MIGRATION_URLS.map(nameOf));
+    expect(retypedColumns(columnsAt0115, await liveColumns()), "A later migration changed the type of a column that existed at 0115 (table.column: old -> new); "
+      + "the serialised values can look unchanged, but the column is not the one this proof pinned.").toEqual([]);
+    expect(await namedColumnRowsOf(columnsAt0115)).toEqual(history);
     const first = legacy.previewed!;
     const replacement = await preview(first);
     expect(replacement.latest!.sequence).toBe(2);
@@ -239,19 +260,7 @@ describe("M4-6-S-R1 populated upgrade proof", () => {
     await expect(repo.command(priorDelivered.context, priorDelivered.caseId, command("advance", priorDelivered.view), priorDelivered.actor)).rejects.toMatchObject({ code: "RECOVERY_MESSAGE_ALREADY_DELIVERED" });
     await expect(preview(priorDelivered)).rejects.toMatchObject({ code: "RECOVERY_MESSAGE_EXISTING_EFFECT" });
     await verifyChains();
-    // The runner remains idempotent after the manual upgrade and takes the database on to the head of the registry, so every later migration
-    // runs over this populated database. Rows are compared by the VALUES of the columns that existed at 0115 (named in columnsAt0115): a later
-    // migration that only adds a nullable column no longer fails this proof, one that changes any existing value, drops or renames a column,
-    // or adds or removes a pre-existing row still does. The list is first pinned to the real 0115 catalogue, so it cannot drift.
-    // Row versions (xmin/ctid) are checked in the 0112/0115 step above, where no later migration runs; here a later backfill may legitimately rewrite a row.
-    // The TYPE of every listed column (name, atttypid, atttypmod) is pinned the same way and compared again after the head step.
-    expect(await liveColumns()).toEqual(columnsAt0115);
-    const history = await namedColumnRowsOf(columnsAt0115);
-    await migrate(admin);
-    expect((await admin.query("SELECT migration_name FROM public.jobguard_schema_migration")).rows.map(row => row.migration_name as string).sort()).toEqual(MIGRATION_URLS.map(nameOf));
-    expect(retypedColumns(columnsAt0115, await liveColumns()), "A later migration changed the type of a column that existed at 0115 (table.column: old -> new); "
-      + "the serialised values can look unchanged, but the column is not the one this proof pinned.").toEqual([]);
-    expect(await namedColumnRowsOf(columnsAt0115)).toEqual(history);
+
   }, 60_000);
 });
 const beforeRepairPrivileges: Awaited<ReturnType<typeof privileges>> = { roles: [], memberships: [], tables: [], policies: [], routines: [] };

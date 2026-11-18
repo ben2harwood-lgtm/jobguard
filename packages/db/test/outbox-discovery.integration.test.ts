@@ -17,6 +17,7 @@ type Task = NonNullable<TaskList[string]>;
 const { makeWorkerUtils } = createRequire(new URL("../../../apps/api/package.json", import.meta.url))("graphile-worker");
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, infrastructure: Pool, directory: string;
 const tenants = [randomUUID(), randomUUID()];
+const tenantOwners = new Map<string, string>();
 const actions: { id: string; tenant: string }[] = [];
 const tasks: TaskList = {};
 registerOutboxDiscoveryTask(tasks);
@@ -54,6 +55,7 @@ beforeAll(async () => {
   await admin.query("REVOKE CREATE ON DATABASE postgres FROM discovery_queue");
   for (const tenant of tenants) {
     const user = randomUUID(), account = randomUUID(), member = randomUUID();
+    tenantOwners.set(tenant, member);
     const decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
     const content = "Fictional approved document", hash = createHash("sha256").update(content).digest("hex");
     await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
@@ -162,12 +164,12 @@ it("rediscovery leaves persisted due time, max attempts and terminal delivery au
   await executor.execute(testTenantContext(tenants[0]!), retry.id); // Wrong tenant never delivers.
   expect(calls.size).toBe(0);
   await execute(retry); await execute(unknown);
-  await operateOutbox(runtime, testTenantContext(cancelled.tenant), cancelled.id, "cancel");
+  await operateOutbox(runtime, testTenantContext(cancelled.tenant, { membershipId: tenantOwners.get(cancelled.tenant)! }), cancelled.id, "cancel");
   await rediscover(); await execute(retry); await execute(unknown); await execute(cancelled); await execute(actions[0]!);
   expect(calls.get(retry.id)).toBe(1); expect(calls.get(unknown.id)).toBe(1);
   expect(calls.has(cancelled.id)).toBe(false); expect(calls.has(actions[0]!.id)).toBe(false);
   for (let attempt = 1; attempt < 5; attempt++) {
-    await withTenant(runtime, testTenantContext(retry.tenant), db => db.$client.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1", [retry.id]));
+    await admin.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [retry.tenant, retry.id]);
     await rediscover(); await execute(retry);
   }
   await rediscover(); await execute(retry);

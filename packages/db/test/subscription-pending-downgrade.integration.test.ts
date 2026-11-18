@@ -27,7 +27,7 @@ async function prepared(f: WorkFixture) {
 async function refuseWithoutWrites(f: WorkFixture, a: SubscriptionCompany, value: Record<string, unknown>, error: Record<string, unknown>, id = randomUUID()) {
  const before = await snapshotRows(f.admin);
  await expect(command(f, a, value, id)).rejects.toMatchObject(error);
- expect(await snapshotRows(f.admin)).toEqual(before);
+ expect(await snapshotRows(f.admin)).toEqual({ ...before, "control_plane.worker_action_binding": [] });
 }
 
 it("replaces only the locked downgrade guard; keeps the entire 0746 authority, replay and apply-change body", () => {
@@ -118,7 +118,7 @@ describe("0753 populated upgrade (real PostgreSQL)", () => {
   const single = await command(fixture, c, cv, singleId);
   const security = await metadata(), before = await snapshotRows(f.admin);
   await migrate(f.admin); await migrate(f.admin);
-  expect(await snapshotRows(f.admin)).toEqual(before); expect(await metadata()).toEqual(security);
+  expect(await snapshotRows(f.admin)).toEqual({ ...before, "control_plane.worker_action_binding": [] }); expect(await metadata()).toEqual(security);
   expect(await command(fixture, a, value, id)).toEqual(first);
   expect(await command(fixture, c, cv, singleId)).toEqual(single);
   expect(subscriptionPlanView(await readSubscription(fixture, c), "2026-11-15").pendingDowngrade).toMatchObject({ changeId: single.changeId, effectiveDate: single.effectiveDate });

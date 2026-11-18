@@ -409,9 +409,9 @@ it.each(["pending", "retryable"])("LATER-SAFETY-36 cancels a %s send after its s
   expect(await q.attempts()).toHaveLength(attempts);
   expect(await q.audit()).toEqual([{
     actor_ref: "system:outbox", subject_ref: q.jobId,
-    // LP-6e 0758: the domain actor_ref stays the outbox claim; the sealed fields name the bound session member.
-    payload: { references: { auditTrust: "checked_operation", auditActorKind: "bound_member",
-      auditActorRef: expect.stringMatching(/^membership:[0-9a-f-]{36}$/u), linkId: q.sent.linkId, outboxId: q.sent.outboxActionId }, hashes: {} },
+    // The same checked cancellation now runs with the worker's authenticated login.
+    payload: { references: { auditTrust: "checked_operation", auditActorKind: "system",
+      auditActorRef: "system:database:lp10_fixture_worker", linkId: q.sent.linkId, outboxId: q.sent.outboxActionId }, hashes: {} },
   }]);
   await command(c, q.world, { kind: "grant.create", membershipId: q.sender.member.membershipId,
     role: "surveyor", scope: { kind: "branch", id: q.world.demo.branchId }, contractId: null });

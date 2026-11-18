@@ -5,6 +5,7 @@ import { cluster, seedHomeOwner, type Cluster } from "../../../../../../packages
 import { authenticatePracticeSession, authorizePracticeJob, withTenant } from "@jobguard/db";
 const plumbing=vi.hoisted(()=>({jar:new Map<string,string>(),headers:new Headers()}));
 vi.mock("server-only",()=>({}));
+vi.mock("@jobguard/db",async importOriginal=>({ ...await importOriginal<typeof import("@jobguard/db")>(), closeOutboundWorkerPool:vi.fn() }));
 vi.mock("next/headers",()=>({cookies:async()=>({get:(key:string)=>plumbing.jar.has(key)?{value:plumbing.jar.get(key)!}:undefined}),headers:async()=>plumbing.headers}));
 // Actual Next handlers, actual identity application/provider and restricted pools.
 // Only Next's request-local cookie/header plumbing is replaced.
