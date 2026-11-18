@@ -1803,6 +1803,26 @@ pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.tes
 
 The first entitlement batch passed 24 of 26. One failure was held and the other passed in the subsequent six-test authority rerun. The catalogue, upgrade and tenant policy batch passed 89 of 89.
 
+## r5 audit hand-off and outbox fixtures
+
+The hand-off shell previously changed to the runtime role and appended with only `app.tenant_id`. Its checked SQL entry point now verifies the original synthetic database owner and the exact locked audit head. The scope permits only the matching hand-off event. The attested prior sequence, prior hash and database actor stay identical to the existing audit contract. Intervening-append fixtures prove a real contractor request before writing on the same test connection.
+
+The outbox tests now bind the seeded business actor when appending and when calling the business-facing executor facade. The executor still switches to the separate worker login and derives authority from the committed signal.
+
+| Focused group | Non-held failures before | Non-held failures after |
+| --- | ---: | ---: |
+| Audit checkpoint hand-off | 12 | 0 |
+| Outbox | 13 | 0 |
+
+The hand-off tests passed 22 of 22, the outbox tests passed 15 of 15, and the catalogue, upgrade and tenant-policy tests passed 89 of 89. The populated proof has 1,350 effective-privilege changes, 748 upgrade changes and 634 policy changes.
+
+```sh
+pnpm --filter @jobguard/db exec vitest run test/audit-checkpoint-handoff.integration.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db exec vitest run test/outbox.integration.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/migration-proof-loader.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db typecheck
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

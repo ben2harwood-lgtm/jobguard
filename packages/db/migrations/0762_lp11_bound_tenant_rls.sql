@@ -2578,6 +2578,63 @@ BEGIN
 END verified_input;
 END $$;
 
+-- The audit hand-off is a narrow maintenance operation. Its login is the
+-- synthetic database owner and its witness is the exact locked audit head.
+CREATE UNLOGGED TABLE control_plane.lp11_audit_handoff_scope (
+ transaction_id xid8 PRIMARY KEY,
+ tenant_id uuid NOT NULL,
+ prior_sequence bigint NOT NULL,
+ prior_hash text NOT NULL,
+ login name NOT NULL
+);
+ALTER TABLE control_plane.lp11_audit_handoff_scope OWNER TO jobguard_migration;
+REVOKE ALL ON control_plane.lp11_audit_handoff_scope FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_audit_handoff_tenant(subject text,actor text,seq text,hash text) RETURNS uuid
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_audit_handoff_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+  AND actor='operations:audit-checkpoint-handoff'
+  AND (s.tenant_id::text,s.prior_sequence::text,s.prior_hash)=(subject,seq,hash)
+$$;
+ALTER FUNCTION app.lp11_audit_handoff_tenant(text,text,text,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_audit_handoff_tenant(text,text,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_audit_handoff_tenant(text,text,text,text) TO jobguard_audit_writer;
+
+CREATE FUNCTION app.lp11_append_audit_handoff(t uuid,seq bigint,hash text,operator text,event_id uuid) RETURNS app.audit_event
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE head_sequence bigint; head_hash text; sealed app.audit_event;
+ saved_tenant text:=current_setting('app.tenant_id',true);
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo'
+  OR session_user::text IS DISTINCT FROM (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database())
+  OR NOT pg_has_role(session_user,'jobguard_migration','MEMBER')
+  OR NOT pg_has_role(session_user,'jobguard_runtime','MEMBER')
+  OR app.lp6e_request_binding_present()
+  OR t IS NULL OR seq IS NULL OR seq<1 OR hash IS NULL OR hash !~ '^[a-f0-9]{64}$'
+  OR operator IS NULL OR operator !~ '^[a-zA-Z0-9._-]{1,64}$' OR event_id IS NULL
+ THEN RAISE EXCEPTION 'AUDIT_CHECKPOINT_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ PERFORM set_config('app.tenant_id',t::text,true);
+ SELECT h.sequence,h.event_hash INTO head_sequence,head_hash FROM app.lock_audit_head() h;
+ IF (head_sequence,head_hash) IS DISTINCT FROM (seq,hash) THEN
+  RAISE EXCEPTION 'AUDIT_CHECKPOINT_DISAGREEMENT' USING ERRCODE='23505';
+ END IF;
+ INSERT INTO control_plane.lp11_audit_handoff_scope(transaction_id,tenant_id,prior_sequence,prior_hash,login)
+ VALUES(pg_current_xact_id(),t,seq,hash,session_user);
+ SELECT * INTO sealed FROM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object(
+  'id',event_id,'version','audit.v1','actorRef','operations:audit-checkpoint-handoff',
+  'eventType','audit.checkpoint.handed_off','subjectType','audit-checkpoint','subjectRef',t::text,
+  'payload',jsonb_build_object('references',jsonb_build_object(
+   'environment','synthetic_demo','priorSequence',seq::text,'operator',operator,'sessionUser',session_user::text),
+   'hashes',jsonb_build_object('priorHead',hash),'classifications',jsonb_build_object('action','security'))
+ )),'lower_trust');
+ DELETE FROM control_plane.lp11_audit_handoff_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ PERFORM set_config('app.tenant_id',coalesce(saved_tenant,''),true);
+ RETURN sealed;
+END $$;
+ALTER FUNCTION app.lp11_append_audit_handoff(uuid,bigint,text,text,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_append_audit_handoff(uuid,bigint,text,text,uuid) FROM PUBLIC;
+
 DO $cutover$
 DECLARE
  policy_row record;
@@ -2823,6 +2880,8 @@ ALTER POLICY lp4_audit_writer ON app.audit_event USING (
   CASE WHEN subject_type='sso-connection' AND event_type LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END,
   CASE WHEN subject_type='connector' AND event_type='connector.input_staged'
    THEN app.lp11_connector_audit_tenant(subject_ref,actor_ref) END,
+  CASE WHEN subject_type='audit-checkpoint' AND event_type='audit.checkpoint.handed_off'
+   THEN app.lp11_audit_handoff_tenant(subject_ref,actor_ref,payload#>>'{references,priorSequence}',payload#>>'{hashes,priorHead}') END,
   CASE WHEN (subject_type='customer_portal' AND event_type IN('customer_portal.signed_in','customer_portal.signed_out'))
      OR (subject_type='quote_document' AND event_type='quote.acceptance.customer_authenticated')
      OR (subject_type='job' AND event_type IN('job_source.customer_message_recorded','customer_portal.message_recorded'))
@@ -2838,6 +2897,8 @@ ALTER POLICY lp4_audit_writer ON app.audit_event USING (
   CASE WHEN subject_type='sso-connection' AND event_type LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END,
   CASE WHEN subject_type='connector' AND event_type='connector.input_staged'
    THEN app.lp11_connector_audit_tenant(subject_ref,actor_ref) END,
+  CASE WHEN subject_type='audit-checkpoint' AND event_type='audit.checkpoint.handed_off'
+   THEN app.lp11_audit_handoff_tenant(subject_ref,actor_ref,payload#>>'{references,priorSequence}',payload#>>'{hashes,priorHead}') END,
   CASE WHEN (subject_type='customer_portal' AND event_type IN('customer_portal.signed_in','customer_portal.signed_out'))
      OR (subject_type='quote_document' AND event_type='quote.acceptance.customer_authenticated')
      OR (subject_type='job' AND event_type IN('job_source.customer_message_recorded','customer_portal.message_recorded'))
