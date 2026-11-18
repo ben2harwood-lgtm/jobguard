@@ -143,7 +143,9 @@ export async function createApplicationIsolationFixture() {
  };
  await copyPublicHistory();
  const received=(await zero.admin.query("SELECT server_received_at::text time FROM app.evidence_object WHERE id=$1",[evidence])).rows[0].time;
- await asFixtureTenant(many.shadow,a.tenantId,async db=>{for(let n=0;n<25;n++){
+ await asFixtureTenant(many.shadow,a.tenantId,async db=>{
+  await db.query("SELECT app.lp11_bind_shadow_job($1,$2)",[a.tenantId,a.jobId]);
+  for(let n=0;n<25;n++){
   const signal=randomUUID();await db.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
    VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-sv4.v1',clock_timestamp(),'Fictional private extra','low','held_for_final_check')`,[a.tenantId,a.jobId,signal,randomUUID()]);
   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)",[a.tenantId,a.jobId,signal,evidence,objectVersion,LOCK_HASH,received]);

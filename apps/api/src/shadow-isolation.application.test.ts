@@ -152,9 +152,10 @@ beforeAll(async()=>{
  }finally{await closeTestPools(p)}
  // Clone the freshly migrated and deterministically seeded baseline, preserving exact server timestamps and identities.
  await owner.query("CREATE DATABASE sv3_isolation_many TEMPLATE jobguard_synthetic_demo");
- const many=pool("postgres","sv3_isolation_many");try{
-  await many.query(`CREATE ROLE sv3_isolation_shadow LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_shadow TO sv3_isolation_shadow`);
-  const shadow=pool("sv3_isolation_shadow","sv3_isolation_many");try{await withTenant(shadow,testTenantContext(DEMO_TENANT_ID),async (db:{$client:PoolClient})=>{
+ await owner.query(`CREATE ROLE sv3_isolation_shadow LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_shadow TO sv3_isolation_shadow`);
+ await replayPracticeDatabase("sv3_isolation_many",async database=>{
+  const shadow=pool("sv3_isolation_shadow",database);try{await withTenant(shadow,testTenantContext(DEMO_TENANT_ID),async (db:{$client:PoolClient})=>{
+   await db.$client.query("SELECT app.lp11_bind_shadow_job($1,$2)",[DEMO_TENANT_ID,jobId]);
    for(let n=0;n<25;n++){
     const signalId=`10000000-0000-4000-8000-${String(100+n).padStart(12,"0")}`;
     await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:isolation',$4,'Fictional held extra','low','held_for_final_check')",[DEMO_TENANT_ID,jobId,signalId,fixed]);
@@ -162,7 +163,7 @@ beforeAll(async()=>{
     await db.$client.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'synthetic-v1',repeat('a',64),$5)",[DEMO_TENANT_ID,jobId,signalId,evidenceId,fixed]);
    }
   })}finally{await closeTestPools(shadow)}
- }finally{await closeTestPools(many)}
+ });
 },60000);
 afterAll(async()=>{await closeTestPools(owner);await postgres?.stop();if(dir)await rm(dir,{recursive:true,force:true})});
 describe("SV-3 Test Q: signed-in builder HTTP surfaces",()=>{
@@ -312,7 +313,9 @@ describe("SV-3 Test Q-LOG: runtime statement log normalisation (pure)",()=>{
 
 it("Test Q: successful mutations, exports, delivery/retry telemetry and every mutation error surface are identical",async()=>{
  const {seedAccount}=await import(sourceFixtureUrl("../../../packages/db/test/final-account-lock.integration.test.ts", import.meta.url).href);
- const {createWorkspaceApplication}=await import("./workspace/application.js"),{ActionExecutor}=await import(sourceFixtureUrl("../../../packages/db/src/outbox.ts", import.meta.url).href);
+ const {createWorkspaceApplication}=await import("./workspace/application.js");
+ const {WorkerActionExecutor}=await import(sourceFixtureUrl("../../../packages/db/src/worker-action-executor.ts", import.meta.url).href);
+ const {workerFixturePool}=await import(sourceFixtureUrl("../../../packages/db/test/worker-login-fixture.ts", import.meta.url).href);
  // A fresh public fixture and two exact clones. No prior HTTP test can change the compared history.
  const initial=pool("postgres","jobguard_synthetic_demo"),a=await seedAccount(initial,DEMO_TENANT_ID,100000);
  const signalEvidence=randomUUID(),signalUpload=randomUUID(),queued=randomUUID(),authority=randomUUID(),approval=randomUUID(),decision=randomUUID(),artifact="Fictional approved notification";
@@ -340,10 +343,15 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
  const databases=["sv3_effect_zero","sv3_effect_many"];
  for(const name of databases)await owner.query(`CREATE DATABASE ${name} TEMPLATE jobguard_synthetic_demo`);
  const manyAdmin=pool("postgres",databases[1]!);
- try{const hidden=pool("sv3_isolation_shadow",databases[1]!);try{await withTenant(hidden,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
+ try{
+  await replayPracticeDatabase(databases[1]!,async database=>{
+   const hidden=pool("sv3_isolation_shadow",database);
+   try{await withTenant(hidden,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
+  await db.$client.query("SELECT app.lp11_bind_shadow_job($1,$2)",[DEMO_TENANT_ID,a.jobId]);
   for(let n=0;n<25;n++){const id=randomUUID();await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q',$4,'Private fictional extra','low','held_for_final_check')",[DEMO_TENANT_ID,a.jobId,id,fixed]);
    await db.$client.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'Q:v1',repeat('a',64),$5)",[DEMO_TENANT_ID,a.jobId,id,signalEvidence,fixed]);}
  })}finally{await closeTestPools(hidden)}
+  });
  expect((await manyAdmin.query("SELECT count(*)::int n FROM app.shadow_signal_evidence WHERE job_id=$1",[a.jobId])).rows).toEqual([{n:25}]);
  }finally{await closeTestPools(manyAdmin)}
  const originalUuid=crypto.randomUUID;
@@ -388,6 +396,7 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    await success("proof complete",()=>app.proof.command(a.jobId,{version:"practice-proof-command.v1",action:"complete",commandId:randomUUID(),scopeItemId:proofScope,evidenceId:verified.upload.evidenceId}));
    const {assembleDraftFinalAccount}=await import("@jobguard/core");
    const rebuilt=await withTenant(inspect,testTenantContext(DEMO_TENANT_ID),async(db:{$client:PoolClient})=>{
+    await db.$client.query("SELECT app.bind_request('practice',$1,$2)",[digest,DEMO_TENANT_ID]);
     const lines=(await db.$client.query(`
      SELECT line_kind kind,source_id "sourceId",scope_item_id "scopeItemId",commercial_revision_id "commercialRevisionId",approval_id "approvalId",description,net_pence "netPence"
      FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'
@@ -414,11 +423,11 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    await success("final-account lock projection",()=>app.finalAccountLock.get(a.jobId));
    // Real authorized delivery exercises notification content and retry telemetry, with no external provider.
    let attempts=0;const adapter:import("@jobguard/db").OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async action=>{trace.notifications.push(action);return ++attempts===1?{kind:"retryable",code:"SYNTHETIC_RETRY"}:{kind:"succeeded",providerReference:"synthetic:Q"}},reconcile:async()=>"unknown"};
-   const executor=new ActionExecutor(runtime,new Map([[adapter.name,adapter]]),{emit:(name:Parameters<import("@jobguard/db").SafeTelemetry["emit"]>[0],fields:Readonly<Record<string,string|number>>)=>trace.telemetry.push({name,fields})});
+   const executor=new WorkerActionExecutor(await workerFixturePool(runtime),new Map([[adapter.name,adapter]]),{emit:(name:Parameters<import("@jobguard/db").SafeTelemetry["emit"]>[0],fields:Readonly<Record<string,string|number>>)=>trace.telemetry.push({name,fields})});
    await inspect.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1",[queued]);
-   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
+   await executor.execute(queued);
    await inspect.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1",[queued]);
-   await executor.execute(testTenantContext(DEMO_TENANT_ID),queued);
+   await executor.execute(queued);
    expect(trace.notifications).toHaveLength(2);expect(trace.telemetry).toContainEqual(expect.objectContaining({name:"outbox.retry"}));
    // Setup only: simulate authoritative processing of every frozen source without advancing public UUIDs per signal.
    const {publishFixtureCompletion}=await import(sourceFixtureUrl("../../../packages/db/test/sv5pre-fixtures.ts", import.meta.url).href);

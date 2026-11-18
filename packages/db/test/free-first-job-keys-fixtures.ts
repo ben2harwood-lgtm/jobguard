@@ -23,7 +23,8 @@ export async function insertSnapshot(db: PoolClient, s: KeySnapshot) {
  VALUES($1,$2,$3,$4,'free-first-job-identity.v1','synthetic_demo','fictional_verified_fixture.v1',$5,'2026-10-18T10:00:00.123456Z',$6,$7,$8)`, [s.tenantId,s.id,s.jobId,s.activationId,s.provenance,s.company,s.phone,s.fingerprint]);
 }
 export async function store(f: WorkFixture, s: KeySnapshot) {
- return workTenant(f.admin,s.tenantId,async db => { await db.query("SET LOCAL ROLE jobguard_migration"); await insertSnapshot(db,s); },{membershipId:s.actorId});
+ const actor = s.actorId === undefined ? undefined : { membershipId: s.actorId };
+ return workTenant(f.admin,s.tenantId,async db => { await db.query("SET LOCAL ROLE jobguard_migration"); await insertSnapshot(db,s); },actor);
 }
 export async function claimRows(f: WorkFixture, s: KeySnapshot) {
  return (await f.admin.query("SELECT identity_key FROM app.trial_identity_key_claim WHERE tenant_id=$1 AND snapshot_id=$2 ORDER BY identity_key COLLATE \"C\"",[s.tenantId,s.id])).rows.map(row=>row.identity_key as string);
