@@ -4068,6 +4068,149 @@ node --test --test-concurrency=1 tools/commercial-integrity-current-source-guard
 pnpm exec turbo run typecheck --concurrency=1
 ```
 
+## r5 full PostgreSQL run at 36e7c648e
+
+PostgreSQL 16.10 ran all 878 files. 775 passed and 103 failed. Of 8,017 tests, 6,901 passed, 846 failed, 251 were skipped and 19 were marked todo. Vitest reported zero unhandled errors.
+
+Outside the allowed exceptions, failed assertions went from 2,111 to 0 and setup-only failures went from 43 to 0. This round recorded 846 direct held-fixture assertions, 21 setup files with a direct held-fixture stack and zero `pg_dump` failures.
+
+```sh
+export PATH=/workspace/.jobguard-runtime/node_modules/.bin:$PATH
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=3 --testTimeout=300000 --passWithNoTests --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-surface-full-results.json
+```
+
+The three-worker run used the existing per-test limits and ran without overlapping application or guard jobs. The contractor permission matrix passed in 27.3 seconds and the populated recovery upgrade passed in 6.8 seconds. The held source and S9 pins still match `abbf302b3`.
+
+Of the 2,111 original non-held failed assertions, 2,106 passed, four Northside assertions now fail directly in the held fixture, and one M4-12 signed JSON `54001` case reached its existing conditional skip because the embedded server parsed the deepest permitted fixture payload. Both parameterizations of the SV5PRE invalidation test passed, including the case whose generated UUID differs between runs.
+
+Each row tracks the original r4 assertions by file and test name. A later failure with a direct held-fixture stack is counted in its own column.
+
+| Original error group | r4 failures | Passed | Still failing outside hold | Direct held stack | Skipped or absent |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| error: JOB_PARTIES_REQUIRED | 1081 | 1081 | 0 | 0 | 0 |
+| error: JOB_NOT_FOUND | 304 | 304 | 0 | 0 | 0 |
+| Assertion mismatch | 90 | 90 | 0 | 0 | 0 |
+| error: NOT_FOUND | 59 | 59 | 0 | 0 | 0 |
+| error: CUSTOMER_REFUSED | 55 | 55 | 0 | 0 | 0 |
+| Error: RECOVERY_REVIEWER_FORBIDDEN | 49 | 49 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "fee_reservation_book" | 39 | 38 | 0 | 0 | 1 |
+| error: SSO_REQUIRED_FORBIDDEN | 38 | 38 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "evidence_upload" | 37 | 37 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "membership" | 33 | 33 | 0 | 0 | 0 |
+| PracticeFeedRepositoryError: PRACTICE_FEED_FORBIDDEN | 19 | 19 | 0 | 0 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'id') | 18 | 18 | 0 | 0 | 0 |
+| error: job not found | 17 | 17 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "audit_event" | 17 | 17 | 0 | 0 | 0 |
+| OidcError: OIDC_REFUSED | 16 | 16 | 0 | 0 | 0 |
+| Error: UNAUTHENTICATED | 13 | 13 | 0 | 0 | 0 |
+| Error: promise rejected "SsoError: SSO_FORBIDDEN { code: 'SSO…' }" instead of resolving | 13 | 13 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "action_outbox" | 12 | 12 | 0 | 0 | 0 |
+| SsoError: SSO_FORBIDDEN | 9 | 9 | 0 | 0 | 0 |
+| error: UNAUTHENTICATED | 9 | 9 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "input_event" | 9 | 9 | 0 | 0 | 0 |
+| WormCommandError: WORM_REFUSED | 7 | 7 | 0 | 0 | 0 |
+| error: EMERGENCY_REFUSED | 7 | 7 | 0 | 0 | 0 |
+| SsoRequiredError: SSO_EMERGENCY_REFUSED | 6 | 6 | 0 | 0 | 0 |
+| Error: ACCESS_REFUSED | 5 | 5 | 0 | 0 | 0 |
+| Error: Synthetic tenant key registry operation refused | 5 | 5 | 0 | 0 | 0 |
+| WatchdogError: JOB_NOT_LIVE | 5 | 5 | 0 | 0 | 0 |
+| error: FORBIDDEN | 5 | 5 | 0 | 0 | 0 |
+| error: INVALID_TRANSITION | 5 | 5 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "job" | 5 | 5 | 0 | 0 | 0 |
+| Error: NOT_FOUND | 4 | 4 | 0 | 0 | 0 |
+| Error: promise resolved "Result{ command: 'SELECT', …(9) }" instead of rejecting | 4 | 4 | 0 | 0 | 0 |
+| Error: promise resolved "Result{ command: 'UPDATE', …(9) }" instead of rejecting | 4 | 4 | 0 | 0 | 0 |
+| TypeError: Cannot destructure property 'f' of 'world' as it is undefined. | 4 | 0 | 0 | 4 | 0 |
+| error: new row violates row-level security policy for table "account" | 4 | 4 | 0 | 0 | 0 |
+| Error: expected error: FORBIDDEN { length: 311, …(14) } to match object { code: '22023', …(1) } | 3 | 3 | 0 | 0 | 0 |
+| Error: promise rejected "error: SSO_REQUIRED_FORBIDDEN { …(15) }" instead of resolving | 3 | 3 | 0 | 0 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'status') | 3 | 3 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "commercial_track_assignment" | 3 | 3 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "job_commercial_track" | 3 | 3 | 0 | 0 | 0 |
+| Error: FORBIDDEN | 2 | 2 | 0 | 0 | 0 |
+| Error: expected Error: RECOVERY_REVIEWER_FORBIDDEN { code: '…' } to match object { Object (code) } | 2 | 2 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'EVIDENCE_PACK_V3_SOURCE_CONFLICT' but got 'cannot execute INSERT in a read-only …' | 2 | 2 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'FINAL_CHECK_SOURCE_CHANGED' but got 'JOB_NOT_FOUND' | 2 | 2 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'RECOVERY_SOURCE_NOT_RECOGNISED' but got 'RECOVERY_REVIEWER_FORBIDDEN' | 2 | 2 | 0 | 0 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: '23503' } | 2 | 2 | 0 | 0 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: '42501', …(1) } | 2 | 2 | 0 | 0 | 0 |
+| Error: jobguard_session_lookup does not have the required least-privilege posture | 2 | 2 | 0 | 0 | 0 |
+| Error: promise rejected "error: new row violates row-level securit… { …(15) }" instead of resolving | 2 | 2 | 0 | 0 | 0 |
+| ReadinessSeamError: INVALID_READINESS_PLAN | 2 | 2 | 0 | 0 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'revision') | 2 | 2 | 0 | 0 | 0 |
+| error: STALE_SSO_REQUIRED | 2 | 2 | 0 | 0 | 0 |
+| error: cannot execute INSERT in a read-only transaction | 2 | 2 | 0 | 0 | 0 |
+| error: invalid reversal | 2 | 2 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "capture_source" | 2 | 2 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "shadow_commercial_signal" | 2 | 2 | 0 | 0 | 0 |
+| AssertionError [ERR_ASSERTION]: PREFLIGHT_FIXTURE_ACCOUNT_REQUIRED | 1 | 1 | 0 | 0 | 0 |
+| Error: Dispatch did not block behind contractor revocation | 1 | 1 | 0 | 0 | 0 |
+| Error: ELIGIBILITY_REVIEWER_FORBIDDEN | 1 | 1 | 0 | 0 | 0 |
+| Error: FINAL_CHECK_FORBIDDEN | 1 | 1 | 0 | 0 | 0 |
+| Error: MEMBERSHIP_FORBIDDEN | 1 | 1 | 0 | 0 | 0 |
+| Error: STACK_TRACE_ERROR | 1 | 1 | 0 | 0 | 0 |
+| Error: before allowance mismatch: ["connector","binding","binding_lookup"] | 1 | 1 | 0 | 0 | 0 |
+| Error: expected WormCommandError: WORM_REFUSED { …(1) } to match object { code: 'WORM_UNCONFIRMED', …(1) } | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'EVIDENCE_PACK_V3_DEPENDENCY_HELD' but got 'cannot execute INSERT in a read-only …' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'IDEMPOTENCY_PAYLOAD_CONFLICT' but got 'RECOVERY_REVIEWER_FORBIDDEN' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'JOB_NOT_LIVE' but got 'JOB_NOT_FOUND' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'JOB_WORK_CLOSED' but got 'FINAL_CHECK_LOCK_BINDING_INVALID' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'LP2 permit rollback' but got 'JOB_INSERT_PERMIT_REQUIRED' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'NOT_FOUND' but got 'cannot execute INSERT in a read-only …' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'POST_LOCK_WORK_REQUIRES_LINKED_JOB' but got 'JOB_SOURCE_FORBIDDEN' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'PRE_ADOPTION_SOURCE_EXCLUDED' but got 'insert or update on table "shadow_sig…' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'RECOVERY_CASE_NOT_FOUND' but got 'RECOVERY_REVIEWER_FORBIDDEN' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'REQUEST_BINDING_REFUSED' but got 'jobguard_session_lookup does not have…' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'SYNC_AUTHORITY_REQUIRED' but got 'SYNC_UNAVAILABLE' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'TEST-WORKER-pending' but got 'cannot execute INSERT in a read-only …' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'UNAUTHENTICATED' but got 'cannot execute INSERT in a read-only …' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'fixture audit failure' but got 'new row violates row-level security p…' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'rollback' but got 'new row violates row-level security p…' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'synthetic failure' but got 'new row violates row-level security p…' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'synthetic migration failure' but got 'jobguard_session_lookup does not have…' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected [Function] to throw error including 'synthetic rollback' but got 'new row violates row-level security p…' | 1 | 1 | 0 | 0 | 0 |
+| Error: expected error: FORBIDDEN { length: 139, …(14) } to match object { code: '23514' } | 1 | 1 | 0 | 0 | 0 |
+| Error: expected error: INVALID_JOB_LINK { …(15) } to match object { …(2) } | 1 | 1 | 0 | 0 | 0 |
+| Error: expected error: JOB_NOT_FOUND { …(15) } to match object { code: '23505' } | 1 | 1 | 0 | 0 | 0 |
+| Error: expected error: cannot execute INSERT in a read-on… { …(15) } to match object { Object (code) } | 1 | 1 | 0 | 0 | 0 |
+| Error: expected error: cannot execute INSERT in a read-on… { …(15) } to match object { …(2) } | 1 | 1 | 0 | 0 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: '23505' } | 1 | 1 | 0 | 0 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: 'AGREEMENT_INELIGIBLE' } | 1 | 1 | 0 | 0 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { code: 'COLLECTION_REFUSED' } | 1 | 1 | 0 | 0 | 0 |
+| Error: expected error: new row violates row-level securit… { …(15) } to match object { …(2) } | 1 | 1 | 0 | 0 | 0 |
+| Error: expected error: query returned no rows { …(15) } to match object { code: '23514' } | 1 | 1 | 0 | 0 | 0 |
+| Error: expected undefined to deeply equal { kind: 'cancelled', …(1) } | 1 | 1 | 0 | 0 | 0 |
+| Error: promise rejected "Error: UNAUTHENTICATED { code: 'UNAU…' }" instead of resolving | 1 | 1 | 0 | 0 | 0 |
+| Error: promise resolved "undefined" instead of rejecting | 1 | 1 | 0 | 0 | 0 |
+| ExtraPersistenceError: NOT_FOUND | 1 | 1 | 0 | 0 | 0 |
+| RecoveryMessageError: RECOVERY_MESSAGE_BLOCKED | 1 | 1 | 0 | 0 | 0 |
+| TypeError: Cannot convert undefined or null to object | 1 | 1 | 0 | 0 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'cause_code') | 1 | 1 | 0 | 0 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'connect') | 1 | 1 | 0 | 0 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'identity_user_id') | 1 | 1 | 0 | 0 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'payload') | 1 | 1 | 0 | 0 | 0 |
+| TypeError: Cannot read properties of undefined (reading 'practice_session_digest') | 1 | 1 | 0 | 0 | 0 |
+| error: COMMAND_CONFLICT | 1 | 1 | 0 | 0 | 0 |
+| error: SMALL_TRIP_FORBIDDEN | 1 | 1 | 0 | 0 | 0 |
+| error: STALE_REVISION | 1 | 1 | 0 | 0 | 0 |
+| error: WORM_REFUSED | 1 | 1 | 0 | 0 | 0 |
+| error: cannot alter type of a column used in a policy definition | 1 | 1 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "merchant" | 1 | 1 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "provider_event_inbox" | 1 | 1 | 0 | 0 | 0 |
+| error: new row violates row-level security policy for table "scope_identity" | 1 | 1 | 0 | 0 | 0 |
+| error: permission denied for table jobguard_schema_migration | 1 | 1 | 0 | 0 | 0 |
+| error: synthetic live job required | 1 | 1 | 0 | 0 | 0 |
+
+### Named exceptions
+
+The original [held assertion names](#tests-that-reached-the-held-work-order-fixture) and [held setup names](#tests-skipped-when-a-held-fixture-failed-during-setup) appear below. The changes from those lists at this revision are recorded here.
+
+- `test/northside-demo.integration.test.ts` — CLIENT-ISOLATION permits a second client's own extra and denies cross-client presentation, view and decision
+- `test/northside-demo.integration.test.ts` — RESET-HISTORY starts a new run while retaining earlier attribution, settings, evidence, origins and the audit prefix
+- `test/northside-demo.integration.test.ts` — SETTINGS-SNAPSHOT retains the stored definition, contract references and immutable requirement snapshots
+- `test/northside-demo.integration.test.ts` — SWITCH-REFERENCE rejects invented, cross-actor, cross-session and out-of-window references without masking the existing switch TRUNCATE guard
+- No longer an exception in `test/lp6a-practice-restore.integration.test.ts` — upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8
+
 ## Missing pg_dump in earlier full runs
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)
