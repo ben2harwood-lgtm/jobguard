@@ -1,11 +1,12 @@
 // LATER-SAFETY-184: real PostgreSQL composition; run by CI, never the builder sandbox.
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { siteExtraContentSha256V1 } from "@jobguard/core";
 import { SiteExtraApplication } from "../../../apps/api/src/contractor/site-extra.application.js";
 import { ContractorRepository, ExtraApprovalRepository, SiteExtraRepository, contractorSessionContext, withTenant } from "../src/index.js";
 import { cluster, siteFixture, photo } from "./site-extra-evidence-fixtures.js";
-import { command, written, type Cluster } from "./site-extra-pricing-fixtures.js";
+import { command, ownerTx, written, type Cluster } from "./site-extra-pricing-fixtures.js";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { status } from "./contractor-entitlement-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
@@ -117,6 +118,31 @@ it("transient submission failure keeps the log and deterministic submit identity
  expect(submit.mock.calls[1]![2]).toEqual(submit.mock.calls[2]![2]);
  expect(saved.extra_origin).toBe(before.extra_origin! + 1); expect(saved.requests).toBe(before.requests + 1);
  expect(await counts(h.actor.tenantId)).toEqual(saved);
+});
+
+it("the recovery SELECT itself excludes a raiser revoked after priced submission", async () => {
+ const h = await setup(), answer = await h.run();
+ const extraId = (await c.admin.query("SELECT variation_id FROM app.extra_sor_revision WHERE tenant_id=$1 AND command_id=$2",
+  [h.actor.tenantId, h.raw.commandId])).rows[0].variation_id as string;
+ // Execute the repository's actual SELECT, not a copy of its predicates. The
+ // owner fixture deliberately bypasses session/replay/feature and runtime RLS
+ // gates, so those earlier checks cannot hide a missing active-member filter.
+ const source = readFileSync(new URL("../src/extra-approval-chain-repository.ts", import.meta.url), "utf8");
+ const sql = source.match(/`(\s*SELECT q\.id "requestId",e\.kind state[^`]*)`/u)?.[1];
+ expect(sql).toBeDefined();
+ const recover = () => ownerTx(c, h.actor.tenantId, async db => (await db.$client.query(sql!,
+  [h.actor.tenantId, h.f.jobId, extraId, h.raw.commandId, h.actor.membershipId])).rows);
+ const expected = [{ requestId: answer.requestId, state: answer.state }];
+ expect(await recover()).toEqual(expected);
+ await command(c, h.f, { kind: "membership.revoke", membershipId: h.actor.membershipId });
+ const before = await counts(h.actor.tenantId);
+ // Revocation leaves the operative's job assignment in place. The assignment
+ // branch must still pass, leaving membership activity as the refusal reason.
+ expect(await ownerTx(c, h.actor.tenantId, async db => (await db.$client.query(
+  "SELECT app.contractor_member_active($1) active, app.contractor_job_assigned($1,$2) assigned",
+  [h.actor.membershipId, h.f.jobId])).rows[0])).toEqual({ active: false, assigned: true });
+ expect(await recover()).toEqual([]);
+ expect(await counts(h.actor.tenantId)).toEqual(before);
 });
 
 it("scoped recovery refuses wrong bindings and withdrawn state", async () => {

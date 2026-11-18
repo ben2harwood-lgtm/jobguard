@@ -1,3 +1,4 @@
+import { seedPredecessorRecoveryMessage } from "./recovery-message-predecessor-data.js";
 import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { seedLegacySandbox, historicalAcceptedQuote } from "./lp-legacy-sandbox-fixture.js";
@@ -83,7 +84,7 @@ beforeAll(async()=>{
  await applyOutboundPause(upgrade);
  await admin.query("CREATE ROLE terms_upgrade_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO terms_upgrade_login");runtime=new Pool({host:"127.0.0.1",port,user:"terms_upgrade_login",password:"synthetic",database:"jobguard_synthetic_demo",max:4});({job,caseId,packId,session}=await seed(upgrade,runtime));
  const repo=new RecoveryMessageRepository(runtime),v=(await preview()).latest!,q=await repo.command(context,caseId,{version:"recovery-message-command.v1",action:"approve",commandId:randomUUID(),messageId:v.id,expectedRevision:v.revision,recipient:v.message.recipient,body:v.message.body,amountPence:v.message.amountPence,packId:v.message.packId,contentHash:v.message.contentHash},messageActor);
- await repo.command(context,caseId,{version:"recovery-message-command.v1",action:"advance",commandId:randomUUID(),messageId:v.id,expectedRevision:q.latest!.revision,outcome:"success"},messageActor);
+ await seedPredecessorRecoveryMessage(upgrade,T,caseId,q.latest!,messageActor,"succeeded");
  const sandbox=new SandboxRepository(runtime);await seedLegacySandbox(upgrade,session);const follow=new RecoveryFollowUpRepository(runtime),scheduled=await follow.schedule(context,caseId,{version:"recovery-follow-up-command.v1",action:"schedule",commandId:randomUUID(),sourceMessageId:v.id,expectedCaseRevision:2},messageActor);
  for(let tick=0;tick<3;tick++)await follow.advanceTime(context,caseId,{version:"recovery-follow-up-command.v1",action:"advance_time",commandId:randomUUID(),followUpId:scheduled.latest!.id},messageActor,(run,id)=>sandbox.advance(session,run,id));
 });

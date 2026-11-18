@@ -75,6 +75,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       expect(current.policies).toHaveLength((row.policies?.length ?? 0) + 1);
       for (const policy of row.policies ?? []) expect(current.policies).toContainEqual(policy);
       expect(current.policies.some((policy: { polname: string }) => policy.polname === (row.relname.startsWith("extra_") ? "lp6_client_binding_read" : "lp6_customer_binding_read"))).toBe(true);
+    } else if (row.nspname === 'app' && row.relname === 'action_attempt') {
+      expect(replayCatalog).toContainEqual({...row,relacl:row.relacl.replace('jobguard_runtime=ar/','jobguard_runtime=r/')});
+    } else if (row.nspname === "app" && row.relname === "sandbox_run_event") {
+      const current = replayCatalog.find(r => r.nspname === row.nspname && r.relname === row.relname)!;
+      expect({ ...current, policies: row.policies }).toEqual(row);
+      expect(current.policies).toHaveLength((row.policies?.length ?? 0) + 1);
+      for (const policy of row.policies ?? []) expect(current.policies).toContainEqual(policy);
+      expect(current.policies.filter((policy: { polname: string; polcmd: string }) =>
+        policy.polname === "worker_recovery_archived_run" && policy.polcmd === "r")).toHaveLength(1);
     } else if (row.nspname === "app" && row.relname === "final_check_terms_acceptance") {
       // 0735 adds exactly one restrictive per-firm read policy; its metadata is in the 0735 proof above.
       const current = replayCatalog.find(r => r.nspname === row.nspname && r.relname === row.relname)!;
@@ -290,6 +299,16 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // LATER-SAFETY-189: xa_proceed's latest body preserves covered reads and requires the raiser for writes.
   const proceedRaiserSql = await readFile(new URL("../migrations/0760_extra_proceed_raiser_authority.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.xa_proceed(p_job,p_extra,p_actor,p_body)", proceedRaiserSql.split("AS $$")[1]!.split("$$;")[0]!);
+  // LP-10 preserves the LP-6d sink body and moves only its outbox row lock.
+  for (const [key, before, after] of [
+    ["app.guard_recovery_message_sink()", "FOR SHARE OF mem,o)", "FOR SHARE OF mem)"],
+    ...["app.lp6d_share_sink_authorization(p_tenant,p_outbox)", "app.lp6d_share_sink_authorization_worker(p_tenant,p_outbox)"]
+      .map(key => [key, "FOR SHARE OF a;", "FOR SHARE OF a;\n PERFORM 1 FROM app.action_outbox WHERE tenant_id=p_tenant AND id=p_outbox FOR SHARE;"]),
+  ] as [string, string, string][]) {
+    const body = lp6dBodies.get(key)!;
+    expect(body.split(before)).toHaveLength(2);
+    lp6dBodies.set(key, body.replace(before, after));
+  }
   // 0761 replaces only Northside's registration body; successor proof metadata remains checked above.
   const northsideSql = await readFile(new URL("../migrations/0761_northside_hosted_agreement.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.northside_register(p_owner,p_settings)", northsideSql.split("FUNCTION app.northside_register(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);

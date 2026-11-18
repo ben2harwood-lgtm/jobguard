@@ -73,10 +73,15 @@ export async function seedDemo(environment: DemoEnvironment, boundary: DemoComma
 }
 
 /** Minimal generated CH-1 recipe. Owner credentials only prepare fictional source
- * rows; quote send, acceptance and activation use their ordinary commands.
+ * rows. The default sends, accepts and activates through ordinary commands.
+ * A predecessor fixture can record historical delivery facts before the current worker exists.
  * Not an application endpoint; callers must select an isolated synthetic database.
  */
-export async function prepareActivationFixtureV3(owner:Pool,context:VerifiedTenantContext,name:string,acceptedNetPence:number, runtime:Pool=owner, highestSentNetPence=acceptedNetPence, practiceDigest:string|null=null){
+export async function prepareActivationFixtureV3(
+ owner: Pool, context: VerifiedTenantContext, name: string, acceptedNetPence: number,
+ runtime: Pool = owner, highestSentNetPence = acceptedNetPence, practiceDigest: string | null = null,
+ recordPredecessorDelivery?: (tenantId: string, jobId: string, documentId: string) => Promise<void>,
+){
  if(process.env.JOBGUARD_ENV!=="synthetic_demo"||context.tenantId!==DEMO_TENANT_ID)throw new DemoSeedSafetyError("CH-1 fixtures require the synthetic tenant");
  // Every generated job belongs to a practice firm before its first preview.
  // Explicit owners retain their existing context; legacy fixture callers get a fresh firm.
@@ -99,7 +104,8 @@ export async function prepareActivationFixtureV3(owner:Pool,context:VerifiedTena
   await quotes.saveDraft(firmContext,{jobId,draftId,expectedRevision:index,currency:"GBP",taxPolicyVersion:"candidate_m1_standard_v1",blockingQuestions:[],effectiveAt:new Date(),lines:[{id:randomUUID(),scopeItemId:scope,scopeRevisionId:scopeRevision,description:"Generated fictional work",origin:"captured",included:true,exclusionReason:null,quantity:"1",unit:"item",unitRatePence:net,discountPercent:"0",taxTreatment:"standard_rate_20",rateProvenance:"entered",category:"Work",region:null}]});
   const preview=await delivery.preview(firmContext,jobId,recipient);
   await delivery.issue(firmContext,jobId,{commandId:randomUUID(),documentId:preview.documentId,contentHash:preview.hash,recipient});
-  await delivery.execute(firmContext,jobId,preview.documentId,"success");
+  if (recordPredecessorDelivery) await recordPredecessorDelivery(firmContext.tenantId, jobId, preview.documentId);
+  else await delivery.execute(firmContext,jobId,preview.documentId,"success");
   if(index===values.length-1)await withTenant(owner,firmContext,async db=>{
    // Owner-only synthetic fixture setup preserves historical-schema upgrade tests.
    // Runtime application callers use the hardened LP-3 signature exclusively.

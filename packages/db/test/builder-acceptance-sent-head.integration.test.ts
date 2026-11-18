@@ -12,7 +12,7 @@ import { prepareActivationFixtureV3, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as 
   DEMO_ACCOUNT_ID as A, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { authenticatePracticeSession, issuePracticeSession } from "../src/practice-session.js";
 import { migrate } from "../src/migrate.js";
-import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
+import { jobDoorsDatabase, transaction } from "./lp-job-doors-fixtures.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { snapshotRows } from "./upgrade-proof-utils.js";
 import { loadMigrationProofs } from "./migration-proof-loader.js";
@@ -37,8 +37,31 @@ async function seed(db: Database) {
   practiceDigests.set(auth.context,auth.digest);
   return auth.context;
 }
-async function fixture(db: Database, context: Context) {
-  const job = await prepareActivationFixtureV3(db.owner,context,`Fictional sent head ${randomUUID()}`,100000,db.runtime,100000,practiceDigests.get(context)!);
+async function fixture(db: Database, context: Context, predecessor = false) {
+  const recordPredecessorDelivery: Parameters<typeof prepareActivationFixtureV3>[7] = predecessor
+    ? async (tenantId, jobId, documentId) => {
+        // The older schema can store a sent quote but has no worker login yet.
+        // Seed its completed fake receipt under the owner, with all guards active.
+        await transaction(db.owner, tenantId, async client => {
+          const sent = await client.query(`UPDATE app.action_outbox o
+            SET status='executing',claimed_at=clock_timestamp(),updated_at=clock_timestamp()
+            FROM app.quote_send s WHERE (o.tenant_id,o.id)=(s.tenant_id,s.outbox_action_id)
+              AND (s.tenant_id,s.job_id,s.document_id)=($1,$2,$3)
+              AND o.status='pending' AND o.adapter='fake_quote_delivery' RETURNING o.id`,
+            [tenantId, jobId, documentId]);
+          expect(sent.rows).toHaveLength(1);
+          const action = sent.rows[0].id;
+          await client.query(`INSERT INTO app.action_attempt
+            (id,tenant_id,action_id,attempt_number,outcome,provider_reference,finished_at)
+            VALUES(gen_random_uuid(),$1,$2,1,'succeeded',$3,clock_timestamp())`,
+            [tenantId, action, `fake-receipt:${action}`]);
+          await client.query(`UPDATE app.action_outbox SET status='succeeded',completed_at=clock_timestamp(),
+            updated_at=clock_timestamp() WHERE (tenant_id,id)=($1,$2)`, [tenantId, action]);
+        });
+      }
+    : undefined;
+  const job = await prepareActivationFixtureV3(db.owner,context,`Fictional sent head ${randomUUID()}`,100000,
+    db.runtime,100000,practiceDigests.get(context)!,recordPredecessorDelivery);
   const repo = new QuoteAcceptanceRepository(db.runtime);
   const view = await repo.view(context,job), d = view.activeAcceptance!;
   await repo.disposition(context,job,{ commandId:randomUUID(),documentId:d.documentId,documentHash:d.documentHash,
@@ -312,7 +335,7 @@ describe("0745 populated predecessor upgrade",()=>{
   beforeAll(async()=>{process.env.JOBGUARD_ENV="synthetic_demo";db=await jobDoorsDatabase(true,own);context=await seed(db);},300000);
   afterAll(async()=>{await db?.close();if(original===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=original;});
   it("proves the predecessor defect, preserves every populated row and ACL, and then refuses it",async()=>{
-    const history=await fixture(db,context), f=await fixture(db,context), newer=await preview(db,context,f.job);
+    const history=await fixture(db,context,true), f=await fixture(db,context,true), newer=await preview(db,context,f.job);
     await send(db,context,f.job,newer);
     const a=await acceptance(db,f.job,f.old);
     // Failing-first behavioral witness: the predecessor accepts a stale sent v1.
@@ -325,9 +348,9 @@ describe("0745 populated predecessor upgrade",()=>{
     })).rejects.toThrow("PREDECESSOR_ACCEPTED_STALE_SENT_QUOTE");
     const before=await snapshotRows(db.owner), acl=await catalog(db.owner);
     await migrate(db.owner);
-    // LP-6d's later migration creates identity.lp6d_sso_grant_permit empty.
+    // LP-6d and LP-10 add two empty private bookkeeping tables.
     const upgraded=await snapshotRows(db.owner);
-    expect(upgraded).toEqual({...before,"identity.lp6d_sso_grant_permit":[]});
+    expect(upgraded).toEqual({...before,"identity.lp6d_sso_grant_permit":[],"control_plane.worker_action_binding":[]});
     expect(await catalog(db.owner)).toEqual(acl);
     expect(acl.map(r=>r.runtime)).toEqual([false,true]);
     expect(acl.every(r=>r.owner==="jobguard_migration"&&r.prosecdef)).toBe(true);

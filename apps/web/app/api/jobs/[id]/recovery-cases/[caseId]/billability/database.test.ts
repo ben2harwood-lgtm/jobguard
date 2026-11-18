@@ -14,7 +14,9 @@ vi.mock("@jobguard/api/identity",()=>({resolveVerifiedTenantContext:async (_prov
 }}));
 vi.mock("next/headers",()=>({cookies:async()=>({get:(key:string)=>({value:key==="jg_session"?state.practice:state.identity})})}));
 vi.mock("../../../../../../lib/synthetic-server",()=>({syntheticPool:()=>state.pool}));
-vi.mock("@jobguard/db",()=>import("../../../../../../../../../packages/db/src/index.js"));
+vi.mock("@jobguard/db",async()=>({
+ ...await import("../../../../../../../../../packages/db/src/index.js"),closeOutboundWorkerPool:vi.fn(),
+}));
 vi.mock("../../../../../../lib/identity-server",()=>({identityApplication:()=>({
  session:async()=>({csrfToken:"synthetic-csrf",memberships:[{tenantId:state.tenant,role:"owner"}]}),
  allowedOrigin:"http://example.invalid",provider:{digest:()=>state.digest},

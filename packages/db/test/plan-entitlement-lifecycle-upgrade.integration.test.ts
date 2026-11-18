@@ -521,6 +521,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       const body = migration.split("CREATE OR REPLACE FUNCTION app.mon3_activate")[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toEqual(body);
       expect(current?.source).toBe(body);
+    } else if (prior.nspname === "app" && prior.proname === "guard_recovery_message_sink" && prior.args === "") {
+      const migration = await readFile(new URL("../migrations/0749_lp6d_remaining_routines.sql", import.meta.url), "utf8");
+      const lp6dBody = migration.split("CREATE OR REPLACE FUNCTION app.guard_recovery_message_sink()").at(-1)!.split("AS $$")[1]!.split("$$;")[0]!;
+      expect(lp6dBody).toContain("FOR SHARE OF mem,o)");
+      const body = lp6dBody.replace("FOR SHARE OF mem,o)", "FOR SHARE OF mem)");
+      expect(current?.definition).toEqual(prior.definition?.replace(prior.source, () => body));
+      expect(current?.source).toEqual(body);
     } else if (ent5Bodies.has(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`))) {
       expect(current?.definition?.split("$function$")[1]).toEqual(ent5Bodies.get(routineKey(`${prior.nspname}.${prior.proname}(${prior.args})`)));
     } else if (prior.nspname === "app" && billingBodies.has(`${prior.proname}|${prior.args}`)) {

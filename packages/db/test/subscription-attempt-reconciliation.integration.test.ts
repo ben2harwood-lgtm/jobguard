@@ -309,7 +309,7 @@ describe("0756 populated predecessor upgrade (real PostgreSQL)", () => {
   const metadata = async () => (await f.admin.query("SELECT proowner,proacl::text,prosecdef,proconfig,proargtypes::text,prorettype FROM pg_proc WHERE oid=$1::regprocedure", [signature])).rows;
   const security = await metadata(), before = await snapshotRows(f.admin);
   await migrate(f.admin); await migrate(f.admin);
-  expect(await metadata()).toEqual(security); expect(await snapshotRows(f.admin)).toEqual(before);
+  expect(await metadata()).toEqual(security); expect(await snapshotRows(f.admin)).toEqual({ ...before, "control_plane.worker_action_binding": [] });
   const fake = reconciler(fixture);
   expect(await fake.executor.reconcile(a.context, a.digest, approved.workId, 2)).toMatchObject({ settled: true, amountPence: approved.amountPence, contentHash: approved.contentHash, revision: 2 });
   expect(fake.executes()).toBe(0); expect(await count(fixture, a, "subscription_simulated_attempt")).toBe(1);

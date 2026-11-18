@@ -5,7 +5,9 @@ import { EnterpriseLivePromptRepository, EvidenceService } from "@jobguard/db";
 import { cluster, promptFixture, materialsInput, listInput, completionPhoto, promptSession } from "../../../../../../../../../packages/db/test/enterprise-live-prompt-fixtures.js";
 import { command } from "../../../../../../../../../packages/db/test/site-extra-fixtures.js";
 vi.mock("server-only", () => ({}));
-vi.mock("@jobguard/db", () => import("../../../../../../../../../packages/db/src/index.js"));
+vi.mock("@jobguard/db", async () => ({
+  ...await import("../../../../../../../../../packages/db/src/index.js"), closeOutboundWorkerPool: vi.fn(),
+}));
 const transport = vi.hoisted(() => ({ session: "", pool: undefined as unknown }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: transport.session }) }) }));
 vi.mock("../../../../../../lib/synthetic-server", () => ({ syntheticPool: () => transport.pool }));
