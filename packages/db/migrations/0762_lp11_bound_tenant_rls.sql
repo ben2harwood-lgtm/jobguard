@@ -2057,6 +2057,7 @@ CREATE FUNCTION app.lp11_customer_tenant(resource text,id uuid) RETURNS uuid
    WHEN 'stage_customer' THEN x.purpose='stage' AND x.customer_id=id
    WHEN 'stage_session' THEN x.purpose='stage' AND x.session_id=id
    WHEN 'stage_command' THEN x.purpose='stage' AND x.command_id=id
+   WHEN 'billing_job' THEN x.purpose='billing' AND x.job_id=id
    WHEN 'variation_job' THEN x.purpose='variation' AND x.job_id=id
    WHEN 'variation_target' THEN x.purpose='variation' AND x.variation_id=id
    WHEN 'variation_scope_item' THEN x.purpose='variation' AND x.variation_scope_item_id=id
@@ -2101,7 +2102,7 @@ CREATE FUNCTION app.lp11_customer_operation(operation text) RETURNS void
  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
  UPDATE control_plane.lp11_customer_scope x SET purpose=operation
  WHERE x.transaction_id=pg_current_xact_id_if_assigned() AND x.lookup_kind='authorized_session'
-  AND x.purpose IS NULL AND operation IN('stage','variation')
+  AND x.purpose IS NULL AND operation IN('stage','variation','billing')
 $$;
 ALTER FUNCTION app.lp11_customer_operation(text) OWNER TO jobguard_session_lookup;
 REVOKE ALL ON FUNCTION app.lp11_customer_operation(text) FROM PUBLIC;
@@ -2181,6 +2182,28 @@ BEGIN
  END IF;
  IF opened THEN PERFORM app.lp11_close_customer_scope(); END IF;
  RETURN jsonb_build_object('version','customer-session.v1','jobId',j,'customerId',c,'companyId',g.company_id);
+END $$;
+
+-- Latest definition: 0633_customer_practice_pay_now_read.sql. Reuse the
+-- customer portal's locked grant, session, sponsor and current-party checks.
+CREATE OR REPLACE FUNCTION identity.customer_practice_pay_now(t uuid,j uuid,c uuid,digest text) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE result jsonb;
+BEGIN
+ PERFORM app.lp11_open_customer_scope(t,j,c,digest,'resolve');
+ -- Resolve checks the session, grant, sponsor and current customer/job binding
+ -- before any invoice read, holding the existing portal locks until return.
+ PERFORM identity.customer_portal_use(t,j,c,digest,NULL,'resolve');
+ PERFORM app.lp11_customer_operation('billing');
+ SELECT jsonb_build_object('invoiceNumber',i.invoice_number,'balancePence',greatest(0,i.total_pence
+  -coalesce((SELECT sum(n.amount_pence) FROM app.customer_credit_note n WHERE n.tenant_id=t AND n.invoice_id=i.id),0)
+  -coalesce((SELECT sum(p.amount_pence) FROM app.customer_payment p WHERE p.tenant_id=t AND p.invoice_id=i.id
+   AND NOT EXISTS(SELECT 1 FROM app.customer_payment_reversal r WHERE r.tenant_id=t AND r.payment_id=p.id)),0)))
+ INTO result FROM app.customer_invoice i WHERE i.tenant_id=t AND i.job_id=j AND i.synthetic
+ ORDER BY i.issued_on DESC,i.invoice_number DESC LIMIT 1;
+ IF result IS NULL THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ PERFORM app.lp11_close_customer_scope();
+ RETURN result;
 END $$;
 
 CREATE OR REPLACE FUNCTION identity.customer_portal_quote(t uuid,j uuid,c uuid,digest text,cmd jsonb) RETURNS jsonb
@@ -3911,6 +3934,15 @@ CREATE POLICY lp11_readiness_audit ON app.audit_event TO jobguard_audit_writer U
   THEN tenant_id=app.lp11_readiness_tenant('worker',subject_ref::uuid,(payload#>>'{references,taskId}')::uuid)
   ELSE false END
 );
+
+CREATE POLICY lp11_customer_billing_read ON app.customer_invoice FOR SELECT TO jobguard_migration
+ USING (synthetic AND tenant_id=app.lp11_customer_tenant('billing_job',job_id));
+CREATE POLICY lp11_customer_billing_read ON app.customer_credit_note FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_customer_tenant('billing_job',job_id));
+CREATE POLICY lp11_customer_billing_read ON app.customer_payment FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_customer_tenant('billing_job',job_id));
+CREATE POLICY lp11_customer_billing_read ON app.customer_payment_reversal FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_customer_tenant('billing_job',job_id));
 
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.

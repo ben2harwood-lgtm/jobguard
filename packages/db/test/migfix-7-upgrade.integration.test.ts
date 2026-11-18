@@ -352,8 +352,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     expect(afterRoutines.some(row => row.proname === name)).toBe(false);
   }
   const lp11Sql = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
-  for (const signature of ["infrastructure.discover_readiness_plans()", "app.serialize_final_check_evidence()"]) {
-    const source = lp11Sql.split(`CREATE OR REPLACE FUNCTION ${signature}`)[1]!
+  for (const signature of ["infrastructure.discover_readiness_plans()", "app.serialize_final_check_evidence()",
+    "identity.customer_practice_pay_now(uuid,uuid,uuid,text)"]) {
+    const source = lp11Sql.split(`CREATE OR REPLACE FUNCTION ${signature.split("(")[0]}(`)[1]!
       .split("AS $$")[1]!.split("$$;")[0];
     expect((await c.admin.query("SELECT prosrc FROM pg_proc WHERE oid=$1::regprocedure", [signature])).rows)
       .toEqual([{ prosrc: source }]);

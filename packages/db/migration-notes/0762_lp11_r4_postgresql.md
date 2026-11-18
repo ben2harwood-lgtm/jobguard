@@ -2815,6 +2815,27 @@ Vitest attributed a `57P01` connection-termination exception to each of `test/m5
 
 The same 842 assertion names and 21 setup files reached the held work-order customer insert as in the original report. See [tests that reached the held work-order fixture](#tests-that-reached-the-held-work-order-fixture) and [tests skipped when a held fixture failed during setup](#tests-skipped-when-a-held-fixture-failed-during-setup).
 
+## r5 customer invoice display, retained-plan fixtures and pool shutdown
+
+| Group | Before | Focused rerun |
+| --- | ---: | ---: |
+| Customer practice Pay Now failures | 6 | 0 |
+| Retained plan-entitlement comparisons | 7 | 0 |
+| Identity round `57P01` shutdown errors | 2 | 0 |
+
+The customer display reuses the checked and locked portal session, then reads invoices, credits, payments and reversals for its exact job. Its database entry point keeps the same identity-only EXECUTE grant and returns the same two fields. The four new policies grant SELECT only to the private migration owner. The successful, cross-tenant refusal, byte parity and unchanged storage assertions passed in all seven PostgreSQL cases.
+
+All ten plan-entitlement lifecycle cases passed after the retained-read comparison used the fixture's persisted owner. The comparison still requires rows, a signed retained export, and byte parity. The two identity suites passed 17 of 17 assertions with no unhandled PostgreSQL errors after the fixture waited for its connections to close. The shared upgrade fixture now applies the same connection-close check.
+
+The migration catalogue, tenant policies, proof loader and exact populated upgrades passed 89 of 89 assertions. That run recorded a separate `57P01` on `test/migfix-7-upgrade.integration.test.ts` during fixture shutdown. The subsequent eight customer and upgrade assertions passed with no unhandled errors using the updated teardown. The catalogue proof contains 1,411 effective-privilege changes, 789 upgrade changes and 660 policy changes.
+
+```sh
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/customer-practice-pay-now.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-paynow-disconnect-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/plan-entitlement-lifecycle.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-plan-retained-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/m57-sso-conformance.integration.test.ts test/sso-emergency-token.integration.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-scim-close-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/migration-proof-loader.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-paynow-upgrades-results.json
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

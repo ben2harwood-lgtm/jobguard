@@ -2308,7 +2308,7 @@
           "jobguard_command_writer",
           "jobguard_migration"
         ],
-        "definitionSha256": "cdcaf1f974a9e3239354983b199bc07f38340cfb8fb9431a8f0e87e5da57f369",
+        "definitionSha256": "60a7d722411298662ac486efd09f1c47282f87cf44a79e1b19466d6d6a71e73c",
         "staticWrites": [],
         "staticCalls": []
       }
@@ -10962,7 +10962,7 @@
         "otherExecute": [
           "jobguard_migration"
         ],
-        "definitionSha256": "7d17674c635d5f87268d5293b0270759cb920b2175297702c6b12ab70ef8b2f7",
+        "definitionSha256": "e663ebb47a335631772a604d9a7d38918c3438af669cf74704037c8a94a3ac2d",
         "staticWrites": [
           "control_plane.lp11_customer_scope"
         ],
@@ -11433,6 +11433,70 @@
       "after": {
         "key": "owner|routine|function:app.lp11_readiness_worker(uuid,uuid,uuid,text,jsonb)|jobguard_migration",
         "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_credit_note|lp11_customer_billing_read|PERMISSIVE|SELECT|jobguard_migration|5bdbb7a0043affbb"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_invoice|lp11_customer_billing_read|PERMISSIVE|SELECT|jobguard_migration|85a91c2ac7229c57"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_payment_reversal|lp11_customer_billing_read|PERMISSIVE|SELECT|jobguard_migration|5bdbb7a0043affbb"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_payment|lp11_customer_billing_read|PERMISSIVE|SELECT|jobguard_migration|5bdbb7a0043affbb"
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.customer_practice_pay_now(uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "identity.customer_portal_use"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.customer_practice_pay_now(uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "b48ab66ecff3951644187cf69ee138046448fa3b186ae15f7ff7acc632d0e415",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp11_close_customer_scope",
+          "app.lp11_customer_operation",
+          "app.lp11_open_customer_scope",
+          "identity.customer_portal_use"
+        ]
       }
     }
   ],
@@ -28016,6 +28080,62 @@
         "relacl": null,
         "relrowsecurity": false,
         "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_credit_note",
+        "policyname": "lp11_customer_billing_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_customer_tenant('billing_job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_invoice",
+        "policyname": "lp11_customer_billing_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(synthetic AND (tenant_id = app.lp11_customer_tenant('billing_job'::text, job_id)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_payment",
+        "policyname": "lp11_customer_billing_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_customer_tenant('billing_job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_payment_reversal",
+        "policyname": "lp11_customer_billing_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_customer_tenant('billing_job'::text, job_id))",
+        "with_check": null
       }
     }
   ],
