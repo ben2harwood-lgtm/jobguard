@@ -2460,6 +2460,21 @@ The 21 setup files directly reaching the held insert at `packages/db/src/work-or
 
 Five of the 15 other setup failures were import failures in the frozen worktree. The CIS and inbox route fixtures could not resolve API build output, and the Northside, notice and VAT route fixtures could not resolve the API identity or workspace exports. The counts above include these five. The next frozen worktree builds the API and uses its own package link, alongside the DB build and AI dependency link.
 
+## r5 customer stage and variation acknowledgements
+
+The earlier full run recorded seven failed customer-stage assertions and five failed customer-variation assertions. The customer portal authenticated the session and then closed its protected scope before `identity.customer_stages` and `identity.customer_variation` read their source rows. Stage tests that attempted an acknowledgement also exposed an audit policy refusal once the stage reads were repaired.
+
+Both routines now retain the checked portal job and session through lock, recheck, write and audit. Stage visibility is read-only for source rows and qualifies indirect invalidations and reviews by the job. Stage acknowledgements require the same job and customer, with their exact session additionally checked at write time. Variation writes are limited to the selected variation, approval command, scope item and first claim on the matching existing catch case. The audit policy admits only the exact event and subject recorded in each protected scope.
+
+The customer stage suite passed 7 of 7 and the variation suite passed 20 of 20 on PostgreSQL 16.10. The two populated upgrade comparisons and ten independent policy, binding, view and pool tests passed. The proof stores 1,385 privilege and routine changes and 765 upgrade changes, including 645 policy changes.
+
+```sh
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/customer-stage-acknowledgement.integration.test.ts test/customer-variation-approval.integration.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-stage-variation-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp-0-authz-record.test.ts test/lp11-bound-tenant-rls.integration.test.ts --maxWorkers=1 --reporter=default
+```
+
+The third filename in the second command matched no file. The remaining three files ran all 12 tests. The programme's migration proof loader runs separately from those PostgreSQL comparisons.
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

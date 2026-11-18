@@ -2356,7 +2356,7 @@
           "jobguard_command_writer",
           "jobguard_migration"
         ],
-        "definitionSha256": "cb0a0ec7f0179e8c00eae1434b9901d022e01380e9df3b4adb099aea23055fff",
+        "definitionSha256": "cdcaf1f974a9e3239354983b199bc07f38340cfb8fb9431a8f0e87e5da57f369",
         "staticWrites": [],
         "staticCalls": []
       }
@@ -7501,7 +7501,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.audit_event|lp4_audit_writer|PERMISSIVE|ALL|jobguard_audit_writer|e93ff3487da29045"
+      "after": "app.audit_event|lp4_audit_writer|PERMISSIVE|ALL|jobguard_audit_writer|bf5f309d1da71065"
     },
     {
       "section": "policies",
@@ -7881,12 +7881,12 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.customer_stage_acknowledgement|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|4433767ed92661df"
+      "after": "app.customer_stage_acknowledgement|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|bbbab721313b8a5c"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "app.customer_variation_approval|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|4433767ed92661df"
+      "after": "app.customer_variation_approval|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|37cdcdfa3ac4ec5a"
     },
     {
       "section": "policies",
@@ -8016,7 +8016,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.evidence_invalidation|customer_stage_source|PERMISSIVE|SELECT|jobguard_migration|8e45006a00e133f3"
+      "after": "app.evidence_invalidation|customer_stage_source|PERMISSIVE|SELECT|jobguard_migration|90bdb9c81eeb9cc4"
     },
     {
       "section": "policies",
@@ -8031,7 +8031,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.evidence_link|customer_stage_source|PERMISSIVE|SELECT|jobguard_migration|63b9378b1f5e939f"
+      "after": "app.evidence_link|customer_stage_source|PERMISSIVE|SELECT|jobguard_migration|cdd96b28fa5ece78"
     },
     {
       "section": "policies",
@@ -9896,7 +9896,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.stage_completion|customer_stage_source|PERMISSIVE|SELECT|jobguard_migration|63b9378b1f5e939f"
+      "after": "app.stage_completion|customer_stage_source|PERMISSIVE|SELECT|jobguard_migration|cdd96b28fa5ece78"
     },
     {
       "section": "policies",
@@ -9911,7 +9911,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.stage_review_event|customer_stage_source|PERMISSIVE|SELECT|jobguard_migration|63b9378b1f5e939f"
+      "after": "app.stage_review_event|customer_stage_source|PERMISSIVE|SELECT|jobguard_migration|f0ea397eb7d76c97"
     },
     {
       "section": "policies",
@@ -10940,6 +10940,254 @@
       "before": null,
       "after": {
         "key": "owner|routine|function:app.lp11_scim_connection_tenant(text[],uuid)|jobguard_migration",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.extra_origin|lp11_customer_variation_read|PERMISSIVE|SELECT|jobguard_migration|c05c894fc01042a3"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.recovery_case|lp11_customer_variation_read|PERMISSIVE|SELECT|jobguard_migration|c05c894fc01042a3"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.recovery_claim_revision|lp11_customer_variation_insert|PERMISSIVE|INSERT|jobguard_migration|de7d0926ab4ce753"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.recovery_claim_revision|lp11_customer_variation_read|PERMISSIVE|SELECT|jobguard_migration|c05c894fc01042a3"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.scope_progress|lp11_customer_variation_insert|PERMISSIVE|INSERT|jobguard_migration|8f87d9612ca68291"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.variation|lp11_customer_variation_read|PERMISSIVE|SELECT|jobguard_migration|c05c894fc01042a3"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.variation|lp11_customer_variation_update|PERMISSIVE|UPDATE|jobguard_migration|34ca29d0a9409635"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.variation_approval|lp11_customer_variation_insert|PERMISSIVE|INSERT|jobguard_migration|0806bef29ab1121e"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.variation_approval|lp11_customer_variation_read|PERMISSIVE|SELECT|jobguard_migration|c05c894fc01042a3"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.variation_rejection|lp11_customer_variation_read|PERMISSIVE|SELECT|jobguard_migration|c05c894fc01042a3"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.variation_revision|lp11_customer_variation_read|PERMISSIVE|SELECT|jobguard_migration|c05c894fc01042a3"
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_customer_operation(text)",
+        "owner": "jobguard_session_lookup",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": "7d17674c635d5f87268d5293b0270759cb920b2175297702c6b12ab70ef8b2f7",
+        "staticWrites": [
+          "control_plane.lp11_customer_scope"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_customer_variation_target(uuid,uuid)",
+        "owner": "jobguard_session_lookup",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": "ca7edbb3f46ef76c33fbd0e5433729e902b59e34e7a05a679cc80b9d8506737d",
+        "staticWrites": [
+          "control_plane.lp11_customer_scope"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.customer_stage_acknowledgement"
+        ],
+        "staticCalls": [
+          "app.customer_portal_audit",
+          "app.customer_stage_snapshot",
+          "identity.customer_portal_use"
+        ],
+        "identity": "function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)"
+      },
+      "after": {
+        "identity": "function:identity.customer_stages(uuid,uuid,uuid,text,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "d25ccdf99f50e59cb39c3037d30853e29e1eb56293257c0fcad3d25b7da0cd00",
+        "staticWrites": [
+          "app.customer_stage_acknowledgement"
+        ],
+        "staticCalls": [
+          "app.customer_portal_audit",
+          "app.customer_stage_snapshot",
+          "app.lp11_close_customer_scope",
+          "app.lp11_customer_command",
+          "app.lp11_customer_operation",
+          "app.lp11_open_customer_scope",
+          "identity.customer_portal_use"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.customer_variation(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "3fd2d4a92a748b3d0d5091109896a3b3a8f0c7f293b1a841d35dc1285d646b0e",
+        "staticWrites": [
+          "app.customer_variation_approval",
+          "app.scope_progress",
+          "app.variation",
+          "app.variation_approval"
+        ],
+        "staticCalls": [
+          "app.customer_portal_audit",
+          "app.final_lock_hash",
+          "app.lock_recovery_message_sources",
+          "identity.customer_portal_use"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.customer_variation(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "3153495fd94a320c546d2ca94558852621ad9b2183e4103a33b1ca1a370e73e5",
+        "staticWrites": [
+          "app.customer_variation_approval",
+          "app.scope_progress",
+          "app.variation",
+          "app.variation_approval"
+        ],
+        "staticCalls": [
+          "app.customer_portal_audit",
+          "app.final_lock_hash",
+          "app.lock_recovery_message_sources",
+          "app.lp11_close_customer_scope",
+          "app.lp11_customer_command",
+          "app.lp11_customer_operation",
+          "app.lp11_customer_variation_target",
+          "app.lp11_open_customer_scope",
+          "identity.customer_portal_use"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_customer_operation(text)|jobguard_migration|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_customer_variation_target(uuid,uuid)|jobguard_migration|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_customer_operation(text)|jobguard_session_lookup",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_customer_variation_target(uuid,uuid)|jobguard_session_lookup",
         "group": "a-lp11-bound-tenant-r3"
       }
     }
@@ -13455,8 +13703,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_audit_writer}",
         "cmd": "ALL",
-        "qual": "((tenant_id = COALESCE(app.lp11_policy_tenant(), app.lp11_worker_tenant(NULL::uuid),\nCASE\n    WHEN (((subject_type)::text = 'sso-connection'::text) AND ((event_type)::text ~~ 'sso.%'::text)) THEN app.lp11_sso_tenant(ARRAY['audit'::text], (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_identity_operation_audit_tenant((event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text),\nCASE\n    WHEN (((subject_type)::text = 'connector'::text) AND ((event_type)::text = 'connector.input_staged'::text)) THEN app.lp11_connector_audit_tenant((subject_ref)::text, (actor_ref)::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'audit-checkpoint'::text) AND ((event_type)::text = 'audit.checkpoint.handed_off'::text)) THEN app.lp11_audit_handoff_tenant((subject_ref)::text, (actor_ref)::text, (payload #>> '{references,priorSequence}'::text[]), (payload #>> '{hashes,priorHead}'::text[]))\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = ANY ((ARRAY['customer_portal.signed_in'::character varying, 'customer_portal.signed_out'::character varying])::text[]))) OR (((subject_type)::text = 'quote_document'::text) AND ((event_type)::text = 'quote.acceptance.customer_authenticated'::text)) OR (((subject_type)::text = 'job'::text) AND ((event_type)::text = ANY ((ARRAY['job_source.customer_message_recorded'::character varying, 'customer_portal.message_recorded'::character varying])::text[])))) THEN app.lp11_customer_tenant('audit'::text, NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND (((event_type)::text ~~ 'final_check.%'::text) OR ((event_type)::text = ANY ((ARRAY['shadow.disclosed'::character varying, 'shadow.must_surface_fired'::character varying, 'shadow.emergency_read'::character varying])::text[]))) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_shadow_job_tenant((subject_ref)::uuid, NULL::text, 'audit'::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((event_type)::text = 'command.succeeded'::text) AND pg_input_is_valid(((payload -> 'references'::text) ->> 'commandId'::text), 'uuid'::text)) THEN app.lp11_customer_tenant('command'::text, (((payload -> 'references'::text) ->> 'commandId'::text))::uuid)\n    ELSE NULL::uuid\nEND)) OR app.lp11_practice_revoke_event(tenant_id, (event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text))",
-        "with_check": "((tenant_id = COALESCE(app.lp11_policy_tenant(), app.lp11_worker_tenant(NULL::uuid),\nCASE\n    WHEN (((subject_type)::text = 'sso-connection'::text) AND ((event_type)::text ~~ 'sso.%'::text)) THEN app.lp11_sso_tenant(ARRAY['audit'::text], (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_identity_operation_audit_tenant((event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text),\nCASE\n    WHEN (((subject_type)::text = 'connector'::text) AND ((event_type)::text = 'connector.input_staged'::text)) THEN app.lp11_connector_audit_tenant((subject_ref)::text, (actor_ref)::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'audit-checkpoint'::text) AND ((event_type)::text = 'audit.checkpoint.handed_off'::text)) THEN app.lp11_audit_handoff_tenant((subject_ref)::text, (actor_ref)::text, (payload #>> '{references,priorSequence}'::text[]), (payload #>> '{hashes,priorHead}'::text[]))\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = ANY ((ARRAY['customer_portal.signed_in'::character varying, 'customer_portal.signed_out'::character varying])::text[]))) OR (((subject_type)::text = 'quote_document'::text) AND ((event_type)::text = 'quote.acceptance.customer_authenticated'::text)) OR (((subject_type)::text = 'job'::text) AND ((event_type)::text = ANY ((ARRAY['job_source.customer_message_recorded'::character varying, 'customer_portal.message_recorded'::character varying])::text[])))) THEN app.lp11_customer_tenant('audit'::text, NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND (((event_type)::text ~~ 'final_check.%'::text) OR ((event_type)::text = ANY ((ARRAY['shadow.disclosed'::character varying, 'shadow.must_surface_fired'::character varying, 'shadow.emergency_read'::character varying])::text[]))) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_shadow_job_tenant((subject_ref)::uuid, NULL::text, 'audit'::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((event_type)::text = 'command.succeeded'::text) AND pg_input_is_valid(((payload -> 'references'::text) ->> 'commandId'::text), 'uuid'::text)) THEN app.lp11_customer_tenant('command'::text, (((payload -> 'references'::text) ->> 'commandId'::text))::uuid)\n    ELSE NULL::uuid\nEND)) OR app.lp11_practice_revoke_event(tenant_id, (event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text))"
+        "qual": "((tenant_id = COALESCE(app.lp11_policy_tenant(), app.lp11_worker_tenant(NULL::uuid),\nCASE\n    WHEN (((subject_type)::text = 'sso-connection'::text) AND ((event_type)::text ~~ 'sso.%'::text)) THEN app.lp11_sso_tenant(ARRAY['audit'::text], (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_identity_operation_audit_tenant((event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text),\nCASE\n    WHEN (((subject_type)::text = 'connector'::text) AND ((event_type)::text = 'connector.input_staged'::text)) THEN app.lp11_connector_audit_tenant((subject_ref)::text, (actor_ref)::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'audit-checkpoint'::text) AND ((event_type)::text = 'audit.checkpoint.handed_off'::text)) THEN app.lp11_audit_handoff_tenant((subject_ref)::text, (actor_ref)::text, (payload #>> '{references,priorSequence}'::text[]), (payload #>> '{hashes,priorHead}'::text[]))\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = ANY ((ARRAY['customer_portal.signed_in'::character varying, 'customer_portal.signed_out'::character varying])::text[]))) OR (((subject_type)::text = 'quote_document'::text) AND ((event_type)::text = 'quote.acceptance.customer_authenticated'::text)) OR (((subject_type)::text = 'job'::text) AND ((event_type)::text = ANY ((ARRAY['job_source.customer_message_recorded'::character varying, 'customer_portal.message_recorded'::character varying])::text[])))) THEN app.lp11_customer_tenant('audit'::text, NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = 'customer_portal.stage_acknowledged'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('stage_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = 'customer_portal.variation_approved'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('variation_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND (((event_type)::text ~~ 'final_check.%'::text) OR ((event_type)::text = ANY ((ARRAY['shadow.disclosed'::character varying, 'shadow.must_surface_fired'::character varying, 'shadow.emergency_read'::character varying])::text[]))) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_shadow_job_tenant((subject_ref)::uuid, NULL::text, 'audit'::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((event_type)::text = 'command.succeeded'::text) AND pg_input_is_valid(((payload -> 'references'::text) ->> 'commandId'::text), 'uuid'::text)) THEN app.lp11_customer_tenant('command'::text, (((payload -> 'references'::text) ->> 'commandId'::text))::uuid)\n    ELSE NULL::uuid\nEND)) OR app.lp11_practice_revoke_event(tenant_id, (event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text))",
+        "with_check": "((tenant_id = COALESCE(app.lp11_policy_tenant(), app.lp11_worker_tenant(NULL::uuid),\nCASE\n    WHEN (((subject_type)::text = 'sso-connection'::text) AND ((event_type)::text ~~ 'sso.%'::text)) THEN app.lp11_sso_tenant(ARRAY['audit'::text], (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_identity_operation_audit_tenant((event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text),\nCASE\n    WHEN (((subject_type)::text = 'connector'::text) AND ((event_type)::text = 'connector.input_staged'::text)) THEN app.lp11_connector_audit_tenant((subject_ref)::text, (actor_ref)::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'audit-checkpoint'::text) AND ((event_type)::text = 'audit.checkpoint.handed_off'::text)) THEN app.lp11_audit_handoff_tenant((subject_ref)::text, (actor_ref)::text, (payload #>> '{references,priorSequence}'::text[]), (payload #>> '{hashes,priorHead}'::text[]))\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = ANY ((ARRAY['customer_portal.signed_in'::character varying, 'customer_portal.signed_out'::character varying])::text[]))) OR (((subject_type)::text = 'quote_document'::text) AND ((event_type)::text = 'quote.acceptance.customer_authenticated'::text)) OR (((subject_type)::text = 'job'::text) AND ((event_type)::text = ANY ((ARRAY['job_source.customer_message_recorded'::character varying, 'customer_portal.message_recorded'::character varying])::text[])))) THEN app.lp11_customer_tenant('audit'::text, NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = 'customer_portal.stage_acknowledged'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('stage_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'customer_portal'::text) AND ((event_type)::text = 'customer_portal.variation_approved'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_customer_tenant('variation_command'::text, (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND (((event_type)::text ~~ 'final_check.%'::text) OR ((event_type)::text = ANY ((ARRAY['shadow.disclosed'::character varying, 'shadow.must_surface_fired'::character varying, 'shadow.emergency_read'::character varying])::text[]))) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text)) THEN app.lp11_shadow_job_tenant((subject_ref)::uuid, NULL::text, 'audit'::text)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((event_type)::text = 'command.succeeded'::text) AND pg_input_is_valid(((payload -> 'references'::text) ->> 'commandId'::text), 'uuid'::text)) THEN app.lp11_customer_tenant('command'::text, (((payload -> 'references'::text) ->> 'commandId'::text))::uuid)\n    ELSE NULL::uuid\nEND)) OR app.lp11_practice_revoke_event(tenant_id, (event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text))"
       }
     },
     {
@@ -15154,8 +15402,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "((tenant_id = app.lp11_policy_tenant()) OR ((tenant_id = app.lp11_customer_tenant('stage_job'::text, job_id)) AND (tenant_id = app.lp11_customer_tenant('stage_customer'::text, customer_id))))",
+        "with_check": "((tenant_id = app.lp11_policy_tenant()) OR ((tenant_id = app.lp11_customer_tenant('stage_job'::text, job_id)) AND (tenant_id = app.lp11_customer_tenant('stage_customer'::text, customer_id)) AND (tenant_id = app.lp11_customer_tenant('stage_session'::text, session_id))))"
       }
     },
     {
@@ -15177,8 +15425,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "((tenant_id = app.lp11_policy_tenant()) OR ((tenant_id = app.lp11_customer_tenant('variation_session'::text, customer_session_id)) AND (tenant_id = app.lp11_customer_tenant('variation_command'::text, variation_approval_id))))",
+        "with_check": "((tenant_id = app.lp11_policy_tenant()) OR ((tenant_id = app.lp11_customer_tenant('variation_session'::text, customer_session_id)) AND (tenant_id = app.lp11_customer_tenant('variation_command'::text, variation_approval_id))))"
       }
     },
     {
@@ -15752,7 +16000,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "SELECT",
-        "qual": "((tenant_id = (NULLIF((COALESCE(COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_recovery_worker_tenant(NULL::uuid, NULL::uuid, NULL::uuid, evidence_id, 'evidence'::text)\n    ELSE NULL::uuid\nEND),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_shadow_evidence_tenant(evidence_id)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
+        "qual": "(EXISTS ( SELECT 1\n   FROM app.evidence_object e\n  WHERE (((e.tenant_id = evidence_invalidation.tenant_id) AND (e.id = evidence_invalidation.evidence_id)) AND (e.tenant_id = app.lp11_customer_tenant('stage_job'::text, e.job_id)))))",
         "with_check": null
       }
     },
@@ -15812,7 +16060,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "SELECT",
-        "qual": "((tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
+        "qual": "(tenant_id = app.lp11_customer_tenant('stage_job'::text, job_id))",
         "with_check": null
       }
     },
@@ -24184,7 +24432,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "SELECT",
-        "qual": "((tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
+        "qual": "(tenant_id = app.lp11_customer_tenant('stage_job'::text, job_id))",
         "with_check": null
       }
     },
@@ -24253,7 +24501,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "SELECT",
-        "qual": "((tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid) AND (current_setting('app.customer_stage_read'::text, true) = 'on'::text))",
+        "qual": "(EXISTS ( SELECT 1\n   FROM app.stage_completion s\n  WHERE (((s.tenant_id = stage_review_event.tenant_id) AND (s.id = stage_review_event.stage_completion_id)) AND (s.tenant_id = app.lp11_customer_tenant('stage_job'::text, s.job_id)))))",
         "with_check": null
       }
     },
@@ -27060,6 +27308,190 @@
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "extra_origin",
+        "policyname": "lp11_customer_variation_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "recovery_case",
+        "policyname": "lp11_customer_variation_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "recovery_claim_revision",
+        "policyname": "lp11_customer_variation_insert",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "((tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id)) AND (revision = 1) AND\nCASE\n    WHEN (((reviewer_ref)::text ~~ 'customer-session:%'::text) AND pg_input_is_valid(substr((reviewer_ref)::text, 18), 'uuid'::text)) THEN (tenant_id = app.lp11_customer_tenant('variation_session'::text, (substr((reviewer_ref)::text, 18))::uuid))\n    ELSE false\nEND AND (EXISTS ( SELECT 1\n   FROM (app.recovery_case c\n     JOIN app.variation v ON (((v.tenant_id = c.tenant_id) AND (v.job_id = c.job_id))))\n  WHERE (((c.tenant_id = recovery_claim_revision.tenant_id) AND (c.job_id = recovery_claim_revision.job_id) AND (c.id = recovery_claim_revision.case_id)) AND ((c.case_type)::text = 'missed_variation_final_account'::text) AND (c.source_refs ? ('variation:'::text || (v.id)::text)) AND (v.tenant_id = app.lp11_customer_tenant('variation_target'::text, v.id))))))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "recovery_claim_revision",
+        "policyname": "lp11_customer_variation_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "scope_progress",
+        "policyname": "lp11_customer_variation_insert",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "((tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id)) AND (tenant_id = app.lp11_customer_tenant('variation_scope_item'::text, scope_item_id)) AND ((stage)::text = 'not_started'::text) AND (revision = 0))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "variation",
+        "policyname": "lp11_customer_variation_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "variation",
+        "policyname": "lp11_customer_variation_update",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "UPDATE",
+        "qual": "((tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id)) AND (tenant_id = app.lp11_customer_tenant('variation_target'::text, id)))",
+        "with_check": "((tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id)) AND (tenant_id = app.lp11_customer_tenant('variation_target'::text, id)) AND ((state)::text = 'approved'::text))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "variation_approval",
+        "policyname": "lp11_customer_variation_insert",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "((tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id)) AND (tenant_id = app.lp11_customer_tenant('variation_target'::text, variation_id)) AND (tenant_id = app.lp11_customer_tenant('variation_command'::text, id)) AND ((method)::text = 'customer_authenticated'::text))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "variation_approval",
+        "policyname": "lp11_customer_variation_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "variation_rejection",
+        "policyname": "lp11_customer_variation_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "variation_revision",
+        "policyname": "lp11_customer_variation_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_customer_operation",
+        "args": "operation text",
+        "proowner": "jobguard_session_lookup",
+        "proacl": "{jobguard_session_lookup=X/jobguard_session_lookup,jobguard_migration=X/jobguard_session_lookup}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_customer_variation_target",
+        "args": "v uuid, s uuid",
+        "proowner": "jobguard_session_lookup",
+        "proacl": "{jobguard_session_lookup=X/jobguard_session_lookup,jobguard_migration=X/jobguard_session_lookup}",
+        "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
         ]

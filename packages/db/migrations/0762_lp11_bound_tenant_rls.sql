@@ -1957,7 +1957,10 @@ CREATE UNLOGGED TABLE control_plane.lp11_customer_scope (
  grant_id uuid,
  session_id uuid,
  issuer_membership_id uuid,
- command_id uuid
+ command_id uuid,
+ purpose text,
+ variation_id uuid,
+ variation_scope_item_id uuid
 );
 ALTER TABLE control_plane.lp11_customer_scope OWNER TO jobguard_session_lookup;
 REVOKE ALL ON TABLE control_plane.lp11_customer_scope FROM PUBLIC;
@@ -2027,6 +2030,15 @@ CREATE FUNCTION app.lp11_customer_tenant(resource text,id uuid) RETURNS uuid
    WHEN 'session' THEN x.session_id=id
    WHEN 'issuer' THEN x.issuer_membership_id=id
    WHEN 'command' THEN x.command_id=id
+   WHEN 'stage_job' THEN x.purpose='stage' AND x.job_id=id
+   WHEN 'stage_customer' THEN x.purpose='stage' AND x.customer_id=id
+   WHEN 'stage_session' THEN x.purpose='stage' AND x.session_id=id
+   WHEN 'stage_command' THEN x.purpose='stage' AND x.command_id=id
+   WHEN 'variation_job' THEN x.purpose='variation' AND x.job_id=id
+   WHEN 'variation_target' THEN x.purpose='variation' AND x.variation_id=id
+   WHEN 'variation_scope_item' THEN x.purpose='variation' AND x.variation_scope_item_id=id
+   WHEN 'variation_session' THEN x.purpose='variation' AND x.session_id=id
+   WHEN 'variation_command' THEN x.purpose='variation' AND x.command_id=id
    WHEN 'audit' THEN id IS NULL ELSE false END
 $$;
 ALTER FUNCTION app.lp11_customer_tenant(text,uuid) OWNER TO jobguard_session_lookup;
@@ -2060,6 +2072,27 @@ $$;
 ALTER FUNCTION app.lp11_close_customer_scope() OWNER TO jobguard_session_lookup;
 REVOKE ALL ON FUNCTION app.lp11_close_customer_scope() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.lp11_close_customer_scope() TO jobguard_migration,jobguard_binding_owner;
+
+-- Stage proofs and variations are visible only after authorization for this job.
+CREATE FUNCTION app.lp11_customer_operation(operation text) RETURNS void
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ UPDATE control_plane.lp11_customer_scope x SET purpose=operation
+ WHERE x.transaction_id=pg_current_xact_id_if_assigned() AND x.lookup_kind='authorized_session'
+  AND x.purpose IS NULL AND operation IN('stage','variation')
+$$;
+ALTER FUNCTION app.lp11_customer_operation(text) OWNER TO jobguard_session_lookup;
+REVOKE ALL ON FUNCTION app.lp11_customer_operation(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_customer_operation(text) TO jobguard_migration;
+
+CREATE FUNCTION app.lp11_customer_variation_target(v uuid,s uuid DEFAULT NULL) RETURNS void
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ UPDATE control_plane.lp11_customer_scope x SET variation_id=v,variation_scope_item_id=s
+ WHERE x.transaction_id=pg_current_xact_id_if_assigned() AND x.purpose='variation'
+  AND (x.variation_id IS NULL OR x.variation_id=v)
+$$;
+ALTER FUNCTION app.lp11_customer_variation_target(uuid,uuid) OWNER TO jobguard_session_lookup;
+REVOKE ALL ON FUNCTION app.lp11_customer_variation_target(uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_customer_variation_target(uuid,uuid) TO jobguard_migration;
 REVOKE CREATE ON SCHEMA app,control_plane FROM jobguard_session_lookup;
 
 CREATE OR REPLACE FUNCTION app.customer_portal_issuer(t uuid,digest text) RETURNS app.membership
@@ -2303,6 +2336,129 @@ BEGIN
  SET CONSTRAINTS ALL IMMEDIATE;
  PERFORM app.lp11_close_customer_scope();
  RETURN result #- '{record,actualTesterMembershipId}';
+END $$;
+
+-- Customer stage acknowledgement retains the checked portal job through its upload lock and replay.
+CREATE OR REPLACE FUNCTION identity.customer_stages(t uuid,j uuid,c uuid,digest text,completion uuid,command uuid,expected_hash text) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE s app.stage_completion; prior app.customer_stage_acknowledgement; view jsonb; sid uuid; ack uuid:=gen_random_uuid();
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text,387));
+ PERFORM app.lp11_open_customer_scope(t,j,c,digest,'resolve');
+ -- Reuse the existing authority boundary inside this transaction, including its job lock.
+ PERFORM identity.customer_portal_use(t,j,c,digest,NULL,'resolve');
+ PERFORM app.lp11_customer_operation('stage');
+ SELECT id INTO sid FROM app.customer_portal_session WHERE tenant_id=t AND job_id=j AND customer_id=c AND token_digest=digest;
+ IF completion IS NULL THEN
+  IF command IS NOT NULL OR expected_hash IS NOT NULL THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+  view:=jsonb_build_object('version','customer-stages.v1','jobId',j,'stages',coalesce((
+   SELECT jsonb_agg(app.customer_stage_snapshot(t,j,x.id)||jsonb_build_object('acknowledgement',
+    (SELECT jsonb_build_object('id',a.id,'snapshotHash',a.snapshot_hash,'acknowledgedAt',a.acknowledged_at)
+     FROM app.customer_stage_acknowledgement a WHERE a.tenant_id=t AND a.customer_id=c AND a.completion_id=x.id)) ORDER BY x.completed_at,x.id)
+   FROM app.stage_completion x WHERE x.tenant_id=t AND x.job_id=j),'[]'::jsonb));
+  PERFORM app.lp11_close_customer_scope();
+  RETURN view;
+ END IF;
+ IF command IS NULL OR expected_hash IS NULL OR expected_hash !~ '^[a-f0-9]{64}$' THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':customer-stage-command:'||command::text,390));
+ SELECT * INTO prior FROM app.customer_stage_acknowledgement WHERE tenant_id=t AND command_id=command;
+ IF prior.id IS NOT NULL THEN
+  IF prior.job_id<>j OR prior.customer_id<>c OR prior.completion_id<>completion OR prior.snapshot_hash<>expected_hash THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+  PERFORM app.lp11_close_customer_scope();
+  RETURN jsonb_build_object('version','customer-stage-acknowledged.v1','id',prior.id,'snapshotHash',prior.snapshot_hash);
+ END IF;
+ SELECT * INTO s FROM app.stage_completion WHERE tenant_id=t AND job_id=j AND id=completion;
+ IF s.id IS NULL THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ -- Match proof.complete's lock, then proof.invalidate's upload lock. No audit lock until the end.
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text||':'||s.scope_item_id::text||':'||s.stage,0));
+ PERFORM 1 FROM app.evidence_upload u JOIN app.evidence_object e ON(e.tenant_id,e.upload_id)=(u.tenant_id,u.id)
+ JOIN app.evidence_link l ON(l.tenant_id,l.evidence_id)=(e.tenant_id,e.id)
+ WHERE l.tenant_id=t AND l.id=s.evidence_link_id FOR UPDATE OF u;
+ PERFORM identity.customer_portal_use(t,j,c,digest,NULL,'resolve');
+ view:=app.customer_stage_snapshot(t,j,completion);
+ IF view IS NULL OR (view->>'reviewRequired')::boolean IS DISTINCT FROM false OR view->>'hash'<>expected_hash THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ IF EXISTS(SELECT 1 FROM app.customer_stage_acknowledgement WHERE tenant_id=t AND customer_id=c AND completion_id=completion) THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ INSERT INTO app.customer_stage_acknowledgement(tenant_id,id,job_id,customer_id,session_id,completion_id,command_id,snapshot,snapshot_hash)
+ VALUES(t,ack,j,c,sid,completion,command,view->'snapshot',expected_hash);
+ PERFORM app.lp11_customer_command(ack);
+ PERFORM app.customer_portal_audit(t,ack,'stage_acknowledged');
+ PERFORM app.lp11_close_customer_scope();
+ RETURN jsonb_build_object('version','customer-stage-acknowledged.v1','id',ack,'snapshotHash',expected_hash);
+END $$;
+
+-- Customer variation approvals reuse the authenticated portal job and exact command.
+CREATE OR REPLACE FUNCTION identity.customer_variation(t uuid,j uuid,c uuid,digest text,command jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE s app.customer_portal_session; v app.variation; r app.variation_revision; a app.variation_approval;
+ job app.job; provenance app.customer_variation_approval; target jsonb; request_hash text; result jsonb; cmd uuid;
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text,387));
+ PERFORM app.lp11_open_customer_scope(t,j,c,digest,'resolve');
+ PERFORM identity.customer_portal_use(t,j,c,digest,NULL,'resolve');
+ PERFORM app.lp11_customer_operation('variation');
+ SELECT * INTO s FROM app.customer_portal_session WHERE tenant_id=t AND job_id=j AND customer_id=c AND token_digest=digest;
+ SELECT * INTO job FROM app.job WHERE tenant_id=t AND id=j;
+ IF command IS NULL THEN
+  SELECT coalesce(jsonb_agg(jsonb_build_object('id',var.id,'revision',rev.revision,'hash',rev.content_hash,'description',rev.description,
+   'amount',jsonb_build_object('pence',rev.signed_delta_pence,'currency','GBP'),'approved',approval.id IS NOT NULL,'method',approval.method) ORDER BY var.id),'[]'::jsonb) INTO result
+  FROM app.variation var JOIN app.variation_revision rev ON(rev.tenant_id,rev.job_id,rev.variation_id,rev.id)=(var.tenant_id,var.job_id,var.id,var.current_revision_id)
+  LEFT JOIN app.variation_approval approval ON(approval.tenant_id,approval.revision_id)=(rev.tenant_id,rev.id)
+  WHERE var.tenant_id=t AND var.job_id=j AND var.state IN('priced','approved');
+  PERFORM app.lp11_close_customer_scope();
+  RETURN jsonb_build_object('version','customer-variations.v1','jobId',j,'jobRevision',job.revision,'variations',result);
+ END IF;
+ target:=(command->'target');
+ -- Revalidate the strict envelope at the SQL boundary; the identity role cannot bypass HTTP validation.
+ IF jsonb_typeof(command) IS DISTINCT FROM 'object' OR (command-ARRAY['version','commandId','jobId','expectedJobRevision','target'])<>'{}'::jsonb
+  OR (command->>'version') IS DISTINCT FROM 'customer-portal-approval.v1' OR (command->>'jobId')::uuid IS DISTINCT FROM j
+  OR jsonb_typeof(command->'commandId') IS DISTINCT FROM 'string' OR jsonb_typeof(command->'jobId') IS DISTINCT FROM 'string'
+  OR jsonb_typeof(command->'expectedJobRevision') IS DISTINCT FROM 'number' OR (command->>'expectedJobRevision') !~ '^(0|[1-9][0-9]*)$'
+  OR jsonb_typeof(target) IS DISTINCT FROM 'object' OR (target-ARRAY['kind','id','revision','hash','amount'])<>'{}'::jsonb
+  OR (target->>'kind') IS DISTINCT FROM 'variation' OR jsonb_typeof(target->'id') IS DISTINCT FROM 'string'
+  OR jsonb_typeof(target->'revision') IS DISTINCT FROM 'number' OR (target->>'revision') !~ '^[1-9][0-9]*$'
+  OR jsonb_typeof(target->'hash') IS DISTINCT FROM 'string' OR (target->>'hash') !~ '^[a-f0-9]{64}$'
+  OR jsonb_typeof(target->'amount') IS DISTINCT FROM 'object' OR ((target->'amount')-ARRAY['pence','currency'])<>'{}'::jsonb
+  OR (target->'amount'->>'currency') IS DISTINCT FROM 'GBP' OR jsonb_typeof(target->'amount'->'pence') IS DISTINCT FROM 'number'
+  OR (target->'amount'->>'pence') !~ '^-?(0|[1-9][0-9]*)$' OR abs((target->'amount'->>'pence')::numeric)>1000000000000
+ THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ cmd:=(command->>'commandId')::uuid;
+ IF cmd IS NULL THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ PERFORM app.lp11_customer_command(cmd);
+ PERFORM app.lp11_customer_variation_target((target->>'id')::uuid);
+ request_hash:=app.final_lock_hash(command);
+ SELECT * INTO v FROM app.variation WHERE tenant_id=t AND job_id=j AND id=(target->>'id')::uuid FOR UPDATE;
+ -- Source triggers take this lock on insert; acquire it before the final session clock check.
+ PERFORM app.lock_recovery_message_sources(t);
+ -- Refresh after the variation lock; a concurrent approval/pricing writer may have committed during the wait.
+ PERFORM identity.customer_portal_use(t,j,c,digest,NULL,'resolve');
+ SELECT * INTO a FROM app.variation_approval WHERE tenant_id=t AND id=cmd;
+ IF a.id IS NOT NULL THEN
+  SELECT * INTO provenance FROM app.customer_variation_approval WHERE tenant_id=t AND variation_approval_id=a.id;
+  IF a.job_id<>j OR provenance.customer_session_id IS DISTINCT FROM s.id OR provenance.customer_command_hash IS DISTINCT FROM request_hash
+  THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+  PERFORM app.lp11_close_customer_scope();
+  RETURN jsonb_build_object('version','customer-portal-approval-result.v1','approvalId',a.id,'method',a.method);
+ END IF;
+ IF v.id IS NULL OR v.state<>'priced' OR job.status<>'live' OR job.revision<>(command->>'expectedJobRevision')::integer
+ THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ SELECT * INTO r FROM app.variation_revision WHERE tenant_id=t AND job_id=j AND variation_id=v.id AND id=v.current_revision_id;
+ IF r.id IS NULL OR r.revision<>(target->>'revision')::integer OR r.content_hash<>(target->>'hash')
+  OR r.signed_delta_pence<>(target->'amount'->>'pence')::bigint
+  OR EXISTS(SELECT 1 FROM app.variation_approval WHERE tenant_id=t AND revision_id=r.id)
+  OR EXISTS(SELECT 1 FROM app.variation_rejection WHERE tenant_id=t AND revision_id=r.id)
+ THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
+ PERFORM app.lp11_customer_variation_target(v.id,v.scope_item_id);
+ INSERT INTO app.customer_variation_approval(tenant_id,variation_approval_id,customer_session_id,customer_command_hash)
+ VALUES(t,cmd,s.id,request_hash);
+ INSERT INTO app.variation_approval(id,tenant_id,job_id,variation_id,revision_id,revision,content_hash,signed_delta_pence,method,actor_membership_id,evidence_id,approved_at)
+ VALUES(cmd,t,j,v.id,r.id,r.revision,r.content_hash,r.signed_delta_pence,'customer_authenticated',NULL,NULL,clock_timestamp());
+ INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) SELECT t,j,v.scope_item_id WHERE v.existing_scope_item_id IS NULL ON CONFLICT DO NOTHING;
+ UPDATE app.variation SET state='approved' WHERE tenant_id=t AND id=v.id;
+ PERFORM app.customer_portal_audit(t,cmd,'variation_approved');
+ PERFORM app.lp11_close_customer_scope();
+ RETURN jsonb_build_object('version','customer-portal-approval-result.v1','approvalId',cmd,'method','customer_authenticated');
+EXCEPTION WHEN invalid_text_representation OR numeric_value_out_of_range THEN
+ RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501';
 END $$;
 
 -- Shadow worker work is qualified by a persisted job and restricted to that
@@ -3367,6 +3523,12 @@ ALTER POLICY lp4_audit_writer ON app.audit_event USING (
      OR (subject_type='quote_document' AND event_type='quote.acceptance.customer_authenticated')
      OR (subject_type='job' AND event_type IN('job_source.customer_message_recorded','customer_portal.message_recorded'))
    THEN app.lp11_customer_tenant('audit',NULL) END,
+  CASE WHEN subject_type='customer_portal' AND event_type='customer_portal.stage_acknowledged'
+    AND pg_input_is_valid(subject_ref,'uuid')
+   THEN app.lp11_customer_tenant('stage_command',subject_ref::uuid) END,
+  CASE WHEN subject_type='customer_portal' AND event_type='customer_portal.variation_approved'
+    AND pg_input_is_valid(subject_ref,'uuid')
+   THEN app.lp11_customer_tenant('variation_command',subject_ref::uuid) END,
   CASE WHEN subject_type='job' AND (event_type LIKE 'final_check.%' OR event_type IN ('shadow.disclosed','shadow.must_surface_fired','shadow.emergency_read')) AND pg_input_is_valid(subject_ref,'uuid')
    THEN app.lp11_shadow_job_tenant(subject_ref::uuid,NULL,'audit') END,
   CASE WHEN subject_type='job' AND event_type='command.succeeded'
@@ -3385,6 +3547,12 @@ ALTER POLICY lp4_audit_writer ON app.audit_event USING (
      OR (subject_type='quote_document' AND event_type='quote.acceptance.customer_authenticated')
      OR (subject_type='job' AND event_type IN('job_source.customer_message_recorded','customer_portal.message_recorded'))
    THEN app.lp11_customer_tenant('audit',NULL) END,
+  CASE WHEN subject_type='customer_portal' AND event_type='customer_portal.stage_acknowledged'
+    AND pg_input_is_valid(subject_ref,'uuid')
+   THEN app.lp11_customer_tenant('stage_command',subject_ref::uuid) END,
+  CASE WHEN subject_type='customer_portal' AND event_type='customer_portal.variation_approved'
+    AND pg_input_is_valid(subject_ref,'uuid')
+   THEN app.lp11_customer_tenant('variation_command',subject_ref::uuid) END,
   CASE WHEN subject_type='job' AND (event_type LIKE 'final_check.%' OR event_type IN ('shadow.disclosed','shadow.must_surface_fired','shadow.emergency_read')) AND pg_input_is_valid(subject_ref,'uuid')
    THEN app.lp11_shadow_job_tenant(subject_ref::uuid,NULL,'audit') END,
   CASE WHEN subject_type='job' AND event_type='command.succeeded'
@@ -3449,6 +3617,68 @@ ALTER POLICY tenant_intake ON connector.input_event
  USING (tenant_id=coalesce(app.lp11_policy_tenant(),connector.lp11_input_tenant(namespace)))
  WITH CHECK (tenant_id=coalesce(app.lp11_policy_tenant(),connector.lp11_input_tenant(namespace,binding_id)));
 
+
+-- Retain the SELECT-only alternatives, now limited to the authenticated
+-- stage operation and job. The indirect rows have no job column.
+ALTER POLICY customer_stage_source ON app.stage_completion
+ USING (tenant_id=app.lp11_customer_tenant('stage_job',job_id));
+ALTER POLICY customer_stage_source ON app.evidence_link
+ USING (tenant_id=app.lp11_customer_tenant('stage_job',job_id));
+ALTER POLICY customer_stage_source ON app.stage_review_event
+ USING (EXISTS(SELECT 1 FROM app.stage_completion s
+  WHERE (s.tenant_id,s.id)=(stage_review_event.tenant_id,stage_review_event.stage_completion_id)
+   AND s.tenant_id=app.lp11_customer_tenant('stage_job',s.job_id)));
+ALTER POLICY customer_stage_source ON app.evidence_invalidation
+ USING (EXISTS(SELECT 1 FROM app.evidence_object e
+  WHERE (e.tenant_id,e.id)=(evidence_invalidation.tenant_id,evidence_invalidation.evidence_id)
+   AND e.tenant_id=app.lp11_customer_tenant('stage_job',e.job_id)));
+ALTER POLICY tenant_isolation ON app.customer_stage_acknowledgement
+ USING (tenant_id=app.lp11_policy_tenant() OR (
+  tenant_id=app.lp11_customer_tenant('stage_job',job_id)
+  AND tenant_id=app.lp11_customer_tenant('stage_customer',customer_id)))
+ WITH CHECK (tenant_id=app.lp11_policy_tenant() OR (
+  tenant_id=app.lp11_customer_tenant('stage_job',job_id)
+  AND tenant_id=app.lp11_customer_tenant('stage_customer',customer_id)
+  AND tenant_id=app.lp11_customer_tenant('stage_session',session_id)));
+
+-- The checked variation uses only the exact portal job and selected write targets.
+DO $customer_variation$ DECLARE relation text; BEGIN
+ FOREACH relation IN ARRAY ARRAY['variation','variation_revision','variation_approval','variation_rejection','extra_origin','recovery_case','recovery_claim_revision'] LOOP
+  EXECUTE format('CREATE POLICY lp11_customer_variation_read ON app.%I FOR SELECT TO jobguard_migration
+   USING (tenant_id=app.lp11_customer_tenant(''variation_job'',job_id))',relation);
+ END LOOP;
+END $customer_variation$;
+CREATE POLICY lp11_customer_variation_update ON app.variation FOR UPDATE TO jobguard_migration
+ USING (tenant_id=app.lp11_customer_tenant('variation_job',job_id)
+  AND tenant_id=app.lp11_customer_tenant('variation_target',id))
+ WITH CHECK (tenant_id=app.lp11_customer_tenant('variation_job',job_id)
+  AND tenant_id=app.lp11_customer_tenant('variation_target',id) AND state='approved');
+CREATE POLICY lp11_customer_variation_insert ON app.variation_approval FOR INSERT TO jobguard_migration
+ WITH CHECK (tenant_id=app.lp11_customer_tenant('variation_job',job_id)
+  AND tenant_id=app.lp11_customer_tenant('variation_target',variation_id)
+  AND tenant_id=app.lp11_customer_tenant('variation_command',id) AND method='customer_authenticated');
+ALTER POLICY tenant_isolation ON app.customer_variation_approval
+ USING (tenant_id=app.lp11_policy_tenant() OR (
+  tenant_id=app.lp11_customer_tenant('variation_session',customer_session_id)
+  AND tenant_id=app.lp11_customer_tenant('variation_command',variation_approval_id)))
+ WITH CHECK (tenant_id=app.lp11_policy_tenant() OR (
+  tenant_id=app.lp11_customer_tenant('variation_session',customer_session_id)
+  AND tenant_id=app.lp11_customer_tenant('variation_command',variation_approval_id)));
+CREATE POLICY lp11_customer_variation_insert ON app.scope_progress FOR INSERT TO jobguard_migration
+ WITH CHECK (tenant_id=app.lp11_customer_tenant('variation_job',job_id)
+  AND tenant_id=app.lp11_customer_tenant('variation_scope_item',scope_item_id)
+  AND stage='not_started' AND revision=0);
+CREATE POLICY lp11_customer_variation_insert ON app.recovery_claim_revision FOR INSERT TO jobguard_migration
+ WITH CHECK (tenant_id=app.lp11_customer_tenant('variation_job',job_id) AND revision=1
+  AND CASE WHEN reviewer_ref LIKE 'customer-session:%'
+   AND pg_input_is_valid(substr(reviewer_ref,18),'uuid')
+   THEN tenant_id=app.lp11_customer_tenant('variation_session',substr(reviewer_ref,18)::uuid)
+   ELSE false END
+  AND EXISTS(SELECT 1 FROM app.recovery_case c
+   JOIN app.variation v ON (v.tenant_id,v.job_id)=(c.tenant_id,c.job_id)
+   WHERE (c.tenant_id,c.job_id,c.id)=(recovery_claim_revision.tenant_id,recovery_claim_revision.job_id,recovery_claim_revision.case_id)
+    AND c.case_type='missed_variation_final_account' AND c.source_refs ? ('variation:'||v.id::text)
+    AND v.tenant_id=app.lp11_customer_tenant('variation_target',v.id)));
 
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.

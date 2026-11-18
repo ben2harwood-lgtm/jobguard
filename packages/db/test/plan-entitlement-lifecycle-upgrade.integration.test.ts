@@ -137,8 +137,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(receiptHelpers).toHaveLength(1);
   expect(receiptHelpers[0]?.definition?.split("$function$")[1]).toEqual(
     receiptGate.split("FUNCTION app.require_receipt_final_check(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
-  // 0762 preserves the distinct human emergency, mailbox and machine entry points.
+  // 0762 preserves distinct customer, human emergency, mailbox and machine entry points.
   for (const [name, args] of [
+    ["customer_stages", "t uuid, j uuid, c uuid, digest text, completion uuid, command uuid, expected_hash text"],
+    ["customer_variation", "t uuid, j uuid, c uuid, digest text, command jsonb"],
     ["dark_emergency", "s text, csrf text, t uuid, p jsonb"],
     ["emergency_owner", "s text, csrf text, t uuid"],
     ["sso_emergency_use", "u uuid, p jsonb"],
