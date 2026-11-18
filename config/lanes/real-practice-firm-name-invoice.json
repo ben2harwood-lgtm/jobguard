@@ -11,6 +11,7 @@
         "packages/db/test/migration-proofs/0950_practice_firm_name_invoice.proof.json",
         "packages/db/test/practice-firm-name-invoice.integration.test.ts",
         "apps/web/e2e/real-practice-firm-name-invoice.spec.ts",
+        "apps/web/app/ui/customer-invoices.tsx",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
         "packages/db/migrations/0764_practice_firm_name_invoice.sql",
