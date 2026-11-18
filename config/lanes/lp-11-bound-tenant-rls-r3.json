@@ -180,7 +180,18 @@
         "packages/db/test/verified-upload-immutable.integration.test.ts",
         "packages/db/test/worm-command.integration.test.ts",
         "tools/commercial-integrity-boundary.unresolved.json",
-        "tools/commercial-integrity-current-source-guard.unresolved.json"
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
+        "packages/db/src/audit-export-repository.ts",
+        "packages/db/src/tenant-context.ts",
+        "packages/db/test/audit-export.integration.test.ts",
+        "packages/db/test/final-check-manifest.integration.test.ts",
+        "packages/db/test/final-check-post-invoice-receipt.integration.test.ts",
+        "packages/db/test/identity.integration.test.ts",
+        "packages/db/test/outbox-status-forward-only.integration.test.ts",
+        "packages/db/test/real-fc-typed-recovery.integration.test.ts",
+        "packages/db/test/recovery.integration.test.ts",
+        "packages/db/test/recurring-extras.integration.test.ts",
+        "packages/db/test/shadow-catalog.integration.test.ts"
       ]
     }
   }

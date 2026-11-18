@@ -82,7 +82,7 @@ export class InvalidTenantContextError extends Error {
 export type TenantTransaction = NodePgDatabase<typeof schema> & { $client: PoolClient };
 
 /** Exact retained compatibility boundaries; no caller-controlled mode is accepted. */
-type DeferredBinding = "identity-sso" | "identity-oidc" | "identity-sso-required" | "shadow-persist" | "audit-export-refusal"
+type DeferredBinding = "identity-sso" | "identity-oidc" | "identity-sso-required" | "shadow-persist"
   | "practice-switch-off" | "contractor-session-revoke" | "commercial-integrity-read" | "commercial-integrity-read-family"
   | "evidence-pack-approval";
 type LateBinding = { complete: boolean };
@@ -118,6 +118,16 @@ export async function bindIssuedCredential(client: PoolClient, context: Verified
   await bindRequest(client, context);
 }
 
+/** Only the exact audit-refusal routine may consume a contractor credential without binding it. */
+export async function recordAuditExportRefusal(pool: Pool, context: VerifiedTenantContext,
+  actor: { membershipId: string; identityUserId: string }, action: "create" | "list"): Promise<void> {
+  const session = sessionReferences.get(context);
+  if (session?.kind !== "contractor_practice" || session.membershipId !== actor.membershipId)
+    throw new RequestBindingRefusedError("contractor_practice");
+  await pool.query("SELECT app.lp11_record_audit_export_refusal($1,$2,$3,$4,$5)",
+    [session.credential, context.tenantId, actor.membershipId, actor.identityUserId, action]);
+}
+
 /** Only an active approval transaction may bind after its established locks. */
 export async function bindAfterLocks(database: TenantTransaction, context: VerifiedTenantContext): Promise<void> {
   const binding = lateBindings.get(database)?.get(context);
@@ -140,7 +150,7 @@ export async function withTenant<T>(
     throw new InvalidTenantContextError();
   }
 
-  if (deferredBinding !== undefined && !["identity-sso", "identity-oidc", "identity-sso-required", "shadow-persist", "audit-export-refusal",
+  if (deferredBinding !== undefined && !["identity-sso", "identity-oidc", "identity-sso-required", "shadow-persist",
     "practice-switch-off", "contractor-session-revoke", "commercial-integrity-read", "commercial-integrity-read-family",
     "evidence-pack-approval"].includes(deferredBinding)) throw new InvalidTenantContextError();
   const client = await pool.connect();

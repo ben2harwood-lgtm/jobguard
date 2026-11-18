@@ -1,5 +1,6 @@
 /** Later migrations create these tables empty. Upgrade snapshots leave out control_plane.request_binding (per-transaction bookkeeping). */
 export const lp11EmptyTables = {
+  "control_plane.lp11_export_refusal_scope": [],
   "control_plane.lp11_pack_scope": [],
   "control_plane.lp11_retention_scope": [],
   "control_plane.lp11_proof_read": [],

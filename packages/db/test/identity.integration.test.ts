@@ -284,7 +284,9 @@ describe("M0-6L persisted identity / actual PostgreSQL roles",()=>{
   try{
    await client.query("BEGIN");
    const definition=(await client.query("SELECT pg_get_functiondef('identity.provision_verified_challenge(uuid)'::regprocedure) AS definition")).rows[0].definition as string;
-   const mutant=definition.replace(/  SELECT member_row\.id INTO issuer[\s\S]*?IF issuer IS NULL THEN RETURN NULL; END IF;\n/u,"");
+   const mutant=definition.replace(
+    /  SELECT member_row\.id INTO issuer[\s\S]*?  IF issuer IS NULL THEN\n[\s\S]*?   RETURN NULL;\n  END IF;\n/u,"",
+   );
    expect(mutant).not.toBe(definition);
    await client.query(mutant);
    await client.query("SET LOCAL ROLE jobguard_identity");

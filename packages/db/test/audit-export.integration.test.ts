@@ -380,6 +380,11 @@ describe("ENT-10b PostgreSQL audit exports", () => {
     const { p, session } = await setup(), other = await setup();
     const otherCount = (await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [other.p.tenantId])).rows[0]!.n;
     await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [p.tenantId, p.membershipId]);
+    expect(await contractor.refusedSessionPrincipal(other.session)).toBeUndefined();
+    const refusal = "SELECT app.lp11_record_audit_export_refusal($1,$2,$3,$4,$5)";
+    await expect(runtime.query(refusal, [session, other.p.tenantId, other.p.membershipId, other.p.identityUserId, action])).rejects.toMatchObject({code:"42501"});
+    await expect(runtime.query(refusal, [session, p.tenantId, other.p.membershipId, other.p.identityUserId, action])).rejects.toMatchObject({code:"42501"});
+    await expect(runtime.query("SELECT * FROM control_plane.lp11_export_refusal_scope")).rejects.toMatchObject({code:"42501"});
     const application = new AuditExportApplication(runtime);
     const response = await (action === "list" ? application.list(session) : application.create(session, request()))
       .then(() => undefined, error => auditExportHttpFailure(error));

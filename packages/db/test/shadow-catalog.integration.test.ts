@@ -20,7 +20,8 @@ async function signal(jobId:string=J,tenantId:string=T,state="candidate") {
 async function setup() {
  directory=await mkdtemp(join(tmpdir(),"sv2-pg16-"));port=59000+Math.floor(Math.random()*500);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
- await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
+ await postgres.initialise();await postgres.start();await postgres.createDatabase("jobguard_synthetic_demo");
+ admin=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"postgres",password:"synthetic"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  for(const [tenant,job] of [[T,J],[T,K],[O,L]]) {
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[tenant]);
   await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional SV-2 job','live')",[job,tenant]);
@@ -32,7 +33,7 @@ async function setup() {
   await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT ${role} TO ${login}`);
  }
  // Name the database: with none, pg connects to a database called after the login, which does not exist.
- const pool=(user:string)=>new Pool({host:"127.0.0.1",port,database:"postgres",user,password:"synthetic",max:4});
+ const pool=(user:string)=>new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user,password:"synthetic",max:4});
  runtime=pool("sv2_runtime");shadow=pool("sv2_shadow");emergency=pool("sv2_emergency");
 }
 async function cleanup(){await closeTestPools(runtime,shadow,emergency,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});}
@@ -117,7 +118,15 @@ describe("SV-2 catalog and actual role isolation (DW1, DW2, DW3, DW4)",()=>{
   // Every non-trigger routine in app that each new role can execute, by catalog. Trigger functions are not callable
   // directly (checked below). Two pure arithmetic INVOKER helpers keep their default PUBLIC EXECUTE by design.
   // 0306 adds exactly three worker-only evidence-pack entrypoints; emergency access is unchanged.
-  const explicit:Record<string,string[]>={jobguard_shadow:["begin_final_check","complete_evidence_pack_v3_check","complete_final_check","final_check_cycle_claim","final_check_cycle_finish","finish_evidence_pack_v3","prepare_evidence_pack_v3","read_final_check_manifest","record_final_check_source_result","record_shadow_disclosure","surface_shadow_signal_early"],jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"]};
+  const explicit:Record<string,string[]>={
+   jobguard_shadow:[
+    "begin_final_check","complete_evidence_pack_v3_check","complete_final_check","final_check_cycle_claim","final_check_cycle_finish","finish_evidence_pack_v3",
+    "lp11_accounting_receipt_tenant","lp11_bind_shadow_job","lp11_insert_accounting_receipt","lp11_issue_observation_permit",
+    "lp11_policy_tenant","lp11_shadow_job_has_terms","lp11_shadow_job_tenant",
+    "prepare_evidence_pack_v3","read_final_check_manifest","record_final_check_source_result","record_shadow_disclosure","surface_shadow_signal_early",
+   ],
+   jobguard_shadow_emergency_access:["read_shadow_emergency","record_shadow_disclosure"],
+  };
   const pureHelpers=["half_even_ratio","reference_recovery_cap"];
   const callable=(await admin.query(`SELECT r.rolname AS role,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
    CROSS JOIN (VALUES ('jobguard_shadow'),('jobguard_shadow_emergency_access')) r(rolname)
@@ -167,7 +176,10 @@ it('SB-01: Builder runtime role reads a shadow table directly or through a view'
   await expect(runtime.query(`SELECT * FROM app.${table}`)).rejects.toMatchObject({ code: "42501" });
  }
  // Positive control: the authorized shadow login can read that same row in its tenant.
- const rows = await withTenant(shadow, context(), db => db.$client.query("SELECT id FROM app.shadow_commercial_signal WHERE id=$1", [id]));
+ const rows = await withTenant(shadow, context(), async db => {
+  await db.$client.query("SELECT app.lp11_bind_shadow_job($1,$2)", [T,J]);
+  return db.$client.query("SELECT id FROM app.shadow_commercial_signal WHERE id=$1", [id]);
+ });
  expect(rows.rows).toEqual([{ id }]);
 });
 });

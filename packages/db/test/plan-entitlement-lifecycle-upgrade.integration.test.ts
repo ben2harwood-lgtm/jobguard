@@ -113,6 +113,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const lp11Sql = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
   for (const signature of [
     "infrastructure.discover_readiness_plans()", "app.serialize_final_check_evidence()",
+    "app.guard_post_lock_upload_transition()", "app.lp6d_refused_contractor_principal(uuid)",
     "infrastructure.discover_retention_reviews()", "app.retention_timer_book(uuid,uuid)",
     "app.retention_timer(uuid,uuid,jsonb,text)",
     "app.prepare_evidence_pack_v3(uuid,uuid)", "app.complete_evidence_pack_v3_check(uuid,uuid,text)",

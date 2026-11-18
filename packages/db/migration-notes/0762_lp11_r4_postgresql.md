@@ -3450,6 +3450,51 @@ nice -n 8 pnpm --filter @jobguard/db exec vitest run test/lp11-bound-tenant-rls.
 nice -n 7 pnpm --filter @jobguard/db exec vitest run test/lp1-seed.integration.test.ts test/later-command-contention.integration.test.ts test/practice-session.integration.test.ts test/later-audit-export-membership.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-more-bound-fixtures-results.json
 ```
 
+## r5 protected upload transitions and revoked export refusal
+
+The upload inventory trigger closes its maintenance authority before the later
+post-lock upload guard runs. The latter now opens only the trigger row's exact
+job for a maintenance login and otherwise requires existing bound or delegated
+authority. The lock, cutoff, isolation, status and SQLSTATE checks are unchanged.
+The expiry-race fixture injects the change on one specified upload at the original
+point before the freeze. Its later write must still fail with
+`FINAL_CHECK_UPLOAD_TRANSITION_LOCKED`.
+
+The audit-export refusal path rechecks the held contractor credential in
+PostgreSQL. The private lookup owner reads its historical membership and
+revocation only for that persisted session's tenant. The audit writer scope
+allows only the resolved tenant, member, event ID and list or create action.
+Revoked sessions receive no request binding. The original 403, durable refusal,
+and unchanged export and foreign audit state are asserted. Foreign tenant and
+member arguments fail with `42501` and the runtime cannot read the scope table.
+
+| Group in the last completed whole DB run | Failing before | Failing on focused PostgreSQL rerun |
+| --- | ---: | ---: |
+| Outbox forward-only scratch controls on the actual runtime login | 3 | 0 |
+| Final-check manifest lock and immutable upload inventory | 3 | 0 |
+| Final invoice receipt proof and withdrawn-proof negative control | 2 | 0 |
+| Historical and current typed final-check recovery | 4 | 0 |
+| Revoked contractor session audit export list and create | 2 | 0 |
+| Verified invitation issuer-revocation negative controls | 2 | 0 |
+| Recurring extra sources and source withdrawal | 2 | 0 |
+| Historical reversal controls and invalidation review | 3 | 0 |
+| Shadow role exact catalogue and authorized positive read | 2 | 0 |
+
+The four outbox and final-check suites passed 48/48. Both revoked audit actions
+and the refusal-only principal test passed 3/3. Identity and recurring extras
+passed 36/36, and a separate populated catalogue capture passed. Historical
+recovery passed 21/21 and the exact shadow role suite passed 7/7. The identity
+mutants still remove the actual issuer check and must break the original refusal
+before rollback. The 0731 fixture checks that three later binding statements
+did not exist and uses real predecessor PostgreSQL for every business operation.
+
+The populated LP-10, MIGFIX-7, plan-entitlement, proof loader and tenant isolation
+suites passed 90/90. The proof has 1,557 LP0 records and 899 upgrade records,
+including 734 policy changes. The historical audit-export catalogue comparison
+still reports the separate expected-privilege inventory mismatch for 0762 on
+older objects. The whole DB counts above are from the last completed frozen
+checkout and do not credit these focused repairs.
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

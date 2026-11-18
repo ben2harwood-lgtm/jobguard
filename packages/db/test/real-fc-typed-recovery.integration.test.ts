@@ -15,7 +15,7 @@ import { availabilitySafeFinalCheckPorts, discoverFinalCheckRequests, executePra
 import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, finalCheckTenant, FINAL_CHECK_ACTOR, type FinalCheckFixture } from "./final-check-fixture.js";
 import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import type { FinalCheckExecutionPorts } from "../../../apps/api/src/final-check-task-executor.js";
 const { makeWorkerUtils, run } = createRequire(new URL("../../../apps/api/package.json", import.meta.url))("graphile-worker");
 let f: FinalCheckFixture;
@@ -154,6 +154,46 @@ it.each([[150, 150, 15000], [150, 200, null]])("coalesced estimates are order in
     expect((await repo().read(a.context, a.jobId, a.digest)).items).toMatchObject([{ estimatedValuePence: expected }]);
   }
 });
+// Seed the 0731 schema through its original SQL paths. Only the three later
+// binding statements are replaced, each with a real check that the function
+// did not exist in the historical database. Business reads and writes use
+// the original unprivileged shadow and runtime logins.
+function historicalFinalCheckPool(pool: Pool): Pool {
+  const laterBindings = new Map([
+    ["SELECT app.lp11_bind_shadow_job($1,$2)", "app.lp11_bind_shadow_job(uuid,uuid)"],
+    ["SELECT app.lp11_issue_observation_permit($1,$2,$3)", "app.lp11_issue_observation_permit(uuid,uuid,text)"],
+    ["SELECT app.lp11_bind_observation_read($1,$2,$3)", "app.lp11_bind_observation_read(uuid,uuid,text)"],
+  ]);
+  function historicalQuery(connection: Pool | PoolClient): typeof connection.query {
+    const query = connection.query.bind(connection);
+    return ((statement: unknown, ...parameters: unknown[]) => {
+      const later = typeof statement === "string" ? laterBindings.get(statement) : undefined;
+      if (!later) return Reflect.apply(query, connection, [statement, ...parameters]);
+      return query("SELECT pg_catalog.to_regprocedure($1) AS installed", [later]).then(result => {
+        expect(result.rows).toEqual([{ installed: null }]);
+        return result;
+      });
+    }) as typeof connection.query;
+  }
+  return new Proxy(pool, {
+    get(target, property) {
+      if (property === "query") return historicalQuery(target);
+      if (property === "connect") return async () => {
+        const client = await target.connect();
+        return new Proxy(client, {
+          get(connection, clientProperty) {
+            if (clientProperty === "query") return historicalQuery(connection);
+            const value = Reflect.get(connection, clientProperty);
+            return typeof value === "function" ? value.bind(connection) : value;
+          },
+        });
+      };
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 it("upgrade preserves historical records and ACLs, rests legacy queued work and does not revive completed work", async () => {
   const db = await jobDoorsDatabase(true, "0732_final_check_typed_recovery.sql");
   try {
@@ -161,22 +201,24 @@ it("upgrade preserves historical records and ACLs, rests legacy queued work and 
     // Reuse the existing runtime fixture; generated shadow login has no extra business grants.
     const ddl = await db.owner.query("SELECT format('CREATE ROLE recovery_upgrade_shadow LOGIN INHERIT IN ROLE jobguard_shadow PASSWORD %L',$1::text) ddl", [db.owner.options.password]);
     await db.owner.query(ddl.rows[0].ddl);
-    const shadow = new (await import("pg")).Pool({ ...db.owner.options, user: "recovery_upgrade_shadow", password: db.owner.options.password });
+    const shadow = new Pool({ ...db.owner.options, user: "recovery_upgrade_shadow", password: db.owner.options.password });
     try {
       const fixture = { ...f, admin: db.owner, runtime: db.runtime, shadow }, a = await seedFinalCheckJob(fixture);
       await a.lock();
       const worker = new FinalCheckRepository(shadow), m = await worker.begin(a.workerContext, a.jobId);
-      const ports = practiceFinalCheckPorts(shadow, db.runtime, "f".repeat(64));
+      const historicShadow = historicalFinalCheckPool(shadow);
+      const ports = practiceFinalCheckPorts(historicShadow, historicalFinalCheckPool(db.runtime), "f".repeat(64));
+      const completion = new FinalCheckCompletionRepository(historicShadow);
       await new FinalCheckWorker(ports, "synthetic_demo").execute(a.workerContext, { version: "final-check.task.v1", jobId: a.jobId, manifestId: m.id });
       const result = await worker.manifest(a.workerContext, a.jobId, m.id);
-      await new FinalCheckCompletionRepository(shadow).publish(a.workerContext, { version: "final-check-publication.v1", jobId: a.jobId, runId: result.result!.runId, checkId: m.id });
+      await completion.publish(a.workerContext, { version: "final-check-publication.v1", jobId: a.jobId, runId: result.result!.runId, checkId: m.id });
       const invalidated = await seedFinalCheckJob(fixture);
       await new JobSourceRepository(db.runtime).intake(invalidated.context,invalidated.jobId,invalidated.digest,"diary",{version:"job-diary-input.v1",commandId:randomUUID(),entryMode:"typed",onSite:false,text:"Fictional ordinary work note."});
       await invalidated.lock();
       const bad = await worker.begin(invalidated.workerContext,invalidated.jobId);
       await new FinalCheckWorker(ports,"synthetic_demo").execute(invalidated.workerContext,{version:"final-check.task.v1",jobId:invalidated.jobId,manifestId:bad.id});
       const badResult=await worker.manifest(invalidated.workerContext,invalidated.jobId,bad.id);
-      await new FinalCheckCompletionRepository(shadow).publish(invalidated.workerContext,{version:"final-check-publication.v1",jobId:invalidated.jobId,runId:badResult.result!.runId,checkId:bad.id});
+      await completion.publish(invalidated.workerContext,{version:"final-check-publication.v1",jobId:invalidated.jobId,runId:badResult.result!.runId,checkId:bad.id});
       // 0666: locked manifest evidence can be withdrawn only after the final invoice is issued.
       await issue(invalidated,randomUUID(),db.runtime);
       await finalCheckTenant(db.runtime,invalidated.tenantId,client=>client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),invalidated.tenantId,badResult.sources.find(x=>x.evidenceId)!.evidenceId,FINAL_CHECK_ACTOR]));
@@ -295,7 +337,7 @@ it("keeps completed-invalidated reruns under separate manifest-attempt authority
   await expect(repo().requestRun(a.context, a.jobId, a.digest)).rejects.toMatchObject({ code: "FINAL_CHECK_SOURCE_CHANGED" });
   const evidence = original.sources.find(s => s.evidenceId !== null)!;
   const { finalCheckTenant } = await import("./final-check-fixture.js");
-  await finalCheckTenant(f.runtime, a.tenantId, db => db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), a.tenantId, evidence.evidenceId, FINAL_CHECK_ACTOR]));
+  await finalCheckTenant(f.runtime, a.tenantId, db => db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), a.tenantId, evidence.evidenceId, FINAL_CHECK_ACTOR]), { practiceDigest: a.digest });
   expect((await repo().read(a.context, a.jobId, a.digest)).state).toBe("failed");
   await repo().requestRun(a.context, a.jobId, a.digest); const next = await requestRow(a.jobId);
   expect(next.attempt).toBe(originalTask.attempt + 1); expect(next.manifest_id).not.toBe(originalTask.manifestId);
@@ -389,6 +431,7 @@ it("pre-manifest concurrent requests replay without replacing the cycle", async 
 });
 it("restricted lifecycle executors have exact signatures, bodies, owners, search paths and ACLs", async () => {
   const sql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql",import.meta.url),"utf8");
+  const tenantPolicies = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql",import.meta.url),"utf8");
   for (const [schema,name,args,executor] of [
     ["app","final_check_cycle_claim","uuid,uuid,uuid,uuid,integer,uuid","jobguard_shadow"],
     ["app","final_check_cycle_finish","uuid,uuid,uuid,uuid,integer,uuid,boolean","jobguard_shadow"],
@@ -396,7 +439,8 @@ it("restricted lifecycle executors have exact signatures, bodies, owners, search
   ]) {
     const signature=`${schema}.${name}(${args})`;
     const row=(await f.admin.query(`SELECT p.proowner::regrole::text owner,p.prosecdef,p.proconfig,p.proacl::text acl,p.prosrc body FROM pg_proc p WHERE p.oid=$1::regprocedure`,[signature])).rows[0];
-    expect(row).toEqual({owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog, app, infrastructure"],acl:`{jobguard_migration=X/jobguard_migration,${executor}=X/jobguard_migration}`,body:sql.split(`FUNCTION ${schema}.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]});
+    const latest = name === "final_check_cycle_finish" ? tenantPolicies : sql;
+    expect(row).toEqual({owner:"jobguard_migration",prosecdef:true,proconfig:["search_path=pg_catalog, app, infrastructure"],acl:`{jobguard_migration=X/jobguard_migration,${executor}=X/jobguard_migration}`,body:latest.split(`FUNCTION ${schema}.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]});
     for (const role of ["jobguard_runtime","jobguard_identity","jobguard_shadow_emergency_access", executor === "jobguard_shadow" ? "jobguard_infrastructure" : "jobguard_shadow"]) {
       expect((await f.admin.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed",[role,signature])).rows[0].allowed).toBe(false);
     }
@@ -426,7 +470,7 @@ it("unmanaged published-invalidated work retains the original pending-rerun proj
   expect((await repo().read(a.context,a.jobId,a.digest)).state).toBe("completed");
   // 0666: locked manifest evidence can be withdrawn only after the final invoice is issued.
   await issue(a,randomUUID());
-  await finalCheckTenant(f.runtime,a.tenantId,client=>client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),a.tenantId,result.sources.find(x=>x.evidenceId)!.evidenceId,FINAL_CHECK_ACTOR]));
+  await finalCheckTenant(f.runtime,a.tenantId,client=>client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),a.tenantId,result.sources.find(x=>x.evidenceId)!.evidenceId,FINAL_CHECK_ACTOR]), { practiceDigest: a.digest });
   expect((await repo().read(a.context,a.jobId,a.digest)).state).toBe("failed");
   await repo().requestRun(a.context,a.jobId,a.digest);
   const request=await requestRow(a.jobId);
