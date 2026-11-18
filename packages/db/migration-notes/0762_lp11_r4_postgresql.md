@@ -4031,6 +4031,43 @@ The seven-file focused run passed all 84 tests. It included all 21 tenant-contex
 pnpm --filter @jobguard/db exec vitest run src/tenant-context.test.ts test/lp-0-authority-paths.integration.test.ts test/practice-feed.integration.test.ts test/shadow-catalog.integration.test.ts test/lp6b-deferred-binding.test.ts test/audit-export.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-exact-surface-results.json
 ```
 
+## r5 complete PostgreSQL run at e28f8953b
+
+PostgreSQL 16.10 ran all 878 files. It reported 771 passing files, 107 failing files, and zero unhandled errors. Of 8,017 tests, 6,896 passed, 851 failed, 251 were skipped and 19 were marked todo. The 846 direct held assertions and 21 direct held setup files match the names recorded for `b68ed570b`. All three real LP-6a logical restore tests passed in this full run.
+
+Outside the hold, the count fell from 76 assertions and one setup failure at `b68ed570b` to five assertions and zero setup failures at `e28f8953b`. The exact five tests were as follows.
+
+| Test | Result at `e28f8953b` | Follow-up |
+| --- | --- | --- |
+| `src/tenant-context.test.ts` — exports only two stamped constructors and no arbitrary-object registrar | The private audit-refusal helper appeared in the module exports. | Passed in the 84-test run on `36e7c648e`. |
+| `test/lp-0-authority-paths.integration.test.ts` — proves the unreachable and trigger-only routines are really refused to the runtime login | PostgreSQL folded the strict audit event accessor to NULL during planning. | Passed in the 84-test run on `36e7c648e`. |
+| `test/practice-feed.integration.test.ts` — catalogs enforce FORCE RLS, migration ownership, both policy roles, append-only grants and no SECURITY DEFINER writer | The proof expected five policies and the catalogue had seven. | The exact seven-policy comparison passed in the 84-test run on `36e7c648e`. |
+| `test/contractor.integration.test.ts` — CH-3b client customer link requires organisation.manage on the exact client | Timed out at its fixed 60-second limit. | Final run isolated from other verification jobs. |
+| `test/recovery-timing-pin.integration.test.ts` — [AC9] populated upgrade preserves every stored row, earlier routine and table shape; reapply is inert | Timed out at its fixed 15-second limit. | Final run isolated from other verification jobs. |
+
+```sh
+export PATH=/workspace/.jobguard-runtime/node_modules/.bin:$PATH
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=4 --testTimeout=300000 --passWithNoTests --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-readonly-full-results.json
+```
+
+## r5 application, upgrade and guard verification at 36e7c648e
+
+The API unit suite passed 4,509 tests across 261 files, including all 146 S9 context boundary assertions. The web unit suite passed 3,618 tests across 252 files. The migration proof loader and both populated 0762 upgrade suites passed 79 tests across three files. Each commercial-integrity guard returned zero diagnostics, all 253 guard tests passed, and all seven workspace typecheck tasks passed.
+
+```sh
+export PATH=/workspace/.jobguard-runtime/node_modules/.bin:$PATH
+pnpm --filter @jobguard/db build
+pnpm --filter @jobguard/api build
+NEXT_TELEMETRY_DISABLED=1 pnpm --filter @jobguard/web build
+pnpm --filter @jobguard/api exec vitest run src --maxWorkers=1 --testTimeout=30000 --exclude '**/*.integration.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-surface-api-results.json
+pnpm --filter @jobguard/web test --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/database.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-surface-web-results.json
+pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/migration-proof-loader.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-exact-upgrades-results.json
+node tools/commercial-integrity-current-source-guard.mjs
+node tools/commercial-integrity-boundary.mjs
+node --test --test-concurrency=1 tools/commercial-integrity-current-source-guard.test.mjs tools/commercial-integrity-boundary.test.mjs
+pnpm exec turbo run typecheck --concurrency=1
+```
+
 ## Missing pg_dump in earlier full runs
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)
