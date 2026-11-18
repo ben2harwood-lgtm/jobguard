@@ -88,9 +88,12 @@ export class AuditExportRepository {
   constructor(private readonly pool: Pool) {}
   /** Refusal only: the session identifies historical membership, not current export authority. */
   async refuse(context: VerifiedTenantContext, rawActor: AuditExportActor, action: "create" | "list"): Promise<void> {
-    const { recordAuditExportRefusal, withTenant } = await import("./tenant-context.js");
+    const { withTenant } = await import("./tenant-context.js");
     const actor = actorV1.parse(rawActor);
-    await withTenant(this.pool, context, db => recordAuditExportRefusal(db, context, actor, action), "audit-export-refusal");
+    await withTenant(this.pool, context, async (_db, recordRefusal) => {
+      if (!recordRefusal) throw new RequestBindingRefusedError("contractor_practice");
+      await recordRefusal(actor, action);
+    }, "audit-export-refusal");
   }
   private async authorized(db: TenantTransaction, context: VerifiedTenantContext, actor: AuditExportActor, action: "create" | "list"): Promise<boolean> {
     const allowed = (await db.$client.query<{ allowed: boolean; knownMember: boolean }>(`SELECT EXISTS(SELECT 1 FROM app.membership m JOIN app.role_grant g ON (g.tenant_id,g.membership_id)=(m.tenant_id,m.id)

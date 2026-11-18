@@ -121,12 +121,13 @@ export async function bindIssuedCredential(client: PoolClient, context: Verified
 }
 
 /** Only the exact audit-refusal routine may consume a contractor credential without binding it. */
-export async function recordAuditExportRefusal(database: TenantTransaction, context: VerifiedTenantContext,
-  actor: { membershipId: string; identityUserId: string }, action: "create" | "list"): Promise<void> {
+type RecordAuditExportRefusal = (actor: { membershipId: string; identityUserId: string }, action: "create" | "list") => Promise<void>;
+async function recordAuditExportRefusal(client: PoolClient, context: VerifiedTenantContext,
+  ...[actor, action]: Parameters<RecordAuditExportRefusal>): Promise<void> {
   const session = sessionReferences.get(context);
   if (session?.kind !== "contractor_practice" || session.membershipId !== actor.membershipId)
     throw new RequestBindingRefusedError("contractor_practice");
-  await database.$client.query("SELECT app.lp11_record_audit_export_refusal($1,$2,$3,$4,$5)",
+  await client.query("SELECT app.lp11_record_audit_export_refusal($1,$2,$3,$4,$5)",
     [session.credential, context.tenantId, actor.membershipId, actor.identityUserId, action]);
 }
 
@@ -145,7 +146,7 @@ export async function bindAfterLocks(database: TenantTransaction, context: Verif
 export async function withTenant<T>(
   pool: Pool,
   context: VerifiedTenantContext,
-  work: (database: TenantTransaction) => Promise<T>,
+  work: (database: TenantTransaction, recordRefusal?: RecordAuditExportRefusal) => Promise<T>,
   deferredBinding?: DeferredBinding,
 ): Promise<T> {
   if (!genuineTenantContexts.has(context) || typeof context.tenantId !== "string" || !UUID.test(context.tenantId)) {
@@ -172,7 +173,9 @@ export async function withTenant<T>(
       contexts.set(context, late);
       lateBindings.set(database, contexts);
     }
-    const result = await work(database);
+    const result = deferredBinding === "audit-export-refusal"
+      ? await work(database, (actor, action) => recordAuditExportRefusal(client, context, actor, action))
+      : await work(database);
     if (late && !late.complete) throw new RequestBindingRefusedError(sessionReferences.get(context)?.kind ?? "real");
     await client.query("COMMIT");
     return result;

@@ -640,8 +640,16 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     const tables = ["practice_feed_job_owner", "practice_feed_account", "practice_feed_command", "practice_feed_event", "practice_feed_receipt_match"];
     const rows = (await admin.query("SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1)", [tables])).rows;
     expect(rows).toHaveLength(5); expect(rows.every((row) => row.relrowsecurity && row.relforcerowsecurity && row.owner === "jobguard_migration")).toBe(true);
-    const policies = (await admin.query("SELECT roles FROM pg_policies WHERE schemaname='app' AND tablename=ANY($1)", [tables])).rows;
-    expect(policies).toHaveLength(5); expect(policies.every((row) => row.roles.includes("jobguard_migration") && row.roles.includes("jobguard_runtime"))).toBe(true);
+    const policies = (await admin.query(`SELECT tablename,policyname,permissive,roles::text,cmd,qual,with_check
+      FROM pg_policies WHERE schemaname='app' AND tablename=ANY($1) ORDER BY tablename,policyname`, [tables])).rows;
+    const tenantPredicate = "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)";
+    expect(policies).toEqual([
+      ...tables.map(tablename => ({ tablename, policyname: "tenant_isolation", permissive: "PERMISSIVE",
+        roles: "{jobguard_migration,jobguard_runtime}", cmd: "ALL", qual: tenantPredicate, with_check: tenantPredicate })),
+      ...["practice_feed_event", "practice_feed_receipt_match"].map(tablename => ({ tablename, policyname: "lp11_pack_job_read",
+        permissive: "PERMISSIVE", roles: "{jobguard_migration}", cmd: "SELECT",
+        qual: "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))", with_check: null })),
+    ].sort((a,b) => a.tablename.localeCompare(b.tablename) || a.policyname.localeCompare(b.policyname)));
     const grants = (await admin.query("SELECT table_name,privilege_type FROM information_schema.role_table_grants WHERE grantee='jobguard_runtime' AND table_schema='app' AND table_name=ANY($1) ORDER BY 1,2", [tables])).rows;
     expect(grants).toEqual(tables.flatMap((table) => [{ table_name: table, privilege_type: "INSERT" }, { table_name: table, privilege_type: "SELECT" }]).sort((a, b) => a.table_name.localeCompare(b.table_name) || a.privilege_type.localeCompare(b.privilege_type)));
     for (const table of tables) for (const operation of [`UPDATE app.${table} SET environment='synthetic_demo'`, `DELETE FROM app.${table}`, `TRUNCATE app.${table}`]) {

@@ -12417,7 +12417,7 @@
         "otherExecute": [
           "jobguard_audit_writer"
         ],
-        "definitionSha256": "bc9eaa7f86428f3479e9d10687465aaeaefc1cafa9c751d4c09b7b7e8a0bad81",
+        "definitionSha256": "ed6ccfd4465650519cd719c44d72cc27f578fadcdfd192a1ed270467af846a92",
         "staticWrites": [],
         "staticCalls": []
       }

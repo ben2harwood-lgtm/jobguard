@@ -3836,8 +3836,9 @@ ALTER POLICY practice_membership_lookup ON app.membership USING (
 );
 
 -- A row accessor preserves the event predicates across a column type change.
+-- Keep its execution permission observable even when the supplied row is NULL.
 CREATE FUNCTION app.lp11_audit_event_type(event app.audit_event) RETURNS text
- LANGUAGE sql IMMUTABLE STRICT SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
+ LANGUAGE sql STABLE SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
  SELECT event.event_type::text
 $$;
 ALTER FUNCTION app.lp11_audit_event_type(app.audit_event) OWNER TO jobguard_migration;
