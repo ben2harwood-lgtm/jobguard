@@ -1,3 +1,4 @@
+import { sha256 } from "@jobguard/core";
 import { AiGatewayError } from "./errors.js";
 import {
   aiGatewayRequestSchema,
@@ -47,6 +48,13 @@ export class AiGateway {
       source.visibility !== "public" || source.tenantId !== tenantId
     )) {
       throw new AiGatewayError("invalid_request", "AI source is not permitted");
+    }
+    const sourceIds = new Set<string>();
+    for (const source of request.sources) {
+      if (sourceIds.has(source.id) || sha256(source.content) !== source.sha256) {
+        throw new AiGatewayError("invalid_request", "Invalid AI source provenance");
+      }
+      sourceIds.add(source.id);
     }
     if (options.signal?.aborted) throw new AiGatewayError("cancelled", "AI fixture request was cancelled");
 
