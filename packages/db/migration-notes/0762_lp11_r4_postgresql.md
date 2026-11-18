@@ -1729,6 +1729,47 @@ pnpm --filter @jobguard/db exec vitest run test/real-wayin-linked-practice.integ
 pnpm --filter @jobguard/api exec vitest run src/shadow-detection.worker.test.ts --maxWorkers=1 --testTimeout=30000
 ```
 
+## r5 full shadow-fixture round
+
+The fixture-only round completed all 878 PostgreSQL files. It had 558 passing files and 320 failing files. Of 8,012 tests, 5,903 passed, 1,561 failed, 529 were skipped and 19 were todo. The 842 directly held assertions, 21 directly held setup failures and one missing pg_dump were identical by count. Non-held failures moved from 784 assertions and 13 setup files to 718 assertions and 12 setup files. This is the complete run before the subsequent maintenance, linked-practice and connector changes. It remains RED.
+
+Of the 86 previous failures first diagnosed as `shadow_commercial_signal` RLS, 60 passed, 26 still failed and none were skipped. Of the 10 previous `STACK_TRACE_ERROR` failures, seven passed and three still failed. Vitest reported one unhandled `P0002` in `watchdog.integration.test.ts`, from `app.transition_job` during **holds the first business lock until commit; both race orders serialize**.
+
+```sh
+pnpm --filter @jobguard/db exec vitest run --maxWorkers=4 --passWithNoTests --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-shadow-fixture-full-results.json
+```
+
+The 12 other setup failures reported for this round were:
+
+- `test/UIWIRE-10.integration.test.ts` (INVALID_TRANSITION)
+- `test/UIWIRE-11.integration.test.ts` (INVALID_TRANSITION)
+- `test/job-sources-authority.integration.test.ts` (<no diagnostic>)
+- `test/job-sources-isolation.integration.test.ts` (<no diagnostic>)
+- `test/later-recovery-message-attempt.integration.test.ts` (REQUEST_BINDING_REFUSED)
+- `test/lp1-membership-account.integration.test.ts` (<no diagnostic>)
+- `test/managed-recovery.integration.test.ts` (COMMAND_CONFLICT)
+- `test/merchant-ingestion.integration.test.ts` (EVIDENCE_PACK_CASE_NOT_FOUND)
+- `test/outbox-discovery.integration.test.ts` (new row violates row-level security policy for table "action_outbox")
+- `test/recovery-follow-up.integration.test.ts` (job not found)
+- `test/recovery-messages.integration.test.ts` (REQUEST_BINDING_REFUSED)
+- `test/recovery-record-immutable.integration.test.ts` (job not found)
+
+The four `lp6e-audit.integration.test.ts` cases below expect a generic unbound invocation to append an audit event with only the caller's tenant setting. These remain outside the held work-order scope.
+
+- **Keeps existing unbound statements lower-trust system work despite caller actor claims**
+- **Never attributes an unbound NOINHERIT runtime statement to a human**
+- **Owner-side checked writers record system work rather than a supplied person**
+- **Cannot reuse an authenticated append's binding in the next pooled transaction**
+
+The latest checked worker and binding command passed 38 of 38, including all 14 LP-6a binding tests and the exact relation lock set. The commercial-integrity guard CLIs returned zero diagnostics and their 253 tests passed on the latest code.
+
+```sh
+pnpm --filter @jobguard/db exec vitest run test/lp6a-binding.integration.test.ts test/lp-10-worker-login.integration.test.ts test/real-wayin-linked-practice-races.integration.test.ts --maxWorkers=1 --reporter=default
+node tools/commercial-integrity-current-source-guard.mjs
+node tools/commercial-integrity-boundary.mjs
+node --test --test-concurrency=1 tools/commercial-integrity-{current-source-guard,boundary}.test.mjs
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)
