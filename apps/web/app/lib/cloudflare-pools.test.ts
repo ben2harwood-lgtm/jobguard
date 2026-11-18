@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
-vi.mock("@jobguard/db", () => ({ PracticeAccessError: class extends Error {} }));
+vi.mock("@jobguard/db", () => ({ PracticeAccessError: class extends Error {}, closeOutboundWorkerPool: vi.fn() }));
 vi.mock("@jobguard/api/workspace", () => ({ SYNTHETIC_SESSION: "fictional" }));
 const identity = vi.hoisted(() => ({ create: vi.fn(() => ({})) }));
 vi.mock("@jobguard/api/identity", () => ({ createIdentityApplication: identity.create }));
