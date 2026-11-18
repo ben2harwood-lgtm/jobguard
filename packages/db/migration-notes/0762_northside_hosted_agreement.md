@@ -9,7 +9,7 @@ contractor startup assigned the track but supplied no active MON-8 status. The
 browser suite concealed that failure with an owner-only fixture; it separately
 inserted enterprise terms and copied their database UUID into the statement form.
 
-Migration `0761_northside_hosted_agreement.sql` replaces the complete current
+Migration `0762_northside_hosted_agreement.sql` replaces the complete current
 0749 `northside_register(uuid,jsonb)` body. Its original request-binding, tenant,
 persisted original-owner session, lifetime, made-up-company, active-switch,
 settings and conflict checks remain. Registration now takes the matching

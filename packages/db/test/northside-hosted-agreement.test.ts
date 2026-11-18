@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { loadMigrationProofs } from "./migration-proof-loader.js";
 import { loadReviewedInventory } from "./lp-0-catalog.js";
 const read = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
-const migration = "0761_northside_hosted_agreement.sql";
+const migration = "0762_northside_hosted_agreement.sql";
 const sql = read(`../migrations/${migration}`);
 it("keeps every original Northside binding, lifetime, made-up-instance and settings refusal in the forward body", () => {
   const body = (source: string) => source.match(/CREATE OR REPLACE FUNCTION app.northside_register\([\s\S]*?AS \$\$([\s\S]*?)\$\$;/)![1]!;

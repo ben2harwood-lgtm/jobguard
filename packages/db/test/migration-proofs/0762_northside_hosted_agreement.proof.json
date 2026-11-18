@@ -1,5 +1,5 @@
 {
-  "migration": "0761_northside_hosted_agreement.sql",
+  "migration": "0762_northside_hosted_agreement.sql",
   "lp0": [
     {
       "section": "routines",

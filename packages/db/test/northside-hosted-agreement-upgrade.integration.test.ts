@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { migrate, registerNorthsideRun } from "../src/index.js";
 import { startBeforeMigration, applyMigration, startSession, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
-const migration = "0761_northside_hosted_agreement.sql";
+const migration = "0762_northside_hosted_agreement.sql";
 let c: Cluster;
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await startBeforeMigration(migration); }, 240000);
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });

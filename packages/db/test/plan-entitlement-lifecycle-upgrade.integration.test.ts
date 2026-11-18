@@ -305,7 +305,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const proceedRaiserSql = await readFile(new URL("../migrations/0760_extra_proceed_raiser_authority.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.xa_proceed", [proceedRaiserSql.split("AS $$")[1]!.split("$$;")[0]!]);
   // 0761 is the complete Northside registration successor; retain every header and privilege comparison below.
-  const northsideSql = await readFile(new URL("../migrations/0761_northside_hosted_agreement.sql", import.meta.url), "utf8");
+  const northsideSql = await readFile(new URL("../migrations/0762_northside_hosted_agreement.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.northside_register", [northsideSql.split("FUNCTION app.northside_register(")[1]!.split("AS $$")[1]!.split("$$;")[0]!]);
   // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
   lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);

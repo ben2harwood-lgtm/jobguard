@@ -86,7 +86,7 @@ it("selects only this run's stored agreement under finance/session checks and pr
 it("reapplying the forward migration does not provision, edit or remove existing facts", async () => {
   const f = await fresh(); await registerNorthsideRun(c.runtime, f.p, f.context);
   const before = await counts(c.admin, tables), stored = await facts(f.p.tenantId);
-  const sql = await readFile(new URL("../migrations/0761_northside_hosted_agreement.sql", import.meta.url), "utf8");
+  const sql = await readFile(new URL("../migrations/0762_northside_hosted_agreement.sql", import.meta.url), "utf8");
   await c.admin.query(sql); await c.admin.query(sql);
   expect(await counts(c.admin, tables)).toEqual(before); expect(await facts(f.p.tenantId)).toEqual(stored);
 });
