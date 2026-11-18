@@ -76,6 +76,8 @@
         "packages/db/test/subscription-pending-downgrade.integration.test.ts",
         "packages/db/test/worker-login-fixture.ts",
         "packages/db/vitest.config.ts",
+        "tools/commercial-integrity-boundary.unresolved.json",
+        "tools/commercial-integrity-current-source-guard.unresolved.json",
         "tools/docker/001-worker-roles.sql"
       ]
     }
