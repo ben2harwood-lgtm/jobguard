@@ -10,6 +10,7 @@
         ".env.example",
         "apps/api/src/worker.ts",
         "apps/web/app/lib/synthetic-server.ts",
+        "apps/web/e2e/M4-5-S.spec.ts",
         "apps/web/e2e/global-setup.ts",
         "apps/web/playwright.config.ts",
         "docker-compose.yml",

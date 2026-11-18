@@ -342,15 +342,19 @@ CREATE POLICY worker_recovery_archived_run ON app.sandbox_run_event FOR SELECT T
 
 CREATE FUNCTION app.record_worker_recovery_message(p_action uuid) RETURNS void
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
-DECLARE item app.action_outbox; t uuid; recovery_case uuid;
+DECLARE item app.action_outbox; t uuid; recovery_case uuid; practice_digest text;
  saved_tenant text:=current_setting('app.tenant_id',true);
+ saved_material_digest text:=current_setting('app.practice_material_digest',true);
 BEGIN
  PERFORM app.lp10_assert_worker();
  IF app.lp6e_request_binding_present() THEN RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
  IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
  SELECT s.tenant_id INTO t FROM infrastructure.outbox_signal s WHERE s.action_id=p_action;
  PERFORM set_config('app.tenant_id',coalesce(t::text,''),true);
- SELECT a.case_id INTO recovery_case FROM app.recovery_message_approval a WHERE (a.tenant_id,a.outbox_action_id)=(t,p_action);
+ SELECT a.case_id,j.practice_session_digest INTO recovery_case,practice_digest
+ FROM app.recovery_message_approval a
+ JOIN app.job j ON (j.tenant_id,j.id)=(a.tenant_id,a.job_id)
+ WHERE (a.tenant_id,a.outbox_action_id)=(t,p_action);
  IF recovery_case IS NULL THEN RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514'; END IF;
  -- Match recovery commands: lock the case and evidence sources before outbox rows.
  PERFORM pg_advisory_xact_lock(hashtext(t::text),hashtext(recovery_case::text));
@@ -363,6 +367,8 @@ BEGIN
   RAISE EXCEPTION 'RECOVERY_MESSAGE_SINK_INVALID' USING ERRCODE='23514';
  END IF;
  PERFORM app.bind_worker_action(p_action);
+ -- The approved job owns the catalogue scope used by the existing source check.
+ PERFORM set_config('app.practice_material_digest',coalesce(practice_digest,''),true);
  BEGIN
   PERFORM app.lp6d_recovery_message_sink_worker(p_action,'fake-recovery:'||p_action::text);
  EXCEPTION WHEN unique_violation THEN
@@ -371,6 +377,7 @@ BEGIN
    RAISE;
   END IF;
  END;
+ PERFORM set_config('app.practice_material_digest',coalesce(saved_material_digest,''),true);
  PERFORM set_config('app.tenant_id',coalesce(saved_tenant,''),true);
 END $$;
 ALTER FUNCTION app.record_worker_recovery_message(uuid) OWNER TO jobguard_migration;

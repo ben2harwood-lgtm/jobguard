@@ -829,7 +829,7 @@
         "otherExecute": [
           "jobguard_worker"
         ],
-        "definitionSha256": "642404e9ed4cb3036053474869c0fe29e9fa6c3f24407cb8686bef94cb8ff56b",
+        "definitionSha256": "36a603dbc10f4ea48522060d2f022146bee5bc2d7dc031253d9d33659abbbcd5",
         "staticWrites": [],
         "staticCalls": [
           "app.bind_worker_action",
