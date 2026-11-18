@@ -4634,6 +4634,167 @@ BEGIN
  RETURN NEW;
 END $$;
 
+-- Discovery exposes only tenant identifiers to the scheduler. The worker's
+-- per-job scope permits only retention review rows and their exact audit event.
+CREATE UNLOGGED TABLE control_plane.lp11_retention_scope (
+ transaction_id xid8 PRIMARY KEY,
+ login name NOT NULL,
+ tenant_id uuid NOT NULL,
+ job_id uuid,
+ purpose text NOT NULL,
+ command_id uuid,
+ record_hash text,
+ CHECK ((purpose IN ('discover','list') AND job_id IS NULL)
+  OR (purpose='timer' AND job_id IS NOT NULL))
+);
+ALTER TABLE control_plane.lp11_retention_scope OWNER TO jobguard_migration;
+REVOKE ALL ON TABLE control_plane.lp11_retention_scope FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_retention_tenant(j uuid,resource text,cid uuid DEFAULT NULL,digest text DEFAULT NULL) RETURNS uuid
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_retention_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+ AND CASE resource
+  WHEN 'profile' THEN s.purpose IN ('discover','list') OR s.job_id=j
+  WHEN 'review' THEN s.purpose='discover' OR s.job_id=j
+  WHEN 'job' THEN s.job_id=j
+  WHEN 'head' THEN s.command_id IS NOT NULL
+  WHEN 'write' THEN (s.job_id,s.command_id,s.record_hash)=(j,cid,digest)
+  ELSE false END
+$$;
+ALTER FUNCTION app.lp11_retention_tenant(uuid,text,uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_retention_tenant(uuid,text,uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_retention_tenant(uuid,text,uuid,text) TO jobguard_audit_writer;
+
+CREATE POLICY lp11_retention_book_read ON app.retention_record FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_retention_tenant(job_id,CASE record_kind
+  WHEN 'retention.profile.v1' THEN 'profile' WHEN 'retention.review.v1' THEN 'review' ELSE 'job' END));
+CREATE POLICY lp11_retention_timer_read ON app.job FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_retention_tenant(id,'job'));
+CREATE POLICY lp11_retention_timer_lock ON app.job FOR UPDATE TO jobguard_migration
+ USING (tenant_id=app.lp11_retention_tenant(id,'job')) WITH CHECK (false);
+CREATE POLICY lp11_retention_timer_append ON app.retention_record FOR INSERT TO jobguard_migration
+ WITH CHECK (record_kind='retention.review.v1' AND actor_membership_id IS NULL
+  AND record->>'trigger'='timer' AND record->>'owner'='retention-release-review-v1'
+  AND tenant_id=app.lp11_retention_tenant(job_id,'write',command_id,record_hash));
+CREATE POLICY lp11_retention_audit_head ON audit_control.audit_head TO jobguard_audit_writer
+ USING (tenant_id=app.lp11_retention_tenant(NULL,'head')) WITH CHECK (tenant_id=app.lp11_retention_tenant(NULL,'head'));
+CREATE POLICY lp11_retention_audit ON app.audit_event TO jobguard_audit_writer
+ USING (CASE WHEN subject_type='job' AND actor_ref='system:retention-release-review-v1'
+   AND app.lp11_audit_event_type(audit_event)='retention.review.raised'
+   AND pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,commandId}','uuid')
+  THEN tenant_id=app.lp11_retention_tenant(subject_ref::uuid,'write',(payload#>>'{references,commandId}')::uuid,payload#>>'{hashes,record}')
+  ELSE false END)
+ WITH CHECK (CASE WHEN subject_type='job' AND actor_ref='system:retention-release-review-v1'
+   AND app.lp11_audit_event_type(audit_event)='retention.review.raised'
+   AND pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,commandId}','uuid')
+  THEN tenant_id=app.lp11_retention_tenant(subject_ref::uuid,'write',(payload#>>'{references,commandId}')::uuid,payload#>>'{hashes,record}')
+  ELSE false END);
+
+CREATE OR REPLACE FUNCTION infrastructure.discover_retention_reviews() RETURNS TABLE(tenant_id uuid)
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR app.lp6e_request_binding_present()
+  OR NOT pg_has_role(session_user,'jobguard_infrastructure','USAGE') THEN RETURN; END IF;
+ -- The protected iteration reads only one registered tenant's profile and review rows.
+ FOR t IN SELECT id FROM control_plane.tenant ORDER BY id LOOP
+  INSERT INTO control_plane.lp11_retention_scope(transaction_id,login,tenant_id,purpose)
+  VALUES(pg_current_xact_id(),session_user,t,'discover');
+  IF EXISTS(
+   SELECT 1 FROM app.retention_record p
+   CROSS JOIN LATERAL jsonb_array_elements(p.record->'conditions') c
+   WHERE p.tenant_id=t AND p.record_kind='retention.profile.v1'
+    AND NOT EXISTS(SELECT 1 FROM app.retention_record newer WHERE newer.tenant_id=t AND newer.job_id=p.job_id
+     AND newer.record_kind='retention.profile.v1' AND newer.ordinal>p.ordinal)
+    AND c->>'dueDate'<=to_char(CURRENT_DATE,'YYYY-MM-DD')
+    AND NOT EXISTS(SELECT 1 FROM app.retention_record r WHERE r.tenant_id=t AND r.job_id=p.job_id
+     AND r.record_kind='retention.review.v1' AND r.record->>'profileId'=p.command_id::text
+     AND r.record->>'conditionId'=c->>'id')
+  ) THEN tenant_id:=t; RETURN NEXT; END IF;
+  DELETE FROM control_plane.lp11_retention_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION app.retention_timer_book(t uuid,j uuid) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE records jsonb;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'RETENTION_DARK'; END IF;
+ IF t IS NULL OR t IS DISTINCT FROM app.lp11_retention_tenant(j,'job')
+ THEN RAISE EXCEPTION 'RETENTION_NOT_FOUND'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||j::text,753));
+ IF NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=j) THEN RAISE EXCEPTION 'RETENTION_NOT_FOUND'; END IF;
+ SELECT coalesce(jsonb_agg(record ORDER BY ordinal),'[]'::jsonb) INTO records
+  FROM app.retention_record WHERE tenant_id=t AND job_id=j;
+ IF EXISTS(SELECT 1 FROM app.retention_record WHERE tenant_id=t AND job_id=j AND record_hash<>app.final_lock_hash(record))
+ THEN RAISE EXCEPTION 'RETENTION_CONFLICT'; END IF;
+ RETURN jsonb_build_object('actorId',NULL,'records',records,'bookHash',app.final_lock_hash(records),
+  'today',to_char(CURRENT_DATE,'YYYY-MM-DD'));
+END $$;
+
+CREATE OR REPLACE FUNCTION app.retention_timer(t uuid,j uuid,v jsonb,expected text) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE caller_tenant text:=current_setting('app.tenant_id',true); stored jsonb; result jsonb; profile jsonb; prior jsonb;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'RETENTION_DARK'; END IF;
+ PERFORM app.lp10_assert_worker();
+ IF t IS NULL OR app.lp6e_request_binding_present() OR NOT EXISTS(SELECT FROM control_plane.tenant WHERE id=t)
+ THEN RAISE EXCEPTION 'RETENTION_NOT_FOUND'; END IF;
+ INSERT INTO control_plane.lp11_retention_scope(transaction_id,login,tenant_id,job_id,purpose)
+ VALUES(pg_current_xact_id(),session_user,t,j,CASE WHEN j IS NULL THEN 'list' ELSE 'timer' END);
+ IF j IS NULL THEN
+  IF v IS NOT NULL OR expected IS NOT NULL THEN RAISE EXCEPTION 'RETENTION_CONFLICT'; END IF;
+  SELECT coalesce(jsonb_agg(job_id ORDER BY job_id),'[]'::jsonb) INTO result
+   FROM (SELECT DISTINCT job_id FROM app.retention_record WHERE tenant_id=t AND record_kind='retention.profile.v1') jobs;
+ ELSE
+  stored:=app.retention_timer_book(t,j);
+  IF v IS NOT NULL THEN
+   SELECT record INTO profile FROM app.retention_record WHERE tenant_id=t AND job_id=j
+    AND record_kind='retention.profile.v1' ORDER BY ordinal DESC LIMIT 1;
+   IF expected IS DISTINCT FROM stored->>'bookHash' OR jsonb_typeof(v) IS DISTINCT FROM 'object'
+    OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(v) k) IS DISTINCT FROM
+     ARRAY['conditionId','id','jobId','owner','profileId','raisedOn','tenantId','trigger','version']::text[]
+    OR v->>'version' IS DISTINCT FROM 'retention.review.v1' OR v->>'trigger' IS DISTINCT FROM 'timer'
+    OR v->>'owner' IS DISTINCT FROM 'retention-release-review-v1'
+    OR v->>'tenantId' IS DISTINCT FROM t::text OR v->>'jobId' IS DISTINCT FROM j::text
+    OR v->>'profileId' IS DISTINCT FROM profile->>'id' OR profile IS NULL
+    OR v->>'raisedOn' IS DISTINCT FROM to_char(CURRENT_DATE,'YYYY-MM-DD')
+    OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(profile->'conditions') c WHERE c->>'id'=v->>'conditionId'
+      AND c->>'dueDate'<=to_char(CURRENT_DATE,'YYYY-MM-DD'))
+   THEN RAISE EXCEPTION 'RETENTION_CONFLICT'; END IF;
+   SELECT record INTO prior FROM app.retention_record WHERE tenant_id=t AND job_id=j AND command_id=(v->>'id')::uuid;
+   IF FOUND THEN
+    IF prior IS DISTINCT FROM v THEN RAISE EXCEPTION 'RETENTION_CONFLICT'; END IF;
+   ELSE
+    IF EXISTS(SELECT 1 FROM app.retention_record WHERE tenant_id=t AND job_id=j AND record_kind='retention.review.v1'
+      AND record->>'profileId'=v->>'profileId' AND record->>'conditionId'=v->>'conditionId')
+    THEN RAISE EXCEPTION 'RETENTION_CONFLICT'; END IF;
+    IF NOT EXISTS(SELECT 1 FROM app.job WHERE tenant_id=t AND id=j AND status IN('live','invoiced','paid') FOR SHARE)
+    THEN RAISE EXCEPTION 'JOB_NOT_LIVE'; END IF;
+    UPDATE control_plane.lp11_retention_scope SET command_id=(v->>'id')::uuid,record_hash=app.final_lock_hash(v)
+    WHERE transaction_id=pg_current_xact_id_if_assigned();
+    INSERT INTO app.retention_record(tenant_id,job_id,command_id,ordinal,record_kind,record,record_hash,actor_membership_id)
+     VALUES(t,j,(v->>'id')::uuid,jsonb_array_length(stored->'records')+1,'retention.review.v1',v,app.final_lock_hash(v),NULL);
+    PERFORM set_config('app.tenant_id',t::text,true);
+    PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1',
+     'actorRef','system:retention-release-review-v1','eventType','retention.review.raised','subjectType','job','subjectRef',j::text,
+     'payload',jsonb_build_object('references',jsonb_build_object('commandId',v->>'id'),
+      'hashes',jsonb_build_object('record',app.final_lock_hash(v))))),'checked_operation');
+   END IF;
+   stored:=app.retention_timer_book(t,j);
+  END IF;
+  result:=stored||jsonb_build_object('today',to_char(CURRENT_DATE,'YYYY-MM-DD'));
+ END IF;
+ DELETE FROM control_plane.lp11_retention_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true);
+ RETURN result;
+EXCEPTION WHEN OTHERS THEN
+ PERFORM set_config('app.tenant_id',coalesce(caller_tenant,''),true); RAISE;
+END $$;
+REVOKE EXECUTE ON FUNCTION app.retention_timer(uuid,uuid,jsonb,text) FROM jobguard_runtime;
+GRANT EXECUTE ON FUNCTION app.retention_timer(uuid,uuid,jsonb,text) TO jobguard_worker;
+
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.
 ALTER VIEW app.ledger_balance SET (security_invoker=true);

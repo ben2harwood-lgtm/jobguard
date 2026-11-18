@@ -12508,6 +12508,218 @@
         "key": "owner|routine|function:app.lp11_audit_event_type(app.audit_event)|jobguard_migration",
         "group": "a-lp11-bound-tenant-r3"
       }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.audit_event|lp11_retention_audit|PERMISSIVE|ALL|jobguard_audit_writer|8d61383f1fca3ecf"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job|lp11_retention_timer_lock|PERMISSIVE|UPDATE|jobguard_migration|4d6eff9983cf76a1"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job|lp11_retention_timer_read|PERMISSIVE|SELECT|jobguard_migration|768f4797c0060852"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.retention_record|lp11_retention_book_read|PERMISSIVE|SELECT|jobguard_migration|f4a87f10c681946e"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.retention_record|lp11_retention_timer_append|PERMISSIVE|INSERT|jobguard_migration|0a57f9ef5ec01bf9"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "audit_control.audit_head|lp11_retention_audit_head|PERMISSIVE|ALL|jobguard_audit_writer|cf798c09ea2eed64"
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_retention_tenant(uuid,text,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_audit_writer"
+        ],
+        "definitionSha256": "f20373c1cd768ff9e13a4177a95d7cd760f45a0046ad50b6c639fc17337bd5d6",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.retention_timer(uuid,uuid,jsonb,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.retention_record"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "app.lp4_seal_audit",
+          "app.retention_timer_book"
+        ]
+      },
+      "after": {
+        "identity": "function:app.retention_timer(uuid,uuid,jsonb,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_worker"
+        ],
+        "definitionSha256": "89aa046cfa117b9e22abf9484f0e24c5eec69c58ee7f2fe12a1fc515221349a0",
+        "staticWrites": [
+          "app.retention_record",
+          "control_plane.lp11_retention_scope"
+        ],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "app.lp10_assert_worker",
+          "app.lp4_seal_audit",
+          "app.lp6e_request_binding_present",
+          "app.retention_timer_book"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.retention_timer_book(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_lock_hash"
+        ]
+      },
+      "after": {
+        "identity": "function:app.retention_timer_book(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "3e5307b58ee767580f982e5308bab2ad320726606919b1e39f505aaf8ed1c9f0",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_lock_hash",
+          "app.lp11_retention_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:infrastructure.discover_retention_reviews()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_infrastructure"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:infrastructure.discover_retention_reviews()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_infrastructure"
+        ],
+        "definitionSha256": "9fd8203f2540171acffcd77bf0a8e7849494844a34d3896451e69494d0c21355",
+        "staticWrites": [
+          "control_plane.lp11_retention_scope"
+        ],
+        "staticCalls": [
+          "app.lp6e_request_binding_present"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|routine|function:app.retention_timer(uuid,uuid,jsonb,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-m4-20-records"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_retention_tenant(uuid,text,uuid,text)|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.retention_timer(uuid,uuid,jsonb,text)|jobguard_worker|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_retention_tenant(uuid,text,uuid,text)|jobguard_migration",
+        "group": "a-lp11-bound-tenant-r3"
+      }
     }
   ],
   "upgrade": [
@@ -29764,6 +29976,154 @@
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
         ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "audit_event",
+        "policyname": "lp11_retention_audit",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_audit_writer}",
+        "cmd": "ALL",
+        "qual": "\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((actor_ref)::text = 'system:retention-release-review-v1'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'retention.review.raised'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,commandId}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_retention_tenant((subject_ref)::uuid, 'write'::text, ((payload #>> '{references,commandId}'::text[]))::uuid, (payload #>> '{hashes,record}'::text[])))\n    ELSE false\nEND",
+        "with_check": "\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((actor_ref)::text = 'system:retention-release-review-v1'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'retention.review.raised'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,commandId}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_retention_tenant((subject_ref)::uuid, 'write'::text, ((payload #>> '{references,commandId}'::text[]))::uuid, (payload #>> '{hashes,record}'::text[])))\n    ELSE false\nEND"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job",
+        "policyname": "lp11_retention_timer_lock",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "UPDATE",
+        "qual": "(tenant_id = app.lp11_retention_tenant(id, 'job'::text))",
+        "with_check": "false"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job",
+        "policyname": "lp11_retention_timer_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_retention_tenant(id, 'job'::text))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "retention_record",
+        "policyname": "lp11_retention_book_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_retention_tenant(job_id,\nCASE record_kind\n    WHEN 'retention.profile.v1'::text THEN 'profile'::text\n    WHEN 'retention.review.v1'::text THEN 'review'::text\n    ELSE 'job'::text\nEND))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "retention_record",
+        "policyname": "lp11_retention_timer_append",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "((record_kind = 'retention.review.v1'::text) AND (actor_membership_id IS NULL) AND ((record ->> 'trigger'::text) = 'timer'::text) AND ((record ->> 'owner'::text) = 'retention-release-review-v1'::text) AND (tenant_id = app.lp11_retention_tenant(job_id, 'write'::text, command_id, record_hash)))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "audit_control",
+        "tablename": "audit_head",
+        "policyname": "lp11_retention_audit_head",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_audit_writer}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = app.lp11_retention_tenant(NULL::uuid, 'head'::text))",
+        "with_check": "(tenant_id = app.lp11_retention_tenant(NULL::uuid, 'head'::text))"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_retention_tenant",
+        "args": "j uuid, resource text, cid uuid, digest text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_audit_writer=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "retention_timer",
+        "args": "t uuid, j uuid, v jsonb, expected text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "retention_timer",
+        "args": "t uuid, j uuid, v jsonb, expected text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_worker=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_retention_scope",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_retention_scope_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
       }
     }
   ],

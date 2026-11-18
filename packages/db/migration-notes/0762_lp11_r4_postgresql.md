@@ -3197,6 +3197,23 @@ nice -n 8 node tools/commercial-integrity-boundary.mjs
 nice -n 10 node --test --test-concurrency=1 tools/commercial-integrity-{current-source-guard,boundary}.test.mjs
 ```
 
+## r5 retention review discovery and execution
+
+All four retention timer cases in the 3e89a0416 run failed because the discovery and execution routines read FORCE-RLS books without protected authority. Discovery now works one registered tenant at a time under its existing infrastructure role and returns the same due tenant identifiers. The isolated 0761 worker login checks the stored job, locks the same book and can append only the exact checked timer review with a null human actor. The protected row authorizes the matching event and audit head. Book, hash, date, immutability and race checks remain enforced. The worker and infrastructure connections continue to deny raw table access.
+
+The runtime login lost the old timer routine grant. The API wiring test now requires the existing isolated worker pool and explicitly denies use of the business pool for this timer. The real PostgreSQL fixture uses separate, non-superuser worker and infrastructure logins. The exact records still belong to the selected book while the legacy setting names another tenant, and the setting is restored after the call. All four PostgreSQL cases passed. The unchanged S9 scanner and retention unit cases passed 157/157. Both populated upgrades, the 0761 upgrade, the tenant policy checks and proof loader passed 90/90. The 0762 proof records 1,490 LP0 objects, 843 populated upgrade objects and 690 policy changes.
+
+The workspace snapshot also passed workspace typecheck 7/7 and both commercial guard commands reported zero diagnostics.
+
+```sh
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/retention-review-timer.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-retention-role-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/lp11-bound-tenant-rls.integration.test.ts test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/migration-proof-loader.test.ts test/lp-10-worker-login-upgrade.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-retention-exact-results.json
+nice -n 8 pnpm --filter @jobguard/api exec vitest run src/retention-review-task.test.ts src/auth/context-boundary.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-retention-api-final-results.json
+nice -n 8 pnpm typecheck
+nice -n 7 node tools/commercial-integrity-current-source-guard.mjs
+nice -n 7 node tools/commercial-integrity-boundary.mjs
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

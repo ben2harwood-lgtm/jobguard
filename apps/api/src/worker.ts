@@ -136,7 +136,7 @@ Object.assign(tasks, readiness.tasks);
 const extraEscalationCrontab=registerExtraEscalationTasks(tasks,finalCheckEnvironment,parsed=>
  escalateOverdueExtrasTask(runtimePool,queueContext({tenantId:parsed.tenantId})));
 const extraEscalationTasks=extraEscalationCrontab?{discover_extra_escalations:tasks.discover_extra_escalations!,escalate_overdue_extras:tasks.escalate_overdue_extras!}:{};
-const retentionRepository=new RetentionRecordRepository(runtimePool);
+const retentionRepository=new RetentionRecordRepository(workerPool);
 const retentionCrontab=registerRetentionReviewTasks(tasks,process.env.JOBGUARD_ENV??"disabled",async tenantId=>{
  const context=queueContext({tenantId});
  await retentionRepository.raiseTimerReviews(context,refusal=>console.warn("retention book refused",refusal));
