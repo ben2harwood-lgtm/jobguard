@@ -3823,7 +3823,17 @@ The four latest direct held failures are in `test/northside-demo.integration.tes
 
 Focused evidence includes 70/70 across the private presence, contractor practice, LP-10 and LP-11 checks, 112/112 across the LP-6d source, recovery catalogue and proof loader, 37/37 purchase order, 73/73 across the six original relation and owner witnesses across the first run and recovery-catalogue retest, 53/53 across the seven final-check/receipt/credit/operative/signed-export/redaction files, 17/17 saved-estimate and 7/7 pay-now/cold isolation. The seven-test commercial isolation file and exact LP-6a relation-lock file passed. The two guards returned zero diagnostics, all 253 guard tests passed, and all seven typecheck tasks passed. Whole-suite confirmation on the latest candidate remains in progress.
 
-## Missing pg_dump
+## r5 logical dump and restore
+
+The embedded 16.10 server distribution supplies neither `pg_dump` nor `psql`. A workspace-local copy of Debian's signed `postgresql-client-17` package supplied both clients at version 17.11. The complete LP-6a restore file first ran two tests successfully and exposed one fixture failure. Its destination seed fired the saved-sample issuance trigger in the deliberately wrong database and `app.bind_request` refused the practice session.
+
+The disposable administrative loader now restores the actual source practice row and stale binding rows in one transaction, using `pg_dump --disable-triggers` to suppress issuance during the data load. The test requires the exact live credential row to survive the restore, confirms an actual `xid8` collision, and retains both runtime refusals. The destination catalogue and dark foundation checks still run. The real PostgreSQL 16.10 round trip restored six binding rows and passed all three tests.
+
+```sh
+pnpm --filter @jobguard/db exec vitest run test/lp6a-practice-restore.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-logical-dump-results.json
+```
+
+## Missing pg_dump in earlier full runs
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)
 
