@@ -77,7 +77,7 @@ privileges, last-owner protection, two-connection barrier races, next-request bi
 audit rollback, pending invitations and queued sends. Database execution is deferred
 to CI in the restricted builder sandbox; these are test cases, not a claimed DB PASS.
 
-Migration `0761_member_administration.sql` is additive. Apply it after its LP
+Migration `0763_member_administration.sql` is additive. Apply it after its LP
 predecessors; deployment numbering is serialized by the router. No backfill is needed.
 Forward-fix a failed procedure; emergency disablement revokes its identity EXECUTE
 grant. Never restore business-runtime membership writes. Do not reverse committed
@@ -96,7 +96,7 @@ from current code. No predecessor migration, snapshot, seal body, pin or protect
 baseline was copied. Main's signout, invitation CSRF, typed failures, session binding,
 issuer-revocation policy and audit.v3 sealer remain in place.
 
-Migration **0761_member_administration.sql** adds exactly two identity-only
+Migration **0763_member_administration.sql** adds exactly two identity-only
 routines. It replaces no existing routine, so neither successor-source registry
 needs an edit. No new table, fingerprinted column, business-runtime authority,
 owner creation, emergency access or provider action is introduced. Both routines
@@ -188,7 +188,7 @@ No unresolved implementation conflict or known failing local test remains.
    landing. Do not run the superseded LP-7 leaf or include later LP repairs.
 
 LATER / SIMPLICITY (retained initial-review observation): the owner/target/last-owner
-checks are repeated in the two routines in `0761_member_administration.sql`.
+checks are repeated in the two routines in `0763_member_administration.sql`.
 A later reviewed private helper could centralize them so security fixes cannot drift
 between removal and role changes. That would need separate privilege review; it
 is non-blocking and outside this additive catch-up.

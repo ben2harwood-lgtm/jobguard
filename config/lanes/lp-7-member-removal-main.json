@@ -14,7 +14,9 @@
         "docs/operations/member-administration.md",
         "packages/db/migrations/0761_member_administration.sql",
         "packages/db/test/migration-proofs/0761_member_administration.proof.json",
-        "packages/db/test/lp7-member-administration.integration.test.ts"
+        "packages/db/test/lp7-member-administration.integration.test.ts",
+        "packages/db/migrations/0763_member_administration.sql",
+        "packages/db/test/migration-proofs/0763_member_administration.proof.json"
       ],
       "receipt": "docs/operations/member-administration.md",
       "note": "LP-7 RED, main-based additive catch-up; NOPR=1, ordered landing after LP-6e."

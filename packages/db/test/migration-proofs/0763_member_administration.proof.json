@@ -1,5 +1,5 @@
 {
-  "migration": "0761_member_administration.sql",
+  "migration": "0763_member_administration.sql",
   "lp0": [
     {
       "section": "groups",
@@ -26,7 +26,7 @@
           "LP-12": "Review identity entry-point definer custody."
         },
         "sources": [
-          "packages/db/migrations/0761_member_administration.sql",
+          "packages/db/migrations/0763_member_administration.sql",
           "apps/api/src/auth/identity.application.ts"
         ],
         "tests": [
@@ -56,7 +56,7 @@
           "LP-12": "Review identity entry-point definer custody."
         },
         "sources": [
-          "packages/db/migrations/0761_member_administration.sql",
+          "packages/db/migrations/0763_member_administration.sql",
           "apps/api/src/auth/identity.application.ts"
         ],
         "tests": [
