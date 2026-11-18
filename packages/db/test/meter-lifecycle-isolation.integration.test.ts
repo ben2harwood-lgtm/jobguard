@@ -40,7 +40,7 @@ describe('MON1-S local privilege boundary, CI PostgreSQL only',()=>{
   expected.sort((a,b)=>a.object.localeCompare(b.object)||a.privilege.localeCompare(b.privilege));
   expect(grants).toEqual(expected);
   const policies=(await f.admin.query("SELECT tablename,roles::text[],cmd,qual,with_check FROM pg_policies WHERE policyname='meter_lifecycle_source_read' ORDER BY tablename")).rows;
-  expect(policies).toEqual(source.sort().map(tablename=>({tablename,roles:['jobguard_meter_owner'],cmd:'SELECT',qual:"(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",with_check:null})));
+  expect(policies).toEqual(source.sort().map(tablename=>({tablename,roles:['jobguard_meter_owner'],cmd:'SELECT',qual:"(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",with_check:null})));
  });
  it('M1S-08 every executing lifecycle principal has no privilege on any shadow relation, sequence or dedicated schema',async()=>{
   const db=await f.admin.connect();

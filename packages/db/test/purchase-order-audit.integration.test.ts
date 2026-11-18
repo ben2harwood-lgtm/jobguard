@@ -17,7 +17,7 @@ import { PurchaseOrderApplication } from "../../../apps/api/src/purchase-order.a
 import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repository.js";
 import { FakeMerchantOrderPort } from "../src/purchase-order-action.js";
 import { ActionExecutor, operateOutbox } from "../src/outbox.js";
-import { withTenant } from "../src/tenant-context.js";
+import { bindIssuedCredential, withTenant } from "../src/tenant-context.js";
 import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { rolledBack } from "./upgrade-proof-utils.js";
 import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
@@ -521,6 +521,7 @@ it("refuses direct manual attestations outside the demo database; dropping the g
   const insert = async (db: Pick<PoolClient, "query">) => {
     await db.query(`INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash)
       VALUES($1,$2,$3,'purchase_order.attest_manual',$4)`, [f.auth.context.tenantId, commandId, f.job, "a".repeat(64)]);
+    expect((await db.query("SELECT app.current_tenant() tenant")).rows).toEqual([{ tenant:f.auth.context.tenantId }]);
     return db.query(`INSERT INTO app.purchase_order_manual_attestation(id,tenant_id,job_id,draft_id,revision_id,
       merchant_id,actor_membership_id,command_id,supplier_reference_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
       [id, f.auth.context.tenantId, f.job, f.preview.order.draftId, f.revision.id,
@@ -544,8 +545,9 @@ it("refuses direct manual attestations outside the demo database; dropping the g
     (SELECT count(*) FROM app.watchdog_command_identity)::int commands`)).rows;
   try {
     expect((await outside.query("SELECT current_database() name")).rows[0].name).toBe("jobguard_order_attestation_outside");
+    const context = await testBoundTenantContext(outside, f.auth.context.tenantId, f.auth.membershipId);
     const before = await counts();
-    await expect(withTenant(outsideRuntime, f.auth.context, db => insert(db.$client)))
+    await expect(withTenant(outsideRuntime, context, db => insert(db.$client)))
       .rejects.toMatchObject({ message: "MODE_FORBIDDEN", code: "42501" });
     expect(await counts()).toEqual(before);
     expect((await outside.query("SELECT id FROM app.purchase_order_manual_attestation WHERE id=$1", [id])).rows).toEqual([]);
@@ -554,12 +556,13 @@ it("refuses direct manual attestations outside the demo database; dropping the g
     // restores both the trigger and every inserted row even if an assertion fails.
     await rolledBack(outside, async db => {
       await db.query("DROP TRIGGER a_manual_attestation_synthetic ON app.purchase_order_manual_attestation");
-      await db.query("SET LOCAL ROLE jobguard_runtime");
-      await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.auth.context.tenantId]);
+      await db.query("SET LOCAL SESSION AUTHORIZATION jobguard_runtime");
+      await bindIssuedCredential(db, context);
+      expect((await db.query("SELECT app.current_tenant() tenant")).rows).toEqual([{ tenant:f.auth.context.tenantId }]);
       expect((await insert(db)).rows).toEqual([{ id }]);
     });
     expect(await counts()).toEqual(before);
-    await expect(withTenant(outsideRuntime, f.auth.context, db => insert(db.$client)))
+    await expect(withTenant(outsideRuntime, context, db => insert(db.$client)))
       .rejects.toMatchObject({ message: "MODE_FORBIDDEN", code: "42501" });
     expect(await counts()).toEqual(before);
   } finally { await closeTestPools(outsideRuntime, outside); }

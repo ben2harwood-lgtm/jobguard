@@ -576,22 +576,36 @@ END $$;
 
 CREATE FUNCTION app.lp11_lock_practice_approval(digest text,requested_tenant uuid) RETURNS boolean
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE bound_tenant uuid:=app.lp11_policy_tenant(); member uuid; locked boolean;
 BEGIN
- IF current_setting('app.evidence_pack_approval_fence',true)='on' THEN
- IF nullif(current_setting('app.tenant_id',true),'') IS DISTINCT FROM requested_tenant::text THEN RETURN false; END IF;
+ IF current_setting('app.evidence_pack_approval_fence',true) IS DISTINCT FROM 'on' THEN RETURN true; END IF;
+ IF current_database()<>'jobguard_synthetic_demo'
+ OR (bound_tenant IS NOT NULL AND bound_tenant IS DISTINCT FROM requested_tenant) THEN RETURN false; END IF;
+ member:=CASE requested_tenant
+  WHEN '11111111-1111-4111-8111-111111111111'::uuid THEN 'd1500000-0000-4000-8000-000000000003'::uuid
+  WHEN '33333333-3333-4333-8333-333333333333'::uuid THEN '33333333-3333-4333-8333-333333333335'::uuid
+ END;
+ IF member IS NULL THEN RETURN false; END IF;
  -- Lock order: session, then the fixed practice membership. Lock by identity
  -- first; evaluate mutable permission/deadlines in a fresh statement after ALL
  -- waits so neither a committed revocation nor elapsed expiry is overlooked.
- PERFORM 1 FROM control_plane.practice_session s WHERE s.token_digest=digest FOR SHARE;
+ PERFORM 1 FROM control_plane.practice_session s
+ WHERE s.token_digest=digest AND s.environment='synthetic_demo'
+ FOR SHARE;
  IF NOT FOUND THEN RETURN false; END IF;
- -- FOR SHARE uses the tenant's existing UPDATE RLS policy. The approval path
- -- above requires that matching context; no bootstrap RLS policy is expanded.
-  PERFORM 1 FROM app.membership m WHERE m.tenant_id=requested_tenant
-   AND ((m.tenant_id='11111111-1111-4111-8111-111111111111'::uuid AND m.id='d1500000-0000-4000-8000-000000000003'::uuid) OR (m.tenant_id='33333333-3333-4333-8333-333333333333'::uuid AND m.id='33333333-3333-4333-8333-333333333335'::uuid))
-   AND m.identity_user_id='d1500000-0000-4000-8000-000000000001'::uuid FOR SHARE;
-  IF NOT FOUND THEN RETURN false; END IF;
+ IF NOT EXISTS(SELECT FROM control_plane.practice_session s WHERE s.token_digest=digest
+  AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()) THEN RETURN false; END IF;
+ IF bound_tenant IS NULL THEN
+  INSERT INTO control_plane.lp11_linked_parent_scope(transaction_id,tenant_id,membership_id)
+  VALUES(pg_current_xact_id(),requested_tenant,member);
  END IF;
- RETURN true;
+ PERFORM 1 FROM app.membership m WHERE m.tenant_id=requested_tenant AND m.id=member
+  AND m.identity_user_id='d1500000-0000-4000-8000-000000000001'::uuid FOR SHARE;
+ locked:=FOUND;
+ IF bound_tenant IS NULL THEN
+  DELETE FROM control_plane.lp11_linked_parent_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ END IF;
+ RETURN locked;
 END $$;
 ALTER FUNCTION app.lp11_lock_practice_approval(text,uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp11_lock_practice_approval(text,uuid) FROM PUBLIC;
@@ -659,6 +673,73 @@ BEGIN
  DELETE FROM control_plane.lp11_identity_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
  IF active THEN RETURN; END IF;
  RETURN QUERY SELECT l.tenant_id,l.membership_id,l.identity_user_id;
+END $$;
+
+-- Resolve committed state while a concurrent revoke owns the session row.
+-- The lookup role inspects only the live credential's own memberships and
+-- never creates a request binding on this path.
+GRANT CREATE ON SCHEMA app TO jobguard_session_lookup;
+CREATE FUNCTION app.lp11_contended_contractor_session(s uuid,selected_tenant uuid)
+ RETURNS TABLE(tenant_id uuid,membership_id uuid,identity_user_id uuid)
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE base_active boolean; answer record;
+BEGIN
+ IF selected_tenant IS NULL OR NOT EXISTS(SELECT FROM app.contractor_practice_session_live(s) l
+  WHERE l.tenant_id=selected_tenant) THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+ PERFORM app.lp11_set_identity_scope(selected_tenant,NULL);
+ base_active:=EXISTS(SELECT 1 FROM app.contractor_practice_session_live(s) l JOIN app.membership base
+   ON (base.tenant_id,base.id,base.identity_user_id)=(l.tenant_id,l.membership_id,l.identity_user_id)
+  WHERE base.revoked_at IS NULL AND (base.expires_at IS NULL OR base.expires_at>clock_timestamp())
+   AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE (r.tenant_id,r.membership_id)=(base.tenant_id,base.id)));
+ SELECT effective.tenant_id,effective.membership_id,effective.identity_user_id INTO answer
+  FROM app.lp6d_contractor_session_identity(s) effective
+  JOIN app.membership m ON (m.tenant_id,m.id,m.identity_user_id)=(effective.tenant_id,effective.membership_id,effective.identity_user_id)
+  WHERE m.tenant_id=selected_tenant
+   AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+   AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE (r.tenant_id,r.membership_id)=(m.tenant_id,m.id))
+  LIMIT 1;
+ DELETE FROM control_plane.lp11_identity_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ IF NOT base_active OR answer.membership_id IS NULL THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+ RETURN QUERY SELECT answer.tenant_id,answer.membership_id,answer.identity_user_id;
+END $$;
+ALTER FUNCTION app.lp11_contended_contractor_session(uuid,uuid) OWNER TO jobguard_session_lookup;
+REVOKE ALL ON FUNCTION app.lp11_contended_contractor_session(uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_contended_contractor_session(uuid,uuid) TO jobguard_migration;
+REVOKE CREATE ON SCHEMA app FROM jobguard_session_lookup;
+
+-- Latest definition: 0749_lp6d_remaining_routines.sql.
+CREATE OR REPLACE FUNCTION app.contractor_session(s uuid)
+ RETURNS TABLE(tenant_id uuid,membership_id uuid,identity_user_id uuid)
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE selected_tenant uuid; bound boolean; settled boolean:=true;
+BEGIN
+ -- LP6D_BOUND: this credential bridge binds before returning an actor. The
+ -- private projection below is also used by the binding lookup, avoiding a cycle.
+ SELECT live.tenant_id INTO selected_tenant FROM app.contractor_practice_session_live(s) live;
+ IF selected_tenant IS NULL THEN RETURN; END IF;
+ -- R4 (PH13): an unbound lookup never waits behind an in-flight end of this session. Main's bridge
+ -- took no lock; binding's FOR SHARE would wait for the open revoke. Probe without waiting first.
+ BEGIN PERFORM app.current_actor(); bound:=true;
+ EXCEPTION WHEN insufficient_privilege THEN bound:=false; END;
+ IF NOT bound THEN
+  BEGIN
+   PERFORM 1 FROM control_plane.contractor_practice_session x
+    WHERE x.session_digest=app.contractor_practice_session_digest(s) FOR SHARE NOWAIT;
+  EXCEPTION WHEN lock_not_available THEN settled:=false; END;
+ END IF;
+ IF settled THEN
+  PERFORM app.bind_request('contractor_practice',s::text,selected_tenant);
+  RETURN QUERY SELECT effective.* FROM app.lp6d_contractor_session_identity(s) effective
+   WHERE effective.tenant_id=app.current_tenant() AND effective.membership_id=app.current_actor();
+  RETURN;
+ END IF;
+ -- An end is in flight: answer from committed state as main did, but with binding's own refusals
+ -- (revoked/expired base owner or effective actor). Nothing is bound; every guarded routine still binds.
+ RETURN QUERY SELECT * FROM app.lp11_contended_contractor_session(s,selected_tenant);
 END $$;
 
 -- A checked identity operation may need tenant-owned rows before it can issue
@@ -2705,6 +2786,14 @@ ALTER FUNCTION app.lp11_shadow_job_tenant(uuid,text,text) OWNER TO jobguard_sess
 REVOKE ALL ON FUNCTION app.lp11_shadow_job_tenant(uuid,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.lp11_shadow_job_tenant(uuid,text,text) TO jobguard_shadow,jobguard_migration,jobguard_runtime,jobguard_audit_writer;
 
+-- Freeze the checked job's builder capture without exposing unlinked sources.
+CREATE POLICY lp11_shadow_builder_proposal ON app.job_record_proposal FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_shadow_job_tenant(job_id,NULL,'job'));
+CREATE POLICY lp11_shadow_builder_source ON app.capture_source FOR SELECT TO jobguard_migration
+ USING (EXISTS(SELECT 1 FROM app.job_record_proposal p
+  WHERE (p.tenant_id,p.source_id)=(capture_source.tenant_id,capture_source.id)
+   AND p.tenant_id=app.lp11_shadow_job_tenant(p.job_id,NULL,'job')));
+
 CREATE FUNCTION app.lp11_shadow_terms_lookup(t uuid,j uuid,enabled boolean) RETURNS boolean
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 BEGIN
@@ -3101,8 +3190,8 @@ ALTER FUNCTION app.lp11_shadow_evidence_tenant(uuid) OWNER TO jobguard_migration
 REVOKE ALL ON FUNCTION app.lp11_shadow_evidence_tenant(uuid) FROM PUBLIC;
 
 
--- Linked practice preserves the existing parent-first lock order. The
--- checked parent and its effective owner qualify only one membership lock.
+-- Linked practice and anonymous practice approval preserve their existing
+-- credential-first lock order. A checked credential qualifies one membership lock.
 CREATE UNLOGGED TABLE control_plane.lp11_linked_parent_scope (
  transaction_id xid8 PRIMARY KEY,
  tenant_id uuid NOT NULL,
@@ -5199,6 +5288,38 @@ BEGIN
  OR EXISTS(SELECT 1 FROM app.subscription_alert a JOIN app.subscription_correction_disposition d ON(d.tenant_id,d.correction_id)=(a.tenant_id,a.correction_id) WHERE a.tenant_id=t AND a.period_id<>d.period_id)
  THEN RAISE EXCEPTION 'SUBSCRIPTION_INTEGRITY_FAILURE' USING ERRCODE='23514'; END IF;
  RETURN NULL;
+END $$;
+
+-- Private identity-key claims require the same protected tenant as the originating snapshot.
+CREATE OR REPLACE FUNCTION app.claim_trial_identity_keys(p_tenant uuid,p_snapshot uuid) RETURNS void
+LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,app AS $$
+DECLARE s app.trial_identity_snapshot; k text; keys text[]:='{}'; existing app.trial_identity_key_claim;
+BEGIN
+ IF p_tenant IS NULL OR p_tenant IS DISTINCT FROM app.lp11_policy_tenant() THEN
+  RAISE EXCEPTION 'TRIAL_IDENTITY_CONTEXT_REQUIRED' USING ERRCODE='42501';
+ END IF;
+ SELECT * INTO s FROM app.trial_identity_snapshot WHERE tenant_id=p_tenant AND id=p_snapshot FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'TRIAL_IDENTITY_REQUIRED' USING ERRCODE='22023'; END IF;
+ -- array_to_json(text[]) preserves the JS compact tuple encoding, including escaping.
+ IF s.company_number IS NOT NULL THEN keys:=array_append(keys,array_to_json(ARRAY['free-first-job.v1','company',s.company_number])::text); END IF;
+ IF s.normalized_phone IS NOT NULL AND s.card_fingerprint IS NOT NULL THEN
+  keys:=array_append(keys,array_to_json(ARRAY['free-first-job.v1','phone_card',s.normalized_phone,'simulated',s.card_fingerprint])::text);
+ END IF;
+ FOR k IN SELECT value FROM unnest(keys) value ORDER BY value COLLATE "C" LOOP
+  SELECT * INTO existing FROM app.trial_identity_key_claim WHERE identity_key=k;
+  IF FOUND THEN
+   IF (existing.tenant_id,existing.job_id,existing.activation_id,existing.snapshot_id) IS DISTINCT FROM (s.tenant_id,s.job_id,s.activation_id,s.id) THEN
+    RAISE EXCEPTION 'TRIAL_IDENTITY_CONFLICT' USING ERRCODE='23505';
+   END IF;
+  ELSE
+   INSERT INTO app.trial_identity_key_claim(identity_key,tenant_id,job_id,activation_id,snapshot_id)
+    VALUES(k,s.tenant_id,s.job_id,s.activation_id,s.id);
+  END IF;
+ END LOOP;
+EXCEPTION WHEN unique_violation THEN
+ -- Cross-tenant collisions are decided by the global unique index, not an RLS-visible lookup.
+ -- Never surface the index's identity-bearing DETAIL to callers.
+ RAISE EXCEPTION 'TRIAL_IDENTITY_CONFLICT' USING ERRCODE='23505';
 END $$;
 
 -- The ledger view was an owner-rights view. Preserve its security barrier and

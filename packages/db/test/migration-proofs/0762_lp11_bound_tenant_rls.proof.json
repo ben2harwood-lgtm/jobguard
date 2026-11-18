@@ -1229,7 +1229,7 @@
       "before": null,
       "after": {
         "key": "owner|routine|function:app.lp6_session_authority(text,text,uuid)|jobguard_session_lookup",
-        "group": "a-lp11-bound-tenant-r3"
+        "group": "a-lp6a-request-binding"
       }
     },
     {
@@ -2476,9 +2476,13 @@
         "otherExecute": [
           "jobguard_session_lookup"
         ],
-        "definitionSha256": "0006e041b9412c65bb64bac145854fdddbc49bf54d594caf121062f0ab168cf8",
-        "staticWrites": [],
-        "staticCalls": []
+        "definitionSha256": "de1539ebba78bebf6e9a3914ad5ba1d7d1e5a12a6d7b1f079f825dd925a07c66",
+        "staticWrites": [
+          "control_plane.lp11_linked_parent_scope"
+        ],
+        "staticCalls": [
+          "app.lp11_policy_tenant"
+        ]
       }
     },
     {
@@ -13489,6 +13493,146 @@
         "definitionSha256": "97f88d640ac40cbb652d46c213adf551b86c6a911245db20912bb8e12f5d2e56",
         "staticWrites": [],
         "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.claim_trial_identity_keys(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.trial_identity_key_claim"
+        ],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.claim_trial_identity_keys(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "2bbc827763cb3f538536739a4e7b2a690a1acb74e1b1d623e7407606e26af30d",
+        "staticWrites": [
+          "app.trial_identity_key_claim"
+        ],
+        "staticCalls": [
+          "app.lp11_policy_tenant"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.capture_source|lp11_shadow_builder_source|PERMISSIVE|SELECT|jobguard_migration|923e001213459cd9"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job_record_proposal|lp11_shadow_builder_proposal|PERMISSIVE|SELECT|jobguard_migration|c21e5979d282f384"
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.contractor_session(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "31ec4cf4fc9e0ae0751ebf8717464de6d68653d025e08445b41ed982b933b053",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.bind_request",
+          "app.contractor_practice_session_digest",
+          "app.contractor_practice_session_live",
+          "app.current_actor",
+          "app.current_tenant",
+          "app.lp6d_contractor_session_identity"
+        ]
+      },
+      "after": {
+        "identity": "function:app.contractor_session(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "09d0993582535e0d4ca706ebb4721482a6b021f3924452867e866c715e3e539a",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.bind_request",
+          "app.contractor_practice_session_digest",
+          "app.contractor_practice_session_live",
+          "app.current_actor",
+          "app.current_tenant",
+          "app.lp11_contended_contractor_session",
+          "app.lp6d_contractor_session_identity"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_contended_contractor_session(uuid,uuid)",
+        "owner": "jobguard_session_lookup",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": "6a19c1999e97d4edacc04769f34bc0b53406f7a119185a384f1a484df27bdccc",
+        "staticWrites": [
+          "control_plane.lp11_identity_scope"
+        ],
+        "staticCalls": [
+          "app.contractor_practice_session_live",
+          "app.lp11_set_identity_scope",
+          "app.lp6d_contractor_session_identity"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_contended_contractor_session(uuid,uuid)|jobguard_migration|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_contended_contractor_session(uuid,uuid)|jobguard_session_lookup",
+        "group": "a-lp11-bound-tenant-r3"
       }
     }
   ],
@@ -31698,6 +31842,49 @@
         "cmd": "ALL",
         "qual": "(tenant_id = app.lp11_export_refusal_tenant(NULL::uuid, NULL::text, NULL::text, NULL::text))",
         "with_check": "(tenant_id = app.lp11_export_refusal_tenant(NULL::uuid, NULL::text, NULL::text, NULL::text))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "capture_source",
+        "policyname": "lp11_shadow_builder_source",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(EXISTS ( SELECT 1\n   FROM app.job_record_proposal p\n  WHERE (((p.tenant_id = capture_source.tenant_id) AND (p.source_id = capture_source.id)) AND (p.tenant_id = app.lp11_shadow_job_tenant(p.job_id, NULL::text, 'job'::text)))))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job_record_proposal",
+        "policyname": "lp11_shadow_builder_proposal",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_shadow_job_tenant(job_id, NULL::text, 'job'::text))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_contended_contractor_session",
+        "args": "s uuid, selected_tenant uuid",
+        "proowner": "jobguard_session_lookup",
+        "proacl": "{jobguard_session_lookup=X/jobguard_session_lookup,jobguard_migration=X/jobguard_session_lookup}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
       }
     }
   ],

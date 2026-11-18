@@ -60,7 +60,8 @@ describe('immutable evidence pack commands on PostgreSQL', () => {
       }
       await expect(client.query('INSERT INTO app.evidence_pack(id,tenant_id,job_id,case_id) VALUES($1,$2,$3,$4)', [randomUUID(), fixture.tenantId, fixture.jobId, fixture.caseId])).rejects.toMatchObject({ code: '42501' });
       await client.query("SELECT set_config('app.tenant_id','malformed',false)");
-      await expect(client.query('SELECT * FROM app.evidence_pack')).rejects.toMatchObject({ code: '22P02' });
+      expect((await client.query('SELECT * FROM app.evidence_pack')).rows).toEqual([]);
+      await expect(client.query("SELECT app.bind_request('real',$1,$2)", ['0'.repeat(64), 'malformed'])).rejects.toMatchObject({ code: '22P02' });
     } finally { await client.query('RESET app.tenant_id'); client.release(); }
   });
   it('records exact attachment approval, rejects stale hashes, and invalidates previous approvals without updating history', async () => {

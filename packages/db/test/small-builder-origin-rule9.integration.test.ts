@@ -17,6 +17,7 @@ type Snapshot = { table: string; columns: Column[]; primaryKey: string[]; rows: 
 type Differences = { types: string[]; changed: string[]; missing: string[] };
 const tables = ["job", "scope_identity", "variation", "job_commercial_track", "extra_origin"];
 const fixtures = Array.from({ length: 2 }, () => ({ tenant: randomUUID(), job: randomUUID(), scope: randomUUID(), variation: randomUUID() }));
+const runtimeActors = new Map<string, string>();
 const ownName = "0128_shadow_persistence.sql";
 const routineSignature = "app.half_even_ratio(bigint,bigint,bigint)";
 const scratchColumn = "f7_nullable_control";
@@ -145,6 +146,7 @@ describe.sequential("FIXLATER-7 supplementary SV-2 rule-9 proof", () => {
   }, 60_000);
 
   it("[F7-U11] runtime tenant isolation survives the complete upgrade", async () => {
+    for (const fixture of fixtures) runtimeActors.set(fixture.tenant, (await jobDoorsActor(admin, fixture.tenant)).member);
     await admin.query(`CREATE ROLE f7_runtime LOGIN PASSWORD '${dbAccessValue}' INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
       GRANT jobguard_runtime TO f7_runtime`);
     runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "f7_runtime", password: dbAccessValue, max: 1 });
@@ -154,7 +156,9 @@ describe.sequential("FIXLATER-7 supplementary SV-2 rule-9 proof", () => {
     expect(await runtimeOrigins()).toEqual([]);
     expect(await runtimeOrigins("")).toEqual([]);
     expect(await runtimeOrigins(fixtures[1]!.tenant, fixtures[0]!.variation)).toEqual([]);
-    // This proves RLS under a supplied setting, not caller authentication.
+    expect(await runtimeOrigins(fixtures[0]!.tenant, undefined, fixtures[1]!.tenant)).toEqual([
+      { tenant_id: fixtures[0]!.tenant, variation_id: fixtures[0]!.variation },
+    ]);
   });
 
   it("[F7-U12] refused runtime writes and shadow reads leave original rows unchanged", async () => {
@@ -304,13 +308,16 @@ async function preparePredecessors(): Promise<void> {
   originals = await captureOriginals(admin);
 }
 
-async function runtimeOrigins(tenant?: string, variation?: string): Promise<unknown[]> {
+async function runtimeOrigins(tenant?: string, variation?: string, setting = tenant): Promise<unknown[]> {
   const client = await runtime!.connect();
   try {
     await client.query("BEGIN");
-    if (tenant !== undefined) await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+    if (setting !== undefined) await client.query("SELECT set_config('app.tenant_id',$1,true)", [setting]);
     else expect((await client.query("SELECT nullif(current_setting('app.tenant_id',true),'') AS tenant")).rows).toEqual([{ tenant: null }]);
+    if (tenant) await bindTestClient(admin, client, tenant, runtimeActors.get(tenant)!);
     return (await client.query(`SELECT tenant_id,variation_id FROM app.extra_origin
       ${variation === undefined ? "" : "WHERE variation_id=$1"} ORDER BY tenant_id,variation_id`, variation === undefined ? [] : [variation])).rows;
   } finally { try { await client.query("ROLLBACK"); } finally { client.release(); } }
 }
+import { jobDoorsActor } from "./lp-job-doors-fixtures.js";
+import { bindTestClient } from "./tenant-context-test-utils.js";
