@@ -1780,6 +1780,29 @@ pnpm --filter @jobguard/db exec vitest run test/recovery-attribution.integration
 
 All 29 tests passed, including the exact fixture and mutation controls. The full checked-product run began before these fixture-only changes.
 
+## r5 legacy variation-origin and meter fixtures
+
+The maintenance trigger `app.record_legacy_builder_origin` previously selected its tenant through a caller setting. It now uses the exact variation from the administrative INSERT. The private policy can read the matching command key and write just that variation's legacy origin. The usual bound request path retains its original checks. The meter tests supply the fixture owner's binding before entering the private seam and at both sides of its existing lock barrier.
+
+The meter and race files went from 21 failures to zero on PostgreSQL 16.10. The 35 ordinary-text final-check cases also passed against the updated migration. The new table remains empty in the historical upgrade comparisons. The catalogue records 1,346 effective-privilege changes, 744 upgrade changes and 634 policy changes.
+
+```sh
+pnpm --filter @jobguard/db exec vitest run test/meter-trip.integration.test.ts test/meter-trip-races.integration.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db exec vitest run test/meter-trip.integration.test.ts test/meter-trip-races.integration.test.ts test/real-fc-ordinary-words.integration.test.ts --maxWorkers=1 --reporter=default
+```
+
+## r5 contractor-entitlement fixtures
+
+The fixture read of the current track assignment had entered the migration role with a tenant setting and no binding. The fixture now enters through the already-issued contractor credential and qualifies the assignment by tenant. The superseding-assignment case writes through the same bound owner transaction and retains the exact audit assertion. Across the three focused files, the eight non-held failures went to zero. **Effective switched member is not replaced by owner** in `test/contractor-entitlement-session.integration.test.ts` still reaches the held work-order customer insert.
+
+```sh
+pnpm --filter @jobguard/db exec vitest run test/contractor-entitlement-authority.integration.test.ts test/contractor-entitlement-session.integration.test.ts test/contractor-entitlement-upgrade.integration.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db exec vitest run test/contractor-entitlement-authority.integration.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/migration-proof-loader.test.ts --maxWorkers=1 --reporter=default
+```
+
+The first entitlement batch passed 24 of 26. One failure was held and the other passed in the subsequent six-test authority rerun. The catalogue, upgrade and tenant policy batch passed 89 of 89.
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

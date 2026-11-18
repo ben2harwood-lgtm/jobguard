@@ -1048,6 +1048,48 @@ BEGIN
  RETURN NEW;
 END $$;
 
+-- Administrative variation inserts can stamp one legacy origin for the
+-- exact variation witnessed by the AFTER INSERT trigger.
+CREATE UNLOGGED TABLE control_plane.lp11_legacy_origin_scope (
+ transaction_id xid8 PRIMARY KEY,
+ tenant_id uuid NOT NULL,
+ job_id uuid NOT NULL,
+ variation_id uuid NOT NULL
+);
+ALTER TABLE control_plane.lp11_legacy_origin_scope OWNER TO jobguard_migration;
+REVOKE ALL ON control_plane.lp11_legacy_origin_scope FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_legacy_origin_tenant(j uuid,v uuid,command_key text) RETURNS uuid
+ LANGUAGE sql VOLATILE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_legacy_origin_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned()
+  AND ((s.job_id,s.variation_id)=(j,v) OR command_key='extra-origin:'||s.job_id::text||':'||s.variation_id::text)
+$$;
+ALTER FUNCTION app.lp11_legacy_origin_tenant(uuid,uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_legacy_origin_tenant(uuid,uuid,text) FROM PUBLIC;
+CREATE POLICY lp11_legacy_origin_insert ON app.extra_origin FOR INSERT TO jobguard_migration
+ WITH CHECK (provenance='legacy_synthetic_capture' AND tenant_id=app.lp11_legacy_origin_tenant(job_id,variation_id,NULL));
+CREATE POLICY lp11_legacy_origin_command ON app.command_receipt FOR SELECT TO jobguard_migration
+ USING (command_type='LogBuilderExtra' AND tenant_id=app.lp11_legacy_origin_tenant(NULL,NULL,semantic_key));
+
+CREATE OR REPLACE FUNCTION app.record_legacy_builder_origin() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
+BEGIN
+ IF NEW.job_track<>'small_builder' OR NEW.origin<>'builder_logged' THEN RETURN NEW; END IF;
+ IF maintenance THEN
+  INSERT INTO control_plane.lp11_legacy_origin_scope(transaction_id,tenant_id,job_id,variation_id)
+  VALUES(pg_current_xact_id(),NEW.tenant_id,NEW.job_id,NEW.id);
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM app.command_receipt WHERE tenant_id=NEW.tenant_id AND command_type='LogBuilderExtra' AND semantic_key=('extra-origin:'||NEW.job_id::text||':'||NEW.id::text)) THEN
+  INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,raising_role,server_recorded_at,provenance,source_capture_kind,source_capture_hash)
+  VALUES(NEW.tenant_id,NEW.job_id,NEW.id,NEW.job_track,NEW.origin,'legacy_unrecorded',transaction_timestamp(),'legacy_synthetic_capture',NEW.capture_kind,encode(sha256(convert_to(NEW.capture_text,'UTF8')),'hex'));
+ END IF;
+ IF maintenance THEN
+  DELETE FROM control_plane.lp11_legacy_origin_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ END IF;
+ RETURN NEW;
+END $$;
+
 -- The retired transition remains private. A maintenance invocation may change
 -- only its exact job, and the nested triggers keep their own narrower scopes.
 CREATE UNLOGGED TABLE control_plane.lp11_maintenance_job_transition (
