@@ -6,4 +6,4 @@ No landed migration is edited. Reconciled ordering puts hosted blocker PR #839
 first; LP7 has no open PR and moves its unlanded placeholder to the next free
 number at its own integration. Northside is not renamed in repair 1.
 The migration note contains scope, forward-fix strategy, validation and open gates:
-`packages/db/migration-notes/0761_northside_hosted_agreement.md`.
+`packages/db/migration-notes/0762_northside_hosted_agreement.md`.
