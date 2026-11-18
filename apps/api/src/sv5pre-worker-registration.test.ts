@@ -59,6 +59,7 @@ describe("SV5PRE final-check registration", () => {
     }));
     const listeners = vi.spyOn(process, "once").mockReturnValue(process);
     for (const name of ["GRAPHILE_DATABASE_URL", "RUNTIME_DATABASE_URL", "SHADOW_DATABASE_URL"]) vi.stubEnv(name, "postgresql://localhost/sv5pre");
+    vi.stubEnv("WORKER_DATABASE_URL", "postgresql://localhost/outbound-worker");
     vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
     try {
       vi.useFakeTimers({ toFake: ["Date"] });

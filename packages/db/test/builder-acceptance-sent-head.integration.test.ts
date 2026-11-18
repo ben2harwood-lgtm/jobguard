@@ -39,24 +39,24 @@ async function seed(db: Database) {
 }
 async function fixture(db: Database, context: Context, predecessor = false) {
   const recordPredecessorDelivery: Parameters<typeof prepareActivationFixtureV3>[7] = predecessor
-    ? async (scope, jobId, documentId) => {
+    ? async (tenantId, jobId, documentId) => {
         // The older schema can store a sent quote but has no worker login yet.
         // Seed its completed fake receipt under the owner, with all guards active.
-        await transaction(db.owner, scope.tenantId, async client => {
+        await transaction(db.owner, tenantId, async client => {
           const sent = await client.query(`UPDATE app.action_outbox o
             SET status='executing',claimed_at=clock_timestamp(),updated_at=clock_timestamp()
             FROM app.quote_send s WHERE (o.tenant_id,o.id)=(s.tenant_id,s.outbox_action_id)
               AND (s.tenant_id,s.job_id,s.document_id)=($1,$2,$3)
               AND o.status='pending' AND o.adapter='fake_quote_delivery' RETURNING o.id`,
-            [scope.tenantId, jobId, documentId]);
+            [tenantId, jobId, documentId]);
           expect(sent.rows).toHaveLength(1);
           const action = sent.rows[0].id;
           await client.query(`INSERT INTO app.action_attempt
             (id,tenant_id,action_id,attempt_number,outcome,provider_reference,finished_at)
             VALUES(gen_random_uuid(),$1,$2,1,'succeeded',$3,clock_timestamp())`,
-            [scope.tenantId, action, `fake-receipt:${action}`]);
+            [tenantId, action, `fake-receipt:${action}`]);
           await client.query(`UPDATE app.action_outbox SET status='succeeded',completed_at=clock_timestamp(),
-            updated_at=clock_timestamp() WHERE (tenant_id,id)=($1,$2)`, [scope.tenantId, action]);
+            updated_at=clock_timestamp() WHERE (tenant_id,id)=($1,$2)`, [tenantId, action]);
         });
       }
     : undefined;

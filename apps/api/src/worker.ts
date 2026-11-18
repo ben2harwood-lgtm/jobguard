@@ -16,7 +16,7 @@ import { FinalCheckWorker } from "./final-check.worker.js";
 import { generatePracticePng } from "./proof/proof.application.js";
 import { ShadowFixtureProposer, shadowFixtureCorpusV1 } from "@jobguard/ai";
 import { ShadowDetectionWorker } from "./shadow-detection.worker.js";
-import { WorkerActionExecutor, type OutboundAdapter, type SafeTelemetry, verifiedTenantContextForQueuedJob } from "@jobguard/db";
+import { ActionExecutor, closeOutboundWorkerPool, type OutboundAdapter, type SafeTelemetry, verifiedTenantContextForQueuedJob } from "@jobguard/db";
 import { run, type TaskList } from "graphile-worker";
 import { Pool } from "pg";
 import { z } from "zod";
@@ -30,7 +30,6 @@ const logger = new RedactingLogger();
 async function startWorker() {
 const environmentSchema=z.object({WORKER_DATABASE_URL:z.string().url(),GRAPHILE_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url"),RUNTIME_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url"),SHADOW_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url")}).strict();
 const environment=environmentSchema.parse({WORKER_DATABASE_URL:process.env.WORKER_DATABASE_URL,GRAPHILE_DATABASE_URL:process.env.GRAPHILE_DATABASE_URL,RUNTIME_DATABASE_URL:process.env.RUNTIME_DATABASE_URL,SHADOW_DATABASE_URL:process.env.SHADOW_DATABASE_URL});
-const workerPool=new Pool({connectionString:environment.WORKER_DATABASE_URL,application_name:"jobguard-outbound-worker"});
 const runtimePool=new Pool({connectionString:environment.RUNTIME_DATABASE_URL,application_name:"jobguard-business-worker"});
 const shadowPool=new Pool({connectionString:environment.SHADOW_DATABASE_URL,application_name:"jobguard-shadow-worker"});
 const posture=(await shadowPool.query<{safe:boolean}>(`SELECT NOT r.rolsuper AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolbypassrls
@@ -48,12 +47,12 @@ await detectionWorker.start();
 function queueContext(payload:unknown){const parsed=z.object({tenantId:z.string().uuid()}).strict().parse(payload);return verifiedTenantContextForQueuedJob(parsed.tenantId);}
 const fakeAdapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,async deliver(action){return {kind:"succeeded",providerReference:`synthetic:${action.providerEffectKey}`};},async reconcile(){return "unknown";}};
 const telemetry:SafeTelemetry={emit(name,fields){logger.log({event:name,...fields});}};
-const executor=new WorkerActionExecutor(workerPool,new Map([[fakeAdapter.name,fakeAdapter]]),telemetry);
+const executor=new ActionExecutor(runtimePool,new Map([[fakeAdapter.name,fakeAdapter]]),telemetry);
 const tasks:TaskList={};
 registerOutboxDiscoveryTask(tasks);
 Object.assign(tasks,{
  // Gate money operations from the persisted action type; ordinary delivery keeps its existing behavior.
- async execute_outbox(payload){const parsed=z.object({actionId:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await executor.execute(parsed.actionId,actionType=>requireOutboxSettlementEligibility(process.env.JOBGUARD_ENV??"disabled",actionType));},
+ async execute_outbox(payload){const parsed=z.object({actionId:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await executor.execute(queueContext({tenantId:parsed.tenantId}),parsed.actionId,actionType=>requireOutboxSettlementEligibility(process.env.JOBGUARD_ENV??"disabled",actionType));},
  async detect_shadow_evidence(payload){const parsed=z.object({version:z.literal("shadow-detection-task.v1"),tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" })}).strict().parse(payload);await detectionWorker.execute(queueContext({tenantId:parsed.tenantId}),parsed);},
 } satisfies TaskList);
 // SV-5 practice run: the checked lock trigger or owner request queues identifiers; this worker alone
@@ -147,7 +146,7 @@ const runner=await run({connectionString:environment.GRAPHILE_DATABASE_URL,
  taskList:redactingTasks(practiceOnly?{...extraEscalationTasks,...readiness.tasks,discover_final_check_requests:tasks.discover_final_check_requests!,final_check_practice_run:tasks.final_check_practice_run!,discover_evidence_pack_requests:tasks.discover_evidence_pack_requests!,build_evidence_pack_v3:tasks.build_evidence_pack_v3!,discover_demo_source_holds:tasks.discover_demo_source_holds!,hold_demo_sources:tasks.hold_demo_sources!}:tasks),
  crontab:[retentionCrontab && !practiceOnly ? retentionCrontab : "",practiceOnly?"*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds":"*/1 * * * * discover_outbox\n*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds",practiceOnly?readiness.crontab:"",extraEscalationCrontab].filter(Boolean).join("\n")});
 for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{
- void (async()=>{await runner.stop();await runtimePool.end();await workerPool.end();await shadowPool.end();})()
+ void (async()=>{await runner.stop();await runtimePool.end();await closeOutboundWorkerPool();await shadowPool.end();})()
   .catch(()=>{logger.error("WORKER_TASK_FAILED");process.exitCode=1;});
 });
 }

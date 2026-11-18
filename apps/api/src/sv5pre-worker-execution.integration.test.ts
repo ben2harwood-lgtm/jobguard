@@ -57,7 +57,7 @@ beforeAll(async () => {
     await admin.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`);
   }
   await migrate(admin);
-  for (const [login, group] of [["sv5pre_worker_runtime", "jobguard_runtime"], ["sv5pre_worker_shadow", "jobguard_shadow"], ["sv5pre_worker_graphile", "jobguard_infrastructure"]]) {
+  for (const [login, group] of [["sv5pre_worker_runtime", "jobguard_runtime"], ["sv5pre_worker_shadow", "jobguard_shadow"], ["sv5pre_worker_graphile", "jobguard_infrastructure"], ["sv5pre_worker_outbound", "jobguard_worker"]]) {
     await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS`);
     await admin.query(`ALTER ROLE ${login} PASSWORD '${credential}'`); await admin.query(`GRANT ${group} TO ${login}`);
   }
@@ -113,7 +113,8 @@ describe("SV5PRE actual Graphile execution", () => {
     let output = "";
     entrypoint = spawn("pnpm", ["--filter", "@jobguard/api", "start:worker"], { cwd: root, detached: true, stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, JOBGUARD_ENV: "synthetic_demo", GRAPHILE_DATABASE_URL: connection("sv5pre_worker_graphile"),
-        RUNTIME_DATABASE_URL: connection("sv5pre_worker_runtime"), SHADOW_DATABASE_URL: connection("sv5pre_worker_shadow") } });
+        RUNTIME_DATABASE_URL: connection("sv5pre_worker_runtime"), SHADOW_DATABASE_URL: connection("sv5pre_worker_shadow"),
+        WORKER_DATABASE_URL: connection("sv5pre_worker_outbound") } });
     entrypoint.stdout?.on("data", chunk => { output += String(chunk); }); entrypoint.stderr?.on("data", chunk => { output += String(chunk); });
     try {
       await until(async () => {
