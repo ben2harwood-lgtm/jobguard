@@ -1,6 +1,6 @@
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {randomUUID} from "node:crypto";
-import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,availableFinalCheck,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
+import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,availableFinalCheck,finalCheckTenant,finalCheckShadowJob,type FinalCheckFixture} from "./final-check-fixture.js";
 import {FinalCheckRepository} from "../src/final-check-repository.js";
 let f:FinalCheckFixture;beforeAll(async()=>{f=await createFinalCheckFixture()},60000);afterAll(async()=>closeFinalCheckFixture(f));
 const tables=['final_check_disposition_binding','final_check_manifest','final_check_manifest_source','final_check_processing_source','final_check_reveal_proof','final_check_run_binding','final_check_source_attempt'];
@@ -31,7 +31,7 @@ it("SV5-22 missing/malformed tenant fails closed and pooled transactions lose co
 });
 it("SV5-24 before lock zero/many signals yield identical controlled response",async()=>{
  const a=await seedFinalCheckJob(f),repo=new FinalCheckRepository(f.runtime),before=await repo.read(a.context,a.jobId,a.digest);
- await finalCheckTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Synthetic hidden extra','low')",[a.tenantId,a.jobId,randomUUID(),randomUUID()]));
+ await finalCheckShadowJob(f.shadow,a.tenantId,a.jobId,db=>db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Synthetic hidden extra','low')",[a.tenantId,a.jobId,randomUUID(),randomUUID()]));
  expect(await repo.read(a.context,a.jobId,a.digest)).toEqual(before);expect(before).toEqual({state:'unlocked',items:[]});
 });
 it("SV5-22 own source integrity validator refuses an after-cutoff or same-tenant wrong-job source",async()=>{
@@ -59,7 +59,7 @@ it("SV5-24 real builder requests preserve identical runtime statement sequence w
   expect(statements.length).toBeGreaterThan(0);expect(statements.join('\n')).not.toMatch(/\bshadow_commercial_signal\b|\bshadow_signal_\w+\b/u);
   return {out,statements};
  }
- const zero=await read();await finalCheckTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Synthetic hidden proposal','low')",[a.tenantId,a.jobId,randomUUID(),randomUUID()]));expect(await read()).toEqual(zero);
+ const zero=await read();await finalCheckShadowJob(f.shadow,a.tenantId,a.jobId,db=>db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Synthetic hidden proposal','low')",[a.tenantId,a.jobId,randomUUID(),randomUUID()]));expect(await read()).toEqual(zero);
  // Inspect this piece's own routine branch as well: server log_statement shows outer calls, not nested PL/pgSQL reads.
  const sql=await readFile(new URL('../migrations/0238_final_check.sql',import.meta.url),'utf8'),routine=sql.slice(sql.indexOf('CREATE FUNCTION app.read_final_check_reveal'),sql.indexOf('CREATE FUNCTION app.record_final_check_disposition'));
  expect(routine.indexOf("IF NOT FOUND THEN RETURN jsonb_build_object('state','unlocked'")).toBeLessThan(routine.indexOf('app.shadow_commercial_signal'));

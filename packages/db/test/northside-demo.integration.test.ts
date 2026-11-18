@@ -128,10 +128,13 @@ async function reworkWorld() {
   return { f, seed, act, ctx, log, repo };
 }
 type ReworkWorld = Awaited<ReturnType<typeof reworkWorld>>;
-let world: ReworkWorld;
+let worldPromise: Promise<ReworkWorld> | undefined;
+function getWorld() {
+  return worldPromise ??= reworkWorld();
+}
 
 it("ACTION-ATTRIBUTION durably binds every journey command to the persisted tester, fictional actor and switch, with no delivery attempts", async () => {
-  world = await reworkWorld(); const { f, seed, act, ctx, log, repo } = world;
+  const { f, seed, act, ctx, log, repo } = await getWorld();
   const op = await act(seed.journey.operativeMembershipId), extra = await log(seed.journey.jobId, op);
   const originBefore = (await c.admin.query("SELECT row_to_json(o)::text bytes FROM app.extra_origin o WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, extra.extraId])).rows;
   const sv = await act(seed.surveyorMembershipId), priceId = randomUUID();
@@ -182,7 +185,7 @@ it("ACTION-ATTRIBUTION durably binds every journey command to the persisted test
 }, 600_000);
 
 it("CLIENT-ISOLATION permits a second client's own extra and denies cross-client presentation, view and decision", async () => {
-  const { f, seed, act, ctx, log, repo } = world;
+  const { f, seed, act, ctx, log, repo } = await getWorld();
   await act();
   const secondOrder = (await c.admin.query(`SELECT w.job_id,w.client_id,w.contract_id,a.membership_id FROM app.work_order w JOIN app.job_assignment a ON(a.tenant_id,a.job_id)=(w.tenant_id,w.job_id)
     JOIN app.membership m ON(m.tenant_id,m.id)=(a.tenant_id,a.membership_id)
@@ -221,7 +224,7 @@ it("CLIENT-ISOLATION permits a second client's own extra and denies cross-client
 }, 120_000);
 
 it("SWITCH-REFERENCE rejects invented, cross-actor, cross-session and out-of-window references without masking the existing switch TRUNCATE guard", async () => {
-  const { f, act, ctx } = world; await act();
+  const { f, act, ctx } = await getWorld(); await act();
   const { rolledBack } = await import("./upgrade-proof-utils.js");
   const overrides = [{ switch_id: randomUUID() }, { actor_membership_id: f.p.membershipId }, { session_ref: randomUUID() }, { tenant_id: randomUUID() }, { tester_membership_id: randomUUID() }, { recorded_at: "2000-01-01T00:00:00Z" }];
   for (const change of overrides) await rolledBack(c.admin, async db => {
@@ -238,18 +241,18 @@ it("SWITCH-REFERENCE rejects invented, cross-actor, cross-session and out-of-win
 });
 
 it("SETTINGS-SNAPSHOT retains the stored definition, contract references and immutable requirement snapshots", async () => {
-  const { f, act } = world; await act();
-  const before = await northsideRun(c.runtime, f.p, await world.ctx());
+  const { f, act, ctx } = await getWorld(); await act();
+  const before = await northsideRun(c.runtime, f.p, await ctx());
   expect(before?.settings).toEqual(northsideSettings);
   const stored = (await c.admin.query("SELECT row_to_json(a)::text bytes FROM app.extra_approval_request a WHERE tenant_id=$1 ORDER BY id", [f.p.tenantId])).rows;
-  await registerNorthsideRun(c.runtime, f.p, await world.ctx());
-  const context = await world.ctx();
+  await registerNorthsideRun(c.runtime, f.p, await ctx());
+  const context = await ctx();
   await expect(withTenant(c.runtime, context, db => db.$client.query("SELECT app.northside_register($1,$2::jsonb)", [f.p.membershipId, JSON.stringify({ ...northsideSettings, linkLifetimeMinutes: 1 })]))).rejects.toMatchObject({ message: "NORTHSIDE_SETTINGS_CONFLICT" });
   await expect(withTenant(c.runtime, context, db => db.$client.query("UPDATE app.northside_run SET settings_version='changed'"))).rejects.toMatchObject({ code: "42501" });
   for (const statement of ["UPDATE app.northside_action_attribution SET actor_role='spoofed'", "DELETE FROM app.northside_action_attribution", "TRUNCATE app.northside_action_attribution", "UPDATE app.northside_run SET settings_version='changed'"]) {
     await expect(withTenant(c.admin, context, async db => { await db.$client.query("SET LOCAL ROLE jobguard_migration"); await db.$client.query(statement); })).rejects.toMatchObject({ code: "55000", message: "NORTHSIDE_HISTORY_IMMUTABLE" });
   }
-  expect(await northsideRun(c.runtime, f.p, await world.ctx())).toEqual(before);
+  expect(await northsideRun(c.runtime, f.p, await ctx())).toEqual(before);
   expect((await c.admin.query("SELECT row_to_json(a)::text bytes FROM app.extra_approval_request a WHERE tenant_id=$1 ORDER BY id", [f.p.tenantId])).rows).toEqual(stored);
   const contracts = (await c.admin.query(`SELECT count(*)::int n FROM app.work_order w JOIN app.northside_action_attribution a ON a.tenant_id=w.tenant_id AND a.contract_version_id=w.contract_version_id
     WHERE w.tenant_id=$1 AND a.settings_version=$2 AND a.settings_hash=$3`, [f.p.tenantId, before!.settings.version, before!.settingsHash])).rows[0].n;
@@ -257,7 +260,7 @@ it("SETTINGS-SNAPSHOT retains the stored definition, contract references and imm
 });
 
 it("RESET-HISTORY starts a new run while retaining earlier attribution, settings, evidence, origins and the audit prefix", async () => {
-  const { f, act } = world; await act();
+  const { f, act } = await getWorld(); await act();
   const { proofBefore, proofDifferences } = await import("./upgrade-proof-utils.js");
   const before = await proofBefore(c.admin, ["app.northside_run", "app.northside_action_attribution", "app.extra_origin", "app.evidence_object", "app.audit_event"]);
   await new ContractorPracticeSessionRepository(c.runtime).revoke(await requestContext(c, f), f.session);

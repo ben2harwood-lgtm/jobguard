@@ -4361,6 +4361,263 @@ CREATE POLICY lp11_meter_day_insert ON app.meter_lifecycle_day_ledger FOR INSERT
    AND c.status='counted' AND c.recipe_version='london-midnight-stops.v1'
    AND app.lp11_meter_source_matches(c.tenant_id,c.source_id,c.scope_id,c.source_hash)));
 
+-- Owner-side proof checks use the protected request tenant and the trigger's
+-- exact job and evidence link. Runtime retains its existing table policies.
+CREATE UNLOGGED TABLE control_plane.lp11_proof_read (
+ transaction_id xid8 PRIMARY KEY,
+ login name NOT NULL,
+ tenant_id uuid NOT NULL,
+ job_id uuid NOT NULL,
+ link_id uuid,
+ read_original boolean NOT NULL
+);
+ALTER TABLE control_plane.lp11_proof_read OWNER TO jobguard_migration;
+REVOKE ALL ON TABLE control_plane.lp11_proof_read FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_open_proof_read(t uuid,j uuid,l uuid,original boolean) RETURNS void
+ LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF app.lp11_policy_tenant() IS DISTINCT FROM t THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+ INSERT INTO control_plane.lp11_proof_read VALUES(pg_current_xact_id(),session_user,t,j,l,original);
+END $$;
+ALTER FUNCTION app.lp11_open_proof_read(uuid,uuid,uuid,boolean) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_open_proof_read(uuid,uuid,uuid,boolean) FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_close_proof_read() RETURNS void
+ LANGUAGE sql SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
+ DELETE FROM control_plane.lp11_proof_read WHERE transaction_id=pg_current_xact_id_if_assigned() AND login=session_user
+$$;
+ALTER FUNCTION app.lp11_close_proof_read() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_close_proof_read() FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_proof_read_tenant(j uuid,l uuid,resource text) RETURNS uuid
+ LANGUAGE sql VOLATILE SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_proof_read s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+  AND s.job_id=j AND s.tenant_id=app.lp11_policy_tenant()
+  AND CASE resource
+   WHEN 'link' THEN s.link_id IS NULL OR s.link_id=l
+   WHEN 'lock' THEN s.link_id IS NULL
+   WHEN 'original' THEN s.read_original
+   ELSE false END
+$$;
+ALTER FUNCTION app.lp11_proof_read_tenant(uuid,uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_proof_read_tenant(uuid,uuid,text) FROM PUBLIC;
+
+ALTER POLICY customer_stage_source ON app.evidence_link
+ USING (tenant_id=coalesce(app.lp11_customer_tenant('stage_job',job_id),app.lp11_proof_read_tenant(job_id,id,'link')));
+ALTER POLICY customer_stage_source ON app.stage_completion
+ USING (tenant_id=coalesce(app.lp11_customer_tenant('stage_job',job_id),app.lp11_proof_read_tenant(job_id,NULL,'lock')));
+ALTER POLICY customer_stage_source ON app.stage_review_event
+ USING (EXISTS(SELECT FROM app.stage_completion s
+  WHERE (s.tenant_id,s.id)=(stage_review_event.tenant_id,stage_review_event.stage_completion_id)
+   AND s.tenant_id=coalesce(app.lp11_customer_tenant('stage_job',s.job_id),app.lp11_proof_read_tenant(s.job_id,NULL,'lock'))));
+ALTER POLICY job_proof_source_read ON app.synthetic_evidence_original
+ USING (tenant_id=app.lp11_proof_read_tenant(job_id,NULL,'original')
+  OR (tenant_id=app.lp11_recovery_worker_tenant(job_id,NULL,NULL,NULL,'row')
+   AND current_setting('app.job_proof_source_read',true)='on'));
+
+CREATE OR REPLACE FUNCTION app.guard_job_proof_source()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $$
+DECLARE j uuid; t uuid:=NEW.tenant_id; requirement jsonb; anchor uuid; e app.evidence_object; intact boolean;
+BEGIN
+ IF (SELECT rolsuper FROM pg_roles WHERE rolname=session_user) THEN RETURN NEW; END IF;
+ IF TG_TABLE_NAME='evidence_invalidation' THEN
+  SELECT job_id INTO j FROM app.evidence_object WHERE tenant_id=t AND id=NEW.evidence_id;
+ ELSE j:=NEW.job_id; END IF;
+ IF EXISTS(SELECT 1 FROM app.job_commercial_track WHERE tenant_id=t AND job_id=j AND job_track='contractor') THEN RETURN NEW; END IF;
+ -- Voice and general unscoped captures are not the final-account proof upload.
+ IF TG_TABLE_NAME='evidence_upload' THEN
+  IF NEW.scope_item_id IS NULL OR NEW.expected_content_type='audio/wav' THEN RETURN NEW; END IF;
+ END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended('job-proof:'||t::text||':'||j::text,0));
+ IF NOT EXISTS(SELECT 1 FROM app.job_proof_statement WHERE tenant_id=t AND job_id=j) THEN RETURN NEW; END IF;
+ IF TG_TABLE_NAME='evidence_upload' THEN
+  IF EXISTS(SELECT 1 FROM app.evidence_upload WHERE tenant_id=t AND id=NEW.id) THEN RETURN NEW; END IF;
+  SELECT jsonb_build_object('requiredEvidenceType',CASE WHEN includes_electrical_work THEN 'electrical_certificate' ELSE 'completion_photo' END,'stage',CASE WHEN includes_electrical_work THEN 'electrical-stage' ELSE 'completion-photo-stage' END) INTO requirement FROM app.job_proof_statement WHERE tenant_id=t AND job_id=j ORDER BY revision DESC LIMIT 1;
+
+ ELSIF TG_TABLE_NAME='stage_completion' THEN
+  SELECT jsonb_build_object('requiredEvidenceType',CASE WHEN includes_electrical_work THEN 'electrical_certificate' ELSE 'completion_photo' END,'stage',CASE WHEN includes_electrical_work THEN 'electrical-stage' ELSE 'completion-photo-stage' END) INTO requirement FROM app.job_proof_statement WHERE tenant_id=t AND job_id=j ORDER BY revision DESC LIMIT 1;
+
+  SELECT id INTO anchor FROM app.scope_identity WHERE tenant_id=t AND job_id=j AND state='confirmed' ORDER BY created_at,id LIMIT 1;
+  IF NEW.scope_item_id IS DISTINCT FROM anchor THEN RETURN NEW; END IF;
+  PERFORM app.lp11_open_proof_read(t,j,NEW.evidence_link_id,true);
+  SELECT obj.* INTO e FROM app.evidence_link l JOIN app.evidence_object obj ON(obj.tenant_id,obj.job_id,obj.id)=(l.tenant_id,l.job_id,l.evidence_id)
+   JOIN app.evidence_upload u ON(u.tenant_id,u.job_id,u.id,u.scope_item_id)=(obj.tenant_id,obj.job_id,obj.upload_id,obj.scope_item_id)
+   WHERE l.tenant_id=t AND l.job_id=j AND l.id=NEW.evidence_link_id AND obj.scope_item_id=anchor
+    AND obj.evidence_type=requirement->>'requiredEvidenceType' AND obj.kind='original' AND u.state='verified' AND u.object_version_id=obj.object_version_id
+    AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=t AND i.evidence_id=obj.id);
+  SELECT EXISTS(SELECT 1 FROM app.synthetic_evidence_original original
+   WHERE(original.tenant_id,original.job_id,original.scope_item_id,original.upload_id,original.object_key,original.object_version_id)=(e.tenant_id,e.job_id,e.scope_item_id,e.upload_id,e.object_key,e.object_version_id)
+    AND encode(sha256(original.bytes),'hex')=e.sha256 AND octet_length(original.bytes)=e.byte_length) INTO intact;
+  PERFORM app.lp11_close_proof_read();
+  IF e.id IS NULL OR NEW.scope_item_id IS DISTINCT FROM anchor OR NEW.stage IS DISTINCT FROM requirement->>'stage' OR NOT intact
+  THEN RAISE EXCEPTION 'PROOF_NOT_FINAL' USING ERRCODE='23514'; END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION app.guard_final_lock_proof_statement()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $$
+DECLARE s app.job_proof_statement; binding app.final_account_proof_statement; requirement jsonb; anchor uuid; canonical_source text; invalidations text; expected_hash text; current_proof boolean;
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended('job-proof:'||NEW.tenant_id::text||':'||NEW.job_id::text,0));
+ SELECT * INTO s FROM app.job_proof_statement WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id ORDER BY revision DESC LIMIT 1;
+ SELECT * INTO binding FROM app.final_account_proof_statement WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND revision_id=NEW.final_account_revision_id;
+ IF s.id IS NULL THEN RETURN NEW; END IF;
+ IF binding.statement_id IS DISTINCT FROM s.id
+  OR NOT EXISTS(SELECT 1 FROM app.final_account_revision r WHERE r.tenant_id=NEW.tenant_id AND r.job_id=NEW.job_id AND r.id=binding.revision_id AND r.source_hash=binding.source_hash)
+ THEN RAISE EXCEPTION 'STALE_OR_BLOCKED_FINAL_ACCOUNT' USING ERRCODE='40001'; END IF;
+ requirement:=jsonb_build_object('requiredEvidenceType',CASE WHEN s.includes_electrical_work THEN 'electrical_certificate' ELSE 'completion_photo' END,'stage',CASE WHEN s.includes_electrical_work THEN 'electrical-stage' ELSE 'completion-photo-stage' END);
+ SELECT id INTO anchor FROM app.scope_identity WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND state='confirmed' ORDER BY created_at,id LIMIT 1;
+ PERFORM app.lp11_open_proof_read(NEW.tenant_id,NEW.job_id,NULL,true);
+ SELECT EXISTS(
+  SELECT 1 FROM app.final_account_proof p
+  JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.id,e.scope_item_id,e.evidence_type,e.object_version_id,e.sha256)=(p.tenant_id,p.job_id,p.evidence_id,p.scope_item_id,p.evidence_type,p.object_version_id,p.sha256)
+  JOIN app.evidence_upload u ON(u.tenant_id,u.job_id,u.id,u.scope_item_id)=(e.tenant_id,e.job_id,e.upload_id,e.scope_item_id)
+  JOIN app.evidence_link l ON(l.tenant_id,l.job_id,l.scope_item_id,l.evidence_id)=(e.tenant_id,e.job_id,e.scope_item_id,e.id)
+  JOIN app.stage_completion c ON(c.tenant_id,c.job_id,c.scope_item_id,c.evidence_link_id)=(l.tenant_id,l.job_id,l.scope_item_id,l.id)
+  WHERE p.tenant_id=NEW.tenant_id AND p.job_id=NEW.job_id AND p.final_account_revision_id=NEW.final_account_revision_id
+   AND p.mandatory AND e.kind='original' AND e.scope_item_id=anchor AND e.evidence_type=requirement->>'requiredEvidenceType'
+   AND c.stage=requirement->>'stage' AND u.state='verified' AND u.object_version_id=e.object_version_id
+   AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=e.tenant_id AND i.evidence_id=e.id)
+   AND EXISTS(SELECT 1 FROM app.synthetic_evidence_original original WHERE (original.tenant_id,original.job_id,original.scope_item_id,original.upload_id,original.object_key,original.object_version_id)=(e.tenant_id,e.job_id,e.scope_item_id,e.upload_id,e.object_key,e.object_version_id) AND encode(sha256(original.bytes),'hex')=e.sha256 AND octet_length(original.bytes)=e.byte_length)
+   AND NOT EXISTS(SELECT 1 FROM app.stage_review_event rv WHERE rv.tenant_id=c.tenant_id AND rv.stage_completion_id=c.id)
+   AND NOT EXISTS(SELECT 1 FROM app.stage_completion newer WHERE newer.tenant_id=c.tenant_id AND newer.supersedes_completion_id=c.id)
+ ) INTO current_proof;
+ PERFORM app.lp11_close_proof_read();
+ IF NOT current_proof THEN RAISE EXCEPTION 'FINAL_ACCOUNT_SOURCE_CHANGED' USING ERRCODE='23514'; END IF;
+ -- Recompute the explicit source from immutable revision rows; a forged binding
+ -- or issue_blocked=false flag never substitutes for the original source bytes.
+ SELECT app.final_lock_canonical(jsonb_build_object(
+  'lines',coalesce((SELECT jsonb_agg(jsonb_build_object('kind',line_kind,'sourceId',source_id,'scopeItemId',scope_item_id,'commercialRevisionId',commercial_revision_id,'description',description,'netPence',net_pence,'approvalId',approval_id) ORDER BY line_kind,source_id) FROM app.final_account_line WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND final_account_revision_id=NEW.final_account_revision_id),'[]'::jsonb),
+  'proof',coalesce((SELECT jsonb_agg(jsonb_build_object('evidenceId',evidence_id,'objectVersionId',object_version_id,'scopeItemId',scope_item_id,'evidenceType',evidence_type,'sha256',sha256,'mandatory',mandatory) ORDER BY scope_item_id,evidence_type,evidence_id) FROM app.final_account_proof WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND final_account_revision_id=NEW.final_account_revision_id),'[]'::jsonb),
+  'mandatoryProofRequirements',jsonb_build_array(jsonb_build_object('scopeItemId',anchor,'evidenceType',requirement->>'requiredEvidenceType')),
+  'taxPolicyVersion','candidate_m1_standard_v1')) INTO canonical_source;
+ SELECT '['||coalesce(string_agg('{"id":'||to_json(i.id::text)::text||',"evidence_id":'||to_json(i.evidence_id::text)::text||'}',',' ORDER BY i.id),'')||']' INTO invalidations
+ FROM app.evidence_invalidation i JOIN app.evidence_object e ON(e.tenant_id,e.id)=(i.tenant_id,i.evidence_id)
+ WHERE i.tenant_id=NEW.tenant_id AND e.job_id=NEW.job_id;
+ expected_hash:=encode(sha256(convert_to('{"source":'||to_json(canonical_source)::text||',"proofStatementId":'||to_json(s.id::text)::text||',"proofInvalidations":'||invalidations||'}','UTF8')),'hex');
+ IF binding.source_hash IS DISTINCT FROM expected_hash THEN RAISE EXCEPTION 'FINAL_ACCOUNT_SOURCE_CHANGED' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION app.ch4_capture_site_source()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $$
+DECLARE r app.job_site_source_receipt; evidence app.evidence_object; upload app.evidence_upload; doc app.supplier_document; ver app.supplier_document_version;
+ actor uuid; marker app.job_work_state_event; seq bigint; prior_context text:=current_setting('app.tenant_id',true);
+ stage_proof boolean:=false; proof_stage text;
+BEGIN
+ -- Excluded billing/catch/office facts return BEFORE any business lock, including when their existing command already appended audit.
+ IF TG_TABLE_NAME='job_diary_entry' THEN
+  IF NOT NEW.on_site THEN RETURN NEW; END IF;
+ ELSIF TG_TABLE_NAME='evidence_object' THEN
+  IF NEW.kind<>'original' OR NEW.evidence_type NOT IN('pre_cover_photo','completion_photo','excavation_photo','electrical_certificate') OR NEW.byte_length<=0 THEN RETURN NEW; END IF;
+ ELSIF TG_TABLE_NAME='extra_origin' THEN
+  IF NEW.kind<>'builder_logged' OR NEW.provenance<>'command' OR NEW.job_track<>'small_builder' THEN RETURN NEW; END IF;
+ ELSIF TG_TABLE_NAME='supplier_document_version' THEN
+  SELECT * INTO doc FROM app.supplier_document WHERE (tenant_id,job_id,id)=(NEW.tenant_id,NEW.job_id,NEW.document_id);
+  IF doc.document_type<>'delivery' OR doc.status<>'ready' OR NEW.parent_version_id IS NOT NULL OR NEW.version<>1 THEN RETURN NEW; END IF;
+ END IF;
+ IF NOT app.ch4_source_job(NEW.tenant_id,NEW.job_id) THEN RETURN NEW; END IF;
+ r.tenant_id:=NEW.tenant_id; r.job_id:=NEW.job_id; r.environment:='synthetic_demo'; r.provenance:='server_source'; r.version:='job-site-source-receipt.v1';
+ IF TG_TABLE_NAME='job_diary_entry' THEN
+  r.source_kind:='diary'; r.evidence_id:=NEW.evidence_id;
+  SELECT upload_id INTO r.upload_id FROM app.evidence_object WHERE (tenant_id,job_id,id)=(NEW.tenant_id,NEW.job_id,NEW.evidence_id);
+  r.received_at:=NEW.source_received_at; r.source_hash:=NEW.sha256; r.object_version_id:=NEW.object_version_id;
+  r.fact_key:='diary:'||NEW.id::text; r.actor_membership_id:=NEW.actor_membership_id; r.provenance:='source_command';
+ ELSIF TG_TABLE_NAME='evidence_object' THEN
+  IF NEW.kind<>'original' OR NEW.evidence_type NOT IN('pre_cover_photo','completion_photo','excavation_photo','electrical_certificate') OR NEW.byte_length<=0 THEN RETURN NEW; END IF;
+  SELECT * INTO upload FROM app.evidence_upload WHERE (tenant_id,job_id,id)=(NEW.tenant_id,NEW.job_id,NEW.upload_id) AND state='verified';
+  IF upload.id IS NULL OR NEW.sha256<>upload.expected_sha256 OR NEW.object_version_id<>upload.object_version_id OR EXISTS(SELECT 1 FROM app.evidence_invalidation WHERE tenant_id=NEW.tenant_id AND evidence_id=NEW.id) THEN RETURN NEW; END IF;
+  IF EXISTS(SELECT 1 FROM app.job_photo_purpose WHERE tenant_id=NEW.tenant_id AND job_id=NEW.job_id AND evidence_id=NEW.id AND purpose='snagging') THEN RETURN NEW; END IF;
+  r.source_kind:='photo'; r.evidence_id:=NEW.id; r.upload_id:=NEW.upload_id; r.received_at:=upload.server_received_at; r.source_hash:=NEW.sha256; r.object_version_id:=NEW.object_version_id; r.fact_key:='photo:'||NEW.upload_id::text;
+ ELSIF TG_TABLE_NAME='supplier_document_version' THEN
+  SELECT * INTO doc FROM app.supplier_document WHERE (tenant_id,job_id,id)=(NEW.tenant_id,NEW.job_id,NEW.document_id);
+  IF doc.document_type<>'delivery' OR doc.status<>'ready' OR NEW.parent_version_id IS NOT NULL OR NEW.version<>1 THEN RETURN NEW; END IF;
+  r.source_kind:='delivery_note'; r.document_id:=doc.id; r.document_version_id:=NEW.id; r.received_at:=doc.created_at; r.source_hash:=NEW.content_hash; r.fact_key:='document:'||doc.id::text;
+ ELSIF TG_TABLE_NAME='goods_receipt' THEN
+  SELECT * INTO doc FROM app.supplier_document WHERE (tenant_id,job_id,id)=(NEW.tenant_id,NEW.job_id,NEW.document_id);
+  SELECT * INTO ver FROM app.supplier_document_version WHERE (tenant_id,job_id,document_id)=(NEW.tenant_id,NEW.job_id,NEW.document_id) AND parent_version_id IS NULL ORDER BY version,id LIMIT 1;
+  r.source_kind:='goods_receipt'; r.goods_receipt_id:=NEW.id; r.document_id:=NEW.document_id; r.document_version_id:=ver.id; r.received_at:=CASE WHEN doc.document_type='delivery' AND doc.status='ready' THEN doc.created_at ELSE NEW.created_at END; r.source_hash:=doc.content_hash; r.fact_key:='document:'||NEW.document_id::text;
+ ELSIF TG_TABLE_NAME='extra_origin' THEN
+  IF NEW.kind<>'builder_logged' OR NEW.provenance<>'command' THEN RETURN NEW; END IF;
+  IF NOT EXISTS(SELECT 1 FROM app.command_receipt c JOIN app.membership m ON(m.tenant_id,m.id)=(c.tenant_id,c.actor_membership_id) WHERE c.tenant_id=NEW.tenant_id AND c.command_id=NEW.command_id AND c.command_type='LogBuilderExtra' AND m.id=NEW.raising_membership_id AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())) THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  r.source_kind:='builder_extra'; r.variation_id:=NEW.variation_id; r.extra_track:='small_builder'; r.extra_kind:='builder_logged'; r.received_at:=NEW.server_recorded_at; r.source_hash:=NEW.source_capture_hash; r.fact_key:='builder_extra:'||NEW.variation_id::text; r.actor_membership_id:=NEW.raising_membership_id; r.provenance:='source_command';
+ ELSIF TG_TABLE_NAME='stage_completion' THEN
+  SELECT c.actor_membership_id INTO actor FROM app.command_receipt c WHERE c.tenant_id=NEW.tenant_id AND c.command_id=NEW.command_id AND c.command_type='proof.complete';
+  IF actor IS NOT NULL AND NOT EXISTS(SELECT 1 FROM app.membership WHERE tenant_id=NEW.tenant_id AND id=actor AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())) THEN RAISE EXCEPTION 'WORK_STATE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  r.source_kind:='stage_completion'; r.stage_completion_id:=NEW.id; r.stage_evidence_link_id:=NEW.evidence_link_id; r.received_at:=NEW.completed_at; r.source_hash:=encode(sha256(convert_to(NEW.id::text||':'||NEW.evidence_link_id::text,'UTF8')),'hex'); r.fact_key:='stage_completion:'||NEW.id::text; r.actor_membership_id:=actor;
+ ELSE RETURN NEW;
+ END IF;
+ IF r.actor_membership_id IS NULL THEN
+  SELECT auth.membership_id INTO r.actor_membership_id FROM app.job job CROSS JOIN LATERAL app.authenticate_practice_session(job.practice_session_digest,job.tenant_id) auth WHERE job.tenant_id=r.tenant_id AND job.id=r.job_id AND job.practice_session_digest IS NOT NULL;
+  IF r.actor_membership_id IS NOT NULL THEN r.provenance:='source_command'; END IF;
+ END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(r.tenant_id::text,184));
+ IF r.source_kind='diary' AND EXISTS(SELECT 1 FROM app.job x WHERE x.tenant_id=r.tenant_id AND x.id=r.job_id AND x.practice_session_digest IS NULL) THEN PERFORM app.ch4_admit_place(r.tenant_id,r.job_id,'restart'); END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(r.tenant_id::text||':'||r.job_id::text,144));
+ IF EXISTS(SELECT 1 FROM app.job_site_source_receipt WHERE tenant_id=r.tenant_id AND job_id=r.job_id AND fact_key=r.fact_key) THEN RETURN NEW; END IF;
+ r.id:=app.ch4_fact_id(r.tenant_id::text||':'||r.job_id::text||':'||r.fact_key); r.recorded_at:=clock_timestamp();
+ INSERT INTO app.job_site_source_receipt SELECT r.*;
+ SELECT coalesce(max(sequence),0) INTO seq FROM app.job_work_state_event WHERE tenant_id=r.tenant_id AND job_id=r.job_id;
+ SELECT * INTO marker FROM app.job_work_state_event WHERE tenant_id=r.tenant_id AND job_id=r.job_id AND kind IN('finished_on_site','finished_cancelled') ORDER BY sequence DESC LIMIT 1;
+ IF r.source_kind IN('photo','stage_completion') THEN
+  IF r.source_kind='photo' THEN
+   evidence:=NEW;
+  ELSE
+   proof_stage:=NEW.stage;
+   PERFORM app.lp11_open_proof_read(NEW.tenant_id,NEW.job_id,NEW.evidence_link_id,false);
+   SELECT e.* INTO evidence FROM app.evidence_link l
+    JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.scope_item_id,e.id)=(l.tenant_id,l.job_id,l.scope_item_id,l.evidence_id)
+    WHERE (l.tenant_id,l.job_id,l.scope_item_id,l.id)=(NEW.tenant_id,NEW.job_id,NEW.scope_item_id,NEW.evidence_link_id)
+     AND l.required_evidence_type=e.evidence_type AND e.kind='original';
+   PERFORM app.lp11_close_proof_read();
+  END IF;
+  -- select_generated is a server command, recorded atomically with upload
+  -- admission, before finalise. Neither the evidence label nor a client flag
+  -- supplies proof purpose. Bind the exact upload, scope and required type.
+  SELECT EXISTS(
+   SELECT 1 FROM app.proof_application_response p
+   JOIN app.evidence_upload u ON(u.tenant_id,u.job_id,u.id)=(p.tenant_id,p.job_id,p.command_id)
+   JOIN app.job j ON(j.tenant_id,j.id)=(u.tenant_id,u.job_id)
+   WHERE (p.tenant_id,p.job_id,u.id,u.scope_item_id)=(r.tenant_id,r.job_id,evidence.upload_id,evidence.scope_item_id)
+    AND j.practice_session_digest IS NOT NULL
+    AND p.action='select_generated' AND p.command_type='evidence.begin_upload'
+    AND p.response->>'jobId'=r.job_id::text
+    AND p.response->>'scopeItemId'=evidence.scope_item_id::text
+    AND p.response#>>'{upload,id}'=u.id::text
+    AND p.response->>'requiredEvidenceType'=evidence.evidence_type
+    AND (r.source_kind='photo' OR p.response->>'stage'=proof_stage)
+    AND p.created_at<=evidence.server_verified_at
+    AND u.state='verified' AND u.expected_sha256=evidence.sha256
+    AND u.object_version_id=evidence.object_version_id
+  ) INTO stage_proof;
+ END IF;
+ IF NOT stage_proof AND marker.kind='finished_on_site' AND (r.received_at>marker.fact_at OR (r.received_at=marker.fact_at AND r.id>marker.id)) THEN
+  seq:=seq+1;
+  INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,actor_membership_id,source_receipt_id,predecessor_id,request_hash,audit_event_id)
+   VALUES(r.tenant_id,r.job_id,app.ch4_fact_id(r.id::text||':cancel'),seq,'finished_cancelled',r.received_at,r.actor_membership_id,r.id,marker.id,r.source_hash,app.ch4_fact_id(r.id::text||':cancel:audit'));
+ END IF;
+ INSERT INTO app.job_work_state_event(tenant_id,job_id,id,sequence,kind,fact_at,actor_membership_id,source_receipt_id,request_hash,audit_event_id)
+ VALUES(r.tenant_id,r.job_id,r.id,seq+1,CASE WHEN r.source_kind IN('photo','delivery_note','goods_receipt','diary') THEN 'first_site_evidence' ELSE 'site_activity' END,r.received_at,r.actor_membership_id,r.id,r.source_hash,app.ch4_fact_id(r.id::text||':audit'));
+ RETURN NEW;
+END $$;
+
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.
 ALTER VIEW app.ledger_balance SET (security_invoker=true);

@@ -3142,6 +3142,33 @@ nice -n 7 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integ
 nice -n 8 pnpm --filter @jobguard/api exec vitest run src/auth/context-boundary.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-context-final-results.json
 ```
 
+## r5 proof triggers and checked fixture transactions
+
+Nine stored proof assertions in the 3e89a0416 run returned `PROOF_NOT_FINAL`. The completion, final lock and work-state triggers used the old customer and proof flags to obtain owner-side reads. The latest 0761 trigger bodies now scope those reads to the protected request tenant and exact job. Completion and work-state lookup the exact evidence link. Final lock can check every completion and proof revision for its locked job. The scope closes before the trigger returns and grants no runtime table or routine privileges. Exact upload, version, hash, invalidation and review predicates remain enforced. The trade and finished-work suites passed 35/35.
+
+The fixture transactions for three practice company marker and three small builder origin failures now use checks against their own persisted credentials after administrative seeding. The three focused marker cases and all ten origin cases passed with the original assertions. The value allocator uses the isolated shadow login and binds its exact job before fixture writes. Its five checks passed, including the three 3e89a0416 failures. The final-check access and final-account reveal fixtures use protected job scope or the existing administrative fixture login for signal setup. Their eight and two checks passed, clearing three prior failures.
+
+The Northside fixture now retains the rejected shared seed promise. In the focused run, each of its seven failing assertions reached the held `work-order-fixtures.ts:71` customer insert. Four of those had previously reported an undefined fixture instead. The four exact tests are:
+
+- CLIENT-ISOLATION permits a second client's own extra and denies cross-client presentation, view and decision
+- SWITCH-REFERENCE rejects invented, cross-actor, cross-session and out-of-window references without masking the existing switch TRUNCATE guard
+- SETTINGS-SNAPSHOT retains the stored definition, contract references and immutable requirement snapshots
+- RESET-HISTORY starts a new run while retaining earlier attribution, settings, evidence, origins and the audit prefix
+
+The proof records 1,472 LP0 objects, 831 populated upgrade objects and 684 policy changes. Both populated upgrade comparisons and the ten tenant policy checks passed. The migration proof loader and value allocator passed 82/82. The added 0762 proof merges from the exact earlier records; its working trigger bodies came from live 0761. The held work-order fixture and the context scanner and source pins remain byte-for-byte unchanged.
+
+```sh
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/real-gap-proof-by-trade.integration.test.ts test/real-proof-keeps-finished.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-proof-trigger-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/practice-company-marker.integration.test.ts -t 'hand-built' --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-hand-built-marker-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/small-builder-origin.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-small-builder-origin-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/northside-demo.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-northside-held-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/final-check-access.integration.test.ts test/shadow-isolation-query-log.integration.test.ts test/j3-landing-allocation.integration.test.ts test/evidence-pack-v3-isolation.integration.test.ts test/final-account-lock-reveal.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-shadow-fixture-bound-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/migration-proof-loader.test.ts test/j3-landing-allocation.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-proof-trigger-final-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migration-proof-loader.test.ts test/j3-landing-allocation.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-proof-trigger-loader-results.json
+```
+
+The combined shadow fixture run recorded 18 passes and three failures. The final-account reveal and final-check access suites passed on that run. The value allocator passed after correcting the proof predecessor record. The application workspace read with a hidden signal and the evidence-pack activation task still have a separate request-binding failure.
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)
