@@ -257,8 +257,7 @@ REVOKE ALL ON FUNCTION app.lp11_identity_scope() FROM PUBLIC;
 GRANT SELECT ON app.account,app.membership,app.contractor_membership_revocation,app.contractor_member,
  identity.sso_subject,identity.sso_session_binding,identity.sso_required_event,identity.sso_emergency_window,
  identity.session,identity.user_email,identity.membership_locator,
- control_plane.practice_session,control_plane.contractor_practice_session,
- control_plane.identity_practice_namespace,control_plane.identity_practice_credential TO jobguard_session_lookup;
+ control_plane.practice_session,control_plane.contractor_practice_session TO jobguard_session_lookup;
 -- PostgreSQL requires an UPDATE column privilege for the existing credential
 -- locks. Business membership, account and revocation receive SELECT only.
 GRANT UPDATE (id) ON identity.session TO jobguard_session_lookup;
@@ -465,18 +464,33 @@ DECLARE result jsonb; binding record; BEGIN
  RETURN coalesce(result,'{"revoked":true}'::jsonb);
 END $$;
 
+-- The lookup owner receives only the classification of a supplied digest.
+-- The associations themselves remain private to the migration owner.
+CREATE FUNCTION app.lp11_practice_digest_kind(d text) RETURNS text
+ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT CASE WHEN d ~ '^[0-9a-f]{64}$' THEN
+  CASE WHEN EXISTS(SELECT 1 FROM control_plane.identity_practice_namespace WHERE owner_digest=d) THEN 'namespace'
+   WHEN EXISTS(SELECT 1 FROM control_plane.identity_practice_credential WHERE token_digest=d) THEN 'credential'
+   END
+ END
+$$;
+ALTER FUNCTION app.lp11_practice_digest_kind(text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_practice_digest_kind(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_practice_digest_kind(text) TO jobguard_session_lookup;
+
 CREATE OR REPLACE FUNCTION app.lp6_session_authority(p_kind text,p_credential text,p_tenant uuid)
  RETURNS TABLE(session_ref text,actor_id uuid,expires_at timestamptz)
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
 DECLARE linked record; real_session identity.session; home control_plane.practice_session;
  practice control_plane.contractor_practice_session; selected_actor uuid;
- selected_ref text; deadline timestamptz; saved_tenant text:=current_setting('app.tenant_id',true);
+ selected_ref text; deadline timestamptz; practice_kind text; saved_tenant text:=current_setting('app.tenant_id',true);
  saved_sso text:=current_setting('app.sso_session_id',true);
 BEGIN
- IF p_kind='practice' AND EXISTS(SELECT 1 FROM control_plane.identity_practice_namespace WHERE owner_digest=p_credential) THEN
+ IF p_kind='practice' THEN practice_kind:=app.lp11_practice_digest_kind(p_credential); END IF;
+ IF practice_kind='namespace' THEN
   RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
- IF p_kind='practice' AND EXISTS(SELECT 1 FROM control_plane.identity_practice_credential WHERE token_digest=p_credential) THEN
+ IF practice_kind='credential' THEN
   IF p_tenant IS DISTINCT FROM '11111111-1111-4111-8111-111111111111'::uuid THEN
    RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501'; END IF;
   BEGIN
@@ -2254,6 +2268,274 @@ ALTER FUNCTION app.lp11_shadow_evidence_tenant(uuid) OWNER TO jobguard_migration
 REVOKE ALL ON FUNCTION app.lp11_shadow_evidence_tenant(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.lp11_shadow_evidence_tenant(uuid) TO jobguard_runtime,jobguard_shadow;
 
+
+-- Linked practice preserves the existing parent-first lock order. The
+-- checked parent and its effective owner qualify only one membership lock.
+CREATE UNLOGGED TABLE control_plane.lp11_linked_parent_scope (
+ transaction_id xid8 PRIMARY KEY,
+ tenant_id uuid NOT NULL,
+ membership_id uuid NOT NULL
+);
+ALTER TABLE control_plane.lp11_linked_parent_scope OWNER TO jobguard_migration;
+REVOKE ALL ON control_plane.lp11_linked_parent_scope FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_linked_parent_tenant(m uuid) RETURNS uuid
+ LANGUAGE sql VOLATILE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_linked_parent_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.membership_id=m
+$$;
+ALTER FUNCTION app.lp11_linked_parent_tenant(uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_linked_parent_tenant(uuid) FROM PUBLIC;
+CREATE POLICY lp11_linked_parent_read ON app.membership FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_linked_parent_tenant(id));
+-- PostgreSQL checks UPDATE policy visibility for SELECT FOR SHARE.
+CREATE POLICY lp11_linked_parent_lock ON app.membership FOR UPDATE TO jobguard_migration
+ USING (tenant_id=app.lp11_linked_parent_tenant(id)) WITH CHECK (false);
+CREATE POLICY lp11_linked_parent_read ON app.contractor_membership_revocation FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_linked_parent_tenant(membership_id));
+
+CREATE OR REPLACE FUNCTION app.linked_practice_parent(d text)
+ RETURNS TABLE(parent_id uuid,identity_tenant uuid,owner_membership uuid,deadline timestamptz)
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE s identity.session; m record; scope jsonb; n integer; t uuid; member uuid;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR d IS NULL OR d !~ '^[0-9a-f]{64}$' THEN
+  RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000'; END IF;
+ SELECT * INTO s FROM identity.session WHERE token_digest=d;
+ IF NOT FOUND THEN RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000'; END IF;
+ scope:=identity.sso_session_scope(s.id);
+ SELECT count(*),(array_agg(e.tenant_id))[1],(array_agg(e.id))[1] INTO n,t,member
+ FROM identity.sso_session_memberships(s.user_id,s.id) e
+ WHERE scope IS NULL OR (coalesce((scope->>'revoked')::boolean,false)=false
+  AND e.tenant_id::text=scope->>'tenantId' AND e.id::text=scope->>'membershipId');
+ IF n<>1 THEN RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000'; END IF;
+ PERFORM pg_advisory_xact_lock_shared(hashtextextended(t::text,54));
+ PERFORM 1 FROM identity.session WHERE id=s.id FOR SHARE;
+ INSERT INTO control_plane.lp11_linked_parent_scope(transaction_id,tenant_id,membership_id)
+ VALUES(pg_current_xact_id(),t,member);
+ PERFORM 1 FROM identity.membership_locator WHERE user_id=s.user_id AND tenant_id=t FOR SHARE;
+ PERFORM 1 FROM app.membership WHERE tenant_id=t AND id=member FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000'; END IF;
+ -- Fresh reads after ALL waits; scope/effective membership are not replaced by
+ -- the row lock. This also rejects contractor revocation and SSO restrictions.
+ SELECT * INTO s FROM identity.session WHERE id=s.id;
+ scope:=identity.sso_session_scope(s.id);
+ SELECT count(*) INTO n FROM identity.sso_session_memberships(s.user_id,s.id) e
+ WHERE scope IS NULL OR (coalesce((scope->>'revoked')::boolean,false)=false
+  AND e.tenant_id::text=scope->>'tenantId' AND e.id::text=scope->>'membershipId');
+ SELECT * INTO m FROM identity.sso_session_memberships(s.user_id,s.id) e WHERE e.id=member AND e.tenant_id=t;
+ IF s.environment<>'synthetic_demo' OR s.revoked_at IS NOT NULL OR s.expires_at<=clock_timestamp()
+  OR n<>1 OR m.id IS NULL OR m.role<>'owner' OR NOT EXISTS(
+   SELECT 1 FROM app.membership a WHERE (a.tenant_id,a.id,a.identity_user_id)=(t,member,s.user_id)
+    AND a.role='owner' AND a.revoked_at IS NULL AND (a.expires_at IS NULL OR a.expires_at>clock_timestamp())
+    AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE (r.tenant_id,r.membership_id)=(t,member)))
+ THEN RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000'; END IF;
+ SELECT least(s.expires_at,coalesce(a.expires_at,'infinity')) INTO deadline
+ FROM app.membership a WHERE (a.tenant_id,a.id)=(t,member);
+ parent_id:=s.id; identity_tenant:=t; owner_membership:=member;
+ DELETE FROM control_plane.lp11_linked_parent_scope
+ WHERE transaction_id=pg_current_xact_id_if_assigned();
+ RETURN NEXT;
+END $$;
+
+-- Stage events and their audit witness only after authenticating the stored
+-- connector binding. Other namespaces of the same tenant are inaccessible.
+CREATE UNLOGGED TABLE control_plane.lp11_connector_input_scope (
+ transaction_id xid8 PRIMARY KEY,
+ tenant_id uuid NOT NULL,
+ binding_id uuid NOT NULL,
+ namespace text NOT NULL,
+ login name NOT NULL,
+ expires_at timestamptz NOT NULL
+);
+ALTER TABLE control_plane.lp11_connector_input_scope OWNER TO jobguard_migration;
+REVOKE ALL ON control_plane.lp11_connector_input_scope FROM PUBLIC;
+
+CREATE FUNCTION connector.lp11_input_tenant(ns text, binding uuid DEFAULT NULL) RETURNS uuid
+ LANGUAGE sql VOLATILE SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_connector_input_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+  AND s.expires_at>clock_timestamp() AND s.namespace=ns
+  AND (binding IS NULL OR s.binding_id=binding)
+  AND coalesce(app.lp11_policy_tenant(),s.tenant_id)=s.tenant_id
+$$;
+ALTER FUNCTION connector.lp11_input_tenant(text,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION connector.lp11_input_tenant(text,uuid) FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_connector_audit_tenant(subject text, actor text) RETURNS uuid
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_connector_input_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+  AND s.expires_at>clock_timestamp() AND s.binding_id::text=subject
+  AND actor='connector:'||s.binding_id::text
+  AND coalesce(app.lp11_policy_tenant(),s.tenant_id)=s.tenant_id
+$$;
+ALTER FUNCTION app.lp11_connector_audit_tenant(text,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_connector_audit_tenant(text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_connector_audit_tenant(text,text) TO jobguard_audit_writer;
+
+CREATE OR REPLACE FUNCTION connector.intake(binding_id uuid, token text, input jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE b connector.binding; prior connector.input_event; h text; result jsonb;
+ payload jsonb; v_kind text;
+ previous_context text:=current_setting('app.tenant_id',true);
+BEGIN
+ -- No caller-supplied tenant, human membership, role, mode, job, bill or target SQL routine.
+ SELECT * INTO b FROM connector.binding WHERE id=binding_id FOR SHARE;
+ IF NOT FOUND OR token IS NULL OR octet_length(token) NOT BETWEEN 32 AND 256
+  OR b.token_sha256 IS DISTINCT FROM encode(sha256(convert_to(token,'UTF8')),'hex')
+  OR b.revoked_at IS NOT NULL OR b.expires_at<=clock_timestamp()
+  OR b.environment<>'synthetic_demo' OR b.endpoint_kind<>'fake'
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='42501'; END IF;
+ IF EXISTS(SELECT FROM connector.machine_connection m WHERE m.id=binding_id)
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='42501'; END IF;
+ IF app.lp11_policy_tenant() IS NOT NULL AND app.lp11_policy_tenant() IS DISTINCT FROM b.tenant_id THEN
+  RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='42501';
+ END IF;
+ INSERT INTO control_plane.lp11_connector_input_scope(transaction_id,tenant_id,binding_id,namespace,login,expires_at)
+ VALUES(pg_current_xact_id(),b.tenant_id,b.id,b.namespace,session_user,b.expires_at);
+ -- Validate again at the database boundary, including direct SQL attacks.
+ IF input IS NULL OR jsonb_typeof(input)<>'object' OR octet_length(input::text)>16384
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='22023'; END IF;
+ v_kind:=input->>'kind';
+ IF v_kind IS NULL OR v_kind NOT IN('work_order','billing_status','materials_issue','export_delivery')
+  OR input->>'version' IS DISTINCT FROM 'connector-input.v1'
+  OR (SELECT count(*) FROM jsonb_object_keys(input))<>6
+  OR NOT(input ?& ARRAY['version','eventId','subject','revision','kind'])
+  OR input - ARRAY['version','eventId','subject','revision','kind','document','status','outcome']<>'{}'::jsonb
+  OR jsonb_typeof(input->'eventId') IS DISTINCT FROM 'string'
+  OR jsonb_typeof(input->'subject') IS DISTINCT FROM 'string'
+  OR input->>'eventId' !~ '^fixture:[a-z0-9_-]{1,112}$'
+  OR input->>'subject' !~ '^fixture:[a-z0-9_-]{1,112}$'
+  OR jsonb_typeof(input->'revision') IS DISTINCT FROM 'number'
+  OR (input->>'revision') !~ '^[1-9][0-9]{0,9}$'
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='22023'; END IF;
+ IF (input->>'revision')::bigint>2147483647
+  OR (v_kind IN('work_order','materials_issue') AND (NOT input ? 'document' OR input ? 'status'
+   OR jsonb_typeof(input->'document') IS DISTINCT FROM 'string' OR input->>'document' !~ '^fixture:[a-z0-9_-]{1,112}$'))
+  OR (v_kind='export_delivery' AND (NOT input ? 'outcome' OR input ? 'document' OR input ? 'status'
+   OR jsonb_typeof(input->'outcome') IS DISTINCT FROM 'string' OR input->>'outcome' NOT IN('received','rejected')))
+  OR (v_kind='billing_status' AND (NOT input ? 'status' OR input ? 'document'
+   OR jsonb_typeof(input->'status') IS DISTINCT FROM 'string' OR input->>'status' NOT IN('billed','paid','reversed')))
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='22023'; END IF;
+ h:=app.final_lock_hash(input);
+ -- Stable namespace survives key/connection/channel rotation. Serialize that whole source;
+ -- no domain table is locked or touched. Reordered revisions remain immutable staged facts.
+ PERFORM pg_advisory_xact_lock(hashtextextended('connector:'||b.tenant_id::text||':'||b.namespace,0));
+ IF b.expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='42501'; END IF;
+ SELECT * INTO prior FROM connector.input_event e WHERE e.tenant_id=b.tenant_id AND e.namespace=b.namespace AND e.event_id=input->>'eventId';
+ IF FOUND THEN
+  IF prior.semantic_hash<>h THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='23505'; END IF;
+  DELETE FROM control_plane.lp11_connector_input_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+  RETURN prior.receipt;
+ END IF;
+ IF EXISTS(SELECT 1 FROM connector.input_event e WHERE e.tenant_id=b.tenant_id AND e.namespace=b.namespace AND e.kind=v_kind AND e.subject=input->>'subject' AND e.revision=(input->>'revision')::integer)
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='23505'; END IF;
+ result:=jsonb_build_object('version','connector-receipt.v1','eventId',input->>'eventId','state','staged','domainEffects',0);
+ INSERT INTO connector.input_event(tenant_id,binding_id,namespace,event_id,kind,subject,revision,payload,semantic_hash,receipt)
+ VALUES(b.tenant_id,b.id,b.namespace,input->>'eventId',v_kind,input->>'subject',(input->>'revision')::integer,input,h,result);
+ -- Append to the existing per-tenant chain, identifiers/hash only. Audit head is the LAST lock.
+ payload:=jsonb_build_object('references',jsonb_build_object('bindingId',b.id,'sourceEvent',input->>'eventId'),'hashes',jsonb_build_object('input',h));
+ PERFORM set_config('app.tenant_id',b.tenant_id::text,true);
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object(
+  'id',gen_random_uuid(),'version','audit.v1','actorRef','connector:'||b.id::text,
+  'eventType','connector.input_staged','subjectType','connector','subjectRef',b.id::text,
+  'payload',payload)),'checked_operation');
+ PERFORM set_config('app.tenant_id',coalesce(previous_context,''),true);
+  DELETE FROM control_plane.lp11_connector_input_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ RETURN result;
+END $$;
+
+CREATE OR REPLACE FUNCTION connector.machine_stage(c uuid,token text,expected jsonb,key_ref text,nonce text,stamp bigint,input jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE authority jsonb; result jsonb;
+BEGIN
+ authority:=connector.machine_authority(c,token);
+ IF expected IS DISTINCT FROM authority OR key_ref IS NULL OR key_ref=''
+  OR NOT(authority->'keyRefs' ? key_ref)
+  OR input->>'kind' IS NULL OR input->>'kind'=''
+  OR NOT(authority->'capabilities' ? (input->>'kind'))
+  OR nonce IS NULL OR nonce !~ '^[a-zA-Z0-9_-]{16,120}$' OR stamp IS NULL
+  OR abs(floor(extract(epoch FROM clock_timestamp()))-stamp)>300
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='42501'; END IF;
+ -- Serialize all accepted nonces on this connection. Recheck expiry after any wait.
+ PERFORM pg_advisory_xact_lock(hashtextextended('machine-nonce:'||c::text,0));
+ IF authority IS DISTINCT FROM connector.machine_authority(c,token)
+  OR abs(floor(extract(epoch FROM clock_timestamp()))-stamp)>300
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='42501'; END IF;
+ IF EXISTS(SELECT FROM connector.machine_nonce n WHERE n.connection_id=c AND n.nonce=machine_stage.nonce AND expires_at>clock_timestamp())
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='23505'; END IF;
+ INSERT INTO connector.machine_nonce VALUES((authority->>'tenantId')::uuid,c,nonce,clock_timestamp()+interval '10 minutes')
+ ON CONFLICT ON CONSTRAINT machine_nonce_pkey DO UPDATE SET expires_at=excluded.expires_at;
+ -- Inline the latest 0576 intake body after machine authorization. No public bypass.
+ <<verified_input>>
+ DECLARE b connector.binding; prior connector.input_event; h text; result jsonb;
+ payload jsonb; v_kind text;
+ previous_context text:=current_setting('app.tenant_id',true);
+BEGIN
+ -- No caller-supplied tenant, human membership, role, mode, job, bill or target SQL routine.
+ SELECT * INTO b FROM connector.binding WHERE id=c FOR SHARE;
+ IF NOT FOUND OR token IS NULL OR octet_length(token) NOT BETWEEN 32 AND 256
+  OR b.token_sha256 IS DISTINCT FROM encode(sha256(convert_to(token,'UTF8')),'hex')
+  OR b.revoked_at IS NOT NULL OR b.expires_at<=clock_timestamp()
+  OR b.environment<>'synthetic_demo' OR b.endpoint_kind<>'fake'
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='42501'; END IF;
+ IF app.lp11_policy_tenant() IS NOT NULL AND app.lp11_policy_tenant() IS DISTINCT FROM b.tenant_id THEN
+  RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='42501';
+ END IF;
+ INSERT INTO control_plane.lp11_connector_input_scope(transaction_id,tenant_id,binding_id,namespace,login,expires_at)
+ VALUES(pg_current_xact_id(),b.tenant_id,b.id,b.namespace,session_user,b.expires_at);
+ -- Validate again at the database boundary, including direct SQL attacks.
+ IF input IS NULL OR jsonb_typeof(input)<>'object' OR octet_length(input::text)>16384
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='22023'; END IF;
+ v_kind:=input->>'kind';
+ IF v_kind IS NULL OR v_kind NOT IN('work_order','billing_status','materials_issue')
+  OR input->>'version' IS DISTINCT FROM 'connector-input.v1'
+  OR (SELECT count(*) FROM jsonb_object_keys(input))<>6
+  OR NOT(input ?& ARRAY['version','eventId','subject','revision','kind'])
+  OR input - ARRAY['version','eventId','subject','revision','kind','document','status']<>'{}'::jsonb
+  OR jsonb_typeof(input->'eventId') IS DISTINCT FROM 'string'
+  OR jsonb_typeof(input->'subject') IS DISTINCT FROM 'string'
+  OR input->>'eventId' !~ '^fixture:[a-z0-9_-]{1,112}$'
+  OR input->>'subject' !~ '^fixture:[a-z0-9_-]{1,112}$'
+  OR jsonb_typeof(input->'revision') IS DISTINCT FROM 'number'
+  OR (input->>'revision') !~ '^[1-9][0-9]{0,9}$'
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='22023'; END IF;
+ IF (input->>'revision')::bigint>2147483647
+  OR (v_kind IN('work_order','materials_issue') AND (NOT input ? 'document' OR input ? 'status'
+   OR jsonb_typeof(input->'document') IS DISTINCT FROM 'string' OR input->>'document' !~ '^fixture:[a-z0-9_-]{1,112}$'))
+  OR (v_kind='billing_status' AND (NOT input ? 'status' OR input ? 'document'
+   OR jsonb_typeof(input->'status') IS DISTINCT FROM 'string' OR input->>'status' NOT IN('billed','paid','reversed')))
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='22023'; END IF;
+ h:=app.final_lock_hash(input);
+ -- Stable namespace survives key/connection/channel rotation. Serialize that whole source;
+ -- no domain table is locked or touched. Reordered revisions remain immutable staged facts.
+ PERFORM pg_advisory_xact_lock(hashtextextended('connector:'||b.tenant_id::text||':'||b.namespace,0));
+ IF b.expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='42501'; END IF;
+ SELECT * INTO prior FROM connector.input_event e WHERE e.tenant_id=b.tenant_id AND e.namespace=b.namespace AND e.event_id=input->>'eventId';
+ IF FOUND THEN
+  IF prior.semantic_hash<>h THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='23505'; END IF;
+  DELETE FROM control_plane.lp11_connector_input_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+  RETURN prior.receipt;
+ END IF;
+ IF EXISTS(SELECT 1 FROM connector.input_event e WHERE e.tenant_id=b.tenant_id AND e.namespace=b.namespace AND e.kind=v_kind AND e.subject=input->>'subject' AND e.revision=(input->>'revision')::integer)
+ THEN RAISE EXCEPTION 'CONNECTOR_INPUT_REFUSED' USING ERRCODE='23505'; END IF;
+ result:=jsonb_build_object('version','connector-receipt.v1','eventId',input->>'eventId','state','staged','domainEffects',0);
+ INSERT INTO connector.input_event(tenant_id,binding_id,namespace,event_id,kind,subject,revision,payload,semantic_hash,receipt)
+ VALUES(b.tenant_id,b.id,b.namespace,input->>'eventId',v_kind,input->>'subject',(input->>'revision')::integer,input,h,result);
+ -- Append to the existing per-tenant chain, identifiers/hash only. Audit head is the LAST lock.
+ payload:=jsonb_build_object('references',jsonb_build_object('bindingId',b.id,'sourceEvent',input->>'eventId'),'hashes',jsonb_build_object('input',h));
+ PERFORM set_config('app.tenant_id',b.tenant_id::text,true);
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object(
+  'id',gen_random_uuid(),'version','audit.v1','actorRef','connector:'||b.id::text,
+  'eventType','connector.input_staged','subjectType','connector','subjectRef',b.id::text,
+  'payload',payload)),'checked_operation');
+ PERFORM set_config('app.tenant_id',coalesce(previous_context,''),true);
+  DELETE FROM control_plane.lp11_connector_input_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ RETURN result;
+END verified_input;
+END $$;
+
 DO $cutover$
 DECLARE
  policy_row record;
@@ -2497,6 +2779,8 @@ ALTER POLICY practice_membership_lookup ON app.membership USING (
 ALTER POLICY lp4_audit_writer ON app.audit_event USING (
  tenant_id=coalesce(app.lp11_policy_tenant(),app.lp11_worker_tenant(NULL),
   CASE WHEN subject_type='sso-connection' AND event_type LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END,
+  CASE WHEN subject_type='connector' AND event_type='connector.input_staged'
+   THEN app.lp11_connector_audit_tenant(subject_ref,actor_ref) END,
   CASE WHEN (subject_type='customer_portal' AND event_type IN('customer_portal.signed_in','customer_portal.signed_out'))
      OR (subject_type='quote_document' AND event_type='quote.acceptance.customer_authenticated')
      OR (subject_type='job' AND event_type IN('job_source.customer_message_recorded','customer_portal.message_recorded'))
@@ -2510,6 +2794,8 @@ ALTER POLICY lp4_audit_writer ON app.audit_event USING (
 ) WITH CHECK (
  tenant_id=coalesce(app.lp11_policy_tenant(),app.lp11_worker_tenant(NULL),
   CASE WHEN subject_type='sso-connection' AND event_type LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END,
+  CASE WHEN subject_type='connector' AND event_type='connector.input_staged'
+   THEN app.lp11_connector_audit_tenant(subject_ref,actor_ref) END,
   CASE WHEN (subject_type='customer_portal' AND event_type IN('customer_portal.signed_in','customer_portal.signed_out'))
      OR (subject_type='quote_document' AND event_type='quote.acceptance.customer_authenticated')
      OR (subject_type='job' AND event_type IN('job_source.customer_message_recorded','customer_portal.message_recorded'))
@@ -2574,6 +2860,11 @@ BEGIN
   EXECUTE format('ALTER POLICY %I ON connector.%I USING (%s) WITH CHECK (%s)',policy_name,table_name,bound_check,bound_check);
  END LOOP;
 END $connector$;
+
+ALTER POLICY tenant_intake ON connector.input_event
+ USING (tenant_id=coalesce(app.lp11_policy_tenant(),connector.lp11_input_tenant(namespace)))
+ WITH CHECK (tenant_id=coalesce(app.lp11_policy_tenant(),connector.lp11_input_tenant(namespace,binding_id)));
+
 
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.

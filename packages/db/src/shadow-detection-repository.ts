@@ -190,9 +190,17 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
   return {
     read: (context: VerifiedTenantContext, task: { jobId: string; manifestId: string }) => repo.manifest(context, task.jobId, task.manifestId),
     async process(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]): Promise<FinalCheckSourceResult> {
+      const readSource = async <T>(read: (db: TenantTransaction) => Promise<T>): Promise<T | undefined> => {
+        try {
+          return await withObservationRead(runtimePool, context, m.comparisons.jobId, read, shadowPool);
+        } catch (error) {
+          if (error instanceof ShadowObservationReadError && error.code === "OBSERVATION_JOB_UNAVAILABLE") return undefined;
+          throw error;
+        }
+      };
       const structured = s.evidenceId === null && s.processable &&
         ["unlinked_supplier_version", "unlinked_supplier_document", "unlinked_purchase_order"].includes(s.sourceKind);
-      const decoded = structured ? await readPracticeStructuredSource(runtimePool, context, m, s, shadowPool) : null;
+      const decoded = structured ? await readPracticeStructuredSource(context, m, s, readSource) : null;
       // Preserve the structured reader's typed refusal (including a changed
       // commercial track). A successful read still requires every frozen check
       // below; no authorization or other exception is caught or converted.
@@ -220,7 +228,7 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
       // the same runtime/RLS source read and frozen binding apply to both paths.
       let includedCertificate;
       if (["completion_photo", "electrical_certificate"].includes(s.sourceKind)) {
-        const verified = s.processable ? await withObservationRead(runtimePool, context, m.comparisons.jobId, async db => (await db.$client.query<{ legacy_photo: boolean }>(`
+        const verified = s.processable ? await readSource(async db => (await db.$client.query<{ legacy_photo: boolean }>(`
           SELECT CASE WHEN j.practice_session_digest IS NOT NULL
             THEN NOT app.is_blank_practice_company(j.practice_session_digest::text)
             ELSE false END AS legacy_photo
@@ -239,10 +247,7 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
             AND j.provenance<>'imported'
             AND (j.practice_session_digest IS NULL OR EXISTS(
               SELECT 1 FROM app.authenticate_practice_session(j.practice_session_digest::text,j.tenant_id)))`,
-        [context.tenantId,m.comparisons.jobId,s.evidenceId,s.sourceRef,s.sourceKind,s.objectVersionId,s.sha256,s.receivedAt,m.cutoff,JSON.stringify(s.input)])).rows[0], shadowPool).catch((error: unknown) => {
-          if (error instanceof ShadowObservationReadError && error.code === "OBSERVATION_JOB_UNAVAILABLE") return undefined;
-          throw error;
-        }) : undefined;
+        [context.tenantId,m.comparisons.jobId,s.evidenceId,s.sourceRef,s.sourceKind,s.objectVersionId,s.sha256,s.receivedAt,m.cutoff,JSON.stringify(s.input)])).rows[0]) : undefined;
         if (!verified) return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: "SOURCE_INVALID", signalIds: [] };
         if (s.sourceKind === "electrical_certificate" && (drainagePhotoSha256 === undefined || s.sha256 !== drainagePhotoSha256)) {
           if (s.sha256 !== practicePhotoSha256) return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: "UNSUPPORTED_SOURCE", signalIds: [] };
@@ -263,7 +268,7 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
       }
       let observation;
       if (s.sourceKind === "job_diary_text" || s.sourceKind === "customer_message_text") {
-        const read = await readFinalCheckTypedText(runtimePool, context, m, s, shadowPool);
+        const read = await readFinalCheckTypedText(context, m, s, readSource);
         if (read.status !== "proposal") return { version: "final-check.source-result.v1", inputHash: s.inputHash,
           status: read.status === "readable" ? "zero_result" : "unsupported", failureCode: read.status === "readable" ? null : "SOURCE_INVALID", signalIds: [] };
         observation = observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
@@ -281,7 +286,7 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
         // notes in the reader; here one work identity reconciles source estimates.
         for (const source of [...m.sources].sort((a,b) => a.id.localeCompare(b.id))) {
           if (!["job_diary_text", "customer_message_text"].includes(source.sourceKind)) continue;
-          const read = await readFinalCheckTypedText(runtimePool, context, m, source, shadowPool);
+          const read = await readFinalCheckTypedText(context, m, source, readSource);
           if (read.status !== "proposal" || read.proposal.facts.workReference !== observation.facts.workReference) continue;
           const candidate = observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
             kind: source.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request", ...read.proposal,

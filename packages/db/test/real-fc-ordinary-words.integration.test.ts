@@ -149,7 +149,9 @@ it("preserves existing persisted provenance instead of retrofitting an old unpri
   const { ShadowDetectionRepository } = await import("../src/shadow-detection-repository.js");
   const a = await setup("Fitted the heated towel rail as an extra.", request);
   const s = a.m.sources.find(source=>source.sourceKind === "job_diary_text")!;
-  const read = await readFinalCheckTypedText(f.runtime,a.shadow,a.m,s,f.shadow);
+  const { withObservationRead } = await import("../src/shadow-observation-reader.js");
+  const read = await readFinalCheckTypedText(a.shadow,a.m,s,
+    work => withObservationRead(f.runtime,a.shadow,a.jobId,work,f.shadow));
   expect(read.status).toBe("proposal"); if(read.status!=="proposal") throw new Error("Expected bounded proposal");
   const observation = observationV1.parse({version:"observation.v1",tenantId:a.tenantId,jobId:a.jobId,kind:"note_or_voice",...read.proposal,
     evidence:{id:s.evidenceId,objectVersionId:s.objectVersionId,sha256:s.sha256,serverReceivedAt:s.receivedAt}});

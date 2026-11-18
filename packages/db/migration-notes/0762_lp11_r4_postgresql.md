@@ -1712,6 +1712,23 @@ pnpm --filter @jobguard/db exec vitest run test/migration-proof-loader.test.ts t
 
 The source, recovery allocation and unit batch passed 163 of 163. The invoice, publication and audit batch passed 31 of 32. The snapshot and upgrade rerun passed 24 of 24. Free-first-job conversion passed 4 of 4, LP‑11 policy isolation passed 10 of 10, and LP‑6a binding including its exact relation-lock set passed 14 of 14. The populated catalogue capture produced 1,334 effective-privilege changes and 731 upgrade changes, of which 629 were policies. The two new maintenance relations are empty in the exact replay inventory.
 
+## r5 follow-up on connector and linked practice
+
+| Regression and refusing route | Baseline failures in the focused files | Focused failures after repair |
+| --- | ---: | ---: |
+| `connector.intake` and `connector.machine_stage` validated the stored binding, then `connector.input_event` refused staging. They now hold a transaction scope for that binding, tenant and namespace. Its audit witness is limited to the matching connector subject and actor. | 20 | 0 |
+| The credential owner could not see private linked-practice associations. That misclassified leaf credentials as anonymous and stamped the wrong namespace in the protected request. The private digest classification returns only the matching kind, and the checked parent path can read and lock just the effective owner and its revocation. | 21 | 0 |
+
+Connector verification passed 61 of 62. **Stages once, preserves the first receipt across retries/rotation, conflicts on changed payload and changes no export/billing rows** in `test/connector-export-delivery-staging.integration.test.ts` failed at the held customer fixture. Linked practice and the tenant policy tests passed 33 of 33, including both orderings of sign-out, membership removal, revocation and reset races.
+
+The worker now keeps permit issuance in shadow composition and gives the exact runtime transaction to the final-check readers. The API shadow-capability suite passed 8 of 8 on that source. The populated PostgreSQL catalogue capture recorded 1,342 effective-privilege changes, 739 upgrade changes and 632 policy changes.
+
+```sh
+pnpm --filter @jobguard/db exec vitest run test/connector-intake.integration.test.ts test/connector-machine.integration.test.ts test/connector-export-delivery-staging.integration.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/db exec vitest run test/real-wayin-linked-practice.integration.test.ts test/real-wayin-linked-practice-races.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts --maxWorkers=1 --reporter=default
+pnpm --filter @jobguard/api exec vitest run src/shadow-detection.worker.test.ts --maxWorkers=1 --testTimeout=30000
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)
