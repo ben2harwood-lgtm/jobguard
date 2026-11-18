@@ -17,7 +17,7 @@ export async function POST(request: Request, context: { params: Promise<{ action
     if (!session || !z.guid().safeParse(session).success) throw new EnterpriseFeeError("EXTRA_FORBIDDEN");
     const raw: unknown = await request.json().catch(() => { throw new EnterpriseFeeError("INVALID_FEE_INPUT"); });
     const { action } = await context.params;
-    if (!["derive", "prepare", "read", "approve", "post", "dispute", "simulate-invoice"].includes(action)) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
+    if (!["derive", "derive-northside", "prepare", "read", "approve", "post", "dispute", "simulate-invoice"].includes(action)) throw new EnterpriseFeeError("INVALID_FEE_INPUT");
     const pool = syntheticPool(), tenant = await contractorSessionContext(pool, session), repo = new EnterpriseFeeRepository(pool);
     let result: unknown;
     if (action === "read") {
@@ -28,7 +28,8 @@ export async function POST(request: Request, context: { params: Promise<{ action
         Promise.all(statement.sections.map(s => repo.read(tenant, session, s.derivationId))), repo.readPostings(tenant, session, statement.id),
       ]);
       result = { statement, derivations, postings };
-    } else if (action === "derive") result = await repo.derive(tenant, session, raw);
+    } else if (action === "derive-northside") result = await repo.deriveNorthside(tenant, session, raw);
+    else if (action === "derive") result = await repo.derive(tenant, session, raw);
     else if (action === "prepare") result = await repo.prepareStatement(tenant, session, raw);
     else if (action === "approve") {
       const input = enterpriseFeeApproveStatementV1.safeParse(raw);

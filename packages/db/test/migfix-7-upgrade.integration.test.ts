@@ -309,6 +309,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     expect(body.split(before)).toHaveLength(2);
     lp6dBodies.set(key, body.replace(before, after));
   }
+  // 0761 replaces only Northside's registration body; successor proof metadata remains checked above.
+  const northsideSql = await readFile(new URL("../migrations/0762_northside_hosted_agreement.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.northside_register(p_owner,p_settings)", northsideSql.split("FUNCTION app.northside_register(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);
   const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;
   const namedAdditions = [
     "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",
