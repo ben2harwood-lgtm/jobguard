@@ -22,7 +22,7 @@
           "packages/db/test/lp-10-worker-login.integration.test.ts"
         ],
         "gaps": [
-          "Candidate only. Full database suite and end-to-end SSO, contractor practice switch and other pre-binding callers remain unverified or red.",
+          "Build-ahead candidate. Completing the focused PostgreSQL regressions does not substitute for the wider database suite or independent RED review.",
           "The S9 hash for packages/db/src/work-order-fixtures.ts requires Ben approval before fixing its unbound customer writes. Independent RED review remains required."
         ],
         "id": "ap-lp11-bound-tenant-r3",
@@ -50,7 +50,7 @@
           "packages/db/test/lp-10-worker-login.integration.test.ts"
         ],
         "gaps": [
-          "Candidate only. Full database suite and end-to-end SSO, contractor practice switch and other pre-binding callers remain unverified or red.",
+          "Build-ahead candidate. Completing the focused PostgreSQL regressions does not substitute for the wider database suite or independent RED review.",
           "The S9 hash for packages/db/src/work-order-fixtures.ts requires Ben approval before fixing its unbound customer writes. Independent RED review remains required."
         ],
         "id": "a-lp11-bound-tenant-r3",
@@ -412,6 +412,38 @@
       "section": "entries",
       "before": null,
       "after": {
+        "key": "acl|routine|function:app.lp11_practice_revoke_event(uuid,text,text,text,text)|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_sso_tenant(text[],uuid)|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_sso_tenant(text[],uuid)|jobguard_identity|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_sso_tenant(text[],uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
         "key": "acl|routine|function:app.lp11_worker_tenant(uuid)|jobguard_audit_writer|EXECUTE|-",
         "group": "a-lp11-bound-tenant-r3"
       }
@@ -620,7 +652,23 @@
       "section": "entries",
       "before": null,
       "after": {
+        "key": "owner|routine|function:app.lp11_practice_revoke_event(uuid,text,text,text,text)|jobguard_migration",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
         "key": "owner|routine|function:app.lp11_set_identity_scope(uuid,uuid)|jobguard_session_lookup",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_sso_tenant(text[],uuid)|jobguard_migration",
         "group": "a-lp11-bound-tenant-r3"
       }
     },
@@ -903,6 +951,41 @@
     {
       "section": "routines",
       "before": {
+        "identity": "function:app.contractor_practice_session_require_audit()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "7ccdf134a1c915c553b6aafb22e8406e5abbdd06228d7b83424f0989fef414fb",
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.contractor_practice_session_require_audit()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "25109fd4a27c2b539e2696c64da690073e3c255194525b158a65995a5cdf1ac1",
+        "staticWrites": [
+          "control_plane.lp11_practice_revoke_audit"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
         "identity": "function:app.current_tenant()",
         "owner": "jobguard_binding_owner",
         "securityDefiner": true,
@@ -1143,6 +1226,27 @@
       "section": "routines",
       "before": null,
       "after": {
+        "identity": "function:app.lp11_practice_revoke_event(uuid,text,text,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_audit_writer"
+        ],
+        "definitionSha256": "88a3c897c6388521a60807acf31b1a24e958ccfb4b615be516cd6301615cbdad",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
         "identity": "function:app.lp11_set_identity_scope(uuid,uuid)",
         "owner": "jobguard_session_lookup",
         "securityDefiner": false,
@@ -1157,6 +1261,28 @@
         "staticWrites": [
           "control_plane.lp11_identity_scope"
         ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_sso_tenant(text[],uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_audit_writer",
+          "jobguard_identity"
+        ],
+        "definitionSha256": "5c45635a4f8196b932beb3e15adfceb52c35d4c0e225bceef6bd000ac51c7a9d",
+        "staticWrites": [],
         "staticCalls": []
       }
     },
@@ -1372,6 +1498,56 @@
     {
       "section": "routines",
       "before": {
+        "identity": "function:app.revoke_contractor_practice_session(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "4e18af48ae00d4f203a7625a7b88303659f08a1af0dbedf109315420ade1ff28",
+        "staticWrites": [
+          "control_plane.contractor_practice_session"
+        ],
+        "staticCalls": [
+          "app.contractor_practice_home_deadline",
+          "app.contractor_practice_session_digest",
+          "app.current_actor",
+          "app.current_tenant",
+          "app.lp6d_contractor_session_identity"
+        ]
+      },
+      "after": {
+        "identity": "function:app.revoke_contractor_practice_session(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "1bf24fb3a408239d48f7d9d8d7700b6b2e79b6948cf512a92cba7b7eeaadf8dc",
+        "staticWrites": [
+          "control_plane.contractor_practice_session",
+          "control_plane.lp11_practice_revoke_audit"
+        ],
+        "staticCalls": [
+          "app.contractor_practice_home_deadline",
+          "app.contractor_practice_session_digest",
+          "app.current_actor",
+          "app.current_tenant",
+          "app.lp6d_contractor_session_identity"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
         "identity": "function:app.seed_saved_v1_sample()",
         "owner": "jobguard_migration",
         "securityDefiner": false,
@@ -1524,6 +1700,175 @@
     },
     {
       "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.lp11_open_sso_scope(uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "9ee563522892bf0230e153fb9c32e3b0522df07763959bb0e15b743a64527476",
+        "staticWrites": [
+          "control_plane.lp11_sso_scope"
+        ],
+        "staticCalls": [
+          "app.current_tenant",
+          "app.lp6e_request_binding_present",
+          "identity.sso_load_connection"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.scim_deactivate(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "9f76e0ed0d23751467c77b68b824072c198c1bbfb14660c63337e296c84afcaa",
+        "staticWrites": [
+          "app.membership",
+          "app.role_grant_revocation",
+          "identity.scim_event",
+          "identity.session"
+        ],
+        "staticCalls": [
+          "identity.sso_load_connection"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.scim_deactivate(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "343cede99404b88c8855735d73eb54dbf3281758b1adf0c65b37f82d6967f07c",
+        "staticWrites": [
+          "app.membership",
+          "app.role_grant_revocation",
+          "control_plane.lp11_sso_scope",
+          "identity.scim_event",
+          "identity.session"
+        ],
+        "staticCalls": [
+          "identity.lp11_open_sso_scope"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.sso_audit_append(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "d8d3d4e7d30e89a46d32d716e1a55590eb070b190f07d7b2cf9882ce55bdb29f",
+        "staticWrites": [
+          "app.audit_event"
+        ],
+        "staticCalls": [
+          "app.advance_audit_head"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.sso_audit_append(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "9d6ec94bd582c250b1bf239d467c14bae5c4a445f4dd31fd9e50b256697abe6d",
+        "staticWrites": [
+          "control_plane.lp11_sso_scope"
+        ],
+        "staticCalls": [
+          "app.lp4_seal_audit",
+          "identity.lp11_open_sso_scope"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.sso_cache(uuid,text,text,character,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "6e8212b9be0d8f985699b4f96c3ad3f7e79da02008afd58b3c6dd39ad0d1e440",
+        "staticWrites": [
+          "identity.sso_request"
+        ],
+        "staticCalls": [
+          "identity.sso_load_connection"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.sso_cache(uuid,text,text,character,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "c129ff8364c641b07cd6153a8c46dcf9372492e27b7aa56ce1db07c4049e189c",
+        "staticWrites": [
+          "control_plane.lp11_sso_scope",
+          "identity.sso_request"
+        ],
+        "staticCalls": [
+          "identity.lp11_open_sso_scope"
+        ]
+      }
+    },
+    {
+      "section": "routines",
       "before": {
         "identity": "function:identity.sso_code_signin_allowed(uuid)",
         "owner": "jobguard_migration",
@@ -1566,6 +1911,129 @@
           "app.lp11_set_identity_scope",
           "identity.current_memberships",
           "identity.sso_required_state"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.sso_complete(uuid,jsonb,character,uuid,character,text,timestamp with time zone)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "64c043822e464ee4e47d6b2317de14a6488f5745141c759486f334ff696491ac",
+        "staticWrites": [
+          "app.contractor_member",
+          "app.membership",
+          "app.role_grant",
+          "app.role_grant_revocation",
+          "identity.identity_user",
+          "identity.lp6d_sso_grant_permit",
+          "identity.membership_locator",
+          "identity.oidc_assertion_use",
+          "identity.security_event",
+          "identity.session",
+          "identity.sso_assertion_use",
+          "identity.sso_grant",
+          "identity.sso_session_binding",
+          "identity.sso_subject",
+          "identity.user_email"
+        ],
+        "staticCalls": [
+          "app.contractor_member_active",
+          "app.lp6d_sso_operative_roles_decision",
+          "app.mon8_sso_feature_decision",
+          "identity.sso_load_connection"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.sso_complete(uuid,jsonb,character,uuid,character,text,timestamp with time zone)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "f55dc59381ae1e70e7310ab51e2f7f1639d603ae68137b19d4a273e75dc0d19f",
+        "staticWrites": [
+          "app.contractor_member",
+          "app.membership",
+          "app.role_grant",
+          "app.role_grant_revocation",
+          "control_plane.lp11_sso_scope",
+          "identity.identity_user",
+          "identity.lp6d_sso_grant_permit",
+          "identity.membership_locator",
+          "identity.oidc_assertion_use",
+          "identity.security_event",
+          "identity.session",
+          "identity.sso_assertion_use",
+          "identity.sso_grant",
+          "identity.sso_session_binding",
+          "identity.sso_subject",
+          "identity.user_email"
+        ],
+        "staticCalls": [
+          "app.contractor_member_active",
+          "app.lp6d_sso_operative_roles_decision",
+          "app.mon8_sso_feature_decision",
+          "identity.lp11_open_sso_scope",
+          "identity.sso_load_connection"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.sso_require_admin(character,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "a472bc1e9dc5433b4265569a10c2e00232e3cd320b3305a2f61781f8181728c3",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.contractor_allowed"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.sso_require_admin(character,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "f975fbddb7daa015010dbf5e266c8fced2da8a565871001d1681ce558f151cb5",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.bind_request",
+          "app.contractor_allowed"
         ]
       }
     },
@@ -4033,12 +4501,12 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.account|contractor_bootstrap_account|PERMISSIVE|ALL|jobguard_migration|9377e3c99b679531"
+      "after": "app.account|contractor_bootstrap_account|PERMISSIVE|ALL|jobguard_migration|b7cd038235d4d2d7"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "app.account|identity_provision_account|PERMISSIVE|ALL|jobguard_migration|9377e3c99b679531"
+      "after": "app.account|identity_provision_account|PERMISSIVE|ALL|jobguard_migration|b7cd038235d4d2d7"
     },
     {
       "section": "policies",
@@ -4123,7 +4591,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.audit_event|lp4_audit_writer|PERMISSIVE|ALL|jobguard_audit_writer|5537e29698435220"
+      "after": "app.audit_event|lp4_audit_writer|PERMISSIVE|ALL|jobguard_audit_writer|38ddecfcda3e386e"
     },
     {
       "section": "policies",
@@ -4133,7 +4601,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.audit_event|migration_audit_integrity|PERMISSIVE|SELECT|jobguard_migration|1349b66c573aa4ae"
+      "after": "app.audit_event|migration_audit_integrity|PERMISSIVE|SELECT|jobguard_migration|fcca669f76f401a2"
     },
     {
       "section": "policies",
@@ -4303,7 +4771,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.commercial_track_assignment|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|4433767ed92661df"
+      "after": "app.commercial_track_assignment|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|8e1bc2526f2a0868"
     },
     {
       "section": "policies",
@@ -4313,7 +4781,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.contractor_agreement_status_revision|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|4433767ed92661df"
+      "after": "app.contractor_agreement_status_revision|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|8e1bc2526f2a0868"
     },
     {
       "section": "policies",
@@ -4333,7 +4801,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.contractor_membership_revocation|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|5537e29698435220"
+      "after": "app.contractor_membership_revocation|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|46c4b0b1be7afcec"
     },
     {
       "section": "policies",
@@ -4343,7 +4811,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.contractor_member|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|4433767ed92661df"
+      "after": "app.contractor_member|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|8e1bc2526f2a0868"
     },
     {
       "section": "policies",
@@ -5408,12 +5876,12 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.membership|contractor_bootstrap_membership|PERMISSIVE|ALL|jobguard_migration|aeb42cb0dbc5b939"
+      "after": "app.membership|contractor_bootstrap_membership|PERMISSIVE|ALL|jobguard_migration|13596b6c3a37d79b"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "app.membership|identity_provision_membership|PERMISSIVE|ALL|jobguard_migration|aeb42cb0dbc5b939"
+      "after": "app.membership|identity_provision_membership|PERMISSIVE|ALL|jobguard_migration|13596b6c3a37d79b"
     },
     {
       "section": "policies",
@@ -5438,7 +5906,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.membership|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|aeb42cb0dbc5b939"
+      "after": "app.membership|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|13596b6c3a37d79b"
     },
     {
       "section": "policies",
@@ -6133,12 +6601,12 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.role_grant_revocation|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|4433767ed92661df"
+      "after": "app.role_grant_revocation|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|8e1bc2526f2a0868"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "app.role_grant|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|4433767ed92661df"
+      "after": "app.role_grant|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|8e1bc2526f2a0868"
     },
     {
       "section": "policies",
@@ -6853,12 +7321,12 @@
     {
       "section": "policies",
       "before": null,
-      "after": "identity.idp_group_role_mapping|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|4433767ed92661df"
+      "after": "identity.idp_group_role_mapping|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|eeedc1f2cf6e4cbc"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "identity.oidc_assertion_use|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|4433767ed92661df"
+      "after": "identity.oidc_assertion_use|tenant_isolation|PERMISSIVE|ALL|jobguard_migration|eeedc1f2cf6e4cbc"
     },
     {
       "section": "policies",
@@ -6888,12 +7356,12 @@
     {
       "section": "policies",
       "before": null,
-      "after": "identity.scim_event|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|911197777669467a"
+      "after": "identity.scim_event|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|5aeb7fcc1beb89ed"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "identity.sso_assertion_use|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|4433767ed92661df"
+      "after": "identity.sso_assertion_use|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|eeedc1f2cf6e4cbc"
     },
     {
       "section": "policies",
@@ -6933,12 +7401,12 @@
     {
       "section": "policies",
       "before": null,
-      "after": "identity.sso_grant|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|4433767ed92661df"
+      "after": "identity.sso_grant|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|8e1bc2526f2a0868"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "identity.sso_request|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|4433767ed92661df"
+      "after": "identity.sso_request|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|c3d2cb11baca5e9b"
     },
     {
       "section": "policies",
@@ -6963,7 +7431,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "identity.sso_session_binding|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|4433767ed92661df"
+      "after": "identity.sso_session_binding|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|8e1bc2526f2a0868"
     },
     {
       "section": "policies",
@@ -6973,12 +7441,12 @@
     {
       "section": "policies",
       "before": null,
-      "after": "identity.sso_subject|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|4433767ed92661df"
+      "after": "identity.sso_subject|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|8e1bc2526f2a0868"
     },
     {
       "section": "policies",
       "before": null,
-      "after": "identity.verified_domain|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|4433767ed92661df"
+      "after": "identity.verified_domain|tenant_isolation|PERMISSIVE|ALL|jobguard_identity,jobguard_migration|eeedc1f2cf6e4cbc"
     }
   ],
   "upgrade": [
@@ -7134,6 +7602,54 @@
         "nspname": "control_plane",
         "relname": "lp11_identity_scope_pkey",
         "relowner": "jobguard_session_lookup",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_practice_revoke_audit",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_practice_revoke_audit_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_sso_scope",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_sso_scope_pkey",
+        "relowner": "jobguard_migration",
         "relacl": null,
         "relrowsecurity": false,
         "relforcerowsecurity": false
@@ -7444,6 +7960,31 @@
       "section": "routines",
       "before": {
         "nspname": "app",
+        "proname": "contractor_practice_session_require_audit",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "contractor_practice_session_require_audit",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
         "proname": "current_tenant",
         "args": "",
         "proowner": "jobguard_binding_owner",
@@ -7570,11 +8111,41 @@
       "before": null,
       "after": {
         "nspname": "app",
+        "proname": "lp11_practice_revoke_event",
+        "args": "t uuid, event text, subject_type text, subject text, actor text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_audit_writer=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
         "proname": "lp11_set_identity_scope",
         "args": "t uuid, s uuid",
         "proowner": "jobguard_session_lookup",
         "proacl": "{jobguard_session_lookup=X/jobguard_session_lookup}",
         "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_sso_tenant",
+        "args": "operations text[], connection uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration,jobguard_identity=X/jobguard_migration,jobguard_audit_writer=X/jobguard_migration}",
+        "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
         ]
@@ -7692,6 +8263,21 @@
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, identity"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "identity",
+        "proname": "lp11_open_sso_scope",
+        "args": "c uuid, operation text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
         ]
       }
     },
@@ -7885,8 +8471,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE app.lp11_policy_tenant()\nEND)::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE app.lp11_policy_tenant()\nEND)::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n        ELSE NULL::uuid\n    END)\nEND)::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n        ELSE NULL::uuid\n    END)\nEND)::text, ''::text))::uuid)"
       }
     },
     {
@@ -7908,8 +8494,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE app.lp11_policy_tenant()\nEND)::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE app.lp11_policy_tenant()\nEND)::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n        ELSE NULL::uuid\n    END)\nEND)::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n        ELSE NULL::uuid\n    END)\nEND)::text, ''::text))::uuid)"
       }
     },
     {
@@ -8474,8 +9060,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_audit_writer}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_policy_tenant()))::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_policy_tenant()))::text, ''::text))::uuid)"
+        "qual": "((tenant_id = COALESCE(app.lp11_policy_tenant(), app.lp11_worker_tenant(NULL::uuid),\nCASE\n    WHEN (((subject_type)::text = 'sso-connection'::text) AND ((event_type)::text ~~ 'sso.%'::text)) THEN app.lp11_sso_tenant(ARRAY['audit'::text], (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND)) OR app.lp11_practice_revoke_event(tenant_id, (event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text))",
+        "with_check": "((tenant_id = COALESCE(app.lp11_policy_tenant(), app.lp11_worker_tenant(NULL::uuid),\nCASE\n    WHEN (((subject_type)::text = 'sso-connection'::text) AND ((event_type)::text ~~ 'sso.%'::text)) THEN app.lp11_sso_tenant(ARRAY['audit'::text], (subject_ref)::uuid)\n    ELSE NULL::uuid\nEND)) OR app.lp11_practice_revoke_event(tenant_id, (event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text))"
       }
     },
     {
@@ -8520,7 +9106,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "SELECT",
-        "qual": "\nCASE\n    WHEN app.lp6e_request_binding_present() THEN (tenant_id = app.current_tenant())\n    ELSE pg_has_role(SESSION_USER, 'jobguard_migration'::name, 'SET'::text)\nEND",
+        "qual": "(\nCASE\n    WHEN app.lp6e_request_binding_present() THEN (tenant_id = app.current_tenant())\n    ELSE pg_has_role(SESSION_USER, 'jobguard_migration'::name, 'SET'::text)\nEND OR app.lp11_practice_revoke_event(tenant_id, (event_type)::text, (subject_type)::text, (subject_ref)::text, (actor_ref)::text))",
         "with_check": null
       }
     },
@@ -9302,8 +9888,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration,jobguard_runtime}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -9348,8 +9934,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -9431,8 +10017,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration,jobguard_runtime}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -9468,8 +10054,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration,jobguard_runtime}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_policy_tenant()))::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND, app.lp11_policy_tenant()))::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND, COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND)))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND, COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND)))::text, ''::text))::uuid)"
       }
     },
     {
@@ -14367,8 +14953,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE app.lp11_policy_tenant()\nEND))::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE app.lp11_policy_tenant()\nEND))::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n        ELSE NULL::uuid\n    END)\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n        ELSE NULL::uuid\n    END)\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -14390,8 +14976,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE app.lp11_policy_tenant()\nEND))::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE app.lp11_policy_tenant()\nEND))::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n        ELSE NULL::uuid\n    END)\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n        ELSE NULL::uuid\n    END)\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -14496,8 +15082,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration,jobguard_runtime}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE app.lp11_policy_tenant()\nEND))::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE app.lp11_policy_tenant()\nEND))::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n        ELSE NULL::uuid\n    END)\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(\nCASE\n    WHEN (CURRENT_USER = ANY (ARRAY['jobguard_migration'::name, 'jobguard_audit_writer'::name])) THEN app.lp11_worker_tenant(NULL::uuid)\n    ELSE NULL::uuid\nEND,\nCASE\n    WHEN ((CURRENT_USER = 'jobguard_migration'::name) AND app.lp11_new_tenant(tenant_id)) THEN tenant_id\n    ELSE COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n        ELSE NULL::uuid\n    END)\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -17693,8 +18279,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration,jobguard_runtime}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -17716,8 +18302,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration,jobguard_runtime}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -21005,8 +21591,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_identity,jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text], connection_id)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text], connection_id)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -21028,8 +21614,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text], connection_id)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text], connection_id)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -21166,8 +21752,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_identity,jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id =\nCASE\n    WHEN ((app.lp11_policy_tenant())::text ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'::text) THEN ((app.lp11_policy_tenant())::text)::uuid\n    ELSE NULL::uuid\nEND)",
-        "with_check": "(tenant_id =\nCASE\n    WHEN ((app.lp11_policy_tenant())::text ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'::text) THEN ((app.lp11_policy_tenant())::text)::uuid\n    ELSE NULL::uuid\nEND)"
+        "qual": "(tenant_id =\nCASE\n    WHEN ((COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['scim'::text], connection_id)\n        ELSE NULL::uuid\n    END))::text ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'::text) THEN ((COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['scim'::text], connection_id)\n        ELSE NULL::uuid\n    END))::text)::uuid\n    ELSE NULL::uuid\nEND)",
+        "with_check": "(tenant_id =\nCASE\n    WHEN ((COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['scim'::text], connection_id)\n        ELSE NULL::uuid\n    END))::text ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'::text) THEN ((COALESCE(app.lp11_policy_tenant(),\n    CASE\n        WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['scim'::text], connection_id)\n        ELSE NULL::uuid\n    END))::text)::uuid\n    ELSE NULL::uuid\nEND)"
       }
     },
     {
@@ -21189,8 +21775,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_identity,jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text], connection_id)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text], connection_id)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -21364,8 +21950,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_identity,jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -21387,8 +21973,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_identity,jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['cache'::text, 'complete'::text], connection_id)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['cache'::text, 'complete'::text], connection_id)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -21484,8 +22070,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_identity,jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -21521,8 +22107,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_identity,jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text, 'scim'::text], NULL::uuid)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     },
     {
@@ -21544,8 +22130,8 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_identity,jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        "with_check": "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)"
+        "qual": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text], connection_id)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((COALESCE(app.lp11_policy_tenant(),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_sso_tenant(ARRAY['complete'::text], connection_id)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)"
       }
     }
   ],

@@ -1,0 +1,1387 @@
+# LP-11 r4 PostgreSQL verification
+
+The complete PostgreSQL 16.10 run executed all 878 test files. It reported 422 passing files and 456 failing files. Of 8,011 tests, 4,265 passed, 2,954 failed, 773 were skipped, and 19 were marked todo. Vitest also reported one unhandled rejection in the watchdog integration file.
+
+The full run started before the upgrade replay assertion was updated to expect the exact revocation trigger header. That replay test passed on its separate rerun. The totals above are the unaltered full-run result.
+
+The accepted exceptions account for one pg_dump failure and 842 failed assertions that reached the held work-order fixture. Another 21 files stopped during setup at that fixture. The full run also recorded 2,111 other failed assertions and 43 other file-level failures outside test bodies.
+
+## Missing pg_dump
+
+- upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)
+
+## Tests that reached the held work-order fixture
+
+Each test below reached prepareWorkOrderDemo and was refused at its customer insert in packages/db/src/work-order-fixtures.ts:71. The containing transaction starts at line 69 without the verified contractor credential. These traces establish the immediate dependency on the held edit.
+
+### `test/canonical-revise-duplicate-guard.integration.test.ts`
+
+- refuses canonical revision without changing either approved extra or billing, then permits the same command after unlink
+- preserves first pricing, revision and subsequent re-pricing without active links
+- does not treat a duplicate-dismissed pending request as an approved duplicate
+- negative control: removing the check in a scratch SQL copy breaks the refusal assertion and reproduces the silent drop
+
+### `test/cloudflare-northside-pool.integration.test.ts`
+
+- LATER-SAFETY-141: one client times out under the seed lock; the Cloudflare pool stores the complete Northside seed
+
+### `test/command-replay-contract.integration.test.ts`
+
+- /api/customer-portal/extra-approvals: client decision replays the first result and conflicts across payload, job and kind
+- ResolveDuplicateCandidates replays one stored result and refuses changed intent
+
+### `test/connector-billing-status-promotion.integration.test.ts`
+
+- links a completed human ENT-6 paid import once, including concurrent replay, with no monetary writes
+- links billed to a human invoiced fact once without monetary effects
+- links reversed to a human payment_reversed fact once without monetary effects
+- links reversed to a human credited fact once without monetary effects
+- refuses disallowed pair billed -> paid without monetary effects
+- refuses disallowed pair billed -> credited without monetary effects
+- refuses disallowed pair billed -> payment_reversed without monetary effects
+- refuses disallowed pair billed -> rejected without monetary effects
+- refuses disallowed pair reversed -> invoiced without monetary effects
+- refuses disallowed pair reversed -> paid without monetary effects
+- refuses disallowed pair reversed -> rejected without monetary effects
+- refuses disallowed pair paid -> invoiced without monetary effects
+- refuses disallowed pair paid -> credited without monetary effects
+- refuses disallowed pair paid -> payment_reversed without monetary effects
+- refuses disallowed pair paid -> rejected without monetary effects
+- preserves authority, foreign-import and incomplete-import refusals for billed -> invoiced
+- preserves authority, foreign-import and incomplete-import refusals for reversed -> payment_reversed
+- preserves authority, foreign-import and incomplete-import refusals for reversed -> credited
+- refuses wrong fact type, source event, foreign import, absent import, and unsupported staged status
+- rechecks finance authority on new links and replay, and rejects forged result fields
+- refuses an incomplete ENT-6 import in the same transaction, before a receipt can complete
+- negative control: restoring the original refusal makes a valid link fail (transaction rolled back)
+- negative control: equality refuses billed -> invoiced and rollback restores the pair
+- negative control: equality refuses reversed -> payment_reversed and rollback restores the pair
+- negative control: equality refuses reversed -> credited and rollback restores the pair
+
+### `test/connector-export-delivery-staging.integration.test.ts`
+
+- ENT-13A-EXPORT-ACK RED staged partner acknowledgements stages once, preserves the first receipt across retries/rotation, conflicts on changed payload and changes no export/billing rows
+
+### `test/connector-promotion.integration.test.ts`
+
+- imports exactly ENT-2 generated baseline prices, replays once, and keeps the connector receipt staged
+- uses the existing ENT-2 revision rules and never reimports a prior event after a later revision
+- refuses a tenant-B principal in a tenant-A promotion transaction before importing or writing either tenant
+- imports one materials fact through the existing authority, without confirming a prompt
+- hides foreign/altered event identities, refuses removed members and unauthorized members without writes
+- unknown fixture labels and billing composition holds write nothing
+- promotion-record failure rolls back orders, revisions, prices, materials and every import audit
+- connector role cannot execute promotion or reach origin, prices, approvals or statements
+- direct SQL cannot substitute a command id or forge an import effect
+- keeps owner and finance mixed lists available when materials is closed, without writes or selected/replay authority
+- keeps owner and finance mixed lists available when materials is non-ordered, without writes or selected/replay authority
+- omits a materials candidate with no target job, while selected reads and recording retain their refusal
+- does not restore materials visibility for supervisors, unauthorized/revoked members, foreign sessions or mismatched requests
+- rethrows unrelated P0001, near-match messages and other SQLSTATEs from materials authority
+- negative control: reverting only the exact JOB_NOT_LIVE skip breaks the closed-job list; rollback restores it
+
+### `test/contractor-billing-delivery.integration.test.ts`
+
+- E6-23 E6-24 outcome_unknown delivery is reconciled, never blindly retried
+- E6-23 wrong content hash refuses before creating durable delivery
+- E6-25 download retrieves only persisted authorized bytes after the fake action succeeds
+- E6-24 an interrupted claim is inspected as unknown and reconciliation never sends
+- M0-13a paused contractor delivery keeps its queued artifact and records no attempt or send
+- LATER-SAFETY-81 refuses another delivery for every sendable or uncertain outbox state without writes
+- LATER-SAFETY-81 dead_letter allows a fresh command while both command replays retain their results
+- LATER-SAFETY-81 cancelled allows a fresh command while both command replays retain their results
+- LATER-SAFETY-81 racing delivery approvals queue exactly one outbox action
+- LATER-SAFETY-81 lapsed pending approval allows fresh delivery but remains unclaimable
+- LATER-SAFETY-81 lapsed retryable approval allows fresh delivery but remains unclaimable
+
+### `test/contractor-billing-import-failure.integration.test.ts`
+
+- LATER-SAFETY-152 real PostgreSQL atomic import failure retains ENT-F2 qualifying principal and the posted 806p fee after a malformed additional movement
+- LATER-SAFETY-152 real PostgreSQL atomic import failure rolls back every invoice group, then accepts corrected input with the unconsumed command ID
+- LATER-SAFETY-152 real PostgreSQL atomic import failure keeps a policy-held payment held while preserving the last valid projection
+- LATER-SAFETY-152 real PostgreSQL atomic import failure keeps a genuinely empty first invoice, missing prerequisites, ambiguous and quarantined facts successful
+- LATER-SAFETY-152 real PostgreSQL atomic import failure preserves legitimate credited movement behavior
+- LATER-SAFETY-152 real PostgreSQL atomic import failure preserves legitimate rejected movement behavior
+- LATER-SAFETY-152 real PostgreSQL atomic import failure preserves legitimate payment_reversed movement behavior
+- LATER-SAFETY-152 real PostgreSQL atomic import failure refuses non-finance and foreign tenant/job imports with otherwise valid data and no writes
+
+### `test/contractor-billing-ordering.integration.test.ts`
+
+- E6-18 E6-20 E6-21 payment before invoice is held then recomputed in a successor run
+- E6-19 E6-20 all 24 arrival permutations preserve credits, reversals and exact projections
+- r7 E6-19 E6-20 paid composition preserves exact projection in either invoice arrival order (one import)
+- r7 E6-19 E6-20 paid composition preserves exact projection in either invoice arrival order (separate imports)
+- r7 E6-16 invalid paid composition remains quarantined in either invoice arrival order
+- r7 E6-19 E6-20 credited composition preserves exact projection in either invoice arrival order (one import)
+- r7 E6-19 E6-20 credited composition preserves exact projection in either invoice arrival order (separate imports)
+- r7 E6-16 invalid credited composition remains quarantined in either invoice arrival order
+- r7 E6-19 E6-20 rejected composition preserves exact projection in either invoice arrival order (one import)
+- r7 E6-19 E6-20 rejected composition preserves exact projection in either invoice arrival order (separate imports)
+- r7 E6-16 invalid rejected composition remains quarantined in either invoice arrival order
+- r7 E6-19 E6-20 payment_reversed composition preserves exact projection in either invoice arrival order (one import)
+- r7 E6-19 E6-20 payment_reversed composition preserves exact projection in either invoice arrival order (separate imports)
+- r7 E6-16 invalid payment_reversed composition remains quarantined in either invoice arrival order
+
+### `test/contractor-entitlement-session.integration.test.ts`
+
+- effective switched member is not replaced by owner
+
+### `test/contractor-job-finish.integration.test.ts`
+
+- ENT-8a owner contractor job finish runs the enabled evaluator, cites stored evidence, immediately surfaces and coalesces without financial or shadow effects
+- ENT-8a owner contractor job finish records a finish with disabled agreement without evaluating evidence
+- ENT-8a owner contractor job finish records a finish with missing agreement without evaluating evidence
+- ENT-8a owner contractor job finish uses the current server agreement and refuses altered ids including on replay
+- ENT-8a owner contractor job finish refuses supervisor for writes and finish-state reads
+- ENT-8a owner contractor job finish refuses surveyor for writes and finish-state reads
+- ENT-8a owner contractor job finish refuses operative for writes and finish-state reads
+- ENT-8a owner contractor job finish refuses finance for writes and finish-state reads
+- ENT-8a owner contractor job finish refuses commercial_manager for writes and finish-state reads
+- ENT-8a owner contractor job finish refuses admin for writes and finish-state reads
+- ENT-8a owner contractor job finish rechecks a removed owner's authority before replay
+- ENT-8a owner contractor job finish returns the same refusal for foreign, out-of-scope and absent jobs
+- ENT-8a owner contractor job finish refuses an open visit and caller-supplied authority/time/check fields
+- ENT-8a owner contractor job finish rejects raw SQL authority fields without creating a finish or receipt
+- ENT-8a owner contractor job finish serializes competing finishes and keeps the record private, forced-RLS and immutable
+
+### `test/contractor-party-bind-work-order-only.integration.test.ts`
+
+- LATER-SAFETY-127 contractor party binding refuses an ordinary draft job at its current revision without changing its parties
+- LATER-SAFETY-127 contractor party binding refuses an ordinary quoting job at its current revision without changing its parties
+- LATER-SAFETY-127 contractor party binding proves mutation sensitivity by removing and restoring the trigger only in this scratch database
+
+### `test/contractor-retained-read-boundaries.integration.test.ts`
+
+- switched operative is never replaced by owner
+- reads leave all business rows receipts and audit heads unchanged
+
+### `test/contractor-retained-read.integration.test.ts`
+
+- historical organisation and contracts survive agreement loss
+- historical reads survive track change but not revocation
+- client and branch scopes remain unchanged
+- restricted readers cannot infer administrative activity
+
+### `test/contractor.integration.test.ts`
+
+- ENT-2 conformance: the work-order import, SoR import, register, batch, revision, assignment, visit, price-list and resident reads agree with the pure role and scope rules, per client in two branches
+
+### `test/customer-signin-lock-order.integration.test.ts`
+
+- matched extra-approver approval versus xa_withdraw: 50 same-job rounds, both lock owners, one outcome
+- matched extra-approver approval versus xa_withdraw without a barrier: 50 same-job rounds, both winners, one outcome
+
+### `test/duplicate-canonical-guard.integration.test.ts`
+
+- refuses approved duplicate into rejected canonical without effects
+- refuses approved duplicate into logged canonical without effects
+- refuses approved duplicate into awaiting_approval canonical without effects
+- also refuses a logged duplicate into a rejected canonical
+- keeps logged-to-logged linking; active canonical withdrawal rolls back, then succeeds after unlink
+- approved-to-approved linking keeps the canonical in the real 0243 billing read
+- mutation control: removing the link guard admits the refused approved-to-logged command
+- mutation control: removing the withdraw guard admits an active canonical withdrawal
+
+### `test/duplicate-unlink-command-binding.integration.test.ts`
+
+- LATER-SAFETY-131 duplicate unlink command binding on PostgreSQL the sole unlink writer succeeds end to end and makes the duplicate active again
+- LATER-SAFETY-131 duplicate unlink command binding on PostgreSQL refuses another processing command by the same actor even with the exact unlink key
+- LATER-SAFETY-131 duplicate unlink command binding on PostgreSQL refuses UnlinkDuplicate with a different job in its semantic key
+- LATER-SAFETY-131 duplicate unlink command binding on PostgreSQL refuses UnlinkDuplicate with a different link in its semantic key
+- LATER-SAFETY-131 duplicate unlink command binding on PostgreSQL refuses UnlinkDuplicate with a different command in its semantic key
+- LATER-SAFETY-131 duplicate unlink command binding on PostgreSQL refuses UnlinkDuplicate with a different prefix in its semantic key
+- LATER-SAFETY-131 duplicate unlink command binding on PostgreSQL the same refusal assertion fails with the old unlink branch and the fixed guard is restored
+
+### `test/enterprise-dashboard-stored.integration.test.ts`
+
+- stored ENT-6 billed/paid totals conserve full-composition allocation and trace exact run/line facts
+- stores immutable history, serializes replay once, reproduces with a new repository instance and requires complete current team coverage
+- catalog enforces FORCE RLS, tenant keys, migration ownership and no raw runtime writes or reads
+
+### `test/enterprise-dashboard.authority-race.integration.test.ts`
+
+- TESTS-DASHBOARD-AUTHORITY-1 stored authority and tenant gate [DA1] rechecks an expired stored session despite its previously verified tenant context
+- TESTS-DASHBOARD-AUTHORITY-1 stored authority and tenant gate [DA2] grant.revoke holds exclusive gate first; waiting dashboard refuses after commit
+- TESTS-DASHBOARD-AUTHORITY-1 stored authority and tenant gate [DA2] membership.revoke holds exclusive gate first; waiting dashboard refuses after commit
+- TESTS-DASHBOARD-AUTHORITY-1 stored authority and tenant gate [DA3] dashboard holds shared gate first; grant.revoke waits until the earlier read completes
+- TESTS-DASHBOARD-AUTHORITY-1 stored authority and tenant gate [DA3] dashboard holds shared gate first; membership.revoke waits until the earlier read completes
+- TESTS-DASHBOARD-AUTHORITY-1 stored authority and tenant gate [DA4] a refused read followed by another tenant on the same backend returns only the second tenant's facts
+- TESTS-DASHBOARD-AUTHORITY-1 stored authority and tenant gate [DA5] reads leave every tenant commercial/audit row unchanged; only the identified revocation writes
+- TESTS-DASHBOARD-AUTHORITY-1 stored authority and tenant gate [DA2 sensitivity] omitting only the dashboard gate makes the lock-order assertion fail
+
+### `test/enterprise-dashboard.integration.test.ts`
+
+- ENT-9B scoped persisted reads [LATER-SAFETY-58] Friday working-day waits show Tuesday at the same London time, matching the queue deadline
+- ENT-9B scoped persisted reads [LATER-SAFETY-58] old snapshots without working-day waits retain their elapsed-minute deadline
+- ENT-9B scoped persisted reads [LATER-SAFETY-22] dashboard and xa_queue share weekend deadlines (legacy snapshot: false)
+- ENT-9B scoped persisted reads [LATER-SAFETY-22] dashboard and xa_queue share weekend deadlines (legacy snapshot: true)
+- ENT-9B scoped persisted reads [E9-02] counts command-created active duplicate groups once and restores two captures after an authorized unlink
+- ENT-9B scoped persisted reads [E9-01 E9-03 E9-07] reads command-created captures, current approvals and immutable deadlines; billing stays held
+- ENT-9B scoped persisted reads [E9-09 E9-10 E9-11 E9-13] applies covering dashboard grants and tenant scope before all output
+- ENT-9B scoped persisted reads [E9-12 E9-15] revocation takes effect on the next request and a session cannot choose a foreign context
+- ENT-9B scoped persisted reads [E9-10 E9-12] a reassigned operative disappears even while the old job remains in scope; unrelated grants cannot supply scope
+- ENT-9B scoped persisted reads [E9-08] derives close-out answers from visit commands and does not change job state
+- ENT-9B scoped persisted reads [E9D] close-out observations cite only covered visits, are replay-stable and disappear after reassignment
+- ENT-9B scoped persisted reads [E9-14 E9-26 E9-28 E9-31] reads and observations preserve canonical business rows and give runtime no new privilege
+- [E9E] a billed variation matched to a JobGuard extra has no missing-extra advisory
+- [E9E] original orders stay silent and unrelated credits cannot erase a possible variation
+- [E9E] unmatched other invoice lines are advisory, scoped, replay-stable and removed by current credits/rejections
+
+### `test/enterprise-fee-command-fixtures.integration.test.ts`
+
+- ENT-F1: £150 approved, billed plus VAT and paid yields a 1500p accrual
+- ENT-F2: full blended receipt follows 806p with a 1594p delta, never another 2400p
+- ENT-F3 / ENT-F12: credit after an approved month compensates next month, preserving the original statement
+- ENT-F4: a reversed £180 payment compensates the entire 1500p fee
+- ENT-F5: approved and billed caps survive posting
+- ENT-F6: approved and billed caps survive posting
+- ENT-F7: two billed-and-paid logs reconcile once, retain artifacts and origins, and compensate to one fee
+- fractional duplicate credit preserves 250000/31 net pence in storage, replay and the authorized hash
+- ENT-F8: office, client instructions and order lines contribute zero even when billed and paid
+- ENT-7: withdrawn amounts contribute zero through real commands, with a qualifying control
+- ENT-7: rejected amounts contribute zero through real commands, with a qualifying control
+- ENT-7: unexported amounts contribute zero through real commands, with a qualifying control
+- ENT-7: unpaid amounts contribute zero through real commands, with a qualifying control
+- ENT-7: runtime SQL cannot insert fee contributions or journal headers
+- ENT-F9: origins either side of a version boundary keep 10% / 8%; a later X credit stays under v1
+- ReconcileExportedDuplicate retains the earlier agreement when the later log is chosen as canonical
+- Self-check: cumulative approval/credit caps survive signed partial reversals and replay without rounding
+- Self-check: wrong locked export revision and oversized amounts cannot create fee contributions
+- Self-check: posting command IDs bind the exact statement and authorization, including zero-result replays
+- Self-check: approved statements reject stale credit inputs without changing the locked bill or posting
+- Self-check: cross-tenant replay, reads and cross-job duplicate references disclose no foreign data
+- ENT-F10: three 5p extras round cumulatively to 2p; largest-remainder trace is 1p/1p/0p by ID
+- ENT-F11: Q=5p half-even cumulative fee=0p
+- ENT-F11: Q=15p half-even cumulative fee=2p
+- ENT-F11: Q=25p half-even cumulative fee=2p
+- ENT-F11: two 5p receipts accumulate to 1p rather than rounding each receipt down
+- ReconcileExportedDuplicate refuses non-live jobs, wrong tenant/session and direct runtime writes
+- ENT-7: the simulated invoice posts exact approved money once and rechecks revoked authority
+
+### `test/enterprise-fee-derivation.integration.test.ts`
+
+- ENT-F2 on PostgreSQL: the site extra contributes Q = 250000/31 pence, the order line nothing; 10% rounds half-even to 806p
+- unexported and unpaid extras contribute zero
+- replays and concurrent derivations record once; the same command with a different request conflicts
+- only finance may derive or read; an unknown session and a missing agreement are refused
+- the runtime role cannot read or write fee tables directly, and stored rows are immutable even for the owner
+- an agreement version only takes extras whose origin time selects it
+
+### `test/enterprise-fee-posting.integration.test.ts`
+
+- posts an approved statement once: one balanced accrual of the exact delta; replays and races add nothing
+- an unchanged next month subtracts prior posted net: zero delta and no new journal
+- posting is refused without approval, with another authorisation, revoked or expired authority, or non-finance
+- posting is refused when the facts move after approval
+- a reversal after posting becomes a linked compensation on the next month's statement, netting the fee back to zero
+- direct runtime SQL can neither write the fee book nor call its private helper, and journals are immutable
+- ENT-11b self-attack: a credit after approval blocks posting without changing the approved statement
+- ENT-11b self-attack: another company cannot read a statement, derivation or journals, or post its approval
+- splits a compensation across outstanding accruals and never offsets the same pence twice
+- zero-statement replays preserve receipts and append no audit, including fresh-key races and cross-company attacks
+- fresh-key accrual replays append one bound audit per command; same-key retries and forbidden replays append nothing
+- refuses preparing February after the same agreement has a posted March fee
+- refuses posting an approved February after March posts, without writing a fee or receipt
+- still posts February then March in order, replays the latest month and posts a later month
+
+### `test/enterprise-fee-production.integration.test.ts`
+
+- production derive/accrue refuses supplied approvals, flags, tenant references and replays without writes or leaks
+- rebuilds exact liability and source attribution; repeated imports/derives and racing posts retain one journal
+- a reversal invalidates stale derivations and yields linked compensation without erasing the original
+- two paid 5p extras on different contracts share one cumulative agreement rounding and posting lock
+- direct runtime writes and oversized or mislinked journal attempts cannot exceed the rebuilt amount
+
+### `test/enterprise-fee-rejected-line.integration.test.ts`
+
+- R151-ZERO: rejection before payment retains allocated cash but charges zero
+- R151-ZERO: rejection after payment retains allocated cash but charges zero
+- R151-CONTROL: identical unrejected ENT-F2 retains exact principal and fee; another rejected invoice line does not erase it
+- R151-REPLAY: rejection changes input hash, exact command/event replay adds no duplicate history
+- R151-COMPENSATE: rejection after approval refuses stale posting; after posting uses linked later-period compensation
+- R151-ADJUST: credits and reversals cannot revive rejected principal
+- R151-MIXED: only the rejected extra is excluded from a mixed invoice
+- R151-ISOLATION: another job's rejection leaves this job eligible; tenant and finance/session guards remain closed
+- R151-MUTATION: removing only the exclusion fails the zero-principal assertion; rollback restores it
+- R151-IMMUTABLE: runtime cannot insert contributions, and approved statements/journals resist owner edits
+
+### `test/enterprise-fee-statement.integration.test.ts`
+
+- prepares one revision per unchanged month from the latest derivation; replays return it
+- exact approval creates one Decision, an approved resolution and one exact expiring authorisation
+- approval is refused for a mismatched hash or total, a bad expiry, non-finance, and changed facts
+- a dispute closes the revision; preparing again makes the next revision, and only that one can be approved
+- direct runtime SQL can neither write statement tables, call the private helpers, nor approve with a wrong total
+
+### `test/enterprise-live-prompt-access.integration.test.ts`
+
+- ENT-8A-P persisted prompt access Possible extras lane is supervisor-only, including a covering supervisor not named on the visit
+- ENT-8A-P persisted prompt access fresh reads expose a committed prompt; only scoped resolution roles can read its detail
+- ENT-8A-P persisted prompt access only finance and owner import materials; import does not grant resolution or lane authority
+- ENT-8A-P persisted prompt access an unauthorised caller gets the identical EXTRA_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job
+- ENT-8A-P persisted prompt access same-tenant wrong-job scope and cross-tenant reads refuse identically
+- ENT-8A-P persisted prompt access revoked grants are rechecked on successful replay and reads
+- ENT-8A-P persisted prompt access revoked memberships and unknown sessions cannot reuse historic authority
+- ENT-8A-P persisted prompt access a revoked persisted session cannot read or mutate
+- ENT-8A-P persisted prompt access contractor capability loss preserves read-only prompt history and refuses new work
+- ENT-8A-P persisted prompt access direct SQL cannot mutate prompt sources, resolutions or settings, even in a valid tenant context
+
+### `test/enterprise-live-prompt-commands.integration.test.ts`
+
+- ENT-8A-P atomic commands exactly one new origin, capture note and scope identity; no automatic price or approval
+- ENT-8A-P atomic commands confirmed extras continue through ENT-5 pricing without rewriting origin
+- ENT-8A-P atomic commands work-order prompt receipts still refuse runtime result and identity rewrites
+- ENT-8A-P atomic commands raw confirmation still raises PROMPT_ORIGIN_HELD
+- ENT-8A-P atomic commands dismissal is immutable and exact prompt hash is required
+- ENT-8A-P atomic commands unsupported returns quarantine the comparison and prevent an earlier prompt confirmation
+- ENT-8A-P atomic commands failed audit rolls source, origin, resolution and receipt back together
+- ENT-8A-P atomic commands importMaterials replaying a command id returns the first result, never the job's current state
+- ENT-8A-P atomic commands importMaterials the same command id with a changed payload conflicts
+- ENT-8A-P atomic commands importMaterials the same command id on another job conflicts
+- ENT-8A-P atomic commands importMaterials a successful no-op keeps its identity
+- ENT-8A-P atomic commands importMaterials a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- ENT-8A-P atomic commands importMaterials an unauthorised caller gets the identical EXTRA_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job
+- ENT-8A-P atomic commands evaluate replaying a command id returns the first result, never the job's current state
+- ENT-8A-P atomic commands evaluate the same command id with a changed payload conflicts
+- ENT-8A-P atomic commands evaluate the same command id on another job conflicts
+- ENT-8A-P atomic commands evaluate a successful no-op keeps its identity
+- ENT-8A-P atomic commands evaluate a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- ENT-8A-P atomic commands evaluate an unauthorised caller gets the identical EXTRA_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job
+- ENT-8A-P atomic commands confirm replaying a command id returns the first result, never the job's current state
+- ENT-8A-P atomic commands confirm the same command id with a changed payload conflicts
+- ENT-8A-P atomic commands confirm the same command id on another job conflicts
+- ENT-8A-P atomic commands confirm a successful no-op keeps its identity
+- ENT-8A-P atomic commands confirm a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- ENT-8A-P atomic commands confirm an unauthorised caller gets the identical EXTRA_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job
+- ENT-8A-P atomic commands dismiss replaying a command id returns the first result, never the job's current state
+- ENT-8A-P atomic commands dismiss the same command id with a changed payload conflicts
+- ENT-8A-P atomic commands dismiss the same command id on another job conflicts
+- ENT-8A-P atomic commands dismiss a successful no-op keeps its identity
+- ENT-8A-P atomic commands dismiss a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- ENT-8A-P atomic commands dismiss an unauthorised caller gets the identical EXTRA_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job
+
+### `test/enterprise-live-prompt-end-check.integration.test.ts`
+
+- caller completion event rejection missing agreement cannot authorize an end check
+- caller completion event rejection disabled agreement cannot authorize an end check
+- caller completion event rejection wrong-version agreement cannot authorize an end check
+- caller completion event rejection a completed visit cannot substitute for authoritative job completion
+- end-check stored rule (a) recheck finishes without evaluating a recognised off-order observation when the end check is disabled
+- end-check stored rule (a) recheck refuses a stored identity/PNG finding mismatch and rolls back the entire finish
+- end-check stored rule (a) recheck does not let an unfinished owner finish authorize another job projection
+- end-check stored rule (a) recheck creates a checked rule (a) prompt and closes owner projection access before replay
+
+### `test/enterprise-live-prompt-office.integration.test.ts`
+
+- ENT-8A-P office advisory real office creation matching surfaced prompts emits one advisory and preserves zero fee eligibility
+- ENT-8A-P office advisory real office creation matching dismissed prompts emits one advisory and preserves zero fee eligibility
+- ENT-8A-P office advisory confirming an exact office match coalesces and creates no origin or scope identity
+- ENT-8A-P office advisory ambiguous exact matches require an explicit same-job existing extra without merging origins
+- ENT-8A-P office advisory reads an honest empty state, paginates without duplicates and rejects invalid bounds/cursors
+- ENT-8A-P office advisory rechecks detail roles, tenant/job scope, and revoked grants even for empty jobs
+
+### `test/enterprise-live-prompt-races.integration.test.ts`
+
+- ENT-8A-P command races b2: first completion holds key 417 before the live lock; replay holds only authority and never locks the baseline
+- ENT-8A-P command races b2: concurrent duplicate completions return one result and one closeout answer
+- ENT-8A-P command races two-connection confirm/confirm produces one resolution and origin
+- ENT-8A-P command races two-connection confirm/dismiss produces one final resolution or typed conflict
+- ENT-8A-P command races two-connection source replay keeps one source and original result
+- ENT-8A-P command races confirm/office capture cannot duplicate a prompt origin or change office origin
+- ENT-8A-P command races baseline change races refuse stale binding or preserve the locked baseline
+- ENT-8A-P command races job-leaves-live race never writes after the live guard loses
+
+### `test/enterprise-live-prompt-repository.integration.test.ts`
+
+- lists exactly verified uninvalidated same-job completion sources with a narrow shape
+- rejects foreign, unknown and uncovered jobs, including another supervisor's job
+- refuses every role refused by the observation command and rechecks revoked grants
+- binds runtime-read photo bytes to the current session, job, evidence, hash, version and length
+
+### `test/enterprise-live-prompt-rules.integration.test.ts`
+
+- persisted deterministic prompt rules materials strict excess is immediately visible from command-created issue facts
+- persisted deterministic prompt rules materials equality and unknown mappings or units remain silent
+- persisted deterministic prompt rules same-time contradictory facts quarantine a previously surfaced materials comparison
+- persisted deterministic prompt rules source replay deduplicates and changed source identity content conflicts atomically
+- persisted deterministic prompt rules unauthorized admin imports have no source or prompt effects
+- persisted deterministic prompt rules unauthorized supervisor imports have no source or prompt effects
+- persisted deterministic prompt rules unauthorized surveyor imports have no source or prompt effects
+- persisted deterministic prompt rules unauthorized commercial_manager imports have no source or prompt effects
+- persisted deterministic prompt rules unauthorized operative imports have no source or prompt effects
+- persisted deterministic prompt rules unauthorized read_only imports have no source or prompt effects
+- persisted deterministic prompt rules completed visit yes creates a job-wide closeout prompt before the visit transaction commits
+- persisted deterministic prompt rules closeout confirmation requires explicit work identity and creates no implicit price
+- persisted deterministic prompt rules no answer suppresses closeout and missing factor suppresses visit duration
+- persisted deterministic prompt rules completed visits compare exact server microseconds to immutable contract factor
+- persisted deterministic prompt rules an observation without immutable verified bytes refuses and leaves no prompt
+- persisted deterministic prompt rules a successful no-op keeps its identity
+- observation command identity and stored PNG provenance rule a reads tags from command-finalized immutable PNG bytes and cites their native hash/version
+- observation command identity and stored PNG provenance ordered explicit synonym stays silent and forged tag/hash/version is refused
+- observation command identity and stored PNG provenance replaying a command id returns the first result, never the job's current state
+- observation command identity and stored PNG provenance the same command id with a changed payload conflicts
+- observation command identity and stored PNG provenance the same command id on another job conflicts
+- observation command identity and stored PNG provenance a successful no-op keeps its identity
+- observation command identity and stored PNG provenance a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- observation command identity and stored PNG provenance an unauthorised caller gets the identical EXTRA_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job
+
+### `test/evidence-bundle-screen.integration.test.ts`
+
+- checks actual approvals read-only, preserves absences, and refuses inaccessible/foreign jobs before reading objects
+
+### `test/evidence-bundle.integration.test.ts`
+
+- joins actual immutable origin, revision, requirement and approval facts; replays deterministically; refuses stale requests and cross-tenant actors
+- LATER-SAFETY-47 bundle follows exact duplicate-link reversals without changing billing
+- LATER-SAFETY-47 Northside follows exact duplicate-link reversals without changing billing
+- LATER-SAFETY-89 preserves an intact bundle through real export, billed and paid imports and post-approval lifecycle states
+- LATER-SAFETY-89 refuses latest credited even with immutable approval and export facts
+- LATER-SAFETY-89 refuses latest billing_rejected even with immutable approval and export facts
+
+### `test/extra-approval-rules.integration.test.ts`
+
+- Q04 first receipt wins a same-person repeat, with no second fact or audit, and revoked grants refuse replay
+- Q11 covered surveyor can withdraw an open request, but cannot change its final outcome
+- Q11 covered commercial_manager can withdraw an open request, but cannot change its final outcome
+- Q06 thresholds are frozen per rule version; Q16 pricing alone never submits
+- Q08 without a backup the mandatory queue stays waiting and overdue, without an escalation fact
+
+### `test/extra-client-authority-loss.integration.test.ts`
+
+- A3 control: approver who keeps authority is not over-cancelled; send delivers once and link works
+- A8 legacy runtime decide path refuses an unused link after sender grant loss
+- Q14 membership loss cancels pending and retryable sends, preserves decisions and current-authority reads
+- Q14 client grant loss cancels pending and retryable sends, preserves decisions and current-authority reads
+- Q14 sender grant loss cancels pending and retryable sends, preserves decisions and current-authority reads
+- Q14 client session has no export action and stores no refusal
+- Q14 contractor bundle check returns only verification, and refuses export input
+- Q14 negative mutation: removing the SQL cancellation makes the cancel case fail
+
+### `test/extra-client-send-permission-order.integration.test.ts`
+
+- a bound current operative gets the same refusal for priced, absent and unpriced requests on one valid job, with no effects
+- covered surveyor sends the exact fake action once; missing and unpriced remain NOT_FOUND
+- covered commercial_manager sends the exact fake action once; missing and unpriced remain NOT_FOUND
+- membership revoked cannot gain effects through replay
+- membership expired cannot gain effects through replay
+- grant revoked cannot gain effects through replay
+- refuses uncovered jobs, foreign tenants, spoofed actors, absent binding and expired credentials without effects
+
+### `test/extra-duplicate-candidates.integration.test.ts`
+
+- two operatives remain separate and priced; linking and unlinking agree with the export blocker, including replays
+- cross-tenant jobs, uncovered grants and wrong roles fail closed
+- stale unlinks and linking racing an export cannot export duplicate captures
+- installed routines agree on the UTC day, visit, code, excess-line and canonical matrix
+- ENT-3 relink same direction exports once and preserves replay/history
+- ENT-3 relink opposite direction exports once and preserves replay/history
+- ENT-3 unlink restores separate approved extras through the existing command and export paths
+- ENT-3 relink refuses a forged actor, uncovered grant, wrong role and foreign tenant without effects
+- ENT-3 relink racing unlink serializes to an active fresh link or unresolved candidates
+- ENT-3 reversal never promotes a duplicate-dismissed pending approval to approved
+- dismissal is exact, append-only and reversible; replay is inert and export keeps distinct approved lines
+- table owner cannot truncate append-only duplicate dispositions and all rows remain
+- refuses reporters, pricers, forged actor, foreign tenant, uncovered and wrong roles, with no facts or receipts
+- revision changes and a new extra racing dismissal raise the group again and keep export refused
+- dismisses one group only; every other group still refuses export and concurrent replays create one fact
+- independent surveyors and commercial managers may dismiss with a covering grant
+- refuses disposition/reason mismatches without changing receipts, facts, audit or export eligibility
+- accepts both distinct-work reasons and review-changed reopening through the SQL writer
+- begins the registered duplicate command with repository-style input
+- completes only the exact fresh disposition fact after a processing receipt
+- the checked writer creates a lifecycle claim and one command audit, and replays the stored result
+- replays pre-lifecycle receipts with their historical digest and refuses changed payloads
+
+### `test/extra-escalation-worker.integration.test.ts`
+
+- ENT-5 worker discovery, crash rollback, concurrent restart, tenant confinement and alternate revocation
+
+### `test/extra-evidence-packs.integration.test.ts`
+
+- E5-18 extra sources and shared verifier — issued sources only
+- E5-19 pending rejected foreign and wrong-version source controls refuse
+- E5-19 evidence lifecycle and confirmation limits — issued sources only
+- E5-18 tampered stored sources are detected through persisted hashes
+- requirement, step actors and outcome are exact persisted versioned sources
+- withdrawn and rejected requests remain explicit and cannot acquire a later approval
+- foreign step sources cannot replace a bound fact, and missing required facts stay incomplete
+
+### `test/extra-links.integration.test.ts`
+
+- ENT-4b immutable links [DW1] all new table rows refuse mutation as runtime and migration owner
+- ENT-4b immutable links [DW4a] composite foreign keys reject cross-tenant and same-tenant wrong-job links/evidence
+- ENT-4b immutable links [DW4b] self, chain, cycle, second active link and concurrent chain are refused
+- ENT-4b immutable links [DW4b] immutable unlink row guards preserve history and allow relink before export; command surface HELD
+- ENT-4b immutable links [DW4c] order-line links preserve origin/hash; same/older revision and duplicate use are refused
+- ENT-4b immutable links [DW4b] either exported endpoint blocks link and unlink, preserving the origin
+- ENT-4b immutable links [DW4c] an instructed revision older than the origin is refused
+- ENT-4b immutable links [DW5a] failed link/order seam and deferred missing audit roll back rows and receipts
+- ENT-4b immutable links [DW5a] link, raw unlink and order writes roll back at receipt, fact, audit and commit failures
+- ENT-4b immutable links [S4] missing unlink/order audit fails commit with no partial link history
+- ENT-4b immutable links [DW6] link audits contain only allowed IDs and hashes
+- ENT-4b immutable links [R2] effective origin is independent of canonical choice and uses lower ID on a time tie
+- ENT-4b immutable links [R3] later formal instruction leaves one extra and its immutable site origin intact
+- ENT-4b immutable links [S1] foreign tenant link/event reads are NOT_FOUND; writes cannot name foreign extras
+- ENT-4b immutable links [S4] both link tables and unlink history share xmin with their audit; missing audit fails commit
+
+### `test/extra-origin.integration.test.ts`
+
+- ENT-4b origin persistence [DW1] runtime cannot mutate immutable rows; owner triggers refuse UPDATE and DELETE
+- ENT-4b origin persistence [DW2a] all mismatched raising command/kind pairs are refused
+- ENT-4b origin persistence [DW2b] receipt actor, processing status and exact semantic identity are required
+- ENT-4b origin persistence [DW2c] origin and client capture uniqueness reject second rows with 23505
+- ENT-4b origin persistence [DW2d] neither origin column accepts the other track's kinds
+- ENT-4b origin persistence [DW3] missing origin fails at commit; SH-1 deferred constraint remains singular
+- ENT-4b origin persistence [DW5a] failures at each write, seam, audit and commit leave no facts or receipt
+- ENT-4b origin persistence [DW5b] command/capture replay and two-connection retry have one effect; conflicting payloads fail
+- ENT-4b origin persistence [DW5b] a successful capture retry durably binds its command ID before any reuse
+- ENT-4b origin persistence [DW6] audit uses closed ID/hash keys; capture metadata never appears in audit or errors
+- ENT-4b origin persistence [R1] office, instruction, import, parties, unknown commands cannot write or relabel site origins
+- ENT-4b origin persistence [R4] earlier small-builder origins survive a later contractor assignment unchanged
+- ENT-4b origin persistence [R4] merged small-builder capture reads as versioned legacy with unknown identities preserved
+- ENT-4b origin persistence [R4] merged legacy origin trigger reads truthfully while command origins stay strict
+- ENT-4b origin persistence [S4] clearing tenant context after valid origin/event/audit writes refuses commit
+- ENT-4b origin persistence [S1] stamped per-call contexts fail closed; other tenant/job reads are NOT_FOUND
+- ENT-4b origin persistence [S4] origin/event/audit share xmin; absent or mismatched audit/logged fact fails at commit
+- ENT-4b origin persistence [S5] server overwrites authority fields; grants, scope, visits, membership and prompt are guarded
+- ENT-4b origin persistence [S4] origin requires exact logged and exact hash/command audit in the same transaction
+- ENT-4b origin persistence [S5] evidence and excess references preserve job identity and new scope lineage
+- ENT-4b origin persistence [S5] grants cover exactly tenant/team/branch/region; visits bind member/job; inactive members fail
+- ENT-4b origin persistence [S6] every stored contractor hash equals the pure mirror with six-digit timestamp text
+- ENT-4b origin persistence [C3] all fixtures are synthetic_demo and every raised identity is a new scope item
+- ENT-4b origin persistence [S4] a stamped context with an UPPER-CASE tenant id commits a valid extra
+- ENT-4b origin persistence [S4] both spellings of one tenant identify one extra for one client capture ID
+- ENT-4b origin persistence [S4] an absent tenant setting at commit is refused and nothing is written
+- ENT-4b origin persistence [S4] an empty tenant setting at commit is refused and nothing is written
+- ENT-4b origin persistence [S4] a different tenant's id in the setting at commit is refused, in either letter case
+- ENT-4b origin persistence [S4] a non-uuid tenant setting at commit is refused and nothing is written
+
+### `test/extra-queue-approver-eligibility.integration.test.ts`
+
+- hides a covered supervisor's own extra but keeps another eligible supervisor's mandatory item
+- hides step 1 from the actor who filled step 0, while preserving the next approver
+- Q04 keeps the same slot visible and approvable on a new revision, but excludes a prior different slot
+- a succeeded rejection reserves its slot across revisions without banning same-slot participation
+- LATER-SAFETY-49 legacy unknown rejection slots stay ineligible, with every fixture guard enabled
+- preserves scope, tenant, revoked-grant and revoked-member exclusions
+- preserves London deadlines, overdue state and the listed escalation alternates
+- mutation probe: removing only SELF_APPROVAL makes its queue regression fail
+- mutation probe: removing only REUSED_APPROVER makes its queue regression fail
+
+### `test/extra-unlink.integration.test.ts`
+
+- ENT-4c un-link command [D1] an owner un-links an active link: one un-link row, one completed command receipt, one domain and one checked terminal audit, nothing else
+- ENT-4c un-link command [D2] each of the five roles un-links at each scope that covers the job
+- ENT-4c un-link command [D3] every role in the merged list is decided, and the four other roles are refused
+- ENT-4c un-link command [D4] one of the five roles without a covering grant is refused
+- ENT-4c un-link command [D5] a revoked grant or membership is refused, on a new command and on a replay
+- ENT-4c un-link command [D6] mixed and foreign actors are refused
+- ENT-4c un-link command [D7] a refused caller gets one answer, whatever they name
+- ENT-4c un-link command [D8] the write statement carries the rule itself
+- ENT-4c un-link command [D9] authority is read from the database at the moment of the command
+- ENT-4c un-link command [D10] typed refusals for an allowed actor, each writing nothing
+- ENT-4c un-link command [D11] replay returns the stored result once; two callers produce one un-link
+- ENT-4c un-link command [D12] history is preserved, append-only, and a pair can be linked again
+- ENT-4c un-link command [D13] refusal after export on either extra
+- ENT-4c un-link command [D14] the audit event commits or rolls back with the command
+- ENT-4c un-link command [D15] tenant isolation and spelling
+- ENT-4c un-link command [D16] nothing else changes
+- ENT-4c un-link command [D17] readDuplicateLinks
+- ENT-4c un-link command [D18] errors carry codes only
+
+### `test/financial-reconciliation-adjustments.integration.test.ts`
+
+- persists waiting state; serializes duplicate proposals and approvals, with exact hashes and unchanged books
+- refuses stale report hash and approval after a newer run, preserving the queue and books
+- concurrent distinct approvals create only one approval and never modify financial books
+- reads fail closed for foreign and unknown runs, non-finance, revoked and expired sessions
+
+### `test/financial-reconciliation-queue.integration.test.ts`
+
+- stores missing, duplicate and late observations in an immutable queue; rebuilds identically after restart
+- binds replay payloads, serializes concurrent runs and deduplicates daily scheduling
+- refuses self-approval including a second session for the same identity; a different finance identity approves exact content
+- refuses stale runs, locked invoice revision substitution and new discrepancies
+- denies direct writes, enforces append-only even for owner, and leaks no cross-tenant run
+- report reads require current finance access even for a known stored run
+- SQL rejects forged invoice money, revision, unknown invoice and omission of a stored invoice despite fresh hashes
+- SQL refuses fabricated, omitted and altered differences and forged balances; an honest direct run is unchanged
+- SQL refuses unbacked journal and correction facts rather than treating reviews as posted money
+- SQL and core agree on supported provider chains, duplicate effects, limits, orphans and late events
+- SQL does not let a daily alias persist a forged report
+
+### `test/firm-profile.integration.test.ts`
+
+- refuses a marked practice company's profile and saves
+
+### `test/job-scheduling.integration.test.ts`
+
+- CH-3b DW3 held cases: team-scoped positive cases against imported work-order jobs with a team and an assigned operative CH-3b DW3 held cases: the operative on the job and that team's supervisor read the resident contact; an operative outside the job's team gets the same 404 as a job that does not exist
+- CH-3b DW3 held cases: team-scoped positive cases against imported work-order jobs with a team and an assigned operative lets roles with resident.read read through the scope that covers the job's team, and no role without it
+- CH-3b DW3 held cases: team-scoped positive cases against imported work-order jobs with a team and an assigned operative follows the job's current revision: moving an order to another team moves who may read it, and the previous team loses access
+- CH-3b DW3 held cases: team-scoped positive cases against imported work-order jobs with a team and an assigned operative keeps the contact out of every list, projection and export the scheduling work adds
+- CH-3b DW3 held cases: team-scoped positive cases against imported work-order jobs with a team and an assigned operative agrees with the pure scope rules for every non-operative role, scope kind, permission and job position
+- CH-3b DW3 held cases: team-scoped positive cases against imported work-order jobs with a team and an assigned operative agrees with the pure operative rule: only an operative assigned to the job, in the job's team, acts on it
+- ENT-2 scheduling facts: a read projection only shows the assignment from the import to the people the job's scope covers, and refuses every other id with the same not-found
+- ENT-2 scheduling facts: a read projection only has no scheduling command: runtime cannot write assignments or visits, and a visit written by the owner (ENT-3's future writer) is projected with server times
+- ENT-2 scheduling facts: a read projection only rejects an assignment that is not a real team member of the order's team, and an operative revoked after assignment loses access
+
+### `test/lock-order-1.integration.test.ts`
+
+- [LOCK-ORDER-1(a)] holds the shared tenant administration lock before the origin foreign key can lock the work order
+- [LOCK-ORDER-1(c)] 50 same-instant captures and baseline revisions use separate connections and leave consistent committed state
+- [LOCK-ORDER-1(d)] M31-S15 same-instant capture, revoke and revise have explicit outcomes
+
+### `test/lp-job-doors-compatibility.integration.test.ts`
+
+- LP-2 creation caller compatibility groundwork [LP2-A12] ENT-2 import still creates one live work-order job atomically through the product repository
+
+### `test/lp5b-contractor-writers.integration.test.ts`
+
+- LP-5b primitive capture first/replay/conflict and duplicate client captures keep the same result
+- LP-5b approval replay checks the original step's current grant and cannot repeat the effect
+- LP-5b visits preserve microsecond result DTOs, conflicts and current membership on replay
+- LP-5b unknown types and completion without each contractor effect are refused and rolled back
+
+### `test/m4-23-contractor-acceptance.integration.test.ts`
+
+- M4-23 site: command approval → fake export → replayed status import → exact monthly posting
+- M4-23 office: command approval → fake export → replayed status import → exact monthly posting
+- M4-23 client: command approval → fake export → replayed status import → exact monthly posting
+- M4-23 original order: paid ordinary work stays in allocation and earns no fee
+- M4-23 rejected extra: the actual rejection prevents export and positive fees
+- M4-23 part payment: only settled principal earns 500p; next month posts only the 1000p balance
+- M4-23 credit: next month compensates once and leaves the approved bill and journal immutable
+- M4-23 duplicate log: capture replay and an explicit duplicate resolution leave one billed fee line
+- M4-23 cross-customer authority cannot read, import against or post the other contractor's statement
+
+### `test/northside-demo.integration.test.ts`
+
+- ENT11A-01 the generated contractor is seeded through commands: 3 clients, 40 operatives, 2,000 orders in the month, all counted back from the rows
+- FLAKE-DIAG-1 measures legacy/new reads and preserves allowed AND denied seeded jobs
+- ACTION-ATTRIBUTION durably binds every journey command to the persisted tester, fictional actor and switch, with no delivery attempts
+
+### `test/offline-risk.integration.test.ts`
+
+- M31-S09 minimal authorized repository read
+- M31-S10 queued intent commits existing facts
+- M31-S11 fresh-instance persistence
+- M31-S12 current authority on replay
+- M31-S13 tenant actor and resource boundaries
+- M31-S16 ambiguous response and rollback
+- M31-S17 compatibility
+- replaying a command id returns the first result, never the job's current state
+- the same command id with a changed payload conflicts
+- the same command id on another job conflicts
+- a successful no-op keeps its identity
+- a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- an unauthorised caller gets the identical EXTRA_FORBIDDEN for unknown, foreign, not-live and live jobs
+
+### `test/offline-risk.properties.integration.test.ts`
+
+- M31-S15 real database multi-crew convergence
+- M31-S15 generated authority and baseline changes have explicit outcomes
+
+### `test/operative-entitlements.integration.test.ts`
+
+- site-origin guard refuses agreement loss, preserves historical rows, and refuses prior command replay without changing stored facts
+
+### `test/operative-offline.integration.test.ts`
+
+- ENT12 downloads filter assigned jobs without RLS and expose no resident or shadow columns
+- ENT12 retains labelled device time while server writes origin, order and current revision
+- ENT12 offline authority loss and cross-tenant selectors write no origin
+
+### `test/practice-company-marker.integration.test.ts`
+
+- [PW31] P3 P6 P14 locator stops an already-running switch without changing its history
+- [PW31] P2 P14 invitation stops an already-running switch without changing its history
+- [PW31] P7 P11 P14 owner address stops an already-running switch without changing its history
+- [PW31] P7 P11 P12 P14 worker address stops an already-running switch without changing its history
+- [PW31] P8 P15 owner session stops an already-running switch without changing its history
+- [PW31] P8 P15 worker session stops an already-running switch without changing its history
+- [PW31] P16 0143 emergency window uses existing locator stops an already-running switch without changing its history
+- [PW31] P17 0143 approved emergency rule uses existing locator stops an already-running switch without changing its history
+- [PW31] P18 0143 emergency use uses existing locator stops an already-running switch without changing its history
+- [PW31] P19 0150 user_email insert stops an already-running switch without changing its history
+- [PW31] P20 0150 signup locator insert stops an already-running switch without changing its history
+- [PW31] P21 0150 replacement locator repoint stops an already-running switch without changing its history
+- [PW31] P22 0150 invitation locator insert stops an already-running switch without changing its history
+- [PW31] P23 0150 invitation acceptance stops an already-running switch without changing its history
+- [PW31] P24 0150 invitation create stops an already-running switch without changing its history
+- [PW15] [PW16] locator prevents marking and is refused after marking
+- [PW15] [PW16] invitation prevents marking and is refused after marking
+- [PW15] [PW16] address prevents marking and is refused after marking
+- [PW16] P4 P5 P6 P12 SSO connection attach is refused for a marked company
+- [PW31] P1 signup of another company cannot affect an acting session
+- [PW31] P9 P10 no connection or locator exists to grant emergency or SCIM access
+- [PW15] [PW33] a marker cannot be written by hand on other terms
+- [PW23] new control-plane rows and audit never store a session value
+- [PW15] marker history is permanent and timestamp bounds use the database clock
+- [PW16] locator and address repointing cannot attach marked identities
+- [PW31] P13 operator paths have no root to bypass the unchanged identity refusals
+- [PW15] RC3 P7 generated signed-in refuses routine and table-owner marker without writing either record
+- [PW15] V1 P3 locator refuses routine and table-owner marker without writing either record
+- [PW15] V2 P2 pending invitation refuses routine and table-owner marker without writing either record
+- [PW15] V3 P3 accepted invitation refuses routine and table-owner marker without writing either record
+- [PW15] V4 P4 connection refuses routine and table-owner marker without writing either record
+- [PW15] V5 P5 verified domain refuses routine and table-owner marker without writing either record
+- [PW15] V6 P7 owner address refuses routine and table-owner marker without writing either record
+- [PW15] V7 P7 admin address refuses routine and table-owner marker without writing either record
+- [PW15] V8 P8 direct session refuses routine and table-owner marker without writing either record
+- [PW16] product invitation and SSO connection administration cannot attach a marked company
+- [PW4] a marked company's second owner-written session cannot acquire its marker
+
+### `test/practice-worker-switch-proof.integration.test.ts`
+
+- [PW6] [PW17] runtime has no table authority: SELECT * FROM
+- [PW6] [PW17] runtime has no table authority: INSERT INTO
+- [PW6] [PW17] runtime has no table authority: UPDATE
+- [PW6] [PW17] runtime has no table authority: DELETE FROM
+- [PW14] lookup refuses every mismatched marker and switch condition
+- [PW8] [PW17] immutable switch history, exact environment and window CHECKs
+- [PW10] end without its audit event fails at commit and keeps the current worker
+- [PW32] wider grants only refused for a currently acted-as member
+- [PW17] foreign-key chain survives disabled user triggers
+- [PW4] tampered session callers of every non-owner role are uniformly refused
+- [PW20] authority settings cannot select another company or target
+- [PW13] [PW17] direct owner writes cannot select a foreign, office or owner target
+- [PW17] missing decision answers fail closed with the caller refusal
+- [PW10] a direct table-owner switch insert still requires its event at commit
+- [PW8] [PW17] table-owner switch and end timestamps must be true database times
+- [PW14] marker environment CHECK survives disabled triggers
+- [PW4] a session whose identity does not match its owner is refused uniformly
+
+### `test/practice-worker-switch-upgrade.integration.test.ts`
+
+- [PW26] rolled-back one-microsecond and full-type controls fail; later additions pass
+- [PW27] hardened rollback and separate feature-off preserve end and state
+- [PW34] composed lookup at head has all three answers and helper errors return no member
+- [PW12] no-active-switch classes remain byte-equal to the hardened lookup at head
+- [PW34] ended never-issued sessions have no fourth answer for every switch state
+- [PW34] ended cap-expired sessions have no fourth answer for every switch state
+- [PW34] ended revoked sessions have no fourth answer for every switch state
+- [PW34] ended home-expired sessions have no fourth answer for every switch state
+- [PW34] ended home-revoked sessions have no fourth answer for every switch state
+
+### `test/practice-worker-switch.integration.test.ts`
+
+- [PW1] [PW3] [PW13] decision 39 switches to operative and back without renewing the session
+- [PW1] [PW3] [PW13] decision 39 switches to supervisor and back without renewing the session
+- [PW1] [PW3] [PW13] decision 39 switches to surveyor and back without renewing the session
+- [PW1] [PW3] [PW13] decision 39 switches to client_approver and back without renewing the session
+- [PW2] exactly the worker's own merged permissions and unchanged authority rows
+- [PW4] [PW7] a refused command writes no switch and no marker
+- [PW5] target owner has the identical not-found refusal
+- [PW5] target admin has the identical not-found refusal
+- [PW5] target commercial_manager has the identical not-found refusal
+- [PW5] target finance has the identical not-found refusal
+- [PW5] target read_only has the identical not-found refusal
+- [PW5] target revoked has the identical not-found refusal
+- [PW5] target wider has the identical not-found refusal
+- [PW6] foreign target and context cannot select another company
+- [PW7] replaying a command id returns the first result, never the session's current state
+- [PW7] the same command id with a changed target conflicts
+- [PW7] the same command id from another session conflicts
+- [PW8] expiry leaves an unclosed switch until explicitly ended
+- [PW9] ended revoked session cannot act or revive
+- [PW9] ended expired session cannot act or revive
+- [PW9] ended home-revoked session cannot act or revive
+- [PW9] ended home-expired session cannot act or revive
+- [PW10] missing audit rolls the routine and first marker back at commit
+- [PW11] concurrent duplicate and different commands serialize
+- [PW22] refusal records deduplicate and omit foreign targets
+- [PW30] a lookup made after a committed end names the owner, also inside a transaction opened before the end
+- [PW30] a transaction that is not read committed is never given the worker: REPEATABLE READ
+- [PW30] a transaction that is not read committed is never given the worker: SERIALIZABLE
+- [PW30] the lookup reads the actual time, not the transaction's start
+- [PW30] expiry is strict
+- [PW32] wider admin grant refused while acting, permitted after end
+- [PW32] wider commercial_manager grant refused while acting, permitted after end
+- [PW32] wider finance grant refused while acting, permitted after end
+- [PW32] wider read_only grant refused while acting, permitted after end
+- [PW23] public state contains no session reference, value or authority
+- [PW10] injected routine failure rolls back both commands and the first marker
+- [PW10] injected audit failure rolls back both commands and the first marker
+- [PW10] injected commit failure rolls back both commands and the first marker
+- [PW10] no business lock is acquired after the audit append
+- [PW20] invalid session values and foreign target cannot select authority
+- [PW11] one command concurrently used across sessions and opposite operations conflicts
+- [PW32] a tenant-locked wider grant committed first prevents a waiting switch
+- [PW9] home record ending during a current switch leaves both session and switch inert
+- [PW32] decision 39 grants stay with the member and revocation removes job access
+- [PW32] the recorded owner alone ends a switch after the worker is revoked, end-only and idempotent (r19)
+- [PW23] catalogue-wide scan stores neither session values nor extra digests
+- [PW1] switch events and rows share a transaction and the audit chain verifies
+- [PW11] [PW32] merged membership.revoke committed first is seen by a waiting switch
+- [PW11] [PW32] merged grant.create committed first is seen by a waiting switch
+- [PW11] session revoke and switch settle without deadlock and no later lookup succeeds
+- [PW11] simultaneous start and end leave a consistent current state
+- [PW4] owner membership caller refusal is identical for every target
+- [PW4] owner grant caller refusal is identical for every target
+- [PW4] small-builder track caller refusal is identical for every target
+- [PW5] a target linked to another company's sign-in locator is not eligible
+- [PW6] unstamped or missing contexts are refused before connecting
+- [PW32] team move and grant revocation remain available while acting
+
+### `test/seed-transaction-locks.integration.test.ts`
+
+- PostgreSQL seed serialization work order: concurrent requests serialize, retain the stored seed, and release transaction-owned locks on early return
+- PostgreSQL seed serialization work order: acquired failure rolls back, permits retry, and failed rollback destroys the backend
+- PostgreSQL seed serialization nested Northside: concurrent requests serialize, retain the stored seed, and release transaction-owned locks on early return
+- PostgreSQL seed serialization nested Northside: acquired failure rolls back, permits retry, and failed rollback destroys the backend
+
+### `test/server-entitlements.integration.test.ts`
+
+- MON-8 track reassignment refuses legacy contractor writers while retaining reads and revocations
+
+### `test/site-extra-evidence.integration.test.ts`
+
+- ENT-3d verified photo and resident confirmation [E7] a verified photo is accepted: the origin links it, copies its hash and covers it in the origin hash
+- ENT-3d verified photo and resident confirmation [E8] every cause of a photo that is not accepted gives the identical PHOTO_NOT_ACCEPTED, nothing written, one refusal event
+- ENT-3d verified photo and resident confirmation [E9] the guard alone: merged raiseExtra with the seam and an unverified photo is rejected, nothing written
+- ENT-3d verified photo and resident confirmation [E10] a missing, empty or whitespace-only note is INVALID_COMMAND with a verified photo and without one; nothing written
+- ENT-3d verified photo and resident confirmation [E11] a confirmation is recorded with a photo: one document, its rows exactly as defined, linked and covered by the origin hash
+- ENT-3d verified photo and resident confirmation [E11] a confirmation is recorded without a photo: one document, its rows exactly as defined, linked and covered by the origin hash
+- ENT-3d verified photo and resident confirmation [E26] the stored confirmation document rebuilds from persisted facts: bytes, hash and length
+- ENT-3d verified photo and resident confirmation [E12] a hash shown for different content is CONFIRMATION_MISMATCH each time; nothing written, no evidence row either, one refusal event
+- ENT-3d verified photo and resident confirmation [E13] the guard alone, binding: a document written for content X cannot serve content Y, serves X once, and not a second extra
+- ENT-3d verified photo and resident confirmation [E14] a confirmation whose content the client tried to supply is rejected at the database; routine 4 has no content argument
+- ENT-3d verified photo and resident confirmation [E15] the same command and payload twice, and twice at once, have one effect and equal answers; changed payloads conflict
+- ENT-3d verified photo and resident confirmation [E16] tenant isolation: another company cannot see or use a photo or a document; an upper-case tenant setting still works; line 2 is the row's own tenant
+- ENT-3d verified photo and resident confirmation [E17] every role that may not log gets ENT-3a's EXTRA_FORBIDDEN for a v3 command; not-named and out-of-scope members get NOT_FOUND, identical with a real or unknown photo
+- ENT-3d verified photo and resident confirmation [E18] existing evidence rows are byte-identical after a successful v3 command and after a refused one
+- ENT-3d verified photo and resident confirmation [E19] the resident's contact values appear in no document, evidence row, audit payload or thrown error
+- ENT-3d v3 command replay properties replaying a command id returns the first result, never the job's current state
+- ENT-3d v3 command replay properties the same command id with a changed payload conflicts
+- ENT-3d v3 command replay properties the same command id on another job conflicts
+- ENT-3d v3 command replay properties a successful no-op keeps its identity
+- ENT-3d v3 command replay properties a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- ENT-3d v3 command replay properties an unauthorised caller gets the identical refusal for an unknown job, a foreign job, a not-live job and a live job
+
+### `test/site-extra-freetext-status.integration.test.ts`
+
+- free-text statuses replay one immutable server statement, remain unpriced, and reject changed status and hidden targets
+- v4 keeps verified-photo enforcement and refuses no note and no verified photo
+
+### `test/site-extra-order-check.integration.test.ts`
+
+- ENT-3c order check read [C18] orderCheck gives the outcome the command then acts on, for every case of [C1] built as real orders
+- ENT-3c order check read [C7] within the order (equal or below) is ALREADY_ON_ORDER as a result of the read, and nothing is written by it
+- ENT-3c search of the job's price list [C18] sorItems returns only items of THIS job's price list, by code, matching text literally and case-insensitively
+- ENT-3c search of the job's price list [C18] at most 50 items are returned, in code order, with truncated set
+- ENT-3c search of the job's price list [C17] both reads work on a job that is no longer live
+- ENT-3c the reads obey the same access rule as the command [C9] sorItems: every role that may not log gets the identical EXTRA_FORBIDDEN for an in-scope job, another branch's job, another tenant's job and a random job
+- ENT-3c the reads obey the same access rule as the command [C10] sorItems: every job refusal is one NOT_FOUND, and no refused caller meets SOR_ITEM_NOT_FOUND, ORDER_LINE_NOT_FOUND, ORDER_LINE_AMBIGUOUS, ALREADY_ON_ORDER or JOB_NOT_LIVE
+- ENT-3c the reads obey the same access rule as the command [C9] orderCheck: every role that may not log gets the identical EXTRA_FORBIDDEN for an in-scope job, another branch's job, another tenant's job and a random job
+- ENT-3c the reads obey the same access rule as the command [C10] orderCheck: every job refusal is one NOT_FOUND, and no refused caller meets SOR_ITEM_NOT_FOUND, ORDER_LINE_NOT_FOUND, ORDER_LINE_AMBIGUOUS, ALREADY_ON_ORDER or JOB_NOT_LIVE
+- ENT-3c the reads obey the same access rule as the command [C11] another tenant's context, an unstamped context and a small-builder tenant's latest assignment
+- ENT-3c catalogue (the new tables and routines) [C21] the application login cannot reach a write on either table and the routine refuses it a path round the checks
+
+### `test/site-extra-priced-evidence.integration.test.ts`
+
+- priced v2 preserves evidence, origin, replay and cross-customer boundaries
+- a committed priced log survives submission failure; concurrent submit replay makes one request
+- work statements do not alter price, requirement, origin or timing; finished above the limit survives later approval
+- server proceed comparison uses the bound rules: within, above and unpriced; cancelled logs remain not found
+- work statement storage is forced-RLS and runtime EXECUTE only, with tenant-qualified foreign keys
+
+### `test/site-extra-priced-submit-recovery.integration.test.ts`
+
+- refuses a missing approval feature before new capture, while site capture remains available
+- rechecks revocation after preflight before capture
+- recovers the operative's exact retry after log commit, competing supervisor submit and lost response
+- transient submission failure keeps the log and deterministic submit identity, then completes once
+- the recovery SELECT itself excludes a raiser revoked after priced submission
+- scoped recovery refuses wrong bindings and withdrawn state
+- recovery refuses missing requests, superseded prices and rejected requests without writing
+
+### `test/site-extra-pricing.integration.test.ts`
+
+- ENT-3c priced log: success, money and the excess only [C5] operative logs a new schedule-item extra: one transaction, server-derived facts only
+- ENT-3c priced log: success, money and the excess only [C5] operative logs a excess schedule-item extra: one transaction, server-derived facts only
+- ENT-3c priced log: success, money and the excess only [C5] supervisor logs a new schedule-item extra: one transaction, server-derived facts only
+- ENT-3c priced log: success, money and the excess only [C5] supervisor logs a excess schedule-item extra: one transaction, server-derived facts only
+- ENT-3c priced log: success, money and the excess only [C5] surveyor logs a new schedule-item extra: one transaction, server-derived facts only
+- ENT-3c priced log: success, money and the excess only [C5] surveyor logs a excess schedule-item extra: one transaction, server-derived facts only
+- ENT-3c priced log: success, money and the excess only [C6] money: every row M1 to M14 stored exactly, equal to merged priceSorLine and to the merged SQL function; M10 is 676 and not 675
+- ENT-3c priced log: success, money and the excess only [C6] a later price list and a later order revision never reprice a stored row; a log after the revision is priced from the new revision's own price list
+- ENT-3c priced log: success, money and the excess only [C8] the excess only: the quantity is claimed minus instructed, priced alone, with the BASELINE revision's line
+- ENT-3c priced log: success, money and the excess only [C7] within the order (equal or below) is ALREADY_ON_ORDER with nothing written, and the same command id then succeeds with a larger quantity
+- ENT-3c access: the same refusals as every command, decided by the database before anything else [C9] direct runtime writer refuses a structurally valid owner origin through its own authority check, with no revision, basis or audit written
+- ENT-3c access: the same refusals as every command, decided by the database before anything else [C9] direct runtime writer refuses a structurally valid unassigned operative origin through its own authority check, with no revision, basis or audit written
+- ENT-3c access: the same refusals as every command, decided by the database before anything else [C10] direct runtime writer re-checks revoked stored authority and refuses at the call with no revision, basis or audit written
+- ENT-3c access: the same refusals as every command, decided by the database before anything else [C11] direct runtime writer refuses without a stored origin or open receipt, with no revision, basis or audit written
+- ENT-3c access: the same refusals as every command, decided by the database before anything else [C16] direct runtime writer still enforces INVALID_COMMAND (23514) for an authorized stored origin whose raising receipt is no longer open
+- ENT-3c access: the same refusals as every command, decided by the database before anything else [C5] direct runtime writer accepts an authorized stored supervisor origin and open receipt with its basis and raised audit in one committing transaction
+- ENT-3c access: the same refusals as every command, decided by the database before anything else [C9] every role that may not log gets EXTRA_FORBIDDEN, identical for an in-scope job, another branch's job, another tenant's job and a random job
+- ENT-3c access: the same refusals as every command, decided by the database before anything else [C10] every job refusal is one NOT_FOUND whatever the cause, and no caller learns of the price list, the order lines or the item
+- ENT-3c access: the same refusals as every command, decided by the database before anything else [C11] another tenant: nothing crosses, nothing of tenant B is read, searched, priced or written
+- ENT-3c access: the same refusals as every command, decided by the database before anything else [C13] two people logging the same item create two candidate duplicates, each priced in full, never merged
+- ENT-3c replay, conflict and the six properties the coordinator named (B-prime) [C12] replaying a command id returns the first result, never the job's current state
+- ENT-3c replay, conflict and the six properties the coordinator named (B-prime) [C12] the same command id with a changed payload conflicts
+- ENT-3c replay, conflict and the six properties the coordinator named (B-prime) [C12] the same command id on another job conflicts
+- ENT-3c replay, conflict and the six properties the coordinator named (B-prime) [C12] a successful no-op keeps its identity
+- ENT-3c replay, conflict and the six properties the coordinator named (B-prime) [C17] a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- ENT-3c replay, conflict and the six properties the coordinator named (B-prime) [C9] an unauthorised caller gets the identical refusal for an unknown job, a foreign job, a not-live job and a live job
+- ENT-3c live only, races, atomic audit and the immutable record [C17] a replay of a command that succeeded while the job was live still returns its first answer after the job has left live; a caller who may not log never learns the job is not live
+- ENT-3c live only, races, atomic audit and the immutable record [C14] races: the same command twice at once is one extra with two equal answers; an order revision between the pre-check and the command ends typed or wholly consistent
+- ENT-3c live only, races, atomic audit and the immutable record [C14] a grant revoke holding the tenant lock while a log is in flight: the log waits, and is refused with nothing written when the revoke commits first
+- ENT-3c live only, races, atomic audit and the immutable record [C14] the job leaving live on a second connection while a log is in flight: the log commits first (the guard holds to commit) and nothing is half written
+- ENT-3c live only, races, atomic audit and the immutable record [C15] a failure forced at each statement leaves nothing written, and the audit event is in the same transaction
+- ENT-3c live only, races, atomic audit and the immutable record [C15] matching origin/revision transaction identities and a valid basis still require the raised audit event: PRICING_AUDIT_REQUIRED rolls everything back
+- ENT-3c live only, races, atomic audit and the immutable record [C16] a correct owner-inserted revision commits with its basis and raised audit, so tamper refusals are isolated to the revision INSERT
+- ENT-3c live only, races, atomic audit and the immutable record [C16] the stored record cannot be changed or supplied, and every tampered row is refused by the guard or a foreign key
+- ENT-3c live only, races, atomic audit and the immutable record [C16] the high/low INSERT-refusal assertions fail if only the exact-price guard is removed (rolled-back mutation control)
+
+### `test/site-extra-recent-items.integration.test.ts`
+
+- recents are distinct, newest first, limited to five, personal and restricted to the target price list
+- empty history is successful; search and recents have identical target refusals
+
+### `test/site-extra-replay-after-invoice.integration.test.ts`
+
+- replays a plain site extra after invoicing while refusing new commands and changed bodies
+
+### `test/site-extra-visit.integration.test.ts`
+
+- ENT-3b the visit reference on a site extra (version 2) [B16] a version 2 log naming the caller's own open visit stores the visit and its origin hash matches the stored row
+- ENT-3b the visit reference on a site extra (version 2) [B16] a version 1 log still writes no visit and its call to the repository is still exactly four fields
+- ENT-3b the visit reference on a site extra (version 2) [B16] a completed visit, another member's visit, a visit of another job, another tenant's visit and a random id are each NOT_FOUND with nothing written
+- ENT-3b the visit reference on a site extra (version 2) [B16] raiseExtra called directly with the seam and a completed visit is refused by the new guard alone
+- ENT-3b the visit reference on a site extra (version 2) [B16] a completion that commits after the pre-check allowed a version 2 log makes the log fail with nothing written
+- ENT-3b the visit reference on a site extra (version 2) [B16] a log that commits first leaves the extra, and the completion that was waiting then succeeds
+- ENT-3b the visit reference on a site extra (version 2) [B16] the other ENT-3a refusals are unchanged for a version 2 body: an unauthorised caller, a foreign job and a not-named member
+
+### `test/site-extra.integration.test.ts`
+
+- ENT-3a governed path [A2] operative logs only server-derived facts atomically
+- ENT-3a governed path [A2] supervisor logs only server-derived facts atomically
+- ENT-3a governed path [A2] surveyor logs only server-derived facts atomically
+- ENT-3a governed path [A3] an unauthorised caller gets the identical EXTRA_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job
+- ENT-3a governed path [A4] every inaccessible job cause has identical NOT_FOUND and no business effect
+- ENT-3a governed path [A5] grant revocation refuses new work and earlier replay
+- ENT-3a governed path [A5] membership revocation refuses new work and earlier replay
+- ENT-3a governed path [A6] seam alone refuses owner, permits supervisor and refuses an unchosen covering grant
+- ENT-3a governed path [A7] two concurrent commands on independent pooled connections have one effect
+- ENT-3a governed path [A7] revoke commits first under the shared administration lock, without sleeps
+- ENT-3a governed path [A7] log commits first under the shared administration lock, without sleeps
+- ENT-3a governed path [A9] exact replay, conflicting note/member/grant and equal text with separate IDs
+- ENT-3a governed path [A10] tenant mismatch, foreign job, missing/unstamped contexts cannot touch tenant B
+- ENT-3a governed path [A11] latest small-builder tenant assignment is TRACK_FORBIDDEN
+- ENT-3a governed path [A12] every refusal reason is durable once, scoped, attributable and contains no free text
+- ENT-3a governed path [A12] concurrent refusal writers coalesce; audit append failure retains identical typed refusal
+- [R2] a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- [R2] not-live between precheck and raiseExtra refuses and leaves no extra, audit or command row
+- [R3] the same command id with a changed payload conflicts
+- a successful no-op keeps its identity
+- replaying a command id returns the first result, never the job's current state
+- the same command id on another job conflicts
+
+### `test/site-supervisor-query.integration.test.ts`
+
+- immutable query: replay, conflict, tenant/assignment/cancellation refusal, stale revision and zero extra effects
+
+### `test/site-visit-abandoned.integration.test.ts`
+
+- LATER-SAFETY-79 abandoned site visits closes a revoked operative's visit, replays once, and releases EndCheck
+- LATER-SAFETY-79 abandoned site visits closes a unassigned operative's visit, replays once, and releases EndCheck
+- LATER-SAFETY-79 abandoned site visits refuses an authoritative operative, non-admins, wrong-job/tenant visits, missing visits and invalid reasons without effects
+- LATER-SAFETY-79 abandoned site visits rechecks the administrator's current membership before replay
+- LATER-SAFETY-79 abandoned site visits refuses a caller naming a different active admin, including terminal replay
+- LATER-SAFETY-79 abandoned site visits refuses a bound owner without a processing receipt, and an unbound caller
+- LATER-SAFETY-79 abandoned site visits refuses a fabricated processing receipt without a begin_command lifecycle claim
+- LATER-SAFETY-79 abandoned site visits refuses changed visit or reason after begin_command claimed the exact input
+
+### `test/site-visit.integration.test.ts`
+
+- ENT-3b success paths [B2] the named operative starts and completes a visit with server times, an answer, two audit events and two receipts
+- ENT-3b success paths [B2] the named supervisor starts and completes a visit with server times, an answer, two audit events and two receipts
+- ENT-3b refusals by role and by job [B3] every role that may not visit: VISIT_FORBIDDEN for both commands, identical for four job ids, nothing written
+- ENT-3b refusals by role and by job [B4] every job refusal is the same NOT_FOUND for start and for completion; the open visit stays open
+- ENT-3b refusals by role and by job [B4] a named supervisor whose only covering grant is revoked, an operative moved off the team, and a cancelled order are refused as NOT_FOUND
+- ENT-3b refusals by role and by job [B4] after membership.revoke both commands answer VISIT_FORBIDDEN
+- ENT-3b refusals by role and by job [B5] another tenant: tenant A's member with tenant B's job or visit, a mismatched actor, an unstamped context, a small-builder tenant
+- ENT-3b the close-out answer [B6] routine 3 called directly as the runtime role with a NULL or an invalid answer raises CLOSEOUT_ANSWER_REQUIRED and writes nothing
+- ENT-3b the close-out answer [B6] as the table owner, completing an open visit with no answer row fails at commit and leaves the visit open
+- ENT-3b the close-out answer [B6] a body with no closeoutAnswer, or a null one, is CLOSEOUT_ANSWER_REQUIRED before anything is read
+- ENT-3b the close-out answer [B7] a second completion with a new command id, with either answer, is VISIT_ALREADY_COMPLETED and changes nothing
+- ENT-3b the close-out answer [B8] an answer can be neither changed nor removed: the runtime role has no privilege, the owner meets the immutable trigger, and a completed visit cannot be reopened or moved
+- ENT-3b replay, conflict, one open visit [B9] start: the same command id and payload returns the same result with one visit, one audit event and one receipt; another job or another member conflicts
+- ENT-3b replay, conflict, one open visit [B9] complete: the same command id and payload returns one answer and the same result; the other answer conflicts and the stored answer is unchanged
+- ENT-3b replay, conflict, one open visit [B9] a replay by a member who has since been revoked or taken off the job is refused before the stored result is read
+- ENT-3b replay, conflict, one open visit [B10] one open visit per member per job; a new start works after completion; two named members may each hold one
+- B-prime replay and live-guard properties: start [BP-a] start: replaying a command id returns the first result, never the job's current state
+- B-prime replay and live-guard properties: start [BP-b] start: the same command id with a changed payload conflicts
+- B-prime replay and live-guard properties: start [BP-c] start: the same command id on another job conflicts
+- B-prime replay and live-guard properties: start [BP-d] start: a successful no-op keeps its identity
+- B-prime replay and live-guard properties: start [BP-e] start: a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- B-prime replay and live-guard properties: start [BP-f] start: an unauthorised caller gets the identical refusal for an unknown job, a foreign job, a not-live job and a live job
+- B-prime replay and live-guard properties: complete [BP-a] complete: replaying a command id returns the first result, never the job's current state
+- B-prime replay and live-guard properties: complete [BP-b] complete: the same command id with a changed payload conflicts
+- B-prime replay and live-guard properties: complete [BP-c] complete: the same command id on another job conflicts
+- B-prime replay and live-guard properties: complete [BP-d] complete: a successful no-op keeps its identity
+- B-prime replay and live-guard properties: complete [BP-e] complete: a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- B-prime replay and live-guard properties: complete [BP-f] complete: an unauthorised caller gets the identical refusal for an unknown job, a foreign job, a not-live job and a live job
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] start: replay holds the shared authority lock and rechecks authority and ownership after reading the receipt
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] complete: replay holds the shared authority lock and rechecks authority and ownership after reading the receipt
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] start live-guard: membership-revocation after the pre-check receives the same authority refusal, with no writes or cached result
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] start live-guard: job-removal after the pre-check receives the same authority refusal, with no writes or cached result
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] start replay: membership-revocation after the pre-check receives the same authority refusal, with no writes or cached result
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] start replay: job-removal after the pre-check receives the same authority refusal, with no writes or cached result
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] complete live-guard: membership-revocation after the pre-check receives the same authority refusal, with no writes or cached result
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] complete live-guard: job-removal after the pre-check receives the same authority refusal, with no writes or cached result
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] complete replay: membership-revocation after the pre-check receives the same authority refusal, with no writes or cached result
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] complete replay: job-removal after the pre-check receives the same authority refusal, with no writes or cached result
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] start: a live-guard refusal rolls back before rechecking authority and conceals job state if membership is then revoked
+- ENT-3b repair round 2 authority races (real PostgreSQL) [R2] complete: a live-guard refusal rolls back before rechecking authority and conceals job state if membership is then revoked
+- ENT-3b live only [B14] a named member on a not-live job gets JOB_NOT_LIVE for both commands; a member who may not visit it never learns that
+- ENT-3b races on independent connections [B11] the same start sent twice at once is one visit and two equal answers
+- ENT-3b races on independent connections [B11] two different start commands by the same member at once: exactly one succeeds
+- ENT-3b races on independent connections [B11] the same completion sent twice at once is one answer; two different completions at once: exactly one succeeds
+- ENT-3b races on independent connections [B11] a revoke holding the tenant lock while a start is in flight: the start waits and is refused with nothing written once the revoke commits
+- ENT-3b the audit event is in the same transaction [B12] start: a failure at claim, the routine call, audit, completion or commit leaves nothing written
+- ENT-3b the audit event is in the same transaction [B12] complete: a failure at claim, the routine call, audit, completion or commit leaves nothing written
+- ENT-3b the audit event is in the same transaction [B12] the visit update, the answer row and the completion audit event carry the same transaction id
+- ENT-3b the audit event is in the same transaction [B12] an answer row inserted by the owner with no matching audit event fails at commit with CLOSEOUT_AUDIT_REQUIRED, also when another company has an event with the same id
+- ENT-3b the audit event is in the same transaction [B12] start: observed with the lock observer, the shared tenant-authority lock is first and no lock is taken after the audit append
+- ENT-3b the audit event is in the same transaction [B12] complete: observed with the lock observer, the shared tenant-authority lock is first and no lock is taken after the audit append
+- ENT-3b the refusal record [B13] one refusal event of the right shape for each reason; the same refused command sent three times leaves one; the job is named only when it is in this company
+- ENT-3b the refusal record [B13] with the audit append made to fail the caller still receives the same typed refusal
+- ENT-3b the refusal record [B13] validation errors, conflicts, replays, not-live refusals and the 422 codes write no refusal record
+- ENT-3b the site worker's reads [B15] assigned jobs: exactly the jobs the caller is named on, with their own open visit, nothing else
+- ENT-3b the site worker's reads returns only the latest completed answer for this tenant, job and operative
+- ENT-3b the site worker's reads [B15] order lines: the current revision's lines in position order, only the new revision's after a revised import, and every refusal applies
+
+### `test/sor-pricing.integration.test.ts`
+
+- ENT-2 DW5 exact pricing prices £100.00 at -35/1000, quantity 1, as £96.50 through the whole import
+- ENT-2 DW5 exact pricing imports tie, zero, positive, fractional, overflow and negative-multiplier orders against their own contracts, with typed errors for the last two
+- ENT-2 DW5 exact pricing uses the SoR version in force on the issue date, listed by the order's contract; an unlisted newer version is never used
+- ENT-2 DW5 exact pricing never reprices a stored revision when a later SoR version is imported or a later contract version lists it; new orders do use it
+- ENT-2 DW5 exact pricing is enforced in the database: a forged net, rate, version, adjustment or origin is refused even if the application is bypassed
+- ENT-2 SoR version import stores immutable versions and items, replays the same command, conflicts on a changed payload, and refuses a second version for the same effective date
+- ENT-2 SoR version import validates strictly: forged fields, duplicate codes, negative or oversized rates, empty and oversized lists, production environment
+- ENT-2 SoR version import imports the largest permitted price list (10,000 items) and cannot commit a version without its audit event
+
+### `test/synthetic-original-nullable-scope.integration.test.ts`
+
+- a job-level Northside photo survives a fresh store and yields an intact approved-extra bundle; other tenants/jobs/versions cannot read it
+- keeps the scope FK for non-null rows and the proof original/finalization path unchanged
+- rolls back the upload and its bytes together when the original callback fails
+
+### `test/work-order-concurrency.integration.test.ts`
+
+- ENT-2 DW1 concurrent imports two (and three) concurrent imports of one file, on separate connections, produce exactly one set of rows and one verifiable audit chain
+- ENT-2 DW1 concurrent imports the same command and the same file racing is one import; the same command with a different file conflicts
+- ENT-2 DW1 concurrent imports two different files that both create one order reference: one creates it, the other is told its revision is stale, and only one job and binding exist
+- ENT-2 DW1 concurrent imports two files revising one order from the same revision: one wins, the other is stale, and the history is a straight line
+- ENT-2 DW1 concurrent imports an import, an SoR import and an ENT-1 administration command in one tenant all complete (no lock-order deadlock), in either arrival order
+- ENT-2 DW1 concurrent imports two tenants import in parallel without touching each other
+
+### `test/work-order-import.integration.test.ts`
+
+- ENT-2 migration and catalog catalogs FORCE RLS, migration ownership, SELECT-only runtime grants and denial of direct writes for every ENT-2 table
+- ENT-2 migration and catalog copies ENT-1's role/permission matrix exactly: app.contractor_role_permits equals app.contractor_allowed for a real member of every role, and the core matrix (bar one documented pre-existing difference)
+- ENT-2 migration and catalog refuses foreign-tenant contracts, teams, memberships, scope identities and jobs through qualified composite keys
+- ENT-2 DW1 idempotent import imports a generated 2,000-order file (measured), replays the same file with no new rows, and records exactly 3 revisions with diffs for 3 changed orders
+- ENT-2 DW1 idempotent import replays the stored batch only when it was clean: a file with a refused row is processed again under a new command
+- ENT-2 DW1 idempotent import answers the same file twice in a row as a replay, but processes an earlier file again as rows once later revisions have moved on (A, B, A; verdict P2-1)
+- ENT-2 DW2 import validation refuses another tenant's contract, client, site and team, committing nothing of those orders
+- ENT-2 DW2 import validation commits no part of a failing order, whichever stage fails (job and parties bound, order inserted, or assignment refused)
+- ENT-2 DW2 import validation gives each malformed row its own typed error in its receipt (unknown code, negative quantity, more than 6 decimals, money out of range, missing site) and imports the good rows around them
+- ENT-2 DW2 import validation refuses malformed files outright: unknown header, unterminated quote, forged tenant, provenance, status, track, origin and price columns
+- ENT-2 DW3 immutability, cancellation and stable scope identity denies runtime and owner updates and deletes of revisions and lines, and records a cancellation as a revision
+- ENT-2 DW3 immutability, cancellation and stable scope identity keeps the scope identity of unchanged lines: matched by client line reference, else by SoR code and position
+- ENT-2 DW3 immutability, cancellation and stable scope identity refuses changes to the parties a job was bound to (CH-3b binds them once) and an incomplete restatement
+- ENT-2 DW4 live from import, with no fee setup makes the job live at import, passing watchdogActive, with no quote, acceptance, obligation, journal, cap or fee-policy row
+- ENT-2 DW4 live from import, with no fee setup CH-3b DW1 held clause: the import calls app.bind_contractor_parties in its transaction and the routine refuses each missing party, committing nothing
+- ENT-2 DW4 live from import, with no fee setup refuses new order and SoR imports after track loss while retaining historical reads (Q5)
+- ENT-2 DW6 personal data and origin keeps resident name, phone and email out of audit payloads, receipts, projections, the batch results and captured logs
+- ENT-2 DW6 personal data and origin can write no origin but client_instruction: lines carry it by CHECK, and no import receipt can raise an extra origin of any kind
+- ENT-2 tenant boundary answers another tenant's batch, order, job and revision ids exactly as it answers unknown ones, and refuses a context that is missing, hand-built or not a tenant's
+- ENT-2 office reads lists batches and orders and shows each revision with its diff and stable line identities, for import-capable members and the job's own team
+
+## Tests skipped when a held fixture failed during setup
+
+The 21 files below stopped during setup with the same customer insert refusal at line 71. Vitest marked these test bodies skipped.
+
+### `test/contractor-billing-allocation.integration.test.ts`
+
+- E6-13 E6-14 ENT-F2 PostgreSQL full denominator Q = £80.645161…; ordinary line contributes zero
+- E6-17 E6-28 checked persistence refuses tampered allocation fractions even for finance
+- E6-15 complete mixed-job invoice keeps both extra lines and ordinary work in the denominator
+- E6-18 earlier deposits never spread onto a later-existing extra
+
+### `test/contractor-billing-export.integration.test.ts`
+
+- E6-06 E6-07 E6-08 finalising again adds no lines; two racing batches only one gets the extra
+- E6-03 E6-10 export guard refuses wrong tenant or client contract
+- E6-09 an extra revised or withdrawn during finalisation is included at locked revision or excluded
+- E6-05 E6-27 unresolved candidates block both racing exports, MarkDuplicate then releases one canonical
+- LATER-SAFETY-81 SQL export prefixes TAB and CR formulas and preserves existing escaping
+- LATER-SAFETY-16 reconciliation restores an approved unlinked extra until its export
+- LATER-SAFETY-16 reconciliation and export exclude withdrawn and rejected extras
+- LATER-SAFETY-16 the effective-state read routine enforces tenant, session and job authority
+
+### `test/contractor-billing-import.integration.test.ts`
+
+- E6-11 E6-12 source event idempotence and cross-channel payment identity
+- E6-16 unknown composition is quarantined and imports never create, price or approve an extra
+- E6-12 E6-21 conflicting cross-source payment identities append ambiguity runs for both groups
+- E6-22 reconciliation totals equal drill-down sums and alert age comes from the frozen contract
+- E6-27 a conflicting later event rolls back earlier events, receipt, run and audit atomically
+- E6-31 imports append no platform fee, journal or subscription facts
+- E6-19 imported rejection is projected without editing the approved extra or invoice history
+- E6-03 E6-28 populated billing rows fail closed without tenant context and stay isolated from another tenant
+- r6 one export line cannot match two invoices (one job)
+- r6 one export line cannot match two invoices (two jobs)
+- r6 replaying the same invoice fact with a new command creates no match or quarantine
+- r6 PostgreSQL refuses a second direct match of the same export line
+
+### `test/contractor-billing-replay.integration.test.ts`
+
+- E6-26 replaying a command id returns the first result, never the job's current state
+- E6-26 the same command id with a changed payload conflicts
+- E6-26 the same command id on another job conflicts
+- E6-26 a successful no-op keeps its identity
+- E6-26 a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- E6-26 an unauthorised caller gets the identical BILLING_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job
+- E6-26 import: replaying a command id returns the first result, never the job's current state
+- E6-26 import: the same command id with a changed payload conflicts
+- E6-26 import: the same command id on another job conflicts
+- E6-26 import: a successful no-op keeps its identity
+- E6-26 import: a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- E6-26 import: an unauthorised caller gets the identical BILLING_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job
+- E6-26 approve-delivery: replaying a command id returns the first result, never the job's current state
+- E6-26 approve-delivery: the same command id with a changed payload conflicts
+- E6-26 approve-delivery: the same command id on another job conflicts
+- E6-26 approve-delivery: a successful no-op keeps its identity
+- E6-26 approve-delivery: a not-live contractor job is refused with JOB_NOT_LIVE and nothing is written
+- E6-26 approve-delivery: an unauthorised caller gets the identical BILLING_FORBIDDEN for an unknown job, a foreign job, a not-live job and a live job
+- E6-04 every other active contractor role is refused on export and import
+- E6-26 concurrent same-id calls replay once and cross-kind reuse conflicts
+- E6-04 grant revocation refuses new commands and replay before any stored result is returned
+- E6-26 export: the same command id with a changed payload conflicts
+
+### `test/contractor-full-demo-package.integration.test.ts`
+
+- A12 Northside commands feed captured and approved drill-downs
+- A13 fresh application and connection recover committed observations
+- A14 foreign tenant client job and revoked-session reads refuse
+- A15 reads create no commercial audit outbox or money effects
+- A16 reset preserves prior run history and isolates the next run
+
+### `test/duplicate-unlink-reopens-request.integration.test.ts`
+
+- reopens a duplicate-closed request, preserves history and approves the restored extra; replay writes nothing
+- leaves an already-approved request intact when its duplicate link is reversed
+- restarts a partially approved chain without copying earlier approvals
+- scratch mutation: disabling the fix reproduces ALREADY_DECIDED; the trigger is restored in finally
+
+### `test/enterprise-dashboard-plan.integration.test.ts`
+
+- ENT-DASHBOARD-SLOW bounds dashboard plan work on the journey's 2,000 command-seeded orders
+
+### `test/extra-approval-authority.integration.test.ts`
+
+- E5-24 partial catalog RLS and absent business writer boundary
+- E5-09 partial source binding preserves the origin-bound SoR row and basis
+- E5-24 partial wrong-job revision hash and predecessor specimens refuse
+- E5-24 partial migration-owner mutation of immutable foundation rows refuses
+
+### `test/extra-approval-chain.integration.test.ts`
+
+- E5B-01 journey: price, submit, grant-filtered queue, company steps, owner-approved send, client approval as the client
+- E5B-02 stale revision, wrong hash/net, unpriced and replay semantics
+- LATER-SAFETY-49 reuses a succeeded legacy command-id receipt only for its person, request and step
+- LATER-SAFETY-49 refuses another step after a legacy rejection with an unknown step
+- E5B-03 thresholds exact at pence equality, SQL snapshot equals the pure evaluator
+- E5B-04 refused approvers: self, wrong role, grant not covering the job, revoked member, out of order
+- E5B-05 races: approve vs withdraw gives one effect; two approvers on one step give one fact
+- E5B-06 client approval refusals: forged, expired, revoked, replaced, other email, other person, other extra, replayed, revoked member
+- E5B-07 the send is owner-only and exact
+- E5B-08 withdraw (covered supervisory roles), reject, and duplicate
+- E5B-09 Standard F: runtime reads only, routines re-check the actor, helpers are not callable
+- E5B-10 a later rule version leaves an existing snapshot unchanged (runs last: it changes the contract's rules)
+- E5B-11 escalation fires once, only listed alternates gain authority, original approvers keep it
+- E5B-11 an unpriced submitted extra can be priced once, by a surveyor, and then approved
+- MON-8 a queued approval message is cancelled after agreement loss without an adapter call
+- LATER-SAFETY-36 cancels a pending send after its surveyor grant is revoked; restoring the role cannot revive it
+- LATER-SAFETY-36 cancels a retryable send after its surveyor grant is revoked; restoring the role cannot revive it
+- LATER-SAFETY-36 keeps a surveyor's send executable when another sender loses a grant
+- LATER-SAFETY-36 still cancels a client send after sender membership revocation
+- LATER-SAFETY-36 ignores another tenant's role revocation and cannot cancel a foreign action
+
+### `test/extra-approval-timing.integration.test.ts`
+
+- ENT-5 shared visit with statement not_started: real client timing and later approval
+- ENT-5 shared visit with statement undefined: real client timing and later approval
+- ENT-5 shared visit with statement under_way: real client timing and later approval
+- ENT-5 shared visit with statement finished: real client timing and later approval
+
+### `test/extra-client-session.integration.test.ts`
+
+- ENT-5 sign-in requires a fresh link and current scoped named grant; replay is one effect
+- ENT-5 real identity approve commits while unrelated checks remain deferred
+- ENT-5 real identity reject commits while unrelated checks remain deferred
+- ENT-5 replaced, expired, foreign-job and revoked grants refuse
+- ENT-5 client approve racing withdraw commits exactly one outcome
+- LATER-SAFETY-60 customer timing matches contractor timing with proceed=true
+- LATER-SAFETY-60 customer timing matches contractor timing with proceed=false
+- LP-6c records the customer's own actor and delegated credential in the command claim
+- LP-6c delegated extra authority refuses another type without writes
+- LP-6c delegated extra authority refuses another job without writes
+- LP-6c delegated extra authority refuses another tenant without writes
+- LP-6c refuses a rebind and hides delegated identity from general actor access
+- LP-6c binder refuses wrong token without writes
+- LP-6c binder refuses wrong recipient without writes
+- LP-6c binder refuses wrong approver without writes
+- LP-6c binder refuses wrong job without writes
+- LP-6c binder refuses wrong tenant without writes
+- LP-6c binder has no PUBLIC, person-facing or login execute capability
+- mutation: removing command-type scope breaks the other-command refusal
+- mutation: removing the private binder breaks a real unbound customer decision
+- LP-6c catalogue identifies the approved binder; queue/view bind read-only ClientViewExtra and history stays unbound
+- ClientViewExtra reads extra work status only for its own job and tenant while live; it never decides
+
+### `test/extra-evidence-pack-timing.integration.test.ts`
+
+- pack seals existing timing projection: finished_breach
+- pack seals existing timing projection: uncertain_overlap
+- pack seals existing timing projection: no_visit
+
+### `test/extra-evidence-pack-writer.integration.test.ts`
+
+- stores an actor-bound immutable snapshot, replays exactly, and uses the merged verifier
+- refuses wrong digests, roles, grants, tenant, subject, unbound context and client content
+- refuses revoked membership on new creation and replay
+- collapses simultaneous command replay to one stored artifact
+- refuses unavailable originals and invalidated persisted evidence without storing a receipt
+- SQL refuses duplicate entries hiding an unmatched wrong-job source atomically
+- SQL refuses duplicate source pairs, extra/missing sources, wrong job and wrong hash
+- SQL accepts permuted arrays and separate versions of one source ID, then replays exactly
+- mutation: removing only the new validation breaks the duplicate-entry refusal and rolls back
+
+### `test/extra-price-permission-order.integration.test.ts`
+
+- R183 admission witness: predecessor leaks through the real repository, repaired order closes it, restoring it fails the regression
+- R183 checked admission reaches xa_price for the same bound non-pricing actor/job in price and revise
+- R183 authorised surveyor still prices, revises, replays and gets NOT_FOUND only for missing targets
+- R183 binding, revoked membership, uncovered surveyor and foreign tenant refusals remain closed
+- R183 fresh installed metadata and populated rows survive repeat forward migration
+
+### `test/extra-price-rules.integration.test.ts`
+
+- Q01 only a surveyor can price; re-pricing requires ReviseExtra and preserves the first snapshot and source
+- Q03 rejects a missing job contract with RULES_NOT_FOUND; no default rules are consulted
+- Q03 structurally refuses a second candidate contract for the same job and a contract without rules
+- Q03 freezes the bound contract and rules even when newer versions exist before submission
+
+### `test/extra-proceed.integration.test.ts`
+
+- proceed is one immutable fact: replay, no approval/step skip/snapshot/pricing/billing/export effect; later approval preserves it
+- refuses wrong tenant/job/extra, unassigned or office actors, revoked members and unpriced/stale requests
+- a required-preapproval statement reaches the client breach view without authorizing or skipping steps; later approval cannot erase it
+- only the raiser may append/replay; covered colleagues and supervisors retain reads, with no refused-write effects
+- expired operative sessions and memberships refuse new statements and replays without effects
+
+### `test/site-extra-authority.integration.test.ts`
+
+- ENT-3a authority [A1] owner / LogSiteExtra
+- ENT-3a authority [A1] owner / RecordOfficeExtra
+- ENT-3a authority [A1] owner / RecordClientInstruction
+- ENT-3a authority [A1] owner / ConfirmPrompt
+- ENT-3a authority [A1] admin / LogSiteExtra
+- ENT-3a authority [A1] admin / RecordOfficeExtra
+- ENT-3a authority [A1] admin / RecordClientInstruction
+- ENT-3a authority [A1] admin / ConfirmPrompt
+- ENT-3a authority [A1] operative / LogSiteExtra
+- ENT-3a authority [A1] operative / RecordOfficeExtra
+- ENT-3a authority [A1] operative / RecordClientInstruction
+- ENT-3a authority [A1] operative / ConfirmPrompt
+- ENT-3a authority [A1] supervisor / LogSiteExtra
+- ENT-3a authority [A1] supervisor / RecordOfficeExtra
+- ENT-3a authority [A1] supervisor / RecordClientInstruction
+- ENT-3a authority [A1] supervisor / ConfirmPrompt
+- ENT-3a authority [A1] surveyor / LogSiteExtra
+- ENT-3a authority [A1] surveyor / RecordOfficeExtra
+- ENT-3a authority [A1] surveyor / RecordClientInstruction
+- ENT-3a authority [A1] surveyor / ConfirmPrompt
+- ENT-3a authority [A1] commercial_manager / LogSiteExtra
+- ENT-3a authority [A1] commercial_manager / RecordOfficeExtra
+- ENT-3a authority [A1] commercial_manager / RecordClientInstruction
+- ENT-3a authority [A1] commercial_manager / ConfirmPrompt
+- ENT-3a authority [A1] finance / LogSiteExtra
+- ENT-3a authority [A1] finance / RecordOfficeExtra
+- ENT-3a authority [A1] finance / RecordClientInstruction
+- ENT-3a authority [A1] finance / ConfirmPrompt
+- ENT-3a authority [A1] read_only / LogSiteExtra
+- ENT-3a authority [A1] read_only / RecordOfficeExtra
+- ENT-3a authority [A1] read_only / RecordClientInstruction
+- ENT-3a authority [A1] read_only / ConfirmPrompt
+- ENT-3a authority [A1] client_approver / LogSiteExtra
+- ENT-3a authority [A1] client_approver / RecordOfficeExtra
+- ENT-3a authority [A1] client_approver / RecordClientInstruction
+- ENT-3a authority [A1] client_approver / ConfirmPrompt
+- ENT-3a authority [A1] rejects unknown command type unknown-command
+- ENT-3a authority [A1] rejects unknown command type null
+- ENT-3a authority [A4] all job failures have the same decision
+- ENT-3a authority [A14] is total and read-only for NULLs, absent, empty, malformed and foreign tenant membership
+- ENT-3a authority [A14] guard fails closed for absent, empty, malformed tenant settings and missing stored origins
+- ENT-3a authority [A16] tenant covering lookup agrees with the merged trigger
+- ENT-3a authority [A16] team covering lookup agrees with the merged trigger
+- ENT-3a authority [A16] branch covering lookup agrees with the merged trigger
+- ENT-3a authority [A16] region covering lookup agrees with the merged trigger
+- ENT-3a authority [A16] tenant non-covering lookup and merged trigger both refuse
+- ENT-3a authority [A16] team non-covering lookup and merged trigger both refuse
+- ENT-3a authority [A16] branch non-covering lookup and merged trigger both refuse
+- ENT-3a authority [A16] region non-covering lookup and merged trigger both refuse
+- ENT-3a authority [A13] populated upgrade changes only two routines; ownership, specific grants and idempotent registration
+
+### `test/site-extra-evidence-routines.integration.test.ts`
+
+- ENT-3d routines [E20] routines 1 and 2 return exactly what the two core functions return
+- ENT-3d routines [E21] routine 3 is total and read-only: one row for NULLs and for an absent, empty, malformed and foreign tenant setting
+- ENT-3d routines [E22] routine 4 refuses by its own authority check, each writing nothing; the same content again is existing, a different one conflicts
+- ENT-3d routines [E23] routine 5 fails closed for an absent, empty or malformed tenant setting, a missing origin and a missing variation, and passes for a note-only extra
+- ENT-3d routines [E24] the catalogue shows exactly the five routines with the stated signatures, volatility, ownership and grants
+- ENT-3d upgrade proof (rule 9) [E25] installs everything before 0141, snapshots, applies 0141 alone, compares, then applies everything after twice
+
+### `test/site-extra-pricing-basis.integration.test.ts`
+
+- ENT-3c pricing basis [C24] beside each version: every revision has exactly one basis row of server_sor, same extra, hash, command, actor, time and transaction; the answer's priceSource is the stored value
+- ENT-3c pricing basis [C25] a revision committed with no basis row fails at commit with PRICING_BASIS_REQUIRED
+- ENT-3c pricing basis [C25] a basis row with no revision beside it, another value, another revision, hash, command or member is refused; a second row for the same extra fails on the unique rule
+- ENT-3c pricing basis [C25] UPDATE, DELETE, TRUNCATE and INSERT fail for the runtime role; UPDATE and DELETE fail for the owner
+- ENT-3c pricing basis [C26] no row of app.variation_revision is written by anything in this piece
+
+### `test/site-jobs-scope.integration.test.ts`
+
+- matches the old list for own/other team, branch and region grants, every role, unassigned and foreign members
+- evaluates authority once per assigned team scope rather than once per order
+- remains equivalent after grant revocation, team removal, reassignment, cancellation and membership revocation
+
+### `test/site-visit-authority.integration.test.ts`
+
+- ENT-3b visit authority: the rule, cell by cell [B1] the named operative is allowed
+- ENT-3b visit authority: the rule, cell by cell [B1] the named supervisor is allowed
+- ENT-3b visit authority: the rule, cell by cell [B1] owner may not visit (forbidden / role_not_permitted)
+- ENT-3b visit authority: the rule, cell by cell [B1] admin may not visit (forbidden / role_not_permitted)
+- ENT-3b visit authority: the rule, cell by cell [B1] surveyor may not visit (forbidden / role_not_permitted)
+- ENT-3b visit authority: the rule, cell by cell [B1] commercial_manager may not visit (forbidden / role_not_permitted)
+- ENT-3b visit authority: the rule, cell by cell [B1] finance may not visit (forbidden / role_not_permitted)
+- ENT-3b visit authority: the rule, cell by cell [B1] read_only may not visit (forbidden / role_not_permitted)
+- ENT-3b visit authority: the rule, cell by cell [B1] client_approver may not visit (forbidden / role_not_permitted)
+- ENT-3b visit authority: the rule, cell by cell [B1] the operative on the team who is not named is refused as a job refusal
+- ENT-3b visit authority: the rule, cell by cell [B1] the supervisor whose grant covers the team but who is not named is refused as a job refusal
+- ENT-3b visit authority: the rule, cell by cell [B1] the supervisor of another branch is refused as a job refusal
+- ENT-3b visit authority: the rule, cell by cell [B1] it runs in a READ ONLY transaction and always returns exactly one row (NULLs, absent, empty and non-uuid tenant setting, another tenant's member)
+- ENT-3b visit authority: the rule, cell by cell [B4] every job refusal is one decision: random id, another tenant's job, a small-builder job, a named operative taken off the team, a revoked grant, a cancelled order
+- ENT-3b visit authority: the rule, cell by cell [B4] a revoked membership is forbidden for the caller whatever the job
+- ENT-3b catalogue [B19] every function: owner, definer flag, pinned search_path, explicit execute grants, nothing for PUBLIC or the infrastructure role
+- ENT-3b catalogue [B19] closeout_answer: owner, forced row security, the merged policy form, SELECT only for the runtime role
+- ENT-3b catalogue [B19] the triggers: immutable on the answer table, guard before insert, deferred audit check, and exactly one new trigger on the visit table
+- ENT-3b catalogue [B19] the closed shape of the new table: columns, keys and the question version rule
+- ENT-3b catalogue [F] build standard F: the migration adds exactly one table grant (SELECT to the runtime role) and function grants from an explicit list, and no write grant
+- ENT-3b catalogue [A-AUDIT] every owner-run routine and the trigger name the company in each audit read or write

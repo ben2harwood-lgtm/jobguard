@@ -483,6 +483,318 @@ GRANT EXECUTE ON FUNCTION app.linked_practice_authority(text),app.authenticate_p
  app.contractor_practice_home_deadline(character,timestamptz) TO jobguard_session_lookup;
 REVOKE CREATE ON SCHEMA app,identity,control_plane FROM jobguard_session_lookup;
 
+-- A checked identity operation may need tenant-owned rows before it can issue
+-- a session. Only the existing connection-keyed SQL entry points open this
+-- scope, and they close it before returning to the identity login.
+CREATE UNLOGGED TABLE control_plane.lp11_sso_scope (
+ transaction_id xid8 PRIMARY KEY,
+ tenant_id uuid NOT NULL,
+ connection_id uuid NOT NULL,
+ operation text NOT NULL CHECK(operation IN ('cache','complete','scim','audit')),
+ login name NOT NULL
+);
+ALTER TABLE control_plane.lp11_sso_scope OWNER TO jobguard_migration;
+REVOKE ALL ON control_plane.lp11_sso_scope FROM PUBLIC;
+
+CREATE FUNCTION identity.lp11_open_sso_scope(c uuid, operation text) RETURNS uuid
+ LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+DECLARE t uuid;
+BEGIN
+ IF NOT pg_has_role(session_user,'jobguard_identity','USAGE') THEN
+  RAISE EXCEPTION 'SSO_FORBIDDEN' USING ERRCODE='42501';
+ END IF;
+ t:=(identity.sso_load_connection(c)->>'tenantId')::uuid;
+ IF t IS NULL THEN RAISE EXCEPTION 'SSO_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+ IF app.lp6e_request_binding_present() THEN
+  IF t IS DISTINCT FROM app.current_tenant() THEN RAISE EXCEPTION 'SSO_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ ELSE
+  INSERT INTO control_plane.lp11_sso_scope VALUES(pg_current_xact_id(),t,c,operation,session_user);
+ END IF;
+ RETURN t;
+END $$;
+ALTER FUNCTION identity.lp11_open_sso_scope(uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION identity.lp11_open_sso_scope(uuid,text) FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_sso_tenant(operations text[], connection uuid) RETURNS uuid
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_sso_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+  AND s.operation=ANY(operations) AND (connection IS NULL OR s.connection_id=connection)
+$$;
+ALTER FUNCTION app.lp11_sso_tenant(text[],uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_sso_tenant(text[],uuid) FROM PUBLIC;
+-- These callers share policies with migration-owned routines. An ordinary
+-- request has no row in the private scope, even when it is already bound.
+GRANT EXECUTE ON FUNCTION app.lp11_sso_tenant(text[],uuid) TO jobguard_runtime,jobguard_identity,jobguard_audit_writer;
+
+-- A revocation must be auditable even when the exact credential can no
+-- longer make a normal request. The revoker records one specific audit fact.
+CREATE UNLOGGED TABLE control_plane.lp11_practice_revoke_audit (
+ transaction_id xid8 NOT NULL,
+ tenant_id uuid NOT NULL,
+ session_id uuid NOT NULL,
+ membership_id uuid NOT NULL,
+ PRIMARY KEY(transaction_id,session_id)
+);
+ALTER TABLE control_plane.lp11_practice_revoke_audit OWNER TO jobguard_migration;
+REVOKE ALL ON control_plane.lp11_practice_revoke_audit FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_practice_revoke_event(t uuid, event text, subject_type text, subject text, actor text) RETURNS boolean
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT event='contractor.practice_session.revoked' AND subject_type='practice-session' AND EXISTS(
+  SELECT FROM control_plane.lp11_practice_revoke_audit r
+  WHERE r.transaction_id=pg_current_xact_id_if_assigned() AND r.tenant_id=t
+   AND r.session_id::text=subject AND 'membership:'||r.membership_id=actor)
+$$;
+ALTER FUNCTION app.lp11_practice_revoke_event(uuid,text,text,text,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_practice_revoke_event(uuid,text,text,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_practice_revoke_event(uuid,text,text,text,text) TO jobguard_audit_writer;
+
+CREATE OR REPLACE FUNCTION identity.sso_require_admin(s char(64),t uuid) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE u uuid; m uuid; BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR t IS DISTINCT FROM nullif(current_setting('app.tenant_id',true),'')::uuid THEN RAISE EXCEPTION 'SSO_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ SELECT user_id INTO u FROM identity.session WHERE token_digest=s AND environment='synthetic_demo' AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR SHARE;
+ IF u IS NULL THEN RAISE EXCEPTION 'SSO_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ PERFORM app.bind_request('real',s::text,t);
+ SELECT id INTO m FROM app.membership WHERE tenant_id=t AND identity_user_id=u AND app.contractor_allowed(id,'organisation.manage',t) FOR SHARE;
+ IF m IS NULL THEN RAISE EXCEPTION 'SSO_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ RETURN m;
+END $$;
+
+CREATE OR REPLACE FUNCTION identity.sso_cache(c uuid,k text,v text,state char(64),link_session uuid,operation text) RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid; result text; BEGIN
+ t:=identity.lp11_open_sso_scope(c,'cache');
+ IF operation='save' THEN
+  INSERT INTO identity.sso_request(tenant_id,connection_id,request_id,request_value,state_digest,link_session_id,expires_at) VALUES(t,c,k,v,state,link_session,clock_timestamp()+interval '10 minutes'); DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned(); RETURN v;
+ ELSIF operation='get' THEN
+  SELECT request_value INTO result FROM identity.sso_request WHERE tenant_id=t AND connection_id=c AND request_id=k AND expires_at>clock_timestamp() AND consumed_at IS NULL; DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned(); RETURN result;
+ ELSIF operation='remove' THEN
+  UPDATE identity.sso_request SET consumed_at=clock_timestamp() WHERE tenant_id=t AND connection_id=c AND request_id=k AND consumed_at IS NULL RETURNING request_value INTO result; DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned(); RETURN result;
+ ELSE RAISE EXCEPTION 'INVALID_SSO_INPUT' USING ERRCODE='22023'; END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION identity.sso_complete(c uuid,claims jsonb,state char(64),new_session uuid,token char(64),csrf text,expires timestamptz) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid; r identity.sso_request; sub identity.sso_subject; u uuid; member uuid; account uuid; address text:=(claims->>'email'); email_domain text; group_row record; grant_id uuid; grants_count integer:=0; allow_new_grants boolean:=false; sh char(64):=(claims->>'subjectHash'); eh char(64):=(claims->>'emailHash'); link identity.session; binding jsonb; BEGIN
+ t:=identity.lp11_open_sso_scope(c,'complete');
+ binding:=identity.sso_load_connection(c);
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
+ -- Match email-code serialization order and lock globally shared email before identity creation/linking.
+ PERFORM pg_advisory_xact_lock(hashtextextended('identity-email:'||address,0));
+ SELECT * INTO r FROM identity.sso_request WHERE tenant_id=t AND connection_id=c AND request_id=(claims->>'requestId') FOR UPDATE;
+ IF r.request_id IS NULL OR r.state_digest<>state OR r.expires_at<=clock_timestamp() OR r.consumed_at IS NULL THEN RAISE EXCEPTION 'REQUEST_REFUSED' USING ERRCODE='22023'; END IF;
+ IF address IS NULL OR address<>lower(address) OR address NOT LIKE '%.invalid' OR length(address)>320 THEN RAISE EXCEPTION 'DOMAIN_UNVERIFIED' USING ERRCODE='22023'; END IF;
+ email_domain:=split_part(address,'@',2);
+ IF NOT EXISTS(SELECT 1 FROM identity.verified_domain WHERE tenant_id=t AND connection_id=c AND verified_domain.domain=email_domain) THEN RAISE EXCEPTION 'DOMAIN_UNVERIFIED' USING ERRCODE='22023'; END IF;
+ IF binding->>'protocol'='oidc' THEN
+  IF EXISTS(SELECT 1 FROM identity.oidc_assertion_use WHERE tenant_id=t AND connection_id=c AND (assertion_id=claims->>'assertionId' OR request_id=r.request_id)) THEN RAISE EXCEPTION 'ASSERTION_REPLAY' USING ERRCODE='23505'; END IF;
+ ELSE
+ IF EXISTS(SELECT 1 FROM identity.sso_assertion_use WHERE assertion_id=(claims->>'assertionId')) THEN RAISE EXCEPTION 'ASSERTION_REPLAY' USING ERRCODE='23505'; END IF;
+ END IF;
+ SELECT * INTO sub FROM identity.sso_subject WHERE tenant_id=t AND connection_id=c AND subject_hash=sh;
+ IF sub.user_id IS NOT NULL THEN
+  IF sub.email_hash<>eh THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  u:=sub.user_id; member:=sub.membership_id;
+  IF NOT app.contractor_member_active(member) THEN RAISE EXCEPTION 'MEMBERSHIP_REVOKED' USING ERRCODE='42501'; END IF;
+  -- Existing linked SSO identity cannot be replaced by a different account.
+  IF r.link_session_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM identity.session WHERE id=r.link_session_id AND user_id=u AND revoked_at IS NULL AND expires_at>clock_timestamp()) THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ ELSE
+  SELECT user_id INTO u FROM identity.user_email WHERE email=address;
+  IF u IS NOT NULL THEN
+   IF r.link_session_id IS NULL THEN RAISE EXCEPTION 'LINK_REQUIRED' USING ERRCODE='42501'; END IF;
+   SELECT * INTO link FROM identity.session WHERE id=r.link_session_id AND user_id=u AND environment='synthetic_demo' AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR SHARE;
+   IF link.id IS NULL THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501'; END IF;
+   SELECT id INTO member FROM app.membership WHERE tenant_id=t AND identity_user_id=u AND app.contractor_member_active(id) FOR SHARE;
+   IF member IS NULL THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501'; END IF;
+  ELSIF r.link_session_id IS NOT NULL THEN RAISE EXCEPTION 'LINK_FORBIDDEN' USING ERRCODE='42501';
+  END IF;
+ END IF;
+ IF member IS NOT NULL THEN allow_new_grants:=(app.mon8_sso_feature_decision(member)->>'executable')::boolean; END IF;
+ SELECT count(*) INTO grants_count FROM (SELECT DISTINCT ON(idp_group) * FROM identity.idp_group_role_mapping WHERE tenant_id=t AND connection_id=c ORDER BY idp_group,revision DESC) g
+  WHERE enabled AND idp_group IN(SELECT jsonb_array_elements_text(claims->'groups'));
+ IF sub.user_id IS NOT NULL THEN
+  -- Revocation on a verified next sign-in is a committed fact even if no mapped group remains.
+  UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id IN(SELECT session_id FROM identity.sso_session_binding WHERE tenant_id=t AND connection_id=c AND subject_hash=sh) AND revoked_at IS NULL;
+  INSERT INTO app.role_grant_revocation(tenant_id,id,grant_id) SELECT t,gen_random_uuid(),g.grant_id FROM identity.sso_grant g
+   WHERE tenant_id=t AND connection_id=c AND subject_hash=sh AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation v WHERE v.tenant_id=t AND v.grant_id=g.grant_id)
+   AND (allow_new_grants OR NOT EXISTS(
+    SELECT 1 FROM app.role_grant old_grant JOIN (
+     SELECT DISTINCT ON(idp_group) * FROM identity.idp_group_role_mapping WHERE tenant_id=t AND connection_id=c ORDER BY idp_group,revision DESC
+    ) mapping ON mapping.role=old_grant.role AND mapping.scope_kind=old_grant.scope_kind AND mapping.scope_id=old_grant.scope_id
+    WHERE old_grant.tenant_id=t AND old_grant.id=g.grant_id AND mapping.enabled
+    AND mapping.idp_group IN(SELECT jsonb_array_elements_text(claims->'groups'))));
+ END IF;
+ IF grants_count=0 THEN
+  IF binding->>'protocol'='oidc' THEN
+   INSERT INTO identity.oidc_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  ELSE
+   INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  END IF;
+  DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+  RETURN jsonb_build_object('code','NO_MAPPED_GRANTS');
+ END IF;
+ IF expires<=clock_timestamp() OR expires>clock_timestamp()+interval '15 minutes' THEN RAISE EXCEPTION 'REQUEST_REFUSED' USING ERRCODE='22023'; END IF;
+ -- DB uniqueness is inside the same transaction as identity, membership, grants and session.
+ IF binding->>'protocol'='oidc' THEN
+   INSERT INTO identity.oidc_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  ELSE
+   INSERT INTO identity.sso_assertion_use(tenant_id,connection_id,assertion_id,request_id) VALUES(t,c,(claims->>'assertionId'),r.request_id);
+  END IF;
+ IF member IS NULL THEN
+  u:=gen_random_uuid(); member:=gen_random_uuid();
+  SELECT id INTO account FROM app.account WHERE tenant_id=t ORDER BY created_at,id LIMIT 1;
+  INSERT INTO identity.identity_user(id) VALUES(u);
+  INSERT INTO identity.user_email(email,user_id) VALUES(address,u);
+  INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES(member,t,account,u,'read_only');
+  INSERT INTO app.contractor_member VALUES(t,member,NULL,address);
+  INSERT INTO identity.membership_locator VALUES(u,t,member);
+ END IF;
+ IF sub.user_id IS NULL THEN IF NOT (app.mon8_sso_feature_decision(member)->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF; allow_new_grants:=true; END IF;
+ IF sub.user_id IS NULL THEN
+  INSERT INTO identity.sso_subject(tenant_id,connection_id,subject_hash,email_hash,user_id,membership_id) VALUES(t,c,sh,eh,u,member);
+ END IF;
+ FOR group_row IN SELECT * FROM (SELECT DISTINCT ON(idp_group) * FROM identity.idp_group_role_mapping WHERE tenant_id=t AND connection_id=c ORDER BY idp_group,revision DESC) g
+  WHERE enabled AND allow_new_grants AND idp_group IN(SELECT jsonb_array_elements_text(claims->'groups')) LOOP
+  grant_id:=gen_random_uuid();
+  IF group_row.role='operative' THEN
+   IF NOT (app.lp6d_sso_operative_roles_decision(member)->>'executable')::boolean THEN RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501'; END IF;
+   INSERT INTO identity.lp6d_sso_grant_permit(tenant_id,grant_id,membership_id,backend_pid,transaction_id)
+    VALUES(t,grant_id,member,pg_backend_pid(),pg_current_xact_id());
+  END IF;
+  INSERT INTO app.role_grant VALUES(t,grant_id,member,group_row.role,group_row.scope_kind,group_row.scope_id,NULL);
+  INSERT INTO identity.sso_grant(tenant_id,connection_id,subject_hash,grant_id) VALUES(t,c,sh,grant_id);
+ END LOOP;
+ INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES(new_session,u,'synthetic_demo',token,csrf,expires);
+ INSERT INTO identity.sso_session_binding(tenant_id,connection_id,subject_hash,session_id) VALUES(t,c,sh,new_session);
+ INSERT INTO identity.security_event(id,event_type,subject_id) VALUES(gen_random_uuid(),'session.issued',new_session);
+ DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ RETURN jsonb_build_object('userId',u,'membershipId',member,'tenantId',t);
+END $$;
+
+CREATE OR REPLACE FUNCTION identity.scim_deactivate(c uuid,p jsonb) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE
+ t uuid; previous identity.scim_event; source_id uuid; person_id uuid;
+ target_ids uuid[]:=ARRAY[]::uuid[]; member record; protected_owner boolean:=false;
+ changed_at timestamptz; record_id uuid:=gen_random_uuid();
+ result_outcome text:='ignored'; result_cause text;
+ membership_count integer:=0; session_count integer:=0; grant_count integer:=0;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'SCIM_ROUTE_BLOCKED' USING ERRCODE='42501'; END IF;
+ IF jsonb_typeof(p) IS DISTINCT FROM 'object' THEN RAISE EXCEPTION 'INVALID_SCIM_INPUT' USING ERRCODE='22023'; END IF;
+ IF (p->>'version') IS DISTINCT FROM 'scim-deactivation.v1'
+  OR jsonb_typeof(p->'version') IS DISTINCT FROM 'string'
+  OR jsonb_typeof(p->'eventId') IS DISTINCT FROM 'string'
+  OR ((p->>'eventId') ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') IS NOT TRUE
+  OR jsonb_typeof(p->'subjectHash') IS DISTINCT FROM 'string'
+  OR ((p->>'subjectHash') ~ '^[0-9a-f]{64}$') IS NOT TRUE
+  OR jsonb_typeof(p->'eventHash') IS DISTINCT FROM 'string'
+  OR ((p->>'eventHash') ~ '^[0-9a-f]{64}$') IS NOT TRUE
+  OR (p-ARRAY['version','eventId','subjectHash','eventHash'])<>'{}'::jsonb
+ THEN RAISE EXCEPTION 'INVALID_SCIM_INPUT' USING ERRCODE='22023'; END IF;
+ source_id:=(p->>'eventId')::uuid;
+ t:=identity.lp11_open_sso_scope(c,'scim');
+ IF t IS NULL THEN RAISE EXCEPTION 'SCIM_ROUTE_BLOCKED' USING ERRCODE='42501'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text,54));
+ SELECT * INTO previous FROM identity.scim_event e WHERE e.tenant_id=t AND e.connection_id=c AND e.source_event_id=source_id;
+ IF FOUND THEN
+  IF previous.subject_hash IS DISTINCT FROM (p->>'subjectHash') OR previous.event_hash IS DISTINCT FROM (p->>'eventHash') THEN
+   RAISE EXCEPTION 'SCIM_EVENT_CONFLICT' USING ERRCODE='23505';
+  END IF;
+  DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+  RETURN jsonb_build_object('outcome',previous.outcome,'cause',previous.cause_code,'recordId',previous.id,'replayed',true);
+ END IF;
+ changed_at:=clock_timestamp();
+ SELECT sub.user_id INTO person_id FROM identity.sso_subject sub WHERE sub.tenant_id=t AND sub.connection_id=c AND sub.subject_hash=(p->>'subjectHash');
+ IF person_id IS NULL THEN result_cause:='SCIM_SUBJECT_NOT_LINKED';
+ ELSE
+  FOR member IN SELECT m.id,m.role FROM app.membership m WHERE m.tenant_id=t AND m.identity_user_id=person_id AND m.revoked_at IS NULL ORDER BY m.id FOR UPDATE LOOP
+   target_ids:=array_append(target_ids,member.id);
+   IF member.role='owner' THEN protected_owner:=true; END IF;
+  END LOOP;
+  IF cardinality(target_ids)=0 THEN result_cause:='SCIM_ALREADY_INACTIVE';
+  ELSIF protected_owner THEN result_outcome:='refused';result_cause:='SCIM_OWNER_PROTECTED';
+  ELSE
+   UPDATE app.membership SET revoked_at=changed_at WHERE tenant_id=t AND id=ANY(target_ids) AND revoked_at IS NULL;
+   GET DIAGNOSTICS membership_count=ROW_COUNT;
+   UPDATE identity.session SET revoked_at=changed_at WHERE revoked_at IS NULL AND user_id=person_id AND id IN(
+    SELECT b.session_id FROM identity.sso_session_binding b JOIN identity.sso_subject sub
+     ON(sub.tenant_id,sub.connection_id,sub.subject_hash)=(b.tenant_id,b.connection_id,b.subject_hash)
+    WHERE b.tenant_id=t AND sub.tenant_id=t AND sub.user_id=person_id);
+   GET DIAGNOSTICS session_count=ROW_COUNT;
+   INSERT INTO app.role_grant_revocation(tenant_id,id,grant_id)
+    SELECT t,gen_random_uuid(),g.id FROM app.role_grant g WHERE g.tenant_id=t AND g.membership_id=ANY(target_ids)
+     AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE r.tenant_id=t AND r.grant_id=g.id);
+   GET DIAGNOSTICS grant_count=ROW_COUNT;
+   result_outcome:='deactivated';result_cause:='SCIM_DEACTIVATED';
+  END IF;
+ END IF;
+ INSERT INTO identity.scim_event(tenant_id,id,connection_id,source_event_id,subject_hash,event_hash,outcome,cause_code,user_id,memberships_revoked,sessions_revoked,grants_revoked,created_at)
+ VALUES(t,record_id,c,source_id,p->>'subjectHash',p->>'eventHash',result_outcome,result_cause,person_id,membership_count,session_count,grant_count,changed_at);
+ DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ RETURN jsonb_build_object('outcome',result_outcome,'cause',result_cause,'recordId',record_id,'replayed',false);
+END $$;
+
+CREATE OR REPLACE FUNCTION identity.sso_audit_append(c uuid,e jsonb) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ PERFORM identity.lp11_open_sso_scope(c,'audit');
+ IF e->>'subjectRef' IS DISTINCT FROM c::text OR e->>'subjectType' IS DISTINCT FROM 'sso-connection'
+  OR e->>'eventType' IS NULL OR (e->>'eventType') NOT LIKE 'sso.%' THEN
+  RAISE EXCEPTION 'INVALID_SSO_INPUT' USING ERRCODE='22023'; END IF;
+ PERFORM app.lp4_seal_audit(jsonb_build_array(e),'lower_trust');
+ DELETE FROM control_plane.lp11_sso_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+END $$;
+
+CREATE OR REPLACE FUNCTION app.revoke_contractor_practice_session(s uuid) RETURNS jsonb
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE lp6d_bound boolean;
+BEGIN
+ -- LP6D_BOUND: run before original DECLARE initializers and business locks.
+ -- Ben's LP-6b ruling (5 Nov) keeps ContractorPracticeSessionRepository.revoke as the named
+ -- "contractor-session-revoke" skip: the holder must still be able to end their own session
+ -- after membership revocation, which no binding can express (a revoked base never binds).
+ -- So a BOUND caller must be this very session's actor; the unbound skip path keeps the body's
+ -- own live-credential and tenant authentication below, exactly as before LP-6d.
+ BEGIN PERFORM app.current_actor(); lp6d_bound:=true;
+ EXCEPTION WHEN insufficient_privilege THEN lp6d_bound:=false; END;
+ IF NOT lp6d_bound THEN NULL;
+ ELSIF app.current_actor() IS NULL OR lower(nullif(current_setting('app.tenant_id',true),'')) IS DISTINCT FROM app.current_tenant()::text
+  OR NOT EXISTS(SELECT 1 FROM app.lp6d_contractor_session_identity(s) bound_session WHERE bound_session.tenant_id=app.current_tenant() AND bound_session.membership_id=app.current_actor()) THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+DECLARE requested uuid; target control_plane.contractor_practice_session; reading timestamptz;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501'; END IF;
+ BEGIN
+  requested:=nullif(current_setting('app.tenant_id',true),'')::uuid;
+ EXCEPTION WHEN invalid_text_representation THEN requested:=NULL;
+ END;
+ SELECT x.* INTO target FROM control_plane.contractor_practice_session x WHERE x.session_digest=app.contractor_practice_session_digest(s) FOR UPDATE;
+ reading:=clock_timestamp();
+ -- The only repetition of the row's live tests: store the exact reading tested.
+ IF s IS NULL OR target.session_id IS NULL OR requested IS NULL OR requested IS DISTINCT FROM target.tenant_id
+  OR target.revoked_at IS NOT NULL OR target.expires_at<=reading OR app.contractor_practice_home_deadline(target.session_digest,reading)<=reading
+ THEN RAISE EXCEPTION 'UNAUTHENTICATED' USING ERRCODE='28000'; END IF;
+ UPDATE control_plane.contractor_practice_session x SET revoked_at=reading WHERE x.session_id=target.session_id;
+ INSERT INTO control_plane.lp11_practice_revoke_audit VALUES(pg_current_xact_id(),target.tenant_id,target.session_id,target.membership_id);
+ RETURN jsonb_build_object('session',target.session_id,'member',target.membership_id,'revokedAt',to_char(reading AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'));
+END;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION app.contractor_practice_session_require_audit() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF OLD.revoked_at IS NULL AND NEW.revoked_at IS NOT NULL AND NOT EXISTS(
+  SELECT 1 FROM app.audit_event e WHERE e.tenant_id=NEW.tenant_id AND e.event_type='contractor.practice_session.revoked'
+   AND e.subject_type='practice-session' AND e.subject_ref=NEW.session_id::text AND e.actor_ref='membership:'||NEW.membership_id
+ ) THEN RAISE EXCEPTION 'PRACTICE_SESSION_AUDIT_REQUIRED' USING ERRCODE='23514'; END IF;
+ IF OLD.revoked_at IS NULL AND NEW.revoked_at IS NOT NULL THEN
+  DELETE FROM control_plane.lp11_practice_revoke_audit WHERE transaction_id=pg_current_xact_id_if_assigned() AND session_id=NEW.session_id;
+ END IF;
+ RETURN NULL;
+END $$;
+
 -- An unbound query matches no row. Expired and delegated request checks stay
 -- with the existing LP-6 accessors.
 GRANT CREATE ON SCHEMA app TO jobguard_binding_owner;
@@ -553,6 +865,18 @@ BEGIN
    authority_expression := replace(authority_expression,'app.lp11_policy_tenant()',
     '(CASE WHEN current_user=''jobguard_migration'' AND app.lp11_new_tenant(tenant_id) THEN tenant_id ELSE app.lp11_policy_tenant() END)');
   END IF;
+  IF 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
+   IF (policy_row.nspname,policy_row.relname)=('identity','sso_request') THEN
+    authority_expression := 'coalesce(app.lp11_policy_tenant(),CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_sso_tenant(ARRAY[''cache'',''complete''],connection_id) END)::text';
+   ELSIF policy_row.nspname='identity' AND policy_row.relname IN ('verified_domain','idp_group_role_mapping','sso_assertion_use','oidc_assertion_use','scim_event') THEN
+    authority_expression := format('coalesce(app.lp11_policy_tenant(),CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_sso_tenant(%s,connection_id) END)::text',
+     CASE WHEN policy_row.relname='scim_event' THEN 'ARRAY[''scim'']' ELSE 'ARRAY[''complete'']' END);
+   ELSIF (policy_row.nspname='identity' AND policy_row.relname IN ('sso_subject','sso_session_binding','sso_grant'))
+    OR (policy_row.nspname='app' AND policy_row.relname IN ('account','membership','contractor_member','contractor_membership_revocation','role_grant','role_grant_revocation','commercial_track_assignment','contractor_agreement_status_revision')) THEN
+    authority_expression := replace(authority_expression,'app.lp11_policy_tenant()',
+     'coalesce(app.lp11_policy_tenant(),CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_sso_tenant(ARRAY[''complete'',''scim''],NULL) END)');
+   END IF;
+  END IF;
   expression_using := regexp_replace(policy_row.predicate_using,
    tenant_setting_pattern, authority_expression, 'g');
   expression_check := regexp_replace(policy_row.predicate_check,
@@ -600,9 +924,19 @@ ALTER POLICY practice_membership_lookup ON app.membership USING (
 
 -- The audit owners can perform maintenance from a migration login. Request
 -- and worker sessions do not gain the owner's unbound maintenance authority.
+ALTER POLICY lp4_audit_writer ON app.audit_event USING (
+ tenant_id=coalesce(app.lp11_policy_tenant(),app.lp11_worker_tenant(NULL),
+  CASE WHEN subject_type='sso-connection' AND event_type LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END)
+ OR app.lp11_practice_revoke_event(tenant_id,event_type,subject_type,subject_ref,actor_ref)
+) WITH CHECK (
+ tenant_id=coalesce(app.lp11_policy_tenant(),app.lp11_worker_tenant(NULL),
+  CASE WHEN subject_type='sso-connection' AND event_type LIKE 'sso.%' THEN app.lp11_sso_tenant(ARRAY['audit'],subject_ref::uuid) END)
+ OR app.lp11_practice_revoke_event(tenant_id,event_type,subject_type,subject_ref,actor_ref)
+);
 ALTER POLICY migration_audit_integrity ON app.audit_event USING (
  CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant()
  ELSE pg_has_role(session_user,'jobguard_migration','SET') END
+ OR app.lp11_practice_revoke_event(tenant_id,event_type,subject_type,subject_ref,actor_ref)
 );
 ALTER POLICY migration_integrity ON app.audit_export USING (
  CASE WHEN app.lp6e_request_binding_present() THEN tenant_id=app.current_tenant()

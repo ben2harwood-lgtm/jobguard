@@ -327,9 +327,18 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       continue;
     }
     if (prior.definition !== null && current?.source !== prior.source && lp6dBodies.get(`${prior.nspname}.${prior.proname}`)?.includes(current?.source)) {
-      // The header may change only in LANGUAGE (contractor_session's checked bridge moves from sql to plpgsql).
-      const header = (definition: string) => definition.replace(/^ LANGUAGE \w+$/mu, " LANGUAGE <checked>");
-      expect(header(current!.definition)).toEqual(header(prior.definition.replace(prior.source, () => current!.source)));
+      const definition = prior.definition.replace(prior.source, () => current!.source);
+      if (prior.nspname === "app" && prior.proname === "contractor_practice_session_require_audit" && prior.args === "") {
+        // 0762 verifies the exact revocation witness through the protected
+        // policy and clears the permit as the existing migration owner.
+        expect(current!.definition).toBe(definition.replace(
+          " LANGUAGE plpgsql\n SET search_path", " LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path",
+        ));
+      } else {
+        // Contractor session's checked bridge may change LANGUAGE from SQL to PL/pgSQL.
+        const header = (source: string) => source.replace(/^ LANGUAGE \w+$/mu, " LANGUAGE <checked>");
+        expect(header(current!.definition)).toEqual(header(definition));
+      }
       continue;
     }
     // 0733 changes these exact bodies; retain every routine's security metadata.
