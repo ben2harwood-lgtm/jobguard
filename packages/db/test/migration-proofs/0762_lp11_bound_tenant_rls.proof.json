@@ -1476,7 +1476,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "f5b721ea228c29a458ec07a9e7297bd165d4c7f984f7e178236ad0cd95e1f117",
+        "definitionSha256": "6019eaacfdc22a3de36890c83db0b3380d639914333c8507e644847b7b72de2a",
         "staticWrites": [
           "control_plane.lp11_maintenance_job"
         ],
@@ -13457,6 +13457,39 @@
         "group": "a-lp6d-routine-binding"
       },
       "after": null
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.mon2_consistency()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:app.mon2_consistency()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "97f88d640ac40cbb652d46c213adf551b86c6a911245db20912bb8e12f5d2e56",
+        "staticWrites": [],
+        "staticCalls": []
+      }
     }
   ],
   "upgrade": [

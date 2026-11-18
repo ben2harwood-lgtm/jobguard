@@ -1824,7 +1824,12 @@ BEGIN
  IF maintenance THEN PERFORM app.lp11_open_maintenance_job(NEW.tenant_id,NEW.job_id); END IF;
  IF TG_TABLE_NAME='supplier_document' THEN applies:=NEW.document_type='invoice'; END IF;
  IF TG_TABLE_NAME='supplier_document_intake' THEN applies:=EXISTS(SELECT 1 FROM app.supplier_document d WHERE (d.tenant_id,d.job_id,d.id)=(NEW.tenant_id,NEW.job_id,NEW.document_id) AND d.document_type='invoice'); END IF;
- IF TG_TABLE_NAME='variation' THEN applies:=NEW.origin='builder_logged' AND NEW.job_track='small_builder'; END IF;
+ IF TG_TABLE_NAME='variation' THEN
+  -- The later origin trigger infers builder capture from the stored job
+  -- track when these fields are omitted. Check the lock before it runs.
+  applies:=coalesce(NEW.origin,'builder_logged')='builder_logged'
+   AND coalesce(NEW.job_track,'small_builder')='small_builder';
+ END IF;
  IF TG_TABLE_NAME='evidence_upload' THEN
   applies:=NEW.expected_content_type IN('image/png','image/jpeg','image/webp');
   -- The existing begin-upload replay still reaches INSERT ... ON CONFLICT. Match only the existing request contract.
@@ -5162,6 +5167,39 @@ END $$;
 ALTER FUNCTION app.lp11_record_audit_export_refusal(uuid,uuid,uuid,uuid,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp11_record_audit_export_refusal(uuid,uuid,uuid,uuid,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.lp11_record_audit_export_refusal(uuid,uuid,uuid,uuid,text) TO jobguard_runtime;
+
+-- Validate the exact new binding instead of reopening every tenant binding per row.
+CREATE OR REPLACE FUNCTION app.mon2_consistency() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid:=NEW.tenant_id;
+BEGIN
+ -- A place append changes only that binding's ancestry. Its period, source
+ -- and place parents already exist and are immutable. The other deferred
+ -- triggers still check tenant-wide accounting and ancestry from all tables.
+ IF TG_TABLE_NAME='subscription_place_binding' THEN
+  IF NOT EXISTS(
+   SELECT FROM app.meter_input_event e
+   JOIN app.subscription_place p ON(p.tenant_id,p.place_key)=(e.tenant_id,NEW.place_key)
+   WHERE (e.tenant_id,e.id,e.sequence)=(t,NEW.source_id,NEW.source_revision)
+    AND EXISTS(
+     SELECT FROM jsonb_array_elements(e.input->'days') d
+     CROSS JOIN LATERAL jsonb_array_elements(d->'jobs') j
+     WHERE (d->>'date')::date=NEW.date AND (j->>'jobId')::uuid=NEW.representative_job_id
+      AND (j->>'customerId')::uuid=p.customer_id AND (j->>'siteId')::uuid=p.site_id)
+  ) THEN RAISE EXCEPTION 'SUBSCRIPTION_INTEGRITY_FAILURE' USING ERRCODE='23514'; END IF;
+  RETURN NULL;
+ END IF;
+ IF EXISTS(SELECT 1 FROM app.subscription_period p WHERE p.tenant_id=t AND p.principal_pence<>(SELECT coalesce(sum(l.amount_pence),0) FROM app.subscription_period_line l WHERE l.tenant_id=t AND l.period_id=p.id))
+ OR EXISTS(SELECT 1 FROM app.platform_statement s WHERE s.tenant_id=t AND (s.amount_pence<>(SELECT coalesce(sum(l.amount_pence),0) FROM app.platform_statement_line l WHERE l.tenant_id=t AND l.statement_id=s.id)
+ OR NOT EXISTS(SELECT 1 FROM app.subscription_period p WHERE p.tenant_id=t AND p.id=s.period_id AND p.principal_pence=s.amount_pence AND p.artifact_hash=s.artifact_hash)))
+ OR EXISTS(SELECT 1 FROM app.platform_statement_line l JOIN app.platform_statement s ON(s.tenant_id,s.id)=(l.tenant_id,l.statement_id) JOIN app.subscription_period_line p ON(p.tenant_id,p.period_id,p.line_key)=(l.tenant_id,l.period_id,l.line_key) WHERE l.tenant_id=t AND (s.period_id<>l.period_id OR l.amount_pence<>p.amount_pence))
+ OR EXISTS(SELECT 1 FROM app.subscription_simulated_work w JOIN app.platform_statement s ON(s.tenant_id,s.id)=(w.tenant_id,w.statement_id) JOIN app.action_authorization a ON(a.tenant_id,a.id)=(w.tenant_id,w.authorization_id) WHERE w.tenant_id=t AND (w.amount_pence<>s.amount_pence OR w.content_hash<>s.artifact_hash OR w.amount_pence<>a.amount_pence OR w.content_hash<>a.content_hash OR a.action_type<>'subscription.simulate' OR a.aggregate_revision<>w.agreement_revision))
+ OR EXISTS(SELECT 1 FROM app.subscription_place_binding b JOIN app.meter_input_event e ON(e.tenant_id,e.id)=(b.tenant_id,b.source_id) JOIN app.subscription_place p ON(p.tenant_id,p.place_key)=(b.tenant_id,b.place_key) WHERE b.tenant_id=t AND (b.source_revision<>e.sequence OR NOT EXISTS(SELECT 1 FROM jsonb_array_elements(e.input->'days') d CROSS JOIN LATERAL jsonb_array_elements(d->'jobs') j WHERE (d->>'date')::date=b.date AND (j->>'jobId')::uuid=b.representative_job_id AND (j->>'customerId')::uuid=p.customer_id AND (j->>'siteId')::uuid=p.site_id)))
+ OR EXISTS(SELECT 1 FROM app.subscription_period p JOIN app.meter_input_event e ON(e.tenant_id,e.id)=(p.tenant_id,p.source_id) WHERE p.tenant_id=t AND (p.period_start<>e.period_start OR p.period_end<>e.period_end))
+ OR EXISTS(SELECT 1 FROM app.subscription_correction_disposition d JOIN app.meter_correction c ON(c.tenant_id,c.id)=(d.tenant_id,d.correction_id) JOIN app.subscription_period p ON(p.tenant_id,p.id)=(d.tenant_id,d.period_id) WHERE d.tenant_id=t AND c.apply_start<>p.period_start)
+ OR EXISTS(SELECT 1 FROM app.subscription_alert a JOIN app.subscription_correction_disposition d ON(d.tenant_id,d.correction_id)=(a.tenant_id,a.correction_id) WHERE a.tenant_id=t AND a.period_id<>d.period_id)
+ THEN RAISE EXCEPTION 'SUBSCRIPTION_INTEGRITY_FAILURE' USING ERRCODE='23514'; END IF;
+ RETURN NULL;
+END $$;
 
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.

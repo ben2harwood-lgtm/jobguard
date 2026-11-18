@@ -13,7 +13,7 @@ import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth
 import { resolveVerifiedTenantContext } from "../../../apps/api/src/auth/principal-bridge.js";
 import { SsoApplication } from "../../../apps/api/src/auth/sso/sso.application.js";
 import { generateTestIdentityProvider, type TestResponseOptions } from "../../../apps/api/src/auth/sso/test-identity-provider.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, identity: Pool, directory: string;
@@ -153,12 +153,19 @@ describe("ENT-10a / actual PostgreSQL identity trust boundary", () => {
     const a = await fixture(), b = await fixture();
     const unscoped = await admin.connect();
     try { await unscoped.query("BEGIN; SET LOCAL ROLE jobguard_migration"); expect((await unscoped.query("SELECT * FROM identity.sso_connection")).rows).toEqual([]); await unscoped.query("ROLLBACK"); } finally { unscoped.release(); }
-    expect((await withTenant(admin, testTenantContext(a.principal.tenantId), async db => { await db.$client.query("SET LOCAL ROLE jobguard_migration"); return db.$client.query("SELECT id FROM identity.sso_connection WHERE id=$1", [b.connectionId]); })).rows).toEqual([]);
+    const context = await testBoundTenantContext(admin, a.principal.tenantId, a.principal.membershipId);
+    const connections = await withTenant(admin, context, async db => {
+      await db.$client.query("SET LOCAL ROLE jobguard_migration");
+      return db.$client.query("SELECT id FROM identity.sso_connection WHERE id=ANY($1::uuid[])", [[a.connectionId,b.connectionId]]);
+    });
+    expect(connections.rows).toEqual([{ id: a.connectionId }]);
     const malformed = await admin.connect();
     try {
       await malformed.query("BEGIN; SET LOCAL ROLE jobguard_migration");
       await malformed.query("SELECT set_config('app.tenant_id',$1,true)", ["not-a-uuid"]);
-      await expect(malformed.query("SELECT * FROM identity.sso_connection")).rejects.toMatchObject({ code: "22P02" });
+      expect((await malformed.query("SELECT * FROM identity.sso_connection")).rows).toEqual([]);
+      await expect(malformed.query("SELECT app.bind_request('real',$1,$2::uuid)", ["a".repeat(64), "not-a-uuid"]))
+        .rejects.toMatchObject({ code: "22P02" });
       await malformed.query("ROLLBACK");
       await malformed.query("BEGIN; SET LOCAL ROLE jobguard_migration");
       expect((await malformed.query("SELECT * FROM identity.sso_connection")).rows).toEqual([]);

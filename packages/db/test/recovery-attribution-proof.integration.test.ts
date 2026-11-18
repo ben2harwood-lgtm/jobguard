@@ -25,7 +25,7 @@ describe("SV6-06/07 persisted missing-proof regressions (positive chain dependen
     await invoices.issue(a.context, { jobId: a.jobId, finalAccountRevisionId: a.revisionId,
       actorMembershipId: LOCK_OWNER, commandId: randomUUID(), recipient: "fictional@example.invalid", issuedOn: "2026-10-24" });
     const rows = await asFixtureTenant(f.runtime, a.tenantId, db => db.query<{ id: string }>(
-      "SELECT id FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId]));
+      "SELECT id FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId]), { owner: f.admin, membershipId: LOCK_OWNER });
     expect(rows.rows).toHaveLength(1);
     const target = missingCatchTarget(a, rows.rows[0]!.id);
     // An actual baseline invoice exists, but there is no lock-bound invoiced catch line.
@@ -34,7 +34,7 @@ describe("SV6-06/07 persisted missing-proof regressions (positive chain dependen
        JOIN app.final_account_invoice_binding b ON (b.tenant_id,b.job_id,b.invoice_id)=(l.tenant_id,l.job_id,l.invoice_id)
        WHERE l.tenant_id=$1 AND l.job_id=$2 AND l.invoice_id=$3 AND l.final_account_line_id=$4
        AND b.lock_id=$5 AND l.commercial_revision_id=$6`,
-      [a.tenantId, a.jobId, target.invoiceId, target.accountLineId, target.lockId, target.commercialRevisionId]));
+      [a.tenantId, a.jobId, target.invoiceId, target.accountLineId, target.lockId, target.commercialRevisionId]), { owner: f.admin, membershipId: LOCK_OWNER });
     expect(bound.rows).toEqual([]);
     const result = deriveAttributionBillingPaymentProof({ version: "attribution-billing-payment-proof.v1",
       environment: "synthetic_demo", productionEnabled: false, target, billing: null, payment: null });
@@ -48,16 +48,16 @@ describe("SV6-06/07 persisted missing-proof regressions (positive chain dependen
     await invoices.issue(a.context, { jobId: a.jobId, finalAccountRevisionId: a.revisionId,
       actorMembershipId: LOCK_OWNER, commandId: randomUUID(), recipient: "fictional@example.invalid", issuedOn: "2026-10-24" });
     const invoice = (await asFixtureTenant(f.runtime, a.tenantId, db => db.query<{ id: string }>(
-      "SELECT id FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId]))).rows[0]!;
+      "SELECT id FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId]), { owner: f.admin, membershipId: LOCK_OWNER })).rows[0]!;
     await invoices.recordReceipt(a.context, { jobId: a.jobId, invoiceId: invoice.id, actorMembershipId: LOCK_OWNER,
       commandId: randomUUID(), paidOn: "2026-10-24", amountPence: 96000, method: "bank_transfer", reference: "Fictional manual receipt" });
     const receipts = await asFixtureTenant(f.runtime, a.tenantId, db => db.query<{ id: string; amount_pence: string }>(
-      "SELECT id,amount_pence FROM app.customer_payment WHERE tenant_id=$1 AND job_id=$2 AND invoice_id=$3", [a.tenantId, a.jobId, invoice.id]));
+      "SELECT id,amount_pence FROM app.customer_payment WHERE tenant_id=$1 AND job_id=$2 AND invoice_id=$3", [a.tenantId, a.jobId, invoice.id]), { owner: f.admin, membershipId: LOCK_OWNER });
     expect(receipts.rows).toHaveLength(1);
     const receipt = receipts.rows[0]!;
     for (const table of ["practice_feed_receipt_match", "receipt_line_allocation"] as const) {
       const rows = await asFixtureTenant(f.runtime, a.tenantId, db => db.query(
-        `SELECT payment_id FROM app.${table} WHERE tenant_id=$1 AND job_id=$2 AND payment_id=$3`, [a.tenantId, a.jobId, receipt.id]));
+        `SELECT payment_id FROM app.${table} WHERE tenant_id=$1 AND job_id=$2 AND payment_id=$3`, [a.tenantId, a.jobId, receipt.id]), { owner: f.admin, membershipId: LOCK_OWNER });
       expect(rows.rows).toEqual([]);
     }
     const result = deriveAttributionBillingPaymentProof({ version: "attribution-billing-payment-proof.v1",

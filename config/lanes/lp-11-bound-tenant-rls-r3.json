@@ -191,7 +191,20 @@
         "packages/db/test/real-fc-typed-recovery.integration.test.ts",
         "packages/db/test/recovery.integration.test.ts",
         "packages/db/test/recurring-extras.integration.test.ts",
-        "packages/db/test/shadow-catalog.integration.test.ts"
+        "packages/db/test/shadow-catalog.integration.test.ts",
+        "apps/api/src/sync/snapshot.adapter.ts",
+        "packages/db/test/direct-debit-fixture.integration.test.ts",
+        "packages/db/test/dsar-offboarding.integration.test.ts",
+        "packages/db/test/job-work-state-upgrade.integration.test.ts",
+        "packages/db/test/lp1-lock-compatibility.integration.test.ts",
+        "packages/db/test/lp4-audit-upgrade.integration.test.ts",
+        "packages/db/test/m4-23-small-builder-acceptance.integration.test.ts",
+        "packages/db/test/recovery-attribution-proof.integration.test.ts",
+        "packages/db/test/recovery-demo-replay-job.integration.test.ts",
+        "packages/db/test/recovery-timeline-import-anchor.integration.test.ts",
+        "packages/db/test/subscription-statements.integration.test.ts",
+        "packages/db/test/sync-snapshot.integration.test.ts",
+        "packages/db/test/watchdog-legacy-identities.integration.test.ts"
       ]
     }
   }

@@ -213,7 +213,8 @@ it("malformed tenant context fails closed, runtime grants are exact, and pooling
  const connection=await runtime.connect();
  try{
   await connection.query("BEGIN");await connection.query("SELECT set_config('app.tenant_id','not-a-uuid',true)");
-  await expect(connection.query("SELECT * FROM app.recovery_claim_line")).rejects.toMatchObject({code:"22P02"});
+  expect((await connection.query("SELECT * FROM app.recovery_claim_line")).rows).toEqual([]);
+  await expect(connection.query("SELECT app.bind_request('real',$1,$2::uuid)",["a".repeat(64),"not-a-uuid"])).rejects.toMatchObject({code:"22P02"});
  }finally{await connection.query("ROLLBACK");connection.release();}
  for(const table of ["recovery_eligibility_v3_review","recovery_claim_line","supplier_credit_consumption"]){
   const grants=(await admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'SELECT') s,has_table_privilege('jobguard_runtime',$1,'INSERT') i,has_table_privilege('jobguard_runtime',$1,'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') forbidden",[`app.${table}`])).rows;

@@ -19,13 +19,17 @@ async function installLegacySyntheticPartyFixtures(owner: Pool) {
 }
 import { createScimHarness, fixture as ssoFixture } from "./scim-fixtures.js";
 let db: JobDoorsDatabase;
+let predecessor: JobDoorsDatabase | undefined;
 beforeAll(async () => { db = await jobDoorsDatabase(true); }, 300_000);
-afterAll(async () => { await db?.close(); });
-async function principal(tenant?: string) {
-  const a = await jobDoorsActor(db.owner,tenant), credential = randomBytes(32).toString("hex");
-  await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${a.person}@fictional.invalid`, a.person]);
-  await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [a.person, a.tenant, a.member]);
-  await db.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+afterAll(async () => { await predecessor?.close(); await db?.close(); });
+async function beforeTenantCutover() {
+  return predecessor ??= await jobDoorsDatabase(true, "0762_lp11_bound_tenant_rls.sql");
+}
+async function principal(tenant?: string, database = db) {
+  const a = await jobDoorsActor(database.owner,tenant), credential = randomBytes(32).toString("hex");
+  await database.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${a.person}@fictional.invalid`, a.person]);
+  await database.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [a.person, a.tenant, a.member]);
+  await database.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
     VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(), a.person, credential]);
   return { ...a, credential };
 }
@@ -74,25 +78,37 @@ it("stamps A despite a claim naming B; verifier agrees", async () => {
   expect(events[0]!.payload.references?.auditActorRef).toBe(`membership:${p.member}`); expect(auditActorAttribution(events[0]!)).toBe("bound_member");
 });
 it("keeps existing unbound statements lower-trust system work despite caller actor claims", async () => {
-  const p = await principal();
-  await transaction(db.runtime,p.tenant,c => append(c,[input()]));
-  const events = await chain(p.tenant); verifyAuditChain(events);
+  const legacy = await beforeTenantCutover(), p = await principal(undefined, legacy);
+  await transaction(legacy.runtime,p.tenant,c => append(c,[input()]));
+  const events = await chain(p.tenant,legacy.owner); verifyAuditChain(events);
   expect(events).toHaveLength(1);
   expect(events[0]!.payload.references).toMatchObject({auditTrust:"lower_trust",auditActorKind:"system",auditActorRef:"system:database:lp2_login"});
+  const current = await principal();
+  await expect(transaction(db.runtime,current.tenant,c => append(c,[input()]))).rejects.toMatchObject({code:"42501"});
+  expect(await chain(current.tenant)).toEqual([]);
 });
 it("never attributes an unbound NOINHERIT runtime statement to a human", async () => {
-  const p = await principal(), password = randomBytes(32).toString("hex");
-  await db.owner.query(`CREATE ROLE lp6e_noinherit LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '${password}'`);
-  await db.owner.query("GRANT jobguard_runtime TO lp6e_noinherit");
-  const runtime = new Pool({ ...db.runtime.options, user: "lp6e_noinherit", password, max: 1 });
-  try {
-    await transaction(runtime,p.tenant,async c => {
-      await c.query("SET LOCAL ROLE jobguard_runtime");
-      await append(c,[input()]);
-    });
-    const events = await chain(p.tenant); verifyAuditChain(events);
-    expect(events[0]!.payload.references).toMatchObject({auditActorKind:"system",auditActorRef:"system:database:lp6e_noinherit"});
-  } finally { await runtime.end(); }
+  const legacy = await beforeTenantCutover();
+  for (const database of [legacy, db]) {
+    const p = await principal(undefined, database), password = randomBytes(32).toString("hex");
+    await database.owner.query(`CREATE ROLE lp6e_noinherit LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD '${password}'`);
+    await database.owner.query("GRANT jobguard_runtime TO lp6e_noinherit");
+    const runtime = new Pool({ ...database.runtime.options, user: "lp6e_noinherit", password, max: 1 });
+    try {
+      const appendAsRuntime = () => transaction(runtime,p.tenant,async c => {
+        await c.query("SET LOCAL ROLE jobguard_runtime");
+        await append(c,[input()]);
+      });
+      if (database === legacy) {
+        await appendAsRuntime();
+        const events = await chain(p.tenant,legacy.owner); verifyAuditChain(events);
+        expect(events[0]!.payload.references).toMatchObject({auditActorKind:"system",auditActorRef:"system:database:lp6e_noinherit"});
+      } else {
+        await expect(appendAsRuntime()).rejects.toMatchObject({code:"42501"});
+        expect(await chain(p.tenant)).toEqual([]);
+      }
+    } finally { await runtime.end(); }
+  }
 });
 it.each(["actor", "tenant", "type", "actorRef", "auditActorKind", "auditActorRef"])("refuses collision %s across payload sections", async key => {
   const p = await principal();
@@ -120,13 +136,19 @@ it("rollback after append restores rows/head; retry commits", async () => {
   verifyAuditChain(await chain(p.tenant));
 });
 it("owner-side checked writers record system work rather than a supplied person", async () => {
-  const p = await principal();
-  await transaction(db.owner,p.tenant,async c => {
-    await c.query("SELECT * FROM app.lp4_seal_audit($1,'checked_operation')",[JSON.stringify([input({actorRef:`membership:${p.member}`,eventType:"payment.settled"})])]);
+  const legacy = await beforeTenantCutover(), p = await principal(undefined, legacy);
+  const checked = (c: PoolClient, member: string) =>
+    c.query("SELECT * FROM app.lp4_seal_audit($1,'checked_operation')",
+      [JSON.stringify([input({actorRef:`membership:${member}`,eventType:"payment.settled"})])]);
+  await transaction(legacy.owner,p.tenant,async c => {
+    await checked(c, p.member);
     await c.query("SELECT app.append_final_lock_audit($1,$2,$3,'final_account.locked',$4)",[randomUUID(),p.member,randomUUID(),JSON.stringify({revisionId:randomUUID()})]);
   });
-  const events = await chain(p.tenant); expect(events).toHaveLength(2); verifyAuditChain(events);
+  const events = await chain(p.tenant,legacy.owner); expect(events).toHaveLength(2); verifyAuditChain(events);
   for (const event of events) { expect(auditActorAttribution(event)).toBe("system"); expect(event.payload.references?.auditActorRef).toBe("system:database:postgres"); }
+  const current = await principal();
+  await expect(transaction(db.owner,current.tenant,c => checked(c, current.member))).rejects.toMatchObject({code:"42501"});
+  expect(await chain(current.tenant)).toEqual([]);
 });
 it("rejects a GUC tenant substituted after binding", async () => {
   const p = await principal(), other = await jobDoorsActor(db.owner);
@@ -183,14 +205,29 @@ it("keeps every retired/private audit overload unavailable to a bound runtime", 
   expect(await chain(p.tenant)).toEqual([]);
 });
 it("cannot reuse an authenticated append's binding in the next pooled transaction", async () => {
-  const p = await principal(), pool = db.freshRuntime();
-  try {
-    await transaction(pool,p.tenant,async c => { await bind(c,p); await append(c,[input()]); });
-    await transaction(pool,p.tenant,c => append(c,[input()]));
-    const events = await chain(p.tenant); expect(events).toHaveLength(2); verifyAuditChain(events);
-    expect(events[0]!.payload.references?.auditActorKind).toBe("bound_member");
-    expect(events[1]!.payload.references).toMatchObject({auditActorKind:"system",auditActorRef:"system:database:lp2_login"});
-  } finally { await pool.end(); }
+  const legacy = await beforeTenantCutover();
+  for (const database of [legacy, db]) {
+    const p = await principal(undefined, database), pool = database.freshRuntime();
+    try {
+      const backend = async (c: PoolClient) => (await c.query("SELECT pg_backend_pid() pid")).rows[0].pid;
+      const pid = await transaction(pool,p.tenant,async c => { await bind(c,p); await append(c,[input()]); return backend(c); });
+      const withoutBinding = () => transaction(pool,p.tenant,async c => {
+        expect(await backend(c)).toBe(pid);
+        return append(c,[input()]);
+      });
+      if (database === legacy) {
+        await withoutBinding();
+        const events = await chain(p.tenant,legacy.owner); expect(events).toHaveLength(2); verifyAuditChain(events);
+        expect(events[0]!.payload.references?.auditActorKind).toBe("bound_member");
+        expect(events[1]!.payload.references).toMatchObject({auditActorKind:"system",auditActorRef:"system:database:lp2_login"});
+      } else {
+        const events = await chain(p.tenant); expect(events).toHaveLength(1); verifyAuditChain(events);
+        expect(events[0]!.payload.references?.auditActorKind).toBe("bound_member");
+        await expect(withoutBinding()).rejects.toMatchObject({code:"42501"});
+        expect(await chain(p.tenant)).toEqual(events);
+      }
+    } finally { await pool.end(); }
+  }
 });
 it("uses a protected binding even for an owner-side checked writer", async () => {
   const p = await principal(), peer = await jobDoorsActor(db.owner,p.tenant);

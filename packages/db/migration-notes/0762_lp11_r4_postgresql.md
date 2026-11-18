@@ -3495,6 +3495,67 @@ still reports the separate expected-privilege inventory mismatch for 0762 on
 older objects. The whole DB counts above are from the last completed frozen
 checkout and do not credit these focused repairs.
 
+## r5 bound checkpoint and deferred subscription validation
+
+The sync adapter maps the database's exact request-binding refusal to
+`SYNC_AUTHORITY_REQUIRED`. It still checks the current member and tenant before
+advancing the checkpoint. The wrong-tenant and rollback tests read their
+checkpoints with the persisted fixture credential.
+
+The post-lock new-work trigger checks an unclassified variation before the
+later origin trigger infers builder capture from the stored small-builder track.
+A skeletal post-lock insert therefore reaches the original lock refusal
+before column constraints. The complete catalogue comparison of older CH-4
+policies projects the exact recorded 0762 policy changes onto the predecessor
+set. Its rolled-back permission mutation retains the original strict result.
+
+The subscription statement benchmark isolated a repeated deferred scan.
+At 17 places, a single issuance took 109.4 seconds while the stored source
+and rebuild calls each took less than half a second. The deferred binding
+trigger now reads the new row's exact immutable source sequence, day, job,
+customer and site. Other participating triggers still run the full tenant-wide
+accounting and ancestry check. The new rollback control inserts a row with
+valid foreign keys and an absent source day, then proves the original
+`23514 SUBSCRIPTION_INTEGRITY_FAILURE` at commit and an identical stored history.
+The three formerly timed-out cases passed in 9.539, 6.692 and 1.402 seconds
+within the existing budgets. The full file passed 13/13.
+
+The original LP-4 and LP-6e system-attribution checks run on the actual
+pre-cutover schema. New post-cutover checks assert exact unbound refusal,
+unchanged audit history and persisted-member attribution. The pooled test
+checks both attempts use the same backend PID. Raw isolation tests now
+require exactly zero rows for a malformed obsolete setting and still require
+`22P02` at the actual UUID selector. The SSO cross-tenant control binds A and
+expects precisely A's connection.
+
+| Group in the last completed whole DB run | Failing before | Failing on focused rerun |
+| --- | ---: | ---: |
+| Sync snapshot mismatch and rolled-back checkpoint | 2 | 0 |
+| Privacy subject deletion and tenant exit | 2 | 0 |
+| Historical audit-export catalogue | 1 | 0 |
+| Direct debit replay and direct fixture reads | 2 | 0 |
+| Recovery demo replay and historical negative control | 2 | 0 |
+| Recovery attribution payment and invoice proof | 2 | 0 |
+| Recovery timeline import and lower-trust mutation | 2 | 0 |
+| Small-builder acceptance, captured or disclosed catches | 2 | 0 |
+| Previous-schema command claimant and legacy writer | 2 | 0 |
+| Raw post-lock variation refusal and earlier CH-4 upgrade policy catalogue | 2 | 0 |
+| LP-1 row locks and their SELECT/UPDATE policy boundaries | 2 | 0 |
+| Recovery eligibility and enterprise SSO malformed scope | 2 | 0 |
+| LP-4 historical audit upgrade | 2 | 0 |
+| LP-6e exact predecessor system attribution and current refusal | 4 | 0 |
+| Subscription statement latency | 3 | 0 |
+
+Whole-file focused results included sync/DSAR 38/38, audit export 12/12,
+recovery demo/direct debit 14/14, small-builder acceptance 12/12 with four
+pre-existing todos, timeline import 4/4, recovery attribution 2/2, historical
+audit and lifecycle 13/13, and CH-4 upgrade 1/1. Both legacy waiter cases
+passed. Five focused row-lock and malformed-scope tests passed, and nine
+focused LP-4/LP-6e cases passed. The context scanner passed 146/146.
+Both commercial guards reported zero diagnostics and the serial guard run
+passed 253/253. Workspace typecheck passed 7/7 with one package at a time.
+The last complete whole-run totals above exclude these focused corrections.
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

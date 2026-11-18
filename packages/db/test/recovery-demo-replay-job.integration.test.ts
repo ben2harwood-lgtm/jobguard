@@ -36,9 +36,10 @@ function select(tenant: string, job: string, command: string, scenario = "manual
 }
 
 async function selections(tenant: string) {
-  return (await transaction(db.runtime, tenant, client => client.query(
-    "SELECT * FROM app.recovery_demo_selection WHERE tenant_id=$1 ORDER BY job_id", [tenant],
-  ))).rows;
+  return (await transaction(db.runtime, tenant, async client => {
+    await bindTestClient(db.owner, client, tenant, members.get(tenant)!);
+    return client.query("SELECT * FROM app.recovery_demo_selection WHERE tenant_id=$1 ORDER BY job_id", [tenant]);
+  })).rows;
 }
 
 describe("LATER-SAFETY-122 recovery demo command replay", () => {
@@ -82,6 +83,7 @@ describe("LATER-SAFETY-122 recovery demo command replay", () => {
       const definition = (await client.query("SELECT pg_get_functiondef('app.configure_recovery_demo(uuid,uuid,varchar)'::regprocedure) definition")).rows[0]!.definition;
       await client.query("BEGIN");
       await client.query(oldRoutine);
+      await bindTestClient(db.owner, client, f.tenant, f.member);
       await client.query("SET LOCAL ROLE jobguard_runtime");
       await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenant]);
       expect((await client.query("SELECT app.configure_recovery_demo($1,$2,'manual_receipt') id", [f.jobB, f.command])).rows)
