@@ -310,6 +310,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const presenceSql = await readFile(new URL("../migrations/0753_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
   for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis))
     lp6dBodies.set(m[1]!, [m[4]!]);
+  const lp11Sql = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
+  for (const match of lp11Sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
+    lp6dBodies.set(match[1]!, [match[3]!]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     // 0751 succeeds LP-6d for this exact dispatcher; pin it before generic LP-6d successor handling.

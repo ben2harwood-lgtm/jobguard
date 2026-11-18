@@ -60,10 +60,34 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const metadata = (entries: typeof afterRoutines) => entries.map(({ definition: _definition, ...row }) => row);
   const relationMetadata = (entries: typeof beforeCatalog) => entries.map(({ policies: _policies, ...row }) => row);
   const expected = applyUpgradeProofs({ rows: {}, routines: metadata(afterRoutines), relations: relationMetadata(beforeCatalog), policies: beforePolicies }, successors, ownerOids);
-  const replayRoutines = await routines(), replayCatalog = await catalog();
+  const replayRoutines = await routines(), installedCatalog = await catalog();
   expect(metadata(replayRoutines)).toEqual(expected.routines.filter(row => row.nspname !== "infrastructure"));
-  expect(relationMetadata(replayCatalog)).toEqual(expected.relations);
+  expect(relationMetadata(installedCatalog)).toEqual(expected.relations);
   expect(await policies()).toEqual(expected.policies);
+  // Exact predicates and ACLs are checked above. In the raw OID comparison,
+  // reverse only the 0762 changes and retain every other predecessor field.
+  const lp11 = successors.find(proof => proof.migration === "0762_lp11_bound_tenant_rls.sql")!;
+  const lp11Policies = lp11.upgrade.filter(change => change.section === "policies");
+  const lp11Relations = lp11.upgrade.filter(change => change.section === "relations");
+  const replayCatalog = installedCatalog.map(relation => {
+    const predecessor = beforeCatalog.find(row => row.nspname === relation.nspname && row.relname === relation.relname);
+    if (!predecessor) return relation;
+    const policyChanges = lp11Policies.filter(change => change.after?.schemaname === relation.nspname && change.after.tablename === relation.relname);
+    const policies = relation.policies?.flatMap((policy: { polname: string; polqual: string | null; polwithcheck: string | null }) => {
+      const change = policyChanges.find(entry => entry.after?.policyname === policy.polname);
+      if (!change) return [policy];
+      if (!change.before) return [];
+      const rawPrior = predecessor.policies?.find((entry: { polname: string }) => entry.polname === policy.polname);
+      if (!rawPrior) return [policy];
+      return [{ ...policy, polqual: rawPrior.polqual, polwithcheck: rawPrior.polwithcheck }];
+    }) ?? null;
+    const aclChange = lp11Relations.find(change => change.before?.nspname === relation.nspname && change.before.relname === relation.relname);
+    return {
+      ...relation,
+      relacl: aclChange?.before?.relacl ?? relation.relacl,
+      policies: policies?.length ? policies : null,
+    };
+  });
   // Preserve all raw predecessor catalogue fields, including policy identities.
   for (const row of beforeCatalog) {
     if (row.nspname === "app" && ["customer_portal_session", "customer_portal_grant", "extra_client_session", "extra_client_link"].includes(row.relname)) {
@@ -325,6 +349,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     expect(replayRoutines.filter(row => row.proname === name)).toHaveLength(1);
     expect(afterRoutines.some(row => row.proname === name)).toBe(false);
   }
+  const lp11Sql = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
+  for (const match of lp11Sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
+    lp6dBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);
