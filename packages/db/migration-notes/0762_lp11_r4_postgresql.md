@@ -2888,6 +2888,22 @@ nice -n 9 pnpm typecheck
 nice -n 8 pnpm typecheck
 ```
 
+## r5 stored shadow ancestry and bound audit fixtures
+
+The completed 5ef7a5b87 run recorded seven final-check practice-owner failures, six shadow coalescing failures and four audit chain failures. The practice-owner fixture now uses its existing authenticated synthetic session for tenant-scoped fixture changes. That cleared five failures and isolated the two imported-job cases refused by `final_check_job_terms` with `DISCLOSURE_TERMS_NOT_ACCEPTED`. The checked worker scope now permits the latest terms routine to follow the stored import and successful adoption receipt to the accepting practice firm for the exact scoped job. Only the migration owner can open this temporary, read-only policy path. The existing practice-firm and receipt predicates remain enforced. The practice-owner suite passed 24/24 and the ordinary final-check suite passed 35/35.
+
+The coalescing fixture now uses the required synthetic database and opens the protected scope for its existing jobs with the isolated shadow login. For the wrong-tenant case it establishes tenant B's scope, verifies that call completed, then checks the exact refusal for tenant A and the rollback of both writes. All six coalescing failures cleared. Both populated upgrades, the coalescing suite, the tenant policy tests and the proof loader passed 95/95. The 0762 proof records 1,453 LP0 objects, 815 populated upgrade objects and 678 policy changes.
+
+The audit chain fixture seeds its synthetic account and membership administratively and uses a verified tenant context for the runtime cases. All four failures cleared in the 5/5 run. Both commercial guards recorded zero diagnostics on the preceding snapshot and the recorded guard test run passed 253/253.
+
+```sh
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/final-check-practice-owner.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-final-check-owner-bound-results.json
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/final-check-practice-owner.integration.test.ts test/migfix-7.integration.test.ts test/real-fc-ordinary-words.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-shadow-ancestry-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/migfix-7.integration.test.ts test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/migration-proof-loader.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-shadow-ancestry-upgrades-results.json
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/audit.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-audit-chain-results.json
+nice -n 10 node --test --test-concurrency=1 tools/commercial-integrity-{current-source-guard,boundary}.test.mjs
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

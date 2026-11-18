@@ -2578,6 +2578,7 @@ CREATE UNLOGGED TABLE control_plane.lp11_shadow_scope (
  login name NOT NULL,
  practice_digest text,
  checked boolean NOT NULL DEFAULT false,
+ terms_lookup boolean NOT NULL DEFAULT false,
  expires_at timestamptz NOT NULL
 );
 ALTER TABLE control_plane.lp11_shadow_scope OWNER TO jobguard_session_lookup;
@@ -2639,13 +2640,51 @@ CREATE FUNCTION app.lp11_shadow_job_tenant(j uuid,d text,section text) RETURNS u
   AND s.login=session_user AND s.checked AND s.expires_at>clock_timestamp()
   AND CASE section WHEN 'job' THEN s.job_id=j
     WHEN 'terms' THEN d IS NULL OR s.practice_digest=d
+    WHEN 'terms_lookup' THEN s.terms_lookup
     WHEN 'audit' THEN j IS NULL OR s.job_id=j
     ELSE false END
 $$;
 ALTER FUNCTION app.lp11_shadow_job_tenant(uuid,text,text) OWNER TO jobguard_session_lookup;
 REVOKE ALL ON FUNCTION app.lp11_shadow_job_tenant(uuid,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.lp11_shadow_job_tenant(uuid,text,text) TO jobguard_shadow,jobguard_migration,jobguard_runtime,jobguard_audit_writer;
+
+CREATE FUNCTION app.lp11_shadow_terms_lookup(t uuid,j uuid,enabled boolean) RETURNS boolean
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ UPDATE control_plane.lp11_shadow_scope s SET terms_lookup=enabled
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND (s.tenant_id,s.job_id,s.login)=(t,j,session_user)
+  AND s.checked AND s.expires_at>clock_timestamp() AND s.terms_lookup IS DISTINCT FROM enabled;
+ RETURN FOUND;
+END $$;
+ALTER FUNCTION app.lp11_shadow_terms_lookup(uuid,uuid,boolean) OWNER TO jobguard_session_lookup;
+REVOKE ALL ON FUNCTION app.lp11_shadow_terms_lookup(uuid,uuid,boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_shadow_terms_lookup(uuid,uuid,boolean) TO jobguard_migration;
 REVOKE CREATE ON SCHEMA app,control_plane FROM jobguard_session_lookup;
+
+-- Latest definition: 0735_per_firm_final_check_terms.sql. A checked worker may
+-- evaluate the existing ancestry for its exact job. No other worker operation
+-- gains ancestor or firm acceptance visibility from this temporary scope.
+CREATE OR REPLACE FUNCTION app.final_check_job_terms(t uuid,j uuid,v text,cutoff timestamptz DEFAULT 'infinity') RETURNS boolean
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE d text; accepted boolean; scoped boolean;
+BEGIN
+ IF app.lp11_shadow_job_tenant(j,NULL,'job')=t THEN
+  scoped:=app.lp11_shadow_terms_lookup(t,j,true);
+ END IF;
+ d:=app.final_check_job_scope(t,j);
+ accepted:=EXISTS(SELECT 1 FROM app.final_check_terms_acceptance a WHERE a.tenant_id=t AND a.terms_version=v
+  AND a.practice_session_digest IS NOT DISTINCT FROM d AND a.accepted_at<=cutoff)
+ -- A job locked before this migration keeps the unattributed acceptance it was locked
+ -- under. A new lock cannot use it: the lock row is not yet visible to its own checks.
+  OR EXISTS(SELECT 1 FROM app.final_account_lock l JOIN app.final_check_terms_acceptance a
+   ON a.tenant_id=l.tenant_id AND a.terms_version=v AND a.practice_session_digest IS NULL
+    AND a.accepted_at<=l.locked_at AND a.accepted_at<=cutoff
+   WHERE l.tenant_id=t AND l.job_id=j);
+ IF scoped THEN PERFORM app.lp11_shadow_terms_lookup(t,j,false); END IF;
+ RETURN accepted;
+-- An ambiguous or missing firm is never accepted; callers keep their own refusal codes.
+EXCEPTION WHEN insufficient_privilege THEN RETURN false;
+END $$;
 
 -- Shadow support and disclosure bind the exact stored synthetic job before reading.
 CREATE OR REPLACE FUNCTION app.record_shadow_disclosure(p_tenant uuid,p_job uuid,p_signal uuid,p_event uuid,p_route text) RETURNS uuid
@@ -4011,6 +4050,16 @@ CREATE POLICY lp11_trial_activation_read ON app.trial_admission FOR SELECT TO jo
  USING (tenant_id=app.lp11_trial_activation_tenant(job_id,activation_id));
 CREATE POLICY lp11_deferred_permit_read ON app.lp_job_insert_permit FOR SELECT TO jobguard_migration
  USING (tenant_id=app.lp11_deferred_permit_tenant(job_id,backend_pid,transaction_id));
+
+CREATE POLICY lp11_shadow_terms_lookup ON app.job FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_shadow_job_tenant(NULL,NULL,'terms_lookup'));
+CREATE POLICY lp11_shadow_terms_lookup ON app.job_import_v3 FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_shadow_job_tenant(NULL,NULL,'terms_lookup'));
+CREATE POLICY lp11_shadow_terms_lookup ON app.command_receipt FOR SELECT TO jobguard_migration
+ USING (command_type='job.adopt_in_flight' AND status='succeeded'
+  AND tenant_id=app.lp11_shadow_job_tenant(NULL,NULL,'terms_lookup'));
+CREATE POLICY lp11_shadow_terms_lookup ON app.final_check_terms_acceptance FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_shadow_job_tenant(NULL,NULL,'terms_lookup'));
 
 -- WORM uses the existing isolated executor and operator logins. A command is
 -- visible only in the transaction that checks its persisted synthetic identity.

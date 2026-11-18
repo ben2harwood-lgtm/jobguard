@@ -115,6 +115,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     "infrastructure.discover_readiness_plans()", "app.serialize_final_check_evidence()",
     "identity.customer_practice_pay_now(uuid,uuid,uuid,text)",
     "app.mon3_require_registered_admission()", "app.lp_job_permit_consumed()",
+    "app.final_check_job_terms(uuid,uuid,text,timestamp with time zone)",
     "app.worm_audit(app.worm_command,text,text)", "app.worm_claim(uuid)", "app.worm_finish(uuid,integer,text,jsonb)",
     "worm_control.worm_recovery_target(uuid)", "worm_control.worm_reconcile(uuid,integer,boolean)",
     "worm_control.worm_operator_alerts()",

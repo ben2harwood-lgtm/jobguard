@@ -1749,10 +1749,12 @@
         "otherExecute": [
           "jobguard_session_lookup"
         ],
-        "definitionSha256": "65d45ffb67783a4c2f8f56882741d38f1b800239fb3d8167fafcce2388429727",
+        "definitionSha256": "c61ba00a68a140e878fa8101b0d9a260038a38ff01f6d5ecc163f23bd9a59592",
         "staticWrites": [],
         "staticCalls": [
-          "app.final_check_job_scope"
+          "app.final_check_job_scope",
+          "app.lp11_shadow_job_tenant",
+          "app.lp11_shadow_terms_lookup"
         ]
       }
     },
@@ -2894,7 +2896,7 @@
           "jobguard_migration",
           "jobguard_shadow"
         ],
-        "definitionSha256": "dea86510d3c3bb2fec76f528f4445de63f074bc268b6dba7941fa06f80bc569b",
+        "definitionSha256": "0c3c1e44a55ea7f830d585d5f85d8dbef0f0fdb960e43368dc69b443c3f78058",
         "staticWrites": [],
         "staticCalls": []
       }
@@ -12069,6 +12071,65 @@
         "staticCalls": [
           "app.lp11_worm_tenant"
         ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.command_receipt|lp11_shadow_terms_lookup|PERMISSIVE|SELECT|jobguard_migration|bddeb8bc74747c8a"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.final_check_terms_acceptance|lp11_shadow_terms_lookup|PERMISSIVE|SELECT|jobguard_migration|96f666d405d94518"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job_import_v3|lp11_shadow_terms_lookup|PERMISSIVE|SELECT|jobguard_migration|96f666d405d94518"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job|lp11_shadow_terms_lookup|PERMISSIVE|SELECT|jobguard_migration|96f666d405d94518"
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_shadow_terms_lookup(uuid,uuid,boolean)|jobguard_migration|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_shadow_terms_lookup(uuid,uuid,boolean)|jobguard_session_lookup",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_shadow_terms_lookup(uuid,uuid,boolean)",
+        "owner": "jobguard_session_lookup",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration"
+        ],
+        "definitionSha256": "916fb2458426846d7752f64a6184b839ca53bc06f9c8b3d99acae57d715818ca",
+        "staticWrites": [
+          "control_plane.lp11_shadow_scope"
+        ],
+        "staticCalls": []
       }
     }
   ],
@@ -28999,6 +29060,77 @@
         "args": "t uuid, cid uuid, purpose text",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_worm_executor=X/jobguard_migration,jobguard_worm_operator=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "command_receipt",
+        "policyname": "lp11_shadow_terms_lookup",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(((command_type)::text = 'job.adopt_in_flight'::text) AND ((status)::text = 'succeeded'::text) AND (tenant_id = app.lp11_shadow_job_tenant(NULL::uuid, NULL::text, 'terms_lookup'::text)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "final_check_terms_acceptance",
+        "policyname": "lp11_shadow_terms_lookup",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_shadow_job_tenant(NULL::uuid, NULL::text, 'terms_lookup'::text))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job",
+        "policyname": "lp11_shadow_terms_lookup",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_shadow_job_tenant(NULL::uuid, NULL::text, 'terms_lookup'::text))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job_import_v3",
+        "policyname": "lp11_shadow_terms_lookup",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_shadow_job_tenant(NULL::uuid, NULL::text, 'terms_lookup'::text))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_shadow_terms_lookup",
+        "args": "t uuid, j uuid, enabled boolean",
+        "proowner": "jobguard_session_lookup",
+        "proacl": "{jobguard_session_lookup=X/jobguard_session_lookup,jobguard_migration=X/jobguard_session_lookup}",
         "prosecdef": true,
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
