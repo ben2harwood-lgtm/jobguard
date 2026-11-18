@@ -215,6 +215,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["guard_final_lock_disclosure_terms", "", "0735_per_firm_final_check_terms.sql"],
     ["surface_shadow_signal_early", "p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb", "0735_per_firm_final_check_terms.sql"],
     ["connector_promotion", "p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb", "0754_connector_promotion_list_closed_job.sql"],
+    ["issue_practice_customer_invoice", "p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date", "0950_practice_firm_name_invoice.sql"],
+    ["issue_lock_bound_customer_invoice", "p_tenant uuid, p_job uuid, p_revision uuid, p_actor uuid, p_command uuid, p_kind text, p_recipient text, p_issued_on date, p_source_hash text", "0950_practice_firm_name_invoice.sql"],
   ].map(async ([name, args, migration]) => {
     const sql = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (name === "decision_check_command") expect(sql).toContain("rv.result->>'sourceJobId'=source.id::text");
@@ -393,7 +395,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.source).toBe(sql.split("FUNCTION app.contractor_admin_command(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
       continue;
     }
-    const batchReplacement = batchBodies.find(row => prior.nspname === "app" && prior.proname === row.name && prior.args === row.args);
+    const batchReplacement = batchBodies.findLast(row => prior.nspname === "app" && prior.proname === row.name && prior.args === row.args);
     if (batchReplacement) {
       expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
       expect(current?.definition?.split("$function$")[1]).toEqual(batchReplacement.body);
