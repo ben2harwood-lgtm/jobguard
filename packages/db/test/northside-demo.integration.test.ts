@@ -17,7 +17,7 @@ afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
 let seededPromise: Promise<{ session: Awaited<ReturnType<typeof startSession>>; seed: NorthsideSeed }> | undefined;
 function seeded() {
   return seededPromise ??= (async () => {
-    const session = await startSession(c);
+    const session = await startSession(c, false, false);
     const started = Date.now();
     const seed: NorthsideSeed = await seedNorthsideDemo(c.runtime, session.p, session.context);
     console.log("seed ms", Date.now() - started);

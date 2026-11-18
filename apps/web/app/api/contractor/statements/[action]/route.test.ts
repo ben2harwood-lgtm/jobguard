@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { EnterpriseFeeError } from "@jobguard/core";
-const mocks = vi.hoisted(() => ({ context: vi.fn(), pool: vi.fn(), read: vi.fn(), derive: vi.fn(), prepare: vi.fn(), approve: vi.fn(), post: vi.fn(), dispute: vi.fn(), invoice: vi.fn(), postings: vi.fn(), derivation: vi.fn(), token: "00000000-0000-4000-8000-000000000001" as string | undefined }));
+const mocks = vi.hoisted(() => ({ context: vi.fn(), pool: vi.fn(), read: vi.fn(), derive: vi.fn(), deriveNorthside: vi.fn(), prepare: vi.fn(), approve: vi.fn(), post: vi.fn(), dispute: vi.fn(), invoice: vi.fn(), postings: vi.fn(), derivation: vi.fn(), token: "00000000-0000-4000-8000-000000000001" as string | undefined }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => mocks.token ? { value: mocks.token } : undefined }) }));
 vi.mock("../../../../lib/synthetic-server", () => ({ syntheticPool: mocks.pool }));
 vi.mock("@jobguard/db", async importOriginal => ({ enterpriseFeeApproveStatementV1: (await importOriginal<typeof import("@jobguard/db")>()).enterpriseFeeApproveStatementV1, contractorSessionContext: mocks.context, EnterpriseFeeRepository: class {
-  readStatement = mocks.read; readPostings = mocks.postings; read = mocks.derivation; derive = mocks.derive; prepareStatement = mocks.prepare;
+  readStatement = mocks.read; readPostings = mocks.postings; read = mocks.derivation; derive = mocks.derive; deriveNorthside = mocks.deriveNorthside; prepareStatement = mocks.prepare;
   approveStatement = mocks.approve; postStatement = mocks.post; disputeStatement = mocks.dispute; simulateInvoice = mocks.invoice;
 } }));
 import { POST } from "./route";
@@ -88,4 +88,13 @@ it("simulates only with cookie-scoped authority and the server environment", asy
     expect((await call("simulate-invoice", request(command))).status).toBe(409);
   }
   expect(mocks.invoice).not.toHaveBeenCalled(); expect(mocks.pool).not.toHaveBeenCalled();
+});
+
+it("derives Northside from the cookie and month without accepting an agreement selection", async () => {
+  const command = { version: "northside-fee-derive.v1", commandId: id, period: "2026-11" };
+  mocks.deriveNorthside.mockResolvedValue({ derivationId: id, replayed: false });
+  expect((await call("derive-northside", request(command))).status).toBe(200);
+  expect(mocks.deriveNorthside).toHaveBeenCalledWith({ tenantId: "from-cookie" }, id, command);
+  mocks.deriveNorthside.mockRejectedValueOnce(new EnterpriseFeeError("EXTRA_FORBIDDEN"));
+  expect((await call("derive-northside", request(command))).status).toBe(403);
 });

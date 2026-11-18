@@ -10,3 +10,11 @@ export function fakeAuditAppend(serialized: string, tenantId: string): AuditEven
       references: { ...input.payload.references, auditTrust: "lower_trust" } },
   }));
 }
+
+/** Exact capability probe only; callers must still reject unknown SQL. */
+export function fakeOutboxAuditProbe(sql: string, installed = false) {
+  if (sql === "SELECT to_regprocedure('app.lp6e_append_outbox_audit(jsonb)') installed") {
+    return { rows: [{ installed: installed ? "app.lp6e_append_outbox_audit(jsonb)" : null }] };
+  }
+  return undefined;
+}

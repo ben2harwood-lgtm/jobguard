@@ -32,17 +32,17 @@ vi.mock("./job-final-account", async original => {
 });
 afterEach(() => vi.unstubAllGlobals());
 const jobId = "11111111-1111-4111-8111-111111111112";
-function workspace(status: CaptureWorkspaceResponse["status"], fragment = "", initialPricing = false) {
+function workspace(status: CaptureWorkspaceResponse["status"], fragment = "", initialPricing = false, savedJobId = jobId) {
  vi.stubGlobal("React", React);
  const capture: CaptureWorkspaceResponse = {
-  version: 1, environment: "synthetic_demo", captureId: jobId, jobId, proposalId: jobId, reviewId: jobId,
+  version: 1, environment: "synthetic_demo", captureId: savedJobId, jobId: savedJobId, proposalId: savedJobId, reviewId: savedJobId,
   status, source: { text: "Fictional room", version: 1, kind: "text", acquisition: null, audioByteLength: 0 },
   proposal: { title: "Fictional decorating job", lines: [], questions: [] }, review: null,
  };
  state.live = ["live", "invoiced", "paid"].includes(status);
  state.effects = [];state.setters=[];
  state.values = [null, capture, null, false, fragment];
- return WorkspaceShell({ jobId, initialPricing });
+ return WorkspaceShell({ jobId: savedJobId, initialPricing });
 }
 function ids(html: string, attribute: string) {
  return [...new Set([...html.matchAll(new RegExp(`(?:^|\\s)${attribute}="([^"]+)"`, "gu"))].map(match => match[1]))].sort();
@@ -124,18 +124,27 @@ it.each(["#quote", "#job-diary", "#customer-messages", "#variations-title", "#fi
  expect(html).toContain(`data-job-id="${jobId}"`);
 });
 
-it("keeps the review key stable when a command advances a plain job URL", () => {
- function reviewKey(status: CaptureWorkspaceResponse["status"]) {
-  const tree = workspace(status);
+it.each(["", "#quote", "#work-proof", "#final-account-title", "#job-diary"])("keeps the review mounted across status snapshots at %s", fragment => {
+ function review(status: CaptureWorkspaceResponse["status"]) {
+  const tree = workspace(status, fragment);
   function find(node: React.ReactNode): React.ReactElement | undefined {
    if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return;
    if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node;
    return React.Children.toArray(node.props.children).map(find).find(Boolean);
   }
-  return find(tree)?.key;
+  return find(tree) as React.ReactElement<{ initialPricing: boolean }>;
  }
- expect(reviewKey("quoting")).toBeTruthy();
- expect(reviewKey("live")).toBe(reviewKey("quoting"));
+ // A draft-to-quoting read can arrive after the user has opened pricing locally.
+ // Changing the initial view must not reset that local state or the editor's fields.
+ const key = review("draft").key;
+ expect(key).toBeTruthy();
+ for (const status of ["draft", "quoting", "accepted", "live", "invoiced", "paid"] as const) {
+  expect(review(status).key).toBe(key);
+ }
+ if (fragment === "#quote") {
+  expect(review("draft").props.initialPricing).toBe(false);
+  expect(review("quoting").props.initialPricing).toBe(true);
+ }
 });
 
 
@@ -169,18 +178,13 @@ it("does not put live job controls inside the quote fieldset or sidebar", () => 
  expect(activationFound).toBe(true);
 });
 
-it("handles fragment navigation with main’s loading/remount path", () => {
+it("reloads saved projections on real hash navigation", () => {
  workspace("quoting");
  const listeners = new Map<string, () => void>();
- const fetch = vi.fn(()=>new Promise(()=>{}));
- vi.stubGlobal("fetch", fetch);
- vi.stubGlobal("window", {
-  location: {hash:"#quote"},
-  addEventListener: (name:string, fn:()=>void) => listeners.set(name, fn),
-  removeEventListener: vi.fn(),
- });
- // The second shell effect installs navigation; the initial-load effect is separate.
- const cleanup = state.effects[1]!() as () => void;
+ vi.stubGlobal("fetch", vi.fn(async()=>({ok:false,status:403})));
+ vi.stubGlobal("window", { location:{hash:"#final-account-title"},
+  addEventListener:(name:string,fn:()=>void)=>listeners.set(name,fn), removeEventListener:vi.fn() });
+ const cleanup=state.effects[1]!() as ()=>void;
  listeners.get("hashchange")!();
  expect(fetch).toHaveBeenCalledWith(`/api/jobs/${jobId}/proposal`, expect.objectContaining({cache:"no-store"}));
  expect(state.setters[3]).toHaveBeenCalledWith(true);
@@ -188,14 +192,14 @@ it("handles fragment navigation with main’s loading/remount path", () => {
  expect(state.setters[1]).toHaveBeenCalledWith(null);
  cleanup();
 });
-it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"])("uses main’s scope/editor key for %s navigation", fragment => {
+it.each(["#scope", "#quote", "#job-diary", "#work-proof", "#final-account-title"])("keeps the same job editor identity for %s navigation", fragment => {
  function review(node:React.ReactNode):React.ReactElement | undefined {
   if (Array.isArray(node)) return node.map(review).find(Boolean);
   if (!React.isValidElement<{children?:React.ReactNode}>(node)) return;
   if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node;
   return review(node.props.children);
  }
- expect(review(workspace("live",fragment))!.key).toBe(`${jobId}:${["#scope", "#job-diary"].includes(fragment) ? "scope" : "editor"}`);
+ expect(review(workspace("live",fragment))!.key).toBe(jobId);
 });
 
 
@@ -205,6 +209,11 @@ it.each(["", "#scope", "#quote", "#final-account-title", "#recovery-cases"])("us
  expect(html.match(/data-testid="final-account-lock"/gu) ?? []).toHaveLength(pricing ? 1 : 0);
  expect(html.match(/data-testid="final-check-reveal"/gu)).toHaveLength(1);
  if (pricing) expect(html.indexOf('id="final-account-title"')).toBeLessThan(html.indexOf('id="practice-tools"'));
+ // Once pricing has mounted the account, ordinary navigation keeps the same
+ // review key and the account tree. The browser test checks the live DOM identity.
+ const mounted = renderToStaticMarkup(workspace("live", fragment, true));
+ expect(mounted.match(/data-testid="final-account-lock"/gu)).toHaveLength(1);
+ expect(mounted.match(/data-testid="final-check-reveal"/gu)).toHaveLength(1);
 });
 
 
@@ -230,4 +239,141 @@ it.each(["accepted", "live", "invoiced", "paid"] as const)("renders one proof st
  const proof = html.indexOf('id="work-proof"');
  const editor = html.indexOf('class="quote-editor"');
  expect(proof < editor).toBe(status === "accepted");
+});
+
+it("isolates editor identity when navigating to a different saved job", () => {
+ function keys(node: React.ReactNode): string[] {
+  if (Array.isArray(node)) return node.flatMap(keys);
+  if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return [];
+  if (typeof node.type === "function" && node.type.name === "ReviewProposal") return [String(node.key)];
+  return keys(node.props.children);
+ }
+ expect(keys(workspace("quoting", "#quote"))).toEqual([jobId]);
+ const otherJob = "22222222-2222-4222-8222-222222222222";
+ expect(keys(workspace("quoting", "#quote", false, otherJob))).toEqual([otherJob]);
+});
+
+it("a committed snapshot supersedes a pending section refresh even if fetch ignores abort", async () => {
+ let complete!: (response: unknown) => void;
+ const fetch = vi.fn(() => new Promise(resolve => { complete = resolve; }));
+ vi.stubGlobal("fetch", fetch);
+ const listeners = new Map<string, () => void>();
+ vi.stubGlobal("window", { location: { hash: "#quote" }, addEventListener: (name: string, fn: () => void) => listeners.set(name, fn), removeEventListener: vi.fn() });
+ function review(node: React.ReactNode): React.ReactElement<{ result: CaptureWorkspaceResponse; onSnapshot: (snapshot: CaptureWorkspaceResponse) => void }> | undefined {
+  if (Array.isArray(node)) return node.map(review).find(Boolean);
+  if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return;
+  if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node as ReturnType<typeof review>;
+  return review(node.props.children);
+ }
+ const editor = review(workspace("quoting", "#quote"))!;
+ const cleanup = state.effects[1]!() as () => void;
+ listeners.get("hashchange")!();
+ const committed = { ...editor.props.result, status: "accepted" as const };
+ editor.props.onSnapshot(committed);
+ expect((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].signal!.aborted).toBe(true);
+ complete({ ok: true, json: async () => editor.props.result });
+ await new Promise<void>(resolve => setImmediate(resolve));
+ expect(state.setters[1]!.mock.calls).toEqual([[null], [committed]]);
+ cleanup();
+});
+it("a denied section refresh fails closed without disguising it as an absent capture", async () => {
+ const fetch = vi.fn(async () => ({ ok: false, status: 403 }));
+ vi.stubGlobal("fetch", fetch);
+ let navigate!: () => void;
+ vi.stubGlobal("window", { location: { hash: "#quote" }, addEventListener: (_: string, fn: () => void) => { navigate = fn; }, removeEventListener: vi.fn() });
+ workspace("quoting");
+ const cleanup = state.effects[1]!() as () => void;
+ navigate(); await new Promise<void>(resolve => setImmediate(resolve));
+ expect(fetch).toHaveBeenCalledTimes(1);
+ expect(state.setters[2]).toHaveBeenCalledWith("forbidden");
+ cleanup();
+});
+
+it("hides the old job immediately when the job prop changes before its load effect", () => {
+ vi.stubGlobal("React", React);
+ state.effects = []; state.setters = [];
+ state.values = [null, { jobId, status: "quoting" }, null, false, "#quote"];
+ const html = renderToStaticMarkup(WorkspaceShell({ jobId: "22222222-2222-4222-8222-222222222222" }));
+ expect(html).toContain("Loading your job…");
+ expect(html).not.toContain('data-testid="workspace-job-id"');
+});
+
+
+it.each(["", "#scope", "#quote", "#work-proof"])("passes explicit section navigation %s to the nested quote editor", fragment => {
+ function review(node: React.ReactNode): React.ReactElement<{ sectionNavigationKey: string }> | undefined {
+  if (Array.isArray(node)) return node.map(review).find(Boolean);
+  if (!React.isValidElement<{ children?: React.ReactNode }>(node)) return;
+  if (typeof node.type === "function" && node.type.name === "ReviewProposal") return node as ReturnType<typeof review>;
+  return review(node.props.children);
+ }
+ expect(review(workspace("accepted", fragment))!.props.sectionNavigationKey).toBe(fragment);
+});
+
+it("keeps section clicks and Continue mounted while ordinary URL navigation refreshes", () => {
+ const tree=workspace("live");
+ function find(node:React.ReactNode, predicate:(element:React.ReactElement<Record<string,unknown>>)=>boolean):React.ReactElement<Record<string,unknown>>|undefined {
+  if(Array.isArray(node))return node.map(child=>find(child,predicate)).find(Boolean);
+  if(!React.isValidElement<Record<string,unknown>>(node))return;
+  if(predicate(node))return node;
+  return find(node.props.children as React.ReactNode,predicate);
+ }
+ vi.stubGlobal("fetch",vi.fn());vi.stubGlobal("history",{replaceState:vi.fn()});
+ vi.stubGlobal("location",{pathname:`/jobs/${jobId}`,search:""});
+ const link=find(tree,node=>node.type==="a"&&node.props.href==="#final-account-title")!;
+ const preventDefault=vi.fn();
+ (link.props.onClick as (event:{preventDefault:()=>void})=>void)({preventDefault});
+ expect(preventDefault).toHaveBeenCalled();
+ const journey=find(tree,node=>typeof node.type==="function"&&node.type.name==="PracticeJourney")!;
+ (journey.props.onNavigate as (target:string)=>void)("#quote");
+ expect(state.setters[4]).toHaveBeenCalledWith("#final-account-title");
+ expect(state.setters[4]).toHaveBeenCalledWith("#quote");
+ expect(history.replaceState).toHaveBeenLastCalledWith(null,"",`/jobs/${jobId}#quote`);
+ expect(fetch).not.toHaveBeenCalled();
+ expect(state.setters[1]).not.toHaveBeenCalled();expect(state.setters[3]).not.toHaveBeenCalled();
+});
+
+it("keeps Continue focus on the current account control instead of its sibling heading", () => {
+ const action = {};
+ const panel = { contains: (node: unknown) => node === action };
+ const heading = { matches: () => true, closest: () => panel, focus: vi.fn(), scrollIntoView: vi.fn() };
+ const root = { contains: () => true, querySelector: vi.fn(() => heading) };
+ vi.stubGlobal("document", { activeElement: action, body: {}, getElementById: () => root });
+ workspace("live", "#final-account-title"); state.effects[3]!();
+ expect(heading.focus).not.toHaveBeenCalled();
+ expect(heading.scrollIntoView).not.toHaveBeenCalled();
+});
+
+it("does not steal recovery action focus when its capture revalidates", () => {
+ const root={querySelector:vi.fn()};
+ vi.stubGlobal("document",{getElementById:()=>root});
+ workspace("live","#recovery-cases");state.effects[3]!();
+ expect(root.querySelector).not.toHaveBeenCalled();
+});
+
+it("scrolls the focused Start control into view rather than focusing the quote anchor", () => {
+ const action={scrollIntoView:vi.fn()};
+ const target={contains:(node:unknown)=>node===action,focus:vi.fn(),scrollIntoView:vi.fn()};
+ const root={contains:()=>true,querySelector:()=>target};
+ vi.stubGlobal("document",{activeElement:action,body:{},getElementById:()=>root});
+ workspace("accepted","#quote");state.effects[3]!();
+ expect(action.scrollIntoView).toHaveBeenCalledWith({block:"center"});
+ expect(target.focus).not.toHaveBeenCalled();
+ expect(target.scrollIntoView).not.toHaveBeenCalled();
+});
+
+it("reveals the region before focusing and leaves the redirected Start control as the last scroll", () => {
+ const events:string[]=[];
+ const action={scrollIntoView:vi.fn(({block}:{block:string})=>events.push(`control:${block}`))};
+ const doc:{activeElement:unknown;body:object;getElementById?:()=>unknown}={activeElement:{},body:{}};
+ const target={contains:(node:unknown)=>node===action,
+  focus:vi.fn(()=>{events.push("focus");doc.activeElement=action;action.scrollIntoView({block:"center"});}),
+  scrollIntoView:vi.fn(({block}:{block:string})=>events.push(`region:${block}`))};
+ const root={contains:()=>true,querySelector:()=>target};
+ doc.getElementById=()=>root;vi.stubGlobal("document",doc);
+ workspace("accepted","#quote");state.effects[3]!();
+ expect(events[0]).toBe("region:start");
+ expect(events.at(-1)).toBe("control:center");
+ expect(doc.activeElement).toBe(action);
+ expect(target.focus).toHaveBeenCalledWith({preventScroll:true});
+ expect(target.scrollIntoView).toHaveBeenCalledExactlyOnceWith({block:"start"});
 });

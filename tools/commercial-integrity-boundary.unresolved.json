@@ -9,9 +9,16 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/demo-seed.ts",
-    "line": 102,
-    "fingerprint": "a6028c98b4d93ba41ec6bea63ccf6ec68bd33ebbb7d40e9af6cfa28866057a9b",
-    "reason": "Quote delivery execute receives context/job/document arguments; terminal execute is conservatively covered and unresolved."
+    "line": 108,
+    "fingerprint": "88a68d0e17be63addc2351d46796f8a72dfdc828dbb4595b832dd839de93aae5",
+    "reason": "The synthetic-demo tenant fixture calls QuoteDeliveryRepository.execute with a checked context, job and document for a simulated delivery. The repository uses the fake_quote_delivery adapter and the checked outbox, with no advisory data reads."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/outbox.ts",
+    "line": 35,
+    "fingerprint": "61b190ba5ae9f0ef247899985aea9adbb07f3017ed64d28657359cb3b4691afa",
+    "reason": "ActionExecutor delegates a tenant-visible action ID to WorkerActionExecutor on a separate worker login. The worker calls app.claim_worker_action before invoking the registered adapter and uses the claim token with app.complete_worker_action. Neither path reads advisory data."
   },
   {
     "code": "UNRESOLVED_COVERED_EDGE",
@@ -30,15 +37,15 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/quote-delivery-repository.ts",
-    "line": 77,
-    "fingerprint": "546f1f9667187fc6a51fe5f14c5f87240efa8a07c86df3c55e4d7af1aadbeb0d",
+    "line": 86,
+    "fingerprint": "ae7aca791ee76f9558c531fff8705b2fd9cbc88abbcd1e4f2ab331af72a9ca36",
     "reason": "Business ActionExecutor.execute(context,id) is a terminal execute call; its first argument is not static SQL."
   },
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/quote-delivery-repository.ts",
-    "line": 78,
-    "fingerprint": "d6f66e967bc2537690cec1037e707d50a5e1432142bf8afe72b16b08d04e6972",
+    "line": 87,
+    "fingerprint": "3da1ca4d0927f19050352d9ff4d924cc3d34554e488633e46635d903f2e8f5b3",
     "reason": "Second business ActionExecutor.execute(context,id) call has the same unresolved syntactic boundary."
   },
   {
@@ -65,8 +72,8 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/extra-approval-chain-repository.ts",
-    "line": 94,
-    "fingerprint": "fe14f29bc57a8616ba1826abe5bc2a03856c88ffea7c8f8a67fbc459846f0732",
+    "line": 96,
+    "fingerprint": "7bd6219701ae44bccf96bdaabb30e3cc04247ad805ca4076b878fb72010abe98",
     "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results. (LP-6d r11, 14 Nov 2026: escalateOverdue now calls app.lp6d_escalate_overdue_worker(); helper unchanged)"
   }
 ]

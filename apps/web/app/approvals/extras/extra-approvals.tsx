@@ -63,7 +63,7 @@ export function ExtraApprovals() {
       const link = links[x.extraId];
       const card = pick[x.extraId] ?? { code: rates[x.jobId]?.[0]?.code ?? "", quantity: "1" };
       const rate = rates[x.jobId]?.find(r => r.code === card.code), qty = Number(card.quantity);
-      const total = rate && Number.isInteger(qty) && qty > 0 ? rate.ratePence * qty : null;
+      const total = rate && Number.isInteger(qty) && qty >= 1 && qty <= 1000 ? rate.ratePence * qty : null;
       const status = x.outcome ? words[x.outcome] ?? x.outcome : x.state === "logged" && x.quotedPence !== null ? "Priced - ready to submit" : words[x.state] ?? x.state;
       return <section key={x.extraId} id={`extra-${x.extraId}`} tabIndex={-1} className={styles.card} data-testid="extra-card" aria-label={`Extra on ${x.orderReference}`}>
         <h2>{x.orderReference}: {x.description}</h2>
@@ -74,7 +74,7 @@ export function ExtraApprovals() {
           <div className={styles.row}><label htmlFor={`rate-${x.extraId}`}>Rate card item</label><select id={`rate-${x.extraId}`} value={card.code} onChange={e => setPick({ ...pick, [x.extraId]: { ...card, code: e.target.value } })}>{rates[x.jobId]!.map(r => <option key={r.code} value={r.code}>{r.code} - {r.description} ({pounds(r.ratePence)} per {r.unit})</option>)}</select></div>
           <div className={styles.row}><label htmlFor={`qty-${x.extraId}`}>Quantity measured</label><input id={`qty-${x.extraId}`} inputMode="numeric" value={card.quantity} onChange={e => setPick({ ...pick, [x.extraId]: { ...card, quantity: e.target.value } })} /></div>
           <p>Demo setting, not a real rule. Fictional rate card price: <strong data-testid="price-preview">{total === null ? "-" : pounds(total)}</strong></p>
-          <div className={styles.actions}><button disabled={busy || total === null} onClick={() => void run(x, "price", { sorCode: card.code, quantity: qty })}>Price this extra</button></div></div>}
+          <div className={styles.actions}><button disabled={busy || total === null} onClick={() => { if (!busy && total !== null) void run(x, "price", { sorCode: card.code, quantity: qty }); }}>Price this extra</button></div></div>}
         {role === "supervisor" && x.state === "logged" && x.quotedPence !== null && x.requestId === null && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "submit")}>Submit for approval</button></div>}
         {queue.some(q => q.request_id === x.requestId && q.overdue) && <p role="status">Mandatory approval overdue. {queue.some(q => q.request_id === x.requestId && q.escalated) ? "The named backup is now eligible; original approvers remain eligible." : "Waiting for an eligible approver."}</p>}
         {x.state === "awaiting_approval" && queue.some(q => q.variation_id === x.extraId && q.request_id === x.requestId && q.step_index === x.nextStepIndex) && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "approve")}>Approve as {role.replace("_", " ")}</button></div>}
@@ -89,8 +89,8 @@ export function ExtraApprovals() {
         {role === "surveyor" && ["approved", "rejected"].includes(x.outcome ?? x.state) && rates[x.jobId] && <div>
           <div className={styles.row}><label htmlFor={`revise-rate-${x.extraId}`}>Revised rate card item</label><select id={`revise-rate-${x.extraId}`} value={card.code} onChange={e => setPick({ ...pick, [x.extraId]: { ...card, code: e.target.value } })}>{rates[x.jobId]!.map(r => <option key={r.code} value={r.code}>{r.code} - {r.description} ({pounds(r.ratePence)} per {r.unit})</option>)}</select></div>
           <div className={styles.row}><label htmlFor={`revise-qty-${x.extraId}`}>Revised quantity measured</label><input id={`revise-qty-${x.extraId}`} inputMode="numeric" value={card.quantity} onChange={e => setPick({ ...pick, [x.extraId]: { ...card, quantity: e.target.value } })} /></div>
-          <p>The server calculates the revised amount from the rate card.</p>
-          <button disabled={busy} onClick={() => void run(x, "revise", { sorCode: card.code, quantity: qty })}>Revise this extra</button>
+          <p>Revised amount preview: <strong data-testid="revision-price-preview">{total === null ? "-" : pounds(total)}</strong>. The server recomputes this from the rate card.</p>
+          <button disabled={busy || total === null} onClick={() => { if (!busy && total !== null) void run(x, "revise", { sorCode: card.code, quantity: qty }); }}>Revise this extra</button>
         </div>}
         {(role === "surveyor" || role === "commercial_manager") && x.state === "awaiting_approval" && x.nextStepRole === "client_approver" && <div className={styles.actions}><button disabled={busy} onClick={() => void run(x, "send")}>{x.linkIssued ? "Replace client approval request (practice)" : "Approve sending to the client (practice)"}</button></div>}
         {x.linkIssued && x.state === "awaiting_approval" && <p data-testid="link-issued">Local client link prepared (practice - nothing was emailed).</p>}

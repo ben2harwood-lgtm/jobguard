@@ -31,6 +31,7 @@ const EmbeddedPostgres=requireDb("embedded-postgres").default;
 const {withTenant}=await import(sourceFixtureUrl("../../../packages/db/src/tenant-context.ts", import.meta.url).href);
 const {testTenantContext}=await import(sourceFixtureUrl("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
 const {freePort,closeTestPools,installLegacySyntheticPartyFixtures}=await import(sourceFixtureUrl("../../../packages/db/test/pool-test-utils.ts", import.meta.url).href);
+const {closeWorkerFixtureDatabase}=await import(sourceFixtureUrl("../../../packages/db/test/worker-login-fixture.ts", import.meta.url).href);
 const statementsLog:string[]=[];
 const proposalId=randomUUID(),scopeItemId=randomUUID(),baselineScopeId=randomUUID();
 const credential=randomUUID(),session=randomUUID(),jobId=randomUUID(),digest=createHash("sha256").update(session).digest("hex"),fixed="2026-10-01T00:00:00Z";
@@ -463,7 +464,7 @@ it("Test Q: successful mutations, exports, delivery/retry telemetry and every mu
    trace.statements=runtimeStatements(logStart,database);
    expect(trace.statements.length).toBeGreaterThan(0);expect(trace.statements.join("\n")).not.toMatch(/\b(?:shadow_\w+|surface_shadow_signal_early|record_shadow_disclosure)\b/u);
    return trace;
-  }finally{if(next){next.child.kill("SIGTERM");await new Promise<void>(resolve=>next!.child.once("exit",()=>resolve()))}await nest?.close();await closeTestPools(runtime,inspect);uuidMock.mockRestore();syncBuiltinESMExports();expect(crypto.randomUUID).toBe(originalUuid);vi.useRealTimers()}
+  }finally{if(next){next.child.kill("SIGTERM");await new Promise<void>(resolve=>next!.child.once("exit",()=>resolve()))}await nest?.close();await closeWorkerFixtureDatabase(runtime);await closeTestPools(runtime,inspect);uuidMock.mockRestore();syncBuiltinESMExports();expect(crypto.randomUUID).toBe(originalUuid);vi.useRealTimers()}
  }
  try{const zero=await replayPracticeDatabase(databases[0]!,replay),many=await replayPracticeDatabase(databases[1]!,replay);assertIsolation(zero,many)}finally{for(const name of databases)await owner.query(`DROP DATABASE ${name}`)}
 },180000);

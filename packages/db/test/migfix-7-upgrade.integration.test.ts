@@ -75,6 +75,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       expect(current.policies).toHaveLength((row.policies?.length ?? 0) + 1);
       for (const policy of row.policies ?? []) expect(current.policies).toContainEqual(policy);
       expect(current.policies.some((policy: { polname: string }) => policy.polname === (row.relname.startsWith("extra_") ? "lp6_client_binding_read" : "lp6_customer_binding_read"))).toBe(true);
+    } else if (row.nspname === 'app' && row.relname === 'action_attempt') {
+      expect(replayCatalog).toContainEqual({...row,relacl:row.relacl.replace('jobguard_runtime=ar/','jobguard_runtime=r/')});
+    } else if (row.nspname === "app" && row.relname === "sandbox_run_event") {
+      const current = replayCatalog.find(r => r.nspname === row.nspname && r.relname === row.relname)!;
+      expect({ ...current, policies: row.policies }).toEqual(row);
+      expect(current.policies).toHaveLength((row.policies?.length ?? 0) + 1);
+      for (const policy of row.policies ?? []) expect(current.policies).toContainEqual(policy);
+      expect(current.policies.filter((policy: { polname: string; polcmd: string }) =>
+        policy.polname === "worker_recovery_archived_run" && policy.polcmd === "r")).toHaveLength(1);
     } else if (row.nspname === "app" && row.relname === "final_check_terms_acceptance") {
       // 0735 adds exactly one restrictive per-firm read policy; its metadata is in the 0735 proof above.
       const current = replayCatalog.find(r => r.nspname === row.nspname && r.relname === row.relname)!;
@@ -128,6 +137,11 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   // Exact existing replacements only; all their privileges and unrelated definitions remain frozen.
   const fullBodies = new Map<string, string>();
   for (const [identity, migration, overload = 0] of [
+    ["app.lp4_seal_audit(p_events jsonb, p_trust text)", "0758_lp6e_audit_attribution.sql"],
+    ["app.lp5_check_command_completion()", "0758_lp6e_audit_attribution.sql"],
+    ["app.validate_job_proof_receipt(t uuid, cid uuid)", "0758_lp6e_audit_attribution.sql"],
+    ["app.retire_replaced_job_proof_findings(j uuid, c uuid)", "0758_lp6e_audit_attribution.sql"],
+    ["app.retired_job_proof_findings(j uuid)", "0758_lp6e_audit_attribution.sql"],
     // LP-6d LP-10 sink hold: the latest body is the 4th "FUNCTION app.guard_recovery_message_sink(" in 0749 (after the earlier CREATE, ALTER and REVOKE).
     ["app.guard_recovery_message_sink()", "0749_lp6d_remaining_routines.sql", 3],
     // 0741 recreates these exact bodies; never pin their pre-linked predecessors.
@@ -168,7 +182,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.lp5b_contractor_permission(p_type text, p_actor uuid, p_job uuid, p_input jsonb)", "0722_abandoned_visit_authority.sql"],
     ["app.xa_requirement(p_rules jsonb, p_net bigint)", "0637_extra_working_day_wait.sql"],
     ["app.xa_escalate()", "0637_extra_working_day_wait.sql"],
-    ["app.xa_queue(p_member uuid)", "0637_extra_working_day_wait.sql"],
+    ["app.xa_queue(p_member uuid)", "0759_extra_queue_approver_eligibility.sql"],
     ["app.valid_approval_rules(d jsonb)", "0638_extra_rule_wait_schema.sql"],
     ["app.retention_records(t uuid, digest text, j uuid, cid uuid, v jsonb, expected text)", "0646_retention_timer_runtime_rules.sql"],
     ["app.notice_fixture_records(j uuid, n uuid, digest text, operation text, v jsonb)", "0647_notice_live_job_check.sql"],
@@ -186,14 +200,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0665_interim_read_authority.sql"],
     ["app.interim_draft_records(t uuid, digest text, j uuid, operation text, v jsonb)", "0721_interim_draft_rules.sql"],
     ["app.ch5_history_actor(t uuid, j uuid, d text)", "0668_import_company_owner_history.sql"],
-    ["app.accounting_export(t uuid, digest text, operation text, source text, v jsonb)", "0693_accounting_export_credit_invoice_route.sql"],
+    ["app.accounting_export(t uuid, digest text, operation text, source text, v jsonb)", "0751_accounting_export_attempt_reconciliation.sql"],
     ["app.configure_recovery_demo(p_job uuid, p_command uuid, p_scenario character varying)", "0670_recovery_demo_replay_job.sql"],
     ["app.ent4b_fact_guard()", "0673_duplicate_unlink_command_binding.sql"],
     ["app.work_order_commit(actor uuid, payload jsonb)", "0676_work_order_expected_revision.sql"],
     ["app.sync_snapshot_generation(u uuid, r bigint, s bigint, h text, e text)", "0699_sync_checkpoint_bound_reader.sql"],
     ["identity.provision_verified_challenge(challenge_id uuid)", "0703_invitation_issuer_recheck.sql"],
     ["app.ef_inputs(t uuid, ag app.enterprise_agreement_version, p_period text)", "0745_enterprise_fee_rejected_line.sql"],
-    ["app.mon2_command(t uuid, digest text, command_id uuid, v jsonb)", "0746_subscription_internal_owner_guard.sql"],
+    // 0756 retains LS-149 owner-before-replay and LS-162 pending-change refusal from 0755.
+    ["app.mon2_command(t uuid, digest text, command_id uuid, v jsonb)", "0756_subscription_attempt_reconciliation.sql"],
     ["app.ef_prepare_statement(p_session uuid, p_command uuid, p_period text)", "0704_enterprise_fee_period_order.sql"],
     ["app.ef_post_statement(p_session uuid, p_command uuid, p_statement uuid, p_authorization uuid)", "0704_enterprise_fee_period_order.sql"],
     ["app.accounting_export_route_read(t uuid, digest text, source text)", "0709_accounting_export_route_read_exported.sql"],
@@ -237,7 +252,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.xa_client_view_authority(p_job uuid, p_request uuid, p_actor uuid, p_email text)", "0686_extra_client_authority_loss.sql"],
     ["app.xa_client_decide(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_token_hash text, p_email text, p_hash text, p_net bigint, p_reject boolean, p_reason text, p_role_name text, p_tester text)", "0686_extra_client_authority_loss.sql"],
     ["identity.extra_customer_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0686_extra_client_authority_loss.sql"],
-    ["app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)", "0691_connector_billing_kind_link.sql"],
+    ["app.connector_promotion(p_session uuid, p_namespace text, p_event text, p_command uuid, p_result jsonb)", "0754_connector_promotion_list_closed_job.sql"],
     ["app.guard_practice_material_requirement()", "0690_import_ancestry_record_anchor.sql"],
     ["app.ch4_read_work_facts(t uuid, j uuid, digest text)", "0690_import_ancestry_record_anchor.sql"],
     ["app.read_job_sources(t uuid, j uuid, digest text, source text)", "0690_import_ancestry_record_anchor.sql"],
@@ -254,6 +269,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.surface_shadow_signal_early(p_tenant uuid, p_job uuid, p_signal uuid, p_firing uuid, p_decision uuid, p_disclosure uuid, p_rule text, p_version text, p_source uuid, p_object_version text, p_facts jsonb)", "0735_per_firm_final_check_terms.sql"],
     ["app.accept_final_check_terms(p_tenant uuid, p_actor uuid, p_command uuid, p_version text)", "0735_per_firm_final_check_terms.sql"],
     ["app.guard_final_lock_disclosure_terms()", "0735_per_firm_final_check_terms.sql"],
+    ["app.current_firm_profile_key()", "0757_practice_firm_name.sql"],
+    ["app.job_saved_firm_name(j uuid)", "0757_practice_firm_name.sql"],
     ["app.store_extra_pack_artifact(p_command uuid, p_job uuid, p_extra uuid, p_digest text, p_artifact jsonb)", "0744_extra_pack_source_bijection.sql"],
   ] as readonly (readonly [string, string, number?])[]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
@@ -272,6 +289,29 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const argNames = (args: string) => args.split(",").map(arg => arg.trim().split(/\s+/u)[0]!).filter(Boolean).join(",");
   const lp6dBodies = new Map<string, string>();
   for (const m of lp6dSql.matchAll(/CREATE (?:OR REPLACE )?FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu)) lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
+  // LATER-SAFETY-183 changes only xa_price after LP-6d, retaining its binding prefix.
+  const pricePermissionSql = await readFile(new URL("../migrations/0752_extra_price_permission_order.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_price(p_job,p_variation,p_command,p_actor,p_net,p_revise)", pricePermissionSql.split("AS $$")[1]!.split("$$;")[0]!);
+  // LP6D-WORKER-PRESENCE: only these three definitions supersede historical bodies.
+  const presenceSql = await readFile(new URL("../migrations/0753_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
+  for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\(([\s\S]*?)\)\s*RETURNS[\s\S]*?AS \$\$([\s\S]*?)\$\$\s*;/gu))
+    lp6dBodies.set(`${m[1]}(${argNames(m[2]!)})`, m[3]!);
+  // LATER-SAFETY-189: xa_proceed's latest body preserves covered reads and requires the raiser for writes.
+  const proceedRaiserSql = await readFile(new URL("../migrations/0760_extra_proceed_raiser_authority.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.xa_proceed(p_job,p_extra,p_actor,p_body)", proceedRaiserSql.split("AS $$")[1]!.split("$$;")[0]!);
+  // LP-10 preserves the LP-6d sink body and moves only its outbox row lock.
+  for (const [key, before, after] of [
+    ["app.guard_recovery_message_sink()", "FOR SHARE OF mem,o)", "FOR SHARE OF mem)"],
+    ...["app.lp6d_share_sink_authorization(p_tenant,p_outbox)", "app.lp6d_share_sink_authorization_worker(p_tenant,p_outbox)"]
+      .map(key => [key, "FOR SHARE OF a;", "FOR SHARE OF a;\n PERFORM 1 FROM app.action_outbox WHERE tenant_id=p_tenant AND id=p_outbox FOR SHARE;"]),
+  ] as [string, string, string][]) {
+    const body = lp6dBodies.get(key)!;
+    expect(body.split(before)).toHaveLength(2);
+    lp6dBodies.set(key, body.replace(before, after));
+  }
+  // 0761 replaces only Northside's registration body; successor proof metadata remains checked above.
+  const northsideSql = await readFile(new URL("../migrations/0762_northside_hosted_agreement.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.northside_register(p_owner,p_settings)", northsideSql.split("FUNCTION app.northside_register(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);
   const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;
   const namedAdditions = [
     "final_check_read_authority", "admit_final_check_cycle", "final_check_cycle_claim", "final_check_cycle_finish",
@@ -291,6 +331,13 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);
+    // 0751 succeeds LP-6d for this exact overload; check it before LP-6d's generic body handling.
+    if (identity === "app.accounting_export(t uuid, digest text, operation text, source text, v jsonb)") {
+      const parts = prior!.definition.split("$function$");
+      parts[1] = fullBodies.get(identity)!;
+      expect(row.definition).toBe(parts.join("$function$"));
+      continue;
+    }
     if (prior) {
       let definition = prior.definition;
       const lp6dBody = lp6dBodies.get(lp6dKey(row));

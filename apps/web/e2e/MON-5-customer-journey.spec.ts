@@ -26,9 +26,15 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
     expect(terms.ok()).toBe(true);
     await signInForChooser(page);
     const issuer = await linkIssuer(admin,page);
-    const parties = await page.request.get(`/api/jobs/${job}/parties`);
-    expect(parties.status()).toBe(200);
-    const customer = (await parties.json()).currentIds.customerId as string;
+    // Sign-in enters the builder's linked firm. Explicitly re-enter this job's
+    // original anonymous practice firm; sign-in must not adopt its jobs.
+    await page.context().addCookies([practice]);
+    const parties = await page.evaluate(async job => {
+      const response = await fetch(`/api/jobs/${job}/parties`);
+      return { status: response.status, body: await response.json() };
+    }, job);
+    expect(parties.status).toBe(200);
+    const customer = parties.body.currentIds.customerId as string;
     const other = await seedJob(admin,portalTenant,digest);
     const link = await issueLink(admin,page,job,customer,issuer.csrf);
     const tab = await context.newPage();
@@ -123,8 +129,11 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
     await expect(home.getByRole("status")).toHaveText("Message saved for your builder with its evidence.");
     expect((await portal(home,"messages",sentMessage)).status).toBe(201);
     const builderMessages = async () => {
-      const response = await page.request.get(`/api/jobs/${job}/customer-messages`);
-      expect(response.status()).toBe(200); return response.json();
+      const response = await page.evaluate(async job => {
+        const result = await fetch(`/api/jobs/${job}/customer-messages`);
+        return { status: result.status, body: await result.json() };
+      }, job);
+      expect(response.status).toBe(200); return response.body;
     };
     const before = await builderMessages();
     expect(before.messages).toContainEqual(expect.objectContaining({text:message,evidence:expect.objectContaining({sha256:createHash("sha256").update(message).digest("hex"),objectVersionId:expect.any(String)})}));

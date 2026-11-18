@@ -4,9 +4,7 @@ import { z } from "zod";
 import { randomBytes, randomUUID } from "node:crypto";
 import { ExtraApprovalRepository, northsideApprovalArtifact, northsideExtras, northsideRateCard, northsideRun, withTenant } from "@jobguard/db";
 import { DemoError, bodyOf, demoActor, demoContext, failure, json, requireOrigin, parseDemoBody } from "../../../../../lib/northside-server";
-
-// Leave five minutes for app/database clock skew inside the database's seven-day cap.
-const CLIENT_APPROVAL_LIFETIME_MS = 7 * 24 * 60 * 60_000 - 5 * 60_000;
+import { CLIENT_APPROVAL_LIFETIME_MS } from "../../../../../lib/northside-client-link-policy";
 
 const uuid = (value: unknown): string => { if (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value)) return value.toLowerCase(); throw new DemoError("INVALID_COMMAND", 422); };
 /** One route per step of the journey, each a thin call into the merged ENT-5b commands. The role gates here are only a courtesy: the database routines refuse anyone without the grant. */

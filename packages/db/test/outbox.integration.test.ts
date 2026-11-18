@@ -194,7 +194,7 @@ describe("transactional outbox and fake worker execution", () => {
       provider_reference: "synthetic:quote-delivered",
       error_code: null,
     })]);
-    expect(after.audit).toHaveLength(before.audit.length + 1);
+    expect(after.audit).toHaveLength(before.audit.length + 2);
   });
 
   it("publishes no routing signal and sends nothing when the business transaction rolls back", async () => {

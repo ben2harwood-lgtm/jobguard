@@ -1,3 +1,4 @@
+import { seedPredecessorRecoveryMessage } from "./recovery-message-predecessor-data.js";
 import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import { seedLegacySandbox } from "./lp-legacy-sandbox-fixture.js";
 // Written before 0207. Real PostgreSQL only; CI execution required, NOT RUN locally.
@@ -12,7 +13,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { EvidencePackRepository, MIGRATION_URLS, RecoveryMessageRepository, RecoveryFollowUpRepository, SandboxRepository, migrate, withTenant } from "../src/index.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
 const name = "0259_recovery_pursuit_terms_required.sql", password = randomUUID();
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
@@ -54,13 +55,15 @@ beforeAll(async () => {
       const db = await admin.connect(); try { await db.query("BEGIN"); await db.query("SET LOCAL session_replication_role=replica"); await db.query("UPDATE app.job SET fee_policy_version=NULL,baseline_quote_version_id=NULL,accepted_net_value_pence=NULL,recovery_cap_pence=NULL WHERE tenant_id=$1 AND id=$2", [f.tenantId, f.jobId]); await db.query("COMMIT"); } finally { db.release(); }
     }
     const customer = await preview(f, f.customerCaseId), merchant = await preview(f, f.caseId), repo = new RecoveryMessageRepository(runtime), v = merchant.state.latest!;
-    const delivered = await repo.command(merchant.ctx, f.caseId, { version: "recovery-message-command.v1", action: "advance", commandId: randomUUID(), messageId: v.id, expectedRevision: v.revision, outcome: "success" }, merchant.actor);
+    await seedPredecessorRecoveryMessage(admin, f.tenantId, f.caseId, v, merchant.actor, "succeeded");
+    const delivered = await repo.read(merchant.ctx, f.caseId);
     expect(delivered.sinkCount).toBe(1);
     saved.push({ f, input: customer.input, approval: customer.approval, view: customer.state.latest!, merchant: delivered });
   }
   // A real pre-N v1 delivered pursuit and due reminder, kept as historical data.
   const f = await seedEvidencePackFixture(admin, { practice: true }), initial = await preview(f, f.customerCaseId), repo = new RecoveryMessageRepository(runtime), v = initial.state.latest!;
-  const delivered = await repo.command(initial.ctx, f.customerCaseId, { version: "recovery-message-command.v1", action: "advance", commandId: randomUUID(), messageId: v.id, expectedRevision: v.revision, outcome: "success" }, initial.actor);
+  await seedPredecessorRecoveryMessage(admin, f.tenantId, f.customerCaseId, v, initial.actor, "succeeded");
+  const delivered = await repo.read(initial.ctx, f.customerCaseId);
   const sandbox = new SandboxRepository(runtime), follow = new RecoveryFollowUpRepository(runtime);
   await seedLegacySandbox(admin, f.sessionToken!);
   const scheduled = await follow.schedule(initial.ctx, f.customerCaseId, { version: "recovery-follow-up-command.v1", action: "schedule", commandId: randomUUID(), sourceMessageId: v.id, expectedCaseRevision: delivered.readiness.caseRevision }, initial.actor);
@@ -103,13 +106,16 @@ it("RawPreviewApprovalSinkRefused: historical null/v1 approvals cannot authorize
   for (const { f, view } of saved) {
     const ctx = testTenantContext(f.tenantId,{membershipId:f.memberId}), action = view.approval!.outboxActionId;
     await expect(withTenant(runtime, ctx, async db => {
-      await db.$client.query("UPDATE app.action_outbox SET status='cancelled' WHERE tenant_id=$1 AND id=$2", [f.tenantId, action]);
+      expect((await db.$client.query("SELECT app.control_outbox($1,'cancel') changed", [action])).rows).toEqual([{changed:true}]);
       return db.$client.query("INSERT INTO app.recovery_message SELECT gen_random_uuid(),tenant_id,job_id,case_id,case_sequence+1,pack_id,pack_revision,manifest_hash,attachment_hash,attachment_approval_id,gen_random_uuid(),request_hash,case_type,case_revision,amount_pence,currency,sender,recipient,body,policy_version,content_hash,immutable_content,actor_membership_id,environment,created_at FROM app.recovery_message WHERE tenant_id=$1 AND id=$2", [f.tenantId, view.id]);
     })).rejects.toMatchObject({ code: "23514", message: "RECOVERY_TERMS_NOT_APPROVED" });
     await expect(withTenant(runtime, ctx, db => db.$client.query("INSERT INTO app.recovery_message_approval SELECT * FROM app.recovery_message_approval WHERE tenant_id=$1 AND message_id=$2", [f.tenantId, view.id]))).rejects.toMatchObject({ code: "23514", message: "RECOVERY_TERMS_NOT_APPROVED" });
-    await expect(withTenant(runtime, ctx, async db => {
-      await db.$client.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.tenantId, action]);
-      return db.$client.query("INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)", [randomUUID(), f.tenantId, f.jobId, f.customerCaseId, view.id, action, view.message.recipient, view.message.body, view.message.contentHash, view.message.attachmentHash]);
+    await expect(rolledBack(admin, async client => {
+      await client.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.tenantId, action]);
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenantId]);
+      await bindTestClient(admin, client, f.tenantId, f.memberId);
+      await client.query("SET LOCAL ROLE jobguard_runtime");
+      return client.query("INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)", [randomUUID(), f.tenantId, f.jobId, f.customerCaseId, view.id, action, view.message.recipient, view.message.body, view.message.contentHash, view.message.attachmentHash]);
     })).rejects.toMatchObject({ code: "23514", message: "RECOVERY_TERMS_NOT_APPROVED" });
   }
   expect(await proofDifferences(admin, proof)).toEqual({ rows: [], types: [] });

@@ -7,6 +7,9 @@ import { createWorkFixture, closeWorkFixture, type WorkFixture } from "../../../
 import { meterCompany } from "../../../../../packages/db/test/meter-persistence-fixtures.js";
 const state = vi.hoisted(() => ({ identity: undefined as unknown, pool: undefined as unknown, token: "", csrf: "" }));
 vi.mock("server-only", () => ({}));
+vi.mock("@jobguard/db", async importOriginal => ({
+  ...await importOriginal<typeof import("@jobguard/db")>(), closeOutboundWorkerPool: vi.fn(),
+}));
 vi.mock("../../lib/identity-server", () => ({ identityApplication: () => state.identity,
   identityCredentials: async (request: Request) => ({ sessionToken: state.token, csrfToken: state.csrf, origin: request.headers.get("origin") }) }));
 vi.mock("../../lib/synthetic-server", () => ({ syntheticPool: () => state.pool }));

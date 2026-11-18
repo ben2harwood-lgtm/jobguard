@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-188": {
+      "branches": [
+        "codex/sandbox/later-safety-188"
+      ],
+      "note": "LATER-SAFETY-188 RED: mandatory approval queue eligibility. NOPR build ahead; independent review and database evidence pending.",
+      "allow": [
+        "packages/db/migration-notes/0759_extra_queue_approver_eligibility.md",
+        "packages/db/migrations/0759_extra_queue_approver_eligibility.sql",
+        "packages/db/test/extra-queue-approver-eligibility.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0759_extra_queue_approver_eligibility.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+      ]
+    }
+  }
+}

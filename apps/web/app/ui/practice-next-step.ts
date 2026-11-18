@@ -61,7 +61,9 @@ export function derivePracticeNextStep(facts: SavedFacts): Result {
     if (variation.state === "approved" && current[0]?.approved && !current[0].rejected) continue;
     unresolved = true;
   }
-  if (unresolved) return result("resolve_extras");
+  // Pending work excluded from an issued bill cannot prevent collecting that bill
+  // or undo its settlement. It still needs resolution before the first invoice.
+  if (unresolved && invoices.invoices.length === 0) return result("resolve_extras");
   if (!account.account || !lock.lock || account.account.issueBlocked) return result("review_account");
   if (!check || check.lockId !== lock.lock.id || check.state === "unlocked") return unavailable();
   if (check.state !== "completed") return result("final_check");

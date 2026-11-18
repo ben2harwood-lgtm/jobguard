@@ -112,7 +112,10 @@ describe("CH-4 actual existing repository replay/refusal matrix",()=>{
    await boundaryLock({admin:sourceHarness.admin} as WorkFixture,{tenantId:sourceHarness.tenant,jobId,actorId:sourceHarness.member} as Awaited<ReturnType<typeof seedWorkJob>>);
    expect(sourceHarness.norm(await entry!.run(jobId,command,"same"))).toEqual(first);
    await expect(entry!.run(jobId,command,"changed")).rejects.toThrow(/CONFLICT/u);
-   await expect(entry!.run(jobId,randomUUID(),"same")).rejects.toThrow(/POST_LOCK_WORK_REQUIRES_LINKED_JOB|CONFLICT|STALE_DOCUMENT_INTAKE/u);
+   if(key==="proof-repository.ts#complete")
+    await expect(entry!.run(jobId,randomUUID(),"same")).rejects.toMatchObject({code:"PROOF_NOT_FINAL",message:"already_complete"});
+   else
+    await expect(entry!.run(jobId,randomUUID(),"same")).rejects.toThrow(/POST_LOCK_WORK_REQUIRES_LINKED_JOB|CONFLICT|STALE_DOCUMENT_INTAKE/u);
    const after=await withTenant(sourceHarness.runtime,sourceHarness.ctx,db=>db.$client.query("SELECT count(*)::int n FROM app.job_site_source_receipt WHERE tenant_id=$1 AND job_id=$2",[sourceHarness.tenant,jobId]));expect(after.rows).toEqual(receipts.rows);
   });
  }

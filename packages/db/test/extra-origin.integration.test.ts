@@ -127,7 +127,7 @@ describe("ENT-4b origin persistence", () => {
  it("[DW6] audit uses closed ID/hash keys; capture metadata never appears in audit or errors", async () => {
   const f = await fixture(c), raw = raise(f, { deviceId: "fictional-device-canary", deviceCapturedAt: "2026-10-01T01:02:03.000001Z" }); await repo.raiseExtra(f.ctx, raw);
   const events = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 AND event_type='contractor.extra.raised'", [f.p.tenantId])).rows;
-  expect(events).toHaveLength(1); for (const row of events) { expect(auditPayloadV1Schema.safeParse(row.payload).success).toBe(true); expect(Object.keys(row.payload.references).sort()).toEqual(["auditTrust", "command", "environment", "extra", "job"]); expect(Object.keys(row.payload.hashes)).toEqual(["origin"]); for (const [key,value] of Object.entries(row.payload.references)) { if(key === "auditTrust") expect(value).toBe("lower_trust"); else expect(value).toMatch(/^(?:[a-f0-9-]{36}|synthetic_demo)$/u); } for (const canary of [noteCanary, descriptionCanary, raw.deviceId, raw.deviceCapturedAt]) expect(JSON.stringify(row)).not.toContain(canary); }
+  expect(events).toHaveLength(1); for (const row of events) { expect(auditPayloadV1Schema.safeParse(row.payload).success).toBe(true); expect(Object.keys(row.payload.references).sort()).toEqual(["auditActorKind", "auditActorRef", "auditTrust", "command", "environment", "extra", "job"]); expect(Object.keys(row.payload.hashes)).toEqual(["origin"]); for (const [key,value] of Object.entries(row.payload.references)) { if(key === "auditTrust") expect(value).toBe("lower_trust"); else if(key === "auditActorKind") expect(value).toBe("bound_member"); else if(key === "auditActorRef") expect(value).toMatch(/^membership:[a-f0-9-]{36}$/u); else expect(value).toMatch(/^(?:[a-f0-9-]{36}|synthetic_demo)$/u); } for (const canary of [noteCanary, descriptionCanary, raw.deviceId, raw.deviceCapturedAt]) expect(JSON.stringify(row)).not.toContain(canary); }
   await expect(repo.raiseExtra(f.ctx, { ...raw, kind: noteCanary })).rejects.toMatchObject({ message: "INVALID_COMMAND" });
  });
  it("[R1] office, instruction, import, parties, unknown commands cannot write or relabel site origins", async () => {
@@ -290,11 +290,11 @@ describe("ENT-4b origin persistence", () => {
    "packages/db/src/work-order-repository.ts": "406ec23ac5d01d7cdcb5e0649047357f729fc6fdf1aeb919f0e491deac0ab87b",
    "packages/db/src/sor-repository.ts": "d3ac04e13826761e6c0fc0c8dc45fbb2cdf4813e5d01fd5f073b9c4bb9f930fe",
    "packages/db/src/job-scheduling-repository.ts": "dcc7884fc3ff5bb3c878834a81824e4270e0775de666c61f9ccb031c9430c4de",
-   "packages/db/src/work-order-fixtures.ts": "bfcdf0a9d57691b3af4672313069e333e1399be598c46fd5f7500289a833089a",
+   "packages/db/src/work-order-fixtures.ts": "46a27d5662376acf51c51bd602c5556b566099f73c0caa3998a67a1092eaceb0",
    // Ben 6 Nov router-chat "yes": exactly the emergency-notice and retention-timer constructor sites.
    // Hold: break-glass identity design goes to Ben before real data.
    // Scanner bytes change only for the renewed caller review citation above.
-   "apps/api/src/auth/context-boundary.test.ts": "63d38a478e5133df000601640c1cc08061c4927da16d2d83a1af1cb7e5f86a37"
+   "apps/api/src/auth/context-boundary.test.ts": "c3ac8753acf90895909d91ea24b72792266ca1832eb7817fbc0ef90693dc595c"
   };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });

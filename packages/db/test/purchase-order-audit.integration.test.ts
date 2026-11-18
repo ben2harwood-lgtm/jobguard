@@ -1,3 +1,7 @@
+import { closeWorkerFixtureDatabase } from "./worker-login-fixture.js";
+import { outboundWorkerPool } from "../src/worker-pool.js";
+import { WorkerActionExecutor } from "../src/worker-action-executor.js";
+import { assertV3AuditChain } from "./lp4-writer-catchup-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -302,10 +306,11 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
       action: { ...f.approved.action, contentHash: preview.contentHash } })).rejects.toThrow("AUTHORIZATION_INVALID");
     expect(await effects(f.auth.context.tenantId)).toEqual(before);
     const valid = await f.repo.approve(f.auth.context, f.scope, f.approved);
+    await assertV3AuditChain(admin, f.auth.context.tenantId);
     expect(valid).toMatchObject({ environment: "synthetic_demo", realExternalActions: 0 });
-    expect((await admin.query(`SELECT version,payload->'references'->>'auditTrust' trust FROM app.audit_event
+    expect((await admin.query(`SELECT version,actor_ref,payload->'references'->>'auditActorKind' actor_kind,payload->'references'->>'auditTrust' trust FROM app.audit_event
       WHERE tenant_id=$1 AND event_type='command.succeeded' AND payload->'references'->>'commandId'=$2`,
-      [f.auth.context.tenantId, f.approved.commandId])).rows).toEqual([{ version: "audit.v2", trust: "checked_operation" }]);
+      [f.auth.context.tenantId, f.approved.commandId])).rows).toEqual([{ version: "audit.v3", actor_ref: `membership:${f.approved.actorMembershipId}`, actor_kind: "bound_member", trust: "checked_operation" }]);
   });
   it("changed quantity cancels the queued old authority before any fake delivery", async () => {
     const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);
@@ -404,15 +409,16 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
   });
   it("a transient database check failure leaves the order pending without an audit outcome", async () => {
     const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);
+    const workerPool = await outboundWorkerPool(runtime);
     const pool = { connect: async () => {
-      const client = await runtime.connect();
+      const client = await workerPool.connect();
       return { release: () => client.release(), query: (sql: string, values?: unknown[]) => {
-        if (sql.includes("SELECT app.require_watchdog_live")) throw new Error("synthetic connection failure");
+        if (sql.includes("SELECT app.claim_worker_action")) throw new Error("synthetic connection failure");
         return client.query(sql,values);
       } };
     } } as unknown as Pool;
     const before = await effects(f.auth.context.tenantId);
-    await expect(new ActionExecutor(pool,new Map([[f.port.name,f.port]]),{emit(){}}).execute(f.auth.context,queued.outboxActionId))
+    await expect(new WorkerActionExecutor(pool,new Map([[f.port.name,f.port]]),{emit(){}}).execute(queued.outboxActionId))
       .rejects.toThrow("synthetic connection failure");
     expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [queued.outboxActionId])).rows).toEqual([{status:"pending"}]);
     expect(await effects(f.auth.context.tenantId)).toEqual(before);
@@ -522,6 +528,7 @@ it("refuses direct manual attestations outside the demo database; dropping the g
   };
   const { host, port, password } = (admin as unknown as { options: { host: string; port: number; password: string } }).options;
   const base = { host, port, password };
+  await closeWorkerFixtureDatabase(admin);
   await closeTestPools(runtime, admin);
   const control = new Pool({ ...base, user: "postgres", database: "postgres", max: 1 });
   try { await control.query("CREATE DATABASE jobguard_order_attestation_outside TEMPLATE jobguard_synthetic_demo"); }

@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
 import { verifyRecoveryMessageContent } from "@jobguard/core";
 import type { FakeDeliveryResult, OutboundAction } from "./outbox.js";
-import { inspectRecoveryMessageCase, lockRecoveryCase } from "./recovery-message-current.js";
+import { outboundWorkerPool } from "./worker-pool.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
 export const RECOVERY_MESSAGE_ADAPTER = "fake_recovery_message" as const;
@@ -27,46 +27,32 @@ export class PracticeProcessStopped extends Error {
  * here, so the boundary itself re-checks the case, the evidence pack and the approver under the case lock, in the same
  * transaction as the sink insert. The sink's own database guard checks the same facts again at insert time.
  *
- * The adapter keeps no tenant context: the stamped `VerifiedTenantContext` arrives as the first argument of each call that
- * needs the tenant, is handed whole to `withTenant`, and its `.tenantId` is read as a value. The executor's `OutboundAdapter`
- * interface carries no tenant, so the caller that holds the context (the repository, or a test) passes it at each call.
+ * Delivery uses the worker login and derives scope from the authorized action. Reconciliation reads
+ * the recorded effect using the caller's verified tenant context.
  */
 export class FakeRecoveryMessageAdapter {
   readonly name = RECOVERY_MESSAGE_ADAPTER;
   readonly supportsProviderDeduplication = true;
   constructor(private readonly pool: Pool, private readonly mode: RecoveryMessageDeliveryMode) {}
 
-  async deliver(context: VerifiedTenantContext, action: Readonly<OutboundAction>): Promise<FakeDeliveryResult> {
+  async deliver(_context: VerifiedTenantContext, action: Readonly<OutboundAction>): Promise<FakeDeliveryResult> {
     if (this.mode === "definite_failure") return { kind: "retryable", code: "FAKE_PROVIDER_REJECTED" };
     // The provider never recorded this one and never answered: the outcome is genuinely unknown.
     if (this.mode === "no_response") return { kind: "outcome_unknown", code: "FAKE_NO_RESPONSE" };
     // The practice process dies mid-call: no result is ever reported, so the claim stays `executing` until it is checked.
     if (this.mode === "process_stopped") throw new PracticeProcessStopped();
-    let recorded: boolean;
     try {
       const content = verifyRecoveryMessageContent(action.immutableContent, action.contentHash);
       const messageId = action.providerEffectKey.slice(RECOVERY_MESSAGE_EFFECT_PREFIX.length);
       if (!action.providerEffectKey.startsWith(RECOVERY_MESSAGE_EFFECT_PREFIX) || !UUID.test(messageId) || action.recipient !== content.recipient) throw new Error("FAKE_EFFECT_MISMATCH");
-      recorded = await withTenant(this.pool, context, async db => {
-        // Same lock key as every case command: nothing that changes the case or its evidence can land between this check and the insert.
-        await lockRecoveryCase(db, context.tenantId, content.caseId);
-        await db.$client.query("SELECT app.lock_recovery_message_sources($1)", [context.tenantId]);
-        const current = await inspectRecoveryMessageCase(db, context.tenantId, content.caseId);
-        if (!current.ok || current.message.contentHash !== action.contentHash) return false;
-        await db.$client.query(
-          `INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions)
-           VALUES(gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'synthetic_demo',0) ON CONFLICT(tenant_id,message_id) DO NOTHING`,
-          [context.tenantId, content.jobId, content.caseId, messageId, action.id, content.recipient, content.body, action.contentHash, content.attachmentHash, `fake-recovery:${action.id}`]);
-        return true;
-      });
+      const worker = await outboundWorkerPool(this.pool);
+      await worker.query("SELECT app.record_worker_recovery_message($1)", [action.id]);
     } catch (error) {
-      // Only a refusal by the practice provider's own guards (a check violation) or by content verification means "nothing was
-      // recorded because the facts changed". Anything else, a lost connection for instance, leaves the claim unfinished so it
-      // is checked, never retried blindly.
+      // A source refusal records no effect. A lost connection leaves the claim
+      // unfinished for reconciliation instead of authorizing a blind retry.
       if ((error as { code?: string }).code === "23514" || (error instanceof Error && error.message === "RECOVERY_MESSAGE_CONTENT_INVALID")) return { kind: "retryable", code: RECOVERY_MESSAGE_BLOCKED_CODE };
       throw error;
     }
-    if (!recorded) return { kind: "retryable", code: RECOVERY_MESSAGE_BLOCKED_CODE };
     // The provider recorded it. Either the answer arrives, or it is lost and JobGuard must check before doing anything else.
     return this.mode === "response_lost" ? { kind: "outcome_unknown", code: "FAKE_RESPONSE_LOST_AFTER_ACCEPTANCE" } : { kind: "succeeded", providerReference: `fake-recovery:${action.id}` };
   }

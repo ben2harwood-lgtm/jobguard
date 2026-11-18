@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-189": {
+      "branches": [
+        "codex/sandbox/later-safety-189"
+      ],
+      "allow": [
+        "packages/db/migrations/0760_extra_proceed_raiser_authority.sql",
+        "packages/db/test/migration-proofs/0760_extra_proceed_raiser_authority.proof.json",
+        "packages/db/test/extra-proceed.integration.test.ts",
+        "packages/db/test/extra-proceed-raiser-upgrade.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "docs/contracts/extra-approval-chain-v1.md"
+      ]
+    }
+  }
+}

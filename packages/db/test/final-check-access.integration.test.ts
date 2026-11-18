@@ -47,7 +47,18 @@ it("SV5-21 expired session cannot execute or replay a disposition",async()=>{
 it("SV5-24 real builder requests preserve identical runtime statement sequence with zero/many pre-lock signals",async()=>{
  const {FinalCheckApplication}=await import('../../../apps/api/src/final-check.application.js');const {readFile}=await import('node:fs/promises');const a=await seedFinalCheckJob(f);
  process.env.JOBGUARD_ENV='synthetic_demo';const app=new FinalCheckApplication(f.runtime,a.sessionId);
- async function read(){const start=f.logs.length,out=[await app.get(a.jobId),await app.disputes(a.jobId)];await new Promise<void>(resolve=>setTimeout(resolve,25));const statements=f.logs.slice(start).filter(s=>s.includes(`SV5:${f.runtime.options.user}:`)&&/(?:statement|execute [^:]+):/u.test(s)).map(s=>s.replace(/^.*?(?:statement|execute [^:]+):/su,''));expect(statements.length).toBeGreaterThan(0);expect(statements.join('\n')).not.toMatch(/\bshadow_commercial_signal\b|\bshadow_signal_\w+\b/u);return {out,statements};}
+ async function read(){
+  const tag=randomUUID(),start=`sv5-start-${tag}`,end=`sv5-end-${tag}`;
+  await f.runtime.query(`SELECT 1 /* ${start} */`);
+  const out=[await app.get(a.jobId),await app.disputes(a.jobId)];
+  await f.runtime.query(`SELECT 1 /* ${end} */`);
+  await expect.poll(()=>f.logs.join('').includes(end)).toBe(true);
+  const lines=f.logs.join('').split('\n'),first=lines.findIndex(line=>line.includes(start)),last=lines.findIndex(line=>line.includes(end));
+  expect(first).toBeGreaterThanOrEqual(0);expect(last).toBeGreaterThan(first);
+  const statements=lines.slice(first+1,last).filter(s=>s.includes(`SV5:${f.runtime.options.user}:`)&&/(?:statement|execute [^:]+):/u.test(s)).map(s=>s.replace(/^.*?(?:statement|execute [^:]+):/u,''));
+  expect(statements.length).toBeGreaterThan(0);expect(statements.join('\n')).not.toMatch(/\bshadow_commercial_signal\b|\bshadow_signal_\w+\b/u);
+  return {out,statements};
+ }
  const zero=await read();await finalCheckTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Synthetic hidden proposal','low')",[a.tenantId,a.jobId,randomUUID(),randomUUID()]));expect(await read()).toEqual(zero);
  // Inspect this piece's own routine branch as well: server log_statement shows outer calls, not nested PL/pgSQL reads.
  const sql=await readFile(new URL('../migrations/0238_final_check.sql',import.meta.url),'utf8'),routine=sql.slice(sql.indexOf('CREATE FUNCTION app.read_final_check_reveal'),sql.indexOf('CREATE FUNCTION app.record_final_check_disposition'));

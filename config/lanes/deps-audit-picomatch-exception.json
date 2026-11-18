@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "lanes": {
+    "deps-audit-picomatch-exception": {
+      "branches": ["codex/sandbox/deps-audit-picomatch-exception"],
+      "allow": ["tools/dependency-audit.mjs", "tools/dependency-audit.test.mjs"]
+    }
+  }
+}

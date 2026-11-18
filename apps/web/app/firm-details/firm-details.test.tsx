@@ -75,3 +75,18 @@ it("keeps practice firms on the sample name and disables their save handler", as
  await (element.props as { onSubmit: (event: { preventDefault: () => void }) => void }).onSubmit({ preventDefault() {} });
  expect(fetch).not.toHaveBeenCalled();
 });
+
+it("lets an eligible practice owner save firm details while remaining a practice firm", async () => {
+ const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ profile, canSave: true, isPractice: true }) });
+ vi.stubGlobal("fetch", fetch);
+ const tree = FirmDetailsForm({ initial: { profile, canSave: true, isPractice: true } });
+ const html = renderToStaticMarkup(tree);
+ expect(html).toContain("Save firm details");
+ expect(html).not.toContain("<fieldset disabled");
+ expect(html).not.toContain("Practice firms use the sample name");
+ const element = (tree.props.children as React.ReactElement[]).find(x => React.isValidElement(x) && x.type === "form")!;
+ (element.props as { onSubmit: (event: { preventDefault: () => void }) => void }).onSubmit({ preventDefault() {} });
+ await new Promise(resolve => setTimeout(resolve, 0));
+ expect(JSON.parse(fetch.mock.calls[0]![1].body)).toEqual(profile);
+ expect(hooks.sets.join(" ")).toContain("Firm details saved.");
+});

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 // The synthetic demo tenant (packages/db/src/demo-seed.ts), inlined as the other specs do: @jobguard/db is ESM-only and cannot load in a Playwright spec.
 const DEMO_TENANT_ID = "11111111-1111-4111-8111-111111111111";
-import { E2E_RUNTIME_URL } from "./global-setup";
+import { E2E_ADMIN_DATABASE_URL, E2E_RUNTIME_URL } from "./global-setup";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { get, persistedRecoverySources, post, recordedProof } from "./helpers/recovery-sources";
 
@@ -352,7 +352,7 @@ test("an interrupted claim becomes uncertain after its lease and can be checked 
   expect(executing.attempts).toBe(1); expect(executing.claimAbandoned).toBe(false);
   await page.reload(); await V(page, "pursuit-delivery", "Delivery in progress — check again shortly");
   // Only the elapsed-time input is faked, in the existing real synthetic PostgreSQL fixture. No outcome/approval is fabricated.
-  const clock = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
+  const clock = new Pool({ connectionString: E2E_ADMIN_DATABASE_URL, max: 1 });
   const db = await clock.connect();
   try {
     await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);

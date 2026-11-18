@@ -1,3 +1,5 @@
+import { parseSorSiteExtraInput } from "@jobguard/core";
+import { SiteExtraRepository } from "./site-extra-repository.js";
 import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-command.js";
 import { readExtraApprovalTiming } from "./extra-approval-timing.js";
 import { randomUUID } from "node:crypto";
@@ -101,6 +103,51 @@ export class ExtraApprovalRepository {
       return { result: r, audits: [audit(m, "contractor.extra.submitted", i.extraId, { command: i.commandId, job: i.jobId, extra: i.extraId, request: String(r.requestId) }, { revision: String(r.revisionHash) })] };
     });
   }
+  /** Recover only the original priced capture's first, still-current request.
+   * No receipt is borrowed from the supervisor and no approval state is changed. */
+  async recoverPricedSubmission(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<Result> {
+    const i = parseSorSiteExtraInput(raw);
+    if (!("version" in i) || i.version !== "log-sor-site-extra.v2") throw new ExtraApprovalError("INVALID_COMMAND");
+    const member = this.checkActor(context, actor);
+    try {
+      const saved = await withTenant(this.pool, context, async db => (await db.$client.query(`
+        SELECT 1 FROM app.extra_sor_revision s JOIN app.command_receipt c ON(c.tenant_id,c.command_id)=(s.tenant_id,s.command_id)
+        WHERE s.tenant_id=$1 AND s.job_id=$2 AND s.command_id=$3 AND s.raising_membership_id=$4
+          AND c.command_type='LogSiteExtra' AND c.status='succeeded' AND c.actor_membership_id=$4`,
+        [lc(context.tenantId), i.jobId, i.commandId, member])).rowCount);
+      if (!saved) throw new ExtraApprovalError("INVALID_TRANSITION");
+      // Reuse the log's authoritative actor/payload replay proof; never duplicate
+      // its hash format or consume another actor's command receipt.
+      const logged = await new SiteExtraRepository(this.pool).logSorSiteExtra(context, actor, i);
+      return await withTenant(this.pool, context, async db => {
+        await db.$client.query("SELECT app.mon8_require_feature($1,'site_origin_capture'),app.mon8_require_feature($1,'approval_chains')", [member]);
+        const row = (await db.$client.query<{ requestId: string; state: string }>(`
+          SELECT q.id "requestId",e.kind state
+          FROM app.extra_sor_revision s
+          JOIN app.extra_origin o ON(o.tenant_id,o.job_id,o.variation_id)=(s.tenant_id,s.job_id,s.variation_id)
+          JOIN app.command_receipt c ON(c.tenant_id,c.command_id)=(s.tenant_id,s.command_id)
+          JOIN app.extra_approval_request q ON(q.tenant_id,q.job_id,q.variation_id)=(s.tenant_id,s.job_id,s.variation_id)
+          JOIN LATERAL (SELECT kind FROM app.extra_event x
+            WHERE(x.tenant_id,x.job_id,x.variation_id)=(s.tenant_id,s.job_id,s.variation_id)
+            ORDER BY sequence DESC LIMIT 1) e ON true
+          JOIN app.membership m ON(m.tenant_id,m.id)=(s.tenant_id,s.raising_membership_id)
+          WHERE s.tenant_id=$1 AND s.job_id=$2 AND s.variation_id=$3 AND s.command_id=$4
+            AND s.raising_membership_id=$5 AND o.raising_membership_id=$5
+            AND o.job_track='contractor' AND o.provenance='command'
+            AND c.command_type='LogSiteExtra' AND c.status='succeeded' AND c.actor_membership_id=$5
+            AND app.contractor_member_active($5)
+            AND ((m.role='operative' AND app.contractor_job_assigned($5,$2))
+              OR app.xa_covers($5,ARRAY['supervisor','surveyor'],$2,'job.read') IS NOT NULL)
+            AND q.request_revision=1 AND q.revision_hash=s.content_hash
+            AND NOT EXISTS(SELECT 1 FROM app.extra_approval_request newer
+              WHERE(newer.tenant_id,newer.job_id,newer.variation_id)=(q.tenant_id,q.job_id,q.variation_id) AND newer.request_revision>q.request_revision)
+            AND e.kind IN('awaiting_approval','approved')`,
+          [lc(context.tenantId), i.jobId, logged.variationId, i.commandId, member])).rows[0];
+        if (!row) throw new ExtraApprovalError("INVALID_TRANSITION");
+        return row;
+      });
+    } catch (error) { failure(error); }
+  }
   async priceExtra(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<Result> {
     const i = this.parse(priceExtraV1, raw);
     return this.run(context, actor, "PriceExtra", i.commandId, `extra-price:${i.jobId}:${i.extraId}:${i.commandId}`, { jobId: i.jobId, extraId: i.extraId, netPence: i.netPence }, async (db, _t, m) => {
@@ -162,8 +209,15 @@ export class ExtraApprovalRepository {
     const i = this.parse(issueClientApprovalV1, raw), member = this.checkActor(context, owner), tenant = lc(context.tenantId);
     const linkId = derivedUuid(`extra-client-link:${tenant}:${i.commandId}`), outboxId = derivedUuid(`extra-client-outbox:${tenant}:${i.commandId}`);
     try {
-      const request = await withTenant(this.pool, context, async db => (await db.$client.query<{ request_revision: number; revision_hash: string; net_pence: string | null; variation_id: string }>(
-        "SELECT request_revision,revision_hash,net_pence::text,variation_id FROM app.extra_approval_request WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenant, i.jobId, i.requestId])).rows[0]);
+      const request = await withTenant(this.pool, context, async db => {
+        // Refuse before disclosing target existence; dispatch and the writer recheck execution authority.
+        const authority = (await db.$client.query<{ allowed: boolean }>(
+          "SELECT app.xa_covers($1,ARRAY['surveyor','commercial_manager'],$2,'job.read') IS NOT NULL AS allowed",
+          [member, i.jobId])).rows[0];
+        if (!authority?.allowed) throw new ExtraApprovalError("PERMISSION_DENIED");
+        return (await db.$client.query<{ request_revision: number; revision_hash: string; net_pence: string | null; variation_id: string }>(
+          "SELECT request_revision,revision_hash,net_pence::text,variation_id FROM app.extra_approval_request WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenant, i.jobId, i.requestId])).rows[0];
+      });
       if (!request || request.net_pence === null) throw new ExtraApprovalError("NOT_FOUND");
       const tokenHash = sha256Hex(i.linkToken), net = Number(request.net_pence);
       // The exact message the owner approves (practice only: the fake_email adapter delivers nothing; the .invalid recipient cannot receive anything).
@@ -180,7 +234,7 @@ export class ExtraApprovalRepository {
           if (i.signinDigest) await db.$client.query("SELECT app.xc_bind_link($1,$2,$3)", [linkId, i.signinDigest, member]);
           const replaced = (r.replacedOutboxIds as string[]) ?? [];
           // "Cancel replaced requests": an earlier message that has not gone out never will.
-          if (replaced.length) await db.$client.query("UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE tenant_id=$1 AND id=ANY($2::uuid[]) AND status IN('pending','retryable')", [tenant, replaced]);
+          for (const replacedId of replaced) await db.$client.query("SELECT app.cancel_extra_outbox($1::uuid)", [replacedId]);
           return { ...r, outboxActionId: outboxId };
         },
         auditEvents: () => [audit(member, "contractor.extra.client_link_issued", request.variation_id, { command: i.commandId, job: i.jobId, extra: request.variation_id, request: i.requestId, link: linkId, outbox: outboxId }, { message: contentHash })],
@@ -192,7 +246,7 @@ export class ExtraApprovalRepository {
     const i = this.parse(revokeClientApprovalV1, raw);
     return this.run(context, owner, "RevokeClientApproval", i.commandId, `extra-client-revoke:${i.linkId}:${i.commandId}`, { jobId: i.jobId, linkId: i.linkId }, async (db, tenant, m) => {
       const r = await this.call(db, "SELECT app.xa_revoke_link($1,$2,$3,$4) r", [i.jobId, i.linkId, i.commandId, m]);
-      await db.$client.query("UPDATE app.action_outbox SET status='cancelled',updated_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2 AND status IN('pending','retryable')", [tenant, r.outboxActionId]);
+      await db.$client.query("SELECT app.cancel_extra_outbox($1::uuid)", [r.outboxActionId]);
       const extra = (await db.$client.query<{ variation_id: string }>("SELECT variation_id FROM app.extra_client_link WHERE id=$1", [i.linkId])).rows[0]!.variation_id;
       return { result: r, audits: [audit(m, "contractor.extra.client_link_revoked", extra, { command: i.commandId, job: i.jobId, extra, link: i.linkId })] };
     });
