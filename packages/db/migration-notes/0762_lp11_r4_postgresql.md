@@ -2481,6 +2481,18 @@ nice -n 6 node tools/commercial-integrity-current-source-guard.mjs
 nice -n 6 node tools/commercial-integrity-boundary.mjs
 ```
 
+## r5 synthetic accounting receipt binding
+
+The shadow login's direct INSERT had no request row, so the receipt policy rejected six of seven integration cases. The migration now opens a private scope for the exact receipt tuple from the synthetic shadow login. The INSERT retains the tenant-qualified job foreign key and compares any existing request tenant to the requested tenant. Within the original atomic batch a later receipt can advance the exact key and job within that tenant. A different tenant is refused, and the scope is invisible to a subsequent transaction on the same connection.
+
+Six assertions failed before the change and none failed afterward. All eight integration tests and four unit tests passed, including a new check for two same-tenant jobs in one batch, a wrong-tenant proposal, commit and rollback reuse. The complete targeted run passed 101 of 101 including both upgrade proofs, 77 proof-loader tests and all ten catalog and pool tests. The populated PostgreSQL proof now records 1,393 LP0 changes and 771 upgrade changes including 647 policies. Both commercial-integrity guards reported zero diagnostics.
+
+```sh
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/accounting-observation-receipt.test.ts test/accounting-observation-receipt.integration.test.ts test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/migration-proof-loader.test.ts test/lp11-bound-tenant-rls.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-accounting-final-results.json
+nice -n 7 node tools/commercial-integrity-current-source-guard.mjs
+nice -n 7 node tools/commercial-integrity-boundary.mjs
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

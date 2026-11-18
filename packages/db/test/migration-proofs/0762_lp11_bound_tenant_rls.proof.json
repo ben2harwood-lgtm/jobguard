@@ -11190,6 +11190,95 @@
         "key": "owner|routine|function:app.lp11_customer_variation_target(uuid,uuid)|jobguard_session_lookup",
         "group": "a-lp11-bound-tenant-r3"
       }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.accounting_observation_receipt|lp11_accounting_receipt_insert|PERMISSIVE|INSERT|jobguard_migration|489b6e0ae3ec4a05"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.accounting_observation_receipt|lp11_accounting_receipt_read|PERMISSIVE|SELECT|jobguard_migration,jobguard_shadow|c1afe433cdf62025"
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_accounting_receipt_tenant(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow"
+        ],
+        "definitionSha256": "17016600b819a9eeae4477b9afd5d9788025d114f828256798d5e42ef4b875a1",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_insert_accounting_receipt(uuid,uuid,text,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow"
+        ],
+        "definitionSha256": "bad9fa22e83d5f90b1d43bda3e88718d1e4b3070c9f1d39cdd29d0bb09e40a6b",
+        "staticWrites": [
+          "app.accounting_observation_receipt",
+          "control_plane.lp11_accounting_receipt_scope"
+        ],
+        "staticCalls": [
+          "app.lp11_policy_tenant"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_accounting_receipt_tenant(uuid,uuid,text)|jobguard_shadow|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_insert_accounting_receipt(uuid,uuid,text,uuid,text)|jobguard_shadow|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_accounting_receipt_tenant(uuid,uuid,text)|jobguard_migration",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_insert_accounting_receipt(uuid,uuid,text,uuid,text)|jobguard_migration",
+        "group": "a-lp11-bound-tenant-r3"
+      }
     }
   ],
   "upgrade": [
@@ -27495,6 +27584,88 @@
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
         ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "accounting_observation_receipt",
+        "policyname": "lp11_accounting_receipt_insert",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "(tenant_id = app.lp11_accounting_receipt_tenant(job_id, evidence_id, object_version_id))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "accounting_observation_receipt",
+        "policyname": "lp11_accounting_receipt_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_shadow}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_accounting_receipt_tenant(job_id, evidence_id, object_version_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_accounting_receipt_tenant",
+        "args": "j uuid, e uuid, v text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_shadow=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_insert_accounting_receipt",
+        "args": "t uuid, e uuid, v text, j uuid, h text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_shadow=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_accounting_receipt_scope",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_accounting_receipt_scope_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
       }
     }
   ],

@@ -3680,6 +3680,64 @@ CREATE POLICY lp11_customer_variation_insert ON app.recovery_claim_revision FOR 
     AND c.case_type='missed_variation_final_account' AND c.source_refs ? ('variation:'||v.id::text)
     AND v.tenant_id=app.lp11_customer_tenant('variation_target',v.id)));
 
+-- The synthetic accounting writer is separate from request and shadow detection
+-- authority. The receipt FK witnesses the exact stored tenant/job pair.
+CREATE UNLOGGED TABLE control_plane.lp11_accounting_receipt_scope (
+ transaction_id xid8 PRIMARY KEY,
+ tenant_id uuid NOT NULL,
+ job_id uuid NOT NULL,
+ evidence_id uuid NOT NULL,
+ version_id text NOT NULL,
+ login name NOT NULL,
+ expires_at timestamptz NOT NULL
+);
+ALTER TABLE control_plane.lp11_accounting_receipt_scope OWNER TO jobguard_migration;
+REVOKE ALL ON TABLE control_plane.lp11_accounting_receipt_scope FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_accounting_receipt_tenant(j uuid,e uuid,v text) RETURNS uuid
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_accounting_receipt_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+  AND s.expires_at>clock_timestamp() AND (s.job_id,s.evidence_id,s.version_id)=(j,e,v)
+$$;
+ALTER FUNCTION app.lp11_accounting_receipt_tenant(uuid,uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_accounting_receipt_tenant(uuid,uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_accounting_receipt_tenant(uuid,uuid,text) TO jobguard_shadow;
+
+CREATE FUNCTION app.lp11_insert_accounting_receipt(t uuid,e uuid,v text,j uuid,h text)
+ RETURNS TABLE(evidence_id uuid)
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE tenant uuid:=app.lp11_policy_tenant(); expiry timestamptz:=clock_timestamp()+interval '5 minutes';
+BEGIN
+ IF t IS NULL OR j IS NULL OR e IS NULL OR v IS NULL
+  OR current_database()<>'jobguard_synthetic_demo'
+  OR NOT pg_has_role(session_user,'jobguard_shadow','USAGE')
+  OR pg_has_role(session_user,'jobguard_runtime','USAGE')
+  OR (tenant IS NOT NULL AND t<>tenant) THEN
+  RAISE EXCEPTION 'ACCOUNTING_BINDING_MISMATCH' USING ERRCODE='42501';
+ END IF;
+ DELETE FROM control_plane.lp11_accounting_receipt_scope s
+ WHERE s.expires_at<=clock_timestamp() AND s.transaction_id<>pg_current_xact_id();
+ INSERT INTO control_plane.lp11_accounting_receipt_scope AS s
+ VALUES (pg_current_xact_id(),t,j,e,v,session_user,expiry)
+ ON CONFLICT(transaction_id) DO UPDATE SET
+  job_id=EXCLUDED.job_id,evidence_id=EXCLUDED.evidence_id,version_id=EXCLUDED.version_id
+ WHERE (s.tenant_id,s.login)=(EXCLUDED.tenant_id,EXCLUDED.login) AND s.expires_at>clock_timestamp();
+ IF NOT FOUND THEN RAISE EXCEPTION 'ACCOUNTING_BINDING_MISMATCH' USING ERRCODE='42501'; END IF;
+ RETURN QUERY INSERT INTO app.accounting_observation_receipt AS receipt
+  (tenant_id,evidence_id,object_version_id,job_id,observation_hash)
+  VALUES(t,e,v,j,h) ON CONFLICT ON CONSTRAINT accounting_observation_receipt_pkey DO NOTHING
+  RETURNING receipt.evidence_id;
+END $$;
+ALTER FUNCTION app.lp11_insert_accounting_receipt(uuid,uuid,text,uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_insert_accounting_receipt(uuid,uuid,text,uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_insert_accounting_receipt(uuid,uuid,text,uuid,text) TO jobguard_shadow;
+
+CREATE POLICY lp11_accounting_receipt_read ON app.accounting_observation_receipt FOR SELECT TO jobguard_shadow,jobguard_migration
+ USING (tenant_id=app.lp11_accounting_receipt_tenant(job_id,evidence_id,object_version_id));
+CREATE POLICY lp11_accounting_receipt_insert ON app.accounting_observation_receipt FOR INSERT TO jobguard_migration
+ WITH CHECK (tenant_id=app.lp11_accounting_receipt_tenant(job_id,evidence_id,object_version_id));
+
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.
 ALTER VIEW app.ledger_balance SET (security_invoker=true);
