@@ -1,26 +1,37 @@
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { Pool, type PoolClient } from "pg";
-import { jobDoorsActor } from "./lp-job-doors-fixtures.js";
+import { jobDoorsActor, transaction } from "./lp-job-doors-fixtures.js";
 import { startLp0Database, RUNTIME_TEST_PASSWORD } from "./lp-0-catalog.js";
+import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
+import { closeTestPools } from "./pool-test-utils.js";
+import { closeWorkerFixtureCluster } from "./worker-login-fixture.js";
+import { appendAuditBatch } from "../src/audit.js";
 import { IdentityRepository } from "../src/identity-repository.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
 import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
 import { ActionExecutor, reconcileOutbox } from "../src/outbox.js";
-import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
+import { verifiedTenantContextForQueuedJob, withTenant } from "../src/tenant-context.js";
 
-let db: { owner: Pool; runtime: Pool; identity: Pool; close(): Promise<void> };
+let fixture: Awaited<ReturnType<typeof startLp0Database>>;
+let db: { owner: Pool; runtime: Pool; identity: Pool };
 beforeAll(async () => {
-  const fixture = await startLp0Database(62700);
+  fixture = await startLp0Database(62700);
   await fixture.bootstrapRuntimeLogin();
+  await fixture.admin.query("ALTER ROLE jobguard_identity LOGIN PASSWORD 'identity-fixture'");
   const runtime = new Pool({host:"127.0.0.1",port:fixture.port,database:fixture.databaseName,
     user:"jobguard_runtime",password:RUNTIME_TEST_PASSWORD,max:2});
-  await fixture.admin.query("ALTER ROLE jobguard_identity LOGIN PASSWORD 'identity-fixture'");
   const identity = new Pool({host:"127.0.0.1",port:fixture.port,database:fixture.databaseName,
     user:"jobguard_identity",password:"identity-fixture",max:2});
-  db = {owner:fixture.admin,runtime,identity,async close() { await identity.end(); await runtime.end(); await fixture.stop(); }};
+  db = {owner:fixture.admin,runtime,identity};
 }, 300_000);
-afterAll(async () => { await db?.close(); });
+afterAll(async () => {
+  try {
+    await Promise.all([closeTestPools(db?.identity, db?.runtime), fixture && closeWorkerFixtureCluster(fixture.port)]);
+  } finally {
+    await fixture?.stop();
+  }
+});
 const refusal = { code: "42501", message: "MEMBER_ADMIN_REFUSED" };
 async function member(tenant?: ReturnType<typeof randomUUID>, role = "owner") {
   const a = await jobDoorsActor(db.owner, tenant), digest = randomBytes(32).toString("hex"), sessionId = randomUUID();
@@ -39,7 +50,22 @@ async function administration(a: Member, target: Member, role?: string) {
   try { await c.query("BEGIN"); const r=await invoke(c,a,target,role); await c.query("COMMIT"); return r; }
   catch(e) { await c.query("ROLLBACK"); throw e; } finally { c.release(); }
 }
-const events = async (a: Member) => (await db.owner.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [a.tenant])).rows;
+const fixtureAuditIds = new Map<string, string>();
+async function assignContractorTrack(a: Member) {
+  const id = randomUUID(), actorRef = "operations:lp7-fixture";
+  await withTenant(db.owner, verifiedTenantContextForQueuedJob(a.tenant), async tx => {
+    await tx.$client.query("SET LOCAL ROLE jobguard_migration");
+    await tx.$client.query("SELECT app.assign_commercial_track($1,$2,'contractor',$3,0,$4)", [a.tenant,id,`synthetic-agreement:${a.tenant}`,actorRef]);
+    await appendAuditBatch(tx, [{id,version:"audit.v1",actorRef,eventType:"commercial_track.assigned",
+      subjectType:"tenant",subjectRef:a.tenant,payload:{references:{assignment:id,environment:"synthetic_demo"}}}]);
+  });
+  fixtureAuditIds.set(a.tenant,id);
+}
+
+const events = async (a: Member) => (await db.owner.query(
+  "SELECT * FROM app.audit_event WHERE tenant_id=$1 AND id IS DISTINCT FROM $2::uuid ORDER BY sequence",
+  [a.tenant,fixtureAuditIds.get(a.tenant) ?? null],
+)).rows;
 
 it("rejects non-owners, forged tenants/targets, expired/revoked sessions and owner creation", async () => {
   const a=await member(), nonOwner=await member(a.tenant,"admin"), outsider=await member();
@@ -111,9 +137,11 @@ it("removal rejects the very next bind; demotion rejects stale privileged admini
 });
 
 it("rolls back membership and audit together, including a failure at the final audit write", async () => {
-  const a=await member(), b=await member(a.tenant), c=await db.owner.connect(), grantId=randomUUID();
+  const a=await member(), b=await member(a.tenant), grantId=randomUUID();
+  await assignContractorTrack(a);
   await db.owner.query("INSERT INTO app.contractor_member(tenant_id,membership_id,email) VALUES($1,$2,'fictional@builder.invalid')",[b.tenant,b.member]);
   await db.owner.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id) VALUES($1,$2,$3,'admin','tenant',$1)",[b.tenant,grantId,b.member]);
+  const c=await db.owner.connect();
   try {
     await c.query("BEGIN; SET LOCAL ROLE jobguard_identity"); await invoke(c,a,b); await c.query("ROLLBACK");
     expect(await events(a)).toHaveLength(0);
@@ -128,6 +156,8 @@ it("rolls back membership and audit together, including a failure at the final a
 
 it.each([undefined,"read_only"])("refuses pending invitations and queued owner sends after %s", async role => {
   const a=await member(), b=await member(a.tenant), recipient=`${randomUUID()}@fictional.invalid`;
+  await assignContractorTrack(a);
+  await seedActiveContractorAgreement(db.owner,a.tenant);
   const invitation=(await db.owner.query("SELECT identity.invite_member($1,$2,$3,'finance') id",[b.digest,b.tenant,recipient])).rows[0].id;
   const acceptedRecipient=`${randomUUID()}@fictional.invalid`;
   const acceptedInvitation=(await db.owner.query("SELECT identity.invite_member($1,$2,$3,'finance') id",[b.digest,b.tenant,acceptedRecipient])).rows[0].id;
@@ -140,16 +170,23 @@ it.each([undefined,"read_only"])("refuses pending invitations and queued owner s
   await db.owner.query("INSERT INTO app.decision(tenant_id,id,subject_type,subject_ref,action_type) VALUES($1,$2,'quote','fictional','send_quote')",[b.tenant,decision]);
   await db.owner.query("INSERT INTO app.decision_resolution(tenant_id,id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[b.tenant,resolution,decision,b.member]);
   await db.owner.query("INSERT INTO app.action_authorization(tenant_id,id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'send_quote',$6,1,'synthetic.v1','2099-01-01')",[b.tenant,auth,decision,resolution,b.member,hash]);
-  await db.owner.query("INSERT INTO app.action_outbox(tenant_id,id,authorization_id,adapter,provider_effect_key,action_type,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at) VALUES($1,$2,$3,'fake_capture',$2::text,'send_quote',$4,$5,1,'synthetic.v1','2099-01-01')",[b.tenant,outbox,auth,hash,content]);
+  const enqueue = (id: string) => db.owner.query(
+    "INSERT INTO app.action_outbox(tenant_id,id,authorization_id,adapter,provider_effect_key,action_type,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at) VALUES($1,$2,$3,'fake_capture',($2::uuid)::text,'send_quote',$4,$5,1,'synthetic.v1','2099-01-01')",
+    [b.tenant,id,auth,hash,content],
+  );
+  await enqueue(outbox);
   const deliver=vi.fn(async()=>({kind:"succeeded" as const,providerReference:"fictional-provider-ref"}));
   const control=randomUUID();
-  await db.owner.query("INSERT INTO app.action_outbox(tenant_id,id,authorization_id,adapter,provider_effect_key,action_type,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at) VALUES($1,$2,$3,'fake_capture',$2::text,'send_quote',$4,$5,1,'synthetic.v1','2099-01-01')",[b.tenant,control,auth,hash,content]);
+  await enqueue(control);
   const executor=new ActionExecutor(db.runtime,new Map([["fake_capture",{name:"fake_capture",supportsProviderDeduplication:false,deliver,reconcile:async()=>"unknown" as const}]]),{emit:()=>undefined});
   await executor.execute(verifiedTenantContextForQueuedJob(b.tenant),control);
   expect(deliver).toHaveBeenCalledOnce(); deliver.mockClear();
   // Claim a send before revocation, then hold the fake network result across it.
   const claimed=randomUUID();
-  await db.owner.query("INSERT INTO app.action_outbox(tenant_id,id,authorization_id,adapter,provider_effect_key,action_type,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at) VALUES($1,$2,$3,'fake_capture',$2::text,'send_quote',$4,$5,1,'synthetic.v1','2099-01-01')",[b.tenant,claimed,auth,hash,content]);
+  await enqueue(claimed);
+  const operativeInvitation=randomUUID(), operativeChallenge=randomUUID();
+  const operativeRecipient=`${randomUUID()}@fictional.invalid`;
+  await transaction(db.owner,b.tenant,c=>c.query("INSERT INTO identity.invitation(id,email,tenant_id,account_id,role,expires_at,issuer_user_id) VALUES($1,$2,$3,$4,'operative',clock_timestamp()+interval '1 hour',$5)",[operativeInvitation,operativeRecipient,b.tenant,b.account,b.person]));
   let reached!:()=>void, finish!:(value:{kind:"outcome_unknown";code:string})=>void;
   const reachedAdapter=new Promise<void>(resolve=>{reached=resolve;});
   const outcome=new Promise<{kind:"outcome_unknown";code:string}>(resolve=>{finish=resolve;});
@@ -177,11 +214,7 @@ it.each([undefined,"read_only"])("refuses pending invitations and queued owner s
   await db.owner.query("INSERT INTO identity.challenge(id,email,purpose,invitation_id,digest,requested_at,expires_at,consumed_at,verified) VALUES($1,$2,'invitation',$3,$4,clock_timestamp(),clock_timestamp()+interval '1 hour',clock_timestamp(),true)",[challenge,recipient,invitation,'a'.repeat(64)]);
   expect((await db.owner.query("SELECT identity.provision_verified_challenge($1) id",[challenge])).rows[0].id).toBeNull();
   expect((await db.owner.query("SELECT accepted_at FROM identity.invitation WHERE id=$1",[invitation])).rows[0].accepted_at).toBeNull();
-  // Owner fixture represents an operative grant issued while b was still an owner.
-  // Current MON-8 acceptance must refuse it after revocation/demotion, before entitlement.
-  const operativeInvitation=randomUUID(), operativeChallenge=randomUUID();
-  const operativeRecipient=`${randomUUID()}@fictional.invalid`;
-  await db.owner.query("INSERT INTO identity.invitation(id,email,tenant_id,account_id,role,expires_at,issuer_user_id) VALUES($1,$2,$3,$4,'operative',clock_timestamp()+interval '1 hour',$5)",[operativeInvitation,operativeRecipient,b.tenant,b.account,b.person]);
+  // Current MON-8 acceptance must refuse the invitation after revocation/demotion.
   await db.owner.query("INSERT INTO identity.challenge(id,email,purpose,invitation_id,digest,requested_at,expires_at,consumed_at,verified) VALUES($1,$2,'invitation',$3,$4,clock_timestamp(),clock_timestamp()+interval '1 hour',clock_timestamp(),true)",[operativeChallenge,operativeRecipient,operativeInvitation,'b'.repeat(64)]);
   expect((await db.owner.query("SELECT identity.provision_verified_challenge($1) id",[operativeChallenge])).rows[0].id).toBeNull();
   expect((await db.owner.query("SELECT accepted_at FROM identity.invitation WHERE id=$1",[operativeInvitation])).rows[0].accepted_at).toBeNull();
@@ -197,6 +230,7 @@ it("refuses snapshot isolation that could retain authority from before the tenan
 
 it.each([undefined,"finance"])("revokes delegated grants atomically with %s", async role => {
   const a=await member(), b=await member(a.tenant), grantId=randomUUID();
+  await assignContractorTrack(a);
   await db.owner.query("INSERT INTO app.contractor_member(tenant_id,membership_id,email) VALUES($1,$2,'fictional@builder.invalid')",[b.tenant,b.member]);
   await db.owner.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id) VALUES($1,$2,$3,'admin','tenant',$1)",[b.tenant,grantId,b.member]);
   await administration(a,b,role);
@@ -334,6 +368,10 @@ it.each([undefined,"finance"])("requires a present session and SSO authority for
 
 it.each(["admin","estimator","foreman","operative","finance","read_only"])("changes to the existing %s role without affecting another company", async role => {
   const a=await member(), b=await member(a.tenant,"admin"), other=await member();
+  if (role === "operative") {
+    await assignContractorTrack(a);
+    await seedActiveContractorAgreement(db.owner,a.tenant);
+  }
   await administration(a,b,role);
   expect((await db.owner.query("SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2",[b.tenant,b.member])).rows[0].role).toBe(role);
   await administration(other,await member(other.tenant,"finance"));
