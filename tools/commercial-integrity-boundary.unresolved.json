@@ -16,9 +16,9 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/outbox.ts",
-    "line": 35,
-    "fingerprint": "61b190ba5ae9f0ef247899985aea9adbb07f3017ed64d28657359cb3b4691afa",
-    "reason": "ActionExecutor delegates a tenant-visible action ID to WorkerActionExecutor on a separate worker login. The worker calls app.claim_worker_action before invoking the registered adapter and uses the claim token with app.complete_worker_action. Neither path reads advisory data."
+    "line": 44,
+    "fingerprint": "0807fb800a3f657160d684c53c952eebd78255cac565dfc707f430827016c09b",
+    "reason": "ActionExecutor checks the bound request or passes the expected queued tenant to the separate worker login. The worker verifies the committed outbox signal and claims the same action in that transaction. Adapter delivery occurs after claim and completes with the claim token. The path reads no advisory data."
   },
   {
     "code": "UNRESOLVED_COVERED_EDGE",

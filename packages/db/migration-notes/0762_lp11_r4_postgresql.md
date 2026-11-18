@@ -2525,6 +2525,32 @@ node tools/commercial-integrity-boundary.mjs
 nice -n 9 node --test --test-concurrency=1 tools/commercial-integrity-{current-source-guard,boundary}.test.mjs
 ```
 
+## r5 queued outbox compatibility, private shadow reads and exact upgrade snapshots
+
+Eight queued outbox revocation cases failed when `ActionExecutor` tried to read its tenant row through an unbound web transaction. The worker path now checks the expected identity against the committed signal using the existing isolated LP-10 login. The same protected action scope guards claim, and both reconciliation transactions recheck the scope. A bound request still checks visibility through its own transaction before opening a worker connection. The provider result remains fenced by the worker claim token.
+
+The three PostgreSQL suites passed 40 of 40 across the final results. All 15 revocation and 16 worker login tests passed in the grouped run. Its remaining later-outbox test reached a fixture that tried to bind a second credential. The fixture now asserts its original binding and verifies the exact current idempotent track insert, and all nine later-outbox tests passed on rerun. Eight related unit files passed 107 of 107.
+
+Runtime no longer has direct EXECUTE on the two shadow subject helpers. Migration-owned, exact SELECT and INSERT policies grant the original decision and invalidation reads for the protected job. The frozen enterprise live-prompt test passed its callable-shadow check, and 47 real final-check tests and 89 upgrade, proof-loader and tenant policy checks passed. The catalogue proof has 1,393 LP0 changes and 775 upgrade changes including 650 policy changes.
+
+Seven populated upgrade comparisons now expect the exact list of empty LP-11 bookkeeping tables alongside every previous row and ACL. All seven targeted assertions passed. The individual migration step comparisons retain their original expectations.
+
+Workspace typecheck passed all seven packages. Both commercial-integrity guards returned zero diagnostics with the same eleven reviewed unresolved sites. Each commercial baseline refreshed only its existing `ActionExecutor` delegation at `packages/db/src/outbox.ts:44`, from `61b190ba5ae9f0ef247899985aea9adbb07f3017ed64d28657359cb3b4691afa` to `0807fb800a3f657160d684c53c952eebd78255cac565dfc707f430827016c09b`. The change covers the newly checked worker delegation and keeps the previously reviewed commercial data boundary.
+
+```sh
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/serious-b10-outbox-revocation.integration.test.ts test/lp-10-worker-login.integration.test.ts test/later-outbox.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-worker-compat-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/later-outbox.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-later-outbox-final2-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run src/outbox-worker-cutover.test.ts src/serious-b10.test.ts src/worker-action-executor.test.ts src/later-outbox.test.ts src/outbox.test.ts test/ops-alerts.test.ts test/purchase-order-action.test.ts src/audit-fix-dbsrc-08.test.ts --maxWorkers=2 --reporter=default
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/enterprise-live-prompt-access.integration.test.ts -t 'no new callable routine grants access to shadow storage' --maxWorkers=1 --reporter=default
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/final-check-invalidation-lock.integration.test.ts test/final-check-rerun.integration.test.ts test/real-fc-ordinary-words.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-shadow-role-results.json
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/migration-proof-loader.test.ts test/lp11-bound-tenant-rls.integration.test.ts --maxWorkers=1 --reporter=default
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/subscription-internal-owner.integration.test.ts test/subscription-pending-downgrade.integration.test.ts test/subscription-attempt-reconciliation.integration.test.ts -t 'populated' --maxWorkers=1 --reporter=default
+nice -n 8 pnpm --filter @jobguard/db exec vitest run test/builder-acceptance-sent-head.integration.test.ts test/extra-proceed-raiser-upgrade.integration.test.ts test/extra-proceed-upgrade.integration.test.ts test/lp-10-worker-login-upgrade.integration.test.ts -t 'predecessor defect|populated upgrade|upgrades populated|0761 preserves populated' --maxWorkers=1 --reporter=default
+nice -n 4 pnpm typecheck
+nice -n 7 node tools/commercial-integrity-current-source-guard.mjs
+nice -n 7 node tools/commercial-integrity-boundary.mjs
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

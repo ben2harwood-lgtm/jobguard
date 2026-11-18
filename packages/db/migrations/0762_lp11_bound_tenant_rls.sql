@@ -54,6 +54,21 @@ END $$;
 ALTER FUNCTION app.lp11_open_worker_scope(uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp11_open_worker_scope(uuid) FROM PUBLIC;
 
+-- The compatibility facade can assert its queued tenant through the worker
+-- login. The signal supplies the tenant and the claim reuses this exact scope.
+CREATE FUNCTION app.lp11_worker_action_matches(p_action uuid,p_tenant uuid) RETURNS boolean
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ PERFORM app.lp10_assert_worker();
+ IF NOT EXISTS(SELECT FROM infrastructure.outbox_signal s WHERE (s.action_id,s.tenant_id)=(p_action,p_tenant)) THEN
+  RETURN false;
+ END IF;
+ RETURN app.lp11_open_worker_scope(p_action)=p_tenant;
+END $$;
+ALTER FUNCTION app.lp11_worker_action_matches(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_worker_action_matches(uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_worker_action_matches(uuid,uuid) TO jobguard_worker;
+
 CREATE FUNCTION app.lp11_worker_tenant(p_action uuid) RETURNS uuid
  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
  SELECT s.tenant_id FROM control_plane.lp11_worker_scope s
@@ -2825,7 +2840,6 @@ CREATE FUNCTION app.lp11_shadow_decision_tenant(signal text) RETURNS uuid
 $$;
 ALTER FUNCTION app.lp11_shadow_decision_tenant(text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp11_shadow_decision_tenant(text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION app.lp11_shadow_decision_tenant(text) TO jobguard_runtime,jobguard_command_writer;
 
 CREATE OR REPLACE FUNCTION app.serialize_final_check_invalidation() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
 DECLARE source_job uuid;unbound_maintenance boolean:=app.lp6d_maintenance_login() AND NOT app.lp6e_request_binding_present();
@@ -2897,7 +2911,6 @@ CREATE FUNCTION app.lp11_shadow_evidence_tenant(evidence uuid) RETURNS uuid
 $$;
 ALTER FUNCTION app.lp11_shadow_evidence_tenant(uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp11_shadow_evidence_tenant(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION app.lp11_shadow_evidence_tenant(uuid) TO jobguard_runtime,jobguard_shadow;
 
 
 -- Linked practice preserves the existing parent-first lock order. The
@@ -3369,13 +3382,6 @@ BEGIN
       WHEN 'audit_head' THEN 'NULL,NULL,''audit'''
       ELSE 'job_id,NULL,''job''' END);
   END IF;
-  IF (policy_row.nspname,policy_row.relname)=('app','decision')
-    AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
-   authority_expression:=format(
-    'coalesce(%s,CASE WHEN current_user=''jobguard_migration''
-       AND subject_type=''shadow_signal'' AND action_type=''review_must_surface_signal''
-     THEN app.lp11_shadow_decision_tenant(subject_ref)::text END)',authority_expression);
-  END IF;
   expression_using := regexp_replace(policy_row.predicate_using,
    tenant_setting_pattern, authority_expression, 'g');
   IF policy_row.nspname='app' AND policy_row.relname IN ('job','job_party_current','job_party_binding','customer_revision','site_revision','evidence_upload','final_account_lock','evidence_object','final_check_manifest','final_check_manifest_source','customer_invoice','final_account_invoice_binding','job_commercial_track','supplier_document','job_work_state_event')
@@ -3423,11 +3429,6 @@ BEGIN
    AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
    expression_using := regexp_replace(expression_using,'app\.lp11_policy_tenant\(\)',
     'coalesce(app.lp11_policy_tenant(),CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_sso_tenant(ARRAY[''worker_authorize''],NULL) END)','g');
-  END IF;
-  IF (policy_row.nspname,policy_row.relname)=('app','evidence_invalidation')
-   AND 'jobguard_migration'::regrole::oid=ANY(policy_row.polroles) THEN
-   expression_using:=regexp_replace(expression_using,'app\.lp11_policy_tenant\(\)',
-    'coalesce(app.lp11_policy_tenant(),CASE WHEN current_user=''jobguard_migration'' THEN app.lp11_shadow_evidence_tenant(evidence_id) END)','g');
   END IF;
   IF policy_row.nspname='app' AND policy_row.relname IN ('membership','contractor_member','contractor_membership_revocation',
    'commercial_track_assignment','contractor_agreement_status_revision','role_grant','role_grant_revocation')
@@ -3617,6 +3618,17 @@ ALTER POLICY tenant_intake ON connector.input_event
  USING (tenant_id=coalesce(app.lp11_policy_tenant(),connector.lp11_input_tenant(namespace)))
  WITH CHECK (tenant_id=coalesce(app.lp11_policy_tenant(),connector.lp11_input_tenant(namespace,binding_id)));
 
+
+-- Shadow decision and invalidation reads are owned by the migration role.
+-- Runtime never needs EXECUTE on the subject lookup functions.
+CREATE POLICY lp11_shadow_decision_read ON app.decision FOR SELECT TO jobguard_migration
+ USING (subject_type='shadow_signal' AND action_type='review_must_surface_signal'
+  AND tenant_id=app.lp11_shadow_decision_tenant(subject_ref));
+CREATE POLICY lp11_shadow_decision_insert ON app.decision FOR INSERT TO jobguard_migration
+ WITH CHECK (subject_type='shadow_signal' AND action_type='review_must_surface_signal'
+  AND tenant_id=app.lp11_shadow_decision_tenant(subject_ref));
+CREATE POLICY lp11_shadow_invalidation_read ON app.evidence_invalidation FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_shadow_evidence_tenant(evidence_id));
 
 -- Retain the SELECT-only alternatives, now limited to the authenticated
 -- stage operation and job. The indirect rows have no job column.
