@@ -9,6 +9,7 @@ import {
   type AuditEvent, type CommandMutation,
 } from "../src/index.js";
 import { cluster, type Cluster } from "./extra-fixtures.js";
+import { bindTestClient } from "./tenant-context-test-utils.js";
 
 let c: Cluster;
 beforeAll(async () => { c = await cluster(); }, 60_000);
@@ -21,7 +22,7 @@ async function draftJob() {
     id: randomUUID(), version: "audit.v1", actorRef: `membership:${member}`,
     eventType: "synthetic.contention.fixture", subjectType: "job", subjectRef: job, payload: {},
   }]));
-  return { tenant, job, context: f.context, command: f.command, review: f.review };
+  return { tenant, member, job, context: f.context, command: f.command, review: f.review };
 }
 
 async function auditChain(tenant: string): Promise<AuditEvent[]> {
@@ -110,7 +111,7 @@ it("[L022] blocking observer refuses a SELECT-only substitute while the same bus
     const blockerPid = (await blocker.query("SELECT pg_backend_pid() pid")).rows[0]!.pid as number;
     await blocker.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [f.tenant, f.job]);
     await reader.query("BEGIN");
-    await reader.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenant]);
+    await bindTestClient(c.admin, reader, f.tenant, f.member);
     const readerPid = (await reader.query("SELECT pg_backend_pid() pid")).rows[0]!.pid as number;
     expect(readerPid).not.toBe(blockerPid);
     expect((await reader.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2", [f.tenant, f.job])).rows).toEqual([{ id: f.job }]);

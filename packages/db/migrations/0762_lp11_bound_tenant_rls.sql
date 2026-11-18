@@ -4795,6 +4795,257 @@ END $$;
 REVOKE EXECUTE ON FUNCTION app.retention_timer(uuid,uuid,jsonb,text) FROM jobguard_runtime;
 GRANT EXECUTE ON FUNCTION app.retention_timer(uuid,uuid,jsonb,text) TO jobguard_worker;
 
+-- The shadow pack worker starts from an existing queue fact. Its owner reads
+-- the matching request, checks the stored requester and stays on that job/case.
+CREATE UNLOGGED TABLE control_plane.lp11_pack_scope (
+ transaction_id xid8 PRIMARY KEY,
+ login name NOT NULL,
+ tenant_id uuid NOT NULL,
+ command_id uuid NOT NULL,
+ job_id uuid,
+ case_id uuid,
+ member_id uuid,
+ approved_pack_id uuid,
+ reading_owner boolean NOT NULL DEFAULT false,
+ sealing boolean NOT NULL DEFAULT false
+);
+ALTER TABLE control_plane.lp11_pack_scope OWNER TO jobguard_migration;
+REVOKE ALL ON TABLE control_plane.lp11_pack_scope FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_pack_tenant(resource text,id uuid,job uuid DEFAULT NULL) RETURNS uuid
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_pack_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+  AND CASE resource
+   WHEN 'request' THEN s.command_id=id
+   WHEN 'job' THEN s.job_id IS NOT NULL AND s.job_id=id
+   WHEN 'case' THEN s.case_id IS NOT NULL AND s.case_id=id
+   WHEN 'source' THEN s.job_id IS NOT NULL AND s.job_id=job AND s.case_id=id
+   WHEN 'member' THEN s.member_id IS NOT NULL AND s.member_id=id
+   WHEN 'owner' THEN s.reading_owner
+   WHEN 'pack' THEN s.job_id IS NOT NULL AND s.job_id=job AND (s.command_id=id OR s.approved_pack_id=id)
+   WHEN 'write' THEN s.job_id IS NOT NULL AND s.job_id=job AND s.command_id=id
+   WHEN 'audit' THEN s.sealing AND s.job_id=job AND s.command_id=id
+   WHEN 'audit_head' THEN s.sealing
+   ELSE false END
+$$;
+ALTER FUNCTION app.lp11_pack_tenant(text,uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_pack_tenant(text,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_pack_tenant(text,uuid,uuid) TO jobguard_audit_writer;
+
+CREATE FUNCTION app.lp11_open_pack_request(t uuid,cid uuid) RETURNS app.evidence_pack_v3_request
+ LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE r app.evidence_pack_v3_request; requested_member uuid;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR app.lp6e_request_binding_present()
+  OR NOT pg_has_role(session_user,'jobguard_shadow','USAGE') OR pg_has_role(session_user,'jobguard_runtime','USAGE')
+  OR NOT EXISTS(SELECT FROM infrastructure.evidence_pack_v3_request WHERE (tenant_id,command_id)=(t,cid))
+ THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
+ INSERT INTO control_plane.lp11_pack_scope(transaction_id,login,tenant_id,command_id)
+  VALUES(pg_current_xact_id(),session_user,t,cid);
+ SELECT * INTO r FROM app.evidence_pack_v3_request WHERE (tenant_id,command_id)=(t,cid);
+ IF NOT FOUND THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
+ SELECT p.membership_id INTO requested_member FROM app.authenticate_practice_session(r.session_digest,r.tenant_id) p;
+ IF NOT FOUND THEN RAISE EXCEPTION 'UNAUTHENTICATED'; END IF;
+ PERFORM app.lp11_bind_shadow_job(r.tenant_id,r.job_id);
+ UPDATE control_plane.lp11_pack_scope s SET job_id=r.job_id,case_id=r.case_id,member_id=requested_member,
+  approved_pack_id=CASE WHEN r.command->>'version'='evidence-pack-attachment-approval.v3' THEN (r.command->>'packId')::uuid END
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned();
+ RETURN r;
+END $$;
+ALTER FUNCTION app.lp11_open_pack_request(uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_open_pack_request(uuid,uuid) FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_pack_request_owner(r app.evidence_pack_v3_request) RETURNS uuid
+ LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE owner_job uuid; prior_tenant text:=current_setting('app.tenant_id',true);
+BEGIN
+ IF r.tenant_id IS NULL OR r.tenant_id IS DISTINCT FROM app.lp11_pack_tenant('write',r.command_id,r.job_id)
+ THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
+ UPDATE control_plane.lp11_pack_scope SET reading_owner=true WHERE transaction_id=pg_current_xact_id_if_assigned();
+ PERFORM set_config('app.tenant_id',r.tenant_id::text,true);
+ owner_job:=app.lp6d_evidence_pack_v3_owner(r.tenant_id,r.case_id,r.session_digest);
+ PERFORM set_config('app.tenant_id',coalesce(prior_tenant,''),true);
+ UPDATE control_plane.lp11_pack_scope SET reading_owner=false WHERE transaction_id=pg_current_xact_id_if_assigned();
+ IF owner_job IS DISTINCT FROM r.job_id THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
+ RETURN owner_job;
+END $$;
+ALTER FUNCTION app.lp11_pack_request_owner(app.evidence_pack_v3_request) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_pack_request_owner(app.evidence_pack_v3_request) FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_close_pack_request() RETURNS void
+ LANGUAGE sql SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $$
+ DELETE FROM control_plane.lp11_pack_scope WHERE transaction_id=pg_current_xact_id_if_assigned() AND login=session_user
+$$;
+ALTER FUNCTION app.lp11_close_pack_request() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_close_pack_request() FROM PUBLIC;
+
+CREATE POLICY lp11_pack_request ON app.evidence_pack_v3_request FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_pack_tenant('request',command_id));
+CREATE POLICY lp11_pack_case ON app.recovery_case FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_pack_tenant('source',id,job_id));
+CREATE POLICY lp11_pack_member ON app.membership FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_pack_tenant('member',id));
+CREATE POLICY lp11_pack_member_lock ON app.membership FOR UPDATE TO jobguard_migration
+ USING (tenant_id=app.lp11_pack_tenant('member',id)) WITH CHECK (false);
+
+-- The ancestry check runs under a private owner-only marker. The actual import
+-- lineage and ownership checks remain in the latest checked requester routine.
+CREATE POLICY lp11_pack_ancestry_job ON app.job FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_pack_tenant('owner',NULL));
+CREATE POLICY lp11_pack_ancestry_import ON app.job_import_v3 FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_pack_tenant('owner',NULL));
+CREATE POLICY lp11_pack_ancestry_audit ON app.audit_event FOR SELECT TO jobguard_migration
+ USING (subject_type='job' AND app.lp11_audit_event_type(audit_event)='job.imported_baseline_attested'
+  AND tenant_id=app.lp11_pack_tenant('owner',NULL));
+CREATE POLICY lp11_pack_receipt ON app.command_receipt FOR SELECT TO jobguard_migration
+ USING ((command_type='job.adopt_in_flight' AND status='succeeded' AND tenant_id=app.lp11_pack_tenant('owner',NULL))
+  OR (command_type='evidence_pack.v3' AND tenant_id=app.lp11_pack_tenant('request',command_id)));
+
+DO $pack_case_reads$ DECLARE relation text; BEGIN
+ FOREACH relation IN ARRAY ARRAY['recovery_claim_revision','recovery_case_event','recovery_attribution_revision',
+  'stored_receipt_case_allocation','recovery_case_allocation'] LOOP
+  EXECUTE format('CREATE POLICY lp11_pack_case_read ON app.%I FOR SELECT TO jobguard_migration
+   USING (tenant_id=app.lp11_pack_tenant(''source'',case_id,job_id))',relation);
+ END LOOP;
+END $pack_case_reads$;
+-- The existing checked shadow scope covers the job, its lock and its ordinary
+-- evidence. These sources also need the exact pack job for their existing reads.
+DO $pack_job_reads$ DECLARE relation text; BEGIN
+ FOREACH relation IN ARRAY ARRAY['quote_document_version','quote_acceptance',
+  'variation_revision','variation_approval','customer_invoice','job_source_original',
+  'final_account_revision','extra_origin','final_check_disposition_binding',
+  'recovery_case_allocation_reversal','receipt_line_allocation',
+  'receipt_allocation_fact_line','receipt_allocation_fact_source','final_account_invoice_binding',
+  'final_account_invoiced_line','customer_credit_note','customer_payment','customer_payment_reversal',
+  'practice_feed_event','practice_feed_receipt_match'] LOOP
+  EXECUTE format('CREATE POLICY lp11_pack_job_read ON app.%I FOR SELECT TO jobguard_migration
+   USING (tenant_id=app.lp11_pack_tenant(''job'',job_id))',relation);
+ END LOOP;
+END $pack_job_reads$;
+CREATE POLICY lp11_pack_invalidation ON app.evidence_invalidation FOR SELECT TO jobguard_migration
+ USING (EXISTS(SELECT FROM app.evidence_object e WHERE (e.tenant_id,e.id)=(evidence_invalidation.tenant_id,evidence_invalidation.evidence_id)
+  AND e.tenant_id=app.lp11_pack_tenant('job',e.job_id)));
+
+CREATE POLICY lp11_pack_result ON app.evidence_pack_v3 FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_pack_tenant('pack',id,job_id) AND tenant_id=app.lp11_pack_tenant('case',case_id));
+CREATE POLICY lp11_pack_store ON app.evidence_pack_v3 FOR INSERT TO jobguard_migration
+ WITH CHECK (tenant_id=app.lp11_pack_tenant('write',id,job_id) AND tenant_id=app.lp11_pack_tenant('case',case_id));
+CREATE POLICY lp11_pack_approval ON app.evidence_pack_v3_approval FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_pack_tenant('write',command_id,job_id) AND tenant_id=app.lp11_pack_tenant('case',case_id));
+CREATE POLICY lp11_pack_approve ON app.evidence_pack_v3_approval FOR INSERT TO jobguard_migration
+ WITH CHECK (tenant_id=app.lp11_pack_tenant('write',command_id,job_id) AND tenant_id=app.lp11_pack_tenant('case',case_id)
+  AND tenant_id=app.lp11_pack_tenant('pack',pack_id,job_id));
+CREATE POLICY lp11_pack_check_read ON app.evidence_pack_v3_check FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_pack_tenant('request',command_id));
+CREATE POLICY lp11_pack_check_write ON app.evidence_pack_v3_check FOR INSERT TO jobguard_migration
+ WITH CHECK (tenant_id=app.lp11_pack_tenant('request',command_id));
+CREATE POLICY lp11_pack_audit_head ON audit_control.audit_head TO jobguard_audit_writer
+ USING (tenant_id=app.lp11_pack_tenant('audit_head',NULL)) WITH CHECK (tenant_id=app.lp11_pack_tenant('audit_head',NULL));
+CREATE POLICY lp11_pack_audit ON app.audit_event TO jobguard_audit_writer
+ USING (CASE WHEN subject_type='job' AND actor_ref='system:evidence-pack'
+  AND app.lp11_audit_event_type(audit_event)='evidence_pack.v3_completed'
+  AND pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,commandId}','uuid')
+  THEN tenant_id=app.lp11_pack_tenant('audit',(payload#>>'{references,commandId}')::uuid,subject_ref::uuid) ELSE false END)
+ WITH CHECK (CASE WHEN subject_type='job' AND actor_ref='system:evidence-pack'
+  AND app.lp11_audit_event_type(audit_event)='evidence_pack.v3_completed'
+  AND pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,commandId}','uuid')
+  THEN tenant_id=app.lp11_pack_tenant('audit',(payload#>>'{references,commandId}')::uuid,subject_ref::uuid) ELSE false END);
+
+CREATE OR REPLACE FUNCTION app.prepare_evidence_pack_v3(t uuid,cid uuid) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE r app.evidence_pack_v3_request; result jsonb;
+BEGIN
+ IF NOT pg_has_role(session_user,'jobguard_shadow','USAGE') OR pg_has_role(session_user,'jobguard_runtime','USAGE') THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
+ r:=app.lp11_open_pack_request(t,cid);
+ PERFORM app.lp11_pack_request_owner(r);
+ result:=jsonb_build_object('command',r.command,'visibleRevision',app.final_lock_hash(app.evidence_pack_v3_ordinary(t,r.case_id)),'material',app.evidence_pack_v3_material(t,r.case_id,r.pre_lock));
+ PERFORM app.lp11_close_pack_request();
+ RETURN result;
+END $$;
+
+CREATE OR REPLACE FUNCTION app.complete_evidence_pack_v3_check(t uuid,cid uuid,h text) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE r app.evidence_pack_v3_request;
+BEGIN
+ IF NOT pg_has_role(session_user,'jobguard_shadow','USAGE') OR pg_has_role(session_user,'jobguard_runtime','USAGE') THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
+ r:=app.lp11_open_pack_request(t,cid);
+ PERFORM app.lp11_pack_request_owner(r);
+ IF h IS DISTINCT FROM app.final_lock_hash(app.evidence_pack_v3_ordinary(t,r.case_id)) THEN RAISE EXCEPTION 'EVIDENCE_PACK_V3_SOURCE_CONFLICT'; END IF;
+ INSERT INTO app.evidence_pack_v3_check VALUES(t,cid,h) ON CONFLICT DO NOTHING;
+ PERFORM app.lp11_close_pack_request();
+END $$;
+
+CREATE OR REPLACE FUNCTION app.finish_evidence_pack_v3(t uuid,cid uuid,m jsonb,artifact text,mh text) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE r app.evidence_pack_v3_request;j uuid;p app.evidence_pack_v3;envelope jsonb;expected_sources jsonb;expected_entries jsonb;expected_sections jsonb;
+ previous_tenant text:=current_setting('app.tenant_id',true);
+BEGIN
+ IF NOT pg_has_role(session_user,'jobguard_shadow','USAGE') OR pg_has_role(session_user,'jobguard_runtime','USAGE') THEN RAISE EXCEPTION 'NOT_FOUND'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtext(t::text),hashtext('pack-v3-command:'||cid::text));
+ r:=app.lp11_open_pack_request(t,cid);
+ PERFORM pg_advisory_xact_lock(hashtext(t::text),hashtext(r.case_id::text));
+ PERFORM pg_advisory_xact_lock(hashtextextended('stored-receipt-lines:'||t::text||':'||r.job_id::text,0));
+ -- Fence session revocation, job lock and allocation changes, before audit-head acquisition.
+ PERFORM 1 FROM control_plane.practice_session WHERE token_digest=r.session_digest FOR SHARE;
+ PERFORM 1 FROM app.membership WHERE tenant_id=t AND id IN(SELECT membership_id FROM app.authenticate_practice_session(r.session_digest,t)) FOR SHARE;
+ PERFORM 1 FROM app.job WHERE tenant_id=t AND id=r.job_id FOR UPDATE;
+ j:=app.lp11_pack_request_owner(r);
+ IF NOT EXISTS(SELECT 1 FROM app.command_receipt cr WHERE cr.tenant_id=t AND cr.command_id=cid AND cr.command_type='evidence_pack.v3'
+  AND cr.request_hash=app.final_lock_hash(jsonb_build_object('caseId',r.case_id,'session',r.session_digest,'command',r.command)))
+ THEN RAISE EXCEPTION 'EVIDENCE_PACK_COMMAND_CONFLICT'; END IF;
+
+ IF EXISTS(SELECT 1 FROM app.evidence_pack_v3 WHERE tenant_id=t AND id=cid) OR EXISTS(SELECT 1 FROM app.evidence_pack_v3_approval WHERE tenant_id=t AND command_id=cid) THEN PERFORM app.lp11_close_pack_request(); RETURN; END IF;
+ IF m->'lifecycle'->>'state'='pre_lock' AND NOT EXISTS(SELECT 1 FROM app.evidence_pack_v3_check WHERE tenant_id=t AND command_id=cid AND visible_revision=app.final_lock_hash(app.evidence_pack_v3_ordinary(t,r.case_id))) THEN RAISE EXCEPTION 'EVIDENCE_PACK_V3_DEPENDENCY_HELD'; END IF;
+ IF m IS DISTINCT FROM app.evidence_pack_v3_material(t,r.case_id,r.pre_lock) THEN RAISE EXCEPTION 'EVIDENCE_PACK_V3_SOURCE_CONFLICT'; END IF;
+ IF r.command->>'version'='evidence-pack-attachment-approval.v3' THEN
+  SELECT * INTO p FROM app.evidence_pack_v3 WHERE tenant_id=t AND case_id=r.case_id AND id=(r.command->>'packId')::uuid;
+  IF p.material IS DISTINCT FROM m OR p.manifest_hash IS DISTINCT FROM r.command->>'expectedManifestHash' OR p.content_hash IS DISTINCT FROM r.command->>'expectedContentHash' THEN RAISE EXCEPTION 'EVIDENCE_PACK_STALE_APPROVAL'; END IF;
+  INSERT INTO app.evidence_pack_v3_approval VALUES(t,j,r.case_id,cid,p.id);
+ ELSE
+  IF r.command->>'expectedVisibleSourceRevision' IS DISTINCT FROM app.final_lock_hash(app.evidence_pack_v3_ordinary(t,r.case_id)) THEN RAISE EXCEPTION 'EVIDENCE_PACK_V3_SOURCE_CONFLICT'; END IF;
+  envelope:=artifact::jsonb;
+  IF envelope->>'version' IS DISTINCT FROM 'evidence-pack-export.v3' OR envelope->'manifest'->>'binding' IS DISTINCT FROM 'synthetic-records'
+   OR envelope->'manifest'->>'tenantId' IS DISTINCT FROM t::text OR envelope->'manifest'->>'jobId' IS DISTINCT FROM j::text OR envelope->'manifest'->>'caseId' IS DISTINCT FROM r.case_id::text
+   OR envelope->'manifest'->'lifecycle' IS DISTINCT FROM m->'lifecycle'
+   OR jsonb_array_length(envelope->'sources') IS DISTINCT FROM jsonb_array_length(m->'records')
+   OR EXISTS(SELECT 1 FROM jsonb_array_elements(m->'records') x WHERE NOT EXISTS(SELECT 1 FROM jsonb_array_elements(envelope->'sources') y WHERE y->>'sourceId'=x->>'sourceId' AND y->>'kind'=x->>'kind' AND y->>'content'=x->>'content' AND y->>'recordedAt'=x->>'recordedAt'))
+   OR (m->'lifecycle'->>'state'='pre_lock' AND (envelope->'manifest'->'sections'<>'[]'::jsonb OR EXISTS(SELECT 1 FROM jsonb_array_elements(envelope->'sources') x WHERE x->>'kind'<>'ordinary')))
+  THEN RAISE EXCEPTION 'EVIDENCE_PACK_CONTENT_MISMATCH'; END IF;
+  SELECT coalesce(jsonb_agg(x||jsonb_build_object('tenantId',t,'jobId',j,'caseId',r.case_id,
+   'sourceVersion',encode(sha256(convert_to(x->>'content','UTF8')),'hex'),
+   'objectVersion','database-record:'||encode(sha256(convert_to(x->>'content','UTF8')),'hex'),'links','[]'::jsonb) ORDER BY x->>'sourceId' COLLATE "C"),'[]') INTO expected_sources FROM jsonb_array_elements(m->'records') x;
+  SELECT coalesce(jsonb_agg((x-'content')||jsonb_build_object('contentHash',encode(sha256(convert_to(x->>'content','UTF8')),'hex')) ORDER BY x->>'sourceId' COLLATE "C"),'[]') INTO expected_entries FROM jsonb_array_elements(expected_sources) x;
+  SELECT CASE WHEN m->'lifecycle'->>'state'='pre_lock' THEN '[]'::jsonb ELSE jsonb_agg(
+   CASE WHEN EXISTS(SELECT 1 FROM jsonb_array_elements(expected_sources) x WHERE x->>'kind'=k) THEN
+    jsonb_build_object('kind',k,'status','present','sourceIds',(SELECT jsonb_agg(x->>'sourceId' ORDER BY x->>'sourceId' COLLATE "C") FROM jsonb_array_elements(expected_sources) x WHERE x->>'kind'=k))
+   ELSE jsonb_build_object('kind',k,'status','absent','reason',CASE WHEN k='settlement' THEN 'unpaid' ELSE 'not_yet_available' END) END ORDER BY k COLLATE "C") END INTO expected_sections
+   FROM unnest(ARRAY['lock','capture_snapshot','source_observations','reconciliation','reveal','disposition','attribution_revision','settlement']) k;
+  IF envelope->'sources' IS DISTINCT FROM expected_sources OR envelope->'manifest'->'entries' IS DISTINCT FROM expected_entries
+   OR envelope->'manifest'->'sections' IS DISTINCT FROM expected_sections
+   OR envelope->>'banner' IS DISTINCT FROM 'Practice sandbox — synthetic data; nothing is sent or charged'
+   OR envelope->'manifest'->'trustLimitations' IS DISTINCT FROM jsonb_build_array(
+    'Synthetic database records only; no production entitlement or external verification is asserted.',
+    'Content mapping does not establish the truth of a claim.',
+    'Checkpoint trust must be assessed independently.',
+    'Evidence integrity does not establish that work occurred or that a debt is valid.')
+   OR envelope->>'mediaType' IS DISTINCT FROM 'text/plain'
+   OR envelope->'manifest'->>'version' IS DISTINCT FROM 'evidence-pack-manifest.v3'
+   OR (envelope->'manifest')-ARRAY['version','binding','tenantId','jobId','caseId','lifecycle','sections','entries','trustLimitations']<>'{}'::jsonb
+   OR envelope-ARRAY['version','mediaType','banner','manifest','sources']<>'{}'::jsonb
+   OR mh IS DISTINCT FROM encode(sha256(convert_to(app.canonical_evidence_pack_v3(envelope->'manifest'),'UTF8')),'hex')
+   OR artifact IS DISTINCT FROM app.canonical_evidence_pack_v3(envelope)
+  THEN RAISE EXCEPTION 'EVIDENCE_PACK_CONTENT_MISMATCH'; END IF;
+  INSERT INTO app.evidence_pack_v3 VALUES(t,j,r.case_id,cid,m,artifact,mh,encode(sha256(convert_to(artifact,'UTF8')),'hex'),clock_timestamp());
+ END IF;
+ UPDATE infrastructure.evidence_pack_v3_request SET completed_at=clock_timestamp() WHERE tenant_id=t AND command_id=cid;
+ UPDATE control_plane.lp11_pack_scope SET sealing=true WHERE transaction_id=pg_current_xact_id_if_assigned();
+ PERFORM set_config('app.tenant_id',r.tenant_id::text,true);
+ PERFORM app.append_final_check_audit(gen_random_uuid(),'system:evidence-pack',j,'evidence_pack.v3_completed',jsonb_build_object('commandId',cid));
+ PERFORM set_config('app.tenant_id',coalesce(previous_tenant,''),true);
+ PERFORM app.lp11_close_pack_request();
+END $$;
+
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.
 ALTER VIEW app.ledger_balance SET (security_invoker=true);

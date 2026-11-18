@@ -12720,6 +12720,487 @@
         "key": "owner|routine|function:app.lp11_retention_tenant(uuid,text,uuid,text)|jobguard_migration",
         "group": "a-lp11-bound-tenant-r3"
       }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.audit_event|lp11_pack_ancestry_audit|PERMISSIVE|SELECT|jobguard_migration|07b2ebfb65449c00"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.audit_event|lp11_pack_audit|PERMISSIVE|ALL|jobguard_audit_writer|bf65a6a1f6813292"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.command_receipt|lp11_pack_receipt|PERMISSIVE|SELECT|jobguard_migration|b79e6a39d1734744"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_credit_note|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_invoice|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_payment|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_payment_reversal|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.evidence_invalidation|lp11_pack_invalidation|PERMISSIVE|SELECT|jobguard_migration|c7c46974801c7875"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.evidence_pack_v3|lp11_pack_result|PERMISSIVE|SELECT|jobguard_migration|323279c0202b888f"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.evidence_pack_v3|lp11_pack_store|PERMISSIVE|INSERT|jobguard_migration|ac943766aee101b3"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.evidence_pack_v3_approval|lp11_pack_approval|PERMISSIVE|SELECT|jobguard_migration|802c95f086728ef1"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.evidence_pack_v3_approval|lp11_pack_approve|PERMISSIVE|INSERT|jobguard_migration|14477b968331e29b"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.evidence_pack_v3_check|lp11_pack_check_read|PERMISSIVE|SELECT|jobguard_migration|125a11c73edfef9e"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.evidence_pack_v3_check|lp11_pack_check_write|PERMISSIVE|INSERT|jobguard_migration|8b99e0105498dd4f"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.evidence_pack_v3_request|lp11_pack_request|PERMISSIVE|SELECT|jobguard_migration|125a11c73edfef9e"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.extra_origin|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.final_account_invoice_binding|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.final_account_invoiced_line|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.final_account_revision|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.final_check_disposition_binding|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job|lp11_pack_ancestry_job|PERMISSIVE|SELECT|jobguard_migration|08b4749106c90eca"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job_import_v3|lp11_pack_ancestry_import|PERMISSIVE|SELECT|jobguard_migration|08b4749106c90eca"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job_source_original|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.membership|lp11_pack_member|PERMISSIVE|SELECT|jobguard_migration|01e03428dba67570"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.membership|lp11_pack_member_lock|PERMISSIVE|UPDATE|jobguard_migration|0bf9427ea6fb27bf"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.practice_feed_event|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.practice_feed_receipt_match|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.quote_acceptance|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.quote_document_version|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.receipt_allocation_fact_line|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.receipt_allocation_fact_source|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.receipt_line_allocation|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.recovery_attribution_revision|lp11_pack_case_read|PERMISSIVE|SELECT|jobguard_migration|25489ddb66a67749"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.recovery_case|lp11_pack_case|PERMISSIVE|SELECT|jobguard_migration|2308491bf71af493"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.recovery_case_allocation|lp11_pack_case_read|PERMISSIVE|SELECT|jobguard_migration|25489ddb66a67749"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.recovery_case_allocation_reversal|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.recovery_case_event|lp11_pack_case_read|PERMISSIVE|SELECT|jobguard_migration|25489ddb66a67749"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.recovery_claim_revision|lp11_pack_case_read|PERMISSIVE|SELECT|jobguard_migration|25489ddb66a67749"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.stored_receipt_case_allocation|lp11_pack_case_read|PERMISSIVE|SELECT|jobguard_migration|25489ddb66a67749"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.variation_approval|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.variation_revision|lp11_pack_job_read|PERMISSIVE|SELECT|jobguard_migration|4a90b0169b57a710"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "audit_control.audit_head|lp11_pack_audit_head|PERMISSIVE|ALL|jobguard_audit_writer|e5aa88a38ca034d5"
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.complete_evidence_pack_v3_check(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow"
+        ],
+        "definitionSha256": "0ef004a5bb5e8388d3675752d77c3633a64b344d26375f51ce5f9e3198f87327",
+        "staticWrites": [
+          "app.evidence_pack_v3_check"
+        ],
+        "staticCalls": [
+          "app.evidence_pack_v3_ordinary",
+          "app.final_lock_hash",
+          "app.lp6d_evidence_pack_v3_owner"
+        ]
+      },
+      "after": {
+        "identity": "function:app.complete_evidence_pack_v3_check(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow"
+        ],
+        "definitionSha256": "8d683e4a8a1f16a5dc8be557c074da88597993b584f7cad6d6df894dbcf4d7e6",
+        "staticWrites": [
+          "app.evidence_pack_v3_check"
+        ],
+        "staticCalls": [
+          "app.evidence_pack_v3_ordinary",
+          "app.final_lock_hash",
+          "app.lp11_close_pack_request",
+          "app.lp11_open_pack_request",
+          "app.lp11_pack_request_owner"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.finish_evidence_pack_v3(uuid,uuid,jsonb,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow"
+        ],
+        "definitionSha256": "fe12ac14ed87cfcf12ca59e65364eeab31299a24f3f5ae2b4c1f413e89964060",
+        "staticWrites": [
+          "app.evidence_pack_v3",
+          "app.evidence_pack_v3_approval",
+          "infrastructure.evidence_pack_v3_request"
+        ],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.authenticate_practice_session",
+          "app.canonical_evidence_pack_v3",
+          "app.evidence_pack_v3_material",
+          "app.evidence_pack_v3_ordinary",
+          "app.final_lock_hash",
+          "app.lp6d_evidence_pack_v3_owner"
+        ]
+      },
+      "after": {
+        "identity": "function:app.finish_evidence_pack_v3(uuid,uuid,jsonb,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow"
+        ],
+        "definitionSha256": "c5de119a995ec76a5f05ca4f6e7879450b4a7000fe0bb36a71f61bedc5d5498a",
+        "staticWrites": [
+          "app.evidence_pack_v3",
+          "app.evidence_pack_v3_approval",
+          "control_plane.lp11_pack_scope",
+          "infrastructure.evidence_pack_v3_request"
+        ],
+        "staticCalls": [
+          "app.append_final_check_audit",
+          "app.authenticate_practice_session",
+          "app.canonical_evidence_pack_v3",
+          "app.evidence_pack_v3_material",
+          "app.evidence_pack_v3_ordinary",
+          "app.final_lock_hash",
+          "app.lp11_close_pack_request",
+          "app.lp11_open_pack_request",
+          "app.lp11_pack_request_owner"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_close_pack_request()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "6b0c16d2a405199534b6e20f23ebbffc93f5e334d1fea10dcf0ad45c9a4be225",
+        "staticWrites": [
+          "control_plane.lp11_pack_scope"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_open_pack_request(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "9d79bd4eadce42916ee94bb162c47ca1a863b7f1f1fd6e9c6cd6237846d7862d",
+        "staticWrites": [
+          "control_plane.lp11_pack_scope"
+        ],
+        "staticCalls": [
+          "app.authenticate_practice_session",
+          "app.lp11_bind_shadow_job",
+          "app.lp6e_request_binding_present"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_pack_request_owner(app.evidence_pack_v3_request)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "043f03328118583f595864a810ee28f43752fd9fa7766b4be17ad355eb9b2eef",
+        "staticWrites": [
+          "control_plane.lp11_pack_scope"
+        ],
+        "staticCalls": [
+          "app.lp11_pack_tenant",
+          "app.lp6d_evidence_pack_v3_owner"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_pack_tenant(text,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_audit_writer"
+        ],
+        "definitionSha256": "da6f59a99a8c7116329dc4463c1b8bf7048dd070fb3c644b8e2af32634e02823",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.prepare_evidence_pack_v3(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow"
+        ],
+        "definitionSha256": "ac42a9e7e4028d234aab5e24fe076b1119b2aa2c617a5e251ba26ac632b5f96d",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.evidence_pack_v3_material",
+          "app.evidence_pack_v3_ordinary",
+          "app.final_lock_hash",
+          "app.lp6d_evidence_pack_v3_owner"
+        ]
+      },
+      "after": {
+        "identity": "function:app.prepare_evidence_pack_v3(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_shadow"
+        ],
+        "definitionSha256": "e7f92519ab9f89632fee45a18738a7cf055ea54feecbcbdc8d7cf6ac51f9cf06",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.evidence_pack_v3_material",
+          "app.evidence_pack_v3_ordinary",
+          "app.final_lock_hash",
+          "app.lp11_close_pack_request",
+          "app.lp11_open_pack_request",
+          "app.lp11_pack_request_owner"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_pack_tenant(text,uuid,uuid)|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_pack_tenant(text,uuid,uuid)|jobguard_migration",
+        "group": "a-lp11-bound-tenant-r3"
+      }
     }
   ],
   "upgrade": [
@@ -30120,6 +30601,678 @@
       "after": {
         "nspname": "control_plane",
         "relname": "lp11_retention_scope_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "audit_event",
+        "policyname": "lp11_pack_ancestry_audit",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(((subject_type)::text = 'job'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'job.imported_baseline_attested'::text) AND (tenant_id = app.lp11_pack_tenant('owner'::text, NULL::uuid)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "audit_event",
+        "policyname": "lp11_pack_audit",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_audit_writer}",
+        "cmd": "ALL",
+        "qual": "\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((actor_ref)::text = 'system:evidence-pack'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'evidence_pack.v3_completed'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,commandId}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_pack_tenant('audit'::text, ((payload #>> '{references,commandId}'::text[]))::uuid, (subject_ref)::uuid))\n    ELSE false\nEND",
+        "with_check": "\nCASE\n    WHEN (((subject_type)::text = 'job'::text) AND ((actor_ref)::text = 'system:evidence-pack'::text) AND (app.lp11_audit_event_type(audit_event.*) = 'evidence_pack.v3_completed'::text) AND pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,commandId}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_pack_tenant('audit'::text, ((payload #>> '{references,commandId}'::text[]))::uuid, (subject_ref)::uuid))\n    ELSE false\nEND"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "command_receipt",
+        "policyname": "lp11_pack_receipt",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((((command_type)::text = 'job.adopt_in_flight'::text) AND ((status)::text = 'succeeded'::text) AND (tenant_id = app.lp11_pack_tenant('owner'::text, NULL::uuid))) OR (((command_type)::text = 'evidence_pack.v3'::text) AND (tenant_id = app.lp11_pack_tenant('request'::text, command_id))))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_credit_note",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_invoice",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_payment",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_payment_reversal",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_invalidation",
+        "policyname": "lp11_pack_invalidation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(EXISTS ( SELECT\n   FROM app.evidence_object e\n  WHERE (((e.tenant_id = evidence_invalidation.tenant_id) AND (e.id = evidence_invalidation.evidence_id)) AND (e.tenant_id = app.lp11_pack_tenant('job'::text, e.job_id)))))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_pack_v3",
+        "policyname": "lp11_pack_result",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((tenant_id = app.lp11_pack_tenant('pack'::text, id, job_id)) AND (tenant_id = app.lp11_pack_tenant('case'::text, case_id)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_pack_v3",
+        "policyname": "lp11_pack_store",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "((tenant_id = app.lp11_pack_tenant('write'::text, id, job_id)) AND (tenant_id = app.lp11_pack_tenant('case'::text, case_id)))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_pack_v3_approval",
+        "policyname": "lp11_pack_approval",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((tenant_id = app.lp11_pack_tenant('write'::text, command_id, job_id)) AND (tenant_id = app.lp11_pack_tenant('case'::text, case_id)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_pack_v3_approval",
+        "policyname": "lp11_pack_approve",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "((tenant_id = app.lp11_pack_tenant('write'::text, command_id, job_id)) AND (tenant_id = app.lp11_pack_tenant('case'::text, case_id)) AND (tenant_id = app.lp11_pack_tenant('pack'::text, pack_id, job_id)))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_pack_v3_check",
+        "policyname": "lp11_pack_check_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('request'::text, command_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_pack_v3_check",
+        "policyname": "lp11_pack_check_write",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "(tenant_id = app.lp11_pack_tenant('request'::text, command_id))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_pack_v3_request",
+        "policyname": "lp11_pack_request",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('request'::text, command_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "extra_origin",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "final_account_invoice_binding",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "final_account_invoiced_line",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "final_account_revision",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "final_check_disposition_binding",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job",
+        "policyname": "lp11_pack_ancestry_job",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('owner'::text, NULL::uuid))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job_import_v3",
+        "policyname": "lp11_pack_ancestry_import",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('owner'::text, NULL::uuid))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job_source_original",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "membership",
+        "policyname": "lp11_pack_member",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('member'::text, id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "membership",
+        "policyname": "lp11_pack_member_lock",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "UPDATE",
+        "qual": "(tenant_id = app.lp11_pack_tenant('member'::text, id))",
+        "with_check": "false"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "practice_feed_event",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "practice_feed_receipt_match",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "quote_acceptance",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "quote_document_version",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "receipt_allocation_fact_line",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "receipt_allocation_fact_source",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "receipt_line_allocation",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "recovery_attribution_revision",
+        "policyname": "lp11_pack_case_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('source'::text, case_id, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "recovery_case",
+        "policyname": "lp11_pack_case",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('source'::text, id, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "recovery_case_allocation",
+        "policyname": "lp11_pack_case_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('source'::text, case_id, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "recovery_case_allocation_reversal",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "recovery_case_event",
+        "policyname": "lp11_pack_case_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('source'::text, case_id, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "recovery_claim_revision",
+        "policyname": "lp11_pack_case_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('source'::text, case_id, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "stored_receipt_case_allocation",
+        "policyname": "lp11_pack_case_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('source'::text, case_id, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "variation_approval",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "variation_revision",
+        "policyname": "lp11_pack_job_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_pack_tenant('job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "audit_control",
+        "tablename": "audit_head",
+        "policyname": "lp11_pack_audit_head",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_audit_writer}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = app.lp11_pack_tenant('audit_head'::text, NULL::uuid))",
+        "with_check": "(tenant_id = app.lp11_pack_tenant('audit_head'::text, NULL::uuid))"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_close_pack_request",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_open_pack_request",
+        "args": "t uuid, cid uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_pack_request_owner",
+        "args": "r app.evidence_pack_v3_request",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_pack_tenant",
+        "args": "resource text, id uuid, job uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_audit_writer=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_pack_scope",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_pack_scope_pkey",
         "relowner": "jobguard_migration",
         "relacl": null,
         "relrowsecurity": false,

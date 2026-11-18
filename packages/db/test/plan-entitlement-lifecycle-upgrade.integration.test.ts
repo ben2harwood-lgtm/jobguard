@@ -115,6 +115,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     "infrastructure.discover_readiness_plans()", "app.serialize_final_check_evidence()",
     "infrastructure.discover_retention_reviews()", "app.retention_timer_book(uuid,uuid)",
     "app.retention_timer(uuid,uuid,jsonb,text)",
+    "app.prepare_evidence_pack_v3(uuid,uuid)", "app.complete_evidence_pack_v3_check(uuid,uuid,text)",
+    "app.finish_evidence_pack_v3(uuid,uuid,jsonb,text,text)",
     "identity.customer_practice_pay_now(uuid,uuid,uuid,text)",
     "app.mon3_require_registered_admission()", "app.lp_job_permit_consumed()",
     "app.final_check_job_terms(uuid,uuid,text,timestamp with time zone)",
