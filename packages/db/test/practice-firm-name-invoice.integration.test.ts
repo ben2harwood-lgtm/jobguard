@@ -28,7 +28,15 @@ it("preserves the complete latest writers outside saved issuer resolution and it
   expect(after.indexOf("app.job_saved_firm_name")).toBeGreaterThan(after.lastIndexOf("RETURN (lp5_claim->'result')"));
   expect(after.indexOf("app.job_saved_firm_name")).toBeLessThan(after.indexOf("artifact:="));
   const restored = after.replace("DECLARE issuer_name text:='Fictional Builder Ltd'; ", "DECLARE ")
-   .replace(/ -- Resolve only after authorization, ownership, gates and replay returns\.\n IF p_tenant='11111111-1111-4111-8111-111111111111'::uuid\n  AND current_database\(\)='jobguard_synthetic_demo' THEN\n  issuer_name:=coalesce\(app.job_saved_firm_name\(p_job\),'Fictional Builder Ltd'\);\n END IF;\n/u, "")
+   .replace(` -- Resolve only after authorization, ownership, gates and replay returns.
+ IF p_tenant='11111111-1111-4111-8111-111111111111'::uuid
+  AND current_database()='jobguard_synthetic_demo' THEN
+  -- Only a protected blank-firm binding can supply a saved name.
+  IF app.current_firm_profile_key() IS NOT NULL THEN
+   issuer_name:=coalesce(app.job_saved_firm_name(p_job),'Fictional Builder Ltd');
+  END IF;
+ END IF;
+`, "")
    .replace("'Issuer: '||issuer_name||' ['", "'Issuer: Fictional Builder Ltd ['")
    .replace("'legalName',issuer_name", "'legalName','Fictional Builder Ltd'");
   expect(restored).toBe(before);
@@ -52,6 +60,7 @@ describe("only the owning blank firm’s saved name enters both new invoice writ
   // gates below are exercised through their existing runtime repository paths.
   await asFixtureTenant(c.admin, tenant, async db => {
    await db.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [tenant, job]);
+   await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture')", [tenant, job]);
    await seedSyntheticPartyFixture(db, tenant, job);
    await db.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')", [tenant, scope, job]);
    await db.query("INSERT INTO app.quote_version(tenant_id,id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,500,'accepted')", [tenant, baseline, job, "a".repeat(64)]);

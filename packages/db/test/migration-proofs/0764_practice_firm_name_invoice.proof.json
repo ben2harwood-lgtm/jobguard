@@ -66,6 +66,7 @@
           "app.append_final_lock_audit",
           "app.ch4_require_open",
           "app.current_actor",
+          "app.current_firm_profile_key",
           "app.current_tenant",
           "app.final_check_require_invoice_actor",
           "app.job_saved_firm_name",
@@ -148,6 +149,7 @@
           "app.ch4_require_open",
           "app.complete_command",
           "app.current_actor",
+          "app.current_firm_profile_key",
           "app.current_tenant",
           "app.final_check_require_invoice_actor",
           "app.final_lock_canonical",
@@ -220,7 +222,7 @@
           "PostgreSQL populated upgrade/repeat, named isolation and replay regressions, browser journey and exact-head independent RED review require CI execution; not executed in builder sandbox."
         ],
         "id": "ap-firm-profile",
-        "description": "Blank practice profile ownership resolves exactly one canonical blank_practice_session via final_check_bound_practice, then authenticates it inside the protected transaction. Migration-owned fixed-path routines read existing control_plane.blank_practice_session, contractor_practice_session, practice_company_marker and app.membership/job/firm_profile only; no new table grants. job_saved_firm_name is runtime EXECUTE only and calls final_check_job_scope for exact job ownership. Existing current_firm_profile_key owner/ACL and all RLS policies remain. No profile, document, hash, outbox, approval or acceptance rows are rewritten. Reapplication is data preserving; forward fix replaces routines in a later migration without deleting or transferring stored profiles. A SELECT-only firm_profile_bound_reader policy gives the FORCE-RLS definer owner the existing bound firm_profile_access predicate; no write policy or table grant is added. 0950 adds only job_saved_firm_name to both invoice writers after their existing actor/job/practice checks and replay returns; one resolved value enters artifact text before hashing and issuer.legalName. Only the synthetic small-builder database/tenant resolves a name; unsupported paths retain Fictional Builder Ltd. Body preservation regression pins all other bytes to 0723/0731, including signed VAT, authority and grants. Populated upgrade and repeat-migration tests compare profiles, issued document/artifact/issuer/hash, decisions, authorizations, outbox, receipts and journals byte-for-byte. Forward fix replaces routines in a later migration retaining profiles, documents and accounting history."
+        "description": "Blank practice profile ownership resolves exactly one canonical blank_practice_session via final_check_bound_practice, then authenticates it inside the protected transaction. Migration-owned fixed-path routines read existing control_plane.blank_practice_session, contractor_practice_session, practice_company_marker and app.membership/job/firm_profile only; no new table grants. job_saved_firm_name is runtime EXECUTE only and calls final_check_job_scope for exact job ownership. Existing current_firm_profile_key owner/ACL and all RLS policies remain. No profile, document, hash, outbox, approval or acceptance rows are rewritten. Reapplication is data preserving; forward fix replaces routines in a later migration without deleting or transferring stored profiles. A SELECT-only firm_profile_bound_reader policy gives the FORCE-RLS definer owner the existing bound firm_profile_access predicate; no write policy or table grant is added. 0764 resolves a saved name in both invoice writers after their existing actor/job/practice checks and replay returns, and only when a protected blank-firm profile key is present; one resolved value enters artifact text before hashing and issuer.legalName. Only the synthetic small-builder database/tenant resolves a name; unsupported paths retain Fictional Builder Ltd. Body preservation regression pins all other bytes to 0723/0731, including signed VAT, authority and grants. Populated upgrade and repeat-migration tests compare profiles, issued document/artifact/issuer/hash, decisions, authorizations, outbox, receipts and journals byte-for-byte. Forward fix replaces routines in a later migration retaining profiles, documents and accounting history."
       }
     }
   ],

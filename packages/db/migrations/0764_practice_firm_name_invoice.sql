@@ -56,7 +56,10 @@ BEGIN
  -- Resolve only after authorization, ownership, gates and replay returns.
  IF p_tenant='11111111-1111-4111-8111-111111111111'::uuid
   AND current_database()='jobguard_synthetic_demo' THEN
-  issuer_name:=coalesce(app.job_saved_firm_name(p_job),'Fictional Builder Ltd');
+  -- Only a protected blank-firm binding can supply a saved name.
+  IF app.current_firm_profile_key() IS NOT NULL THEN
+   issuer_name:=coalesce(app.job_saved_firm_name(p_job),'Fictional Builder Ltd');
+  END IF;
  END IF;
  INSERT INTO app.customer_invoice_sequence(id,tenant_id,next_number)VALUES(gen_random_uuid(),p_tenant,2)
  ON CONFLICT(tenant_id) DO UPDATE SET next_number=app.customer_invoice_sequence.next_number+1 RETURNING next_number-1 INTO n;
@@ -229,7 +232,10 @@ BEGIN
  -- Resolve only after authorization, ownership, gates and replay returns.
  IF p_tenant='11111111-1111-4111-8111-111111111111'::uuid
   AND current_database()='jobguard_synthetic_demo' THEN
-  issuer_name:=coalesce(app.job_saved_firm_name(p_job),'Fictional Builder Ltd');
+  -- Only a protected blank-firm binding can supply a saved name.
+  IF app.current_firm_profile_key() IS NOT NULL THEN
+   issuer_name:=coalesce(app.job_saved_firm_name(p_job),'Fictional Builder Ltd');
+  END IF;
  END IF;
  INSERT INTO app.customer_invoice_sequence(id,tenant_id,next_number) VALUES(gen_random_uuid(),p_tenant,2) ON CONFLICT(tenant_id) DO UPDATE SET next_number=app.customer_invoice_sequence.next_number+1 RETURNING next_number-1 INTO n;
  number:='DEMO-CUST-'||lpad(n::text,6,'0');
