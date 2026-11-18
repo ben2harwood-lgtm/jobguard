@@ -290,11 +290,11 @@ describe("ENT-4b origin persistence", () => {
    "packages/db/src/work-order-repository.ts": "406ec23ac5d01d7cdcb5e0649047357f729fc6fdf1aeb919f0e491deac0ab87b",
    "packages/db/src/sor-repository.ts": "d3ac04e13826761e6c0fc0c8dc45fbb2cdf4813e5d01fd5f073b9c4bb9f930fe",
    "packages/db/src/job-scheduling-repository.ts": "dcc7884fc3ff5bb3c878834a81824e4270e0775de666c61f9ccb031c9430c4de",
-   "packages/db/src/work-order-fixtures.ts": "46a27d5662376acf51c51bd602c5556b566099f73c0caa3998a67a1092eaceb0",
+   "packages/db/src/work-order-fixtures.ts": "7a819ffa0a3fc465dfb44133d887b86500672afb82fcc203f6b66a4bb6dc18d4",
    // Ben 6 Nov router-chat "yes": exactly the emergency-notice and retention-timer constructor sites.
    // Hold: break-glass identity design goes to Ben before real data.
    // Scanner bytes change only for the renewed caller review citation above.
-   "apps/api/src/auth/context-boundary.test.ts": "c3ac8753acf90895909d91ea24b72792266ca1832eb7817fbc0ef90693dc595c"
+   "apps/api/src/auth/context-boundary.test.ts": "fc755e00b1ebeb0c272da001d2edcde711e4fd0d87bb5e575152fc5d0eea64ab"
   };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });

@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { encodeWorkOrderCsv, referenceApprovalRulesV1, type WorkOrderSampleId } from "@jobguard/core";
 import { ContractorPartyRepository } from "./contractor-party-repository.js";
-import { ContractorRepository } from "./contractor-repository.js";
+import { ContractorRepository, requireContractorRequestContext } from "./contractor-repository.js";
 import { SorRepository } from "./sor-repository.js";
-import { verifiedTenantContextFromMembership, withTenant } from "./tenant-context.js";
+import { withTenant } from "./tenant-context.js";
 
 /**
  * Generated, fictional fixtures for ENT-2 (C3): the demo organisation's housing association, contract, schedule of rates, sites and operative,
@@ -47,7 +47,7 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedM
       const contracts = await contractors.query(principal, { version: "contractor-query.v1", tenantId: principal.tenantId, resource: "contracts" });
       const version = contracts.contracts.filter(c => c.client_id === existing.id).at(-1)!;
       const document = version.document as ReturnType<typeof contractDocument>;
-      const stored = await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => ({
+      const stored = await withTenant(pool, requireContractorRequestContext(principal), async db => ({
         // The generator creates numbered streets in numeric order; transaction timestamps and random UUIDs cannot recover that order.
         sites: (await db.$client.query<{ id: string; address_line: string }>("SELECT id,payload->'addressLines'->>0 address_line FROM app.site_revision WHERE payload->'addressLines'->>0 LIKE '% Fictional Demo Street'"))
           .rows.sort((a, b) => a.address_line.localeCompare(b.address_line, "en", { numeric: true }) || a.id.localeCompare(b.id)).map(r => r.id),
@@ -66,7 +66,7 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedM
     const contractVersionId = (await command({ kind: "contract.revise", clientId, contractId, document: contractDocument(sor.versionId), rules: referenceApprovalRulesV1 })).id;
     const siteRevisionIds: string[] = [];
     const customerRevisionId = randomUUID();
-    await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => {
+    await withTenant(pool, requireContractorRequestContext(principal), async db => {
       const customerId = randomUUID();
       await db.$client.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [principal.tenantId, customerId]);
       await db.$client.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES($1,$2,$3,1,$4::jsonb)", [principal.tenantId, customerRevisionId, customerId, JSON.stringify({ version: "customer.v1", name: demoClientName, type: "housing_association", email: "lettings@fictional.invalid" })]);
@@ -117,7 +117,7 @@ export async function addBranchClient(pool: Pool, principal: AuthenticatedMember
   const document = { ...contractDocument(demo.sorVersionId), reference: `FICTIONAL-${label.toUpperCase()}-2026`, tenderedAdjustment: demo.adjustment };
   const contractVersionId = (await command({ kind: "contract.revise", clientId, contractId, document, rules: referenceApprovalRulesV1 })).id;
   const customerRevisionId = randomUUID();
-  await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => {
+  await withTenant(pool, requireContractorRequestContext(principal), async db => {
     const customerId = randomUUID();
     await db.$client.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [principal.tenantId, customerId]);
     await db.$client.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES($1,$2,$3,1,$4::jsonb)", [principal.tenantId, customerRevisionId, customerId, JSON.stringify({ version: "customer.v1", name, type: "housing_association", email: "lettings@fictional.invalid" })]);
