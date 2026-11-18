@@ -24,6 +24,7 @@
         "packages/db/src/commercial-integrity-v3-repository.ts",
         "packages/db/src/demo-bootstrap.ts",
         "packages/db/src/audit-checkpoint-handoff.ts",
+        "packages/db/src/audit-checkpoint-handoff.test.ts",
         "packages/db/src/shadow-detection-repository.ts",
         "packages/db/src/shadow-observation-reader.ts",
         "packages/db/src/final-check-practice-readers.ts",
@@ -35,6 +36,8 @@
         "packages/db/src/serious-b10.test.ts",
         "packages/db/src/scheduled-readiness-worker.ts",
         "packages/db/src/worker-action-executor.ts",
+        "packages/db/src/worm-command-repository.ts",
+        "packages/db/src/worm-command-repository.test.ts",
         "packages/db/test/UIWIRE-12.integration.test.ts",
         "packages/db/test/UIWIRE-10.integration.test.ts",
         "packages/db/test/UIWIRE-11.integration.test.ts",
@@ -145,6 +148,7 @@
         "packages/db/test/tenant-key-registry.integration.test.ts",
         "packages/db/test/variation-state-transition.integration.test.ts",
         "packages/db/test/verified-upload-immutable.integration.test.ts",
+        "packages/db/test/worm-command.integration.test.ts",
         "tools/commercial-integrity-boundary.unresolved.json",
         "tools/commercial-integrity-current-source-guard.unresolved.json"
       ]

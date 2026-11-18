@@ -2859,6 +2859,35 @@ nice -n 6 pnpm --filter @jobguard/db exec vitest run test/lp4-audit.integration.
 nice -n 7 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/migration-proof-loader.test.ts test/free-first-job-lifecycle.integration.test.ts test/lp-10-worker-login.integration.test.ts --maxWorkers=1 --testTimeout=300000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-deferred-upgrades-results.json
 ```
 
+## r5 WORM executor, operator and audit hand-off
+
+Nine WORM command failures and one hold-screen failure at `5ef7a5b87` reached executor and operator routines without protected tenant authority. The existing isolated database logins now open a transaction scope after checking the persisted synthetic command. Operator alerts use only the registered tenant scope. The executor locks only the command's author to fence revocation. The policy for that lock has an exact author predicate and a `WITH CHECK (false)` that cannot accept a write. The other policies protect the exact command, attempt and audit subject. The deferred cleanup removes the scope at commit, and rollback removes it with the command changes.
+
+The new PostgreSQL assertion exercises the same physical connection after commit and rollback, checks an explicitly wrong tenant for a persisted command, and confirms a forged tenant setting cannot change the command scope. The populated predecessor proof runs the original 0577 claim and finish before the LP-11 route exists, preserves the stored rows and ACLs, and checks the installed bodies against their exact latest sources. The callable operator catalogue remains an exact list and includes the new checked scope entry point.
+
+All 54 PostgreSQL WORM and repository assertions, and all 92 policy, populated upgrade and proof assertions, passed. All 93 audit hand-off checks passed after the unit fixture mocked the scoped SQL call. Four unit failures at `5ef7a5b87` had used the predecessor call. The real PostgreSQL test still verifies the recorded operator, database session user and server time. The migration proof records 1,446 LP0 changes, 810 upgrade changes and 674 policies. Both commercial-integrity guard commands returned zero diagnostics.
+
+```sh
+nice -n 6 pnpm --filter @jobguard/db exec vitest run test/worm-command.integration.test.ts test/worm-hold-screen.integration.test.ts src/worm-command-repository.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-worm-lock-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts test/lp11-bound-tenant-rls.integration.test.ts test/migration-proof-loader.test.ts test/worm-migration-proofs.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-worm-upgrades-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run src/audit-checkpoint-handoff.test.ts test/audit-checkpoint-handoff.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-handoff-unit-results.json
+nice -n 8 node tools/commercial-integrity-current-source-guard.mjs
+nice -n 8 node tools/commercial-integrity-boundary.mjs
+```
+
+### Application reruns from the main checkout
+
+The frozen `5470e1e60` API run passed 4,485 tests, failed the same two inherited context-scanner checks and skipped 22 tests after Turbopack refused the external Next.js dependency link. The 22 shadow-isolation tests passed from the main checkout, giving 4,507 of 4,509 across those complementary runs. The frozen web run recorded 3,529 of 3,618 with 89 failures. The same web command from the main checkout passed all 3,618 tests in 252 files. The frozen typecheck had cross-worktree type resolution errors. The main checkout typecheck passed all seven packages.
+
+```sh
+nice -n 9 pnpm --filter @jobguard/api exec vitest run src --maxWorkers=2 --testTimeout=30000 --exclude '**/*.integration.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-readiness-api-results.json
+nice -n 8 pnpm --filter @jobguard/api exec vitest run src/shadow-isolation.application.test.ts --maxWorkers=1 --testTimeout=30000 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-shadow-app-final-results.json
+nice -n 9 pnpm --filter @jobguard/web test --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/database.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-readiness-web-results.json
+nice -n 8 pnpm --filter @jobguard/web test --maxWorkers=2 --exclude '**/*.integration.test.ts' --exclude '**/database.test.ts' --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-root-web-results.json
+nice -n 9 pnpm typecheck
+nice -n 8 pnpm typecheck
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

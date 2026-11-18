@@ -4012,6 +4012,225 @@ CREATE POLICY lp11_trial_activation_read ON app.trial_admission FOR SELECT TO jo
 CREATE POLICY lp11_deferred_permit_read ON app.lp_job_insert_permit FOR SELECT TO jobguard_migration
  USING (tenant_id=app.lp11_deferred_permit_tenant(job_id,backend_pid,transaction_id));
 
+-- WORM uses the existing isolated executor and operator logins. A command is
+-- visible only in the transaction that checks its persisted synthetic identity.
+CREATE UNLOGGED TABLE control_plane.lp11_worm_scope (
+ transaction_id xid8 PRIMARY KEY,
+ login name NOT NULL,
+ tenant_id uuid NOT NULL,
+ command_id uuid,
+ actor_id uuid,
+ evidence_id uuid,
+ operation text NOT NULL,
+ checked boolean NOT NULL DEFAULT false,
+ CHECK ((operation='alerts' AND command_id IS NULL)
+  OR (operation IN ('execute','recover') AND command_id IS NOT NULL))
+);
+ALTER TABLE control_plane.lp11_worm_scope OWNER TO jobguard_migration;
+REVOKE ALL ON TABLE control_plane.lp11_worm_scope FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_worm_tenant(resource text,id uuid,subject uuid DEFAULT NULL) RETURNS uuid
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_worm_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+  AND CASE resource
+   WHEN 'lookup' THEN s.command_id=id OR s.operation='alerts'
+   WHEN 'execute' THEN s.checked AND s.operation='execute' AND s.command_id=id
+   WHEN 'recover' THEN s.checked AND s.operation='recover' AND s.command_id=id
+   WHEN 'alerts' THEN s.checked AND s.operation='alerts'
+   WHEN 'attempt' THEN s.checked AND (s.command_id=id OR s.operation='alerts')
+   WHEN 'write' THEN s.checked AND s.command_id=id AND s.operation IN ('execute','recover')
+   WHEN 'actor' THEN s.checked AND s.operation='execute' AND s.actor_id=id
+   WHEN 'audit' THEN s.checked AND s.command_id=id AND s.evidence_id=subject
+   WHEN 'audit_head' THEN s.checked AND s.command_id IS NOT NULL
+   ELSE false END
+$$;
+ALTER FUNCTION app.lp11_worm_tenant(text,uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_worm_tenant(text,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_worm_tenant(text,uuid,uuid) TO jobguard_worm_executor,jobguard_audit_writer;
+
+CREATE FUNCTION worm_control.lp11_bind_worm_scope(t uuid,cid uuid,purpose text) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE command app.worm_command;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' OR t IS NULL
+  OR purpose IS NULL OR purpose NOT IN ('execute','recover','alerts')
+  OR (purpose='alerts') IS DISTINCT FROM (cid IS NULL)
+  OR pg_has_role(session_user,'jobguard_runtime','USAGE') OR app.lp6e_request_binding_present()
+  OR (CASE WHEN purpose='execute' THEN NOT pg_has_role(session_user,'jobguard_worm_executor','USAGE')
+           ELSE NOT pg_has_role(session_user,'jobguard_worm_operator','USAGE') END)
+  OR NOT EXISTS(SELECT FROM control_plane.tenant WHERE id=t)
+  OR EXISTS(SELECT FROM control_plane.lp11_worm_scope WHERE transaction_id=pg_current_xact_id_if_assigned())
+ THEN RAISE EXCEPTION 'WORM_REFUSED' USING ERRCODE='42501'; END IF;
+ INSERT INTO control_plane.lp11_worm_scope(transaction_id,login,tenant_id,command_id,operation)
+ VALUES(pg_current_xact_id(),session_user,t,cid,purpose);
+ IF cid IS NOT NULL THEN
+  SELECT * INTO command FROM app.worm_command c WHERE (c.tenant_id,c.id)=(t,cid);
+  IF NOT FOUND OR command.object_key NOT LIKE 'synthetic/tenants/'||command.tenant_id::text||'/%'
+   OR command.object_key ~ '(^|/)\.\.?(/|$)' OR command.object_version_id IN ('','null')
+  THEN RAISE EXCEPTION 'WORM_REFUSED' USING ERRCODE='42501'; END IF;
+ END IF;
+ UPDATE control_plane.lp11_worm_scope s SET checked=true,actor_id=command.actor_id,evidence_id=command.evidence_id
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned();
+END $$;
+ALTER FUNCTION worm_control.lp11_bind_worm_scope(uuid,uuid,text) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION worm_control.lp11_bind_worm_scope(uuid,uuid,text) FROM PUBLIC;
+GRANT USAGE ON SCHEMA worm_control TO jobguard_worm_executor;
+GRANT EXECUTE ON FUNCTION worm_control.lp11_bind_worm_scope(uuid,uuid,text) TO jobguard_worm_executor,jobguard_worm_operator;
+
+CREATE FUNCTION app.lp11_clear_worm_scope() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ DELETE FROM control_plane.lp11_worm_scope WHERE transaction_id=NEW.transaction_id;
+ RETURN NULL;
+END $$;
+ALTER FUNCTION app.lp11_clear_worm_scope() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_clear_worm_scope() FROM PUBLIC;
+CREATE CONSTRAINT TRIGGER lp11_clear_worm_scope AFTER INSERT ON control_plane.lp11_worm_scope
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.lp11_clear_worm_scope();
+
+CREATE POLICY lp11_worm_lookup ON app.worm_command FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_worm_tenant('lookup',id));
+CREATE POLICY lp11_worm_execute_read ON app.worm_command FOR SELECT TO jobguard_worm_executor
+ USING (tenant_id=app.lp11_worm_tenant('execute',id));
+CREATE POLICY lp11_worm_command_update ON app.worm_command FOR UPDATE TO jobguard_migration
+ USING (tenant_id=app.lp11_worm_tenant('write',id)) WITH CHECK (tenant_id=app.lp11_worm_tenant('write',id));
+CREATE POLICY lp11_worm_attempt_read ON app.worm_attempt FOR SELECT TO jobguard_migration,jobguard_worm_executor
+ USING (tenant_id=app.lp11_worm_tenant('attempt',command_id));
+CREATE POLICY lp11_worm_attempt_insert ON app.worm_attempt FOR INSERT TO jobguard_migration
+ WITH CHECK (tenant_id=app.lp11_worm_tenant('write',command_id));
+CREATE POLICY lp11_worm_attempt_update ON app.worm_attempt FOR UPDATE TO jobguard_migration
+ USING (tenant_id=app.lp11_worm_tenant('write',command_id)) WITH CHECK (tenant_id=app.lp11_worm_tenant('write',command_id));
+CREATE POLICY lp11_worm_actor ON app.membership FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_worm_tenant('actor',id));
+-- FOR SHARE checks UPDATE visibility. The executor can lock the author row
+-- for revocation fencing, and this alternative cannot accept an update.
+CREATE POLICY lp11_worm_actor_lock ON app.membership FOR UPDATE TO jobguard_migration
+ USING (tenant_id=app.lp11_worm_tenant('actor',id)) WITH CHECK (false);
+CREATE POLICY lp11_worm_actor ON app.contractor_membership_revocation FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_worm_tenant('actor',membership_id));
+CREATE POLICY lp11_worm_audit_head ON audit_control.audit_head TO jobguard_audit_writer
+ USING (tenant_id=app.lp11_worm_tenant('audit_head',NULL)) WITH CHECK (tenant_id=app.lp11_worm_tenant('audit_head',NULL));
+CREATE POLICY lp11_worm_audit ON app.audit_event TO jobguard_audit_writer
+ USING (subject_type='evidence' AND event_type IN ('worm.executing','worm.cancelled','worm.applied','worm.pending','worm.outcome_unknown','worm.refused','worm.reconciled')
+  AND CASE WHEN pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,command}','uuid')
+   THEN tenant_id=app.lp11_worm_tenant('audit',(payload#>>'{references,command}')::uuid,subject_ref::uuid) ELSE false END)
+ WITH CHECK (subject_type='evidence' AND event_type IN ('worm.executing','worm.cancelled','worm.applied','worm.pending','worm.outcome_unknown','worm.refused','worm.reconciled')
+  AND CASE WHEN pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,command}','uuid')
+   THEN tenant_id=app.lp11_worm_tenant('audit',(payload#>>'{references,command}')::uuid,subject_ref::uuid) ELSE false END);
+
+-- Latest definition: 0577_worm_durable_commands.sql.
+CREATE OR REPLACE FUNCTION app.worm_audit(c app.worm_command, phase text, actor_ref text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE t uuid:=app.lp11_worm_tenant('audit',c.id,c.evidence_id);
+ payload jsonb; previous_tenant text:=current_setting('app.tenant_id',true);
+BEGIN
+ IF t IS NULL OR c.tenant_id IS DISTINCT FROM t THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
+ payload:=jsonb_build_object('references',jsonb_build_object('command',c.id,'action',c.action,'status',c.status),
+  'hashes',jsonb_build_object('imprint',trim(c.imprint)));
+ PERFORM set_config('app.tenant_id',t::text,true);
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object(
+  'id',gen_random_uuid(),'version','audit.v1','actorRef',actor_ref,
+  'eventType','worm.'||phase,'subjectType','evidence','subjectRef',c.evidence_id::text,
+  'payload',payload)),'checked_operation');
+ PERFORM set_config('app.tenant_id',coalesce(previous_tenant,''),true);
+END $$;
+
+-- Latest definition: 0577_worm_durable_commands.sql.
+CREATE OR REPLACE FUNCTION app.worm_claim(cid uuid) RETURNS app.worm_command
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE t uuid:=app.lp11_worm_tenant('execute',cid); c app.worm_command;
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||'/worm',0));
+ SELECT * INTO c FROM app.worm_command WHERE tenant_id=t AND id=cid FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
+ IF c.status NOT IN ('queued','pending') THEN RETURN c; END IF;
+ PERFORM 1 FROM app.membership m WHERE m.tenant_id=t AND m.id=c.actor_id
+ AND m.identity_user_id=c.identity_user_id AND m.role='owner' AND m.revoked_at IS NULL
+ AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())
+ AND NOT EXISTS(SELECT 1 FROM app.contractor_membership_revocation r WHERE r.tenant_id=t AND r.membership_id=m.id) FOR SHARE;
+ IF NOT FOUND THEN UPDATE app.worm_command SET status='cancelled' WHERE tenant_id=t AND id=cid RETURNING * INTO c;
+ PERFORM app.worm_audit(c,c.status,c.actor_id::text); RETURN c; END IF;
+ UPDATE app.worm_command SET status='executing',attempts=attempts+1 WHERE tenant_id=t AND id=cid RETURNING * INTO c;
+ INSERT INTO app.worm_attempt(tenant_id,command_id,attempt,outcome,result) VALUES(t,cid,c.attempts,'executing','{}'::jsonb);
+ PERFORM app.worm_audit(c,c.status,c.actor_id::text);
+ RETURN c;
+END $$;
+
+-- Latest definition: 0577_worm_durable_commands.sql.
+CREATE OR REPLACE FUNCTION app.worm_finish(cid uuid, n integer, outcome text, material jsonb) RETURNS app.worm_command
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE t uuid:=app.lp11_worm_tenant('execute',cid); c app.worm_command;
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||'/worm',0));
+ SELECT * INTO c FROM app.worm_command WHERE tenant_id=t AND id=cid FOR UPDATE;
+ IF NOT FOUND OR c.status<>'executing' OR c.attempts<>n THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
+ IF outcome IS NULL OR material IS NULL OR outcome NOT IN ('applied','pending','outcome_unknown','refused') OR
+ (c.action<>'request_anchor' AND outcome='pending') OR
+ (c.action='request_anchor' AND outcome='applied' AND
+ (material->>'status' IS DISTINCT FROM 'anchored' OR material->>'token' IS NULL OR material->>'query' IS NULL
+ OR material->>'certificatePem' IS NULL OR material->>'caCertificatePem' IS NULL))
+ THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
+ UPDATE app.worm_attempt SET outcome=worm_finish.outcome,result=material WHERE tenant_id=t AND command_id=cid AND attempt=n;
+ UPDATE app.worm_command SET status=outcome,result=material WHERE tenant_id=t AND id=cid RETURNING * INTO c;
+ PERFORM app.worm_audit(c,c.status,c.actor_id::text);
+ RETURN c;
+END $$;
+
+-- Latest definition: 0578_worm_operator_recovery.sql.
+CREATE OR REPLACE FUNCTION worm_control.worm_recovery_target(cid uuid) RETURNS app.worm_command
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE t uuid:=app.lp11_worm_tenant('recover',cid); c app.worm_command;
+BEGIN
+ SELECT * INTO c FROM app.worm_command WHERE tenant_id=t AND id=cid;
+ IF NOT FOUND OR c.action NOT IN ('apply_hold','release_hold')
+ OR c.status NOT IN ('executing','outcome_unknown','applied') OR c.attempts<1
+ OR c.object_key NOT LIKE 'synthetic/tenants/'||t::text||'/%'
+ OR c.object_version_id IN ('','null')
+ THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
+ RETURN c;
+END $$;
+
+-- Latest definition: 0578_worm_operator_recovery.sql.
+CREATE OR REPLACE FUNCTION worm_control.worm_reconcile(cid uuid, n integer, observed_held boolean) RETURNS app.worm_command
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+DECLARE t uuid:=app.lp11_worm_tenant('recover',cid); c app.worm_command;
+ final_outcome text; material jsonb; operator_ref text;
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(t::text||'/worm',0));
+ SELECT * INTO c FROM app.worm_command WHERE tenant_id=t AND id=cid FOR UPDATE;
+ IF NOT FOUND OR c.action NOT IN ('apply_hold','release_hold') OR n IS NULL OR c.attempts<>n
+ OR c.status NOT IN ('executing','outcome_unknown','applied') OR c.attempts<1
+ THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
+ IF c.status='applied' THEN RETURN c; END IF;
+ -- Readback can confirm only this exact command's intended hold state. Absence,
+ -- failure or mismatch never queues another mutation, release, overwrite or delete.
+ final_outcome := CASE WHEN observed_held IS NOT NULL AND observed_held=(c.action='apply_hold')
+ THEN 'applied' ELSE 'outcome_unknown' END;
+ material := jsonb_build_object('status',final_outcome,'reason',
+ CASE WHEN final_outcome='applied' THEN 'operator_readback_confirmed' ELSE 'operator_readback_unresolved' END);
+ UPDATE app.worm_attempt SET outcome=final_outcome,result=material
+ WHERE tenant_id=t AND command_id=cid AND attempt=n;
+ IF NOT FOUND THEN RAISE EXCEPTION 'WORM_REFUSED'; END IF;
+ UPDATE app.worm_command SET status=final_outcome,result=material WHERE tenant_id=t AND id=cid RETURNING * INTO c;
+ -- Domain rows are locked/updated before taking the audit head lock.
+ operator_ref:='worm-operator:'||encode(sha256(convert_to(session_user::text,'UTF8')),'hex');
+ PERFORM app.worm_audit(c,'reconciled',operator_ref);
+ RETURN c;
+END $$;
+
+-- Latest definition: 0579_worm_operator_alerts.sql.
+CREATE OR REPLACE FUNCTION worm_control.worm_operator_alerts()
+RETURNS TABLE(command_id uuid,evidence_id uuid,action text,code text,severity text,occurred_at timestamptz)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,app AS $$
+ SELECT c.id,c.evidence_id,c.action,'WORM_STORAGE_REFUSED'::text,'critical'::text,a.created_at
+ FROM app.worm_command c
+ JOIN app.worm_attempt a ON (a.tenant_id,a.command_id,a.attempt)=(c.tenant_id,c.id,c.attempts)
+ WHERE c.tenant_id=app.lp11_worm_tenant('alerts',NULL)
+ AND c.status='refused' AND a.outcome='refused' AND c.action IN ('apply_hold','release_hold')
+ ORDER BY a.created_at,c.id
+$$;
+
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.
 ALTER VIEW app.ledger_balance SET (security_invoker=true);

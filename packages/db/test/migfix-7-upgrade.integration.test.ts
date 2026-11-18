@@ -28,7 +28,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     (SELECT jsonb_agg(to_jsonb(p) ORDER BY p.polname) FROM pg_policy p WHERE p.polrelid=c.oid) policies
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('app','identity','control_plane','audit_control') ORDER BY 1,2`)).rows;
   const routines = async () => (await c!.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_functiondef(p.oid) definition
-    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control') AND p.prokind='f' ORDER BY 1,2,3`)).rows;
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control','worm_control') AND p.prokind='f' ORDER BY 1,2,3`)).rows;
   const policies = async () => (await c!.admin.query("SELECT * FROM pg_policies ORDER BY schemaname,tablename,policyname")).rows;
   const beforeCatalog = await catalog(), beforeRoutines = await routines(), beforePolicies = await policies();
   await applyMigration(c, own);
@@ -352,8 +352,14 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     expect(afterRoutines.some(row => row.proname === name)).toBe(false);
   }
   const lp11Sql = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
-  for (const signature of ["infrastructure.discover_readiness_plans()", "app.serialize_final_check_evidence()",
-    "identity.customer_practice_pay_now(uuid,uuid,uuid,text)", "app.mon3_require_registered_admission()", "app.lp_job_permit_consumed()"]) {
+  for (const signature of [
+    "infrastructure.discover_readiness_plans()", "app.serialize_final_check_evidence()",
+    "identity.customer_practice_pay_now(uuid,uuid,uuid,text)",
+    "app.mon3_require_registered_admission()", "app.lp_job_permit_consumed()",
+    "app.worm_audit(app.worm_command,text,text)", "app.worm_claim(uuid)", "app.worm_finish(uuid,integer,text,jsonb)",
+    "worm_control.worm_recovery_target(uuid)", "worm_control.worm_reconcile(uuid,integer,boolean)",
+    "worm_control.worm_operator_alerts()",
+  ]) {
     const source = lp11Sql.split(`CREATE OR REPLACE FUNCTION ${signature.split("(")[0]}(`)[1]!
       .split("AS $$")[1]!.split("$$;")[0];
     expect((await c.admin.query("SELECT prosrc FROM pg_proc WHERE oid=$1::regprocedure", [signature])).rows)
