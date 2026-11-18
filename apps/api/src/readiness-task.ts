@@ -26,7 +26,7 @@ export function readinessTasks(pool: Pool, mode: string, bindStore: (store: Dura
   clock = () => new Date().toISOString()) : { tasks: TaskList; crontab: string } {
   const tasks: TaskList = {};
   if (mode !== "synthetic_demo") return { tasks, crontab: "" };
-  const store = new DurableReadinessStore(pool, mode);
+  const store = new DurableReadinessStore(pool, mode, true);
   tasks.discover_readiness_plans = async (_raw, helpers) => {
     const now = clock();
     const bucket = Math.floor(Date.parse(now) / 60_000);

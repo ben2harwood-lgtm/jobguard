@@ -2551,6 +2551,35 @@ nice -n 7 node tools/commercial-integrity-current-source-guard.mjs
 nice -n 7 node tools/commercial-integrity-boundary.mjs
 ```
 
+## r5 scheduled readiness, verified uploads and bound fixture writes
+
+| PostgreSQL group | Failures at 6c07625f3 | Failures in the focused rerun |
+| --- | ---: | ---: |
+| Readiness discovery and task execution | 10 | 0 |
+| Readiness immutability through the migration login | 1 | 0 |
+| Verified-upload immutability and maintenance | 4 | 0 |
+| Work-state storage authority and guard order | 3 | 0 |
+| Proposal-total fixtures | 2 | 0 |
+| Ordinary safe draft fixture | 1 | 0 |
+
+Readiness discovery runs through the existing synthetic infrastructure entry point. It checks its database and authority, enumerates registered tenants one at a time, and returns only due task identifiers. The isolated worker checks the persisted plan under an exact tenant, job and task scope and checks the plan hash and proposal scope before storing a proposal. The stored plan supplies the legacy audit sealer's scalar tenant input. RLS checks the protected transaction scope with the exact audit event, job and task. The transaction closes the scope on success, and an error rolls it back. Twelve timer cases passed, including the new check for a foreign caller setting, a mismatched task and a wrong-tenant proposed row.
+
+The verified-upload probe still uses a migration-owned definer and expects the exact immutable-upload error from all three product logins. A test-only allowlist exposes only the registered fixture row so those calls reach the trigger. The lock trigger preserves the earlier immutable-upload denial when a privileged caller supplies an existing verified row without a binding. The bound and authorized paths retain their existing lock and invalidation behavior. Four immutability and five final-check lock tests passed.
+
+The historical timezone controls run their predecessor routine and policy in a rolled-back administrative test transaction. The post-lock, proposal-total and safe-draft assertions use their persisted fixture actor. The forged runtime command remains unbound. Eight work-state boundary and 21 proposal-total and job-door cases passed. The focused readiness application tests passed 11 of 11. Workspace typecheck passed all seven packages, and both commercial-integrity guard commands returned zero diagnostics.
+
+```sh
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/readiness-timer.integration.test.ts test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-readiness-final-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/verified-upload-immutable.integration.test.ts test/final-check-invalidation-lock.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-verified-upload-final-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/migfix-7-upgrade.integration.test.ts test/plan-entitlement-lifecycle-upgrade.integration.test.ts --maxWorkers=1 --reporter=default
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/job-work-state-commands-boundaries.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-commands-binding-final-results.json
+nice -n 7 pnpm --filter @jobguard/db exec vitest run test/later-proposal-totals.integration.test.ts test/lp-job-doors.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile.json=/workspace/work/lp11-r5-draft-proposal-results.json
+nice -n 6 pnpm --filter @jobguard/api exec vitest run src/readiness-task.test.ts src/readiness-store.test.ts --maxWorkers=1 --reporter=default
+nice -n 6 pnpm typecheck
+nice -n 7 node tools/commercial-integrity-current-source-guard.mjs
+nice -n 7 node tools/commercial-integrity-boundary.mjs
+```
+
 ## Missing pg_dump
 
 - upgrades dark, round-trips a logical binding-table dump into a fresh cluster and rejects carried rows even at a colliding xid8 (test/lp6a-practice-restore.integration.test.ts)

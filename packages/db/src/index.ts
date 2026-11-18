@@ -55,6 +55,7 @@ export * from "./supplier-document-repository.js";
 export * from "./supplier-match-repository.js";
 export * from "./discrepancy-repository.js";
 export * from "./readiness-repository.js";
+export { runScheduledReadinessWork } from "./scheduled-readiness-worker.js";
 export * from "./inbox-relevance-repository.js";
 export * from "./evidence-pack-repository.js";
 export * from "./contractor-repository.js";

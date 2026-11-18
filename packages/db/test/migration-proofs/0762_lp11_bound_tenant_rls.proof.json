@@ -3568,7 +3568,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": "7fd0dbfd587306f6cbf2b28efbed8086069c6ce9cc98b53310a21722113cc3e4",
+        "definitionSha256": "a20474dc7a8648f3d2675d28af7c8eee73594c264b3beb9eaef7bd10bcab88a4",
         "staticWrites": [
           "control_plane.lp11_maintenance_job"
         ],
@@ -11280,6 +11280,158 @@
       "before": null,
       "after": {
         "key": "owner|routine|function:app.lp11_worker_action_matches(uuid,uuid)|jobguard_migration",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.audit_event|lp11_readiness_audit|PERMISSIVE|ALL|jobguard_audit_writer|01ed2384d0e2a4b3"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.scheduled_readiness_plan|lp11_readiness_discovery|PERMISSIVE|SELECT|jobguard_migration|ac3169ef2ba8376c"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.scheduled_readiness_plan|lp11_readiness_worker_read|PERMISSIVE|SELECT|jobguard_migration|38ea2eb4618d7d0c"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.scheduled_readiness_proposal|lp11_readiness_worker_insert|PERMISSIVE|INSERT|jobguard_migration|fa180dbadb44039f"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.scheduled_readiness_proposal|lp11_readiness_worker_read|PERMISSIVE|SELECT|jobguard_migration|891adb331952ebb9"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "audit_control.audit_head|lp11_readiness_audit_head|PERMISSIVE|ALL|jobguard_audit_writer|39298f600dfb0d2b"
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_readiness_tenant(text,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_audit_writer"
+        ],
+        "definitionSha256": "1ebfa6d9a5e07d02d9b8513170cac3e04c944ea070c4e0179eafa17b9ef543ca",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp11_readiness_worker(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_worker"
+        ],
+        "definitionSha256": "bb6f1ebab3c827d4e863e64acc858fda8d1ff35068e00187b8f403fe0475d526",
+        "staticWrites": [
+          "app.scheduled_readiness_proposal",
+          "control_plane.lp11_readiness_scope"
+        ],
+        "staticCalls": [
+          "app.lp10_assert_worker",
+          "app.lp11_policy_tenant",
+          "app.lp4_seal_audit"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:infrastructure.discover_readiness_plans()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_infrastructure"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      },
+      "after": {
+        "identity": "function:infrastructure.discover_readiness_plans()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_infrastructure"
+        ],
+        "definitionSha256": "25c0b712aa6e50a419d1fc160047618b41af83fc8f2ec2dc4e471c1459a0bdc6",
+        "staticWrites": [
+          "control_plane.lp11_readiness_scope"
+        ],
+        "staticCalls": [
+          "app.lp11_policy_tenant"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_readiness_tenant(text,uuid,uuid)|jobguard_audit_writer|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp11_readiness_worker(uuid,uuid,uuid,text,jsonb)|jobguard_worker|EXECUTE|-",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_readiness_tenant(text,uuid,uuid)|jobguard_migration",
+        "group": "a-lp11-bound-tenant-r3"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp11_readiness_worker(uuid,uuid,uuid,text,jsonb)|jobguard_migration",
         "group": "a-lp11-bound-tenant-r3"
       }
     }
@@ -27726,6 +27878,144 @@
         "proconfig": [
           "search_path=pg_catalog, pg_temp"
         ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "audit_event",
+        "policyname": "lp11_readiness_audit",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_audit_writer}",
+        "cmd": "ALL",
+        "qual": "(((subject_type)::text = 'job'::text) AND ((event_type)::text = 'readiness.scheduled_proposal_recorded'::text) AND ((actor_ref)::text = 'system:readiness-rule'::text) AND\nCASE\n    WHEN (pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,taskId}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_readiness_tenant('worker'::text, (subject_ref)::uuid, ((payload #>> '{references,taskId}'::text[]))::uuid))\n    ELSE false\nEND)",
+        "with_check": "(((subject_type)::text = 'job'::text) AND ((event_type)::text = 'readiness.scheduled_proposal_recorded'::text) AND ((actor_ref)::text = 'system:readiness-rule'::text) AND\nCASE\n    WHEN (pg_input_is_valid((subject_ref)::text, 'uuid'::text) AND pg_input_is_valid((payload #>> '{references,taskId}'::text[]), 'uuid'::text)) THEN (tenant_id = app.lp11_readiness_tenant('worker'::text, (subject_ref)::uuid, ((payload #>> '{references,taskId}'::text[]))::uuid))\n    ELSE false\nEND)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "scheduled_readiness_plan",
+        "policyname": "lp11_readiness_discovery",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_readiness_tenant('discovery'::text, NULL::uuid, NULL::uuid))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "scheduled_readiness_plan",
+        "policyname": "lp11_readiness_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_readiness_tenant('worker'::text, job_id, NULL::uuid))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "scheduled_readiness_proposal",
+        "policyname": "lp11_readiness_worker_insert",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "(tenant_id = app.lp11_readiness_tenant('worker'::text, job_id, task_id))"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "scheduled_readiness_proposal",
+        "policyname": "lp11_readiness_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_readiness_tenant('worker'::text, job_id, task_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "audit_control",
+        "tablename": "audit_head",
+        "policyname": "lp11_readiness_audit_head",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_audit_writer}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = app.lp11_readiness_tenant('worker'::text, NULL::uuid, NULL::uuid))",
+        "with_check": "(tenant_id = app.lp11_readiness_tenant('worker'::text, NULL::uuid, NULL::uuid))"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_readiness_tenant",
+        "args": "p_purpose text, p_job uuid, p_task uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_audit_writer=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp11_readiness_worker",
+        "args": "t uuid, j uuid, task uuid, operation text, proposal jsonb",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_worker=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_readiness_scope",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "lp11_readiness_scope_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
       }
     }
   ],

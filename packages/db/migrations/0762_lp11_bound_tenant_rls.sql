@@ -1800,6 +1800,14 @@ BEGIN
  IF maintenance THEN
   PERFORM app.lp11_open_maintenance_job(NEW.tenant_id,NEW.job_id);
  ELSIF NEW.tenant_id IS DISTINCT FROM coalesce(app.lp11_policy_tenant(),app.lp11_delegated_job_tenant(NEW.job_id)) THEN
+  -- A privileged caller may have supplied this exact upload to the trigger.
+  -- Preserve the verified-upload denial from the later watchdog trigger,
+  -- without doing an unbound read or relaxing the ordinary binding check.
+  IF TG_TABLE_NAME='evidence_upload' AND TG_OP='UPDATE' THEN
+   IF OLD.state='verified' AND NOT pg_has_role(session_user,'jobguard_migration','USAGE') THEN
+    RAISE EXCEPTION 'verified evidence upload is immutable' USING ERRCODE='42501';
+   END IF;
+  END IF;
   RAISE EXCEPTION 'FORBIDDEN' USING ERRCODE='42501';
  END IF;
  -- A shared marker identifies only this tenant/job's in-flight uploads on a bounded lock timeout.
@@ -3749,6 +3757,160 @@ CREATE POLICY lp11_accounting_receipt_read ON app.accounting_observation_receipt
  USING (tenant_id=app.lp11_accounting_receipt_tenant(job_id,evidence_id,object_version_id));
 CREATE POLICY lp11_accounting_receipt_insert ON app.accounting_observation_receipt FOR INSERT TO jobguard_migration
  WITH CHECK (tenant_id=app.lp11_accounting_receipt_tenant(job_id,evidence_id,object_version_id));
+
+-- Readiness discovery has no member request. The infrastructure entry point
+-- enumerates registered tenants and exposes only due plan identifiers.
+CREATE UNLOGGED TABLE control_plane.lp11_readiness_scope (
+ transaction_id xid8 PRIMARY KEY,
+ tenant_id uuid NOT NULL,
+ job_id uuid,
+ task_id uuid,
+ purpose text NOT NULL,
+ login name NOT NULL,
+ expires_at timestamptz NOT NULL,
+ CHECK ((purpose='discovery' AND job_id IS NULL AND task_id IS NULL)
+     OR (purpose='worker' AND job_id IS NOT NULL AND task_id IS NOT NULL))
+);
+ALTER TABLE control_plane.lp11_readiness_scope OWNER TO jobguard_migration;
+REVOKE ALL ON TABLE control_plane.lp11_readiness_scope FROM PUBLIC;
+
+CREATE FUNCTION app.lp11_readiness_tenant(p_purpose text,p_job uuid,p_task uuid) RETURNS uuid
+ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT s.tenant_id FROM control_plane.lp11_readiness_scope s
+ WHERE s.transaction_id=pg_current_xact_id_if_assigned() AND s.login=session_user
+  AND s.purpose=p_purpose AND s.expires_at>clock_timestamp()
+  AND (p_job IS NULL OR s.job_id=p_job) AND (p_task IS NULL OR s.task_id=p_task)
+$$;
+ALTER FUNCTION app.lp11_readiness_tenant(text,uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_readiness_tenant(text,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_readiness_tenant(text,uuid,uuid) TO jobguard_audit_writer;
+
+-- Latest definition: 0718_readiness_timezone_case.sql. Keep its ordering,
+-- cap, date computation and case-insensitive timezone validation.
+CREATE OR REPLACE FUNCTION infrastructure.discover_readiness_plans()
+RETURNS TABLE(tenant_id uuid,job_id uuid,task_id uuid)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE
+ tenant uuid;
+ emitted integer := 0;
+ added integer;
+BEGIN
+ IF current_database()<>'jobguard_synthetic_demo' THEN
+  RAISE EXCEPTION 'MODE_FORBIDDEN' USING ERRCODE='42501';
+ END IF;
+ IF app.lp11_policy_tenant() IS NOT NULL OR NOT pg_has_role(session_user,'jobguard_infrastructure','USAGE') THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
+ END IF;
+ DELETE FROM control_plane.lp11_readiness_scope WHERE expires_at<=clock_timestamp();
+ FOR tenant IN SELECT t.id FROM control_plane.tenant t ORDER BY t.id LOOP
+  INSERT INTO control_plane.lp11_readiness_scope
+  VALUES (pg_current_xact_id(),tenant,NULL,NULL,'discovery',session_user,clock_timestamp()+interval '1 minute');
+  RETURN QUERY
+   SELECT latest.tenant_id,latest.job_id,latest.task_id FROM (
+    SELECT DISTINCT ON(p.tenant_id,p.job_id,p.task_id)
+     p.tenant_id,p.job_id,p.task_id,p.payload
+    FROM app.scheduled_readiness_plan p WHERE p.tenant_id=tenant
+    ORDER BY p.tenant_id,p.job_id,p.task_id,p.fact_revision DESC
+   ) latest WHERE latest.payload->>'status'='confirmed'
+    AND CASE WHEN EXISTS (
+     SELECT 1 FROM pg_catalog.pg_timezone_names zone
+     WHERE lower(zone.name)=lower(latest.payload->>'timeZone')
+    ) THEN (latest.payload->>'plannedDate')::date >=
+     (CURRENT_TIMESTAMP AT TIME ZONE (latest.payload->>'timeZone'))::date
+    ELSE false END
+   ORDER BY latest.job_id,latest.task_id LIMIT (100-emitted);
+  GET DIAGNOSTICS added = ROW_COUNT;
+  DELETE FROM control_plane.lp11_readiness_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+  emitted := emitted+added;
+  EXIT WHEN emitted>=100;
+ END LOOP;
+END $$;
+
+-- The isolated worker follows the exact queued plan. The current stored plan
+-- and its hash fence proposal creation and the audit record.
+CREATE FUNCTION app.lp11_readiness_worker(t uuid,j uuid,task uuid,operation text,proposal jsonb DEFAULT NULL) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE plan app.scheduled_readiness_plan; result jsonb; audit_id uuid:=gen_random_uuid();
+ previous_tenant text:=current_setting('app.tenant_id',true); key text:=proposal->>'key';
+BEGIN
+ PERFORM app.lp10_assert_worker();
+ IF current_database()<>'jobguard_synthetic_demo' OR app.lp11_policy_tenant() IS NOT NULL
+  OR t IS NULL OR j IS NULL OR task IS NULL OR operation IS NULL
+  OR operation NOT IN ('load','load_job','record') OR (operation='record') IS DISTINCT FROM (proposal IS NOT NULL) THEN
+  RAISE EXCEPTION 'READINESS_FORBIDDEN' USING ERRCODE='42501';
+ END IF;
+ DELETE FROM control_plane.lp11_readiness_scope WHERE expires_at<=clock_timestamp();
+ INSERT INTO control_plane.lp11_readiness_scope
+ VALUES (pg_current_xact_id(),t,j,task,'worker',session_user,clock_timestamp()+interval '5 minutes');
+ IF operation='record' THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended('readiness-store:'||t::text||':'||j::text||':'||task::text,0));
+ END IF;
+ SELECT * INTO plan FROM app.scheduled_readiness_plan p
+ WHERE (p.tenant_id,p.job_id,p.task_id)=(t,j,task) ORDER BY p.fact_revision DESC LIMIT 1;
+ IF operation='load' THEN
+  result:=plan.payload;
+ ELSIF operation='load_job' THEN
+  SELECT coalesce(jsonb_agg(latest.payload ORDER BY latest.task_id),'[]'::jsonb) INTO result FROM (
+   SELECT DISTINCT ON (p.task_id) p.task_id,p.payload FROM app.scheduled_readiness_plan p
+   WHERE plan.task_id IS NOT NULL AND (p.tenant_id,p.job_id)=(t,j) ORDER BY p.task_id,p.fact_revision DESC
+  ) latest WHERE latest.payload->>'status'='confirmed';
+ ELSE
+  IF plan.task_id IS NULL OR plan.plan_hash IS DISTINCT FROM proposal->>'planHash'
+   OR plan.payload->>'status' IS DISTINCT FROM 'confirmed'
+   OR lower(proposal#>>'{scope,tenantId}') IS DISTINCT FROM t::text
+   OR lower(proposal#>>'{scope,jobId}') IS DISTINCT FROM j::text
+   OR lower(proposal#>>'{scope,taskId}') IS DISTINCT FROM task::text
+   OR key IS NULL OR key !~ '^[a-f0-9]{64}$' THEN
+   RAISE EXCEPTION 'READINESS_STORE_CONFLICT' USING ERRCODE='23514';
+  END IF;
+  INSERT INTO app.scheduled_readiness_proposal(tenant_id,job_id,task_id,proposal_key,plan_hash,payload,audit_event_id)
+  VALUES(t,j,task,key,plan.plan_hash,proposal,audit_id) ON CONFLICT(tenant_id,proposal_key) DO NOTHING;
+  IF FOUND THEN
+   -- The sealer consumes the derived tenant. RLS requires the private task
+   -- and recognizes only this audit event from the isolated worker.
+   PERFORM set_config('app.tenant_id',plan.tenant_id::text,true);
+   PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object(
+    'id',audit_id,'version','audit.v1','actorRef','system:readiness-rule',
+    'eventType','readiness.scheduled_proposal_recorded','subjectType','job','subjectRef',j,
+    'payload',jsonb_build_object('references',jsonb_build_object('taskId',task,'proposalKey',key),
+     'hashes',jsonb_build_object('planHash',plan.plan_hash),
+     'classifications',jsonb_build_object('action','operational')))),'lower_trust');
+   PERFORM set_config('app.tenant_id',coalesce(previous_tenant,''),true);
+  ELSIF NOT EXISTS(SELECT FROM app.scheduled_readiness_proposal p
+   WHERE (p.tenant_id,p.job_id,p.task_id,p.proposal_key)=(t,j,task,key)
+    AND p.payload-'evaluatedAt'=proposal-'evaluatedAt') THEN
+   RAISE EXCEPTION 'READINESS_STORE_CONFLICT' USING ERRCODE='23514';
+  END IF;
+ END IF;
+ DELETE FROM control_plane.lp11_readiness_scope WHERE transaction_id=pg_current_xact_id_if_assigned();
+ RETURN result;
+END $$;
+ALTER FUNCTION app.lp11_readiness_worker(uuid,uuid,uuid,text,jsonb) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.lp11_readiness_worker(uuid,uuid,uuid,text,jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.lp11_readiness_worker(uuid,uuid,uuid,text,jsonb) TO jobguard_worker;
+
+CREATE POLICY lp11_readiness_discovery ON app.scheduled_readiness_plan FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_readiness_tenant('discovery',NULL,NULL));
+CREATE POLICY lp11_readiness_worker_read ON app.scheduled_readiness_plan FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_readiness_tenant('worker',job_id,NULL));
+CREATE POLICY lp11_readiness_worker_read ON app.scheduled_readiness_proposal FOR SELECT TO jobguard_migration
+ USING (tenant_id=app.lp11_readiness_tenant('worker',job_id,task_id));
+CREATE POLICY lp11_readiness_worker_insert ON app.scheduled_readiness_proposal FOR INSERT TO jobguard_migration
+ WITH CHECK (tenant_id=app.lp11_readiness_tenant('worker',job_id,task_id));
+CREATE POLICY lp11_readiness_audit_head ON audit_control.audit_head TO jobguard_audit_writer
+ USING (tenant_id=app.lp11_readiness_tenant('worker',NULL,NULL))
+ WITH CHECK (tenant_id=app.lp11_readiness_tenant('worker',NULL,NULL));
+CREATE POLICY lp11_readiness_audit ON app.audit_event TO jobguard_audit_writer USING (
+ subject_type='job' AND event_type='readiness.scheduled_proposal_recorded' AND actor_ref='system:readiness-rule'
+ AND CASE WHEN pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,taskId}','uuid')
+  THEN tenant_id=app.lp11_readiness_tenant('worker',subject_ref::uuid,(payload#>>'{references,taskId}')::uuid)
+  ELSE false END
+) WITH CHECK (
+ subject_type='job' AND event_type='readiness.scheduled_proposal_recorded' AND actor_ref='system:readiness-rule'
+ AND CASE WHEN pg_input_is_valid(subject_ref,'uuid') AND pg_input_is_valid(payload#>>'{references,taskId}','uuid')
+  THEN tenant_id=app.lp11_readiness_tenant('worker',subject_ref::uuid,(payload#>>'{references,taskId}')::uuid)
+  ELSE false END
+);
 
 -- The ledger view was an owner-rights view. Preserve its security barrier and
 -- use caller privileges/RLS, just like the existing parties/recovery views.
