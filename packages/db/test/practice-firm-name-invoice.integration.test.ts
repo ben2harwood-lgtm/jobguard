@@ -11,7 +11,7 @@ import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { withTenant, verifiedTenantContextForQueuedJob, type VerifiedTenantContext } from "../src/tenant-context.js";
 
-const own = "0950_practice_firm_name_invoice.sql";
+const own = "0764_practice_firm_name_invoice.sql";
 const profile = { version: "firm-profile.v1", tradingName: "Fictional Moonbrick Works", addressLines: [], contactEmail: "", contactPhone: "" };
 const start = { version: "blank-practice-company.v1", action: "start" };
 const fallback = "Fictional Builder Ltd";

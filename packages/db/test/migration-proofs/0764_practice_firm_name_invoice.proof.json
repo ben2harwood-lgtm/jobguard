@@ -1,5 +1,5 @@
 {
-  "migration": "0950_practice_firm_name_invoice.sql",
+  "migration": "0764_practice_firm_name_invoice.sql",
   "lp0": [
     {
       "section": "routines",
@@ -207,7 +207,7 @@
           "packages/db/migrations/0757_practice_firm_name.sql",
           "packages/db/src/quote-delivery-repository.ts",
           "packages/db/src/acceptance-repository.ts",
-          "packages/db/migrations/0950_practice_firm_name_invoice.sql"
+          "packages/db/migrations/0764_practice_firm_name_invoice.sql"
         ],
         "tests": [
           "packages/db/test/firm-profile.integration.test.ts",
