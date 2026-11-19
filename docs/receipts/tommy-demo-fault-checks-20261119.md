@@ -41,3 +41,13 @@ All existing financial/state assertions and timeouts remain intact. The separate
 The final-head lane-check result is reported in the branch handoff. Test discovery is not test execution. The coordinating agent owns actual PostgreSQL/browser execution and independent review. This builder started no PostgreSQL instance, Next server or browser, and performed no push, merge, CI dispatch or deployment.
 
 The remaining recovered pack variants and timed/nontechnical rehearsals are outside this bounded change. No whole-pack or demonstration-readiness pass is claimed.
+
+## Paired-run setup correction
+
+Source review during CI monitoring found that the two acceptance runs originally reused one browser context. The second `openReview` call would inherit an authenticated practice session and the completed-tour localStorage flag, although the existing helper expects **Start the demo** and a fresh tour. That would test a broken setup rather than the intended interrupted acceptance.
+
+Each control/fault run now creates its own browser context with the current project's configured `baseURL` and `viewport`, and closes it in `finally`. No application cookies, localStorage, stored jobs, or shared helper behavior are altered. The interrupted and control runs still use identical command paths and financial assertions, with independent browser state.
+
+The follow-up source check also confirmed the labelled **Accepted terms** section and **Price the work** controls in QuoteEditor, the capture/recovery routes and request versions used by the real UI, the `recoveryCaseViewV1` money/state field names, and the operation/receipt table columns and `quote.acceptance.attest` operation value. These are source checks, not a runtime pass. The earlier CI head with shared-context setup must not be counted as completed support-v01 coverage.
+
+After this correction, web typecheck and discovery of all 20 executions in the two affected files passed again. Browser/DB execution remains delegated to CI; no such execution was performed in this worktree.

@@ -49,14 +49,22 @@ async function prepareAcceptance(page: Page) {
 
 // support-v01 is CUSTOMER/quote acceptance, not the fake delivery executor's
 // "Simulate timeout after acceptance" (provider acceptance). No end-state seeds.
-test("support-v01 persisted integrity: a lost committed acceptance reply reconciles one operation; report UX recovery separately", async ({ page }, testInfo) => {
+test("support-v01 persisted integrity: a lost committed acceptance reply reconciles one operation; report UX recovery separately", async ({ browser }, testInfo) => {
   const admin = adminPool(), outcomes: unknown[] = [];
   const errors: string[] = [], productFindings: string[] = [];
-  page.on("pageerror", error => errors.push(error.message));
+  const { baseURL, viewport } = testInfo.project.use;
+  if (!baseURL || !viewport) throw new Error("This rehearsal requires the existing project's baseURL and viewport");
   try {
     for (const loseReply of [false, true]) {
+      // openReview's entry helper expects a fresh session and tour. A second
+      // run must not inherit the first run's cookies or tour localStorage.
+      const context = await browser.newContext({ baseURL, viewport });
+      try {
+      const page = await context.newPage();
+      page.on("pageerror", error => errors.push(error.message));
+      const outcome: Record<string, unknown> = { loseReply, viewport, stage: "setup" }; outcomes.push(outcome);
       const jobId = await prepareAcceptance(page), path = `/api/jobs/${jobId}/quotes/acceptance`;
-      const outcome: Record<string, unknown> = { loseReply, jobId }; outcomes.push(outcome);
+      outcome.jobId = jobId; outcome.stage = "acceptance";
       const before = await read(page, path), activationBefore = await read(page, `/api/jobs/${jobId}/quotes/activation`);
       outcome.before = before;
       expect(before.activeAcceptance).toBeNull(); expect(before.events).toHaveLength(0);
@@ -141,6 +149,7 @@ test("support-v01 persisted integrity: a lost committed acceptance reply reconci
         expect(posts).toHaveLength(1); // Reload reconciles; it must never silently POST acceptance again.
         outcome.counts = await counts(); outcome.browserErrors = [...errors];
       } finally { page.off("request", observed); await page.unroute(`**${path}`, intercept); }
+      } finally { await context.close(); }
     }
   } finally {
     await testInfo.attach("support-v01-acceptance-receipts", { body: JSON.stringify({ coverage: "persisted integrity; UX findings reported separately", outcomes, productFindings, browserErrors: errors }, null, 2), contentType: "application/json" });
