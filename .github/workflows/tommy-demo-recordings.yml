@@ -1,0 +1,94 @@
+name: Tommy demo recordings
+on:
+  push:
+    branches: [codex/sandbox/tommy-demo-recordings-20261119]
+permissions:
+  contents: read
+jobs:
+  record-desktop-journeys:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Bind the exact checkout to the reviewed product tree
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_PRODUCT_TREE: 465e9f31f70eccc6cf42467d932b78c5ac097369
+          REVIEWED_PRODUCT_COMMIT: da34f12f6cd8b86b96d32a96bc8f7299c1b86c6d
+        run: |
+          actual_sha=$(git rev-parse HEAD)
+          printf 'Recording checkout SHA: %s\nRecording checkout tree: %s\n' "$actual_sha" "$(git rev-parse HEAD^{tree})"
+          test "$actual_sha" = "$EXPECTED_SHA"
+          diagnostic_index_dir=$(mktemp -d)
+          trap 'rm -rf "$diagnostic_index_dir"' EXIT
+          export GIT_INDEX_FILE="$diagnostic_index_dir/index"
+          git read-tree HEAD
+          git update-index --force-remove .github/workflows/tommy-demo-recordings.yml apps/web/playwright.tommy-recordings.config.ts apps/web/diagnostics/tommy-recordings-reporter.ts config/lanes/tommy-demo-recordings-20261119.json docs/receipts/tommy-demo-recordings-20261119.md
+          export RECORDED_PRODUCT_TREE=$(git write-tree)
+          printf 'Reviewed product/test tree: %s\n' "$RECORDED_PRODUCT_TREE"
+          test "$RECORDED_PRODUCT_TREE" = "$EXPECTED_PRODUCT_TREE"
+          python - <<'PY'
+          import datetime, json, os, pathlib, subprocess
+          metadata = pathlib.Path("apps/web/test-results/tommy-recordings-meta")
+          metadata.mkdir(parents=True, exist_ok=True)
+          receipt = {
+              "checkoutSha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "checkoutTree": subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip(),
+              "expectedSha": os.environ["EXPECTED_SHA"],
+              "productTree": os.environ["RECORDED_PRODUCT_TREE"],
+              "expectedProductTree": os.environ["EXPECTED_PRODUCT_TREE"],
+              "reviewedProductCommit": os.environ["REVIEWED_PRODUCT_COMMIT"],
+              "runId": os.environ["GITHUB_RUN_ID"],
+              "runAttempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "verifiedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "diagnosticOnly": True,
+              "hostedDeployment": False,
+          }
+          (metadata / "source-binding.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          PY
+      - uses: pnpm/action-setup@v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@v4.0.3
+        with: { node-version: 24.15.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Install the existing pinned Chromium
+        run: pnpm --filter @jobguard/web exec playwright install --with-deps chromium
+      - name: Require exactly the four complete desktop journeys
+        run: |
+          pnpm --silent --filter @jobguard/web exec playwright test --config=playwright.tommy-recordings.config.ts --list --reporter=json > apps/web/test-results/tommy-recordings-meta/discovery.json
+          python - <<'PY'
+          import json, pathlib
+          report = json.loads(pathlib.Path("apps/web/test-results/tommy-recordings-meta/discovery.json").read_text())
+          def specs(suites):
+              for suite in suites:
+                  yield from suite.get("specs", [])
+                  yield from specs(suite.get("suites", []))
+          selected = [(spec["title"], test["projectName"]) for spec in specs(report.get("suites", [])) for test in spec["tests"]]
+          expected = {
+              ("ENT-11b full Northside through billing, statement and dashboard at 1280px under ten minutes", "desktop"),
+              ("DEMO-J1 fresh selection launch, five-line job, completed worker check, receipts, reversal, correction, source links and saved report", "desktop"),
+              ("DEMO-J2 recovery-18800 reaches all five figures through the complete fresh journey", "desktop"),
+              ("DEMO-J3 fresh shadow-30000 completes customer approvals, one paid invoice, £800 Q and verified packs", "desktop"),
+          }
+          assert not report.get("errors"), report.get("errors")
+          assert len(selected) == 4 and set(selected) == expected, selected
+          print("Verified four unchanged complete desktop journeys.")
+          PY
+      - name: Record the unchanged real-server synthetic journeys
+        run: pnpm test:e2e --config=playwright.tommy-recordings.config.ts --project=desktop --workers=1 --retries=0
+      - name: Retain videos, traces, test report and source binding on every outcome
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: tommy-demo-recordings-desktop-${{ github.run_attempt }}
+          path: |
+            apps/web/playwright-report/tommy-recordings/
+            apps/web/test-results/tommy-recordings/
+            apps/web/test-results/tommy-recordings-meta/
+          retention-days: 14
+          if-no-files-found: error
