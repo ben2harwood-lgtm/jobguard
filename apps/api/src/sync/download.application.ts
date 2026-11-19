@@ -59,7 +59,10 @@ export class SyntheticSyncDownloadApplication {
     if (!z.string().min(1).max(4096).safeParse(sessionToken).success) throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
     let raw: unknown;
     try { raw = await this.store.readCurrentSession(sessionToken); }
-    catch { throw new SyncServerError("SYNC_UNAVAILABLE"); }
+    catch (error) {
+      if (error instanceof SyncServerError && error.code === "SYNC_AUTHORITY_REQUIRED") throw error;
+      throw new SyncServerError("SYNC_UNAVAILABLE");
+    }
     const parsed = snapshotV1.safeParse(raw);
     if (!parsed.success) throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
     const snapshot = parsed.data;
@@ -80,6 +83,11 @@ export class SyntheticSyncDownloadApplication {
   }
 
   async subscribe(sessionToken: string, raw: unknown) {
+    return (await this.subscribeBound(sessionToken, raw)).response;
+  }
+
+  /** Internal receipt for an authenticated transport. Both values come from the same snapshot. */
+  async subscribeBound(sessionToken: string, raw: unknown) {
     this.assertEnabled();
     const input = subscriptionV1.safeParse(raw);
     if (!input.success) throw new SyncServerError("SYNC_INVALID_INPUT");
@@ -90,7 +98,8 @@ export class SyntheticSyncDownloadApplication {
     const claims = deriveSyncTokenClaimsV1({ version: "sync-token-input.v1", environment: "synthetic_demo", facts,
       generation: snapshot.generation, issuedAtSeconds: now.data, expiresAtSeconds: now.data + 60, audience });
     const body = Buffer.from(JSON.stringify({ version: "synthetic-sync-envelope.v1", claims, sessionId: snapshot.sessionId, scopeHash })).toString("base64url");
-    return { version: "sync-server-token.v1" as const, environment: "synthetic_demo" as const, token: `${body}.${sign(body).toString("base64url")}`, expiresAtSeconds: claims.exp };
+    return { generation: snapshot.generation, response: { version: "sync-server-token.v1" as const,
+      environment: "synthetic_demo" as const, token: `${body}.${sign(body).toString("base64url")}`, expiresAtSeconds: claims.exp } };
   }
 
   private validToken(token: string, current: Awaited<ReturnType<SyntheticSyncDownloadApplication["current"]>>) {

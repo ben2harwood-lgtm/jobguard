@@ -25,3 +25,26 @@ it("native encrypted-store seam consumes actual DARK server pages and cannot ret
  snapshot.authority.status = "revoked";
  await expect(new NativeDownloads(doc, transport).pull()).rejects.toMatchObject({ code: "MOBILE_DENIED" }); expect(JSON.parse(data).sync).toBeNull();
 });
+
+it("the native channel is disabled by default and refuses production before authentication or database access", async () => {
+ const { SyntheticNativeDownloadConnection } = await import("./sync/native-download.connection.js");
+ const { SyntheticMobileAuthApplication } = await import("./auth/mobile-auth.application.js");
+ const { MemoryAuthProvider } = await import("./auth/auth-provider.js");
+ const { Pool } = await import("pg");
+ const source = new MemoryAuthProvider("fictional-native-download-secret", () => {});
+ const origin = "https://jobguard.example.test";
+ const policy = { version: "mobile-auth-policy-specimen.v1", environment: "synthetic_demo",
+  policyVersion: "fictional_mobile_auth_policy_v1", accessDurationMs: 100, refreshDurationMs: 500,
+  sessionDurationMs: 1000, readLeaseDurationMs: 200 };
+ const mobile = new SyntheticMobileAuthApplication(source, policy, { allowedOrigin: origin, now: () => 1000 });
+ const pool = new Pool();
+ try {
+  for (const flags of [{}, { enabled: true }, { environment: "synthetic_demo" }, { enabled: true, environment: "production" }]) {
+   const channel = new SyntheticNativeDownloadConnection(source, mobile, pool, { allowedOrigin: origin, ...flags });
+   await expect(channel.call({}, {})).rejects.toMatchObject({ code: "SYNC_DISABLED" });
+  }
+  await expect(new SyntheticNativeDownloadConnection(source, mobile, pool, {
+   allowedOrigin: origin, environment: "synthetic_demo", enabled: true,
+  }).call({ partition: {} }, {})).rejects.toMatchObject({ code: "SYNC_INVALID_INPUT" });
+ } finally { await pool.end(); }
+});

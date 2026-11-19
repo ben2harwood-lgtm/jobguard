@@ -1,8 +1,23 @@
 import React, { isValidElement, type ReactElement, type ReactNode } from "react";
 import { expect, it, vi } from "vitest";
+// Keep state between host-double renders for the mounted assignment control.
+const hooks = vi.hoisted(() => ({ state: null as unknown[] | null, index: 0 }));
 // Inspect the shell's actual React remount key, using the existing host-double approach.
 vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof import("react")>(),
- useState: <T,>(initial: T) => [initial, vi.fn()] }));
+ useState: <T,>(initial: T) => {
+  const state = hooks.state;
+  if (!state) return [initial, vi.fn()];
+  const slot = hooks.index++;
+  if (!(slot in state)) state[slot] = initial;
+  return [state[slot] as T, (value: T) => { state[slot] = value; }];
+ },
+ useRef: <T,>(initial: T) => {
+  const state = hooks.state;
+  if (!state) return { current: initial };
+  const slot = hooks.index++;
+  if (!(slot in state)) state[slot] = { current: initial };
+  return state[slot] as { current: T };
+ } }));
 vi.mock("react-native", () => ({ SafeAreaView: "SafeAreaView", View: "View", Text: "Text", ScrollView: "ScrollView", TextInput: "TextInput", Button: "Button" }));
 vi.mock("./native-store", () => ({ openNativeStore: vi.fn() }));
 import App from "../App";
@@ -10,10 +25,11 @@ import { NativeComposition, type NativeCompositionInputs } from "./composition";
 import { CoreLoopScreen } from "./CoreLoopScreen";
 import { WorkspaceScreens } from "./WorkspaceScreens";
 import { localData, type MobileSession, type Partition } from "./lifecycle-contracts";
+import { evaluateSyncDownloadV1, pageSyncDownloadV1, planSyncReconcileV1 } from "@jobguard/core";
 import type { NativeCoreSource } from "./core-loop-screens";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 let fixture = 0;
-function setup(hook?: (p: Partition) => Promise<void>) {
+function setup(hook?: (p: Partition) => Promise<void>, connect?: (p: Partition) => NonNullable<NativeCompositionInputs["downloadConnection"]>) {
  const p = { userId: id(1), tenantId: id(2), membershipId: id(3), mobileSessionId: id(4), deviceInstanceId: `fictional-${++fixture}` };
  let bytes: string | null = null, n = 20;
  const keys = new Set<string>(), secure = new Map<string, string>();
@@ -32,7 +48,7 @@ function setup(hook?: (p: Partition) => Promise<void>) {
   connectionId: id(7), refreshedConnectionId: id(7), current: snapshot, review: { action: "acceptQuote" as const, connectionId: id(7), snapshot } };
  const source: NativeCoreSource = { assertCurrent: vi.fn(async () => {}), load: vi.fn(async () => ({ partition: p, context,
   request: { screen: "acceptance_intent" as const, input: context } })) };
- const inputs: NativeCompositionInputs = { partition: p, store, source, uuid: () => id(++n), online: false, authEpoch: 0,
+ const inputs: NativeCompositionInputs = { partition: p, store, source, ...(connect ? { downloadConnection: connect(p) } : {}), uuid: () => id(++n), online: false, authEpoch: 0,
   lifecycle: { provider, vault, resources, options: { enabled: true, environment: "synthetic_demo", policy, uuid: () => id(++n), deviceInstanceId: p.deviceInstanceId,
    clock: () => ({ status: "trusted_fixture", nowMs: 1000 }), partitionKey: async () => p.deviceInstanceId, ...(hook ? { beforePartitionCleanup: hook } : {}) } } };
  const owner = new NativeComposition(inputs);
@@ -129,4 +145,50 @@ it("cleanup hook failure retains marker, pending contents and encryption keys wh
  await expect(f.owner.client.reconnect()).rejects.toThrow("MOBILE_RECOVERY_REQUIRED");
  expect(f.provider.rotate).not.toHaveBeenCalled(); expect(f.provider.reconnect).not.toHaveBeenCalled();
  await expect(f.owner.document.transaction(async data => ({ data, result: null }))).rejects.toThrow("MOBILE_DENIED");
+});
+
+it("the shell's assigned-jobs control reads and refreshes the owning workspace through its download connection", async () => {
+ let allowed = true;
+ const calls = vi.fn();
+ const f = setup(undefined, p => ({
+  access: async () => ({ version: "mobile-access.v1", credential: "a".repeat(43) }),
+  send: async message => {
+   const { operation } = message as { operation: { kind: string; request: Record<string, unknown> } };
+   calls(operation.kind);
+   const version = "native-download-reply.v1";
+   if (!allowed) return { version, outcome: "denied" };
+   if (operation.kind === "check") return { version, outcome: "current", partition: p };
+   if (operation.kind === "subscribe") return { version, outcome: "ok", value: { partition: p, schemaVersion: 1, generation: 1, token: "fictional" } };
+   const facts = { version: "sync-download-facts.v1", environment: "synthetic_demo", request: operation.request.request,
+    authority: { userId: p.userId, tenantId: p.tenantId, membershipId: p.membershipId, status: "active", role: "operative", assignedJobIds: [id(90)] },
+    source: [{ tenantId: p.tenantId, jobId: id(90), workOrderId: id(91), reference: "Fictional connected order",
+     priority: "routine", issuedOn: "2026-11-05", dueOn: null, openVisitId: null }] };
+   return { version, outcome: "ok", value: { version: "sync-server-download-result.v1",
+    page: pageSyncDownloadV1({ facts, afterJobId: null, pageSize: 100 }),
+    cleanup: planSyncReconcileV1({ version: "sync-reconcile.v1", delivered: [], decision: evaluateSyncDownloadV1(facts) }),
+    resync: "none" } };
+  },
+ }));
+ await f.owner.client.exchange(f.p.tenantId);
+ hooks.state = [];
+ try {
+  const binding = f.owner.updateAuthority({ online: true, authEpoch: 0 });
+  const render = (current = binding) => {
+   hooks.index = 0;
+   return nodes(WorkspaceScreens(workspace(current).props as { binding: typeof binding }));
+  };
+  const refresh = (current = binding) => render(current).find(node => node.props.title === "Refresh assigned jobs")!;
+  (refresh().props.onPress as () => void)();
+  await vi.waitFor(() => expect(JSON.stringify(render())).toContain("Fictional connected order"));
+  expect(calls.mock.calls).toEqual([["check"], ["subscribe"], ["page"]]);
+  expect(JSON.parse(f.bytes()!).sync.rows.map((row: { jobId: string }) => row.jobId)).toEqual([id(90)]);
+
+  allowed = false;
+  (refresh().props.onPress as () => void)();
+  await vi.waitFor(() => expect(JSON.parse(f.bytes()!).sync).toBeNull());
+  expect(JSON.stringify(render())).not.toContain("Fictional connected order");
+  const offline = f.owner.updateAuthority({ online: false, authEpoch: 0 });
+  expect(refresh(offline).props.disabled).toBe(true);
+  await expect(binding.assignedJobs!.refresh()).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+ } finally { hooks.state = null; }
 });
