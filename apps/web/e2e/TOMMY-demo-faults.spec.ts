@@ -49,9 +49,9 @@ async function prepareAcceptance(page: Page) {
 
 // support-v01 is CUSTOMER/quote acceptance, not the fake delivery executor's
 // "Simulate timeout after acceptance" (provider acceptance). No end-state seeds.
-test("support-v01: a lost committed quote-acceptance reply reconciles the same operation and document on reload", async ({ page }, testInfo) => {
+test("support-v01 persisted integrity: a lost committed acceptance reply reconciles one operation; report UX recovery separately", async ({ page }, testInfo) => {
   const admin = adminPool(), outcomes: unknown[] = [];
-  const errors: string[] = [];
+  const errors: string[] = [], productFindings: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   try {
     for (const loseReply of [false, true]) {
@@ -80,6 +80,7 @@ test("support-v01: a lost committed quote-acceptance reply reconciles the same o
         } catch (error) { await route.abort("failed").catch(() => undefined); rejectLost(error); }
       };
       try {
+        const errorsBeforeClick = errors.length;
         if (loseReply) await page.route(`**${path}`, intercept);
         await button(page, "Record practice acceptance").click();
         if (loseReply) {
@@ -97,6 +98,20 @@ test("support-v01: a lost committed quote-acceptance reply reconciles the same o
         // Reconcile with authoritative stored facts BEFORE any further action.
         const saved = await read(page, path);
         outcome.saved = saved;
+        if (loseReply) {
+          const browserErrors = errors.slice(errorsBeforeClick);
+          const notices = await page.locator(".quote-editor").locator('[role="status"], [role="alert"]').allTextContents();
+          const copy = notices.join(" ");
+          const hasUncertaintyGuidance = /unknown|may or may not|could not confirm/iu.test(copy)
+            && /reload|reconcile|read.*saved|check.*saved|try again/iu.test(copy);
+          outcome.lostReplyUi = { browserErrors, notices, hasUncertaintyGuidance,
+            acceptanceControlEnabled: await button(page, "Record practice acceptance").isEnabled() };
+          if (browserErrors.length || !hasUncertaintyGuidance) {
+            const finding = `Acceptance persisted, but response-loss UX needs repair: ${browserErrors.length} uncaught browser error(s); actionable uncertainty guidance ${hasUncertaintyGuidance ? "present" : "absent"}. Reload integrity does not satisfy full support-v01.`;
+            productFindings.push(finding);
+            testInfo.annotations.push({ type: "product-finding", description: finding });
+          }
+        }
         expect(saved.jobStatus).toBe("accepted");
         expect(saved.activeAcceptance).toMatchObject({ documentId: command.documentId, documentHash: command.documentHash, documentVersion: command.documentVersion, netPence: 100000, totalPence: 120000 });
         expect(saved.events).toHaveLength(1);
@@ -128,7 +143,7 @@ test("support-v01: a lost committed quote-acceptance reply reconciles the same o
       } finally { page.off("request", observed); await page.unroute(`**${path}`, intercept); }
     }
   } finally {
-    await testInfo.attach("support-v01-acceptance-receipts", { body: JSON.stringify({ outcomes, browserErrors: errors }, null, 2), contentType: "application/json" });
+    await testInfo.attach("support-v01-acceptance-receipts", { body: JSON.stringify({ coverage: "persisted integrity; UX findings reported separately", outcomes, productFindings, browserErrors: errors }, null, 2), contentType: "application/json" });
     await admin.end();
   }
 });
