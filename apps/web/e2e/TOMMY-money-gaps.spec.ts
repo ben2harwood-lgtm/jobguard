@@ -107,7 +107,11 @@ async function freshLiveJob(page: Page, target: "core" | "recovery") {
   await click(page, "Check and edit my draft");
   await expect(page.getByRole("heading", { name: "Check the work items", exact: true })).toBeVisible();
   const savedCapture = captureWorkspaceResponseV1.parse(await read(page, root(jobId) + "/proposal"));
-  expect(savedCapture).toEqual(captured);
+  // view() supplies a new provisional reviewId until a review is saved. Both schema parses
+  // validate that UUID; every persisted identity, source and proposal field must remain exact.
+  expect(captured.review).toBeNull();
+  expect(savedCapture.review).toBeNull();
+  expect(savedCapture).toEqual({ ...captured, reviewId: savedCapture.reviewId });
   expect(captured.source.text).toBe(source);
   expect(captured.proposal.lines.map(line => line.description.value)).toEqual([...names, "Replace shelves"]);
   const originalIds = captured.proposal.lines.filter(line => names.includes(line.description.value)).map(line => line.scopeItemId);

@@ -1,0 +1,57 @@
+name: Tommy focused diagnostics
+on:
+  push:
+    branches: [codex/sandbox/tommy-focused-checks-20261119]
+permissions:
+  contents: read
+jobs:
+  focused-browser:
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [mobile-360, desktop]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Verify the candidate SHA and unchanged product tree
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_PRODUCT_TREE: 21340673da19cb735b1abf34fb329fd017dbe761
+        run: |
+          actual_sha=$(git rev-parse HEAD)
+          printf 'Candidate SHA: %s\nCandidate tree: %s\n' "$actual_sha" "$(git rev-parse HEAD^{tree})"
+          test "$actual_sha" = "$EXPECTED_SHA"
+          diagnostic_index_dir=$(mktemp -d)
+          trap 'rm -rf "$diagnostic_index_dir"' EXIT
+          export GIT_INDEX_FILE="$diagnostic_index_dir/index"
+          git read-tree HEAD
+          git update-index --force-remove .github/workflows/tommy-focused-checks.yml config/lanes/tommy-focused-checks-20261119.json docs/receipts/tommy-focused-checks-20261119.md
+          product_tree=$(git write-tree)
+          printf 'Product/test candidate tree: %s\n' "$product_tree"
+          test "$product_tree" = "$EXPECTED_PRODUCT_TREE"
+      - uses: pnpm/action-setup@v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@v4.0.3
+        with: { node-version: 24.15.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Install the browser used by the existing end-to-end suite
+        run: pnpm --filter @jobguard/web exec playwright install --with-deps chromium
+      - name: Exercise the two focused specs on the real synthetic stack
+        env:
+          PLAYWRIGHT_PROJECT: ${{ matrix.project }}
+        run: pnpm test:e2e e2e/TOMMY-money-gaps.spec.ts e2e/TOMMY-acceptance-recovery.spec.ts --project="$PLAYWRIGHT_PROJECT" --workers=1 --retries=0
+      - name: Retain focused Playwright evidence on every outcome
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: tommy-focused-${{ matrix.project }}-${{ github.run_attempt }}
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 14
+          if-no-files-found: warn
