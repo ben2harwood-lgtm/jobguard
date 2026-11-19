@@ -99,7 +99,7 @@ function PracticeCustomerInvoices({jobId,finalAccount}:{jobId:string;finalAccoun
    </dl>
    <p>Issue date {invoice.issuedOn} · Fictional issuer/run identity <code>{view?.jobId}</code></p>
    <p>Artifact hash <code data-testid="invoice-artifact-hash">{invoice.pdfSha256}</code></p>
-   <a href={`/api/jobs/${jobId}/customer-invoices/${invoice.id}`}>Download synthetic invoice PDF</a>
+   <a href={`/api/jobs/${jobId}/customer-invoices/${invoice.id}`} download>Download synthetic invoice PDF</a>
    <CustomerInvoicePayNow/>
    <p>Need to change it? Issue a correction; this snapshot and number cannot be edited.</p>
    <CustomerCreditNotes jobId={jobId} invoiceId={invoice.id} onChanged={()=>void load(true)}/>

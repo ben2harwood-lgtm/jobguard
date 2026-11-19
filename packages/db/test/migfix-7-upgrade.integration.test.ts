@@ -298,6 +298,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.current_firm_profile_key()", "0757_practice_firm_name.sql"],
     ["app.job_saved_firm_name(j uuid)", "0757_practice_firm_name.sql"],
     ["app.store_extra_pack_artifact(p_command uuid, p_job uuid, p_extra uuid, p_digest text, p_artifact jsonb)", "0744_extra_pack_source_bijection.sql"],
+    ["app.issue_practice_customer_invoice(p_tenant uuid, p_job uuid, p_final_revision uuid, p_actor uuid, p_command uuid, p_recipient text, p_issued_on date)", "0764_practice_firm_name_invoice.sql"],
+    ["app.issue_lock_bound_customer_invoice(p_tenant uuid, p_job uuid, p_revision uuid, p_actor uuid, p_command uuid, p_kind text, p_recipient text, p_issued_on date, p_source_hash text)", "0764_practice_firm_name_invoice.sql"],
   ] as readonly (readonly [string, string, number?])[]) {
     const source = await readFile(new URL(`../migrations/${migration}`, import.meta.url), "utf8");
     if (identity!.startsWith("app.decision_check_command(")) {
