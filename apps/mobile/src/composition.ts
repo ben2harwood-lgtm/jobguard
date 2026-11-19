@@ -5,11 +5,20 @@ import { NativeCoreLoopScreens, type NativeCoreSource } from "./core-loop-screen
 import { WorkspaceDocument } from "./workspace-document";
 import type { EncryptedStore } from "./store";
 import type { NativeWorkspaceBindings } from "./WorkspaceScreens";
+import { DurableNativeQueue, type NativeQueueTransport } from "./durable-queue";
+import { reconciliationController, type QueueReviewSource } from "./reconciliation-controller";
+import type { HashPort } from "./sync";
 
 type LifecycleInputs = ConstructorParameters<typeof MobileClient>;
 export interface NativeCompositionInputs {
  partition: Partition; store: EncryptedStore; source: NativeCoreSource;
  online: boolean; authEpoch: number; uuid(): string;
+ queue?: { transport: NativeQueueTransport; hash: HashPort; review: QueueReviewSource };
+ operative?: {
+  screens(queue: Pick<DurableNativeQueue, "enqueueNote">): NonNullable<NativeWorkspaceBindings["operative"]>;
+  makeIntent: NonNullable<NativeWorkspaceBindings["makeOperativeIntent"]>;
+  onReview?: NonNullable<NativeWorkspaceBindings["onOperativeReview"]>;
+ };
  lifecycle: { provider: LifecycleInputs[0]; vault: LifecycleInputs[1]; resources: LifecycleInputs[2]; options: LifecycleInputs[3] };
 }
 // A cleaned partition remains reserved: re-enrolment must supply a new session partition.
@@ -66,7 +75,22 @@ export class NativeComposition {
     return reply;
    },
   };
-  return { partition: this.partition, online: this.#active && this.#online, authorityGeneration: generation,
+  const base = { partition: this.partition, online: this.#active && this.#online, authorityGeneration: generation,
    uuid: this.inputs.uuid, core: new NativeCoreLoopScreens(this.partition, source, this.inputs.uuid) };
+  const config = this.inputs.queue;
+  if (!config) return base;
+  const queue = new DurableNativeQueue(this.document, source, { upload: async raw => {
+   this.assertCurrent(generation, this.partition);
+   try { return await config.transport.upload(raw); }
+   finally { this.assertCurrent(generation, this.partition); }
+  } }, config.hash, () => {
+   if (!this.#active || generation !== this.#generation) throw new MobileClientError("MOBILE_DENIED");
+  });
+  const operative = this.inputs.operative;
+  return { ...base, queue, onReconcileChoice: reconciliationController(queue, this.partition, source, config.review),
+   ...(operative ? { operative: operative.screens({ enqueueNote: raw => {
+    this.assertCurrent(generation, this.partition);
+    return queue.enqueueNote(raw);
+   } }), makeOperativeIntent: operative.makeIntent, ...(operative.onReview ? { onOperativeReview: operative.onReview } : {}) } : {}) };
  }
 }
