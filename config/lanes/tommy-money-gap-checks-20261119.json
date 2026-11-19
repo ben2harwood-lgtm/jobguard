@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "tommy-money-gap-checks-20261119": {
+      "branches": [
+        "codex/sandbox/tommy-money-gap-checks-20261119"
+      ],
+      "note": "Test-only: recovered support-v02 paired pending £50 exclusion and support-v04 committed £384 allocation response loss. Own spec and receipt only; no product, fixture-helper, existing test, migration or policy changes.",
+      "allow": [
+        "apps/web/e2e/TOMMY-money-gaps.spec.ts",
+        "docs/receipts/tommy-money-gap-checks-20261119.md"
+      ]
+    }
+  }
+}
