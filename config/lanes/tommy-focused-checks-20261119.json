@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/tommy-focused-checks-20261119"
       ],
-      "note": "Branch-only focused iteration 2 on coordinator-reviewed product tree 09e0b8f737d7abaaffae67c5192a213fbedbd169. C1: execution infrastructure introduces no product workflow. This lane owns only the diagnostic workflow, its own registration and receipt; imported component files remain byte-identical to that product tree. Runs the existing money, acceptance, later-safety-140 and real-tour specs with unchanged real setup and full CI gates.",
+      "note": "Branch-only focused iteration 3 on coordinator-reviewed product tree 465e9f31f70eccc6cf42467d932b78c5ac097369. C1: execution infrastructure introduces no product workflow. This lane owns only the diagnostic workflow, its own registration and receipt; imported component files remain byte-identical to that product tree. Runs only the existing money spec in both projects with unchanged real setup and full CI gates; iteration 2 acceptance and journey results remain separate retained evidence.",
       "allow": [
         ".github/workflows/tommy-focused-checks.yml",
         "docs/receipts/tommy-focused-checks-20261119.md"

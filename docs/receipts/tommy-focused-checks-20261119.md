@@ -1,48 +1,49 @@
-# Tommy focused diagnostic execution — iteration 2, 19 November 2026
+# Tommy focused diagnostic execution — iteration 3, 19 November 2026
 
-This branch supplies execution infrastructure for the reviewed Tommy integration candidate. It is not a main-branch promotion candidate and does not replace or weaken any full CI release gate. The coordinator requested this second iteration after reviewing the exact product and test corrections.
+This branch supplies diagnostic execution infrastructure for the coordinator-reviewed Tommy integration candidate. It is not a main-branch promotion candidate and does not replace or weaken full CI release gates. This iteration selects only the existing money spec for prompt feedback on the bounded, independently reviewed zero-fee observer correction.
 
 ## Exact candidate binding
 
-- Previous focused remote head: `c60febcc2488974188a4a3367508286004774394`.
-- Previous complete diagnostic tree: `a8e4d8a1f62f0749ab541cc1dc1cb1d6d01819f6`.
-- **Entire reviewed integration product/test tree for iteration 2: `09e0b8f737d7abaaffae67c5192a213fbedbd169`.** This is the coordinator's staged integration tree, containing 32 changed paths against pinned main `896a701157ef71c81905da93bca4299d105c775a`.
-- Local immutable comparison snapshot: `03b3dbabbc07496080ffbd38f5b96ae7377c724e`, whose tree is exactly that product/test tree. This records the imported baseline; it is not a new implementation, acceptance verdict or runtime result.
+- Previous focused remote head: `c77b7074784e579ea0c4bf17c4c559a2a08ae70c`.
+- Previous complete diagnostic tree: `15b22a125a3a7dec56f293d23081e54b196df9d0`.
+- Previous product/test projection: `09e0b8f737d7abaaffae67c5192a213fbedbd169`.
+- **Entire reviewed integration product/test tree for iteration 3: `465e9f31f70eccc6cf42467d932b78c5ac097369`.** It contains 32 changed paths against pinned main `896a701157ef71c81905da93bca4299d105c775a`.
+- Local immutable product comparison snapshot: `898093507737bf63c9c522999195d7e374706d83`, whose tree is exactly the integration tree above.
 
-The complete candidate consists of every blob in that integration tree plus exactly three diagnostic files: `.github/workflows/tommy-focused-checks.yml`, `config/lanes/tommy-focused-checks-20261119.json` and this receipt. No product, test, component receipt, policy, existing workflow, package script, Playwright configuration, global setup or database file is edited by this iteration. The complete delta from the preceding remote head is recorded in the handoff for review.
+Only the money spec and its component receipt differ between the two product projections. This lane imports the entire reviewed tree without editing any of its blobs, then adds exactly three diagnostic files: `.github/workflows/tommy-focused-checks.yml`, `config/lanes/tommy-focused-checks-20261119.json` and this receipt. The local snapshot records the imported baseline, not a new implementation or runtime verdict. The prior focused history is retained as a separate parent. The handoff records the final head, complete tree and exact delta from the preceding remote head.
 
-The workflow verifies its checkout against GitHub's event SHA, prints its complete tree, then removes exactly the three diagnostic files in a temporary Git index. The resulting product/test tree must equal the pinned integration tree above. The final commit and complete diagnostic tree are recorded outside this self-referential receipt in the handoff.
+The unchanged source guard verifies the checkout against GitHub's event SHA and prints its full tree. It removes exactly the three diagnostic files in a temporary Git index and requires the remaining product/test tree to equal the pinned iteration-3 tree. No other workflow, product file, policy, package script, Playwright configuration, global setup or database file is modified by this diagnostic iteration.
 
 ## Execution boundary
 
-Only a push to `codex/sandbox/tommy-focused-checks-20261119` triggers this workflow. There is no pull-request, main, dispatch, reusable-workflow or scheduled trigger. Permissions are `contents: read`; checkout has `persist-credentials: false`.
+Only a push to `codex/sandbox/tommy-focused-checks-20261119` triggers this workflow. There is no main, pull-request, dispatch, schedule or reusable-workflow trigger. Permissions remain `contents: read`; checkout has `persist-credentials: false`.
 
-Two independent Ubuntu 24.04 matrix jobs run `mobile-360` and `desktop`, with fail-fast disabled. Existing pins remain checkout 4.2.2, pnpm setup 4.1.0, pnpm 10.28.1, Node setup 4.0.3, Node 24.15.0 and artifact upload 4.6.2. Each isolated runner performs the frozen install, complete production build and Chromium installation with system dependencies.
+Two separate Ubuntu 24.04 matrix runners execute `mobile-360` and `desktop`, with fail-fast disabled. Pins are unchanged: checkout 4.2.2, pnpm setup 4.1.0, pnpm 10.28.1, Node setup 4.0.3, Node 24.15.0 and artifact upload 4.6.2. Each runner performs the frozen install, complete production build and Chromium installation with system dependencies.
 
-The command uses the existing root `pnpm test:e2e` forwarding chain:
+The exact existing-script command is:
 
 ```sh
-pnpm test:e2e e2e/TOMMY-money-gaps.spec.ts e2e/TOMMY-acceptance-recovery.spec.ts e2e/later-safety-140.spec.ts e2e/real-tour-one-saved-job-now.spec.ts --project="$PLAYWRIGHT_PROJECT" --workers=1 --retries=0
+pnpm test:e2e e2e/TOMMY-money-gaps.spec.ts --project="$PLAYWRIGHT_PROJECT" --workers=1 --retries=0
 ```
 
-Only those four existing spec files are selected. There is one worker per runner, zero retries and the unchanged 45-minute job bound. Original test deadlines and assertions remain as supplied in the reviewed product tree. No skip filter, success mock, fixture substitution, credential, live provider, external database override or deployment is added.
+This selects support-v02 and support-v04 in each project: four executions total, one worker per isolated runner and zero retries. The 45-minute job bound, original test deadlines and all assertions supplied by the reviewed product tree remain unchanged. No skip filter, success mock, setup-data substitution, external connection, live provider or deployment is added.
 
-The unchanged real Playwright setup creates and migrates embedded PostgreSQL, bootstraps the synthetic practice environment, starts the real practice Final Check worker under its existing roles, and runs the production Next application. Existing teardown drains and stops the stack. Separate runner jobs preserve port and session isolation.
+The existing Playwright global setup creates and migrates real embedded PostgreSQL, bootstraps the synthetic practice environment, starts the real Final Check worker under its existing roles, and runs the production Next application. Existing teardown drains and stops the stack. The reviewed money test's no-fee observer uses only the already-provisioned local E2E admin in a strict read-only transaction, with exact identity binding; it adds no database role, privilege or financial write and makes no runtime-RLS claim.
 
-The existing HTML report and test-results paths are uploaded with `if: always()` and retained for 14 days, including passing JSON attachments. The original retain-on-failure trace policy is unchanged.
+Existing HTML reports and test-result attachments are uploaded on every outcome with `if: always()` and 14-day retention. Passing JSON observations are retained. The existing retain-on-failure trace policy is unchanged.
 
-## Prior results remain unchanged
+## Prior evidence and the bounded correction
 
-Focused run `44567041104` on the previous head completed with four acceptance passes and four money failures, zero retries and no money success receipt. It is preserved separately with its raw logs, verified artifacts, full attachments and exact source binding.
+Focused iteration 1, run `44567041104`, remains archived with four acceptance passes and four money failures. Focused iteration 2, run `44571028972`, completed with **20 passed and 2 failed**, zero skips or retries, on the previous head and projection above. Both support-v04 executions fully passed, including the actual £384 allocation commit, lost reply, authoritative read before exact replay, one saved £320 net/£64 tax effect, reload and £32 fee assertions. The four acceptance, two LATER-SAFETY-140 and twelve guided-tour executions also passed. All original raw logs, verified artifact ZIPs, compact receipts and full observations remain separate unchanged evidence.
 
-That run exposed two bounded harness issues: the exact variation-label matcher included option text, and the public exhausted-claim guard returned the precise claim refusal before the separate payment-capacity check. The reviewed integration includes correction `176b9bb03ebb6a340abfed38a0d9108cd9e62c09`: an anchored label matcher plus a selected-value assertion, and exact `ALLOCATION_EXCEEDS_CLAIM` with an explicit statement that this does not independently cover the available-payment guard. All money, replay, history, database, reload and fee assertions remain. The integration also includes the independently reviewed Final Check setup and guided-tour readiness corrections; this workflow adds their existing specs to obtain direct runtime evidence.
+Both iteration-2 v02 failures occurred in the first £50-absent job at a collection-view read that requires a prior fee derivation. The real response was HTTP 503 `SUCCESS_FEE_DEPENDENCY_BOUND`; the second £50-present job and paired comparison were not reached. That refusal is not interpreted as zero.
 
-The previous money allocation cases reached actual commit, lost reply, authoritative reconciliation and exact replay before failing. Their later post-refusal reload and fee assertions did not execute. The paired £50 comparison did not execute. Neither partial observation is promoted to a passed case, and this iteration's assertions still await runtime.
+Reviewed money correction `4a9ca55b661d80a014fe3f0bef41a7b19e2133cd` replaces only that invalid read with parameterized observations of the exact job/invoice and zero fee effects under `BEGIN READ ONLY`. It retains public zero receipts and allocations, repeats receipt and fee-effect checks after reload, preserves all paired-bill/source/history assertions and leaves the complete support-v04 body unchanged. The coordinator and independent recovery reviewer inspected the exact correction. This new iteration's v02 assertions still await runtime; earlier failures are not relabelled as passes.
 
-## Lane, validation and remaining gates
+## Lane and local validation
 
-The original lane-first commit is `6065b43d18192438ea9522866ab1d4dee1b9aec0`. This iteration narrows the lane's allowed paths to the workflow and receipt, with its own registration implicitly editable. The coordinator-reviewed product baseline is an exact import, not a grant to edit the other components or their lanes. Local lane validation compares only the three diagnostic additions against the immutable product snapshot. The prior focused history is retained as a separate parent.
+The original lane-first commit is `6065b43d18192438ea9522866ab1d4dee1b9aec0`. The lane allows only the workflow and this receipt, plus its own implicitly editable registration. Imported component files and their lane registrations remain bound to the coordinator's exact product tree; this is not authority to edit them. Local lane validation compares only the three diagnostic files against the immutable product snapshot.
 
-C1: this infrastructure introduces no product or user workflow and invents no browser assertions. The four reviewed existing specs supply its executable targets. Schema and scope validation, shell syntax, exact forwarded test discovery, lane validation, whitespace checks and the final projection equality are recorded with their actual results in the handoff. Local discovery does not start the application or database and is not a test execution.
+C1: this metadata introduces no product or user workflow and creates no browser assertion. Only configuration/schema/scope, shell syntax, exact forwarded four-execution discovery, projection, lane, whitespace and clean-worktree checks are required for this preparation; their actual results are recorded in the handoff. Discovery starts neither PostgreSQL nor the application and is not test execution.
 
-Independent coordinator review of the complete final tree is required before publication. Core, DB and full-browser CI requirements remain unchanged; focused results cannot substitute for them. No local browser execution, remote CI dispatch, push, merge or deployment is part of this preparation.
+Independent coordinator review is required before publication. Full core, database, browser, audit and release gates remain mandatory. No local browser/server/database execution, remote CI dispatch, push, merge or deployment occurs in this preparation.
