@@ -171,7 +171,8 @@ describe("ENT-3d verified photo and resident confirmation", () => {
  });
  it("[E13] the guard alone, binding: a document written for content X cannot serve content Y, serves X once, and not a second extra", async () => {
   const f = await siteFixture(c), a = f.members.supervisor, extras = new ExtraRepository(c.runtime), confirmation = randomUUID();
-  const record = (fields: Record<string, unknown>) => runtimeCall(c, f, async q => (await q("SELECT outcome,reason_code FROM app.ent3d_record_resident_confirmation($1,$2,$3,$4,$5,$6,$7,$8)", [a.member.membershipId, f.jobId, randomUUID(), confirmation, fields.description, fields.note, null, fields.shown])).rows[0]);
+  const context = await testActorContext(c.admin, f.ctx, a.member);
+  const record = (fields: Record<string, unknown>) => withTenant(c.runtime, context, async db => (await db.$client.query("SELECT outcome,reason_code FROM app.ent3d_record_resident_confirmation($1,$2,$3,$4,$5,$6,$7,$8)", [a.member.membershipId, f.jobId, randomUUID(), confirmation, fields.description, fields.note, null, fields.shown])).rows[0]);
   expect(await record({ description, note, shown: shownFor(f, null) })).toEqual({ outcome: "recorded", reason_code: "recorded" });
   const before = await evidenceCounts(c, f), head = await chain(c, f);
   await expect(extras.raiseExtra(await testActorContext(c.admin, f.ctx, a.member), direct(f, a, { residentConfirmationEvidenceId: confirmation, note: "Fictional content Y" }), siteExtraAuthoritySeam)).rejects.toMatchObject({ code: "INVALID_ORIGIN" });
