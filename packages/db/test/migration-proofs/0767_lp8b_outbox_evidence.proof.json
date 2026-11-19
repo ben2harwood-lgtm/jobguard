@@ -59,6 +59,55 @@
     },
     {
       "section": "routines",
+      "before": {
+        "identity": "function:app.ent3d_record_resident_confirmation(uuid,uuid,uuid,uuid,text,text,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "d8ac1ffb377d09842d9536a6d44aa449b4daed38212482ea7c748b8cab3a725a",
+        "staticWrites": [
+          "app.evidence_object",
+          "app.evidence_upload"
+        ],
+        "staticCalls": [
+          "app.ent3a_extra_authority",
+          "app.ent3d_confirmation_document",
+          "app.ent3d_site_extra_evidence"
+        ]
+      },
+      "after": {
+        "identity": "function:app.ent3d_record_resident_confirmation(uuid,uuid,uuid,uuid,text,text,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "0e2479864db923f70108bc924c4d61c62375f730c94498d1f36ceef60fd40064",
+        "staticWrites": [
+          "app.evidence_object",
+          "app.evidence_upload"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "app.ent3a_extra_authority",
+          "app.ent3d_confirmation_document",
+          "app.ent3d_site_extra_evidence"
+        ]
+      }
+    },
+    {
+      "section": "routines",
       "before": null,
       "after": {
         "identity": "function:app.insert_authorized_action(uuid,uuid,uuid,uuid,text,text,text,text,text,text,integer,bigint,text,text,timestamp with time zone)",
@@ -388,7 +437,7 @@
     {
       "section": "triggers",
       "before": null,
-      "after": "app.synthetic_evidence_original|b_lp8b_original|app.lp8b_synthetic_original_guard|BEFORE INSERT|O"
+      "after": "app.synthetic_evidence_original|lp8b_original|app.lp8b_synthetic_original_guard|AFTER INSERT|O"
     }
   ],
   "upgrade": [
@@ -421,6 +470,31 @@
         "relacl": null,
         "relrowsecurity": false,
         "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "ent3d_record_resident_confirmation",
+        "args": "p_actor uuid, p_job uuid, p_command uuid, p_confirmation uuid, p_description text, p_note text, p_photo uuid, p_shown_content_sha256 text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "ent3d_record_resident_confirmation",
+        "args": "p_actor uuid, p_job uuid, p_command uuid, p_confirmation uuid, p_description text, p_note text, p_photo uuid, p_shown_content_sha256 text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
       }
     },
     {

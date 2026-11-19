@@ -363,5 +363,63 @@ BEGIN
 END $$;
 ALTER FUNCTION app.lp8b_synthetic_original_guard() OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp8b_synthetic_original_guard() FROM PUBLIC,jobguard_runtime;
-CREATE TRIGGER b_lp8b_original BEFORE INSERT ON app.synthetic_evidence_original FOR EACH ROW EXECUTE FUNCTION app.lp8b_synthetic_original_guard();
+CREATE TRIGGER lp8b_original AFTER INSERT ON app.synthetic_evidence_original FOR EACH ROW EXECUTE FUNCTION app.lp8b_synthetic_original_guard();
+-- The existing resident-confirmation routine alone generates its verified
+-- document. Give that checked writer the same owner boundary as the other
+-- generated originals, retaining the 0141 document and replay contract.
+CREATE OR REPLACE FUNCTION app.ent3d_record_resident_confirmation(p_actor uuid, p_job uuid, p_command uuid, p_confirmation uuid, p_description text, p_note text, p_photo uuid, p_shown_content_sha256 text)
+RETURNS TABLE(outcome text, reason_code text, content_sha256 text, document_sha256 text)
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE v_tenant uuid; v_authority text; v_decision text; v_content text; v_document text; v_document_hash text; v_document_length bigint; v_key text; v_now timestamptz;
+ v_upload_count integer; v_object_count integer; v_same_count integer;
+BEGIN
+ v_tenant:=app.current_tenant();
+ IF v_tenant IS NULL OR p_actor IS NULL OR p_actor IS DISTINCT FROM app.current_actor() OR p_job IS NULL OR p_command IS NULL OR p_confirmation IS NULL OR p_description IS NULL OR p_note IS NULL OR p_shown_content_sha256 IS NULL THEN
+  RETURN QUERY SELECT 'refused'::text,'not_permitted'::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ SELECT a.decision INTO v_authority FROM app.ent3a_extra_authority(p_actor,'LogSiteExtra',p_job) a;
+ IF v_authority IS DISTINCT FROM 'allowed' THEN
+  RETURN QUERY SELECT 'refused'::text,'not_permitted'::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ SELECT d.decision,d.content_sha256 INTO v_decision,v_content FROM app.ent3d_site_extra_evidence(p_job,p_description,p_note,p_photo,NULL,NULL) d;
+ IF v_decision IS DISTINCT FROM 'accepted' OR v_content IS NULL THEN
+  RETURN QUERY SELECT 'refused'::text,'photo_not_accepted'::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ IF p_shown_content_sha256 IS DISTINCT FROM v_content THEN
+  RETURN QUERY SELECT 'refused'::text,'confirmation_mismatch'::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ -- Two identical calls run one after the other.
+ PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('ent3d-resident-confirmation:'||v_tenant::text||':'||p_confirmation::text,0));
+ v_document:=app.ent3d_confirmation_document(v_tenant,p_job,p_confirmation,v_content);
+ v_document_hash:=encode(sha256(convert_to(v_document,'UTF8')),'hex');
+ v_document_length:=octet_length(convert_to(v_document,'UTF8'));
+ v_key:='tenants/'||v_tenant::text||'/resident-confirmations/'||p_confirmation::text||'/document';
+ SELECT count(*)::integer INTO v_upload_count FROM app.evidence_upload u WHERE u.tenant_id=v_tenant AND u.id=p_confirmation;
+ SELECT count(*)::integer INTO v_object_count FROM app.evidence_object c WHERE c.tenant_id=v_tenant AND c.id=p_confirmation;
+ IF v_upload_count>0 OR v_object_count>0 THEN
+  SELECT count(*)::integer INTO v_same_count FROM app.evidence_object c
+   JOIN app.evidence_upload cu ON(cu.tenant_id,cu.id)=(c.tenant_id,c.upload_id)
+   WHERE c.tenant_id=v_tenant AND c.id=p_confirmation AND c.job_id=p_job AND c.upload_id=c.id AND c.scope_item_id IS NULL AND c.original_evidence_id IS NULL
+    AND c.kind='original' AND c.evidence_type='resident_confirmation' AND c.content_type='text/plain; charset=utf-8'
+    AND c.object_key=v_key AND c.object_version_id='resident-confirmation.v1' AND c.retention_class='standard_evidence' AND c.device_captured_at IS NULL
+    AND c.sha256::text=v_document_hash AND c.byte_length=v_document_length
+    AND cu.job_id=p_job AND cu.scope_item_id IS NULL AND cu.state='verified' AND cu.rejection_code IS NULL AND cu.object_key=v_key
+    AND cu.object_version_id=c.object_version_id AND cu.expected_sha256::text=c.sha256::text AND cu.maximum_bytes=c.byte_length
+    AND cu.expected_content_type=c.content_type AND cu.retention_class=c.retention_class AND cu.device_captured_at IS NULL;
+  IF v_same_count=1 AND v_upload_count=1 AND v_object_count=1 THEN
+   RETURN QUERY SELECT 'existing'::text,'existing'::text,v_content,v_document_hash; RETURN;
+  END IF;
+  RETURN QUERY SELECT 'conflict'::text,'conflict'::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ -- That command id has already been used without this confirmation. This only reads whether the id was used; the replay rules stay in the extra's own command.
+ IF EXISTS(SELECT 1 FROM app.command_receipt r WHERE r.tenant_id=v_tenant AND r.command_id=p_command) THEN
+  RETURN QUERY SELECT 'conflict'::text,'conflict'::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ v_now:=pg_catalog.clock_timestamp();
+ INSERT INTO app.evidence_upload(id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,rejection_code,object_version_id,device_captured_at,server_received_at,server_verified_at,expires_at)
+  VALUES(p_confirmation,v_tenant,p_job,NULL,v_key,v_document_hash,'text/plain; charset=utf-8',v_document_length,'standard_evidence','verified',NULL,'resident-confirmation.v1',NULL,v_now,v_now,v_now);
+ INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,scope_item_id,kind,original_evidence_id,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,device_captured_at,server_received_at,server_verified_at)
+  VALUES(p_confirmation,v_tenant,p_confirmation,p_job,NULL,'original',NULL,'resident_confirmation',v_key,'resident-confirmation.v1',v_document_hash,v_document_length,'text/plain; charset=utf-8','standard_evidence',NULL,v_now,v_now);
+ RETURN QUERY SELECT 'recorded'::text,'recorded'::text,v_content,v_document_hash;
+END $$;
 COMMIT;

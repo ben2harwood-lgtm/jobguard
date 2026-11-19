@@ -41,6 +41,12 @@ describe("LATER-SAFETY-131 duplicate unlink command binding on PostgreSQL", () =
    await db.query("SET LOCAL ROLE jobguard_migration");
    await db.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
     VALUES($1,$2,$3,$4,$5,'processing',$6)`, [l.f.p.tenantId, command, type, semantic(command), "a".repeat(64), l.f.p.membershipId]);
+   // Satisfy LP-8b's independent live-claim check so this probe still reaches
+   // the precise 0673 receipt predicate, including its rollback-only mutant.
+   await db.query("SET LOCAL ROLE jobguard_command_writer");
+   await db.query(`INSERT INTO app.command_lifecycle_claim(tenant_id,command_id,actor_membership_id,version,resource,expected_revisions,significant_input)
+    VALUES($1,$2,$3,'repo-command.v1',jsonb_build_object('subjectRef',$4::text),'{}',jsonb_build_object('input',jsonb_build_object('jobId',$4::text)))`,
+    [l.f.p.tenantId, command, l.f.p.membershipId, l.f.jobId]);
    await db.query("SET LOCAL ROLE jobguard_runtime");
    expect((await db.query("SELECT current_user AS role")).rows[0].role).toBe("jobguard_runtime");
    expect((await db.query("SELECT status,actor_membership_id FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [l.f.p.tenantId, command])).rows).toEqual([{ status: "processing", actor_membership_id: l.f.p.membershipId }]);

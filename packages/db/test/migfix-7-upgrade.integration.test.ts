@@ -69,6 +69,11 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const outboxProof = successors.find(proof => proof.migration === "0767_lp8b_outbox_evidence.sql")!;
   const outboxDelta = outboxProof.upgrade.find(change => change.section === "relations" && change.before?.nspname === "app" && change.before.relname === "action_outbox");
   if (outboxDelta?.section !== "relations" || !outboxDelta.before || !outboxDelta.after) throw new Error("Missing LP-8b outbox ACL proof");
+  const residentDelta = outboxProof.upgrade.find(change => change.section === "routines" &&
+    change.before?.nspname === "app" && change.before.proname === "ent3d_record_resident_confirmation");
+  if (residentDelta?.section !== "routines" || !residentDelta.before || !residentDelta.after) throw new Error("Missing LP-8b resident confirmation proof");
+  const residentSql = await readFile(new URL(`../migrations/${outboxProof.migration}`, import.meta.url), "utf8");
+  const residentBody = residentSql.split("CREATE OR REPLACE FUNCTION app.ent3d_record_resident_confirmation(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
   const advanceDelta = billingProof.upgrade.find(change => change.section === "routines" && change.before?.nspname === "app" && change.before.proname === "advance_final_account_draft");
   if (advanceDelta?.section !== "routines" || !advanceDelta.before || !advanceDelta.after) throw new Error("Missing LP-8a draft routine proof");
   const advanceSql = await readFile(new URL(`../migrations/${billingProof.migration}`, import.meta.url), "utf8");
@@ -421,6 +426,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       const lp6dBody = lp6dBodies.get(lp6dKey(row));
       if (row.nspname === advanceDelta.after.nspname && row.proname === advanceDelta.after.proname && row.args === advanceDelta.after.args) {
         expect(row.definition.split("$function$")[1]).toBe(advanceBody);
+        continue;
+      }
+      if (row.nspname === residentDelta.after.nspname && row.proname === residentDelta.after.proname && row.args === residentDelta.after.args) {
+        const parts = definition.split("$function$");
+        expect(prior.prosecdef).toBe(residentDelta.before.prosecdef);
+        expect(row.prosecdef).toBe(residentDelta.after.prosecdef);
+        parts[0] = parts[0]!.replace(" LANGUAGE plpgsql\n", " LANGUAGE plpgsql\n SECURITY DEFINER\n");
+        parts[1] = residentBody;
+        expect(row.definition).toBe(parts.join("$function$"));
         continue;
       }
       if (lp6dBody !== undefined) {

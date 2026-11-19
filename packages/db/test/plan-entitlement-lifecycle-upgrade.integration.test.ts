@@ -358,6 +358,12 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   if (advanceDelta?.section !== "routines" || !advanceDelta.before || !advanceDelta.after) throw new Error("Missing LP-8a draft routine proof");
   const advanceSql = await readFile(new URL(`../migrations/${billingProof.migration}`, import.meta.url), "utf8");
   const advanceBody = advanceSql.split("CREATE OR REPLACE FUNCTION app.advance_final_account_draft(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+  const outboxProof = loadMigrationProofs().proofs.find(proof => proof.migration === "0767_lp8b_outbox_evidence.sql")!;
+  const residentDelta = outboxProof.upgrade.find(change => change.section === "routines" &&
+    change.before?.nspname === "app" && change.before.proname === "ent3d_record_resident_confirmation");
+  if (residentDelta?.section !== "routines" || !residentDelta.before || !residentDelta.after) throw new Error("Missing LP-8b resident confirmation proof");
+  const residentSql = await readFile(new URL(`../migrations/${outboxProof.migration}`, import.meta.url), "utf8");
+  const residentBody = residentSql.split("CREATE OR REPLACE FUNCTION app.ent3d_record_resident_confirmation(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
   const searchPath = (config: string[] | null) => {
     const value = config?.find(setting => setting.startsWith("search_path="));
     if (!value) throw new Error("Missing LP-8a search path in proof");
@@ -373,6 +379,14 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(prior.definition).toContain(before);
       expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => advanceBody).replace(before, after));
       expect(current?.source).toBe(advanceBody);
+      continue;
+    }
+    if (prior.nspname === residentDelta.before.nspname && prior.proname === residentDelta.before.proname && prior.args === residentDelta.before.args) {
+      expect(prior.prosecdef).toBe(residentDelta.before.prosecdef);
+      expect(current?.prosecdef).toBe(residentDelta.after.prosecdef);
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => residentBody)
+        .replace(" LANGUAGE plpgsql\n", " LANGUAGE plpgsql\n SECURITY DEFINER\n"));
+      expect(current?.source).toBe(residentBody);
       continue;
     }
     // 0751 succeeds LP-6d for this exact dispatcher; pin it before generic LP-6d successor handling.

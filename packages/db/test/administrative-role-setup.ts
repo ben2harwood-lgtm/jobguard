@@ -137,7 +137,8 @@ if (testPath?.endsWith(".integration.test.ts")) {
       return {...actual,CustomerBillingCommandService:LegacyBillingFixture};
     });
   }
-  if (testPath.endsWith("/real-gap-proof-by-trade.integration.test.ts")) {
+  if (["extra-approval-authority.integration.test.ts", "extra-approval-upgrade.integration.test.ts", "real-gap-proof-by-trade.integration.test.ts"]
+    .some(name => testPath.endsWith(`/${name}`))) {
     vi.doMock("../src/evidence.js", async () => {
       const actual = await vi.importActual<typeof import("../src/evidence.js")>("../src/evidence.js");
       class HistoricalEvidenceFixture extends actual.EvidenceService {
@@ -168,8 +169,14 @@ if (testPath?.endsWith(".integration.test.ts")) {
     });
   }
   const historicalOutboxSpecs = [
+    "builder-acceptance-sent-head.integration.test.ts",
+    "lp6d-worker-presence.integration.test.ts",
+    "practice-firm-name.integration.test.ts",
+    "quote-reacceptance-upgrade.integration.test.ts",
     "lp8a-billing-revokes.integration.test.ts",
+    "migfix-4-upgrade.integration.test.ts",
     "migfix-8-upgrade.integration.test.ts",
+    "practice-supplier-credit-upgrade.integration.test.ts",
     "recovery-case-terms-upgrade.integration.test.ts",
     "recovery-follow-up-upgrade.integration.test.ts",
     "recovery-message-upgrade.integration.test.ts",

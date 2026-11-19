@@ -151,8 +151,8 @@ async function createAuthorization(expiresAt = "2099-01-01T00:00:00Z") {
   return { authorizationId, content };
 }
 
-async function appendAction(options: { expiresAt?: string; rollback?: boolean; adapter?: OutboundAction["adapter"] } = {}) {
-  const { authorizationId, content } = await createAuthorization(options.expiresAt);
+async function appendAction(options: { rollback?: boolean; adapter?: OutboundAction["adapter"] } = {}) {
+  const { authorizationId, content } = await createAuthorization();
   const suffix = String(sequence++).padStart(12, "0");
   const id = `98000000-0000-4000-8000-${suffix}`;
   const action: OutboundAction = {
@@ -169,7 +169,7 @@ async function appendAction(options: { expiresAt?: string; rollback?: boolean; a
     amountPence: null,
     currency: null,
     policyVersion: "pilot-v1",
-    authorizationExpiresAt: new Date(options.expiresAt ?? "2099-01-01T00:00:00Z"),
+    authorizationExpiresAt: new Date("2099-01-01T00:00:00Z"),
   };
   const operation = withTenant(runtime, context, async (db) => {
     await appendOutboundAction(db, TENANT, action);
@@ -285,7 +285,14 @@ describe("LATER-B9 PostgreSQL outcome guarantees", () => {
     expect(await events(action.id)).toEqual([{ event_type: "outbox.claimed", payload: expect.any(Object) }, { event_type: `outbox.${kind}`, payload: expect.any(Object) }]);
   });
   it("L020 refusal is audited and invalid operator command rolls back with no event", async () => {
-    const action = await appendAction({ expiresAt: "2000-01-01T00:00:00Z" });
+    const { authorizationId, content } = await createAuthorization("2000-01-01T00:00:00Z");
+    const action = { id: randomUUID() };
+    // Restore an already-expired historical row to exercise the worker refusal.
+    await admin.query(`INSERT INTO app.action_outbox
+      (id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,recipient,content_hash,immutable_content,
+       aggregate_revision,policy_version,authorization_expires_at)
+      VALUES($1,$2,$3,'fake_capture',$4,'send_quote','customer@example.test',$5,$6,1,'pilot-v1','2000-01-01')`,
+    [action.id, TENANT, authorizationId, `expired:${action.id}`, hash(content), content]);
     const fake = adapter(async () => { throw new Error("must not send"); });
     await new ActionExecutor(runtime, new Map([[fake.name, fake]]), telemetry).execute(context, action.id);
     expect(await statusOf(action.id)).toBe("cancelled"); expect(await events(action.id)).toHaveLength(1);

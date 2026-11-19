@@ -56,18 +56,18 @@ beforeAll(async () => {
   for (const tenant of tenants) {
     const user = randomUUID(), account = randomUUID(), member = randomUUID();
     tenantOwners.set(tenant, member);
-    const decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
     const content = "Fictional approved document", hash = createHash("sha256").update(content).digest("hex");
     await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
     await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional')", [account, tenant]);
     await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [member, tenant, account, user]);
-    await admin.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'quote','fictional','send_quote')", [decision, tenant]);
-    await admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, member]);
-    await admin.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at)
-      VALUES($1,$2,$3,$4,$5,'send_quote','fictional@example.invalid',$6,1,'pilot-v1','2099-01-01')`, [authorization, tenant, decision, resolution, member, hash]);
     for (let i = 0; i < 105; i++) {
       const id = randomUUID();
+      const decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
+      await admin.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'quote',$3,'send_quote')", [decision, tenant, id]);
+      await admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, member]);
+      await admin.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at)
+        VALUES($1,$2,$3,$4,$5,'send_quote','fictional@example.invalid',$6,1,'pilot-v1','2099-01-01')`, [authorization, tenant, decision, resolution, member, hash]);
       await withTenant(runtime, testTenantContext(tenant, { membershipId: member }), db => appendOutboundAction(db, tenant, {
         version: "outbound-action.v1", id, authorizationId: authorization, adapter: "fake_capture", providerEffectKey: `fictional:${id}`,
         actionType: "send_quote", recipient: "fictional@example.invalid", contentHash: hash, immutableContent: content,
