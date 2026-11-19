@@ -1,7 +1,10 @@
+import { CryptoDigestAlgorithm, digest, digestStringAsync } from "expo-crypto";
 import { mobilePartitionV1 } from "@jobguard/core";
 import { MobileClient } from "./lifecycle";
 import { MobileClientError, samePartition, type Partition } from "./lifecycle-contracts";
 import { NativeCoreLoopScreens, type NativeCoreSource } from "./core-loop-screens";
+import { NativeCaptures } from "./capture";
+import { NativeCaptureUpload, type FictionalAttachment, type NativeCaptureTransport } from "./capture-upload";
 import { WorkspaceDocument } from "./workspace-document";
 import type { EncryptedStore } from "./store";
 import type { NativeWorkspaceBindings } from "./WorkspaceScreens";
@@ -10,6 +13,7 @@ type LifecycleInputs = ConstructorParameters<typeof MobileClient>;
 export interface NativeCompositionInputs {
  partition: Partition; store: EncryptedStore; source: NativeCoreSource;
  online: boolean; authEpoch: number; uuid(): string;
+ captureUpload?: { transport: NativeCaptureTransport; fixture?(kind: "photo" | "voice"): FictionalAttachment };
  lifecycle: { provider: LifecycleInputs[0]; vault: LifecycleInputs[1]; resources: LifecycleInputs[2]; options: LifecycleInputs[3] };
 }
 // A cleaned partition remains reserved: re-enrolment must supply a new session partition.
@@ -66,7 +70,13 @@ export class NativeComposition {
     return reply;
    },
   };
-  return { partition: this.partition, online: this.#active && this.#online, authorityGeneration: generation,
+  const capture = this.inputs.captureUpload;
+  const captures = new NativeCaptures(this.document, source, { sha256: text => digestStringAsync(CryptoDigestAlgorithm.SHA256, text) });
+  return { captures, ...(capture ? {
+   captureUpload: new NativeCaptureUpload(this.document, source, capture.transport, async bytes =>
+    Array.from(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, bytes)), byte => byte.toString(16).padStart(2, "0")).join("")),
+   ...(capture.fixture ? { captureFixture: capture.fixture } : {}),
+  } : {}), partition: this.partition, online: this.#active && this.#online, authorityGeneration: generation,
    uuid: this.inputs.uuid, core: new NativeCoreLoopScreens(this.partition, source, this.inputs.uuid) };
  }
 }

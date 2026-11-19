@@ -3,6 +3,7 @@ import { View, Text, TextInput, Button, ScrollView } from "react-native";
 import type { Partition } from "./lifecycle-contracts";
 import { nativeCoreScreens, type NativeCoreLoopScreens, type LoadedCoreScreen, type nativeReviewChoice } from "./core-loop-screens";
 import type { DurableNativeQueue } from "./durable-queue";
+import type { FictionalAttachment, NativeCaptureUpload } from "./capture-upload";
 import type { NativeCaptures } from "./capture";
 import { CoreLoopScreen } from "./CoreLoopScreen";
 import { ReconciliationScreen } from "./ReconciliationScreen";
@@ -13,6 +14,7 @@ export interface NativeWorkspaceBindings {
  partition: Partition; online: boolean; authorityGeneration: number; uuid(): string;
  operative?: NativeOperativeScreens; makeOperativeIntent?(jobId: string, text: string, description: string): unknown; onOperativeReview?(plan: unknown): void;
  core?: NativeCoreLoopScreens; queue?: DurableNativeQueue; captures?: NativeCaptures;
+ captureUpload?: NativeCaptureUpload; captureFixture?(kind: "voice" | "photo"): FictionalAttachment;
  onReview?(choice: ReturnType<typeof nativeReviewChoice>): void;
  onReconcileChoice?(commandId: string | null, choice: string): void;
 }
@@ -22,6 +24,7 @@ export function WorkspaceScreens({ binding }: { binding: NativeWorkspaceBindings
  const [queue, setQueue] = useState<Awaited<ReturnType<DurableNativeQueue["views"]>>>([]);
  const [captures, setCaptures] = useState<Awaited<ReturnType<NativeCaptures["views"]>>>([]);
  const [draft, setDraft] = useState("Fictional "); const [job, setJob] = useState("");
+ const [scope, setScope] = useState("");
  const [status, setStatus] = useState("Synthetic native adapters only"); const [busy, setBusy] = useState(false); const lock = useRef(false);
  async function run(work: () => Promise<void>) {
   if (lock.current) return; lock.current = true; setBusy(true);
@@ -42,7 +45,20 @@ export function WorkspaceScreens({ binding }: { binding: NativeWorkspaceBindings
    if (binding.onReconcileChoice) binding.onReconcileChoice(commandId, choice); else setStatus("Keep the original intent pending; the owning online review is not connected.");
   }} />
   <TextInput accessibilityLabel="Fictional capture job UUID" value={job} onChangeText={setJob} autoCapitalize="none" autoCorrect={false} />
-  <CaptureScreen online={binding.online} draft={draft} onDraft={setDraft} rows={captures}
+  {binding.captureFixture ? <TextInput accessibilityLabel="Fictional attachment scope UUID (optional)" value={scope} onChangeText={setScope} autoCapitalize="none" autoCorrect={false} /> : null}
+  <CaptureScreen online={binding.online} busy={busy} draft={draft} onDraft={setDraft} rows={captures}
+   {...(binding.captures ? { onRefresh: () => void run(async () => { setCaptures(await binding.captures!.views()); }) } : {})}
+   {...(binding.captureUpload ? { onTransfer: (uploadId: string) => void run(async () => {
+    setCaptures(await binding.captureUpload!.transfer(uploadId, setCaptures));
+   }) } : {})}
+   {...(binding.captureUpload && binding.captureFixture ? { onFixture: (kind: "voice" | "photo") => void run(async () => {
+    const fixture = binding.captureFixture!(kind), now = Date.now();
+    await binding.captureUpload!.keep({ version: "native-capture-upload.v1", environment: "synthetic_demo",
+     jobId: job, scopeItemId: scope || null, attachment: { id: binding.uuid(), base64: fixture.base64 },
+     capturedAtMs: now, expiresAtMs: now + 60 * 60 * 1000, contentType: fixture.contentType, finalizeCommandId: binding.uuid() });
+    setStatus("Fictional attachment kept locally.");
+    if (binding.online && binding.captures) setCaptures(await binding.captures.views());
+   }) } : {})}
    onCapture={() => binding.captures && void run(async () => {
     await binding.captures!.text({ uploadId: binding.uuid(), jobId: job, scopeItemId: null, text: draft, capturedAtMs: Date.now() });
     setStatus("Local text intent retained. No server proof was created.");

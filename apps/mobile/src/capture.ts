@@ -2,9 +2,10 @@ import { z } from "zod";
 import { offlineCaptureItemV1, planOfflineCaptureUploadV1 } from "@jobguard/core";
 import { MobileClientError } from "./lifecycle-contracts";
 import { WorkspaceDocument, type NativeAuthority } from "./workspace-document";
+import { captureViews } from "./capture-upload";
 import type { HashPort } from "./sync";
 const input = z.object({ uploadId: z.guid(), jobId: z.guid(), scopeItemId: z.guid().nullable(), text: z.string().startsWith("Fictional ").max(5000), capturedAtMs: z.number().int().nonnegative().safe() }).strict();
-/** Bounded synthetic text persists inside SQLCipher. General voice/photo bytes never enter this adapter. */
+/** Fictional text persists inside SQLCipher. Device recording and general media remain held. */
 export class NativeCaptures {
  constructor(private readonly document: WorkspaceDocument, private readonly authority: NativeAuthority, private readonly hash: HashPort) {}
  async text(raw: unknown) {
@@ -27,12 +28,12 @@ export class NativeCaptures {
  }
  async views() {
   try { await this.authority.assertCurrent(this.document.partition); } catch { throw new MobileClientError("MOBILE_DENIED"); }
-  return this.document.transaction(async data => ({ data, result: data.captures.map(c => ({ uploadId: c.item.uploadId, jobId: c.item.jobId, status: c.item.status, isServerProof: false as const })) }));
+  return this.document.transaction(async data => ({ data, result: captureViews(data) }));
  }
  async planTextUpload(uploadId: string, nowMs: number) {
   try { await this.authority.assertCurrent(this.document.partition); } catch { throw new MobileClientError("MOBILE_DENIED"); }
   return this.document.transaction(async data => {
-   const capture = data.captures.find(c => c.item.uploadId === uploadId); if (!capture) throw new Error("missing capture");
+   const capture = data.captures.find(c => c.item.uploadId === uploadId); if (!capture || !("text" in capture)) throw new Error("missing text capture");
    return { data, result: planOfflineCaptureUploadV1({ version: "offline-capture-upload.v1", item: capture.item, online: true,
     nowMs, currentClientSha256: await this.hash.sha256(capture.text), deviceBytesSent: 0, server: null }) };
   });

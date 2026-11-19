@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "m3-5-native-resumable-upload": {
+      "branches": ["codex/sandbox/m3-5-native-resumable-upload"],
+      "allow": [
+        "apps/api/src/native-capture-upload.application.ts",
+        "apps/mobile/src/CaptureScreen.tsx",
+        "apps/mobile/src/WorkspaceScreens.tsx",
+        "apps/mobile/src/capture-upload.ts",
+        "apps/mobile/src/capture-upload.test.tsx",
+        "apps/mobile/src/capture.ts",
+        "apps/mobile/src/composition.test.tsx",
+        "apps/mobile/src/composition.ts",
+        "apps/mobile/src/lifecycle-contracts.ts",
+        "docs/contracts/native-plan-slices.md",
+        "packages/db/test/evidence.integration.test.ts"
+      ],
+      "note": "RED. Bounded fictional native attachment transfer only. Integrate after M3-3 and M3-4."
+    }
+  }
+}

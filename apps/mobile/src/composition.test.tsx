@@ -4,6 +4,8 @@ import { expect, it, vi } from "vitest";
 vi.mock("react", async importOriginal => ({ ...await importOriginal<typeof import("react")>(),
  useState: <T,>(initial: T) => [initial, vi.fn()] }));
 vi.mock("react-native", () => ({ SafeAreaView: "SafeAreaView", View: "View", Text: "Text", ScrollView: "ScrollView", TextInput: "TextInput", Button: "Button" }));
+vi.mock("expo-crypto", () => ({ CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+ digest: (_: string, bytes: Uint8Array<ArrayBuffer>) => crypto.subtle.digest("SHA-256", bytes) }));
 vi.mock("./native-store", () => ({ openNativeStore: vi.fn() }));
 import App from "../App";
 import { NativeComposition, type NativeCompositionInputs } from "./composition";
@@ -13,7 +15,7 @@ import { localData, type MobileSession, type Partition } from "./lifecycle-contr
 import type { NativeCoreSource } from "./core-loop-screens";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 let fixture = 0;
-function setup(hook?: (p: Partition) => Promise<void>) {
+function setup(hook?: (p: Partition) => Promise<void>, captureUpload?: NativeCompositionInputs["captureUpload"]) {
  const p = { userId: id(1), tenantId: id(2), membershipId: id(3), mobileSessionId: id(4), deviceInstanceId: `fictional-${++fixture}` };
  let bytes: string | null = null, n = 20;
  const keys = new Set<string>(), secure = new Map<string, string>();
@@ -33,6 +35,7 @@ function setup(hook?: (p: Partition) => Promise<void>) {
  const source: NativeCoreSource = { assertCurrent: vi.fn(async () => {}), load: vi.fn(async () => ({ partition: p, context,
   request: { screen: "acceptance_intent" as const, input: context } })) };
  const inputs: NativeCompositionInputs = { partition: p, store, source, uuid: () => id(++n), online: false, authEpoch: 0,
+  ...(captureUpload ? { captureUpload } : {}),
   lifecycle: { provider, vault, resources, options: { enabled: true, environment: "synthetic_demo", policy, uuid: () => id(++n), deviceInstanceId: p.deviceInstanceId,
    clock: () => ({ status: "trusted_fixture", nowMs: 1000 }), partitionKey: async () => p.deviceInstanceId, ...(hook ? { beforePartitionCleanup: hook } : {}) } } };
  const owner = new NativeComposition(inputs);
@@ -129,4 +132,30 @@ it("cleanup hook failure retains marker, pending contents and encryption keys wh
  await expect(f.owner.client.reconnect()).rejects.toThrow("MOBILE_RECOVERY_REQUIRED");
  expect(f.provider.rotate).not.toHaveBeenCalled(); expect(f.provider.reconnect).not.toHaveBeenCalled();
  await expect(f.owner.document.transaction(async data => ({ data, result: null }))).rejects.toThrow("MOBILE_DENIED");
+});
+
+it("mounts the injected fixture transport with one partition owner and refuses a late reply after authority changes", async () => {
+ const entered = deferred(), finish = deferred();
+ const transport = { transfer: vi.fn(async () => { entered.release(); await finish.promise; return { outcome: "rejected" }; }) };
+ const fixture = () => ({ base64: "AQID", contentType: "image/png" as const });
+ const f = setup(undefined, { transport, fixture });
+ await f.owner.client.exchange(f.p.tenantId);
+ const offline = f.owner.binding;
+ const uploadId = id(30), attachment = offline.captureFixture!("photo");
+ await offline.captureUpload!.keep({ version: "native-capture-upload.v1", environment: "synthetic_demo",
+  attachment: { id: uploadId, base64: attachment.base64 }, contentType: attachment.contentType, jobId: id(5),
+  scopeItemId: id(6), capturedAtMs: 1, expiresAtMs: 2, finalizeCommandId: id(31) });
+ await expect(offline.captureUpload!.transfer(uploadId)).rejects.toThrow("MOBILE_DENIED");
+ expect(transport.transfer).not.toHaveBeenCalled();
+ const online = f.owner.updateAuthority({ online: true, authEpoch: 0 });
+ expect(workspace(online).props.binding).toBe(online);
+ expect((await online.captures!.views())[0]?.status).toBe("local_only");
+ const upload = online.captureUpload!.transfer(uploadId);
+ await entered.promise;
+ const current = f.owner.updateAuthority({ online: true, authEpoch: 1 });
+ const denied = expect(upload).rejects.toThrow("MOBILE_DENIED");
+ finish.release();
+ await denied;
+ expect((await current.captures!.views())[0]?.status).toBe("uploading");
+ expect(JSON.parse(f.bytes()!).unsyncedWork).toBe("present");
 });
