@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "tommy-demo-recordings-20261119": {
+      "branches": ["codex/sandbox/tommy-demo-recordings-20261119"],
+      "note": "C1: branch-only recording diagnostics introduce no product workflow. The base is the coordinator-reviewed product/test tree 465e9f31f70eccc6cf42467d932b78c5ac097369 (remote source da34f12f6cd8b86b96d32a96bc8f7299c1b86c6d). Only these diagnostic additions are owned here. Existing ENT-11b and DEMO-J1/J2/J3 specs, assertions, individual deadlines, application, global setup and full CI gates remain unchanged. Publication requires coordinator review.",
+      "allow": [
+        ".github/workflows/tommy-demo-recordings.yml",
+        "apps/web/playwright.tommy-recordings.config.ts",
+        "apps/web/diagnostics/tommy-recordings-reporter.ts",
+        "docs/receipts/tommy-demo-recordings-20261119.md"
+      ]
+    }
+  }
+}
