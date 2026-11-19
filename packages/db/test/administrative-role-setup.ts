@@ -144,6 +144,8 @@ if (testPath?.endsWith(".integration.test.ts")) {
       class HistoricalEvidenceFixture extends actual.EvidenceService {
         constructor(pool: Pool, storage: ConstructorParameters<typeof actual.EvidenceService>[1], syntheticAudio?: boolean) {
           const fixturePool = Object.create(pool) as Pool;
+          // The fixture's direct catalogue probe uses pg's callback-based pool query.
+          fixturePool.query = pool.query.bind(pool);
           fixturePool.connect = (async () => {
             const client = await pool.connect();
             return {
