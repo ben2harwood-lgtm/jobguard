@@ -112,10 +112,10 @@ export class SyntheticNativeDownloadConnection {
     read: (snapshot: unknown, transaction: Pick<PoolClient, "query">) => Promise<T>,
   ): Promise<T | null> {
     const context = await resolveVerifiedTenantContext(this.auth, credentials, this.options.allowedOrigin).catch(error => {
-      if (error instanceof AuthError) throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
+      if (error instanceof AuthError) return null;
       throw error;
     });
-    if (context.tenantId !== partition.tenantId) return null;
+    if (!context || context.tenantId !== partition.tenantId) return null;
     return withTenant(this.pool, context, async db => {
       const tx = db.$client;
       if (!(await tx.query<{ synthetic: boolean }>(
@@ -160,14 +160,13 @@ export class SyntheticNativeDownloadConnection {
         authority: { userId: partition.userId, tenantId: partition.tenantId, membershipId: partition.membershipId,
           role: member.role, status: "active", assignedJobIds: rows.map(row => row.jobId) },
         source: this.options.replica?.(rows) ?? rows,
-      }, tx).catch(error => {
-        // The existing checkpoint routine refuses scope mismatches and expired membership.
-        // Surface these as loss of authority so the device immediately purges.
-        if (error instanceof Error && ["SYNC_CHECKPOINT_STALE", "SYNC_CHECKPOINT_INVALID"].includes(error.message)) {
-          throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
-        }
-        throw error;
-      });
+      }, tx);
+    }).catch(error => {
+      // After rollback, report expected checkpoint denials as missing current authority.
+      if (error instanceof Error && ["SYNC_CHECKPOINT_STALE", "SYNC_CHECKPOINT_INVALID"].includes(error.message)) {
+        return null;
+      }
+      throw error;
     });
   }
 }
