@@ -20,7 +20,7 @@ jobs:
       - name: Verify the candidate SHA and unchanged product tree
         env:
           EXPECTED_SHA: ${{ github.sha }}
-          EXPECTED_PRODUCT_TREE: 21340673da19cb735b1abf34fb329fd017dbe761
+          EXPECTED_PRODUCT_TREE: 09e0b8f737d7abaaffae67c5192a213fbedbd169
         run: |
           actual_sha=$(git rev-parse HEAD)
           printf 'Candidate SHA: %s\nCandidate tree: %s\n' "$actual_sha" "$(git rev-parse HEAD^{tree})"
@@ -41,10 +41,10 @@ jobs:
       - run: pnpm build
       - name: Install the browser used by the existing end-to-end suite
         run: pnpm --filter @jobguard/web exec playwright install --with-deps chromium
-      - name: Exercise the two focused specs on the real synthetic stack
+      - name: Exercise the four focused specs on the real synthetic stack
         env:
           PLAYWRIGHT_PROJECT: ${{ matrix.project }}
-        run: pnpm test:e2e e2e/TOMMY-money-gaps.spec.ts e2e/TOMMY-acceptance-recovery.spec.ts --project="$PLAYWRIGHT_PROJECT" --workers=1 --retries=0
+        run: pnpm test:e2e e2e/TOMMY-money-gaps.spec.ts e2e/TOMMY-acceptance-recovery.spec.ts e2e/later-safety-140.spec.ts e2e/real-tour-one-saved-job-now.spec.ts --project="$PLAYWRIGHT_PROJECT" --workers=1 --retries=0
       - name: Retain focused Playwright evidence on every outcome
         if: ${{ always() }}
         uses: actions/upload-artifact@v4.6.2
