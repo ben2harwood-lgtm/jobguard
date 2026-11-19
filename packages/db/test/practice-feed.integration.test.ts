@@ -642,7 +642,7 @@ describe("M4-7-S real PostgreSQL practice feed", () => {
     expect(rows).toHaveLength(5); expect(rows.every((row) => row.relrowsecurity && row.relforcerowsecurity && row.owner === "jobguard_migration")).toBe(true);
     const policies = (await admin.query(`SELECT tablename,policyname,permissive,roles::text,cmd,qual,with_check
       FROM pg_policies WHERE schemaname='app' AND tablename=ANY($1) ORDER BY tablename,policyname`, [tables])).rows;
-    const tenantPredicate = "(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)";
+    const tenantPredicate = "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)";
     expect(policies).toEqual([
       ...tables.map(tablename => ({ tablename, policyname: "tenant_isolation", permissive: "PERMISSIVE",
         roles: "{jobguard_migration,jobguard_runtime}", cmd: "ALL", qual: tenantPredicate, with_check: tenantPredicate })),

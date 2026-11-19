@@ -563,8 +563,8 @@ it("refuses direct manual attestations outside the demo database; dropping the g
       expect((await db.query(`SELECT roles::text[],qual,with_check FROM pg_policies
         WHERE schemaname='app' AND tablename='purchase_order_manual_attestation'`)).rows).toEqual([{
         roles:["jobguard_runtime"],
-        qual:"(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
-        with_check:"(tenant_id = (NULLIF((app.lp11_policy_tenant())::text, ''::text))::uuid)",
+        qual:"(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+        with_check:"(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
       }]);
       expect((await insert(db)).rows).toEqual([{ id }]);
     });

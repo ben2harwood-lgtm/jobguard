@@ -37,11 +37,25 @@ GRANT EXECUTE ON FUNCTION app.lp11_request_binding_present() TO jobguard_migrati
 
 CREATE FUNCTION app.lp11_policy_tenant() RETURNS uuid
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE
+ request_xid xid8 := pg_current_xact_id_if_assigned();
+ bound record;
 BEGIN
- IF pg_current_xact_id_if_assigned() IS NULL OR NOT app.lp11_request_binding_present() THEN
-  RETURN NULL;
+ IF request_xid IS NULL THEN RETURN NULL; END IF;
+ -- Apply the same expiry, read-only and delegated checks as the LP-6 reader
+ -- in a single indexed read, including its refusal for an invalid binding.
+ SELECT b.tenant_id,b.credential_kind,b.expires_at INTO bound
+ FROM control_plane.request_binding b
+ WHERE b.environment_id=extract(epoch FROM pg_postmaster_start_time())::text||':'||
+  (SELECT d.oid::text FROM pg_catalog.pg_database d WHERE d.datname=current_database())
+  AND b.transaction_id=request_xid;
+ IF NOT FOUND THEN RETURN NULL; END IF;
+ IF bound.expires_at<=clock_timestamp()
+  OR (bound.credential_kind='practice_read' AND current_setting('transaction_read_only') IS DISTINCT FROM 'on') THEN
+  RAISE EXCEPTION 'REQUEST_BINDING_REFUSED' USING ERRCODE='42501';
  END IF;
- RETURN app.current_tenant();
+ IF bound.credential_kind='customer_portal_delegated' THEN RETURN NULL; END IF;
+ RETURN bound.tenant_id;
 END $$;
 ALTER FUNCTION app.lp11_policy_tenant() OWNER TO jobguard_binding_owner;
 REVOKE CREATE ON SCHEMA app FROM jobguard_binding_owner;
@@ -6342,5 +6356,41 @@ END $$;
 ALTER FUNCTION app.lp11_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,text) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.lp11_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.lp11_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,text) TO jobguard_runtime;
+
+-- Use an uncorrelated scalar subquery so the executor checks the protected
+-- request tenant once per policy expression per statement. Leave the accessor
+-- VOLATILE and preserve every row-dependent predicate and scoped alternative.
+DO $$
+DECLARE
+ policy_row record;
+ expression_using text;
+ expression_check text;
+ tenant_accessor constant text := 'app.lp11_policy_tenant()';
+ tenant_initplan constant text := '(SELECT app.lp11_policy_tenant())';
+ worker_accessor constant text := 'app.lp11_worker_tenant(NULL::uuid)';
+ worker_initplan constant text := '(SELECT app.lp11_worker_tenant(NULL::uuid))';
+ bootstrap_check constant text := 'AND app.lp11_new_tenant(tenant_id)';
+ bootstrap_initplan constant text := 'AND (SELECT app.lp11_policy_tenant()) IS NULL AND app.lp11_new_tenant(tenant_id)';
+BEGIN
+ FOR policy_row IN
+  SELECT p.polname,n.nspname,c.relname,
+   pg_get_expr(p.polqual,p.polrelid) AS predicate_using,
+   pg_get_expr(p.polwithcheck,p.polrelid) AS predicate_check
+  FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid
+  JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE strpos(pg_get_expr(p.polqual,p.polrelid),tenant_accessor)>0
+     OR strpos(pg_get_expr(p.polwithcheck,p.polrelid),tenant_accessor)>0
+     OR strpos(pg_get_expr(p.polqual,p.polrelid),worker_accessor)>0
+     OR strpos(pg_get_expr(p.polwithcheck,p.polrelid),worker_accessor)>0
+ LOOP
+  expression_using := replace(replace(replace(policy_row.predicate_using,
+   tenant_accessor,tenant_initplan),worker_accessor,worker_initplan),bootstrap_check,bootstrap_initplan);
+  expression_check := replace(replace(replace(policy_row.predicate_check,
+   tenant_accessor,tenant_initplan),worker_accessor,worker_initplan),bootstrap_check,bootstrap_initplan);
+  EXECUTE format('ALTER POLICY %I ON %I.%I%s%s',policy_row.polname,policy_row.nspname,policy_row.relname,
+   CASE WHEN expression_using IS NULL THEN '' ELSE format(' USING (%s)',expression_using) END,
+   CASE WHEN expression_check IS NULL THEN '' ELSE format(' WITH CHECK (%s)',expression_check) END);
+ END LOOP;
+END $$;
 
 COMMIT;

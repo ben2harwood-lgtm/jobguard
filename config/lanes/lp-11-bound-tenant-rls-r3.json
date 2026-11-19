@@ -7,6 +7,7 @@
       ],
       "note": "LP-11 RED candidate on LP-10 migration 0761 and main through LP-7 migration 0763. LP-11 is 0765. Independent review remains required.",
       "allow": [
+        "apps/api/src/auth/context-boundary.test.ts",
         "apps/api/src/production-settlement-guard.test.ts",
         "apps/api/src/readiness-store.ts",
         "apps/api/src/readiness-task.test.ts",
@@ -21,6 +22,7 @@
         "apps/api/src/workspace/workspace.service.test.ts",
         "apps/api/src/workspace/workspace.service.ts",
         "apps/api/vitest.config.ts",
+        "apps/web/app/api/jobs/[id]/recovery-cases/[caseId]/billability/database.test.ts",
         "apps/web/test/setup-worker-role.ts",
         "packages/db/migration-notes/0762_lp11_r4_postgresql.md",
         "packages/db/migrations/0765_lp11_bound_tenant_rls.sql",
@@ -290,6 +292,7 @@
         "packages/db/test/site-extra-priced-evidence.integration.test.ts",
         "packages/db/test/site-supervisor-query.integration.test.ts",
         "packages/db/test/site-visit.integration.test.ts",
+        "packages/db/src/work-order-fixtures.ts",
         "packages/db/test/work-order-concurrency.integration.test.ts",
         "packages/db/test/work-order-import.integration.test.ts",
         "packages/db/test/extra-duplicate-candidates.integration.test.ts",
