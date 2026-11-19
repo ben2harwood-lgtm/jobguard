@@ -47,3 +47,48 @@ The two new scenarios run in both configured browser projects. This candidate do
 - New-spec whitespace check: passed. The final-head lane/whole-diff check is recorded in the handoff after committing.
 
 No PostgreSQL server, Next server or browser was started in this worktree. Test discovery is not execution. Actual browser/DB outcomes and independent review remain required before a passing runtime claim.
+
+## Correction after PR850's first real execution
+
+Original run: `44539501275`, remote head `af9a229b51d21f0f556bb23b0614aff8329b2044`, runner merge `8bcd61cceee09a92f8510da7e6b94c267fa8c049`, tree `9b29543c28b2e516e79a43a60a8564a4bb7ac739`.
+
+All four new executions failed before draft creation. Each trace shows `getByLabel("Work details", { exact: true }).fill(...)` waiting until the 600-second case limit, because the actual label also contains the example guidance. The error snapshots retain the untouched example. The success receipts were absent; support-v02's attachment was `[]` and support-v04's was `{}`. These are harness failures, with no verdict on the intended money invariants. A later context-close error obscured the original operation in the console stack, but the traces preserved it.
+
+The original evidence is retained independently under `recovery-failure/pr850-ci/run-44539501275` in the testing workspace. It includes all logs, terminal metadata, source binding, both downloaded Playwright artifacts with verified SHA256 digests, extracted traces and the exact selector diagnosis. That failed attempt remains part of the record.
+
+This follow-up changes only this spec and receipt:
+
+- Select the existing `#walk-source` control, assert its actual accessible-name prefix, and fill the same six-line source.
+- Subscribe to the real `/api/jobs/capture` POST response before clicking **Make my draft**. Require success, validate the existing response schema, derive the top-level `jobId`, and compare the saved proposal with that response. No job identity is taken from a shell-only marker.
+- Explicitly open `/jobs/{that captured jobId}#quote` after confirmation. Verify the quote editor's job ID before pricing and after invoice-related reloads; every later reload remains on the same saved job.
+- Set 10-second action waits and 30-second navigation waits on every fresh context. The existing 600-second case, 45-second proof and 180-second Final Check bounds are not increased.
+- Wait for the actual worker-owned completed Final Check and explicitly load its saved UI result. The trigger introduced in migration `0381` and replaced in `0698_final_check_post_invoice_rerun.sql` already queues this newly captured synthetic small-builder job when its immutable lock commits. The test no longer requires a run button that legitimately disappears when the worker finishes first. It neither restarts failed work nor treats an absent button as completion.
+- Add named `test.step` phases and `TOMMY_MONEY_GAP_PHASE` start/pass/failure records, plus the captured operation identities. The final money PASS receipt still appears only after all original monetary assertions complete.
+- Attempt context and attachment cleanup while preserving the primary exception. Secondary cleanup failures are recorded in annotations and phase output; a cleanup failure still fails an otherwise successful test.
+
+All original monetary amounts, source-line comparisons, immutable history assertions, real response-loss boundary, original-byte replay, no-extra-browser-write observation, exact-rational conservation, and fee source binding remain. No product, server, migration, shared helper, old test or financial success response is changed.
+
+### Locator and navigation audit
+
+This is source inspection, not a new browser pass. Every locator used directly by this spec was compared with its rendered component; existing imported helpers were read without modification.
+
+| Surface | Checked contract and source |
+|---|---|
+| Capture | `#walk-source`, Make/Check buttons and proposal count in `jobguard-app.tsx`; real capture response in `apps/api/src/capture/contracts.ts` |
+| Scope review | Description/quantity/unit labels, source blockquotes, Accept/Dismiss/reason controls, answer fields, confirmation status and count in `review-proposal.tsx` |
+| Customer and site | Save control and saved customer marker in `job-parties.tsx` |
+| Saved job and quote | Same-job route, quote editor identity, pricing fields, revisions, delivery, acceptance and activation controls in `workspace-shell.tsx`, `quote-editor.tsx`, and the unchanged capture/invoice helpers |
+| Variations and final bill | Form labels, exact-revision approvals, addition/omission totals, final totals and excluded-pending region in `job-variations.tsx` and `job-final-account.tsx` |
+| Lock, check and invoice | Dispositions, terms, lock readiness/state, saved Final Check control/status and invoice control/totals in `final-account-lock.tsx`, `final-check-reveal.tsx`, `final-check-reveal-view.ts` and `customer-invoices.tsx` |
+| Recovery, allocations and fees | Case/terms, eligibility, evidence pack, pursuit delivery, allocation comboboxes/review/unknown alert/reconciliation, and fee controls were independently source-checked by the recovery-failure agent against their components and unchanged allocation helper; no further selector mismatch was found |
+
+The recovery and allocation panels mount on the saved workspace independently of quote details. Their hash destinations, the recovery-journey route and subsequent reloads retain the same response-derived job identity. Source-known Final Check control timing is handled by authoritative completion rather than an optional control's presence. Fresh CI execution is still required to establish the intended four money outcomes.
+
+### Follow-up local checks
+
+- Web TypeScript check: passed, exit 0.
+- Playwright discovery: passed, exit 0; the same four executions across mobile-360 and desktop.
+- Compiled ESM capture-contract import: passed, exit 0. The first discovery attempt exposed the API/core packages' ESM-only boundary; the spec now uses the existing allocation helper's native compiled-contract import pattern, rather than Playwright's CommonJS transform.
+- Diff whitespace check: passed. The final committed lane check and exact head/tree are recorded in the handoff.
+
+No browser, Next server, PostgreSQL instance, CI rerun, push, merge or deployment was started for this correction. Static checks do not establish a money-test pass.
