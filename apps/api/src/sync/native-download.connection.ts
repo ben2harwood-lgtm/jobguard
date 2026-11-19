@@ -111,62 +111,62 @@ export class SyntheticNativeDownloadConnection {
     partition: Partition, credentials: TenantRequestCredentials,
     read: (snapshot: unknown, transaction: Pick<PoolClient, "query">) => Promise<T>,
   ): Promise<T | null> {
-    const context = await resolveVerifiedTenantContext(this.auth, credentials, this.options.allowedOrigin).catch(error => {
-      if (error instanceof AuthError) return null;
-      throw error;
-    });
-    if (!context || context.tenantId !== partition.tenantId) return null;
-    return withTenant(this.pool, context, async db => {
-      const tx = db.$client;
-      if (!(await tx.query<{ synthetic: boolean }>(
-        "SELECT current_database()='jobguard_synthetic_demo' AS synthetic",
-      )).rows[0]?.synthetic) return null;
-      const ids = [partition.tenantId, partition.membershipId, partition.userId];
-      // Same tenant lock as contractor administration and work-order writers. Hold until the
-      // checkpoint commits, so an audited assignment/role change cannot straddle this read.
-      await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))", [partition.tenantId]);
-      const member = (await tx.query<{ role: string }>(`
-        SELECT role FROM app.membership
-        WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND app.contractor_member_active(id)
-      `, ids)).rows[0];
-      if (!member) return null;
+    try {
+      const context = await resolveVerifiedTenantContext(this.auth, credentials, this.options.allowedOrigin);
+      if (context.tenantId !== partition.tenantId) return null;
+      return await withTenant(this.pool, context, async db => {
+        const tx = db.$client;
+        if (!(await tx.query<{ synthetic: boolean }>(
+          "SELECT current_database()='jobguard_synthetic_demo' AS synthetic",
+        )).rows[0]?.synthetic) return null;
+        const ids = [partition.tenantId, partition.membershipId, partition.userId];
+        // Same tenant lock as contractor administration and work-order writers. Hold until the
+        // checkpoint commits, so an audited assignment/role change cannot straddle this read.
+        await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text,54))", [partition.tenantId]);
+        const member = (await tx.query<{ role: string }>(`
+          SELECT role FROM app.membership
+          WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3 AND app.contractor_member_active(id)
+        `, ids)).rows[0];
+        if (!member) return null;
 
-      // Neither history shrinks in the synthetic lane. Audit events cover ordinary contractor
-      // mutations, including removal and re-addition between reads. The existing mobile family
-      // history accounts for switch-away/switch-back and session reauthorisation.
-      const { families } = await this.mobile.fixtureRecords();
-      let lifecycleRevision = 0;
-      let activeFamily = false;
-      for (const family of families) {
-        if (family.partition.userId !== partition.userId) continue;
-        lifecycleRevision += family.revokedAtMs === undefined ? 1 : 2;
-        if (family.partition.mobileSessionId === partition.mobileSessionId && family.revokedAtMs === undefined) {
-          activeFamily = true;
+        // Neither history shrinks in the synthetic lane. Audit events cover ordinary contractor
+        // mutations, including removal and re-addition between reads. The existing mobile family
+        // history accounts for switch-away/switch-back and session reauthorisation.
+        const { families } = await this.mobile.fixtureRecords();
+        let lifecycleRevision = 0;
+        let activeFamily = false;
+        for (const family of families) {
+          if (family.partition.userId !== partition.userId) continue;
+          lifecycleRevision += family.revokedAtMs === undefined ? 1 : 2;
+          if (family.partition.mobileSessionId === partition.mobileSessionId && family.revokedAtMs === undefined) {
+            activeFamily = true;
+          }
         }
-      }
-      if (!activeFamily) return null;
-      const revision = (await tx.query<{ sequence: string }>(`
-        SELECT COALESCE((SELECT sequence FROM app.audit_event WHERE tenant_id=$1
-          AND (event_type IN ('commercial_track.assigned', 'contractor.work_order_import.recorded')
-            OR subject_type='contractor-administration'
-            OR event_type LIKE 'contractor.agreement.%')
-          ORDER BY sequence DESC LIMIT 1),0) AS sequence
-      `, [partition.tenantId])).rows[0]!;
-      const rows = (await tx.query<ProjectionRow>(assignedRows, ids.slice(0, 2))).rows;
-      return read({
-        version: "sync-provider-snapshot.v1", environment: "synthetic_demo",
-        sessionId: partition.mobileSessionId, userId: partition.userId, activeTenantId: partition.tenantId,
-        authorityRevision: Number(revision.sequence) + lifecycleRevision,
-        authority: { userId: partition.userId, tenantId: partition.tenantId, membershipId: partition.membershipId,
-          role: member.role, status: "active", assignedJobIds: rows.map(row => row.jobId) },
-        source: this.options.replica?.(rows) ?? rows,
-      }, tx);
-    }).catch(error => {
+        if (!activeFamily) return null;
+        const revision = (await tx.query<{ sequence: string }>(`
+          SELECT COALESCE((SELECT sequence FROM app.audit_event WHERE tenant_id=$1
+            AND (event_type IN ('commercial_track.assigned', 'contractor.work_order_import.recorded')
+              OR subject_type='contractor-administration'
+              OR event_type LIKE 'contractor.agreement.%')
+            ORDER BY sequence DESC LIMIT 1),0) AS sequence
+        `, [partition.tenantId])).rows[0]!;
+        const rows = (await tx.query<ProjectionRow>(assignedRows, ids.slice(0, 2))).rows;
+        return read({
+          version: "sync-provider-snapshot.v1", environment: "synthetic_demo",
+          sessionId: partition.mobileSessionId, userId: partition.userId, activeTenantId: partition.tenantId,
+          authorityRevision: Number(revision.sequence) + lifecycleRevision,
+          authority: { userId: partition.userId, tenantId: partition.tenantId, membershipId: partition.membershipId,
+            role: member.role, status: "active", assignedJobIds: rows.map(row => row.jobId) },
+          source: this.options.replica?.(rows) ?? rows,
+        }, tx);
+      });
+    } catch (error) {
+      if (error instanceof AuthError) return null;
       // After rollback, report expected checkpoint denials as missing current authority.
       if (error instanceof Error && ["SYNC_CHECKPOINT_STALE", "SYNC_CHECKPOINT_INVALID"].includes(error.message)) {
         return null;
       }
       throw error;
-    });
+    }
   }
 }
