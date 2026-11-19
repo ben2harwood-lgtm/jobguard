@@ -14,7 +14,6 @@ import { performance } from "node:perf_hooks";
 import { deflateSync } from "node:zlib";
 import { Pool } from "pg";
 import EmbeddedPostgres from "embedded-postgres";
-import { createSyntheticInvoicePdf, money } from "@jobguard/core";
 
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 const canonical = value => JSON.stringify(value);
@@ -86,22 +85,33 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
   const source = new EmbeddedPostgres({ ...clusterOptions, databaseDir: sourcePath, port: sourcePort });
   const restored = new EmbeddedPostgres({ ...clusterOptions, databaseDir: restoredPath, port: restoredPort });
   const pools = new Set();
-  const pool = (port, user = "postgres", database = "postgres") => { const p = new Pool({ host: "127.0.0.1", port, user, password, database, max: 4 }); pools.add(p); return p; };
+  const pool = (port, user = "postgres", database = "jobguard_synthetic_demo") => { const p = new Pool({ host: "127.0.0.1", port, user, password, database, max: 4 }); pools.add(p); return p; };
   const closePools = async () => { await Promise.all([...pools].map(p => p.end())); pools.clear(); await new Promise(ok => setTimeout(ok, 25)); };
   const pass = (id, detail) => checks.push({ id, status: "PASS", detail });
-  const ids = Object.fromEntries(["tenant", "otherTenant", "identity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision", "variation"].map(name => [name, randomUUID()]));
-  const context = api.verifiedTenantContextFromMembership({ tenantId: ids.tenant, membershipId: ids.member, identityUserId: ids.identity });
-  const otherContext = api.verifiedTenantContextFromMembership({ tenantId: ids.otherTenant, membershipId: randomUUID(), identityUserId: ids.identity });
+  const ids = Object.fromEntries(["tenant", "otherTenant", "otherAccount", "otherMember", "identity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision", "variation", "linkedJob", "linkedScope", "linkedBinding"].map(name => [name, randomUUID()]));
+  const sessionCredential = digest(randomUUID());
+  // Reuse the rehearsal's approved fixed-tenant membership bridge. Business
+  // calls bind the fixture session; the separately authorized shadow role
+  // processes the lock with the existing sessionless rehearsal context.
+  const rehearsalContext = session => api.verifiedTenantContextFromMembership({ tenantId: ids.tenant, membershipId: ids.member, identityUserId: ids.identity }, session);
+  const context = rehearsalContext({kind: "real", credential: sessionCredential});
+  const otherContext = api.verifiedTenantContextFromMembership({ tenantId: ids.otherTenant, membershipId: ids.otherMember, identityUserId: ids.identity }, {kind: "real", credential: sessionCredential});
   const fixtureHash = digest("fictional-source-only");
   let exportReceipt;
+  const previousWorkerUrl = process.env.WORKER_DATABASE_URL;
+  const workerPassword = randomUUID();
+  const configureWorker = port => {
+    if (!fixture) process.env.WORKER_DATABASE_URL = `postgresql://rehearsal_worker:${workerPassword}@127.0.0.1:${port}/jobguard_synthetic_demo`;
+  };
+  const closeWorker = async () => { if (!fixture) await api.closeOutboundWorkerPool(); };
   try {
-    await source.initialise(); await source.start();
+    await source.initialise(); await source.start(); await source.createDatabase("jobguard_synthetic_demo");
     let admin = pool(sourcePort);
     const postgresVersion = (await admin.query("SHOW server_version")).rows[0].server_version;
     assert.match(postgresVersion, /^16\./);
     // Match current migration prerequisites in this disposable cluster. These
     // non-login writer roles never become runtime credentials or memberships.
-    for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) {
+    for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_worker"]) {
       await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN
         CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
         END IF; END $$`);
@@ -112,8 +122,14 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.ok(migrationNames.includes("0095_job_parties.sql"));
     await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [ids.tenant, ids.otherTenant]);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [ids.identity]);
+    await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${ids.identity}@fictional.invalid`,ids.identity]);
+    await admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')",[randomUUID(),ids.identity,sessionCredential]);
     await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional restore builder')", [ids.account, ids.tenant]);
     await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [ids.member, ids.tenant, ids.account, ids.identity]);
+    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[ids.identity,ids.tenant,ids.member]);
+    await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Other fictional builder')",[ids.otherAccount,ids.otherTenant]);
+    await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[ids.otherMember,ids.otherTenant,ids.otherAccount,ids.identity]);
+    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[ids.identity,ids.otherTenant,ids.otherMember]);
     await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional restore job','quoting'),($3,$4,'Other tenant fictional job','draft')", [ids.job, ids.tenant, ids.otherJob, ids.otherTenant]);
     // Supply explicit generated parties before the existing live-state fixture.
     const partyClient = await admin.connect();
@@ -131,15 +147,36 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     } catch (error) { await partyClient.query("ROLLBACK"); throw error; }
     finally { partyClient.release(); }
     await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [ids.scope, ids.tenant, ids.job]);
+    // Post-lock builder work belongs on a linked job for the same customer and site,
+    // as production requires. Generated successor: same parties, own scope, live.
+    await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional linked restore job','quoting')", [ids.linkedJob, ids.tenant]);
+    const linkedClient = await admin.connect();
+    try {
+      await linkedClient.query("BEGIN");
+      await linkedClient.query("SELECT set_config('app.tenant_id',$1,true)", [ids.tenant]);
+      await linkedClient.query("INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance) SELECT b.tenant_id,$3,$4,(SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$4),b.customer_id,b.customer_revision_id,b.paying_party_id,b.paying_party_revision_id,b.site_id,b.site_revision_id,'backfilled_synthetic_fixture' FROM app.job_party_binding b JOIN app.job_party_current c ON(c.tenant_id,c.job_id,c.binding_id)=(b.tenant_id,b.job_id,b.id) WHERE b.tenant_id=$1 AND b.job_id=$2", [ids.tenant, ids.job, ids.linkedBinding, ids.linkedJob]);
+      await linkedClient.query("INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES($1,$2,$3)", [ids.tenant, ids.linkedJob, ids.linkedBinding]);
+      await linkedClient.query("SET LOCAL ROLE jobguard_migration");
+      await linkedClient.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture',$2)", [ids.tenant, ids.linkedJob]);
+      await linkedClient.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [ids.tenant, ids.linkedJob]);
+      await linkedClient.query("COMMIT");
+    } catch (error) { await linkedClient.query("ROLLBACK"); throw error; }
+    finally { linkedClient.release(); }
+    await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [ids.linkedScope, ids.tenant, ids.linkedJob]);
     await admin.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')", [ids.tenant, ids.job, ids.scope]);
     await admin.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,10000,'accepted')", [ids.quote, ids.tenant, ids.job, fixtureHash]);
     await admin.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [ids.draft, ids.tenant, ids.job]);
     await admin.query("INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings) VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',10000,2000,12000,false,'[]')", [ids.revision, ids.tenant, ids.job, ids.draft, fixtureHash, ids.quote]);
+    await admin.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional restore baseline',10000,1)",[randomUUID(),ids.tenant,ids.job,ids.revision,ids.quote,ids.scope]);
     await admin.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3", [ids.revision, ids.tenant, ids.draft]);
     // Generated login exists only inside these disposable clusters. No deployment secrets are read.
     await admin.query(`CREATE ROLE rehearsal_runtime LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO rehearsal_runtime`);
     for (const name of ["rehearsal_operator_a", "rehearsal_operator_b"]) {
       await admin.query(`CREATE ROLE ${name} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_outbound_operator TO ${name}`);
+    }
+    if (!fixture) {
+      await admin.query(`CREATE ROLE rehearsal_worker LOGIN PASSWORD '${workerPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS; GRANT jobguard_worker TO rehearsal_worker`);
+      configureWorker(sourcePort);
     }
     assert.equal((await admin.query("SELECT outbound_control.claims_enabled() enabled")).rows[0].enabled, true);
     let runtime = pool(sourcePort, "rehearsal_runtime");
@@ -148,8 +185,8 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.equal(sourceTrack.length, 1);
     const createBuilderOrigin = (connection, variation) => api.withTenant(connection, context, async db => {
       assert.equal((await db.$client.query("SELECT pg_has_role(current_user,'jobguard_runtime','USAGE') AS runtime_role")).rows[0].runtime_role, true);
-      await db.$client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,existing_scope_item_id,capture_kind,capture_text,description) VALUES($1,$2,$3,$4,$4,'text','Fictional restore extra','Fictional restore extra')", [variation, ids.tenant, ids.job, ids.scope]);
-      const origin = (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.job, variation])).rows;
+      await db.$client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,existing_scope_item_id,capture_kind,capture_text,description) VALUES($1,$2,$3,$4,$4,'text','Fictional restore extra','Fictional restore extra')", [variation, ids.tenant, ids.linkedJob, ids.linkedScope]);
+      const origin = (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.linkedJob, variation])).rows;
       assert.deepEqual(origin, [{ job_track: "small_builder", kind: "builder_logged", provenance: "legacy_synthetic_capture", raising_role: "legacy_unrecorded", source_capture_hash: digest("Fictional restore extra") }]);
       return origin;
     });
@@ -172,13 +209,29 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     await api.withTenant(runtime, context, db => db.$client.query("INSERT INTO app.synthetic_evidence_original(tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes) VALUES($1,$2,$3,$4,$5,$6,'synthetic_demo','image/png',$7)", [ids.tenant, upload.id, ids.job, ids.scope, upload.objectKey, objectVersion, bytes]));
     await evidenceService.finalize(context, { uploadId: upload.id, objectVersionId: objectVersion, evidenceType: "completion_photo" });
     await new api.ProofCommandService(runtime, storage).complete(context, { version: "proof.complete.v1", commandId: randomUUID(), actorMembershipId: ids.member, jobId: ids.job, scopeItemId: ids.scope, stage: "completion", evidenceId: upload.id, requiredEvidenceType: "completion_photo", decisionId: null });
+    const locks = new api.FinalAccountLockRepository(runtime);
+    await locks.acceptTerms(context,{actorMembershipId:ids.member,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
+    await locks.disposition(context,{jobId:ids.job,actorMembershipId:ids.member,commandId:randomUUID(),scopeItemId:ids.scope,disposition:"done"});
+    await locks.lock(context,{jobId:ids.job,actorMembershipId:ids.member,commandId:randomUUID(),finalAccountRevisionId:ids.revision,expectedRevision:1,declarationVersion:"final_account_declaration.v1"});
+    await admin.query(`CREATE ROLE rehearsal_shadow LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_shadow TO rehearsal_shadow`);
+    const shadow = pool(sourcePort,"rehearsal_shadow"), workerContext = rehearsalContext();
+    const checksRepository = new api.FinalCheckRepository(shadow);
+    const checkManifest = await checksRepository.begin(workerContext,ids.job,"synthetic-restore.v1");
+    for(const item of checkManifest.sources.filter(item=>item.processable)) {
+      await checksRepository.record(workerContext,ids.job,checkManifest.id,item.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:item.inputHash,status:"zero_result",failureCode:null,signalIds:[]});
+    }
+    // Explicit deterministic fake output; checked completion verifies the frozen
+    // evidence inventory. No status UPDATE or invented completion certificate.
+    const checkedResult = await checksRepository.reconcile(workerContext,ids.job,checkManifest.id,[]);
+    const invoices = new api.PracticeInvoiceRepository(runtime);
+    const invoiceInput = {jobId:ids.job,finalAccountRevisionId:ids.revision,actorMembershipId:ids.member,commandId:randomUUID(),recipient:"restore@example.invalid",issuedOn:"2026-09-20"};
+    await assert.rejects(invoices.issue(context,invoiceInput), /FINAL_CHECK_NOT_COMPLETE/);
+    // Reconciliation verifies processing; publication separately certifies it
+    // through the checked completion trigger required by every invoice issuer.
+    await new api.FinalCheckCompletionRepository(shadow).publish(workerContext,{version:"final-check-publication.v1",jobId:ids.job,runId:checkedResult.runId,checkId:randomUUID()});
+    const checkedInvoice = await invoices.issue(context,invoiceInput);
+    const issued = {invoiceId:checkedInvoice.id}, invoicePdfHash=checkedInvoice.pdfSha256;
     const billing = new api.CustomerBillingCommandService(runtime);
-    const invoicePdfHash = digest(createSyntheticInvoicePdf({ invoiceNumber: "SYN-2026-000001", issuerName: "Fictional restore builder", total: money(12000), sourceRevisionId: ids.revision, evidenceVersionIds: [] }));
-    const issued = await billing.issue(context, {
-      version: "customer-invoice.issue.v1", finalAccountRevisionId: ids.revision, issuedOn: "2026-09-20",
-      issuer: { legalName: "Fictional restore builder", address: "Synthetic test address only", vatNumber: null },
-      command: { version: "command.v1", commandId: randomUUID(), commandType: "customer_invoice.issue", semanticKey: `invoice:${ids.revision}`, actorMembershipId: ids.member, subjectType: "job", subjectRef: ids.job, authorizationId: randomUUID(), action: { actionType: "final_account.issue", recipient: null, contentHash: invoicePdfHash, aggregateRevision: 1, amountPence: 12000, currency: "GBP", policyVersion: "candidate_m1_standard_v1", expiresAt: new Date("2099-01-01T00:00:00Z") } },
-    });
     const paymentCommand = { version: "customer-payment.record.v1", commandId: randomUUID(), actorMembershipId: ids.member, jobId: ids.job, invoiceId: issued.invoiceId, paidOn: "2026-09-20", amountPence: 5000, currency: "GBP", method: "bank_transfer", reference: "synthetic-restore-part-payment", builderAttestsReceived: true };
     const payment = await billing.recordPayment(context, paymentCommand);
     const sourceBalance = await billing.balance(context, issued.invoiceId);
@@ -197,6 +250,13 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
       }
       actionIds.push(actionId);
     }
+    // The locked job refuses new builder work; link the successor through the production command.
+    const workState = new api.JobWorkStateRepository(runtime), lockedFacts = await workState.read(context, ids.job, ids.member);
+    const predecessorBinding = (await admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2", [ids.tenant, ids.job])).rows[0].binding_id;
+    const linked = await workState.command(context, ids.job, ids.member, { version: "job-link-command.v1", action: "link", commandId: randomUUID(),
+      expectedRevision: Math.max(0, ...lockedFacts.events.map(event => event.sequence)) + lockedFacts.links.filter(link => link.predecessorJobId === ids.job).length,
+      successorJobId: ids.linkedJob, predecessorBindingId: predecessorBinding, successorBindingId: ids.linkedBinding });
+    assert.deepEqual(linked.links.map(link => [link.predecessorJobId, link.successorJobId]), [[ids.job, ids.linkedJob]]);
     const sourceOrigin = await createBuilderOrigin(runtime, ids.variation);
     await fixture?.beforeBackup({ admin, postgres: source, directory: sourcePath, pool: (user, database) => pool(sourcePort, user, database) });
     // The snapshot covers every row, including money/audit/control metadata, not only the examples above.
@@ -217,7 +277,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     const before = await rowSnapshot(admin);
     await assert.rejects(copyStoppedCluster(sourcePath, join(root, "invalid-live-copy")), /RUNNING_CLUSTER_BACKUP_REFUSED/);
     pass("running-cluster-refused", "A live data-directory copy is rejected; no partial hot backup is treated as usable.");
-    await closePools(); await source.stop();
+    await closeWorker(); await closePools(); await source.stop();
     const backupStart = performance.now(), manifest = await copyStoppedCluster(sourcePath, backupPath);
     timings.backupMilliseconds = Math.round(performance.now() - backupStart);
     const manifestHash = digest(canonical(manifest));
@@ -245,13 +305,14 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.equal(sourceOutbound.paused, false);
     const pauseRevision = await control(operatorA, "pause", sourceOutbound.revision);
     assert.equal((await admin.query("SELECT outbound_control.claims_enabled() enabled")).rows[0].enabled, false);
+    configureWorker(restoredPort);
     runtime = pool(restoredPort, "rehearsal_runtime"); storage = new DatabaseSyntheticStorage(runtime);
     assert.equal((await admin.query("SHOW server_version")).rows[0].server_version, postgresVersion);
     assert.deepEqual(await rowSnapshot(admin), before);
     measured("database");
     await fixture?.afterRestore({ admin, postgres: restored, directory: restoredPath, pool: (user, database) => pool(restoredPort, user, database) });
     assert.deepEqual(await trackRows(runtime), sourceTrack);
-    assert.deepEqual(await api.withTenant(runtime, context, async db => (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.job, ids.variation])).rows), sourceOrigin);
+    assert.deepEqual(await api.withTenant(runtime, context, async db => (await db.$client.query("SELECT job_track,kind,provenance,raising_role,source_capture_hash FROM app.extra_origin WHERE tenant_id=$1 AND job_id=$2 AND variation_id=$3", [ids.tenant, ids.linkedJob, ids.variation])).rows), sourceOrigin);
     await createBuilderOrigin(runtime, randomUUID());
     pass("all-rows-restored", `${before.length} application/control tables match their pre-backup row counts and hashes before new capture. The immutable small-builder track and saved origin survive; a subsequent builder origin commits under the runtime role.`);
     const restoredBilling = new api.CustomerBillingCommandService(runtime);
@@ -282,17 +343,18 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.deepEqual(role, { rolsuper: false, rolbypassrls: false, rolcreaterole: false, rolcreatedb: false });
     assert.deepEqual((await runtime.query("SELECT id FROM app.job")).rows, []);
     const visible = await api.withTenant(runtime, context, async db => (await db.$client.query("SELECT id FROM app.job ORDER BY id")).rows);
-    assert.deepEqual(visible, [{ id: ids.job }]);
+    // Exactly this tenant's locked job and its linked successor; the other tenant's job stays invisible.
+    assert.deepEqual(visible, [ids.job, ids.linkedJob].sort().map(id => ({ id })));
     await assert.rejects(api.withTenant(runtime, context, db => db.$client.query("UPDATE app.job SET title='forbidden' WHERE id=$1", [ids.job])), error => error.code === "42501");
     const isolation = (await admin.query("SELECT relrowsecurity,relforcerowsecurity,pg_get_userbyid(relowner) owner FROM pg_class WHERE oid='app.synthetic_evidence_original'::regclass")).rows[0];
     assert.deepEqual(isolation, { relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration" });
     pass("restored-role-and-tenant-isolation", "Runtime remains non-superuser/non-BYPASSRLS, sees no unscoped rows, cannot update jobs, and retains forced evidence RLS.");
     // This export is the documented fixture slice, not a general privacy/legal export service.
     const exported = await api.withTenant(runtime, context, async db => ({ version: "synthetic-job-export.v1", environment, jobs: (await db.$client.query("SELECT id,title,status FROM app.job ORDER BY id")).rows, evidence: (await db.$client.query("SELECT id,object_version_id,sha256 FROM app.evidence_object ORDER BY id")).rows }));
-    assert.equal(exported.jobs.length, 1); assert.equal(exported.evidence.length, 1);
+    assert.deepEqual(exported.jobs.map(job => job.id), [ids.job, ids.linkedJob].sort()); assert.equal(exported.evidence.length, 1);
     assert.ok(!canonical(exported).includes(ids.otherJob));
     exportReceipt = { format: exported.version, sha256: digest(canonical(exported)), jobCount: exported.jobs.length, evidenceCount: exported.evidence.length };
-    pass("tenant-scoped-export-slice", "The fixture export contains only the selected tenant's job and evidence references; no credentials or other-tenant job are exported.");
+    pass("tenant-scoped-export-slice", "The fixture export contains only the selected tenant's locked job, its linked successor and evidence references; no credentials or other-tenant job are exported.");
     const queue = () => api.withTenant(runtime, context, async db => (await db.$client.query("SELECT id,status FROM app.action_outbox ORDER BY id")).rows);
     const queueBefore = await queue(); let fakeDeliveries = 0;
     const attemptsBefore = (await admin.query("SELECT * FROM app.action_attempt ORDER BY id")).rows;
@@ -308,7 +370,11 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.equal(await api.reconcileOutbox(runtime, context, actionIds[1], adapter), "unknown");
     assert.equal((await queue()).find(row => row.id === actionIds[2]).status, "succeeded");
     const resumeRequest = randomUUID(), reconciliationReceipt = randomUUID();
-    const requested = await control(operatorA, "request_resume", pauseRevision, null, resumeRequest);
+    // A fixture sharing this practice database may pause again in afterRestore; resume from the current paused revision.
+    const pausedState = (await operatorA.query("SELECT paused,revision FROM outbound_control.state")).rows[0];
+    assert.equal(pausedState.paused, true); assert.ok(BigInt(pausedState.revision) >= BigInt(pauseRevision));
+    if (!fixture) assert.equal(String(pausedState.revision), String(pauseRevision));
+    const requested = await control(operatorA, "request_resume", pausedState.revision, null, resumeRequest);
     await assert.rejects(control(operatorB, "approve_resume", requested, resumeRequest), /OUTBOUND_RECONCILIATION_REQUIRED/);
     await operatorA.query("SELECT outbound_control.record_reconciliation($1,$2)", [resumeRequest, reconciliationReceipt]);
     await assert.rejects(control(operatorA, "approve_resume", requested, resumeRequest), /OUTBOUND_SECOND_PERSON_REQUIRED/);
@@ -344,7 +410,14 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
       releaseDecision: "NOT_AUTHORIZED", productionRpoRto: "NOT_ESTABLISHED", realDataUsed: false,
     };
   } finally {
-    await closePools(); await source.stop(); await restored.stop();
+    try { await closeWorker(); }
+    finally {
+      if (!fixture) {
+        if (previousWorkerUrl === undefined) delete process.env.WORKER_DATABASE_URL;
+        else process.env.WORKER_DATABASE_URL = previousWorkerUrl;
+      }
+      await closePools(); await source.stop(); await restored.stop();
+    }
     // Only this function's generated disposable fixture tree is removed.
     await rm(root, { recursive: true, force: true });
   }

@@ -64,8 +64,20 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect(metadata(replayRoutines)).toEqual(expected.routines.filter(row => row.nspname !== "infrastructure"));
   expect(relationMetadata(replayCatalog)).toEqual(expected.relations);
   expect(await policies()).toEqual(expected.policies);
+  const billingProof = successors.find(proof => proof.migration === "0766_lp8a_billing_revokes.sql")!;
+  const billingRelations = billingProof.upgrade.filter(change => change.section === "relations");
+  const advanceDelta = billingProof.upgrade.find(change => change.section === "routines" && change.before?.nspname === "app" && change.before.proname === "advance_final_account_draft");
+  if (advanceDelta?.section !== "routines" || !advanceDelta.before || !advanceDelta.after) throw new Error("Missing LP-8a draft routine proof");
+  const advanceSql = await readFile(new URL(`../migrations/${billingProof.migration}`, import.meta.url), "utf8");
+  const advanceBody = advanceSql.split("CREATE OR REPLACE FUNCTION app.advance_final_account_draft(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
   // Preserve all raw predecessor catalogue fields, including policy identities.
   for (const row of beforeCatalog) {
+    const billingDelta = billingRelations.find(change => change.before?.nspname === row.nspname && change.before.relname === row.relname);
+    if (billingDelta?.after) {
+      // Before and after ACLs are pinned by the exact proof replay above.
+      expect(replayCatalog).toContainEqual({ ...row, relacl: billingDelta.after.relacl });
+      continue;
+    }
     if (row.nspname === "app" && ["customer_portal_session", "customer_portal_grant", "extra_client_session", "extra_client_link"].includes(row.relname)) {
       // 0724 adds exactly the private owner's SELECT and one tenant-scoped read policy.
       // Complete ACL/policy metadata is checked against its exact proof above;
@@ -343,6 +355,10 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     if (prior) {
       let definition = prior.definition;
       const lp6dBody = lp6dBodies.get(lp6dKey(row));
+      if (row.nspname === advanceDelta.after.nspname && row.proname === advanceDelta.after.proname && row.args === advanceDelta.after.args) {
+        expect(row.definition.split("$function$")[1]).toBe(advanceBody);
+        continue;
+      }
       if (lp6dBody !== undefined) {
         // 0740 owns this routine's latest definition (some change language, e.g. contractor_session sql -> plpgsql).
         expect(row.definition.split("$function$")[1], identity).toBe(lp6dBody);
