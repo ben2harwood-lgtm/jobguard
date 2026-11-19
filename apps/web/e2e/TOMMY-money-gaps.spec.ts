@@ -181,7 +181,10 @@ async function addVariation(page: Page, description: string, price: string, dire
     const form = page.locator(".variation-entry");
     await expect(form).toBeVisible();
     await form.getByLabel("Description", { exact: true }).fill(description);
-    await form.getByLabel("Change type", { exact: true }).selectOption(direction);
+    // The wrapping label includes the select's option text in Playwright's label matcher.
+    const changeType = form.getByLabel(/^Change type/u);
+    await changeType.selectOption(direction);
+    await expect(changeType).toHaveValue(direction);
     await form.getByLabel("Variation price (£, optional)", { exact: true }).fill(price);
     await click(page, "Add proposed variation");
     await expect(form.getByLabel("Description", { exact: true })).toHaveValue("");
@@ -509,10 +512,12 @@ test("support-v04: a lost committed £384 allocation reply reconciles before exa
     const replayed = await parseAllocationView(await replayResponse.json());
     expect(replayed).toEqual(saved);
     expect(await allocationReceipt(job.jobId, command.commandId)).toEqual(database);
-    // A different identity cannot reuse that receipt's exhausted capacity.
+    // A new command cannot allocate again to the fully recovered £320 case.
+    // The public claim guard runs before payment capacity; this does not independently
+    // exercise the separate available-payment guard.
     const overlap = await page.request.post(path, { data: { version: "recovery-allocation-command.v1", action: "review", commandId: randomUUID(), caseId: job.caseId, paymentId: job.paymentId, evidenceId: job.evidenceId, expectedCaseRevision: saved.cases.find(row => row.caseId === job.caseId)!.revision, grossPence: 38400 }, maxRetries: 0 });
     expect(overlap.status()).toBe(409);
-    expect(await overlap.json()).toEqual({ version: "recovery-allocation-error.v1", code: "ALLOCATION_EXCEEDS_AVAILABLE" });
+    expect(await overlap.json()).toEqual({ version: "recovery-allocation-error.v1", code: "ALLOCATION_EXCEEDS_CLAIM" });
     expect(await readAllocations(page, job.jobId)).toEqual(saved);
     await page.reload();
     await readyAllocations(page);
