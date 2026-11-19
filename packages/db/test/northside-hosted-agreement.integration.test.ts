@@ -79,7 +79,7 @@ it("selects only this run's stored agreement under finance/session checks and pr
   const ownerContext = await contractorSessionContext(c.runtime, foreign.session);
   await expect(repo.deriveNorthside(ownerContext, f.session, input)).rejects.toThrow();
   // Immutable authority loss fences even an exact replay; startup cannot restore it.
-  await status(c, f, "suspended");
+  await status(c, { p: f.p, context }, "suspended");
   await expect(repo.deriveNorthside(context, f.session, input)).rejects.toThrow();
 });
 

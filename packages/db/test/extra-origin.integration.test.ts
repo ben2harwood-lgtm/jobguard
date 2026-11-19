@@ -8,10 +8,12 @@ import { extraOriginHashV1, ExtraPersistenceError, extraOriginV1 } from "@jobgua
 import { ExtraRepository, insertVariationProposal, withTenant, auditPayloadV1Schema, verifyAuditChain, appendAuditBatch, type AuditEvent, type TenantTransaction } from "../src/index.js";
 import { cluster, fixture, raise, rawVariation, rawOrigin, receipt, finishRaw, terminalizeFixtureReceipt, newTables, newOriginColumns, ownerTx, visitAndEvidence, originSql, originHashInput, noteCanary, descriptionCanary, extraIdFor, type Cluster, type Fixture } from "./extra-fixtures.js";
 import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 let c: Cluster, repo: ExtraRepository;
 beforeAll(async () => { c = await cluster(); repo = new ExtraRepository(c.runtime); }, 60_000);
 afterAll(async () => { await c?.close(); });
-const rawAttempt = async (f: Fixture, type = "LogSiteExtra", kind = "site_user", originFields: Record<string, unknown> = {}, receiptFields: { status?: string; semanticKey?: string } = {}, complete = false) => withTenant(c.admin, testTenantContext(f.p.tenantId,{membershipId:f.p.membershipId,bindRequest:false}), async db => {
+const rawAttempt = async (f: Fixture, type = "LogSiteExtra", kind = "site_user", originFields: Record<string, unknown> = {}, receiptFields: { status?: string; semanticKey?: string } = {}, complete = false, prepare?: (db: TenantTransaction) => Promise<unknown>) => withTenant(c.admin, f.ctx, async db => {
+ await prepare?.(db);
  const id = randomUUID(), command = await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, type, randomUUID(), receiptFields);
  await rawVariation(db, f.p.tenantId, f.jobId, id, kind);
  const row = await rawOrigin(db, f, id, command, { kind, ...originFields });
@@ -189,12 +191,17 @@ describe("ENT-4b origin persistence", () => {
   for (const table of newTables) { expect((await c.runtime.query(`SELECT * FROM app.${table}`)).rowCount).toBe(0); await expect(c.runtime.query(`INSERT INTO app.${table}(tenant_id) VALUES($1)`, [a.p.tenantId])).rejects.toBeDefined(); }
  });
  it("[S2] new tenant tables have FORCE RLS, tenant policy and migration ownership", async () => {
-  for (const table of newTables) {
-   const row = (await c.admin.query("SELECT c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,p.polname,p.polcmd FROM pg_class c JOIN pg_policy p ON p.polrelid=c.oid WHERE c.oid=$1::regclass ORDER BY p.polname", [`app.${table}`])).rows;
-   const expected = [{ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "tenant_isolation", polcmd: "*" }];
-   if (["extra_duplicate_link", "extra_order_line_link"].includes(table)) expected.unshift({ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "lp5b_command_read", polcmd: "r" });
-   expect(row).toEqual(expected);
-  }
+  // Pin the ENT-4b policy inventory at the predecessor. The upgrade proof
+  // separately checks the full post-cutover policy inventory.
+  const predecessor = await jobDoorsDatabase(true, "0765_lp11_bound_tenant_rls.sql");
+  try {
+   for (const table of newTables) {
+    const row = (await predecessor.owner.query("SELECT c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,p.polname,p.polcmd FROM pg_class c JOIN pg_policy p ON p.polrelid=c.oid WHERE c.oid=$1::regclass ORDER BY p.polname", [`app.${table}`])).rows;
+    const expected = [{ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "tenant_isolation", polcmd: "*" }];
+    if (["extra_duplicate_link", "extra_order_line_link"].includes(table)) expected.unshift({ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "lp5b_command_read", polcmd: "r" });
+    expect(row).toEqual(expected);
+   }
+  } finally { await predecessor.close(); }
  });
  it("[S3] exactly SELECT/INSERT; invoker functions uncallable by runtime/PUBLIC; least privilege preserved", async () => {
   for (const table of newTables) expect((await c.admin.query("SELECT privilege_type FROM information_schema.role_table_grants WHERE grantee='jobguard_runtime' AND table_schema='app' AND table_name=$1 ORDER BY privilege_type", [table])).rows.map(r => r.privilege_type)).toEqual(["INSERT", "SELECT"]);
@@ -260,8 +267,8 @@ describe("ENT-4b origin persistence", () => {
   await expect(rawAttempt(f, "LogSiteExtra", "site_user", { site_visit_id: visit })).rejects.toMatchObject({ code: "23503" });
   const grant = await ownerTx(c, f.p.tenantId, async db => { const id = randomUUID(); await db.$client.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id) VALUES($1,$2,$3,'supervisor','tenant',$1)", [f.p.tenantId, id, f.p.membershipId]); return id; });
   await expect(rawAttempt(f, "LogSiteExtra", "site_user", { raising_grant_id: grant })).rejects.toMatchObject({ code: "23514" });
-  await ownerTx(c, f.p.tenantId, db => db.$client.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$3)", [f.p.tenantId, randomUUID(), f.p.membershipId]));
-  await expect(rawAttempt(f)).rejects.toMatchObject({ code: "23514" });
+  const revoke = (db: TenantTransaction) => db.$client.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$3)", [f.p.tenantId, randomUUID(), f.p.membershipId]);
+  await expect(rawAttempt(f, "LogSiteExtra", "site_user", {}, {}, false, revoke)).rejects.toMatchObject({ code: "23514" });
  });
  it("[S6] every stored contractor hash equals the pure mirror with six-digit timestamp text", async () => {
   const f = await fixture(c); await repo.raiseExtra(f.ctx, raise(f, { deviceId: "fictional-device", deviceCapturedAt: "2026-10-01T01:02:03.123456Z" }));

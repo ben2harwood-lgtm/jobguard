@@ -120,6 +120,19 @@ export async function bindIssuedCredential(client: PoolClient, context: Verified
   await bindRequest(client, context);
 }
 
+export namespace bindIssuedCredential {
+  /** The exact SQL writer rechecks the original credential for this one audit event. */
+  export async function recordVisitRefusal(client: PoolClient, context: VerifiedTenantContext,
+    actor: AuthenticatedMembership, event: { id: string; commandId: string; commandType: string; reason: string; jobId: string },
+  ): Promise<void> {
+    const session = sessionReferences.get(context);
+    if (!session || session.membershipId !== actor.membershipId) return;
+    await client.query("SELECT app.lp11_record_visit_refusal($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+      [context.tenantId, event.id, event.commandId, actor.membershipId, actor.identityUserId,
+        event.commandType, event.reason, event.jobId, session.kind, session.credential]);
+  }
+}
+
 /** Only the exact audit-refusal routine may consume a contractor credential without binding it. */
 type RecordAuditExportRefusal = (actor: { membershipId: string; identityUserId: string }, action: "create" | "list") => Promise<void>;
 async function recordAuditExportRefusal(client: PoolClient, context: VerifiedTenantContext,

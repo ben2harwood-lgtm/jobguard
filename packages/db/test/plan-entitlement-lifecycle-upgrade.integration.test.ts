@@ -158,7 +158,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(receiptHelpers).toHaveLength(1);
   expect(receiptHelpers[0]?.definition?.split("$function$")[1]).toEqual(
     receiptGate.split("FUNCTION app.require_receipt_final_check(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
-  // 0762 preserves distinct customer, human emergency, mailbox and machine entry points.
+  // 0765 preserves distinct customer, human emergency, mailbox and machine entry points.
   for (const [name, args] of [
     ["customer_stages", "t uuid, j uuid, c uuid, digest text, completion uuid, command uuid, expected_hash text"],
     ["customer_variation", "t uuid, j uuid, c uuid, digest text, command jsonb"],
@@ -342,7 +342,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // LATER-SAFETY-189: pin the complete own-extra writer without changing owner/ACL checks.
   const proceedRaiserSql = await readFile(new URL("../migrations/0760_extra_proceed_raiser_authority.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.xa_proceed", [proceedRaiserSql.split("AS $$")[1]!.split("$$;")[0]!]);
-  // 0761 is the complete Northside registration successor; retain every header and privilege comparison below.
+  // 0762 is the complete Northside registration successor; retain every header and privilege comparison below.
   const northsideSql = await readFile(new URL("../migrations/0762_northside_hosted_agreement.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.northside_register", [northsideSql.split("FUNCTION app.northside_register(")[1]!.split("AS $$")[1]!.split("$$;")[0]!]);
   // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
@@ -369,7 +369,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     if (prior.definition !== null && current?.source !== prior.source && lp6dBodies.get(`${prior.nspname}.${prior.proname}`)?.includes(current?.source)) {
       const definition = prior.definition.replace(prior.source, () => current!.source);
       if (prior.nspname === "app" && prior.proname === "contractor_practice_session_require_audit" && prior.args === "") {
-        // 0762 verifies the exact revocation witness through the protected
+        // 0765 verifies the exact revocation witness through the protected
         // policy and clears the permit as the existing migration owner.
         expect(current!.definition).toBe(definition.replace(
           " LANGUAGE plpgsql\n SET search_path", " LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path",

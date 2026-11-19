@@ -7,7 +7,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool, type PoolClient } from "pg";
+import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { recoveryAttributionRevisionV1, attributionPredicates, candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
@@ -17,7 +17,7 @@ import { unattributedTermsHistory } from "./sv5pre-fixtures.js";
 export const LOCK_OWNER = "40000000-0000-4000-8000-000000000004";
 export const LOCK_USER = "30000000-0000-4000-8000-000000000003";
 export const LOCK_HASH = "a".repeat(64);
-export type LockFixture = { postgres: EmbeddedPostgres; directory: string; port: number; credential: string; admin: Pool; runtime: Pool; shadow: Pool; owner: Pool };
+export type LockFixture = { postgres: EmbeddedPostgres; directory: string; port: number; credential: string; admin: Pool; runtime: Pool; shadow: Pool; owner: Pool; connectionEnds: Promise<void>[] };
 export async function createLockFixture(install = true): Promise<LockFixture> {
  const directory = await mkdtemp(join(tmpdir(), "sv4-pg16-")), port = await freePort(58400, 250), credential = randomUUID();
  const connection = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password: credential };
@@ -26,7 +26,13 @@ export async function createLockFixture(install = true): Promise<LockFixture> {
  const bootstrap = new Pool(connection);
  await bootstrap.query("CREATE DATABASE jobguard_synthetic_demo"); await bootstrap.end();
  connection.database="jobguard_synthetic_demo";
- const admin = new Pool(connection);
+ const connectionEnds: Promise<void>[] = [];
+ const fixturePool = (config: PoolConfig) => {
+  const pool = new Pool(config);
+  pool.on("connect", client => connectionEnds.push(new Promise<void>(resolve => client.once("end", resolve))));
+  return pool;
+ };
+ const admin = fixturePool(connection);
  if (install) {
   for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) await admin.query(`DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; END IF; END $do$`);
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
@@ -35,11 +41,16 @@ export async function createLockFixture(install = true): Promise<LockFixture> {
  for (const role of ["jobguard_runtime", "jobguard_shadow", "jobguard_migration"]) {
   const login = `sv4_${randomUUID().replaceAll("-", "")}`;
   if (install) await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT ${role} TO ${login}`);
-  pools.push(new Pool({ ...connection, user: install ? login : "postgres", max: 4 }));
+  pools.push(fixturePool({ ...connection, user: install ? login : "postgres", max: 4 }));
  }
- return { postgres, directory, port, credential, admin, runtime: pools[0]!, shadow: pools[1]!, owner: pools[2]! };
+ return { postgres, directory, port, credential, admin, runtime: pools[0]!, shadow: pools[1]!, owner: pools[2]!, connectionEnds };
 }
-export async function closeLockFixture(f: LockFixture) { await closeTestPools(f.runtime, f.shadow, f.owner, f.admin); await f.postgres.stop(); await rm(f.directory, { recursive: true, force: true }); }
+export async function closeLockFixture(f: LockFixture) {
+ await closeTestPools(f.runtime, f.shadow, f.owner, f.admin);
+ await Promise.all(f.connectionEnds);
+ await f.postgres.stop();
+ await rm(f.directory, { recursive: true, force: true });
+}
 export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>): Promise<T> {
  const db = await pool.connect();
  try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }

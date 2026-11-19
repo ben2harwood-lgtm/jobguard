@@ -1,3 +1,4 @@
+import { bindIssuedCredential } from "../src/tenant-context.js";
 import { requestContext } from "./practice-worker-switch-fixtures.js";
 import { assignedJobsQuery } from "../src/site-visit-repository.js";
 import { SiteVisitRepository } from "../src/index.js";
@@ -229,6 +230,7 @@ it("SWITCH-REFERENCE rejects invented, cross-actor, cross-session and out-of-win
   const overrides = [{ switch_id: randomUUID() }, { actor_membership_id: f.p.membershipId }, { session_ref: randomUUID() }, { tenant_id: randomUUID() }, { tester_membership_id: randomUUID() }, { recorded_at: "2000-01-01T00:00:00Z" }];
   for (const change of overrides) await rolledBack(c.admin, async db => {
     await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]);
+    await bindIssuedCredential(db, await ctx());
     await db.query("SET LOCAL ROLE jobguard_migration");
     await expect(db.query(`INSERT INTO app.northside_action_attribution
       SELECT (jsonb_populate_record(NULL::app.northside_action_attribution,to_jsonb(a)||$2::jsonb)).*

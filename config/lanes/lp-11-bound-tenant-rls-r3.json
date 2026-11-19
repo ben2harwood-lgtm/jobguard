@@ -5,7 +5,7 @@
       "branches": [
         "codex/sandbox/lp-11-bound-tenant-rls-r3"
       ],
-      "note": "LP-11 RED build-ahead candidate on LP-10 migration 0761. Independent review and compatibility evidence remain required.",
+      "note": "LP-11 RED candidate on LP-10 migration 0761 and main through LP-7 migration 0763. LP-11 is 0765. Independent review remains required.",
       "allow": [
         "apps/api/src/production-settlement-guard.test.ts",
         "apps/api/src/readiness-store.ts",
@@ -122,6 +122,9 @@
         "packages/db/test/lp1-membership-account.integration.test.ts",
         "packages/db/test/merchant-ingestion.integration.test.ts",
         "packages/db/test/northside-demo.integration.test.ts",
+        "packages/db/test/northside-hosted-agreement.integration.test.ts",
+        "packages/db/test/recovery-case-join.integration.test.ts",
+        "packages/db/test/recovery-terms-timing.integration.test.ts",
         "packages/db/test/meter-day-ledger.integration.test.ts",
         "packages/db/test/managed-recovery-fixtures.ts",
         "packages/db/test/managed-recovery.integration.test.ts",
@@ -272,7 +275,28 @@
         "packages/db/test/signed-evidence-export-store.integration.test.ts",
         "packages/db/test/sv5pre-completion-isolation.integration.test.ts",
         "packages/db/test/sv5pre-legacy-invoice.integration.test.ts",
-        "packages/db/test/worker-login-fixture.ts"
+        "packages/db/test/worker-login-fixture.ts",
+        "packages/db/migration-notes/0765_lp11_r7_postgresql.md",
+        "packages/db/src/extra-approval-chain-repository.ts",
+        "packages/db/test/contractor-practice-session-fixtures.ts",
+        "packages/db/test/duplicate-unlink-command-binding.integration.test.ts",
+        "packages/db/test/extra-approval-authority.integration.test.ts",
+        "packages/db/test/extra-escalation-worker.integration.test.ts",
+        "packages/db/test/extra-origin.integration.test.ts",
+        "packages/db/test/extra-proceed.integration.test.ts",
+        "packages/db/test/lp7-member-administration.integration.test.ts",
+        "packages/db/test/practice-worker-switch.integration.test.ts",
+        "packages/db/test/server-entitlements.integration.test.ts",
+        "packages/db/test/site-extra-priced-evidence.integration.test.ts",
+        "packages/db/test/site-supervisor-query.integration.test.ts",
+        "packages/db/test/site-visit.integration.test.ts",
+        "packages/db/test/work-order-concurrency.integration.test.ts",
+        "packages/db/test/work-order-import.integration.test.ts",
+        "packages/db/test/extra-duplicate-candidates.integration.test.ts",
+        "packages/db/test/site-extra-priced-submit-recovery.integration.test.ts",
+        "packages/db/test/site-extra-evidence-routines.integration.test.ts",
+        "packages/db/test/site-visit-authority.integration.test.ts",
+        "packages/db/src/site-visit-repository.ts"
       ]
     }
   }

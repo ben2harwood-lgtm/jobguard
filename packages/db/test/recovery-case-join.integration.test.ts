@@ -358,7 +358,10 @@ it.each(["commit-stale", "rollback-success", "unjoined-stale", "same-command"] a
         : new RecoveryCaseRepository(zPool!).command(ctxA, jobA, inputY, ownerA);
       // Attach both handlers immediately: a stale failure cannot become an unhandled rejection.
       pending = work.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
-      const waiting = await waitForLock(y ? "pid=$1" : "application_name=$1", [y ? yPid : zName]);
+      const waiter = y ? "pid=$1" : "application_name=$1";
+      // Wait for both the live blocker and the activity text of that statement.
+      const waiting = await waitForLock(`${waiter} AND wait_event='advisory' AND $2=ANY(pg_blocking_pids(pid))
+        AND query LIKE 'SELECT pg_advisory_xact_lock(%'`, [y ? yPid : zName, await pid(x)]);
       expect(waiting.query).toContain("pg_advisory_xact_lock");
       await x.query(mode === "rollback-success" ? "ROLLBACK" : "COMMIT");
       const result = await pending;

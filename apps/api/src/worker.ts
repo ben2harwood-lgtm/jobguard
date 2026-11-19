@@ -16,7 +16,7 @@ import { FinalCheckWorker } from "./final-check.worker.js";
 import { generatePracticePng } from "./proof/proof.application.js";
 import { ShadowFixtureProposer, shadowFixtureCorpusV1 } from "@jobguard/ai";
 import { ShadowDetectionWorker } from "./shadow-detection.worker.js";
-import { ActionExecutor, closeOutboundWorkerPool, type OutboundAdapter, type SafeTelemetry, verifiedTenantContextForQueuedJob } from "@jobguard/db";
+import { ActionExecutor, closeOutboundWorkerPool, outboundWorkerPool, type OutboundAdapter, type SafeTelemetry, verifiedTenantContextForQueuedJob } from "@jobguard/db";
 import { run, type TaskList } from "graphile-worker";
 import { Pool } from "pg";
 import { z } from "zod";
@@ -135,6 +135,7 @@ Object.assign(tasks, readiness.tasks);
 const extraEscalationCrontab=registerExtraEscalationTasks(tasks,finalCheckEnvironment,parsed=>
  escalateOverdueExtrasTask(runtimePool,queueContext({tenantId:parsed.tenantId})));
 const extraEscalationTasks=extraEscalationCrontab?{discover_extra_escalations:tasks.discover_extra_escalations!,escalate_overdue_extras:tasks.escalate_overdue_extras!}:{};
+const workerPool=await outboundWorkerPool();
 const retentionRepository=new RetentionRecordRepository(workerPool);
 const retentionCrontab=registerRetentionReviewTasks(tasks,process.env.JOBGUARD_ENV??"disabled",async tenantId=>{
  const context=queueContext({tenantId});

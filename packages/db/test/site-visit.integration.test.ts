@@ -1,3 +1,4 @@
+import { bindIssuedCredential } from "../src/tenant-context.js";
 import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
 // Written before the repository. Real PostgreSQL (embedded) through merged cluster(); the runtime role is the application login.
@@ -462,7 +463,7 @@ describe("ENT-3b races on independent connections", () => {
   const f = await visitFixture(c), before = await snapshot(c, f.p.tenantId);
   const holder = await c.admin.connect();
   try {
-   await holder.query("BEGIN"); await holder.query("SET LOCAL ROLE jobguard_migration"); await holder.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]);
+   await holder.query("BEGIN"); await bindIssuedCredential(holder, f.ctx); await holder.query("SET LOCAL ROLE jobguard_migration"); await holder.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]);
    // The merged administration key: the same exclusive tenant lock a grant, membership or team command takes.
    await holder.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [f.p.tenantId]);
    await holder.query("INSERT INTO app.role_grant_revocation(tenant_id,id,grant_id) VALUES($1,$2,$3)", [f.p.tenantId, randomUUID(), f.named.grant]);
@@ -577,6 +578,7 @@ describe("ENT-3b the audit event is in the same transaction", () => {
 describe("ENT-3b the refusal record", () => {
  it("[B13] one refusal event of the right shape for each reason; the same refused command sent three times leaves one; the job is named only when it is in this company", async () => {
   const f = await visitFixture(c), foreign = await fixture(c), small = await visitFixture(c), revoked = await visitFixture(c);
+  const revokedContext = await testActorContext(c.admin, revoked.ctx, revoked.members.operative.member);
   await smallTrack(c, small); await command(c, revoked, { kind: "membership.revoke", membershipId: revoked.members.operative.member.membershipId });
   const cases: Array<[string, VisitFixture, Actor, string, string]> = [
    ["role_not_permitted", f, f.members.finance, f.jobId, "VISIT_FORBIDDEN"], ["job_out_of_scope", f, f.unassigned, f.jobId, "NOT_FOUND"],
@@ -584,7 +586,7 @@ describe("ENT-3b the refusal record", () => {
   ];
   for (const [reason, fx, who, job, code] of cases) {
    const raw = startInput(fx, { jobId: job });
-   for (let attempt = 0; attempt < 3; attempt++) expect((await errorOf(async () => repo.startVisit(reason === "member_inactive" ? testTenantContext(fx.p.tenantId,{membershipId:who.member.membershipId,bindRequest:false}) : await testActorContext(c.admin, fx.ctx, who.member), who.member, raw))).code).toBe(code);
+   for (let attempt = 0; attempt < 3; attempt++) expect((await errorOf(async () => repo.startVisit(reason === "member_inactive" ? revokedContext : await testActorContext(c.admin, fx.ctx, who.member), who.member, raw))).code).toBe(code);
    const events = await refusalEvents(c, fx.p.tenantId), mine = events.filter(e => e.subject_ref === raw.commandId);
    expect(mine, reason).toHaveLength(1);
    expect(mine[0]).toMatchObject({ id: derivedUuid(`visit-refusal:${fx.p.tenantId}:${raw.commandId}:${reason}`), actor_ref: `membership:${who.member.membershipId}`, subject_type: "visit-command" });
@@ -611,8 +613,8 @@ describe("ENT-3b the refusal record", () => {
    wrapped.add(client);
    const original = client.query.bind(client);
    vi.spyOn(client, "query").mockImplementation((async (sql: any, params?: any) => {
-    // r9 ruling: the refusal audit is appended by the private refusal writer (app.lp6d_record_visit_refusal).
-    if (String(sql).includes("FROM app.append_audit(") || String(sql).includes("app.lp6d_record_visit_refusal(")) { reached++; throw new Error("injected failure"); }
+    // Intercept whichever refusal writer the fixture's migration history uses.
+    if (String(sql).includes("FROM app.append_audit(") || /app\.lp(?:6d|11)_record_visit_refusal\(/u.test(String(sql))) { reached++; throw new Error("injected failure"); }
     return original(sql, params);
    }) as any);
    return client;

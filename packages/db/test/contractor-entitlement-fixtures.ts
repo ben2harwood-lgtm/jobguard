@@ -15,7 +15,7 @@ export async function unchanged<T>(c: Cluster, work: () => Promise<T>): Promise<
  try { return await work(); } finally { expect(await snapshot(c.admin)).toEqual(before); }
 }
 export const read = (c: Cluster, f: SessionFixture) => unchanged(c, () => new ContractorEntitlementAuthorityRepository(c.runtime).withAuthority(f.session, async (_db, authority) => authority));
-export async function status(c: Cluster, f: SessionFixture, value: "active" | "inactive" | "suspended", assignmentId?: string) {
+export async function status(c: Cluster, f: Pick<SessionFixture, "p" | "context">, value: "active" | "inactive" | "suspended", assignmentId?: string) {
  return withTenant(c.admin, f.context, async db => {
   await db.$client.query("SET LOCAL ROLE jobguard_migration");
   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [f.p.tenantId]);

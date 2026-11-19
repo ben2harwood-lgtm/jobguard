@@ -65,7 +65,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect(relationMetadata(installedCatalog)).toEqual(expected.relations);
   expect(await policies()).toEqual(expected.policies);
   // Exact predicates and ACLs are checked above. In the raw OID comparison,
-  // reverse only the 0762 changes and retain every other predecessor field.
+  // reverse only the 0765 changes and retain every other predecessor field.
   const lp11 = successors.find(proof => proof.migration === "0765_lp11_bound_tenant_rls.sql")!;
   const lp11Policies = lp11.upgrade.filter(change => change.section === "policies");
   const lp11Relations = lp11.upgrade.filter(change => change.section === "relations");
@@ -335,7 +335,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     expect(body.split(before)).toHaveLength(2);
     lp6dBodies.set(key, body.replace(before, after));
   }
-  // 0761 replaces only Northside's registration body; successor proof metadata remains checked above.
+  // 0762 replaces only Northside's registration body; successor proof metadata remains checked above.
   const northsideSql = await readFile(new URL("../migrations/0762_northside_hosted_agreement.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.northside_register(p_owner,p_settings)", northsideSql.split("FUNCTION app.northside_register(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);
   const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;
