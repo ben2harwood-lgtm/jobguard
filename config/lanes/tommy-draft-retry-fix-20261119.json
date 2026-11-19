@@ -6,6 +6,7 @@
       "note": "Repair edited-source capture retries in the existing WalkIt workflow. Existing browser acceptance: apps/web/e2e/capture.spec.ts. No policy or migration changes.",
       "allow": [
         "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/local-dictation.tsx",
         "apps/web/app/ui/walk-it-retry.test.tsx",
         "apps/web/app/api/jobs/capture/route.ts",
         "apps/web/app/api/jobs/capture/route.test.ts",

@@ -37,3 +37,53 @@ test("editing a saved capture creates a new draft while exact retries preserve b
   expect(originalRetry.saved.jobId).toBe(first.saved.jobId);
   expect(originalRetry.saved.source.text).toBe(firstText);
 });
+
+for (const control of ["Stop listening", "Cancel dictation"] as const) {
+  test(`pending capture keeps ${control} available for active local dictation`, async ({ page }) => {
+    await page.addInitScript(() => {
+      const counts = { starts: 0, stops: 0, cancels: 0 };
+      Object.assign(window, { __captureSpeechCounts: counts });
+      // Browser speech hardware only is faked. Capture still uses the real route.
+      window.__JOBGUARD_SPEECH_ADAPTER__ = {
+        configuration: { language: "en-GB", processLocally: true, remoteFallback: false },
+        available: async () => "installed", install: async () => true,
+        start(callbacks) {
+          counts.starts++;
+          callbacks.final("Fictional dictated room. Paint walls £250.00.", "capture-voice-1");
+          return {
+            stop() { counts.stops++; callbacks.end(); },
+            cancel() { counts.cancels++; callbacks.end(); },
+          };
+        },
+      };
+    });
+    await openCapture(page);
+    const source = page.getByLabel("Work details"), firstText = await source.inputValue();
+    await page.getByRole("button", { name: "Talk through the example", exact: true }).click();
+    await expect(page.getByText("Listening on this device", { exact: true })).toBeVisible();
+    let arrive!: () => void, release!: () => void;
+    const arrived = new Promise<void>(resolve => { arrive = resolve; });
+    const released = new Promise<void>(resolve => { release = resolve; });
+    await page.route("**/api/jobs/capture", async route => { arrive(); await released; await route.continue(); });
+    const reply = page.waitForResponse(response => response.url().endsWith("/api/jobs/capture") && response.request().method() === "POST");
+    try {
+      await page.getByRole("button", { name: "Make my draft", exact: true }).click();
+      await arrived;
+      await expect(source).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Use these words", exact: true })).toBeDisabled();
+      await expect(page.getByRole("button", { name: control, exact: true })).toBeEnabled();
+      await page.getByRole("button", { name: control, exact: true }).click();
+      await expect(page.getByText("Listening on this device", { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Talk through the example", exact: true })).toBeDisabled();
+      expect(await page.evaluate(() => (window as unknown as { __captureSpeechCounts: object }).__captureSpeechCounts))
+        .toEqual({ starts: 1, stops: control === "Stop listening" ? 1 : 0, cancels: control === "Cancel dictation" ? 1 : 0 });
+      await expect(source).toHaveValue(firstText);
+      release();
+      const response = await reply;
+      expect(response.status()).toBe(201);
+      expect((await response.json()).source.text).toBe(firstText);
+      await expect(page.getByText("Your draft is ready. Check it below — nothing has been sent.", { exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Talk through the example", exact: true })).toBeEnabled();
+    } finally { release(); await page.unroute("**/api/jobs/capture"); }
+  });
+}

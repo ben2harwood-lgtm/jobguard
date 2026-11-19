@@ -138,9 +138,7 @@ export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id
     <button type="button" className="back" onClick={close}>← Back to jobs</button>
     <p className="eyebrow">New job · safe demo</p><h1>Walk the job</h1>
     <p className="screen-intro">Say or type the job the way you'd tell the customer. JobGuard splits it into lines for you to check. You can edit anything before it goes further.</p>
-    <fieldset disabled={busy} style={{border:0,padding:0,margin:0,minWidth:0}}>
-      <LocalDictation onUse={(text,raw)=>{if(submitting.current)return;setTextValue(text);setDictation({raw});sourceChanged();}}/>
-    </fieldset>
+    <LocalDictation applyDisabled={busy} onUse={(text,raw)=>{if(submitting.current)return;setTextValue(text);setDictation({raw});sourceChanged();}}/>
     <div className="walk-grid"><div className="walk-input">
       <label htmlFor="walk-source"><strong>Work details</strong><span>{mode==="own"?"Describe your own job. The example is a hint only.":"Example — replace this with your own words"}</span></label>
       <textarea id="walk-source" aria-describedby="walk-help" placeholder={mode==="own"?referenceWalk:undefined} value={textValue} disabled={busy} onChange={e=>{if(submitting.current)return;setTextValue(e.target.value);sourceChanged();}} rows={15}/>

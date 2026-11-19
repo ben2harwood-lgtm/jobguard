@@ -1,21 +1,32 @@
 import * as React from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { WalkIt } from "./jobguard-app";
-import { LocalDictation } from "./local-dictation";
+import { LocalDictation, type LocalSpeechAdapter } from "./local-dictation";
 
 // Exercise the real component's handlers using the established review-proposal harness.
 const hooks = vi.hoisted(() => {
   let cursor = 0;
-  const slots: any[] = [];
+  const frames = new Map<string, any[]>();
+  let slots: any[] = [];
+  const cleanups: (() => void)[] = [];
   return {
-    reset() { cursor = 0; slots.length = 0; },
-    render() { cursor = 0; },
+    reset() { cursor = 0; frames.clear(); slots = []; },
+    render(component = "walk") { cursor = 0; if (!frames.has(component)) frames.set(component, []); slots = frames.get(component)!; },
+    cleanup() { for (const cleanup of cleanups.splice(0)) cleanup(); },
     useState(initial: any) {
       const index = cursor++;
-      if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial;
-      return [slots[index], (value: any) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
+      const frame = slots;
+      if (!(index in frame)) frame[index] = typeof initial === "function" ? initial() : initial;
+      return [frame[index], (value: any) => { frame[index] = typeof value === "function" ? value(frame[index]) : value; }];
     },
     useRef(initial: unknown) { return slots[cursor++] ??= { current: initial }; },
+    useEffect(effect: () => void | (() => void), dependencies: unknown[]) {
+      const index = cursor++, previous = slots[index] as unknown[] | undefined;
+      if (previous && previous.length === dependencies.length && previous.every((value, i) => Object.is(value, dependencies[i]))) return;
+      slots[index] = dependencies;
+      const cleanup = effect();
+      if (cleanup) cleanups.push(cleanup);
+    },
   };
 });
 vi.mock("react", async original => ({ ...await original<typeof React>(), ...hooks }));
@@ -66,7 +77,7 @@ function panel() {
   return { render, source, button, edit, submit, captured };
 }
 beforeEach(() => { hooks.reset(); vi.stubGlobal("React", React); });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { hooks.cleanup(); vi.unstubAllGlobals(); });
 
 it("makes a new draft from edited source, preserves earlier drafts, and reuses each exact submitted snapshot", async () => {
   const server = captureServer(), p = panel();
@@ -131,6 +142,88 @@ it("includes dictation provenance in capture identity even when the edited text 
   expect(new Set(server.requests.map(request => request.captureId)).size).toBe(3);
   expect(server.requests[1]!.source.acquisition).toMatchObject({ rawFinalText: firstSource, humanEdited: false });
   expect(server.requests[2]!.source.acquisition).toMatchObject({ rawFinalText: "Original local transcript", humanEdited: true });
+});
+
+it.each(["Stop listening", "Cancel dictation"])("keeps %s usable during a pending capture without applying different source", async control => {
+  const server = captureServer(), p = panel();
+  const persist = server.fetcher.getMockImplementation()!;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  server.fetcher.mockImplementationOnce(async (...args) => { await pending; return persist(...args); });
+  let callbacks!: Parameters<LocalSpeechAdapter["start"]>[0];
+  const stop = vi.fn(() => callbacks.end()), cancel = vi.fn();
+  const adapter: LocalSpeechAdapter = {
+    configuration: { language: "en-GB", processLocally: true, remoteFallback: false },
+    available: async () => "installed", install: async () => true,
+    start: vi.fn(next => { callbacks = next; return { stop, cancel }; }),
+  };
+  vi.stubGlobal("window", { __JOBGUARD_SPEECH_ADAPTER__: adapter });
+  const dictation = () => {
+    const node = all(p.render(), element => element.type === LocalDictation)[0]!;
+    hooks.render("dictation");
+    return LocalDictation(node.props as React.ComponentProps<typeof LocalDictation>);
+  };
+  const speechButton = (label: string) => all(dictation(), node => node.type === "button" && text(node.props.children) === label)[0]!;
+  dictation(); await flush();
+  speechButton("Talk through the example").props.onClick(); await flush();
+  callbacks.final(editedSource, "fictional-speech-1");
+  expect(adapter.start).toHaveBeenCalledTimes(1);
+  p.button(p.render()).props.onClick();
+  expect(server.fetcher).toHaveBeenCalledTimes(1);
+  expect(p.source(p.render()).props.disabled).toBe(true);
+  // Native fieldset disabling overrides each child's own disabled prop.
+  const blockingAncestors = all(p.render(), node => node.type === "fieldset" && node.props.disabled && all(node.props.children, child => child.type === LocalDictation).length > 0);
+  expect(blockingAncestors).toHaveLength(0);
+  expect(speechButton("Use these words").props.disabled).toBe(true);
+  speechButton("Use these words").props.onClick();
+  expect(cancel).not.toHaveBeenCalled();
+  expect(p.source(p.render()).props.value).toBe(firstSource);
+  expect(speechButton(control).props.disabled).not.toBe(true);
+  speechButton(control).props.onClick();
+  expect(control === "Stop listening" ? stop : cancel).toHaveBeenCalledTimes(1);
+  expect(speechButton("Talk through the example").props.disabled).toBe(true);
+  speechButton("Talk through the example").props.onClick();
+  expect(adapter.start).toHaveBeenCalledTimes(1);
+  release(); await flush();
+  expect(server.saved.size).toBe(1);
+  expect(server.requests[0]!.source).toMatchObject({ kind: "text", text: firstSource });
+  expect(speechButton("Talk through the example").props.disabled).toBe(false);
+  if (control === "Stop listening") {
+    expect(speechButton("Use these words").props.disabled).toBe(false);
+    speechButton("Use these words").props.onClick();
+    expect(p.source(p.render()).props.value).toBe(editedSource);
+    await p.submit();
+    expect(server.requests[1]!.captureId).not.toBe(server.requests[0]!.captureId);
+    expect(server.requests[1]!.source).toMatchObject({ kind: "browser_local_transcript", text: editedSource });
+  }
+});
+
+it("does not install a speech model while a capture is pending", async () => {
+  captureServer();
+  const install = vi.fn(async () => true);
+  const adapter: LocalSpeechAdapter = {
+    configuration: { language: "en-GB", processLocally: true, remoteFallback: false },
+    available: async () => "downloadable", install,
+    start: vi.fn(() => ({ stop: vi.fn(), cancel: vi.fn() })),
+  };
+  vi.stubGlobal("window", { __JOBGUARD_SPEECH_ADAPTER__: adapter });
+  const p = panel();
+  let release!: (response: Response) => void;
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(resolve => { release = resolve; })));
+  const dictation = () => {
+    const node = all(p.render(), element => element.type === LocalDictation)[0]!;
+    hooks.render("dictation");
+    return LocalDictation(node.props as React.ComponentProps<typeof LocalDictation>);
+  };
+  dictation(); await flush();
+  p.button(p.render()).props.onClick();
+  const button = all(dictation(), node => node.type === "button" && text(node.props.children) === "Install on-device voice")[0]!;
+  expect(button.props.disabled).toBe(true);
+  button.props.onClick(); await flush();
+  expect(install).not.toHaveBeenCalled();
+  release(new Response(JSON.stringify({ code: "DATABASE_UNAVAILABLE" }), { status: 503 })); await flush();
+  const enabled = all(dictation(), node => node.type === "button" && text(node.props.children) === "Install on-device voice")[0]!;
+  expect(enabled.props.disabled).toBe(false);
 });
 
 it("keeps source and gives a recovery step for a typed conflict instead of inviting the same conflicting retry", async () => {
