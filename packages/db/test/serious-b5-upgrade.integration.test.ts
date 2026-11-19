@@ -1669,7 +1669,7 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  const isConnectorPolicy = (change: typeof proofs[number]["upgrade"][number]) =>
   change.section === "policies" && (change.before ?? change.after)?.schemaname === "connector";
  const connectorProofs = proofs.map(proof => ({ ...proof, upgrade: proof.upgrade.filter(isConnectorPolicy) }));
- const cutover = connectorProofs.find(proof => proof.migration === "0762_lp11_bound_tenant_rls.sql");
+ const cutover = connectorProofs.find(proof => proof.migration === "0765_lp11_bound_tenant_rls.sql");
  const connectorBefore = cutover?.upgrade.flatMap(change => change.before ? [change.before] : []) ?? [];
  // The connector schema was added by proof-bearing migrations. Its reviewed
  // 0762 predecessor records cover all seven policies, including their ACLs.

@@ -23,7 +23,7 @@ let predecessor: JobDoorsDatabase | undefined;
 beforeAll(async () => { db = await jobDoorsDatabase(true); }, 300_000);
 afterAll(async () => { await predecessor?.close(); await db?.close(); });
 async function beforeTenantCutover() {
-  return predecessor ??= await jobDoorsDatabase(true, "0762_lp11_bound_tenant_rls.sql");
+  return predecessor ??= await jobDoorsDatabase(true, "0765_lp11_bound_tenant_rls.sql");
 }
 async function principal(tenant?: string, database = db) {
   const a = await jobDoorsActor(database.owner,tenant), credential = randomBytes(32).toString("hex");

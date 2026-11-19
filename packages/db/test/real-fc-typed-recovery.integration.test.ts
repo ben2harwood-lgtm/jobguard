@@ -431,7 +431,7 @@ it("pre-manifest concurrent requests replay without replacing the cycle", async 
 });
 it("restricted lifecycle executors have exact signatures, bodies, owners, search paths and ACLs", async () => {
   const sql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql",import.meta.url),"utf8");
-  const tenantPolicies = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql",import.meta.url),"utf8");
+  const tenantPolicies = await readFile(new URL("../migrations/0765_lp11_bound_tenant_rls.sql",import.meta.url),"utf8");
   for (const [schema,name,args,executor] of [
     ["app","final_check_cycle_claim","uuid,uuid,uuid,uuid,integer,uuid","jobguard_shadow"],
     ["app","final_check_cycle_finish","uuid,uuid,uuid,uuid,integer,uuid,boolean","jobguard_shadow"],

@@ -110,7 +110,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]!
       .replace(" IF EXISTS(SELECT 1 FROM app.ent3b_visit_authority(visit_row.membership_id,p_job)",
         " -- LP6D_THIRD_PARTY (repair 12): the visit's operative is a third party with no request of its own; its\n -- current visit authority is read through the private copy, never through the caller's binding.\n IF EXISTS(SELECT 1 FROM app.lp6d_visit_authority_of(visit_row.membership_id,p_job)"));
-  const lp11Sql = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
+  const lp11Sql = await readFile(new URL("../migrations/0765_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
   for (const signature of [
     "infrastructure.discover_readiness_plans()", "app.serialize_final_check_evidence()",
     "app.guard_post_lock_upload_transition()", "app.lp6d_refused_contractor_principal(uuid)",
@@ -342,6 +342,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // LATER-SAFETY-189: pin the complete own-extra writer without changing owner/ACL checks.
   const proceedRaiserSql = await readFile(new URL("../migrations/0760_extra_proceed_raiser_authority.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.xa_proceed", [proceedRaiserSql.split("AS $$")[1]!.split("$$;")[0]!]);
+  // 0761 is the complete Northside registration successor; retain every header and privilege comparison below.
+  const northsideSql = await readFile(new URL("../migrations/0762_northside_hosted_agreement.sql", import.meta.url), "utf8");
+  lp6dBodies.set("app.northside_register", [northsideSql.split("FUNCTION app.northside_register(")[1]!.split("AS $$")[1]!.split("$$;")[0]!]);
   // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
   lp6dBodies.set("app.guard_recovery_message_sink", [lp6dBodies.get("app.guard_recovery_message_sink")!.at(-1)!]);
   // LP6D-WORKER-PRESENCE: exact latest sources; historical 0749 assertions remain above.

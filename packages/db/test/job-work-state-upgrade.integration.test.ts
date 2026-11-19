@@ -104,7 +104,7 @@ describe("CH-4 own-migration upgrade",()=>{
    ...originalPolicies.find(policy=>policy.name==="app.audit_event.tenant_isolation")!,
    name:"app.audit_event.lp4_audit_writer",roles:["jobguard_audit_writer"],
   }];
-  const cutover=loadMigrationProofs().proofs.find(proof=>proof.migration==="0762_lp11_bound_tenant_rls.sql")!;
+  const cutover=loadMigrationProofs().proofs.find(proof=>proof.migration==="0765_lp11_bound_tenant_rls.sql")!;
   const cutoverChanges=cutover.upgrade.filter(change=>change.section==="policies"
    && oldPolicyTables.has(`${(change.after??change.before)!.schemaname}.${(change.after??change.before)!.tablename}`));
   const records=predecessorPolicies.map(({name,roles,...row})=>{

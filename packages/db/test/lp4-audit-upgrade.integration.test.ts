@@ -49,7 +49,7 @@ describe("LP-4 compatible upgrade and database-independent sealing", () => {
     } finally { await db.close(); }
   }, 300_000);
   it("seals runtime and owner-side events in an ordinary migrated database with the same refusals", async () => {
-    const db = await jobDoorsDatabase(false, "0762_lp11_bound_tenant_rls.sql");
+    const db = await jobDoorsDatabase(false, "0765_lp11_bound_tenant_rls.sql");
     try {
       expect((await db.owner.query("SELECT current_database() name")).rows[0].name).toBe("postgres");
       const {tenant,member}=await jobDoorsActor(db.owner), id=randomUUID(), job=randomUUID();

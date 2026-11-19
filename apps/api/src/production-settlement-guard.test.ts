@@ -28,8 +28,8 @@ function outbox(actionType: string, mode?: string) {
     authorization_expires_at: "2099-01-01T00:00:00Z", created_at: "2026-01-01T00:00:00Z", status: "pending" };
   const query = vi.fn(async (sql: string) => {
     if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: true }], rowCount: 1 };
-    if (sql.includes("app.claim_worker_action(")) return { rows: [{ claim: { action: row, attempt: 1, token: jobId } }], rowCount: 1 };
-    if (sql.includes("app.complete_worker_action(")) return { rows: [{ completed: true }], rowCount: 1 };
+    if (sql.startsWith("SELECT app.claim_worker_action(")) return { rows: [{ claim: { action: row, attempt: 1, token: jobId } }], rowCount: 1 };
+    if (sql.startsWith("SELECT app.complete_worker_action(")) return { rows: [{ completed: true }], rowCount: 1 };
     return { rows: [], rowCount: 0 };
   });
   const pool = { query, connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool;

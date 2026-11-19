@@ -7,7 +7,7 @@ type Queryable = Pick<Pool | PoolClient, "query">;
 
 /** Advance a populated historical fixture to the immediate cutover predecessor. */
 export async function advanceToTenantCutover(db: Queryable) {
-  const cutover = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("/0762_lp11_bound_tenant_rls.sql"));
+  const cutover = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("/0765_lp11_bound_tenant_rls.sql"));
   if (cutover < 0) throw new Error("Tenant cutover migration is missing");
   const applied = new Set((await db.query("SELECT migration_name FROM public.jobguard_schema_migration")).rows.map(row => row.migration_name));
   for (const url of MIGRATION_URLS.slice(0, cutover)) {
@@ -33,7 +33,7 @@ export async function tenantCutoverCatalogue(db: Queryable): Promise<MigrationPr
 }
 
 export async function expectedTenantCutover(db: Queryable, before: MigrationProofSnapshot) {
-  const proofs = loadMigrationProofs().proofs.filter(proof => proof.migration >= "0762_lp11_bound_tenant_rls.sql");
+  const proofs = loadMigrationProofs().proofs.filter(proof => proof.migration >= "0765_lp11_bound_tenant_rls.sql");
   const ownerOids = Object.fromEntries((await db.query("SELECT rolname,oid FROM pg_roles")).rows.map(row => [row.rolname,row.oid]));
   return applyUpgradeProofs(before, proofs, ownerOids);
 }

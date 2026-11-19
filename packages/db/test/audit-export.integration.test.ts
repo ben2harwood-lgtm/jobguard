@@ -197,7 +197,7 @@ beforeAll(async () => {
     UNION ALL SELECT policyname::text FROM pg_policies
     UNION ALL SELECT rolname::text FROM pg_roles
   ) s WHERE name LIKE '%mo5%'`)).rows[0]!.count as string;
-  const cutover = "0762_lp11_bound_tenant_rls.sql";
+  const cutover = "0765_lp11_bound_tenant_rls.sql";
   const cutoverIndex = names.indexOf(cutover);
   expect(cutoverIndex).toBeGreaterThan(own);
   for (const url of MIGRATION_URLS.slice(own + 1, cutoverIndex)) {

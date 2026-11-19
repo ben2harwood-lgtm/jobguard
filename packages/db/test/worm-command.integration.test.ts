@@ -109,7 +109,7 @@ beforeAll(async () => {
   const metadata = (rows: { proname: string; body: string; proacl: string }[]) => rows.map(({ proname, proacl }) => ({ proname, proacl }));
   expect(metadata(after)).toEqual(metadata(before));
   const lp6d = await readFile(new URL("../migrations/0749_lp6d_remaining_routines.sql", import.meta.url), "utf8");
-  const lp11 = await readFile(new URL("../migrations/0762_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
+  const lp11 = await readFile(new URL("../migrations/0765_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
   for (const { proname, body } of after) {
     const source = proname === "worm_submit" ? lp6d : lp11;
     expect(body.split("$function$")[1]).toBe(source.split(`CREATE OR REPLACE FUNCTION app.${proname}(`)[1]!

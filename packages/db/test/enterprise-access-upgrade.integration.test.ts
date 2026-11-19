@@ -129,7 +129,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const boundary=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0613_scim2_machine.sql'));
  expect(boundary).toBeGreaterThanOrEqual(0);
  const later=new Set<string>();
- const cutover=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0762_lp11_bound_tenant_rls.sql'));
+ const cutover=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0765_lp11_bound_tenant_rls.sql'));
  expect(cutover).toBeGreaterThan(boundary);
  for(const url of MIGRATION_URLS.slice(boundary+1,cutover))
   for(const m of (await readFile(url,'utf8')).matchAll(/CREATE OR REPLACE FUNCTION ([a-z_]+)\.([a-z0-9_]+)\(/gu))later.add(`${m[1]}.${m[2]}`);

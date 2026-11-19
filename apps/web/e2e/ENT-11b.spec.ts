@@ -1,11 +1,9 @@
-import { installContractorAgreementFixture } from "./contractor-agreement-fixture.js";
 import { expect, test, type Page } from "@playwright/test";
 import { Pool } from "pg";
 import baselineSample from "../../../docs/fixtures/contractor-full-demo-package.v1.json";
 import type { projectEnterpriseDashboard, projectStoredDashboardBilling } from "@jobguard/core";
 import type { StatementView } from "../app/lib/enterprise-statement-types";
 test.setTimeout(600_000);
-test.beforeEach(async ({ page }) => { await installContractorAgreementFixture(page); });
 const baseURL = "http://127.0.0.1:3000";
 const banner = "Practice sandbox — synthetic data; nothing is sent or charged";
 const admin = () => new Pool({ host: "127.0.0.1", port: 55432, user: "postgres", password: "sbox-e2e-owner", database: "jobguard_synthetic_demo" });
@@ -158,10 +156,7 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   const attributionBefore = (await db.query("SELECT row_to_json(a)::text bytes FROM app.northside_action_attribution a WHERE tenant_id=$1 ORDER BY source_kind,source_id", [tenant])).rows;
 
 
-  // Operations-only fixture provisioning, never a browser authority or production policy.
-  const agreementId = crypto.randomUUID();
-  await db.query(`INSERT INTO app.enterprise_agreement_version(tenant_id,id,agreement_ref,rate_numerator,rate_denominator,basis,policy_version,effective_from,end_of_job_check,content_hash,environment,operations_actor_ref)
-    VALUES($1,$2,'Northside fictional proposed terms',1,10,'on_payment','enterprise_site_capture_policy_v1','2000-01-01T00:00:00Z',false,$3,'synthetic_demo','operations:fictional-e2e')`, [tenant, agreementId, "c".repeat(64)]);
+  // Fictional terms were provisioned by normal server-verified Northside startup.
   await switchTo("finance");
   const order = (await db.query("SELECT id,job_id FROM app.work_order WHERE tenant_id=$1 AND reference='NS-1-0001'", [tenant])).rows[0];
   await page.goto(`/contractor/work-orders/${order.id}`);
@@ -241,7 +236,6 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   expect(persistedFacts).toHaveLength(3);
   await page.getByRole("link", { name: "Monthly statement", exact: true }).click();
   const period = (await db.query("SELECT to_char(clock_timestamp() AT TIME ZONE 'Europe/London','YYYY-MM') p")).rows[0].p;
-  await page.getByLabel("Fictional agreement version ID").fill(agreementId);
   await page.getByLabel("Statement month").fill(period);
   await page.getByRole("button", { name: "Derive and prepare statement", exact: true }).click();
   await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(rate * 6 / 10)}`);
@@ -257,7 +251,13 @@ for (const width of [360, 1280]) test(`ENT-11b full Northside through billing, s
   await page.getByRole("button", { name: "Simulate invoice for approved statement (practice)", exact: true }).click();
   await expect(page.getByRole("status")).toHaveText(`Simulated invoice: ${pounds(rate * 6 / 10)}. No payment due.`);
   const statementId = (await db.query("SELECT id FROM app.enterprise_fee_statement WHERE tenant_id=$1", [tenant])).rows[0].id;
-  await page.reload(); await page.getByLabel("Stored statement ID").fill(statementId);
+  const savedStatementUrl = page.url();
+  expect(new URL(savedStatementUrl).searchParams.get("statement")).toBe(statementId);
+  await page.reload();
+  await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(rate * 6 / 10)}`);
+  await page.goto("/contractor/dashboard"); await page.goto(savedStatementUrl);
+  await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(rate * 6 / 10)}`);
+  await page.getByLabel("Stored statement ID").fill(statementId);
   await page.getByRole("button", { name: "Reload stored statement", exact: true }).click();
   await expect(page.getByTestId("statement-total")).toHaveText(`Statement delta: ${pounds(rate * 6 / 10)}`);
   const readStatement = await page.request.post("/api/contractor/statements/read", { headers: { origin: baseURL }, data: { version: "enterprise-fee-screen-read.v1", statementId } });

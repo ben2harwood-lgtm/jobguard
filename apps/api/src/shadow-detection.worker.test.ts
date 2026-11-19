@@ -95,6 +95,7 @@ describe("SV-3 actual shared worker composition",()=>{
   vi.stubEnv("WORKER_DATABASE_URL","postgresql://localhost/worker");
   vi.stubEnv("GRAPHILE_DATABASE_URL","postgresql://localhost/graphile");
   vi.stubEnv("RUNTIME_DATABASE_URL","postgresql://localhost/runtime");
+  vi.stubEnv("WORKER_DATABASE_URL","postgresql://localhost/outbound-worker");
   vi.stubEnv("SHADOW_DATABASE_URL","postgresql://localhost/shadow");vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
   try{
    vi.resetModules();await expect(import("./worker.js")).rejects.toThrow("TERMS_RELATION_UNAVAILABLE");expect(registered).not.toHaveBeenCalled();

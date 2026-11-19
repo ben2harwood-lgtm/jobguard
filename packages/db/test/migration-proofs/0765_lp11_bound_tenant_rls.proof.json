@@ -1,5 +1,5 @@
 {
-  "migration": "0762_lp11_bound_tenant_rls.sql",
+  "migration": "0765_lp11_bound_tenant_rls.sql",
   "lp0": [
     {
       "section": "authorityPaths",
@@ -15,7 +15,7 @@
           "LP-12": "Review custody and grants of private lookup and migration-owned routines."
         },
         "sources": [
-          "packages/db/migrations/0762_lp11_bound_tenant_rls.sql"
+          "packages/db/migrations/0765_lp11_bound_tenant_rls.sql"
         ],
         "tests": [
           "packages/db/test/lp11-bound-tenant-rls.integration.test.ts",
@@ -43,7 +43,7 @@
           "LP-12": "Review custody and grants of private lookup and migration-owned routines."
         },
         "sources": [
-          "packages/db/migrations/0762_lp11_bound_tenant_rls.sql"
+          "packages/db/migrations/0765_lp11_bound_tenant_rls.sql"
         ],
         "tests": [
           "packages/db/test/lp11-bound-tenant-rls.integration.test.ts",
