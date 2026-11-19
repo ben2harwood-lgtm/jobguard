@@ -21,7 +21,7 @@ function setup(hook?: (p: Partition) => Promise<void>) {
  const vault = { get: async (key: string) => secure.get(key) ?? null, set: async (key: string, value: string) => { secure.set(key, value); }, remove: async (key: string) => { secure.delete(key); } };
  const resources = { open: vi.fn(async () => { keys.add(p.deviceInstanceId); return store; }),
   destroy: vi.fn(async () => { bytes = null; keys.delete(p.deviceInstanceId); }) };
- const policy = { version: "mobile-auth-policy-specimen.v1", environment: "synthetic_demo", policyVersion: "fictional_mobile_auth_policy_v1", accessDurationMs: 100, refreshDurationMs: 500, sessionDurationMs: 1000, readLeaseDurationMs: 200 };
+ const policy = { version: "mobile-auth-policy-specimen.v1", environment: "synthetic_demo", policyVersion: "fictional_mobile_auth_policy_v1" as const, accessDurationMs: 100, refreshDurationMs: 500, sessionDurationMs: 1000, readLeaseDurationMs: 200 };
  const session: MobileSession = { version: "mobile-session.v1", environment: "synthetic_demo", partition: p,
   access: { version: "mobile-access.v1", credential: "a".repeat(43) }, refresh: { version: "mobile-refresh.v1", credential: "b".repeat(43) }, accessExpiresAtMs: 1100, refreshExpiresAtMs: 1500,
   lease: { version: "mobile-read-lease.v1", environment: "synthetic_demo", leaseId: id(8), partition: p, policyVersion: policy.policyVersion, issuedAtMs: 1000, expiresAtMs: 1200 } };

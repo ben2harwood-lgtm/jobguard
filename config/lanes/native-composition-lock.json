@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "native-composition-lock": {
+      "branches": [
+        "codex/sandbox/native-composition-lock"
+      ],
+      "allow": [
+        "apps/mobile/src/composition.test.tsx",
+        "docs/contracts/m3-1-native-risk.md",
+        "pnpm-lock.yaml"
+      ],
+      "note": "Native composition + reviewed mature mobile lockfile merge (unit/typecheck/lint level); one test-only type fix; NOPR, device proof/D08/G3 closed."
+    }
+  }
+}
