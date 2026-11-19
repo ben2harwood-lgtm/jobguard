@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "tommy-final-check-test-20261119": {
+      "branches": ["codex/sandbox/tommy-final-check-test-20261119"],
+      "note": "Test-only correction for observed LATER-SAFETY-140 setup race: the lock already queues Final Check, so observe actual worker completion without requiring the pending-only Run control. Preserve all existing assertions and timeouts; no product, API, DB, policy or fixture change.",
+      "allow": [
+        "apps/web/e2e/later-safety-140.spec.ts",
+        "docs/receipts/tommy-final-check-test-20261119.md"
+      ]
+    }
+  }
+}
