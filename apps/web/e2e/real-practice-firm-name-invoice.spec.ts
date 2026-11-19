@@ -69,9 +69,9 @@ async function journey(page: Page, savedName: string | null) {
  const recorded = await recording;
  expect(recorded.ok()).toBe(true);
  expect((await recorded.json()).activeAcceptance.actor).toBe(`${quoteName} (builder)`);
- await expect(page.getByText(`Actor: ${name} (builder)`,{exact:true})).toBeVisible();
+ await expect(page.getByText(`Actor: ${quoteName} (builder)`,{exact:true})).toBeVisible();
  await noOverflow(page); await page.reload();
- await expect(page.getByText(`Actor: ${name} (builder)`,{exact:true})).toBeVisible();
+ await expect(page.getByText(`Actor: ${quoteName} (builder)`,{exact:true})).toBeVisible();
  await click(page,"Start this practice job");
  await expect(page.getByRole("heading",{name:"Live · baseline frozen",exact:true})).toBeVisible();
  await page.goto(`/jobs/${job}/work#quote`);
