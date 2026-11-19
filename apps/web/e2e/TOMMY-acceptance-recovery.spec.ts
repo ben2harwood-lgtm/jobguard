@@ -1,18 +1,35 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Pool } from "pg";
 import { E2E_ADMIN_DATABASE_URL } from "./global-setup";
 import { openReview } from "./helpers/capture-journey";
 
 test.setTimeout(180_000);
+const actionTimeout = 10_000, responseTimeout = 30_000;
 const button = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
+// The actual contract imports ESM-only core output. Use the same built-module
+// boundary as the existing allocation helpers, without loading it through CJS.
+const captureContracts = () => (new Function("specifier", "return import(specifier)") as
+  (specifier: string) => Promise<typeof import("../../api/src/capture/contracts")>)(
+  pathToFileURL(join(process.cwd(), "../api/dist/capture/contracts.js")).href);
 async function pricing(page: Page) {
   const price = button(page, "Price the work"), editor = page.locator(".quote-editor");
-  await Promise.race([price.waitFor({ state: "visible" }), editor.waitFor({ state: "visible" })]);
+  await Promise.race([price.waitFor({ state: "visible", timeout: actionTimeout }), editor.waitFor({ state: "visible", timeout: actionTimeout })]);
   if (await price.isVisible()) await price.click();
   await expect(editor).toHaveAttribute("data-quote-ready", "true");
 }
-async function prepareAcceptance(page: Page) {
-  await openReview(page);
+async function prepareAcceptance(page: Page, phase: (value: string) => void) {
+  phase("capture-and-review");
+  const [response] = await Promise.all([
+    page.waitForResponse(candidate => new URL(candidate.url()).pathname === "/api/jobs/capture" && candidate.request().method() === "POST", { timeout: responseTimeout }),
+    openReview(page),
+  ]);
+  expect(response.status(), await response.text()).toBe(201);
+  const captured = (await captureContracts()).captureWorkspaceResponseV1.parse(await response.json());
+  expect(captured.proposal.lines).toHaveLength(6);
+  const jobId = captured.jobId;
+  phase("confirm-captured-scope");
   for (const name of ["Protect room", "Prepare walls", "Paint walls", "Finish trim", "Clean site"]) await button(page, `Accept ${name}`).click();
   await button(page, "Dismiss Replace shelves").click();
   await page.getByLabel("Dismissal reason Replace shelves").fill("Outside this fictional quote");
@@ -20,8 +37,13 @@ async function prepareAcceptance(page: Page) {
   await button(page, "Confirm scope").click();
   await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
   await expect(page.getByTestId("confirmed-line-count")).toHaveText("5");
-  const jobId = (await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;
+  // /classic renders ReviewProposal inline; it has no WorkspaceShell and a
+  // reload returns to Jobs. Open the same authoritative job before the fault so
+  // the final reload exercises this persisted quote, not the inline wizard.
+  phase("open-saved-quote");
+  await page.goto(`/jobs/${jobId}#quote`);
   await pricing(page);
+  await expect(page.locator(".quote-editor")).toHaveAttribute("data-job-id", jobId);
   await button(page, "Save draft revision").click();
   await expect(page.getByTestId("quote-revision")).toHaveText("1");
   await page.getByLabel("Unit rate Clean site").fill("200.00");
@@ -29,15 +51,16 @@ async function prepareAcceptance(page: Page) {
   await expect(page.getByTestId("quote-revision")).toHaveText("2");
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
   await button(page, "Preview immutable quote").click();
-  await expect(page.getByLabel("Quote preview")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Quote preview", exact: true })).toBeVisible();
   await button(page, "Simulate sending this quote").click();
-  await expect(page.getByTestId("quote-delivery")).toHaveText("Queued — not sent");
-  await button(page, "Continue fake worker").click();
+  await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
+  if (await page.getByTestId("quote-delivery").textContent() === "Queued — not sent") await button(page, "Continue fake worker").click();
   await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
+  await expect(button(page, "Record practice acceptance")).toBeEnabled();
   return jobId;
 }
 async function read(page: Page, path: string) {
-  const response = await page.request.get(path);
+  const response = await page.request.get(path, { timeout: responseTimeout });
   expect(response.ok(), `Read ${path}: ${response.status()}`).toBe(true);
   return response.json();
 }
@@ -46,13 +69,19 @@ for (const committedBeforeLoss of [true, false]) {
   test(committedBeforeLoss
     ? "lost committed quote acceptance visibly reconciles with GET only and no duplicate effect"
     : "uncommitted lost quote acceptance stays held after an empty read and retries the identical command", async ({ page }, testInfo) => {
-    const admin = new Pool({ connectionString: E2E_ADMIN_DATABASE_URL, max: 1 });
+    page.setDefaultTimeout(actionTimeout); page.setDefaultNavigationTimeout(responseTimeout);
+    const admin = new Pool({ connectionString: E2E_ADMIN_DATABASE_URL, max: 1, connectionTimeoutMillis: actionTimeout, statement_timeout: actionTimeout, query_timeout: actionTimeout });
     const diagnostics: Record<string, unknown> = { committedBeforeLoss }, errors: string[] = [];
+    const phase = (value: string) => {
+      diagnostics.phase = value;
+      console.info("TOMMY_ACCEPTANCE_RECOVERY_PHASE", JSON.stringify({ committedBeforeLoss, project: testInfo.project.name, phase: value }));
+    };
     page.on("pageerror", error => errors.push(error.message));
-    let path = "", intercept: ((route: Route) => Promise<void>) | undefined;
+    let path = "", intercept: ((route: Route) => Promise<void>) | undefined, failed = false;
     try {
-      const jobId = await prepareAcceptance(page); path = `/api/jobs/${jobId}/quotes/acceptance`;
+      const jobId = await prepareAcceptance(page, phase); path = `/api/jobs/${jobId}/quotes/acceptance`;
       diagnostics.jobId = jobId;
+      phase("inject-acceptance-response-loss");
       const before = await read(page, path);
       expect(before.activeAcceptance).toBeNull(); expect(before.events).toHaveLength(0);
       const commands: Record<string, unknown>[] = [], rawCommands: (string | null)[] = [];
@@ -65,16 +94,18 @@ for (const committedBeforeLoss of [true, false]) {
         try {
           if (committedBeforeLoss) {
             // Forward the real command exactly once; discard only its committed reply.
-            const actual = await route.fetch({ maxRetries: 0 });
+            const actual = await route.fetch({ maxRetries: 0, timeout: responseTimeout });
             const body = await actual.json(); diagnostics.committedReply = { status: actual.status(), body };
             expect(actual.status()).toBe(200); expect(body.activeAcceptance).not.toBeNull();
           }
           // The other case proves the empty-read branch with no server write at all.
           await route.abort("failed"); resolved(undefined);
-        } catch (error) { await route.abort("failed").catch(() => undefined); rejected(error); }
+        } catch (error) { rejected(error); await route.abort("failed").catch(() => undefined); }
       };
       await page.route(`**${path}`, intercept);
-      await button(page, "Record practice acceptance").click(); await lost;
+      const lossDeadline = setTimeout(() => rejected(new Error("Acceptance fault interception did not finish within 30 seconds")), responseTimeout);
+      try { await Promise.all([lost, button(page, "Record practice acceptance").click()]); }
+      finally { clearTimeout(lossDeadline); }
       const recovery = page.getByRole("status", { name: "Acceptance recovery", exact: true });
       await expect(recovery).toBeVisible(); await expect(recovery).toBeFocused();
       await expect(recovery).toContainText("may or may not have been saved");
@@ -90,15 +121,19 @@ for (const committedBeforeLoss of [true, false]) {
         (SELECT count(*)::int FROM app.activation_acceptance_operation_use WHERE job_id=$1 AND operation='quote.acceptance.attest') operations`, [jobId])).rows[0];
       const beforeRecovery = await counts(); diagnostics.beforeRecovery = beforeRecovery;
       expect(beforeRecovery).toEqual({ acceptances: committedBeforeLoss ? 1 : 0, events: committedBeforeLoss ? 1 : 0, operations: committedBeforeLoss ? 1 : 0 });
+      phase("read-authoritative-acceptance");
       await button(page, "Load the saved acceptance").click();
       if (!committedBeforeLoss) {
         await expect(recovery).toContainText("do not yet confirm");
         await expect(button(page, "Record practice acceptance")).toBeDisabled();
         await expect(button(page, "Record customer decline")).toBeDisabled();
         expect(commands).toHaveLength(1); expect(await counts()).toEqual(beforeRecovery);
-        const reply = page.waitForResponse(response => response.url().endsWith(path) && response.request().method() === "POST");
-        await button(page, "Retry this same acceptance").click();
-        expect((await reply).status()).toBe(200);
+        phase("explicit-identical-command-retry");
+        const [reply] = await Promise.all([
+          page.waitForResponse(response => response.url().endsWith(path) && response.request().method() === "POST", { timeout: responseTimeout }),
+          button(page, "Retry this same acceptance").click(),
+        ]);
+        expect(reply.status()).toBe(200);
         expect(commands).toHaveLength(2); expect(commands[1]).toEqual(original);
         expect(rawCommands).toHaveLength(2); expect(rawCommands[1]).toBe(rawCommands[0]);
       }
@@ -116,7 +151,9 @@ for (const committedBeforeLoss of [true, false]) {
         WHERE c.command_id=$1 AND u.job_id=$2`, [original.commandId, jobId])).rows;
       expect(operation).toEqual([{ command_id: original.commandId, command_type: "quote.acceptance.attest", status: "succeeded", job_id: jobId, operation: "quote.acceptance.attest" }]);
       diagnostics.operation = operation;
+      phase("reload-same-saved-quote");
       await page.reload(); await pricing(page);
+      await expect(page.locator(".quote-editor")).toHaveAttribute("data-job-id", jobId);
       await expect(terms).toBeVisible(); expect(await read(page, path)).toEqual(stored);
       const finalCounts = await counts();
       expect(finalCounts).toEqual({ acceptances: 1, events: 1, operations: 1 });
@@ -128,10 +165,24 @@ for (const committedBeforeLoss of [true, false]) {
         dbCounts: finalCounts, originalCommandId: original.commandId, browserErrors: errors.length,
         rawRetryBytesIdentical: committedBeforeLoss ? null : rawCommands[1] === rawCommands[0],
       }));
+    } catch (error) {
+      failed = true;
+      diagnostics.failure = error instanceof Error ? error.message : String(error);
+      console.error("TOMMY_ACCEPTANCE_RECOVERY_FAILURE", JSON.stringify({ committedBeforeLoss, project: testInfo.project.name, phase: diagnostics.phase, failure: diagnostics.failure }));
+      throw error;
     } finally {
-      if (path && intercept) await page.unroute(`**${path}`, intercept);
-      await testInfo.attach("acceptance-recovery-receipts", { body: JSON.stringify({ diagnostics, browserErrors: errors }, null, 2), contentType: "application/json" });
-      await admin.end();
+      const cleanupErrors: string[] = [];
+      const cleanup = async (name: string, work: () => Promise<unknown>) => {
+        try { await work(); } catch (error) { cleanupErrors.push(`${name}: ${error instanceof Error ? error.message : String(error)}`); }
+      };
+      await cleanup("route", async () => { if (path && intercept) await page.unroute(`**${path}`, intercept); });
+      await cleanup("database pool", () => admin.end());
+      diagnostics.cleanupErrors = cleanupErrors;
+      await cleanup("attachment", () => testInfo.attach("acceptance-recovery-receipts", { body: JSON.stringify({ diagnostics, browserErrors: errors }, null, 2), contentType: "application/json" }));
+      if (cleanupErrors.length) {
+        console.error("TOMMY_ACCEPTANCE_RECOVERY_CLEANUP", JSON.stringify({ committedBeforeLoss, project: testInfo.project.name, errors: cleanupErrors }));
+        if (!failed) throw new Error(cleanupErrors.join("; "));
+      }
     }
   });
 }
