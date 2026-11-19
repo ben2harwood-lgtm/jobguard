@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "./demo-seed.js";
+import { mapRequestBindingRefusal, RequestBindingRefusedError } from "./request-binding-error.js";
 import { verifiedTenantContextFromMembership, withTenant } from "./tenant-context.js";
 
 export type SyntheticDemoJob = Readonly<{ id: string; title: string; status: string; revision: number; updatedAt: Date; customerLabel?: string; siteLabel?: string }>;
@@ -11,14 +12,14 @@ export class SyntheticDemoReadError extends Error {
 }
 
 /** A fixed synthetic principal bridge. It cannot select a caller-provided tenant. */
-export async function readSyntheticDemo(pool: Pool) {
+export async function readSyntheticDemo(pool: Pool, sessionDigest: string) {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
   const context = verifiedTenantContextFromMembership({
     identityUserId: "d1500000-0000-4000-8000-000000000001",
     membershipId: DEMO_MEMBERSHIP_ID,
     tenantId: DEMO_TENANT_ID,
-  } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
-  const primary = await withTenant(pool, context, async (database) => {
+  } as Parameters<typeof verifiedTenantContextFromMembership>[0], { kind: "practice", credential: sessionDigest });
+  const primary = await mapRequestBindingRefusal(withTenant(pool, context, async (database) => {
     const membership = await database.$client.query(
       `SELECT a.name FROM app.membership m JOIN app.account a
          ON (a.tenant_id,a.id)=(m.tenant_id,m.account_id)
@@ -47,10 +48,10 @@ export async function readSyntheticDemo(pool: Pool) {
       [DEMO_TENANT_ID],
     );
     return { tenant: { id: DEMO_TENANT_ID, name: membership.rows[0].name as string }, jobs: jobs.rows };
-  });
+  }), () => new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN"));
   const emptyContext = verifiedTenantContextFromMembership({
     identityUserId: "d1500000-0000-4000-8000-000000000001", membershipId: DEMO_EMPTY_MEMBERSHIP_ID, tenantId: DEMO_EMPTY_TENANT_ID,
-  } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+  } as Parameters<typeof verifiedTenantContextFromMembership>[0], { kind: "practice", credential: sessionDigest });
   const empty = await withTenant(pool, emptyContext, async (database) => {
     const membership = await database.$client.query<{ name: string }>(
       `SELECT a.name FROM app.membership m JOIN app.account a ON (a.tenant_id,a.id)=(m.tenant_id,m.account_id)
@@ -60,6 +61,9 @@ export async function readSyntheticDemo(pool: Pool) {
     );
     if (membership.rowCount !== 1) return null;
     return { id: DEMO_EMPTY_TENANT_ID, name: membership.rows[0]!.name };
+  }).catch(error => {
+    if (error instanceof RequestBindingRefusedError) return null;
+    throw error;
   });
   return { ...primary, tenants: empty ? [primary.tenant, empty] : [primary.tenant] };
 }
@@ -70,13 +74,13 @@ export async function readSyntheticDemo(pool: Pool) {
  * is rechecked on every read; RLS makes foreign and missing jobs indistinguishable.
  * Scope identities describe confirmed work only, excluding reserved/retired history.
  */
-export async function readSyntheticDemoJob(pool: Pool, jobId: string) {
+export async function readSyntheticDemoJob(pool: Pool, jobId: string, sessionDigest: string) {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
   const context = verifiedTenantContextFromMembership({
     identityUserId: DEMO_IDENTITY_USER_ID,
     membershipId: DEMO_MEMBERSHIP_ID,
     tenantId: DEMO_TENANT_ID,
-  } as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+  } as Parameters<typeof verifiedTenantContextFromMembership>[0], { kind: "practice", credential: sessionDigest });
   try {
     return await withTenant(pool, context, async (database) => {
       const membership = await database.$client.query<{ name: string }>(
@@ -102,6 +106,7 @@ export async function readSyntheticDemoJob(pool: Pool, jobId: string) {
       return { tenant: { id: DEMO_TENANT_ID, name: membership.rows[0]!.name }, job };
     });
   } catch (error) {
+    if (error instanceof RequestBindingRefusedError) throw new SyntheticDemoReadError("MEMBERSHIP_FORBIDDEN");
     if (error instanceof SyntheticDemoReadError) throw error;
     throw new SyntheticDemoReadError("DATABASE_UNAVAILABLE", { cause: error });
   }

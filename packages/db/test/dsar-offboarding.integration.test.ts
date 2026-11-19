@@ -15,7 +15,7 @@ async function subject(a: Company, kind = "builder") {
     await db.query("INSERT INTO app.privacy_subject(tenant_id,id,kind) VALUES($1,$2,$3)",[a.tenantId,id,kind]);
     for (const category of categories) await db.query(`INSERT INTO app.privacy_artifact(tenant_id,subject_id,id,category,payload,retention_basis,retention_review_ref)
       VALUES($1,$2,$3,$4,$5,'synthetic_reference_only',$6)`,[a.tenantId,id,randomUUID(),category,{ fictional: `${a.tenantId}:${category}` },randomUUID()]);
-  }); return id;
+  }, { membershipId: a.actorId }); return id;
 }
 // Existing journeys count business steps; recorded check commands add two revisions.
 const checkRevisions = new Map<unknown, number>();
@@ -45,7 +45,7 @@ describe("M5-11 expanded dark DSAR and tenant exit", () => {
     await expect(execute(a,req.requestId,1)).rejects.toMatchObject({code:"PRIVACY_CONFLICT"});
     await review(a,req.requestId,1);
     await expect(command(a,{version:"privacy-command.v1",action:"execute",requestId:req.requestId,expectedRevision:2})).rejects.toMatchObject({code:"PRIVACY_INVALID"});
-    await workTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.privacy_artifact SET hold_ref=$1 WHERE tenant_id=$2 AND category='source'",[randomUUID(),a.tenantId]));
+    await workTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.privacy_artifact SET hold_ref=$1 WHERE tenant_id=$2 AND category='source'",[randomUUID(),a.tenantId]), { membershipId: a.actorId });
     await expect(execute(a,req.requestId,2)).rejects.toMatchObject({code:"PRIVACY_CONFLICT"});
     expect((await read(a,req.requestId)).document).toBeNull();
     await expect(open(b,id,"delete")).rejects.toMatchObject({code:"PRIVACY_NOT_FOUND"});
@@ -67,7 +67,7 @@ describe("M5-11 expanded dark DSAR and tenant exit", () => {
     const resident=await subject(a,"resident"); await subject(b); const untouched=await artifacts(b);
     // Existing exports are removed, including those belonging to a different subject in the exiting tenant.
     const exp=await open(a,id,"export"); await review(a,exp.requestId,0); await execute(a,exp.requestId,1);
-    await workTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.privacy_artifact SET hold_ref=$1 WHERE tenant_id=$2 AND category IN('source','access_grant')",[randomUUID(),a.tenantId]));
+    await workTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.privacy_artifact SET hold_ref=$1 WHERE tenant_id=$2 AND category IN('source','access_grant')",[randomUUID(),a.tenantId]), { membershipId: a.actorId });
     const req=await open(a,id); await instruct(a,req.requestId); await review(a,req.requestId,1);
     const value={action:"execute",requestId:req.requestId,expectedRevision:2,commandId:randomUUID()};
     const [one,two]=await Promise.all([command(a,value),command(a,value)]); expect(two).toEqual(one);
@@ -86,7 +86,7 @@ describe("M5-11 expanded dark DSAR and tenant exit", () => {
     expect((await f.admin.query("SELECT id FROM app.privacy_subject WHERE tenant_id=$1 AND revoked_at IS NOT NULL",[a.tenantId])).rows).toHaveLength(2);
     await expect(open(a,resident,"access")).rejects.toMatchObject({code:"PRIVACY_CONFLICT"});
     await expect(subject(a)).rejects.toMatchObject({message:"PRIVACY_CONFLICT"});
-    await expect(workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.privacy_artifact(tenant_id,subject_id,id,category) VALUES($1,$2,$3,'queued_work')",[a.tenantId,id,randomUUID()]))).rejects.toMatchObject({message:"PRIVACY_CONFLICT"});
+    await expect(workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.privacy_artifact(tenant_id,subject_id,id,category) VALUES($1,$2,$3,'queued_work')",[a.tenantId,id,randomUUID()]), { membershipId: a.actorId })).rejects.toMatchObject({message:"PRIVACY_CONFLICT"});
     expect(await artifacts(b)).toEqual(untouched);
     const events=(await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='privacy.execute'",[a.tenantId,req.requestId])).rows;
     expect(events).toHaveLength(1); expect(JSON.stringify(events)).not.toContain("fictional");
@@ -98,7 +98,7 @@ describe("M5-11 expanded dark DSAR and tenant exit", () => {
     const legacy=await command(a,{version:"privacy-command.v1",action:"open",subjectId:id,operation:"delete"});
     await expect(command(a,{version:"privacy-command.v1",action:"execute",requestId:legacy.requestId,expectedRevision:0})).rejects.toMatchObject({code:"PRIVACY_INVALID"});
     const req=await open(a,id,"delete"); await review(a,req.requestId,0); await execute(a,req.requestId,1);
-    await expect(workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.privacy_artifact(tenant_id,subject_id,id,category) VALUES($1,$2,$3,'queued_work')",[a.tenantId,id,randomUUID()]))).rejects.toMatchObject({message:"PRIVACY_CONFLICT"});
+    await expect(workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.privacy_artifact(tenant_id,subject_id,id,category) VALUES($1,$2,$3,'queued_work')",[a.tenantId,id,randomUUID()]), { membershipId: a.actorId })).rejects.toMatchObject({message:"PRIVACY_CONFLICT"});
     expect(await subject(a)).toEqual(expect.any(String));
   });
   it("upgrades 0539 without rewriting inventory, preserves table isolation and exposes no new runtime privilege",async()=>{

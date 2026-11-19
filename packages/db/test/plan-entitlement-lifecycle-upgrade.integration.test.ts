@@ -110,6 +110,35 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     abandonedVisit.split("FUNCTION app.ent3b_close_abandoned_visit(")[1]!.split("AS $$")[1]!.split("$$;")[0]!
       .replace(" IF EXISTS(SELECT 1 FROM app.ent3b_visit_authority(visit_row.membership_id,p_job)",
         " -- LP6D_THIRD_PARTY (repair 12): the visit's operative is a third party with no request of its own; its\n -- current visit authority is read through the private copy, never through the caller's binding.\n IF EXISTS(SELECT 1 FROM app.lp6d_visit_authority_of(visit_row.membership_id,p_job)"));
+  const lp11Sql = await readFile(new URL("../migrations/0765_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
+  for (const signature of [
+    "infrastructure.discover_readiness_plans()", "app.serialize_final_check_evidence()",
+    "app.guard_post_lock_upload_transition()", "app.lp6d_refused_contractor_principal(uuid)",
+    "app.ch4_guard_new_site_work()", "app.mon2_consistency()", "app.claim_trial_identity_keys(uuid,uuid)", "app.contractor_session(uuid)", "app.lp6_bound_request()",
+    "infrastructure.discover_retention_reviews()", "app.retention_timer_book(uuid,uuid)",
+    "app.retention_timer(uuid,uuid,jsonb,text)",
+    "app.prepare_evidence_pack_v3(uuid,uuid)", "app.complete_evidence_pack_v3_check(uuid,uuid,text)",
+    "app.finish_evidence_pack_v3(uuid,uuid,jsonb,text,text)",
+    "identity.customer_practice_pay_now(uuid,uuid,uuid,text)",
+    "app.mon3_require_registered_admission()", "app.lp_job_permit_consumed()",
+    "app.final_check_job_terms(uuid,uuid,text,timestamp with time zone)",
+    "app.guard_job_proof_source()", "app.guard_final_lock_proof_statement()", "app.ch4_capture_site_source()",
+    "app.worm_audit(app.worm_command,text,text)", "app.worm_claim(uuid)", "app.worm_finish(uuid,integer,text,jsonb)",
+    "worm_control.worm_recovery_target(uuid)", "worm_control.worm_reconcile(uuid,integer,boolean)",
+    "worm_control.worm_operator_alerts()",
+  ]) {
+    const source = lp11Sql.split(`CREATE OR REPLACE FUNCTION ${signature.split("(")[0]}(`)[1]!
+      .split("AS $$")[1]!.split("$$;")[0];
+    expect((await c.admin.query("SELECT prosrc FROM pg_proc WHERE oid=$1::regprocedure", [signature])).rows)
+      .toEqual([{ prosrc: source }]);
+  }
+  for (const routine of ["intake", "machine_stage"]) {
+    const source = lp11Sql.split(`CREATE OR REPLACE FUNCTION connector.${routine}(`)[1]!
+      .split("AS $$")[1]!.split("$$;")[0];
+    expect((await c!.admin.query(
+      "SELECT p.prosrc FROM pg_proc p WHERE p.pronamespace='connector'::regnamespace AND p.proname=$1", [routine],
+    )).rows).toEqual([{ prosrc: source }]);
+  }
   const recoverySql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql", import.meta.url), "utf8");
   for (const [name,args] of [
     ["final_check_read_authority","t uuid, j uuid, d text, locking boolean"],
@@ -119,7 +148,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   ]) {
     const routines = live.filter(row => row.nspname === "app" && row.proname === name && row.args === args);
     expect(routines).toHaveLength(1);
-    expect(routines[0]?.definition?.split("$function$")[1]).toBe(recoverySql.split(`FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]);
+    const source = name === "final_check_cycle_finish" ? lp11Sql : recoverySql;
+    expect(routines[0]?.definition?.split("$function$")[1]).toBe(source.split(`FUNCTION app.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]);
   }
   // 0692 adds one owner-only helper; pin its complete body as well as successor metadata.
   const receiptGate = await readFile(new URL("../migrations/0692_final_check_post_invoice_receipt_gate.sql", import.meta.url), "utf8");
@@ -128,13 +158,21 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(receiptHelpers).toHaveLength(1);
   expect(receiptHelpers[0]?.definition?.split("$function$")[1]).toEqual(
     receiptGate.split("FUNCTION app.require_receipt_final_check(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
-  // 0655 replaces only the emergency capability body; pin the complete reviewed replacement.
-  const emergency = await readFile(new URL("../migrations/0655_emergency_token_minted.sql", import.meta.url), "utf8");
-  const emergencyBody = emergency.split("FUNCTION identity.dark_emergency(")[1]!.split("AS $$")[1]!.split("$$;")[0];
-  const emergencyRoutines = live.filter(row => row.nspname === "identity" && row.proname === "dark_emergency"
-    && row.args === "s text, csrf text, t uuid, p jsonb");
-  expect(emergencyRoutines).toHaveLength(1);
-  expect(emergencyRoutines[0]?.definition?.split("$function$")[1]).toEqual(emergencyBody);
+  // 0765 preserves distinct customer, human emergency, mailbox and machine entry points.
+  for (const [name, args] of [
+    ["customer_stages", "t uuid, j uuid, c uuid, digest text, completion uuid, command uuid, expected_hash text"],
+    ["customer_variation", "t uuid, j uuid, c uuid, digest text, command jsonb"],
+    ["dark_emergency", "s text, csrf text, t uuid, p jsonb"],
+    ["emergency_owner", "s text, csrf text, t uuid"],
+    ["sso_emergency_use", "u uuid, p jsonb"],
+    ["scim2_configure", "s text, csrf text, t uuid, b uuid, c uuid, is_enabled boolean, credential_hash text"],
+    ["scim2_machine", "b uuid, token text, p jsonb"],
+  ]) {
+    const body = lp11Sql.split(`FUNCTION identity.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
+    const routines = live.filter(row => row.nspname === "identity" && row.proname === name && row.args === args);
+    expect(routines).toHaveLength(1);
+    expect(routines[0]?.definition?.split("$function$")[1]).toEqual(body);
+  }
   // 0709 replaces only this exact overload on 0656's body; pin its entire body, including all predecessor guards.
   const feeResult = await readFile(new URL("../migrations/0742_fee_webhook_receipt_binding.sql", import.meta.url), "utf8");
   const feeResultBody = feeResult.split("CREATE OR REPLACE FUNCTION app.replace_fee_reservation_book")[1]!.split("AS $$")[1]!.split("$$;")[0];
@@ -306,7 +344,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   // LATER-SAFETY-189: pin the complete own-extra writer without changing owner/ACL checks.
   const proceedRaiserSql = await readFile(new URL("../migrations/0760_extra_proceed_raiser_authority.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.xa_proceed", [proceedRaiserSql.split("AS $$")[1]!.split("$$;")[0]!]);
-  // 0761 is the complete Northside registration successor; retain every header and privilege comparison below.
+  // 0762 is the complete Northside registration successor; retain every header and privilege comparison below.
   const northsideSql = await readFile(new URL("../migrations/0762_northside_hosted_agreement.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.northside_register", [northsideSql.split("FUNCTION app.northside_register(")[1]!.split("AS $$")[1]!.split("$$;")[0]!]);
   // LP-6d LP-10 hold: only the final appended sink-trigger successor is live.
@@ -325,6 +363,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     if (!value) throw new Error("Missing LP-8a search path in proof");
     return "SET search_path TO " + value.slice("search_path=".length).split(", ").map(schema => `'${schema}'`).join(", ");
   };
+  for (const match of lp11Sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
+    lp6dBodies.set(match[1]!, [match[3]!]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     if (prior.nspname === advanceDelta.before.nspname && prior.proname === advanceDelta.before.proname && prior.args === advanceDelta.before.args) {
@@ -347,9 +387,18 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       continue;
     }
     if (prior.definition !== null && current?.source !== prior.source && lp6dBodies.get(`${prior.nspname}.${prior.proname}`)?.includes(current?.source)) {
-      // The header may change only in LANGUAGE (contractor_session's checked bridge moves from sql to plpgsql).
-      const header = (definition: string) => definition.replace(/^ LANGUAGE \w+$/mu, " LANGUAGE <checked>");
-      expect(header(current!.definition)).toEqual(header(prior.definition.replace(prior.source, () => current!.source)));
+      const definition = prior.definition.replace(prior.source, () => current!.source);
+      if (prior.nspname === "app" && prior.proname === "contractor_practice_session_require_audit" && prior.args === "") {
+        // 0765 verifies the exact revocation witness through the protected
+        // policy and clears the permit as the existing migration owner.
+        expect(current!.definition).toBe(definition.replace(
+          " LANGUAGE plpgsql\n SET search_path", " LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path",
+        ));
+      } else {
+        // Contractor session's checked bridge may change LANGUAGE from SQL to PL/pgSQL.
+        const header = (source: string) => source.replace(/^ LANGUAGE \w+$/mu, " LANGUAGE <checked>");
+        expect(header(current!.definition)).toEqual(header(definition));
+      }
       continue;
     }
     // 0733 changes these exact bodies; retain every routine's security metadata.

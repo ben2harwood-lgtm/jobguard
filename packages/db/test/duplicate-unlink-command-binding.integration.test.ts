@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { ExtraRepository } from "../src/index.js";
 import { cluster, fixture, linkInput, raise, type Cluster, type Fixture } from "./extra-fixtures.js";
 
@@ -36,6 +37,7 @@ describe("LATER-SAFETY-131 duplicate unlink command binding on PostgreSQL", () =
    await db.query("BEGIN");
    if (restoreOld) await db.query(oldGuard);
    await db.query("SELECT set_config('app.tenant_id',$1,true)", [l.f.p.tenantId]);
+   await bindTestClient(c.admin, db, l.f.p.tenantId, l.f.p.membershipId);
    await db.query("SET LOCAL ROLE jobguard_migration");
    await db.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id)
     VALUES($1,$2,$3,$4,$5,'processing',$6)`, [l.f.p.tenantId, command, type, semantic(command), "a".repeat(64), l.f.p.membershipId]);

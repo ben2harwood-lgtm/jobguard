@@ -68,7 +68,7 @@ it("C248 negative control: removing only 0245's trigger restores the reviewer's 
   await db.query('BEGIN');
   await db.query('DROP TRIGGER b_final_check_upload_transition ON app.evidence_upload');
   await db.query(`SET LOCAL ROLE ${f.runtime.options.user}`);
-  await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+  await bindTestClient(f.admin,db,a.tenantId,FINAL_CHECK_ACTOR);
   for(const state of ['quarantined','verified']) {
    const result=await db.query("UPDATE app.evidence_upload SET state=$3::varchar,server_verified_at=CASE WHEN $3::varchar='verified' THEN clock_timestamp() ELSE NULL END,object_version_id='post-lock.v1' WHERE tenant_id=$1 AND id=$2",[a.tenantId,id,state]);
    expect(result.rowCount).toBe(1);

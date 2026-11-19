@@ -16,6 +16,7 @@ import { jobDoorsDatabase, transaction } from "./lp-job-doors-fixtures.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { snapshotRows } from "./upgrade-proof-utils.js";
 import { loadMigrationProofs } from "./migration-proof-loader.js";
+import { lp11EmptyTables } from "./later-empty-tables.js";
 
 const own = "0743_builder_acceptance_sent_head.sql";
 const sqlUrl = new URL(`../migrations/${own}`, import.meta.url);
@@ -348,9 +349,9 @@ describe("0745 populated predecessor upgrade",()=>{
     })).rejects.toThrow("PREDECESSOR_ACCEPTED_STALE_SENT_QUOTE");
     const before=await snapshotRows(db.owner), acl=await catalog(db.owner);
     await migrate(db.owner);
-    // LP-6d and LP-10 add two empty private bookkeeping tables.
+    // Require every earlier row plus the exact empty LP-6d, LP-10 and LP-11 tables.
     const upgraded=await snapshotRows(db.owner);
-    expect(upgraded).toEqual({...before,"identity.lp6d_sso_grant_permit":[],"control_plane.worker_action_binding":[]});
+    expect(upgraded).toEqual({...before,...lp11EmptyTables,"identity.lp6d_sso_grant_permit":[],"control_plane.worker_action_binding":[]});
     expect(await catalog(db.owner)).toEqual(acl);
     expect(acl.map(r=>r.runtime)).toEqual([false,true]);
     expect(acl.every(r=>r.owner==="jobguard_migration"&&r.prosecdef)).toBe(true);

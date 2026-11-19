@@ -1,3 +1,4 @@
+import { bindIssuedCredential } from "../src/tenant-context.js";
 import { testActorContext, testTenantContext } from "./tenant-context-test-utils.js";
 // PostgreSQL CI only: this sandbox cannot start PostgreSQL.
 import { randomUUID } from "node:crypto";
@@ -41,7 +42,7 @@ it("proceed is one immutable fact: replay, no approval/step skip/snapshot/pricin
  expect(audit.rows).toHaveLength(1); expect(JSON.stringify(audit.rows)).not.toContain(body.reason);
  for (const mutation of ["UPDATE app.extra_proceed_statement SET reason='forged'", "DELETE FROM app.extra_proceed_statement", "TRUNCATE app.extra_proceed_statement"]) {
   const owner = await c.admin.connect();
-  try { await owner.query("BEGIN"); await owner.query("SET LOCAL ROLE jobguard_migration"); await owner.query("SELECT set_config('app.tenant_id',$1,true)", [ctx.tenantId]); await expect(owner.query(mutation)).rejects.toMatchObject({ code: "55000" }); }
+  try { await owner.query("BEGIN"); await bindIssuedCredential(owner, ctx); await owner.query("SET LOCAL ROLE jobguard_migration"); await owner.query("SELECT set_config('app.tenant_id',$1,true)", [ctx.tenantId]); await expect(owner.query(mutation)).rejects.toMatchObject({ code: "55000" }); }
   finally { await owner.query("ROLLBACK"); owner.release(); }
  }
  await expect(withTenant(c.runtime, ctx, db => db.$client.query("SELECT * FROM app.extra_proceed_statement"))).rejects.toMatchObject({ code: "42501" });

@@ -164,12 +164,13 @@ it("preserves an exact legacy service receipt without rewriting history", async 
 
 it("home read survives unrelated workspace revocation", async () => {
   const session = await issuePracticeSession(runtime);
-  expect((await authenticatePracticeSession(runtime, session)).context.tenantId).toBe(DEMO_TENANT_ID);
-  const before = await readSyntheticDemo(runtime);
+  const auth = await authenticatePracticeSession(runtime, session);
+  expect(auth.context.tenantId).toBe(DEMO_TENANT_ID);
+  const before = await readSyntheticDemo(runtime, auth.digest);
   expect(before.tenants.map(t => t.id)).toContain(DEMO_EMPTY_TENANT_ID);
   await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_MEMBERSHIP_ID]);
   try {
-    const after = await readSyntheticDemo(runtime);
+    const after = await readSyntheticDemo(runtime, auth.digest);
     expect(after.tenant).toEqual(before.tenant);
     expect(after.jobs).toEqual(before.jobs);
     expect(after.tenants).toEqual([after.tenant]);

@@ -6,7 +6,7 @@ import { MIGRATION_URLS, migrate } from "../src/migrate.js";
 import { finalizeMeterLifecycleOwnership } from "../src/demo-bootstrap.js";
 import { closeWorkFixture, createWorkFixture, seedWorkJob, type WorkFixture } from "./job-work-state-fixtures.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
+import { advanceToTenantCutover, expectedTenantCutover, proofBefore, proofDifferences, tenantCutoverCatalogue } from "./upgrade-proof-utils.js";
 
 // No local database execution: fresh installation is covered by the admission
 // suite; this test proves the predecessor and already-finalized reader upgrade.
@@ -30,14 +30,13 @@ describe("MON-1 0380 upgrade (PostgreSQL CI)", () => {
   await f.admin.query("ALTER FUNCTION app.mon1_counted_meter_today(uuid,text) OWNER TO jobguard_meter_owner; ALTER FUNCTION app.mon1_counted_meter_today(uuid,text) SECURITY DEFINER");
   await f.admin.query("REVOKE CREATE ON SCHEMA app FROM jobguard_meter_owner");
   const grants=(await f.admin.query("SELECT oid,relname,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE relnamespace='app'::regnamespace AND relkind='r' ORDER BY oid")).rows;
-  await migrate(f.admin); await migrate(f.admin);
+  await advanceToTenantCutover(f.admin);
   // 0399 must retire the old signature on an already meter-owned installation,
   // before the administrative finalizer has another chance to revoke it.
   expect((await f.admin.query("SELECT has_function_privilege('jobguard_runtime','app.mon1_counted_meter_today(uuid,text)','EXECUTE') allowed")).rows).toEqual([{allowed:false}]);
   expect((await f.admin.query("SELECT migration_name FROM public.jobguard_schema_migration WHERE migration_name='0399_meter_reader_revoke.sql'")).rows).toEqual([{migration_name:"0399_meter_reader_revoke.sql"}]);
   expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
   const auditOid=(await f.admin.query("SELECT 'app.audit_event'::regclass::oid oid")).rows[0].oid;
-  const billingProof=JSON.parse(await readFile(new URL('./migration-proofs/0766_lp8a_billing_revokes.proof.json',import.meta.url),'utf8'));
   const expectedGrants=await Promise.all(grants.map(async row=>{
     const acl=row.oid===auditOid ? await lp4AuditEventAcl(f.admin,row.relacl) : row.relacl;
     let relacl=await lp5RelationAcl(f.admin,row.relname,acl);
@@ -47,11 +46,13 @@ describe("MON-1 0380 upgrade (PostgreSQL CI)", () => {
       expect(items.some(item=>item.startsWith("jobguard_binding_owner="))).toBe(false);
       relacl=(await f.admin.query<{acl:string}>("SELECT $1::text[]::aclitem[]::text acl",[[...items,"jobguard_binding_owner=r/jobguard_migration"]])).rows[0]!.acl;
     }
-    const delta=billingProof.upgrade.find((v:any)=>v.section==='relations'&&v.before?.relname===row.relname);
-    if(delta){expect(relacl).toBe(delta.before.relacl);relacl=delta.after.relacl;}
     return {...row,relacl};
   }));
   expect((await f.admin.query("SELECT oid,relname,relacl::text,relowner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=ANY($1::oid[]) ORDER BY oid",[grants.map(row=>row.oid)])).rows).toEqual(expectedGrants);
+  const priorCutover=await tenantCutoverCatalogue(f.admin);
+  await migrate(f.admin); await migrate(f.admin);
+  expect(await tenantCutoverCatalogue(f.admin)).toEqual(await expectedTenantCutover(f.admin,priorCutover));
+  expect(await proofDifferences(f.admin,before)).toEqual({rows:[],types:[]});
   const admin=await f.admin.connect();
   try { await finalizeMeterLifecycleOwnership(admin); await finalizeMeterLifecycleOwnership(admin); } finally { admin.release(); }
   expect((await f.admin.query(`SELECT proname,pg_get_userbyid(proowner) owner,prosecdef,has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime

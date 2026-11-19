@@ -17,6 +17,7 @@ import {CUSTOMER_MESSAGE_SAFETY_TEXT} from "../src/customer-message-fixtures.js"
 import {startBeforeMigration,applyMigration} from "./contractor-practice-session-fixtures.js";
 import {snapshot} from "./contractor-entitlement-fixtures.js";
 import {migrate} from "../src/migrate.js";
+import {testBoundTenantContext} from "./tenant-context-test-utils.js";
 const hash=(v:string)=>createHash("sha256").update(v).digest("hex");
 const input=(jobId:string,text="Please fit an outside tap.")=>({version:"customer-portal-message.v1",jobId,commandId:randomUUID(),text});
 describe("MON-5 customer messages through checked SV-7A",()=>{
@@ -84,10 +85,47 @@ describe("MON-5 customer messages through checked SV-7A",()=>{
   await expect(send(w,input(w.j,"After lock"))).rejects.toThrow("POST_LOCK_WORK_REQUIRES_LINKED_JOB");expect(await send(w,raw)).toEqual(saved);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_message_source WHERE tenant_id=$1 AND job_id=$2",[w.t,w.j])).rows[0].n).toBe(1);
  });
+ it("keeps the one-use shadow read permit on its exact job and closes it when another tenant binds",async()=>{
+  const a=await seedWorkPractice(f),b=await seedWorkJob(f),secondJob=await seedWorkPractice(f);
+  const own=a.auth.context.tenantId,foreign=b.tenantId,permit=hash(randomUUID()),foreignCredential=hash(randomUUID());
+  await testBoundTenantContext(f.admin,foreign,b.actorId,foreignCredential);
+  expect(own).not.toBe(foreign);
+  const claims="SELECT app.lp11_bind_observation_read($1,$2,$3)";
+  const issue="SELECT app.lp11_issue_observation_permit($1,$2,$3)";
+  const payload=[own,a.jobId,permit];
+  const reader=new ShadowObservationReader(f.runtime,new FixtureObservationSources([]),shadow);
+  const context=verifiedTenantContextForQueuedJob(own);
+  await expect(reader.hasAcceptedTerms(context,a.jobId)).resolves.toBe(false);
+  await withTenant(practiceMaterialPool(f.runtime,a.auth.digest),a.auth.practiceContext,db=>db.$client.query(
+   "SELECT app.accept_final_check_terms($1,$2,$3,$4)",[own,a.auth.membershipId,randomUUID(),"synthetic_final_check_terms.v1"]));
+  await expect(reader.hasAcceptedTerms(context,a.jobId)).resolves.toBe(true);
+  await expect(f.runtime.query(issue,payload)).rejects.toMatchObject({code:"42501"});
+  await shadow.query(issue,payload);
+  const db=await f.runtime.connect();
+  try {
+   await db.query("BEGIN");
+   await db.query("SAVEPOINT foreign_permit");
+   await expect(db.query(claims,[foreign,b.jobId,permit])).rejects.toMatchObject({code:"42501"});
+   await db.query("ROLLBACK TO foreign_permit; RELEASE foreign_permit");
+   await db.query(claims,payload);
+   await db.query("SELECT set_config('app.tenant_id',$1,true)",[foreign]);
+   const jobs="SELECT id FROM app.job WHERE id=ANY($1::uuid[])";
+   const ids=[[a.jobId,b.jobId,secondJob.jobId]];
+   expect((await db.query(jobs,ids)).rows).toEqual([{id:a.jobId}]);
+   await db.query("SELECT app.bind_request('real',$1,$2)",[foreignCredential,foreign]);
+   expect((await db.query(jobs,ids)).rows).toEqual([{id:b.jobId}]);
+   await db.query("COMMIT");
+   expect((await db.query(jobs,ids)).rows).toEqual([]);
+   await expect(db.query(claims,payload)).rejects.toMatchObject({code:"42501"});
+  } finally {
+   await db.query("ROLLBACK");
+   db.release();
+  }
+ });
  it("pre-lock hidden signals never change message receipt/read; exact candidate B safety message surfaces once and loses fee eligibility",async()=>{
   const w=await fresh(),raw=input(w.j),saved=await send(w,raw),a=w.practice.auth;
   const before=await f.repository.read(a.context,w.j,a.digest,"customer_message");
-  const reader=new ShadowObservationReader(f.runtime,new FixtureObservationSources([])),sink=new ShadowDetectionRepository(shadow);
+  const reader=new ShadowObservationReader(f.runtime,new FixtureObservationSources([]),shadow),sink=new ShadowDetectionRepository(shadow);
   const worker=new ShadowDetectionWorker({assertTermsRelation:()=>reader.assertTermsRelation(),hasAcceptedTerms:(c,j)=>reader.hasAcceptedTerms(c,j),read:(c,r)=>reader.read(c,r),propose:async()=>({proposals:[]}),persist:(c,r)=>sink.persist(c,r)},"synthetic_demo",()=>new Date().toISOString());
   await withTenant(practiceMaterialPool(f.runtime,a.digest),a.practiceContext,db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[w.t,a.membershipId,randomUUID(),"synthetic_final_check_terms.v1"]));
   const task={version:"shadow-detection-task.v1",tenantId:w.t,jobId:w.j};await worker.start();await worker.execute(verifiedTenantContextForQueuedJob(w.t),task);

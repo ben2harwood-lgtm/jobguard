@@ -14,11 +14,13 @@ const TENANT_B = "20000000-0000-4000-8000-000000000002";
 const ACCOUNT_A = "a0000000-0000-4000-8000-000000000001";
 const ACCOUNT_B = "b0000000-0000-4000-8000-000000000002";
 const USER_A = "c0000000-0000-4000-8000-000000000001";
+const MEMBER_A = "11000000-0000-4000-8000-000000000001";
+const MEMBER_B = "22000000-0000-4000-8000-000000000002";
 const USER_B = "d0000000-0000-4000-8000-000000000002";
 
 // Synthetic authenticated membership creates stamped contexts for the RLS tests.
 const context = (tenantId: string): VerifiedTenantContext =>
-  testTenantContext(tenantId);
+  testTenantContext(tenantId, { membershipId: tenantId === TENANT_A ? MEMBER_A : MEMBER_B });
 
 let postgres: EmbeddedPostgres;
 let admin: Pool;
@@ -58,8 +60,8 @@ beforeAll(async () => {
       ('${ACCOUNT_A}', '${TENANT_A}', 'Tenant A'),
       ('${ACCOUNT_B}', '${TENANT_B}', 'Tenant B');
     INSERT INTO app.membership (id, tenant_id, account_id, identity_user_id, role) VALUES
-      ('11000000-0000-4000-8000-000000000001', '${TENANT_A}', '${ACCOUNT_A}', '${USER_A}', 'owner'),
-      ('22000000-0000-4000-8000-000000000002', '${TENANT_B}', '${ACCOUNT_B}', '${USER_B}', 'owner');
+      ('${MEMBER_A}', '${TENANT_A}', '${ACCOUNT_A}', '${USER_A}', 'owner'),
+      ('${MEMBER_B}', '${TENANT_B}', '${ACCOUNT_B}', '${USER_B}', 'owner');
     CREATE ROLE jobguard_test_login LOGIN PASSWORD 'synthetic-runtime-only'
       NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
     GRANT jobguard_runtime TO jobguard_test_login;

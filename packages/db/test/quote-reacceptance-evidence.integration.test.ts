@@ -43,7 +43,7 @@ describe("re-acceptance with an EARLIER stated date", () => {
       await client.query("INSERT INTO app.quote_acceptance_sequence(tenant_id,job_id,document_id,acceptance_id,acceptance_sequence,replaces_acceptance_id) VALUES($1,$2,$3,$4,2,$5)", [fixture.tenantId, first.job_id, first.document_id, second, fixture.acceptanceId]);
       await client.query("COMMIT");
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
-    const ids = (await withTenant(runtime, testTenantContext(fixture.tenantId), db => loadEvidencePackSources(db, fixture.tenantId, fixture.caseId))).sources.map(x => x.sourceId);
+    const ids = (await withTenant(runtime, testTenantContext(fixture.tenantId, { membershipId: fixture.memberId }), db => loadEvidencePackSources(db, fixture.tenantId, fixture.caseId))).sources.map(x => x.sourceId);
     expect(ids).toContain(`quote_acceptance:${second}`);
     expect(ids).not.toContain(`quote_acceptance:${fixture.acceptanceId}`);
   });

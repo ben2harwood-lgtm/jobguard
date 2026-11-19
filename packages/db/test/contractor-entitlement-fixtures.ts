@@ -4,7 +4,8 @@ import { expect } from "vitest";
 import type { Pool, PoolClient } from "pg";
 import { snapshotRows as snapshot } from "./upgrade-proof-utils.js";
 import { ContractorEntitlementAuthorityRepository } from "../src/contractor-entitlement-authority-repository.js";
-import { ownerTx, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
+import { withTenant } from "../src/tenant-context.js";
+import type { Cluster, SessionFixture } from "./contractor-practice-session-fixtures.js";
 export { cluster, startBeforeMigration, applyMigration, ownerTx, makeSessionExpired } from "./contractor-practice-session-fixtures.js";
 export type { Cluster, SessionFixture };
 export const own = "0198_contractor_entitlement_authority.sql";
@@ -14,10 +15,13 @@ export async function unchanged<T>(c: Cluster, work: () => Promise<T>): Promise<
  try { return await work(); } finally { expect(await snapshot(c.admin)).toEqual(before); }
 }
 export const read = (c: Cluster, f: SessionFixture) => unchanged(c, () => new ContractorEntitlementAuthorityRepository(c.runtime).withAuthority(f.session, async (_db, authority) => authority));
-export async function status(c: Cluster, f: SessionFixture, value: "active" | "inactive" | "suspended", assignmentId?: string) {
- return ownerTx(c, f.p.tenantId, async db => {
+export async function status(c: Cluster, f: Pick<SessionFixture, "p" | "context">, value: "active" | "inactive" | "suspended", assignmentId?: string) {
+ return withTenant(c.admin, f.context, async db => {
+  await db.$client.query("SET LOCAL ROLE jobguard_migration");
   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [f.p.tenantId]);
-  const assignment = assignmentId ?? (await db.$client.query("SELECT id FROM app.commercial_track_assignment ORDER BY revision DESC LIMIT 1")).rows[0].id;
+  const assignment = assignmentId ?? (await db.$client.query(
+    "SELECT id FROM app.commercial_track_assignment WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1", [f.p.tenantId],
+  )).rows[0].id;
   const id = randomUUID();
   await db.$client.query(`INSERT INTO app.contractor_agreement_status_revision(tenant_id,id,assignment_id,revision,status,schema_version,environment,fictional_source)
    SELECT $1,$2,$3,coalesce(max(revision),0)+1,$4,'contractor-agreement-status.v1','synthetic_demo',$5 FROM app.contractor_agreement_status_revision WHERE tenant_id=$1 AND assignment_id=$3`, [f.p.tenantId,id,assignment,value,`fictional-fixture:${randomUUID()}`]);

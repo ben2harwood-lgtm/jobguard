@@ -7,13 +7,13 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  ContractorRepository, MIGRATION_URLS, SorRepository, WorkOrderRepository, demoFile, demoRow, migrate, prepareWorkOrderDemo, verifyAuditChain, verifiedTenantContextFromMembership, withTenant,
+  ContractorRepository, MIGRATION_URLS, SorRepository, WorkOrderRepository, demoFile, demoRow, migrate, prepareWorkOrderDemo, verifyAuditChain, requireContractorRequestContext, withTenant,
   type AuditEvent, type AuthenticatedMembership,
 } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, orders: WorkOrderRepository, rates: SorRepository;
-const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
+const ctx = (p: AuthenticatedMembership) => requireContractorRequestContext(p);
 const TABLES = ["work_order", "work_order_revision", "work_order_line", "work_order_current", "import_batch", "import_row_receipt", "job_assignment", "scope_identity", "job", "contractor_party_binding", "command_receipt", "audit_event"];
 const counts = async (tenantId: string) => Object.fromEntries(await Promise.all(TABLES.map(async t => [t, (await admin.query(`SELECT count(*)::int n FROM app.${t} WHERE tenant_id=$1`, [tenantId])).rows[0].n as number])));
 async function org() { const p = await contractors.startPractice(randomUUID()); await seedActiveContractorAgreement(admin,p.tenantId); const demo = await prepareWorkOrderDemo(runtime, p); return { p, demo }; }

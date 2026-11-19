@@ -1,4 +1,3 @@
-import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
@@ -46,9 +45,8 @@ const adminCredential = randomUUID(), runtimeCredential = randomUUID(), infrastr
  * owner, accepted document, authorization and lifecycle before binding v3. */
 async function activatePursuitFixture(client: import("pg").PoolClient, tenant: string, job: string, expected: number) {
   const row = (await client.query("SELECT d.id,d.document_version,d.content_hash,m.id actor FROM app.quote_document_version d JOIN app.membership m ON m.tenant_id=d.tenant_id AND m.role='owner' AND m.revoked_at IS NULL WHERE d.tenant_id=$1 AND d.job_id=$2", [tenant, job])).rows[0];
-  const credential = createHash('sha256').update(randomUUID()).digest('hex');
-  await testBoundTenantContext(client as unknown as Pool, tenant, row.actor, credential);
-  await client.query("SELECT app.bind_request('real',$1,$2)",[credential,tenant]);
+  // The evidence fixture already bound this owner before entering the activation seam.
+  expect((await client.query("SELECT app.current_actor() actor,app.current_tenant() tenant")).rows).toEqual([{ actor: row.actor, tenant }]);
   const command = randomUUID(), significant = {version:'command.v1',commandId:command,commandType:'job.switch_live',semanticKey:`pursuit-fixture:${job}`,actorMembershipId:row.actor,subjectType:'job',subjectRef:job,
     action:{actionType:'job.switch_live',recipient:null,contentHash:row.content_hash,aggregateRevision:row.document_version,amountPence:null,currency:null,policyVersion:'synthetic_demo_activation.v3',expiresAt:new Date(Date.now()+3600000).toISOString()}};
   const claim=(await client.query("SELECT app.begin_command($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb) result",['command.v1',command,'job.switch_live',significant.semanticKey,{tenantId:tenant,actorMembershipId:row.actor,subjectType:'job',subjectRef:job},{aggregateRevision:row.document_version},significant])).rows[0].result;
@@ -79,7 +77,7 @@ async function seedPursuitFixture() {
             expect(document).toEqual([{ id: args[5] }]);
             return activatePursuitFixture(target, String(args[0]), primaryJob, Number(args[2]));
           }
-          if (sql === "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')" && args?.[1] === primaryJob) {
+          if (sql === "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT (tenant_id,job_id) DO NOTHING" && args?.[1] === primaryJob) {
             expect(tracks++).toBe(0);
             const bound = await target.query('SELECT job_track,environment FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2', args);
             expect(bound.rows).toEqual([{ job_track: 'small_builder', environment: 'synthetic_demo' }]);

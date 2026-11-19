@@ -1,3 +1,4 @@
+import { bindIssuedCredential } from "../src/tenant-context.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -113,7 +114,7 @@ it("work statements do not alter price, requirement, origin or timing; finished 
  await expect(repo.supervisorQueries(await testActorContext(c.admin, w.ctx, w.otherSupervisor.member), w.otherSupervisor.member, jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
  const owner = await c.admin.connect();
  try {
-  await owner.query("BEGIN"); await owner.query("SET LOCAL ROLE jobguard_migration");
+  await owner.query("BEGIN"); await bindIssuedCredential(owner, w.ctx); await owner.query("SET LOCAL ROLE jobguard_migration");
   await owner.query("SELECT set_config('app.tenant_id',$1,true)", [w.p.tenantId]);
   await expect(owner.query("UPDATE app.site_extra_work_status SET work_status='not_started' WHERE tenant_id=$1 AND variation_id=$2", [w.p.tenantId, finished!.variationId])).rejects.toMatchObject({ code: "55000" });
  } finally { await owner.query("ROLLBACK"); owner.release(); }

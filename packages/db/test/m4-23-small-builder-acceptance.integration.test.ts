@@ -3,6 +3,7 @@ import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 // Coverage limits are executable TODOs below. A withheld-payment recovery is
 // deliberately not described as the plan's merchant-overcharge Chain A.
 import { randomUUID } from "node:crypto";
+import { Pool } from "pg";
 import { verifyStandalonePack } from "@jobguard/core";
 import { FakeTrueLayerAisAdapter, SyntheticAisTokenVault, aisHash, type AisPage } from "../src/ais-adapter.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
@@ -30,12 +31,20 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 import { catchFeeFixture } from "./success-fee-catch-fixture.js";
 import { recoveryFeeFixture } from "./success-fee-recovery-fixture.js";
 import { realReceiptFixture } from "./stored-receipt-case-fixture.js";
-import { createFinalCheckFixture, closeFinalCheckFixture, finalCheckTenant, type FinalCheckFixture } from "./final-check-fixture.js";
+import { createFinalCheckFixture, closeFinalCheckFixture, finalCheckShadowJob, finalCheckTenant, type FinalCheckFixture } from "./final-check-fixture.js";
 
 let f: FinalCheckFixture;
+let support: Pool;
 const environment = process.env.JOBGUARD_ENV;
-beforeAll(async () => { f = await createFinalCheckFixture(); }, 120_000);
+beforeAll(async () => {
+  f = await createFinalCheckFixture();
+  const login = "acceptance_shadow_support", password = randomUUID();
+  const ddl = await f.admin.query("SELECT format('CREATE ROLE %I LOGIN NOSUPERUSER NOBYPASSRLS IN ROLE jobguard_shadow_emergency_access PASSWORD %L',$1::text,$2::text) ddl", [login,password]);
+  await f.admin.query(ddl.rows[0].ddl);
+  support = new Pool({ ...f.admin.options, user: login, password, max: 1 });
+}, 120_000);
 afterAll(async () => {
+  await support?.end();
   if (f) await closeFinalCheckFixture(f);
   if (environment === undefined) delete process.env.JOBGUARD_ENV;
   else process.env.JOBGUARD_ENV = environment;
@@ -295,7 +304,7 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
       });
       // Detector input only: bind the existing evidenced signal to the real
       // capture through the shadow role's normal update grants, guards enabled.
-      await finalCheckTenant(f.shadow, x.context.tenantId, db => db.query(
+      await finalCheckShadowJob(f.shadow, x.context.tenantId, x.jobId, db => db.query(
         "UPDATE app.shadow_commercial_signal SET matched_variation_id=$1,outcome='builder_captured',revision=revision+1 WHERE tenant_id=$2 AND job_id=$3 AND id=$4",
         [captureId, x.context.tenantId, x.jobId, x.signalId]));
     })).rejects.toThrow("FINAL_CHECK_SOURCE_CHANGED");
@@ -332,7 +341,7 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
     let source: Subject | undefined;
     await expect(realReceiptFixture(f, "F7", "receipt-line-allocation-command.v1", false, false, async x => {
       source = { context: x.context, jobId: x.jobId, auth: { digest: x.digest } };
-      await new ShadowRepository(f.admin).supportDisclosure(x.context, {
+      await new ShadowRepository(support).supportDisclosure(verifiedTenantContextForQueuedJob(x.context.tenantId), {
         version: "shadow-support-disclosure.v1", jobId: x.jobId, signalId: x.signalId, eventId: randomUUID(),
       });
     })).rejects.toThrow("FINAL_CHECK_SOURCE_CHANGED");

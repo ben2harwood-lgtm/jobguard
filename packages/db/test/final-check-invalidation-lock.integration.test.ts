@@ -24,8 +24,11 @@ function invalidate(db: PoolClient, a: FinalCheckJob, evidenceId: string) {
     VALUES($1,$2,$3,$4,'verification_invalid')`,
   [randomUUID(), a.tenantId, evidenceId, FINAL_CHECK_ACTOR]);
 }
+function invalidateAsFixtureOwner(a: FinalCheckJob, evidenceId: string) {
+  return finalCheckTenant(f.runtime, a.tenantId, db => invalidate(db, a, evidenceId), { practiceDigest: a.digest });
+}
 async function expectLocked(a: FinalCheckJob, evidenceId: string) {
-  await expect(finalCheckTenant(f.runtime, a.tenantId, db => invalidate(db, a, evidenceId)))
+  await expect(invalidateAsFixtureOwner(a, evidenceId))
     .rejects.toMatchObject({ code: "55000", message: "FINAL_CHECK_VERIFIED_SOURCE_LOCKED" });
   expect((await f.admin.query(`SELECT id FROM app.evidence_invalidation
     WHERE tenant_id=$1 AND evidence_id=$2`, [a.tenantId, evidenceId])).rows).toEqual([]);
@@ -53,12 +56,12 @@ it("refuses locked manifest evidence after completion until the final invoice is
   expect((await f.admin.query(`SELECT id FROM app.customer_invoice
     WHERE tenant_id=$1 AND job_id=$2 AND id=$3`, [a.tenantId, a.jobId, issued.invoiceId])).rowCount).toBe(1);
   // C135: once the final invoice is issued, recovery flows may withdraw the same proof.
-  expect((await finalCheckTenant(f.runtime, a.tenantId, db => invalidate(db, a, evidenceId))).rowCount).toBe(1);
+  expect((await invalidateAsFixtureOwner(a, evidenceId)).rowCount).toBe(1);
 });
 
 it("keeps invalidation of the same kind of evidence before lock unchanged", async () => {
   const a = await seedFinalCheckJob(f), evidenceId = await insertFinalCheckEvidence(f, a);
-  expect((await finalCheckTenant(f.runtime, a.tenantId, db => invalidate(db, a, evidenceId))).rowCount).toBe(1);
+  expect((await invalidateAsFixtureOwner(a, evidenceId)).rowCount).toBe(1);
 });
 
 it("refuses manifest evidence as soon as the locked manifest exists, before completion", async () => {
@@ -80,9 +83,9 @@ it("allows same-job evidence outside the locked manifest and another job's evide
   [previewId, `synthetic/preview/${previewId}`, a.tenantId, evidenceId]));
   expect((await f.admin.query(`SELECT id FROM app.final_check_manifest_source
     WHERE tenant_id=$1 AND job_id=$2 AND evidence_id=$3`, [a.tenantId, a.jobId, previewId])).rows).toEqual([]);
-  expect((await finalCheckTenant(f.runtime, a.tenantId, db => invalidate(db, a, previewId))).rowCount).toBe(1);
+  expect((await invalidateAsFixtureOwner(a, previewId)).rowCount).toBe(1);
   const other = await seedFinalCheckJob(f), otherEvidence = await insertFinalCheckEvidence(f, other);
-  expect((await finalCheckTenant(f.runtime, other.tenantId, db => invalidate(db, other, otherEvidence))).rowCount).toBe(1);
+  expect((await invalidateAsFixtureOwner(other, otherEvidence)).rowCount).toBe(1);
   await expectLocked(a, evidenceId);
 });
 

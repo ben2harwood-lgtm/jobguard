@@ -1,11 +1,30 @@
+import { randomBytes } from "node:crypto";
 import { readJobSourceObservations } from "./job-source-observation-reader.js";
 import { z } from "zod";
 import type { Pool } from "pg";
 import { FINAL_CHECK_TERMS_VERSION, observationV1, parseObservation, shadowCaptureV1, type Observation, type ShadowCapture } from "@jobguard/core";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 const readV1 = z.object({ version: z.literal("shadow-observation-read.v1"), jobId: z.guid({ error: "Invalid uuid" }) }).strict();
 export class ShadowObservationReadError extends Error {
   constructor(readonly code: "INVALID_OBSERVATION_READ" | "OBSERVATION_JOB_UNAVAILABLE" | "TERMS_RELATION_UNAVAILABLE" | "TERMS_NOT_ACCEPTED" | "SOURCE_NOT_FINALIZED" | "DETECTION_LOCKED_JOB") { super(code); }
+}
+/** The worker passes an exact-job permit to runtime SELECT policies. */
+export async function withObservationRead<T>(pool: Pool, context: VerifiedTenantContext, jobId: string,
+  read: (db: TenantTransaction) => Promise<T>, shadowAuthority?: Pool): Promise<T> {
+  if (!shadowAuthority) return withTenant(pool, context, read);
+  const permit = randomBytes(32).toString("hex");
+  try {
+    await shadowAuthority.query("SELECT app.lp11_issue_observation_permit($1,$2,$3)", [context.tenantId, jobId, permit]);
+  } catch (error) {
+    const refusal = error as {code?:string; message?:string};
+    if (refusal.code === "42501" && refusal.message === "OBSERVATION_JOB_UNAVAILABLE")
+      throw new ShadowObservationReadError("OBSERVATION_JOB_UNAVAILABLE");
+    throw error;
+  }
+  return withTenant(pool, context, async db => {
+    await db.$client.query("SELECT app.lp11_bind_observation_read($1,$2,$3)", [context.tenantId, jobId, permit]);
+    return read(db);
+  });
 }
 /** Synthetic structured captions/facts only. Never read the separate evaluation labels. */
 export interface ObservationSourcePort {
@@ -20,9 +39,9 @@ export class FixtureObservationSources implements ObservationSourcePort {
     return o ? { text: o.text, facts: o.facts, citations: o.citations } : null;
   }
 }
-/** Ordinary runtime login + RLS only. This reader never issues a shadow statement. */
+/** Reads observations through the runtime login and RLS. */
 export class ShadowObservationReader {
-  constructor(private readonly pool: Pool, private readonly sources: ObservationSourcePort) {}
+  constructor(private readonly pool: Pool, private readonly sources: ObservationSourcePort, private readonly shadowAuthority?: Pool) {}
   async assertTermsRelation(): Promise<void> {
     const exists = (await this.pool.query<{ available: boolean }>("SELECT to_regclass('app.final_check_terms_acceptance') IS NOT NULL AS available")).rows[0]?.available;
     if (!exists) throw new ShadowObservationReadError("TERMS_RELATION_UNAVAILABLE");
@@ -30,12 +49,18 @@ export class ShadowObservationReader {
   async hasAcceptedTerms(context: VerifiedTenantContext, jobId: string): Promise<boolean> {
     // SV-4 owns this append-only record. An absent relation is a startup error, never a permissive fallback.
     await this.assertTermsRelation();
+    if (this.shadowAuthority) {
+      return (await this.shadowAuthority.query<{ accepted: boolean }>(
+        "SELECT app.lp11_shadow_job_has_terms($1,$2) AS accepted", [context.tenantId, jobId],
+      )).rows[0]?.accepted === true;
+    }
     return withTenant(this.pool, context, async db => (await db.$client.query<{ accepted: boolean }>("SELECT app.final_check_runtime_job_terms($1,$2) AS accepted", [jobId, FINAL_CHECK_TERMS_VERSION])).rows[0]?.accepted === true);
   }
   async read(context: VerifiedTenantContext, raw: unknown): Promise<{ observations: readonly Observation[]; captures: readonly ShadowCapture[] }> {
     const parsed = readV1.safeParse(raw); if (!parsed.success) throw new ShadowObservationReadError("INVALID_OBSERVATION_READ");
     const jobId = parsed.data.jobId;
-    return withTenant(this.pool, context, async db => {
+    return withObservationRead(this.pool, context, jobId, async db => {
+      if (this.shadowAuthority) await db.$client.query("SET TRANSACTION READ ONLY");
       const job = (await db.$client.query<{ id: string }>("SELECT j.id FROM app.job j JOIN app.job_commercial_track t ON (t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.tenant_id=$1 AND j.id=$2 AND j.status='live' AND j.provenance='system_generated_quote' AND t.job_track='small_builder' AND t.environment='synthetic_demo'", [context.tenantId,jobId])).rows[0];
       if (!job) throw new ShadowObservationReadError("OBSERVATION_JOB_UNAVAILABLE");
       const locksAvailable=(await db.$client.query<{available:boolean}>("SELECT to_regclass('app.final_account_lock') IS NOT NULL AS available")).rows[0]?.available;
@@ -88,6 +113,6 @@ export class ShadowObservationReader {
         ...extras.map(r => shadowCaptureV1.parse({ version: "shadow-capture.v1",tenantId:context.tenantId,jobId,id:r.id,scopeItemId:r.scope_item_id,revisionId:r.revision_id,
           serverRecordedAt:r.recorded,valuePence:null,kind:r.origin === "final_review" ? "final_review" : "log_extra",state:r.origin === "final_review" ? null : r.state,scopeArea:"job",description:r.description,recordedPhase:"pre_lock",aiStructured:false,sourceRef:r.id }))];
       return { observations, captures };
-    });
+    }, this.shadowAuthority);
   }
 }

@@ -110,10 +110,11 @@ it("F21FreshInstallAndOwnMigrationUpgrade",async()=>{
  const fresh=new Pool({...adminConfig,database});try{await migrate(fresh);await migrate(fresh);expect((await fresh.query("SELECT migration_name FROM public.jobguard_schema_migration ORDER BY migration_name")).rows.map(r=>r.migration_name)).toEqual(names);}finally{await closeTestPools(fresh);}
 },120000);
 it("F21LegacyReplayAfterUpgrade",async()=>{
- expect(await historical.repo.review(ctx,historical.jobId,command,actor,historical.auth.digest)).toEqual(saved);
- const next=await historical.repo.review(ctx,historical.jobId,review(historical.c,"F21",1),actor,historical.auth.digest);
+ const context=historical.auth.context;
+ expect(await historical.repo.review(context,historical.jobId,command,actor,historical.auth.digest)).toEqual(saved);
+ const next=await historical.repo.review(context,historical.jobId,review(historical.c,"F21",1),actor,historical.auth.digest);
  expect(next.result).toEqual(expected);expect(next.revision).toBe(2);
- expect(await historical.repo.review(ctx,historical.jobId,command,actor,historical.auth.digest)).toEqual(saved);
+ expect(await historical.repo.review(context,historical.jobId,command,actor,historical.auth.digest)).toEqual(saved);
  expect(await proofDifferences(admin,proof)).toEqual({rows:[],types:[]});
 });
 it("F21UpgradeComparatorControls",async()=>{

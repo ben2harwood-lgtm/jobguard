@@ -121,7 +121,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "80aff76fe9ef562d129b299f9866c23156ffc645d319cfee6dffeb4e9284fd48",
         "staticWrites": [
           "app.customer_invoice_sequence"
         ],
@@ -163,7 +163,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "08c441ade09a2685785d32c5c0b3400f0e7b09e37e649838e6bfbe588bba2d00",
         "staticWrites": [
           "app.final_account_draft"
         ],
@@ -199,6 +199,7 @@
           "LP-8a": "revoke direct invoice, evidence, credit, payment, reversal and number-sequence writes; retire the legacy direct-insert service; convert restore rehearsal; cover both invoice signatures"
         },
         "downstream": "Issuing an invoice, credit, payment or reversal moves money records; the login can write them without the exact-approval and same-actor receipt checks the routines apply.",
+        "path": "ap-customer-billing",
         "sources": [
           "packages/db/migrations/0017_customer_billing.sql:8",
           "packages/db/migrations/0017_customer_billing.sql:14",
@@ -211,8 +212,7 @@
           "packages/db/test/final-account-lock-invoice.integration.test.ts",
           "packages/db/test/practice-invoice-audit.integration.test.ts"
         ],
-        "gaps": [],
-        "path": "ap-customer-billing"
+        "gaps": []
       },
       "after": null
     },
@@ -236,6 +236,7 @@
           "LP-13": "invoice-number burning: numbers cannot corrupt issued records or create unbounded service trouble"
         },
         "downstream": "Consumes the next invoice number for a tenant without issuing an invoice.",
+        "path": "ap-lp13-invoice-number-burning",
         "sources": [
           "packages/db/migrations/0017_customer_billing.sql:14"
         ],
@@ -243,8 +244,7 @@
           "packages/db/test/UIWIRE-10.integration.test.ts",
           "packages/db/test/lp-0-authority-paths.integration.test.ts"
         ],
-        "gaps": [],
-        "path": "ap-lp13-invoice-number-burning"
+        "gaps": []
       },
       "after": null
     },
@@ -322,6 +322,8 @@
         "responsibilities": {
           "LP-8a": "Preserve exact legacy artifacts through checked routines."
         },
+        "downstream": "Legacy billing compatibility uses checked LP-5 claims, LP-6c identity, exact artifacts and immutable billing rows.",
+        "path": "ap-lp8a-billing-adapters",
         "sources": [
           "packages/db/migrations/0766_lp8a_billing_revokes.sql"
         ],
@@ -330,9 +332,7 @@
         ],
         "gaps": [
           "Exact-head RED review and PostgreSQL CI remain required."
-        ],
-        "downstream": "Legacy billing compatibility uses checked LP-5 claims, LP-6c identity, exact artifacts and immutable billing rows.",
-        "path": "ap-lp8a-billing-adapters"
+        ]
       }
     },
     {
@@ -351,7 +351,7 @@
         "otherExecute": [
           "jobguard_migration"
         ],
-        "definitionSha256": null,
+        "definitionSha256": "b395e03f494321d5988a23eb17c4ed1055251de589916a232ac40b1265cece47",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",
@@ -389,7 +389,7 @@
         "runtimeExecute": false,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "2667c2a97dd578ff7053a41f2785bc09104197e78b6dcb0b723ab7391d61bc29",
         "staticWrites": [],
         "staticCalls": []
       }
@@ -408,7 +408,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "629ca8d4fb76d5b334a65c75fcd6a3151defd4a0596cc342531195cea94ea346",
         "staticWrites": [
           "app.customer_invoice",
           "app.customer_invoice_evidence"
@@ -456,7 +456,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "47151312b13ef917a5e099cd2bef88afe84b2626bcd04ab5c4d1c81698980ad8",
         "staticWrites": [
           "app.customer_credit_note"
         ],
@@ -499,7 +499,7 @@
         "runtimeExecute": true,
         "publicExecute": false,
         "otherExecute": [],
-        "definitionSha256": null,
+        "definitionSha256": "10b68fa9382901892822918c48f5deeb06a95fe6823e900fe4cca4c5358233d3",
         "staticWrites": [],
         "staticCalls": [
           "app.current_actor",

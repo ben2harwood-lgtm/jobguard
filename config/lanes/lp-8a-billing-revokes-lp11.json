@@ -1,10 +1,11 @@
 {
   "version": 2,
   "lanes": {
-    "lp-8a-billing-revokes-main": {
+    "lp-8a-billing-revokes-lp11": {
       "branches": [
-        "codex/sandbox/lp-8a-billing-revokes-main"
+        "codex/sandbox/lp-8a-billing-revokes-lp11"
       ],
+      "note": "LP-8a catch-up relative to the reviewed LP-11 parent.",
       "allow": [
         "packages/db/migration-notes/0766_lp8a_billing_revokes.md",
         "packages/db/migrations/0766_lp8a_billing_revokes.sql",
@@ -14,7 +15,7 @@
         "packages/db/test/administrative-role-setup.ts",
         "packages/db/test/audit-api-file-final-account.test.ts",
         "packages/db/test/audit-dbsrc-03.integration.test.ts",
-        "packages/db/test/enterprise-access-upgrade.integration.test.ts",
+        "packages/db/test/final-account.integration.test.ts",
         "packages/db/test/financial-restore-proof.integration.test.ts",
         "packages/db/test/invoice-later.integration.test.ts",
         "packages/db/test/lp-0-authority-paths.integration.test.ts",
@@ -23,16 +24,12 @@
         "packages/db/test/lp8a-billing-revokes.integration.test.ts",
         "packages/db/test/lp8a-billing-revokes.test.ts",
         "packages/db/test/lp8a-legacy-billing-transport.ts",
-        "packages/db/test/meter-work-admission-upgrade.integration.test.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0766_lp8a_billing_revokes.proof.json",
         "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
-        "packages/db/test/resilience-exercises.integration.test.ts",
-        "packages/db/test/restore-rehearsal.integration.test.ts",
         "packages/db/test/shadow-catalog.integration.test.ts",
         "packages/db/tools/synthetic-restore.mjs"
-      ],
-      "note": "RED LP-8a port onto main."
+      ]
     }
   }
 }

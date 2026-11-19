@@ -17,18 +17,18 @@ type Receipt = Awaited<ReturnType<typeof realReceiptFixture>>;
  * existing receipt journey's activation. Not company-route/admission proof.
  * Start/end triggers, lock, check, catch, invoice and receipt writers run normally.
  * Company screen access remains on jobguard-trial-demo-scope-2026-11-01. */
-async function trialBeforeLock(f: FinalCheckFixture, tenantId: string, jobId: string) {
+async function trialBeforeLock(f: FinalCheckFixture, tenantId: string, jobId: string, digest: string) {
  expect((await f.admin.query("SELECT count(*)::int n FROM app.job_activation WHERE tenant_id=$1", [tenantId])).rows).toEqual([{ n: 1 }]);
  const parent = (await f.admin.query<Parameters<typeof snapshot>[0]>(
   'SELECT tenant_id AS "tenantId",job_id AS "jobId",id AS "activationId" FROM app.job_activation WHERE tenant_id=$1 AND job_id=$2', [tenantId, jobId])).rows[0]!;
- const s = snapshot(parent), commandId = randomUUID();
+ const s = snapshot({ ...parent, actorId: DEMO_MEMBERSHIP_ID }), commandId = randomUUID();
  await store(f, s);
  await finalCheckTenant(f.admin, tenantId, async db => {
   await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2::uuid,'ch4.fixture',($2::uuid)::text,$3,'succeeded',$4,'{}',clock_timestamp())", [tenantId, commandId, 'a'.repeat(64), DEMO_MEMBERSHIP_ID]);
   await db.query("SET LOCAL ROLE jobguard_migration");
   await db.query("INSERT INTO app.trial_business_verification(tenant_id,id,version,environment,source,company_number,normalized_phone) VALUES($1,$2,'trial-business-verification.v1','synthetic_demo','fictional_verified_fixture.v1',$3,$4)", [tenantId, s.provenance, s.company, s.phone]);
   await db.query("INSERT INTO app.trial_admission(tenant_id,job_id,activation_id,snapshot_id,verification_id,command_id,admission_kind) VALUES($1,$2,$3,$4,$5,$6,'first')", [tenantId, jobId, parent.activationId, s.id, s.provenance, commandId]);
- });
+ }, { practiceDigest: digest });
  expect((await f.admin.query("SELECT started_at<clock_timestamp() AND deadline_at>clock_timestamp() active FROM app.trial_start WHERE tenant_id=$1 AND job_id=$2", [tenantId, jobId])).rows).toEqual([{ active: true }]);
  expect((await f.admin.query("SELECT count(*)::int n FROM app.trial_end_source WHERE tenant_id=$1", [tenantId])).rows).toEqual([{ n: 0 }]);
 }
@@ -66,7 +66,7 @@ describe.each(["F7", "F5"] as const)("MON-3 trial Final Check %s", kind => {
   const ordinary = await realReceiptFixture(controlFixture, kind, "receipt-line-allocation-command.v1");
   expect((await controlFixture.admin.query("SELECT count(*)::int n FROM app.trial_start WHERE tenant_id=$1", [ordinary.context.tenantId])).rows).toEqual([{ n: 0 }]);
   const trial = await realReceiptFixture(f, kind, "receipt-line-allocation-command.v1", false, false, async source => {
-   await trialBeforeLock(f, source.context.tenantId, source.jobId);
+   await trialBeforeLock(f, source.context.tenantId, source.jobId, source.digest);
   });
   const sources = (await f.admin.query(`SELECT e.kind,e.source_id,e.job_id,e.effective_at=l.locked_at exact_time,
    s.deadline_at>l.locked_at before_deadline FROM app.trial_start s
@@ -77,7 +77,7 @@ describe.each(["F7", "F5"] as const)("MON-3 trial Final Check %s", kind => {
   const ended = await finalCheckTenant(f.admin, trial.context.tenantId, async db => {
    await db.query("SET LOCAL ROLE jobguard_migration");
    return (await db.query("SELECT app.mon3_trial_date($1,clock_timestamp()) IS NOT NULL ended", [trial.context.tenantId])).rows[0].ended;
-  });
+  }, { practiceDigest: trial.auth.digest });
   expect(ended).toBe(true);
   const read = (x: Receipt) => new FinalCheckApplication(x.f.runtime, x.session).get(x.jobId);
   const [control, result] = await Promise.all([read(ordinary), read(trial)]);

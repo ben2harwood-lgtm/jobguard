@@ -52,6 +52,7 @@ it("0613 upgrades without changing a locked job, work events or meter; replay is
  const sink=new ShadowDetectionRepository(f.shadow),batch={version:"shadow-detection-batch.v1",jobId:a.jobId,observations,captures:[],proposals:detectShadowObservations(observations,[],new Date().toISOString())};
  await sink.persist(verifiedTenantContextForQueuedJob(a.tenantId),batch);await sink.persist(verifiedTenantContextForQueuedJob(a.tenantId),batch);
  await finalCheckTenant(f.shadow,a.tenantId,async db=>{
+  await db.query("SELECT app.lp11_bind_shadow_job($1,$2)",[a.tenantId,a.jobId]);
   expect((await db.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND coalesced_into_signal_id IS NULL",[a.tenantId,a.jobId])).rows).toEqual([{n:1}]);
   expect((await db.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toContainEqual({reason:"evidence_after_lock"});
  });

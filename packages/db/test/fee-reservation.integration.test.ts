@@ -1,3 +1,4 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -6,7 +7,7 @@ import { DarkFeeCollectionExecutor } from "../../../apps/api/src/fee-collection/
 import { FakeGoCardlessRail } from "../../../apps/api/src/fee-collection/fake-gocardless.js";
 import { ctx, fixture, id } from "../../../apps/api/src/fee-collection/test-fixture.js";
 import { withTenant, type TenantTransaction } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { feeFixtureContext, seedFeeFixtureTenant } from "./fee-reservation-membership-fixture.js";
 import { closeWorkFixture, createWorkFixture, type WorkFixture } from "./job-work-state-fixtures.js";
 import { migrate } from "../src/migrate.js";
 
@@ -16,7 +17,8 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
   let db: WorkFixture;
   beforeAll(async () => {
     db = await createWorkFixture();
-    await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [ctx.tenantId, id(90)]);
+    await seedFeeFixtureTenant(db.admin, ctx.tenantId);
+    await seedFeeFixtureTenant(db.admin, id(90));
     // Source fixture lives outside app and is not a migration/business capability.
     await db.admin.query(`CREATE TABLE public.fee_source_fixture(tenant_id uuid PRIMARY KEY, value jsonb NOT NULL);
       GRANT SELECT, UPDATE ON public.fee_source_fixture TO jobguard_runtime`);
@@ -27,7 +29,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const f = fixture();
     // Each test uses an isolated synthetic tenant, including fresh book creation races.
     const tenantId = randomUUID();
-    await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenantId]);
+    await seedFeeFixtureTenant(db.admin, tenantId);
     f.source.tenantId = tenantId;
     f.source.agreement.tenantId = tenantId;
     f.source.agreement.record!.selection.tenantId = tenantId;
@@ -48,7 +50,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       collection: async () => (await tx.$client.query("SELECT value FROM public.fee_source_fixture WHERE tenant_id=$1 FOR UPDATE", [tenantId])).rows[0]?.value,
       credit: async () => ({ ...f.credit, tenantId }),
     });
-    const store = () => new PostgresReservationStore(db.runtime, testTenantContext(tenantId), readers);
+    const store = () => new PostgresReservationStore(db.runtime, feeFixtureContext(tenantId), readers);
     const dd = new FakeGoCardlessRail("fake-dd-test-signing-secret");
     const executor = () => new DarkFeeCollectionExecutor(store(), [f.rail, dd], () => new Date("2026-10-29T00:00:00Z"), sessions);
     const read = () => store().transaction(tenantId, async book => structuredClone(book));
@@ -74,7 +76,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const { Pool } = await import("pg");
     const restartedPool = new Pool(db.runtime.options);
     try {
-      const restarted = new PostgresReservationStore(restartedPool, testTenantContext(f.tenantId), () => ({ collection: async () => f.source, credit: async () => f.credit }));
+      const restarted = new PostgresReservationStore(restartedPool, feeFixtureContext(f.tenantId), () => ({ collection: async () => f.source, credit: async () => f.credit }));
       expect(await restarted.transaction(f.tenantId, async book => book.attempts[0])).toEqual(first);
     } finally { await restartedPool.end(); }
     expect(await f.executor().reserve(f.context, f.intent)).toEqual(first);
@@ -99,7 +101,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     f.rail.crashAfterAcceptance = true;
     await expect(f.executor().execute(f.context, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
     const before = await f.read();
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       "UPDATE app.fee_reservation_book SET book=jsonb_set(book,'{attempts}','[]'::jsonb) WHERE tenant_id=$1", [f.tenantId],
     ))).rejects.toMatchObject({ code: "42501" });
     expect(await f.read()).toEqual(before);
@@ -115,12 +117,12 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const before = await f.read();
     for (const sql of ["UPDATE app.fee_reservation_book SET book=book WHERE tenant_id=$1",
       "DELETE FROM app.fee_reservation_book WHERE tenant_id=$1"]) {
-      await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(sql, [f.tenantId])))
+      await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(sql, [f.tenantId])))
         .rejects.toMatchObject({ code: "42501" });
       expect(await f.read()).toEqual(before);
     }
     const fresh = await setup();
-    await expect(withTenant(db.runtime, testTenantContext(fresh.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(fresh.tenantId), tx => tx.$client.query(
       "INSERT INTO app.fee_reservation_book(tenant_id,book) VALUES($1,$2)",
       [fresh.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", ...before })])))
       .rejects.toMatchObject({ code: "42501" });
@@ -149,7 +151,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       { ...active, events: { original: "b".repeat(64) } },
     ];
     for (const book of attacks) {
-      await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
         "SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(book)])))
         .rejects.toMatchObject({ code: "23514" });
       expect((await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows[0]?.book).toEqual(active);
@@ -166,7 +168,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const before = await f.read();
     for (const sql of ["SELECT app.lock_fee_reservation_book($1)", "SELECT app.replace_fee_reservation_book($1,$2::jsonb)"]) {
       const values = sql.includes("$2") ? [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", ...before })] : [f.tenantId];
-      await expect(withTenant(db.runtime, testTenantContext(id(90)), tx => tx.$client.query(sql, values)))
+      await expect(withTenant(db.runtime, feeFixtureContext(id(90)), tx => tx.$client.query(sql, values)))
         .rejects.toMatchObject({ code: "42501" });
       await expect(db.runtime.query(sql, values)).rejects.toMatchObject({ code: "42501" });
       expect(await f.read()).toEqual(before);
@@ -206,7 +208,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     await db.admin.query("INSERT INTO app.fee_reservation_book VALUES($1,$2)", [f.tenantId, JSON.stringify(active)]);
     await other.read();
     const refuse = async () => {
-      await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
         "SELECT app.replace_fee_reservation_book($1,$2::jsonb)",
         [f.tenantId, JSON.stringify({ ...active, attempts: [] })])))
         .rejects.toMatchObject({ code: "23514" });
@@ -237,6 +239,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       try {
         await client.query("SET LOCAL ROLE jobguard_migration");
         await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+        if (tenant) await bindTestClient(db.admin, client, tenant, id(2));
         return await work();
       } finally { await client.query("ROLLBACK"); }
     };
@@ -290,23 +293,23 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     forged.attempts[0]!.state = "released";
     forged.audit.push({ commandId: id(10), state: "released" });
     // Each attack has its own transaction: one refusal must not skip later steps.
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       "SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(forged)])))
       .rejects.toMatchObject({ code: "23514" });
     const records = [
       { kind: "attempt", key: `${id(10)}:0`, payload: forged.attempts[0] },
       ...forged.audit.map((payload, i) => ({ kind: "audit", key: String(i), payload })),
     ];
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       `INSERT INTO app.fee_reservation_archive(tenant_id,kind,key,payload)
         SELECT $1,kind,key,payload FROM jsonb_to_recordset($2::jsonb) r(kind text,key text,payload jsonb)
         ON CONFLICT DO NOTHING`, [f.tenantId, JSON.stringify(records)])))
       .rejects.toMatchObject({ code: "42501" });
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       "SELECT app.replace_fee_reservation_book($1,$2::jsonb)",
       [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", attempts: [], events: {}, audit: [] })])))
       .rejects.toMatchObject({ code: "23514" });
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       "INSERT INTO app.fee_reservation_archive VALUES($1,'attempt',$2,$3)",
       [f.tenantId, `${id(10)}:0`, JSON.stringify(forged.attempts[0])]))).rejects.toMatchObject({ code: "42501" });
     expect(await f.read()).toEqual(before);
@@ -319,13 +322,13 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const f = await setup();
     await f.executor().reserve(f.context, f.intent);
     const before = await f.read();
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       "INSERT INTO app.fee_reservation_archive VALUES($1,'audit','999','null'::jsonb)",
       [f.tenantId]))).rejects.toMatchObject({ code: "42501" });
     expect(await f.read()).toEqual(before);
     for (const poisoned of [{ ...before, events: { poisoned: null } },
       { ...before, attempts: [{ ...before.attempts[0], amountPence: -1 }] }]) {
-      await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
         "SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(poisoned)])))
         .rejects.toMatchObject({ code: "23514" });
       expect(await f.read()).toEqual(before);
@@ -367,6 +370,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       await client.query(predecessor);
       await client.query("SET LOCAL ROLE jobguard_runtime");
       await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenantId]);
+      await bindTestClient(db.admin, client, f.tenantId, id(2));
       await expect(client.query("SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)", values))
         .rejects.toMatchObject({ code: "22P02" });
     } finally {
@@ -374,7 +378,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       client.release();
     }
     expect(await snapshot()).toEqual(unchanged);
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       "SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)", values)))
       .rejects.toMatchObject({ code: "23514", message: path === "attempt result" ? "authenticated fee result required" : "authenticated fee event required" });
     expect(await snapshot()).toEqual(unchanged);
@@ -417,6 +421,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       await client.query(predecessor);
       await client.query("SET LOCAL ROLE jobguard_runtime");
       await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenantId]);
+      await bindTestClient(db.admin, client, f.tenantId, id(2));
       try {
         await client.query("SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)", values);
       } catch (error) { predecessorError = error; }
@@ -432,7 +437,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       context.skip("54001 not triggered by the deepest payload within the existing body limit; handler retained");
     }
     expect(predecessorError).toMatchObject({ code });
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       "SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)", values)))
       .rejects.toMatchObject({ code: "23514", message: path === "attempt result" ? "authenticated fee result required" : "authenticated fee event required" });
     expect(await snapshot()).toEqual(unchanged);
@@ -456,15 +461,15 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       f.rail.signStoreResult(f.tenantId, { ...next.attempts[0]!, commandId: id(99) }),
       f.rail.signStoreResult(f.tenantId, { ...next.attempts[0]!, amountPence: 1 })];
     for (const proof of proofs) {
-      await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
         "SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)",
         [f.tenantId, JSON.stringify(next), JSON.stringify(proof)]))).rejects.toMatchObject({ code: "23514" });
       expect(await f.read()).toEqual(before);
     }
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       "SELECT signing_secret FROM app.fee_provider_fixture_key WHERE tenant_id=$1", [f.tenantId])))
       .rejects.toMatchObject({ code: "42501" });
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       "SELECT app.seal_fee_reservation_change($1,'[]','[]')", [f.tenantId])))
       .rejects.toMatchObject({ code: "42501" });
     const body = JSON.stringify({ version: "fake-stripe-event.v1", environment: "synthetic_demo", account: "fake_jobguard_card",
@@ -491,14 +496,14 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const auditCount = async () => (await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.tenantId])).rows;
     const archive = async () => (await db.admin.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1 ORDER BY kind,key", [f.tenantId])).rows;
     const priorAudit = await auditCount(), priorArchive = await archive();
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), async tx => {
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), async tx => {
       await tx.$client.query("SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(next)]);
       throw new Error("rollback-after-routine");
     })).rejects.toThrow("rollback-after-routine");
     expect(await f.read()).toEqual(before);
     expect(await auditCount()).toEqual(priorAudit);
     expect(await archive()).toEqual(priorArchive);
-    await withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       "SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(next)]));
     expect((await auditCount()).map(a => a.event_type)).toEqual(["fee.collection.reserved", "fee.collection.outcome_unknown"]);
     expect((await f.read()).attempts[0]?.state).toBe("outcome_unknown");
@@ -620,10 +625,10 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
   it("keeps the archive tenant isolated and append only for runtime", async () => {
     const f = await setup();
     await f.executor().reserve(f.context, f.intent);
-    await withTenant(db.runtime, testTenantContext(id(90)), async tx => {
+    await withTenant(db.runtime, feeFixtureContext(id(90)), async tx => {
       expect((await tx.$client.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1", [f.tenantId])).rows).toEqual([]);
     });
-    await expect(withTenant(db.runtime, testTenantContext(id(90)), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(id(90)), tx => tx.$client.query(
       "INSERT INTO app.fee_reservation_archive VALUES($1,'event','cross-tenant','null')", [f.tenantId]))).rejects.toMatchObject({ code: "42501" });
     for (const sql of ["UPDATE app.fee_reservation_archive SET payload=payload", "DELETE FROM app.fee_reservation_archive", "TRUNCATE app.fee_reservation_archive"])
       await expect(db.runtime.query(sql)).rejects.toMatchObject({ code: "42501" });
@@ -656,12 +661,12 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const f = await setup();
     await f.executor().reserve(f.context, f.intent);
     await expect(f.store().transaction(id(90), async () => undefined)).rejects.toThrow("COLLECTION_REFUSED");
-    await withTenant(db.runtime, testTenantContext(id(90)), async tx => {
+    await withTenant(db.runtime, feeFixtureContext(id(90)), async tx => {
       expect((await tx.$client.query("SELECT * FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows).toEqual([]);
 
     });
-    await expect(withTenant(db.runtime, testTenantContext(id(90)), tx => tx.$client.query("UPDATE app.fee_reservation_book SET book=book WHERE tenant_id=$1", [f.tenantId]))).rejects.toMatchObject({ code: "42501" });
-    await expect(withTenant(db.runtime, testTenantContext(id(90)), tx => tx.$client.query("INSERT INTO app.fee_reservation_book(tenant_id) VALUES($1)", [ctx.tenantId]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(db.runtime, feeFixtureContext(id(90)), tx => tx.$client.query("UPDATE app.fee_reservation_book SET book=book WHERE tenant_id=$1", [f.tenantId]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(db.runtime, feeFixtureContext(id(90)), tx => tx.$client.query("INSERT INTO app.fee_reservation_book(tenant_id) VALUES($1)", [ctx.tenantId]))).rejects.toMatchObject({ code: "42501" });
     expect((await db.runtime.query("SELECT * FROM app.fee_reservation_book")).rows).toEqual([]);
     for (const action of ["DELETE", "TRUNCATE"]) await expect(db.runtime.query(`${action === "DELETE" ? "DELETE FROM" : "TRUNCATE"} app.fee_reservation_book`)).rejects.toMatchObject({ code: "42501" });
   });
@@ -713,7 +718,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
       }, () => proof);
       // The identical result must remain an audited no-op, in its own statement.
       const current = await f.read();
-      await withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+      await withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
         "SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)",
         [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", ...current }), JSON.stringify(proof)]));
       expect(await f.read()).toEqual(current);
@@ -722,7 +727,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
         const backwards = structuredClone(current);
         backwards.attempts[0] = submitted!.attempts[0]!;
         // Preserve today's audit prefix: refusal must be the payment-order check.
-        await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+        await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
           "SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)",
           [f.tenantId, JSON.stringify({ version: "fee-reservation-book.v1", ...backwards }), JSON.stringify(captured)])))
           .rejects.toMatchObject({ code: "23514" });
@@ -762,7 +767,7 @@ describe("M4-12 PostgreSQL shared reservation store", () => {
     const auditBefore = (await db.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.tenantId])).rows;
     const forged = { version: "fee-reservation-book.v1", ...before,
       events: { ...before.events, [`stripe_card:${id(81)}`]: "a".repeat(64) } };
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(
       "SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [f.tenantId, JSON.stringify(forged)])))
       .rejects.toMatchObject({ code: "23514" });
     expect(await f.read()).toEqual(before);

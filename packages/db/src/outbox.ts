@@ -4,7 +4,7 @@ import { appendAuditBatch } from "./audit.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { isRequestTransaction, withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 export const outboundActionV1Schema=z.object({version:z.literal("outbound-action.v1"),id:z.guid({ error: "Invalid uuid" }),authorizationId:z.guid({ error: "Invalid uuid" }),adapter:z.string().regex(/^fake_/u),providerEffectKey:z.string().min(1).max(300),actionType:z.string().min(1).max(100),recipient:z.string().max(320).nullable(),contentHash:z.string().regex(/^[a-f0-9]{64}$/u),immutableContent:z.string().max(1_000_000),aggregateRevision:z.number().int().nonnegative(),amountPence:z.number().int().nonnegative().nullable(),currency:z.literal("GBP").nullable(),policyVersion:z.string().min(1).max(80),authorizationExpiresAt:z.coerce.date()}).strict();
 export type OutboundAction=z.infer<typeof outboundActionV1Schema>;
@@ -24,15 +24,24 @@ export interface SafeTelemetry{emit(name:"outbox.queue_age"|"outbox.failure"|"ou
 /** Terminal refusal: no adapter call or delivery attempt is made. */
 export type OutboxRevocationRefusal = { kind: "cancelled"; code: "AUTHORIZATION_REVOKED" };
 
+async function workerRoute(pool: Pool, context: VerifiedTenantContext, id: string) {
+  return withTenant(pool, context, async db => {
+    const visible = (await db.$client.query("SELECT id FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [context.tenantId, id])).rowCount === 1;
+    if (visible) return { allowed: true };
+    if (isRequestTransaction(db)) return { allowed: false };
+    return { allowed: true, expectedTenant: context.tenantId };
+  });
+}
+
 /** Compatibility facade: execution always uses a separate worker credential. */
 export class ActionExecutor {
   constructor(private pool: Pool, private adapters: Map<string, OutboundAdapter>, private telemetry: SafeTelemetry,
     private customerSigninDigest?: (value: string) => string) {}
   async execute(context: VerifiedTenantContext, id: string, beforeClaim?: (actionType: string) => void) {
-    const visible = await withTenant(this.pool, context, async db =>
-      (await db.$client.query("SELECT id FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [context.tenantId, id])).rowCount === 1);
-    if (!visible) return;
-    return new WorkerActionExecutor(await outboundWorkerPool(this.pool), this.adapters, this.telemetry, this.customerSigninDigest).execute(id, beforeClaim);
+    const route = await workerRoute(this.pool, context, id);
+    if (!route.allowed) return;
+    const worker = new WorkerActionExecutor(await outboundWorkerPool(this.pool), this.adapters, this.telemetry, this.customerSigninDigest);
+    return route.expectedTenant === undefined ? worker.execute(id, beforeClaim) : worker.execute(id, beforeClaim, route.expectedTenant);
   }
 }
 
@@ -50,10 +59,10 @@ export async function operateOutbox(pool: Pool, context: VerifiedTenantContext, 
   });
 }
 export async function reconcileOutbox(pool: Pool, context: VerifiedTenantContext, id: string, adapter: OutboundAdapter) {
-  const visible = await withTenant(pool, context, async db =>
-    (await db.$client.query("SELECT id FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [context.tenantId, id])).rowCount === 1);
-  if (!visible) throw new Error("NOT_RECONCILABLE");
-  return reconcileWorkerAction(await outboundWorkerPool(pool), id, adapter);
+  const route = await workerRoute(pool, context, id);
+  if (!route.allowed) throw new Error("NOT_RECONCILABLE");
+  const worker = await outboundWorkerPool(pool);
+  return route.expectedTenant === undefined ? reconcileWorkerAction(worker, id, adapter) : reconcileWorkerAction(worker, id, adapter, route.expectedTenant);
 }
 export interface ProviderSignatureVerifier{verify(rawBody:Uint8Array,signature:string):Promise<boolean>}
 export async function ingestProviderEvent(db:TenantTransaction,tenantId:string,input:{adapter:`fake_${string}`;providerEventId:string;providerEffectKey:string;eventKind:string;occurredAt:Date;rawBody:Uint8Array;signature:string},verifier:ProviderSignatureVerifier){const verified=await verifier.verify(input.rawBody,input.signature);if(!verified)throw new Error("INVALID_PROVIDER_SIGNATURE");const hash=createHash("sha256").update(input.rawBody).digest("hex");await db.$client.query(`INSERT INTO app.provider_event_inbox(id,tenant_id,adapter,provider_event_id,provider_effect_key,event_kind,occurred_at,payload_hash,signature_verified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,true) ON CONFLICT DO NOTHING`,[randomUUID(),tenantId,input.adapter,input.providerEventId,input.providerEffectKey,input.eventKind,input.occurredAt,hash]);}

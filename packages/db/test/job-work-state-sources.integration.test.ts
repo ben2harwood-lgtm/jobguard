@@ -12,7 +12,7 @@ describe("CH-4 existing source storage",()=>{
  it("CH4-A02 CH4-A11 only qualifying site sources create first site evidence; late processing preserves original server time",async()=>{
   const a=await seedWorkJob(f),id=await insertPhoto(f,a);
   const events=await workEvents(f,a);expect(events).toHaveLength(1);expect(events[0]).toMatchObject({kind:"first_site_evidence",fact_at:"2026-10-13T10:00:00.000001Z"});
-  const source=await workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT evidence_id,source_kind,object_version_id,source_hash FROM app.job_site_source_receipt WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows);
+  const source=await workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT evidence_id,source_kind,object_version_id,source_hash FROM app.job_site_source_receipt WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows,{membershipId:a.actorId});
   expect(source).toHaveLength(1);expect(source[0]).toMatchObject({evidence_id:id,source_kind:"photo",source_hash:CH4_HASH});expect(source[0].object_version_id).toBeTruthy();
   await insertPhoto(f,a,"2026-10-13T10:00:00.000000Z","unknown_photo_label");expect(await workEvents(f,a)).toEqual(events);
  });
@@ -35,7 +35,7 @@ describe("CH-4 existing source storage",()=>{
    await db.query("INSERT INTO app.purchase_order_draft(id,tenant_id,job_id,requirement_id) VALUES($1,$2,$3,$4)",[order,a.tenantId,a.jobId,randomUUID()]);
    await db.query("SET LOCAL session_replication_role='origin'");
    await db.query("INSERT INTO app.goods_receipt(id,tenant_id,job_id,order_draft_id,document_id,revision,ordered_quantity,delivered_quantity,accepted_quantity,rejected_quantity,missing_quantity,unit) VALUES($1,$2,$3,$4,$5,1,1,1,1,0,0,'each')",[randomUUID(),a.tenantId,a.jobId,order,d]);
-  });expect(await workEvents(f,a)).toHaveLength(1);
+  },{membershipId:a.actorId});expect(await workEvents(f,a)).toHaveLength(1);
  });
 });
 
@@ -63,7 +63,7 @@ describe("CH-4 verified proof and stage command sources",()=>{
   expect(await workEvents(f,a)).toEqual([]);
   await evidence.finalize(a.context,{uploadId:upload.id,objectVersionId:version,evidenceType});
   expect(await workEvents(f,a)).toEqual([expect.objectContaining({kind:"first_site_evidence"})]);
-  const source=await workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT evidence_id,source_kind,object_version_id,source_hash FROM app.job_site_source_receipt WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows);
+  const source=await workTenant(f.runtime,a.tenantId,async db=>(await db.query("SELECT evidence_id,source_kind,object_version_id,source_hash FROM app.job_site_source_receipt WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows,{membershipId:a.actorId});
   expect(source).toEqual([{evidence_id:upload.id,source_kind:"photo",object_version_id:version,source_hash:hash}]);
   const command={version:"proof.complete.v1",commandId:randomUUID(),actorMembershipId:a.actorId,jobId:a.jobId,scopeItemId:a.scopeId,stage:"electrical-stage",evidenceId:upload.id,requiredEvidenceType:evidenceType,decisionId:null};
   const proof=new ProofCommandService(f.runtime,storage),result=await proof.complete(a.context,command),events=await workEvents(f,a);
@@ -78,7 +78,7 @@ describe("CH-4 verified proof and stage command sources",()=>{
    await db.query("INSERT INTO app.stage_completion(id,tenant_id,job_id,scope_item_id,stage,evidence_link_id,command_id,completed_at) VALUES($1,$2,$3,$4,'r8-binding',$5,$6,'2026-10-14T10:00:00.123456Z')",[stage,a.tenantId,a.jobId,a.scopeId,link,command]);
    await db.query("RESET ROLE");
    await db.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [a.tenantId, command]);
-  });
+  },{membershipId:a.actorId});
   const before=await workEvents(f,a);
   // The table owner cannot see this source under its unchanged FORCE RLS.
   await workTenant(f.admin,a.tenantId,async db=>{
@@ -135,7 +135,7 @@ describe("CH-4 real database held-signal isolation",()=>{
        await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:ch4-r7',$4,'Fictional held extra','low','held_for_final_check')",[a.tenantId,a.jobId,signalId,evidence.received]);
        await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)",[a.tenantId,a.jobId,signalId,evidenceId,evidence.object_version_id,evidence.sha256,evidence.received]);
       }
-     });
+     },{membershipId:a.actorId});
      expect((await admin.query("SELECT count(*)::int n FROM app.shadow_signal_evidence")).rows).toEqual([{n:signalCount}]);
      // Disposable databases only, as in merged Test Q: compare every stored byte,
      // controlling the same server clock rather than removing timestamps or ids.
@@ -162,7 +162,7 @@ describe("CH-4 real database held-signal isolation",()=>{
       // This raw stage fixture proves source guards, not receipt construction.
       await db.query("RESET ROLE");
       await db.query("UPDATE app.command_receipt SET status='succeeded',result=$3::jsonb,completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[a.tenantId,commandId,JSON.stringify({completionId,evidenceId:photoId,state:'complete'})]);
-     });
+     },{membershipId:a.actorId});
      expect((await admin.query("SELECT kind FROM app.job_work_state_event ORDER BY sequence")).rows).toEqual([{kind:"first_site_evidence"},{kind:"first_site_evidence"},{kind:"site_activity"}]);
      const after=await snapshot();expect(after).not.toEqual(before);
      return {before,after};

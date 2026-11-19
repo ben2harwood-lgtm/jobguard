@@ -28,7 +28,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     (SELECT jsonb_agg(to_jsonb(p) ORDER BY p.polname) FROM pg_policy p WHERE p.polrelid=c.oid) policies
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('app','identity','control_plane','audit_control') ORDER BY 1,2`)).rows;
   const routines = async () => (await c!.admin.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args,p.proowner,p.proacl,p.prosecdef,p.proconfig,pg_get_functiondef(p.oid) definition
-    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control') AND p.prokind='f' ORDER BY 1,2,3`)).rows;
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('app','identity','control_plane','audit_control','worm_control') AND p.prokind='f' ORDER BY 1,2,3`)).rows;
   const policies = async () => (await c!.admin.query("SELECT * FROM pg_policies ORDER BY schemaname,tablename,policyname")).rows;
   const beforeCatalog = await catalog(), beforeRoutines = await routines(), beforePolicies = await policies();
   await applyMigration(c, own);
@@ -60,9 +60,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const metadata = (entries: typeof afterRoutines) => entries.map(({ definition: _definition, ...row }) => row);
   const relationMetadata = (entries: typeof beforeCatalog) => entries.map(({ policies: _policies, ...row }) => row);
   const expected = applyUpgradeProofs({ rows: {}, routines: metadata(afterRoutines), relations: relationMetadata(beforeCatalog), policies: beforePolicies }, successors, ownerOids);
-  const replayRoutines = await routines(), replayCatalog = await catalog();
+  const replayRoutines = await routines(), installedCatalog = await catalog();
   expect(metadata(replayRoutines)).toEqual(expected.routines.filter(row => row.nspname !== "infrastructure"));
-  expect(relationMetadata(replayCatalog)).toEqual(expected.relations);
+  expect(relationMetadata(installedCatalog)).toEqual(expected.relations);
   expect(await policies()).toEqual(expected.policies);
   const billingProof = successors.find(proof => proof.migration === "0766_lp8a_billing_revokes.sql")!;
   const billingRelations = billingProof.upgrade.filter(change => change.section === "relations");
@@ -70,6 +70,30 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   if (advanceDelta?.section !== "routines" || !advanceDelta.before || !advanceDelta.after) throw new Error("Missing LP-8a draft routine proof");
   const advanceSql = await readFile(new URL(`../migrations/${billingProof.migration}`, import.meta.url), "utf8");
   const advanceBody = advanceSql.split("CREATE OR REPLACE FUNCTION app.advance_final_account_draft(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+  // Exact predicates and ACLs are checked above. In the raw OID comparison,
+  // reverse only the 0765 changes and retain every other predecessor field.
+  const lp11 = successors.find(proof => proof.migration === "0765_lp11_bound_tenant_rls.sql")!;
+  const lp11Policies = lp11.upgrade.filter(change => change.section === "policies");
+  const lp11Relations = lp11.upgrade.filter(change => change.section === "relations");
+  const replayCatalog = installedCatalog.map(relation => {
+    const predecessor = beforeCatalog.find(row => row.nspname === relation.nspname && row.relname === relation.relname);
+    if (!predecessor) return relation;
+    const policyChanges = lp11Policies.filter(change => change.after?.schemaname === relation.nspname && change.after.tablename === relation.relname);
+    const policies = relation.policies?.flatMap((policy: { polname: string; polqual: string | null; polwithcheck: string | null }) => {
+      const change = policyChanges.find(entry => entry.after?.policyname === policy.polname);
+      if (!change) return [policy];
+      if (!change.before) return [];
+      const rawPrior = predecessor.policies?.find((entry: { polname: string }) => entry.polname === policy.polname);
+      if (!rawPrior) return [policy];
+      return [{ ...policy, polqual: rawPrior.polqual, polwithcheck: rawPrior.polwithcheck }];
+    }) ?? null;
+    const aclChange = lp11Relations.find(change => change.before?.nspname === relation.nspname && change.before.relname === relation.relname);
+    return {
+      ...relation,
+      relacl: aclChange?.before?.relacl ?? relation.relacl,
+      policies: policies?.length ? policies : null,
+    };
+  });
   // Preserve all raw predecessor catalogue fields, including policy identities.
   for (const row of beforeCatalog) {
     const billingDelta = billingRelations.find(change => change.before?.nspname === row.nspname && change.before.relname === row.relname);
@@ -203,7 +227,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)", "0733_real_customer_link_own_quote.sql"],
     ["identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0733_real_customer_link_own_quote.sql"],
     ["identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)", "0733_real_customer_link_own_quote.sql"],
-    ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0655_emergency_token_minted.sql"],
+    ["identity.customer_stages(t uuid, j uuid, c uuid, digest text, completion uuid, command uuid, expected_hash text)", "0765_lp11_bound_tenant_rls.sql"],
+    ["identity.customer_variation(t uuid, j uuid, c uuid, digest text, command jsonb)", "0765_lp11_bound_tenant_rls.sql"],
+    ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0765_lp11_bound_tenant_rls.sql"],
     ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0742_fee_webhook_receipt_binding.sql"],
     ["app.ch6_integrity_authority(t uuid, j uuid, digest text)", "0660_baseline_ancestry_audit_trust.sql"],
     ["app.ch6_integrity_sources(t uuid, j uuid, d text)", "0660_baseline_ancestry_audit_trust.sql"],
@@ -323,7 +349,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     expect(body.split(before)).toHaveLength(2);
     lp6dBodies.set(key, body.replace(before, after));
   }
-  // 0761 replaces only Northside's registration body; successor proof metadata remains checked above.
+  // 0762 replaces only Northside's registration body; successor proof metadata remains checked above.
   const northsideSql = await readFile(new URL("../migrations/0762_northside_hosted_agreement.sql", import.meta.url), "utf8");
   lp6dBodies.set("app.northside_register(p_owner,p_settings)", northsideSql.split("FUNCTION app.northside_register(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);
   const lp6dKey = (row: { nspname: string; proname: string; args: string }) => `${row.nspname}.${row.proname}(${argNames(row.args)})`;
@@ -342,6 +368,37 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     expect(replayRoutines.filter(row => row.proname === name)).toHaveLength(1);
     expect(afterRoutines.some(row => row.proname === name)).toBe(false);
   }
+  const lp11Sql = await readFile(new URL("../migrations/0765_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
+  for (const signature of [
+    "infrastructure.discover_readiness_plans()", "app.serialize_final_check_evidence()",
+    "app.guard_post_lock_upload_transition()", "app.lp6d_refused_contractor_principal(uuid)",
+    "app.ch4_guard_new_site_work()", "app.mon2_consistency()", "app.claim_trial_identity_keys(uuid,uuid)", "app.contractor_session(uuid)", "app.lp6_bound_request()",
+    "infrastructure.discover_retention_reviews()", "app.retention_timer_book(uuid,uuid)",
+    "app.retention_timer(uuid,uuid,jsonb,text)",
+    "app.prepare_evidence_pack_v3(uuid,uuid)", "app.complete_evidence_pack_v3_check(uuid,uuid,text)",
+    "app.finish_evidence_pack_v3(uuid,uuid,jsonb,text,text)",
+    "identity.customer_practice_pay_now(uuid,uuid,uuid,text)",
+    "app.mon3_require_registered_admission()", "app.lp_job_permit_consumed()",
+    "app.final_check_job_terms(uuid,uuid,text,timestamp with time zone)",
+    "app.guard_job_proof_source()", "app.guard_final_lock_proof_statement()", "app.ch4_capture_site_source()",
+    "app.worm_audit(app.worm_command,text,text)", "app.worm_claim(uuid)", "app.worm_finish(uuid,integer,text,jsonb)",
+    "worm_control.worm_recovery_target(uuid)", "worm_control.worm_reconcile(uuid,integer,boolean)",
+    "worm_control.worm_operator_alerts()",
+  ]) {
+    const source = lp11Sql.split(`CREATE OR REPLACE FUNCTION ${signature.split("(")[0]}(`)[1]!
+      .split("AS $$")[1]!.split("$$;")[0];
+    expect((await c.admin.query("SELECT prosrc FROM pg_proc WHERE oid=$1::regprocedure", [signature])).rows)
+      .toEqual([{ prosrc: source }]);
+  }
+  for (const routine of ["intake", "machine_stage"]) {
+    const source = lp11Sql.split(`CREATE OR REPLACE FUNCTION connector.${routine}(`)[1]!
+      .split("AS $$")[1]!.split("$$;")[0];
+    expect((await c.admin.query(
+      "SELECT p.prosrc FROM pg_proc p WHERE p.pronamespace='connector'::regnamespace AND p.proname=$1", [routine],
+    )).rows).toEqual([{ prosrc: source }]);
+  }
+  for (const match of lp11Sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
+    lp6dBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);

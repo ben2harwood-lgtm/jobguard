@@ -4,6 +4,7 @@ import { closeTestPools } from "./pool-test-utils.js";
 type Credentials = { user: string; password: string };
 type WorkerCluster = { credentials: Credentials; login: Promise<void> | undefined; pools: Map<string, Promise<Pool>> };
 const clusters = new Map<number, WorkerCluster>();
+const disconnections = new WeakMap<Pool, Promise<void>[]>();
 
 export function registerWorkerFixtureCluster(port: number, credentials: Credentials) {
   clusters.set(port, { credentials, login: undefined, pools: new Map() });
@@ -37,7 +38,11 @@ export async function workerFixturePool(source: Pool): Promise<Pool> {
         } finally { await admin.end(); }
       })();
       await cluster.login;
-      return new Pool({ ...address, database, user: "lp10_fixture_worker", password: "synthetic-worker-only", max: 2 });
+      const worker = new Pool({ ...address, database, user: "lp10_fixture_worker", password: "synthetic-worker-only", max: 2 });
+      const disconnected: Promise<void>[] = [];
+      worker.on("connect", client => disconnected.push(new Promise<void>(resolve => client.once("end", resolve))));
+      disconnections.set(worker, disconnected);
+      return worker;
     })();
     cluster.pools.set(database, pool);
   }
@@ -50,7 +55,7 @@ export async function closeWorkerFixtureDatabase(source: Pool) {
   const pool = pools?.get(database);
   if (!pool) return;
   pools!.delete(database);
-  await closeTestPools(await pool);
+  await closeWorkerPools(await pool);
 }
 
 export async function closeWorkerFixtureCluster(port: number) {
@@ -58,5 +63,10 @@ export async function closeWorkerFixtureCluster(port: number) {
   clusters.delete(port);
   if (!cluster?.pools.size) return;
   const pools = await Promise.allSettled(cluster.pools.values());
-  await closeTestPools(...pools.flatMap(pool => pool.status === "fulfilled" ? [pool.value] : []));
+  await closeWorkerPools(...pools.flatMap(pool => pool.status === "fulfilled" ? [pool.value] : []));
+}
+
+async function closeWorkerPools(...pools: Pool[]) {
+  await closeTestPools(...pools);
+  await Promise.all(pools.flatMap(pool => disconnections.get(pool) ?? []));
 }

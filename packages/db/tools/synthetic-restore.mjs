@@ -88,22 +88,16 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
   const pool = (port, user = "postgres", database = "jobguard_synthetic_demo") => { const p = new Pool({ host: "127.0.0.1", port, user, password, database, max: 4 }); pools.add(p); return p; };
   const closePools = async () => { await Promise.all([...pools].map(p => p.end())); pools.clear(); await new Promise(ok => setTimeout(ok, 25)); };
   const pass = (id, detail) => checks.push({ id, status: "PASS", detail });
-  const ids = Object.fromEntries(["tenant", "otherTenant", "otherAccount", "otherMember", "identity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision", "variation", "linkedJob", "linkedScope", "linkedBinding"].map(name => [name, randomUUID()]));
-  const sessionCredential = digest(randomUUID());
+  const ids = Object.fromEntries(["tenant", "otherTenant", "otherAccount", "otherMember", "identity", "otherIdentity", "account", "member", "job", "otherJob", "scope", "quote", "draft", "revision", "variation", "linkedJob", "linkedScope", "linkedBinding"].map(name => [name, randomUUID()]));
+  const sessionCredential = digest(randomUUID()), otherCredential = digest(randomUUID());
   // Reuse the rehearsal's approved fixed-tenant membership bridge. Business
   // calls bind the fixture session; the separately authorized shadow role
   // processes the lock with the existing sessionless rehearsal context.
   const rehearsalContext = session => api.verifiedTenantContextFromMembership({ tenantId: ids.tenant, membershipId: ids.member, identityUserId: ids.identity }, session);
   const context = rehearsalContext({kind: "real", credential: sessionCredential});
-  const otherContext = api.verifiedTenantContextFromMembership({ tenantId: ids.otherTenant, membershipId: ids.otherMember, identityUserId: ids.identity }, {kind: "real", credential: sessionCredential});
+  const otherContext = api.verifiedTenantContextFromMembership({ tenantId: ids.otherTenant, membershipId: ids.otherMember, identityUserId: ids.otherIdentity }, {kind: "real", credential: otherCredential});
   const fixtureHash = digest("fictional-source-only");
   let exportReceipt;
-  const previousWorkerUrl = process.env.WORKER_DATABASE_URL;
-  const workerPassword = randomUUID();
-  const configureWorker = port => {
-    if (!fixture) process.env.WORKER_DATABASE_URL = `postgresql://rehearsal_worker:${workerPassword}@127.0.0.1:${port}/jobguard_synthetic_demo`;
-  };
-  const closeWorker = async () => { if (!fixture) await api.closeOutboundWorkerPool(); };
   try {
     await source.initialise(); await source.start(); await source.createDatabase("jobguard_synthetic_demo");
     let admin = pool(sourcePort);
@@ -111,7 +105,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.match(postgresVersion, /^16\./);
     // Match current migration prerequisites in this disposable cluster. These
     // non-login writer roles never become runtime credentials or memberships.
-    for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_worker"]) {
+    for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_worker", "jobguard_session_lookup"]) {
       await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN
         CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
         END IF; END $$`);
@@ -121,15 +115,18 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.deepEqual(migrationNames, api.MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)));
     assert.ok(migrationNames.includes("0095_job_parties.sql"));
     await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1),($2)", [ids.tenant, ids.otherTenant]);
-    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [ids.identity]);
-    await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${ids.identity}@fictional.invalid`,ids.identity]);
-    await admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')",[randomUUID(),ids.identity,sessionCredential]);
-    await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional restore builder')", [ids.account, ids.tenant]);
-    await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [ids.member, ids.tenant, ids.account, ids.identity]);
-    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[ids.identity,ids.tenant,ids.member]);
-    await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Other fictional builder')",[ids.otherAccount,ids.otherTenant]);
-    await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[ids.otherMember,ids.otherTenant,ids.otherAccount,ids.identity]);
-    await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)",[ids.identity,ids.otherTenant,ids.otherMember]);
+    for (const [tenant, account, member, user, session] of [
+      [ids.tenant, ids.account, ids.member, ids.identity, sessionCredential],
+      [ids.otherTenant, ids.otherAccount, ids.otherMember, ids.otherIdentity, otherCredential],
+    ]) {
+      await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
+      await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fictional.invalid`, user]);
+      await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional restore builder')", [account, tenant]);
+      await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [member, tenant, account, user]);
+      await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, tenant, member]);
+      await admin.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')",
+        [randomUUID(), user, session, randomUUID()]);
+    }
     await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional restore job','quoting'),($3,$4,'Other tenant fictional job','draft')", [ids.job, ids.tenant, ids.otherJob, ids.otherTenant]);
     // Supply explicit generated parties before the existing live-state fixture.
     const partyClient = await admin.connect();
@@ -139,6 +136,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
       await api.seedSyntheticPartyFixture(partyClient, ids.tenant, ids.job);
       // SH-1 binds legacy live INSERTs; this generated fixture goes live by UPDATE.
       await partyClient.query("SET LOCAL ROLE jobguard_migration");
+      await partyClient.query("SELECT app.bind_request('real',$1,$2)", [sessionCredential, ids.tenant]);
       await partyClient.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture',$2)", [ids.tenant, ids.job]);
       assert.deepEqual((await partyClient.query("SELECT job_track,environment,provenance,source_id FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2", [ids.tenant, ids.job])).rows,
         [{ job_track: "small_builder", environment: "synthetic_demo", provenance: "legacy_synthetic_live_fixture", source_id: ids.job }]);
@@ -157,6 +155,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
       await linkedClient.query("INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance) SELECT b.tenant_id,$3,$4,(SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$4),b.customer_id,b.customer_revision_id,b.paying_party_id,b.paying_party_revision_id,b.site_id,b.site_revision_id,'backfilled_synthetic_fixture' FROM app.job_party_binding b JOIN app.job_party_current c ON(c.tenant_id,c.job_id,c.binding_id)=(b.tenant_id,b.job_id,b.id) WHERE b.tenant_id=$1 AND b.job_id=$2", [ids.tenant, ids.job, ids.linkedBinding, ids.linkedJob]);
       await linkedClient.query("INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES($1,$2,$3)", [ids.tenant, ids.linkedJob, ids.linkedBinding]);
       await linkedClient.query("SET LOCAL ROLE jobguard_migration");
+      await linkedClient.query("SELECT app.bind_request('real',$1,$2)", [sessionCredential, ids.tenant]);
       await linkedClient.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture',$2)", [ids.tenant, ids.linkedJob]);
       await linkedClient.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2", [ids.tenant, ids.linkedJob]);
       await linkedClient.query("COMMIT");
@@ -171,15 +170,13 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     await admin.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3", [ids.revision, ids.tenant, ids.draft]);
     // Generated login exists only inside these disposable clusters. No deployment secrets are read.
     await admin.query(`CREATE ROLE rehearsal_runtime LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO rehearsal_runtime`);
+    await admin.query(`CREATE ROLE rehearsal_worker LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_worker TO rehearsal_worker`);
     for (const name of ["rehearsal_operator_a", "rehearsal_operator_b"]) {
       await admin.query(`CREATE ROLE ${name} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_outbound_operator TO ${name}`);
     }
-    if (!fixture) {
-      await admin.query(`CREATE ROLE rehearsal_worker LOGIN PASSWORD '${workerPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION NOBYPASSRLS; GRANT jobguard_worker TO rehearsal_worker`);
-      configureWorker(sourcePort);
-    }
     assert.equal((await admin.query("SELECT outbound_control.claims_enabled() enabled")).rows[0].enabled, true);
     let runtime = pool(sourcePort, "rehearsal_runtime");
+    let worker = pool(sourcePort, "rehearsal_worker");
     const trackRows = connection => api.withTenant(connection, context, async db => (await db.$client.query("SELECT * FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2", [ids.tenant, ids.job])).rows);
     const sourceTrack = await trackRows(runtime);
     assert.equal(sourceTrack.length, 1);
@@ -246,7 +243,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
       await api.withTenant(runtime, context, db => api.appendOutboundAction(db, ids.tenant, { version: "outbound-action.v1", id: actionId, authorizationId: authorization, adapter: "fake_restore", providerEffectKey: `restore:${state}:${actionId}`, actionType: "send_quote", recipient: "customer@example.invalid", contentHash: digest(content), immutableContent: content, aggregateRevision: 1, amountPence: null, currency: null, policyVersion: "synthetic-rehearsal.v1", authorizationExpiresAt: new Date("2099-01-01T00:00:00Z") }));
       if (state !== "pending") {
         const adapter = { name: "fake_restore", supportsProviderDeduplication: false, deliver: async () => state === "succeeded" ? { kind: "succeeded", providerReference: "synthetic-pre-backup" } : { kind: "outcome_unknown", code: "synthetic-timeout" }, reconcile: async () => "unknown" };
-        await new api.ActionExecutor(runtime, new Map([["fake_restore", adapter]]), { emit() {} }).execute(context, actionId);
+        await new api.WorkerActionExecutor(worker, new Map([["fake_restore", adapter]]), { emit() {} }).execute(actionId);
       }
       actionIds.push(actionId);
     }
@@ -277,7 +274,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     const before = await rowSnapshot(admin);
     await assert.rejects(copyStoppedCluster(sourcePath, join(root, "invalid-live-copy")), /RUNNING_CLUSTER_BACKUP_REFUSED/);
     pass("running-cluster-refused", "A live data-directory copy is rejected; no partial hot backup is treated as usable.");
-    await closeWorker(); await closePools(); await source.stop();
+    await closePools(); await source.stop();
     const backupStart = performance.now(), manifest = await copyStoppedCluster(sourcePath, backupPath);
     timings.backupMilliseconds = Math.round(performance.now() - backupStart);
     const manifestHash = digest(canonical(manifest));
@@ -305,8 +302,8 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.equal(sourceOutbound.paused, false);
     const pauseRevision = await control(operatorA, "pause", sourceOutbound.revision);
     assert.equal((await admin.query("SELECT outbound_control.claims_enabled() enabled")).rows[0].enabled, false);
-    configureWorker(restoredPort);
     runtime = pool(restoredPort, "rehearsal_runtime"); storage = new DatabaseSyntheticStorage(runtime);
+    worker = pool(restoredPort, "rehearsal_worker");
     assert.equal((await admin.query("SHOW server_version")).rows[0].server_version, postgresVersion);
     assert.deepEqual(await rowSnapshot(admin), before);
     measured("database");
@@ -359,15 +356,15 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     const queueBefore = await queue(); let fakeDeliveries = 0;
     const attemptsBefore = (await admin.query("SELECT * FROM app.action_attempt ORDER BY id")).rows;
     const adapter = { name: "fake_restore", supportsProviderDeduplication: false, deliver: async () => { fakeDeliveries++; return { kind: "succeeded", providerReference: "synthetic-after-restore" }; }, reconcile: async () => "unknown" };
-    const executor = new api.ActionExecutor(runtime, new Map([["fake_restore", adapter]]), { emit() {} });
-    const executeRestored = id => executor.execute(context, id);
+    const executor = new api.WorkerActionExecutor(worker, new Map([["fake_restore", adapter]]), { emit() {} });
+    const executeRestored = id => executor.execute(id);
     await executeRestored(actionIds[0]);
     assert.equal(fakeDeliveries, 0); assert.deepEqual(await queue(), queueBefore);
     assert.deepEqual((await admin.query("SELECT * FROM app.action_attempt ORDER BY id")).rows, attemptsBefore);
     pass("restore-database-starts-paused", "Source sending was ON. The isolated restored database is paused before any runtime connects; actual executor dispatch makes no claim, attempt or fake delivery.");
     // Reconcile every restored action before requesting dispatch. Unknown work
     // remains held, completed work is not resent; only the pending fake may run.
-    assert.equal(await api.reconcileOutbox(runtime, context, actionIds[1], adapter), "unknown");
+    assert.equal(await api.reconcileWorkerAction(worker, actionIds[1], adapter), "unknown");
     assert.equal((await queue()).find(row => row.id === actionIds[2]).status, "succeeded");
     const resumeRequest = randomUUID(), reconciliationReceipt = randomUUID();
     // A fixture sharing this practice database may pause again in afterRestore; resume from the current paused revision.
@@ -382,7 +379,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     await Promise.all([executeRestored(actionIds[0]), executeRestored(actionIds[0])]); await executeRestored(actionIds[0]);
     await executeRestored(actionIds[1]); await executeRestored(actionIds[2]); assert.equal(fakeDeliveries, 1);
     await assert.rejects(api.operateOutbox(runtime, context, actionIds[1], "retry"), /UNSAFE_OUTBOX_COMMAND/);
-    assert.equal(await api.reconcileOutbox(runtime, context, actionIds[1], adapter), "unknown");
+    assert.equal(await api.reconcileWorkerAction(worker, actionIds[1], adapter), "unknown");
     await executeRestored(actionIds[1]); assert.equal(fakeDeliveries, 1);
     pass("pending-replay-and-unknown-outcome", "Concurrent/repeated dispatch produces one fake effect for the pending action; completed work is not resent and unknown work stays held without a blind retry.");
     // Leave the rehearsal dark even after exercising a controlled fake resume.
@@ -410,14 +407,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
       releaseDecision: "NOT_AUTHORIZED", productionRpoRto: "NOT_ESTABLISHED", realDataUsed: false,
     };
   } finally {
-    try { await closeWorker(); }
-    finally {
-      if (!fixture) {
-        if (previousWorkerUrl === undefined) delete process.env.WORKER_DATABASE_URL;
-        else process.env.WORKER_DATABASE_URL = previousWorkerUrl;
-      }
-      await closePools(); await source.stop(); await restored.stop();
-    }
+    await closePools(); await source.stop(); await restored.stop();
     // Only this function's generated disposable fixture tree is removed.
     await rm(root, { recursive: true, force: true });
   }
