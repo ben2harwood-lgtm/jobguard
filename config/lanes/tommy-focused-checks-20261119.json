@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "tommy-focused-checks-20261119": {
+      "branches": [
+        "codex/sandbox/tommy-focused-checks-20261119"
+      ],
+      "note": "Branch-only diagnostic execution of the existing Tommy money and acceptance specs on the reviewed combined candidate. C1: no new product workflow; preserves real existing Playwright global setup and all original tests. Only the reviewed provisional-reviewId comparison delta plus this lane, diagnostic workflow and receipt.",
+      "allow": [
+        ".github/workflows/tommy-focused-checks.yml",
+        "docs/receipts/tommy-focused-checks-20261119.md",
+        "apps/web/e2e/TOMMY-money-gaps.spec.ts",
+        "docs/receipts/tommy-money-gap-checks-20261119.md"
+      ]
+    }
+  }
+}
