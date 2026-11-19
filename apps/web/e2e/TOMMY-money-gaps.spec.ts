@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { expect, test, type Browser, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
 import type { CaptureWorkspaceResponse } from "../../api/src/capture/contracts";
 import type { QuoteWorkspaceResponse } from "../../api/src/quote/contracts";
@@ -248,6 +248,42 @@ async function finishAndInvoice(page: Page, jobId: string, netPence: number, gro
   return { account, invoice, evidenceId };
 }
 
+/** Exact zero-effect observer for a job with no fee posting yet.
+ * The collection view requires a derivation, so its dependency refusal is not zero.
+ * This uses the existing isolated E2E admin only inside BEGIN READ ONLY. It proves
+ * persisted absence for this tenant/job, not runtime SELECT access or RLS isolation.
+ */
+async function noFeeEffectReceipt(jobId: string, invoiceId: string) {
+  const pool = new Pool({ host: "127.0.0.1", port: 55432, database: "jobguard_synthetic_demo", user: "postgres", password: ["sbox", "e2e", "owner"].join("-"), max: 1 });
+  let client: PoolClient | undefined;
+  let failed = false;
+  try {
+    client = await pool.connect();
+    await client.query("BEGIN READ ONLY");
+    const identity = await client.query(`SELECT j.tenant_id, j.id AS job_id, i.id AS invoice_id,
+      current_setting('transaction_read_only') AS read_only
+      FROM app.job j JOIN app.customer_invoice i ON (i.tenant_id, i.job_id) = (j.tenant_id, j.id)
+      WHERE j.tenant_id = $1 AND j.id = $2 AND i.id = $3`, [tenant, jobId, invoiceId]);
+    expect(identity.rows).toEqual([{ tenant_id: tenant, job_id: jobId, invoice_id: invoiceId, read_only: "on" }]);
+    const counts = await client.query(`SELECT
+      (SELECT count(*)::integer FROM app.success_fee_derivation WHERE tenant_id = $1 AND job_id = $2) AS derivations,
+      (SELECT count(*)::integer FROM app.success_fee_journal WHERE tenant_id = $1 AND job_id = $2) AS journal_entries,
+      (SELECT count(*)::integer FROM app.platform_fee_statement WHERE tenant_id = $1 AND job_id = $2) AS statements,
+      (SELECT count(*)::integer FROM app.platform_fee_attempt WHERE tenant_id = $1 AND job_id = $2) AS attempts,
+      (SELECT count(*)::integer FROM app.platform_fee_attempt_event WHERE tenant_id = $1 AND job_id = $2) AS attempt_events,
+      (SELECT count(*)::integer FROM app.platform_fee_collection_command WHERE tenant_id = $1 AND job_id = $2) AS collection_commands`, [tenant, jobId]);
+    expect(counts.rows).toEqual([{ derivations: 0, journal_entries: 0, statements: 0, attempts: 0, attempt_events: 0, collection_commands: 0 }]);
+    return { observer: "isolated-ci-admin-read-only", identity: identity.rows[0], counts: counts.rows[0] };
+  } catch (error) { failed = true; throw error; }
+  finally {
+    await cleanup(test.info(), failed, [
+      ["Roll back read-only fee observation", async () => { if (client) await client.query("ROLLBACK"); }],
+      ["Release fee observer connection", async () => { client?.release(); }],
+      ["Close fee observer pool", () => pool.end()],
+    ]);
+  }
+}
+
 test("support-v02: matched fresh jobs exclude dismissed shelves and a pending £50 from the same final bill", async ({ browser }, info) => {
   const outcomes: Record<string, unknown>[] = [];
   let failed = false;
@@ -288,8 +324,7 @@ test("support-v02: matched fresh jobs exclude dismissed shelves and a pending £
           const allocations = await readAllocations(page, job.jobId);
           expect(allocations.allocations).toHaveLength(0);
           expect(allocations.eligibleNetPence).toBe(0);
-          const collection = await read(page, root(job.jobId) + "/success-fees/collection");
-          expect(collection).toMatchObject({ attempts: [], settledPrincipal: 0, refundedPrincipal: 0, retainedPrincipal: 0, outstandingPrincipal: 0, refundDue: 0, collectionReserved: 0, refundReserved: 0, unknownOutcome: false });
+          const noFees = await phase("Observe zero saved fee effects before reload", () => noFeeEffectReceipt(job.jobId, finished.invoice.id));
           await page.reload();
           await enterQuote(page);
           await expect(page.locator(".quote-editor")).toHaveAttribute("data-job-id", job.jobId);
@@ -298,7 +333,12 @@ test("support-v02: matched fresh jobs exclude dismissed shelves and a pending £
           expect(savedReview.review!.lines.find(line => line.scopeItemId === job.shelfId)).toMatchObject({ disposition: "dismissed", dismissalReason });
           expect(savedReview.review!.lines.filter(line => line.disposition === "accepted").map(line => line.scopeItemId).sort()).toEqual([...job.originalIds].sort());
           expect((await read(page, root(job.jobId) + "/customer-invoices")).invoices).toEqual([finished.invoice]);
-          outcomes.push({ includePending, jobId: job.jobId, originalIds: job.originalIds, shelfId: job.shelfId, review: savedReview.review, quoteRevisions: job.quotes.revisions, account, invoice: finished.invoice, receipts, allocations, collection,
+          const receiptsAfterReload = await read(page, receiptsPath);
+          expect(receiptsAfterReload.receipts).toEqual(receipts.receipts);
+          expect(receiptsAfterReload.eligibleRecoveryPrincipalPence).toBe(0);
+          const noFeesAfterReload = await phase("Observe the same zero saved fee effects after reload", () => noFeeEffectReceipt(job.jobId, finished.invoice.id));
+          expect(noFeesAfterReload).toEqual(noFees);
+          outcomes.push({ includePending, jobId: job.jobId, originalIds: job.originalIds, shelfId: job.shelfId, review: savedReview.review, quoteRevisions: job.quotes.revisions, account, invoice: finished.invoice, receipts, receiptsAfterReload, allocations, noFees, noFeesAfterReload,
             comparison: { totals: account.totals, billableLines: account.lines.map(line => ({ kind: line.kind, description: line.description, netPence: line.netPence })).sort((a, b) => a.description.localeCompare(b.description)) } });
         });
       } catch (error) { contextFailed = true; throw error; }
