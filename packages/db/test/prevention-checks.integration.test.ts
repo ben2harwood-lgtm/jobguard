@@ -120,19 +120,19 @@ describe("MON-7a real PostgreSQL guarantees", () => {
     }
     const clone=async (changes:string)=>withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.property_constraint_fact SELECT ${changes} FROM app.property_constraint_fact WHERE tenant_id=$1 AND job_id=$2 LIMIT 1`,[tenant,j.id]));
     // Named columns avoid reliance on SELECT * column order for adversarial writes.
-    const insert=async (sourceName:string|null,retrieved:string|null,jobId=j.id)=>withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.property_constraint_fact(tenant_id,id,job_id,binding_id,site_revision_id,command_id,kind,source_id,source_name,retrieved_at,result,audit_event_id) SELECT tenant_id,$3,$4,binding_id,site_revision_id,command_id,kind,source_id,$5,$6,result,audit_event_id FROM app.property_constraint_fact WHERE tenant_id=$1 AND job_id=$2 LIMIT 1`,[tenant,j.id,randomUUID(),jobId,sourceName,retrieved]));
+    const insert=async (sourceName:string|null,retrieved:string|null,jobId=j.id)=>withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.property_constraint_fact(tenant_id,id,job_id,binding_id,site_revision_id,command_id,kind,source_id,source_name,retrieved_at,result,audit_event_id,actor_membership_id) SELECT tenant_id,$3,$4,binding_id,site_revision_id,command_id,kind,source_id,$5,$6,result,audit_event_id,actor_membership_id FROM app.property_constraint_fact WHERE tenant_id=$1 AND job_id=$2 LIMIT 1`,[tenant,j.id,randomUUID(),jobId,sourceName,retrieved]));
     await expect(insert(null,scenarioNow)).rejects.toMatchObject({code:"23502"});
     await expect(insert("Generated property register (synthetic)",null)).rejects.toMatchObject({code:"23502"});
     await expect(insert("Generated property register (synthetic)","2026-10-07T12:00:00.000Z",wrong.id)).rejects.toMatchObject({code:"23503"});
     for(const changed of ["result-'source'","result-'retrievedAt'","jsonb_set(result,'{status}','\"clear\"'::jsonb)"]){
-      await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.property_constraint_fact(tenant_id,id,job_id,binding_id,site_revision_id,command_id,kind,source_id,source_name,retrieved_at,result,audit_event_id)
-        SELECT tenant_id,$3,job_id,binding_id,site_revision_id,command_id,kind,source_id,source_name,retrieved_at,${changed},audit_event_id FROM app.property_constraint_fact WHERE tenant_id=$1 AND job_id=$2 AND result->>'status'='unknown' LIMIT 1`,[tenant,j.id,randomUUID()]))).rejects.toMatchObject({code:"23514"});
+      await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.property_constraint_fact(tenant_id,id,job_id,binding_id,site_revision_id,command_id,kind,source_id,source_name,retrieved_at,result,audit_event_id,actor_membership_id)
+        SELECT tenant_id,$3,job_id,binding_id,site_revision_id,command_id,kind,source_id,source_name,retrieved_at,${changed},audit_event_id,actor_membership_id FROM app.property_constraint_fact WHERE tenant_id=$1 AND job_id=$2 AND result->>'status'='unknown' LIMIT 1`,[tenant,j.id,randomUUID()]))).rejects.toMatchObject({code:"23514"});
     }
     // Cross-tenant writes fail RLS even when the row otherwise references known facts.
-    await expect(clone(`'${other}'::uuid,gen_random_uuid(),job_id,binding_id,site_revision_id,command_id,kind,source_id,source_name,retrieved_at,result,audit_event_id,created_at`)).rejects.toMatchObject({code:"42501"});
+    await expect(clone(`'${other}'::uuid,gen_random_uuid(),job_id,binding_id,site_revision_id,command_id,kind,source_id,source_name,retrieved_at,result,audit_event_id,created_at,actor_membership_id`)).rejects.toMatchObject({code:"42501"});
     const company=await job("business","ZZ000001");await prevention.command(context,member,company.id,command(company.binding,"company"));
-    await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.counterparty_check(tenant_id,id,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id)
-      SELECT c.tenant_id,$3,$4,b.id,b.customer_revision_id,c.command_id,c.kind,c.watch_revision,c.source_id,c.source_name,c.retrieved_at,c.result,c.audit_event_id
+    await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.counterparty_check(tenant_id,id,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id,actor_membership_id)
+      SELECT c.tenant_id,$3,$4,b.id,b.customer_revision_id,c.command_id,c.kind,c.watch_revision,c.source_id,c.source_name,c.retrieved_at,c.result,c.audit_event_id,c.actor_membership_id
       FROM app.counterparty_check c JOIN app.job_party_binding b ON b.tenant_id=c.tenant_id AND b.id=$5 WHERE c.tenant_id=$1 AND c.job_id=$2 AND c.kind='company' LIMIT 1`,[tenant,company.id,randomUUID(),j.id,j.binding]))).rejects.toMatchObject({code:"23514"});
   });
   it("fails closed when the customer's latest revision is not eligible: new checks refuse and an existing watch yields nothing", async () => {
@@ -155,8 +155,8 @@ describe("MON-7a real PostgreSQL guarantees", () => {
     // Property facts concern the site, not the customer, so they still run.
     expect((await prevention.command(context,member,j.id,command(j.binding,"property","fresh"))).view.property).toHaveLength(5);
     // The database refuses a direct runtime write that is bound to the stale, formerly eligible revision.
-    await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.counterparty_check(tenant_id,id,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id)
-      SELECT tenant_id,$3,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id FROM app.counterparty_check WHERE tenant_id=$1 AND job_id=$2 AND kind='company' LIMIT 1`,[tenant,j.id,randomUUID()])))
+    await expect(withTenant(runtime,context,db=>db.$client.query(`INSERT INTO app.counterparty_check(tenant_id,id,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id,actor_membership_id)
+      SELECT tenant_id,$3,job_id,binding_id,customer_revision_id,command_id,kind,watch_revision,source_id,source_name,retrieved_at,result,audit_event_id,actor_membership_id FROM app.counterparty_check WHERE tenant_id=$1 AND job_id=$2 AND kind='company' LIMIT 1`,[tenant,j.id,randomUUID()])))
       .rejects.toMatchObject({code:"23514",message:expect.stringContaining("NOT_REGISTERED_COMPANY")});
     // A later revision that would itself be eligible still refuses until the job is re-bound to it.
     const business=await parties.command(context,member,j.id,{version:"job-parties-command.v1",commandId:randomUUID(),action:"revise_customer",customerId:j.customerId,expectedRevision:2,customer:{version:"customer.v1",name:"Fictional customer",type:"business",companyNumber:"ZZ000002"}});

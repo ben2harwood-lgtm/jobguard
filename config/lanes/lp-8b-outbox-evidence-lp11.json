@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-8b-outbox-evidence-lp11": {
+      "branches": [
+        "codex/sandbox/lp-8b-outbox-evidence-lp11"
+      ],
+      "note": "LP-8b RED build ahead on the LP-8a and LP-11 predecessor. Migration 0767 preserves the checked 0764 synthetic invoice issue paths.",
+      "allow": [
+        "packages/db/migration-notes/0767_lp8b_outbox_evidence.md",
+        "packages/db/migrations/0767_lp8b_outbox_evidence.sql",
+        "packages/db/src/evidence.ts",
+        "packages/db/src/outbox.ts",
+        "packages/db/src/prevention-check-repository.ts",
+        "packages/db/src/resumable-evidence.test.ts",
+        "packages/db/test/administrative-role-setup.ts",
+        "packages/db/test/lp7-member-administration.integration.test.ts",
+        "packages/db/test/lp8b-outbox-evidence.integration.test.ts",
+        "packages/db/test/lp8b-storage.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0767_lp8b_outbox_evidence.proof.json",
+        "packages/db/test/outbox.integration.test.ts",
+        "packages/db/test/post-lock-upload-guard.integration.test.ts",
+        "packages/db/test/prevention-checks.integration.test.ts",
+        "packages/db/test/purchase-order-action.test.ts",
+        "packages/db/test/purchase-order-audit.test.ts",
+        "packages/db/test/real-gap-proof-by-trade.integration.test.ts",
+        "packages/db/test/sv5pre-completion.integration.test.ts",
+        "packages/db/test/watchdog.integration.test.ts"
+      ]
+    }
+  }
+}
