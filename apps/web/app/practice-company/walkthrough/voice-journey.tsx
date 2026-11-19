@@ -240,7 +240,14 @@ export function VoiceJourney() {
           // The tour owns spotlight scrolling; open pricing without a fragment scroll.
           history.replaceState(null, "", `${location.pathname}${location.search}`);
         }
-        return ownPriced.current;
+        // The saved revision starts an async workspace handoff. Keep Next and
+        // autoplay incomplete until that same job's saved quote is mounted.
+        const expectedJob = current.current.prepared || current.current.capture?.jobId;
+        const workspace = screen()?.querySelector<HTMLElement>("#captured-job-workspace");
+        const quote = workspace?.querySelector<HTMLElement>(".quote-editor");
+        return ownPriced.current && !!expectedJob && workspace?.getAttribute("data-job-id") === expectedJob &&
+          quote?.getAttribute("data-job-id") === expectedJob && quote.getAttribute("data-quote-ready") === "true" &&
+          Number(quote.querySelector('[data-testid="quote-revision"]')?.textContent) > 0;
       },
       () => text("quote-delivery") === "Simulated delivery — nothing sent",
       () => !!screen()?.querySelector('[data-testid="activation-policy"]'),
