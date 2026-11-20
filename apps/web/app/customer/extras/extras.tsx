@@ -1,6 +1,18 @@
 "use client";
 import { useEffect, useState } from "react";
-import { customerVariationViewV1, type CustomerVariationView } from "@jobguard/core";
+import { candidateM1TaxPolicy, customerVariationViewV1, money, type CustomerVariationView } from "@jobguard/core";
+const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
+const pounds = (pence: number) => `${pence < 0 ? "−" : ""}${gbp.format(Math.abs(pence) / 100)}`;
+
+export function extraPriceWords(pence: number, revision: number) {
+  const vat = candidateM1TaxPolicy.calculateGroup(money(pence), "standard_rate_20");
+  const total = pounds(pence + vat.pence);
+  return {
+    price: `Revision ${revision} · ${pounds(pence)} plus VAT ${pounds(vat.pence)} · total ${total}`,
+    approval: `Approve revision ${revision} for ${total} including VAT`,
+  };
+}
+
 export default function CustomerExtras() {
   const [view, setView] = useState<CustomerVariationView>(), [notice, setNotice] = useState("Loading extras…"), [busy, setBusy] = useState(false);
   async function load() {
@@ -25,12 +37,14 @@ export default function CustomerExtras() {
     } catch { setView(undefined); setNotice("Approval could not be confirmed. Reload extras to check before trying again."); }
     finally { setBusy(false); }
   }
-  const pounds = (pence:number) => `${pence<0?"−":"+"}£${Math.trunc(Math.abs(pence)/100)}.${String(Math.abs(pence)%100).padStart(2,"0")}`;
-  return <main><h1>Review extras</h1><p>Synthetic practice · each approval applies only to the revision and signed amount shown.</p><p role="status">{notice}</p>
+  return <main style={{ overflowWrap: "anywhere" }}><h1>Review extras</h1><p>Synthetic practice · each approval applies only to the revision and signed amount shown.</p><p role="status">{notice}</p>
     <button disabled={busy} onClick={() => void load()}>Reload extras</button>
     {view?.variations.length === 0 && <p>No priced extras to review.</p>}
-    {view?.variations.map(item => <section key={item.id}><h2>{item.description}</h2><p>Revision {item.revision} · {pounds(item.amount.pence)}</p><p>Content hash: <code>{item.hash}</code></p>
-      {item.approved ? <p>Approved · {item.method === "customer_authenticated" ? "authenticated customer" : item.method === "builder_attestation" ? "builder attestation" : "customer evidence"}</p> : <button disabled={busy} onClick={() => void approve(item)}>Approve revision {item.revision} for {pounds(item.amount.pence)}</button>}
-    </section>)}
+    {view?.variations.map(item => {
+      const { price, approval } = extraPriceWords(item.amount.pence, item.revision);
+      return <section key={item.id}><h2>{item.description}</h2><p>{price}</p><p>Content hash: <code>{item.hash}</code></p>
+        {item.approved ? <p>Approved · {item.method === "customer_authenticated" ? "authenticated customer" : item.method === "builder_attestation" ? "builder attestation" : "customer evidence"}</p> : <button disabled={busy} onClick={() => void approve(item)}>{approval}</button>}
+      </section>;
+    })}
   </main>;
 }

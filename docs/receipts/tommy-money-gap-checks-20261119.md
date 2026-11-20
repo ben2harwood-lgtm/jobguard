@@ -134,3 +134,21 @@ The public empty-receipt and zero-eligible-principal/allocation assertions stay.
 Remaining support-v02 reload and pending-line assertions were checked against the actual saved surfaces and repositories: the excluded-pending region and amount formatting match, final-account reads preserve their saved revision and approved lines, the customer invoice is a persisted projection, and the reload does not issue a new variation, invoice or receipt. This is source inspection, not a runtime pass of the still-unreached paired comparison.
 
 Typecheck, four-execution discovery, lane and whitespace results for this local correction are recorded in the handoff. No local PostgreSQL, Next or browser execution, remote dispatch, push, merge or deployment is performed by this correction. Actual execution of the revised support-v02 remains required.
+
+## PR #850 repair 1 — 20 November 2026
+
+Merged `origin/main` at `228aa98740f64d201b90a61574581b686b73fa2e` into the existing draft branch. The merged baseline was `6a1a0e7f678c8998361a6c0f9f1ba35991487b5d`.
+
+Fail-first on that baseline used the repository's production Playwright mode (`CI=1`) and synthetic PostgreSQL on `127.0.0.1:55432`:
+
+```sh
+PLAYWRIGHT_SKIP_BROWSER_GC=1 timeout 1500 pnpm --filter @jobguard/web test:e2e TOMMY-money-gaps.spec.ts --workers=1 --grep support-v04
+```
+
+Both `mobile-360` and `desktop` reached `expect(database.commands).toHaveLength(1)` at line 529 and received `[]` (exit 1). Both had already read the saved allocation through the application. An earlier development-server attempt stopped at “Start the demo” in both projects and supplied no allocation evidence. The local runs used Node 24.15.0, pnpm 10.28.1 and system Chromium 154.0.8037.57 because the Playwright download was blocked. The API dependency build and web production build passed.
+
+`allocationReceipt` now binds the browser's practice session with `bindPracticeRequest` before its runtime-role reads. The transaction starts with `BEGIN` because the binding records a row. The SELECTs, COMMIT, ROLLBACK and support-v02 admin observer are unchanged. Compared with `5642fb6a`, the spec differs only in the import, observer comment, transaction and four calls that supply the page. All asserted values, including £384 gross, £320 net, £64 tax and the original-byte replay comparisons, are preserved.
+
+With the repair and the same local production Playwright setup, `PLAYWRIGHT_SKIP_BROWSER_GC=1 timeout 1500 pnpm --filter @jobguard/web test:e2e TOMMY-money-gaps.spec.ts --workers=1` passed all four executions in 6.7 minutes. Both projects emitted PASS receipts for support-v02 and support-v04. Each support-v04 receipt recorded one allocation, one landing event and one payment after the byte-identical replay.
+
+`./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit`, `pnpm lint:lanes`, `git diff --check` and `git merge-base --is-ancestor origin/main HEAD` passed. GitHub CI and the independent checker are separate gates on the pushed head.

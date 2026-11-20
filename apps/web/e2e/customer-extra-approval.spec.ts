@@ -19,8 +19,8 @@ async function seedJob(admin: Pool, tenant: string) {
   await db.query("COMMIT"); return { job, customer };
  } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
-test("customer reviews and approves one exact signed extra; builder history records customer method",async({page,browser,baseURL})=>{
- const admin=new Pool({connectionString:process.env.E2E_ADMIN_DATABASE_URL});const context=await browser.newContext();
+test("customer reviews and approves one exact signed extra; builder history records customer method",async({page,browser,baseURL,viewport})=>{
+ const admin=new Pool({connectionString:process.env.E2E_ADMIN_DATABASE_URL});const context=await browser.newContext({viewport});
  try {
   await page.goto("/sign-in");await page.getByLabel("Fictional email address").fill(`extras-builder-${randomUUID()}@practice.invalid`);
   await page.getByRole("button",{name:"Request code",exact:true}).click();const code=await page.getByTestId("fixture-code").textContent();
@@ -45,7 +45,13 @@ test("customer reviews and approves one exact signed extra; builder history reco
   await customer.getByRole("link",{name:"Review extras",exact:true}).click();
   await expect(customer.getByRole("heading",{name:"Fictional extra socket"})).toBeVisible();
   await expect(customer.getByText(`Content hash: ${contentHash}`)).toBeVisible();
-  await customer.getByRole("button",{name:"Approve revision 1 for +£50.00",exact:true}).click();
+  const section=customer.locator("section").filter({has:customer.getByRole("heading",{name:"Fictional extra socket",exact:true})});
+  await expect(section.getByText("Revision 1 · £50.00 plus VAT £10.00 · total £60.00",{exact:true})).toBeVisible();
+  if(viewport?.width===360) {
+   expect(await customer.evaluate(()=>window.innerWidth)).toBe(360);
+   expect(await customer.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+  }
+  await customer.getByRole("button",{name:"Approve revision 1 for £60.00 including VAT",exact:true}).click();
   await expect(customer.getByText("Approved · authenticated customer",{exact:true})).toBeVisible();
   await customer.reload();await expect(customer.getByText("Approved · authenticated customer",{exact:true})).toBeVisible();
   expect((await admin.query("SELECT method,actor_membership_id,signed_delta_pence FROM app.variation_approval WHERE tenant_id=$1 AND variation_id=$2",[tenant,variation])).rows).toEqual([{method:"customer_authenticated",actor_membership_id:null,signed_delta_pence:"5000"}]);

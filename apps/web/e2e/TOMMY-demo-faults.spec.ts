@@ -186,17 +186,32 @@ test("concurrent confirm-scope and open-recovery commands preserve one scope and
     await arrived;
     expect(requests).toHaveLength(2); // Both commands are outstanding before either is sent to the real server.
     diagnostics.stage = "both commands released";
+    diagnostics.scopeRevisionsBefore = (await admin.query("SELECT count(*)::int AS count FROM app.scope_revision WHERE job_id=$1", [jobId])).rows[0].count;
     release();
     const [confirmation, opening] = await Promise.all([confirmReply, caseReply]);
     const confirmationBody = await confirmation.json(), openingBody = await opening.json();
     diagnostics.requests = requests; diagnostics.confirmation = { status: confirmation.status(), body: confirmationBody };
     diagnostics.opening = { status: opening.status(), body: openingBody }; diagnostics.deadlocksAfter = await deadlocks();
     await page.unroute(`**${confirmPath}`, intercept); await page.unroute(`**${casePath}`, intercept);
-    expect(confirmation.status(), JSON.stringify(diagnostics)).toBe(200);
+    expect([confirmation.status(), opening.status()], JSON.stringify(diagnostics)).toContain(200);
+    let confirmedCommand = requests.find(request => request.path === confirmPath)!.body;
+    if (confirmation.status() !== 200) {
+      expect(confirmation.status()).toBe(503);
+      expect(confirmationBody).toEqual({ code: "DATABASE_UNAVAILABLE" });
+      const confirmAlert = page.getByRole("alert").and(page.getByText("Scope was not confirmed (DATABASE_UNAVAILABLE).", { exact: true }));
+      await expect(confirmAlert).toBeVisible();
+      expect((await admin.query("SELECT command_id FROM app.command_receipt WHERE command_id=$1", [confirmedCommand.commandId])).rows).toHaveLength(0);
+      expect((await admin.query("SELECT count(*)::int AS count FROM app.scope_revision WHERE job_id=$1", [jobId])).rows[0].count).toBe(diagnostics.scopeRevisionsBefore);
+      const confirmRetry = page.waitForResponse(response => response.url().endsWith(confirmPath) && response.request().method() === "POST");
+      await button(page, "Confirm scope").click();
+      const retried = await confirmRetry;
+      confirmedCommand = retried.request().postDataJSON();
+      diagnostics.confirmRetry = retried.status();
+      expect(retried.status(), JSON.stringify(diagnostics)).toBe(200);
+    }
     await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
     await expect(page.getByTestId("confirmed-line-count")).toHaveText("5");
     const openingCommand = requests.find(request => request.path === casePath)!.body;
-    const confirmedCommand = requests.find(request => request.path === confirmPath)!.body;
     if (opening.status() !== 200) {
       // A 503 is not success. It must carry the precise unknown-outcome contract,
       // visibly hold other writes, and recover by the original command, once.

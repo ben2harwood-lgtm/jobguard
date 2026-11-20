@@ -1,0 +1,350 @@
+import { randomBytes, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { Pool } from "pg";
+import { afterAll, beforeAll, expect, it } from "vitest";
+import { LedgerRepository } from "../src/ledger.js";
+import { adoptionFixture, jobDoorsActor, jobDoorsDatabase, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
+import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
+import { lp12ColumnGrants, lp12CredentialLookup, lp12Moved, lp12Owners, lp12TableGrants } from "./lp12-narrow-owners.js";
+
+let db: JobDoorsDatabase;
+let worker: Pool;
+const bodies = new Map<string, { prosrc: string; proconfig: string[] }>();
+beforeAll(async () => {
+  db = await jobDoorsDatabase(false, "0768_lp12_narrow_owners.sql");
+  for (const [signature] of [lp12CredentialLookup, ...lp12Moved]) bodies.set(signature,
+    (await db.owner.query("SELECT prosrc,proconfig FROM pg_proc WHERE oid=$1::regprocedure", [signature])).rows[0]);
+  await db.owner.query(await readFile(new URL("../migrations/0768_lp12_narrow_owners.sql", import.meta.url), "utf8"));
+  // Use LP-10's installed worker capability, never fabricate a missing role.
+  expect((await db.owner.query("SELECT rolname FROM pg_roles WHERE rolname='jobguard_worker'")).rows).toHaveLength(1);
+  const password = randomBytes(24).toString("hex");
+  await db.owner.query(`CREATE ROLE lp12_worker_probe LOGIN INHERIT PASSWORD '${password}'; GRANT jobguard_worker TO lp12_worker_probe`);
+  worker = new Pool({ ...db.runtime.options, user: "lp12_worker_probe", password, max: 1 });
+}, 300_000);
+afterAll(async () => { await worker?.end(); await db?.close(); });
+
+async function session(tenant?: string) {
+  const f = await jobDoorsActor(db.owner, tenant), credential = randomBytes(32).toString("hex");
+  await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${f.person}@fictional.invalid`, f.person]);
+  await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [f.person, f.tenant, f.member]);
+  await db.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+    VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(), f.person, credential]);
+  return { ...f, credential };
+}
+
+it("keeps all owners inert, memberless, and outside protected table/schema custody", async () => {
+  for (const name of lp12Owners) {
+    const role = (await db.owner.query(`SELECT rolcanlogin,rolinherit,rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls
+      FROM pg_roles WHERE rolname=$1`, [name])).rows[0];
+    expect(Object.values(role)).toEqual(Array(7).fill(false));
+    const members = (await db.owner.query(`SELECT m.*,g.rolsuper FROM pg_auth_members m JOIN pg_roles g ON g.oid=m.grantor
+      WHERE m.member=$1::regrole OR m.roleid=$1::regrole`, [name])).rows;
+    for (const m of members) expect(m).toMatchObject({ roleid: (await db.owner.query("SELECT $1::regrole::oid id", [name])).rows[0].id,
+      admin_option: true, inherit_option: false, set_option: false, rolsuper: true });
+    expect((await db.owner.query(`SELECT n.nspname||'.'||c.relname object FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE c.relowner=$1::regrole AND c.relkind IN ('r','p') AND n.nspname IN ('app','identity','control_plane','audit_control')
+      ORDER BY 1`, [name])).rows.map(row => row.object)).toEqual(
+      name === "jobguard_binding_owner" ? ["control_plane.request_binding"] :
+      name === "jobguard_session_lookup" ? ["control_plane.lp11_customer_scope", "control_plane.lp11_identity_scope",
+        "control_plane.lp11_observation_permit", "control_plane.lp11_observation_scope", "control_plane.lp11_shadow_scope"] : []);
+    expect((await db.owner.query("SELECT nspname FROM pg_namespace WHERE nspowner=$1::regrole", [name])).rows).toEqual([]);
+    expect((await db.owner.query(`SELECT nspname FROM pg_namespace WHERE nspname IN ('app','identity','control_plane','audit_control')
+      AND has_schema_privilege($1,nspname,'CREATE')`, [name])).rows).toEqual([]);
+  }
+});
+
+it("refuses owner assumption and routine replacement as actual runtime and worker logins", async () => {
+  for (const login of [db.runtime, worker]) {
+    for (const name of lp12Owners) await expect(login.query(`SET ROLE ${name}`)).rejects.toMatchObject({ code: "42501" });
+    for (const [signature] of [lp12CredentialLookup, ...lp12Moved]) {
+      const definition = (await db.owner.query("SELECT pg_get_functiondef($1::regprocedure) definition", [signature])).rows[0].definition;
+      await expect(login.query(definition)).rejects.toMatchObject({ code: "42501" });
+    }
+    for (const signature of ["app.lp6_session_authority(text,text,uuid)", lp12Moved[0][0]]) {
+      expect((await db.owner.query("SELECT has_function_privilege($1,$2,'EXECUTE') allowed", [login.options.user, signature])).rows[0].allowed).toBe(false);
+    }
+  }
+});
+
+it("installs exactly the listed table/column grants, no sequence privileges, and unchanged routine bodies", async () => {
+  for (const name of Object.keys(lp12TableGrants) as (keyof typeof lp12TableGrants)[]) {
+    const tables = (await db.owner.query(`SELECT n.nspname||'.'||c.relname||':'||a.privilege_type fact
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace,
+      LATERAL aclexplode(c.relacl) a WHERE a.grantee=$1::regrole ORDER BY 1`, [name])).rows.map(r => r.fact);
+    expect(tables).toEqual(lp12TableGrants[name]);
+    const columns = (await db.owner.query(`SELECT n.nspname||'.'||c.relname||'.'||col.attname||':'||a.privilege_type fact
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute col ON col.attrelid=c.oid,
+      LATERAL aclexplode(col.attacl) a WHERE a.grantee=$1::regrole ORDER BY 1`, [name])).rows.map(r => r.fact);
+    expect(columns).toEqual(lp12ColumnGrants[name]);
+    expect((await db.owner.query(`SELECT c.oid FROM pg_class c WHERE c.relkind='S' AND
+      (has_sequence_privilege($1,c.oid,'USAGE') OR has_sequence_privilege($1,c.oid,'SELECT') OR has_sequence_privilege($1,c.oid,'UPDATE'))`, [name])).rows).toEqual([]);
+  }
+  for (const [signature, owner] of [lp12CredentialLookup, ...lp12Moved]) {
+    const routine = (await db.owner.query("SELECT prosrc,pg_get_userbyid(proowner) owner,proconfig FROM pg_proc WHERE oid=$1::regprocedure", [signature])).rows[0];
+    expect(routine).toEqual({ ...bodies.get(signature), owner });
+  }
+});
+
+it("rejects unsafe provisioning atomically before changing any object", async () => {
+  const migration = await readFile(new URL("../migrations/0768_lp12_narrow_owners.sql", import.meta.url), "utf8");
+  const preflight = migration.slice(0, migration.indexOf("-- A command claim"));
+  const admin = await db.owner.connect();
+  try {
+    for (const name of lp12Owners) for (const defect of [`ALTER ROLE ${name} LOGIN`,
+      `GRANT jobguard_migration TO ${name}`, `GRANT ${name} TO jobguard_runtime`,
+      `GRANT ${name} TO jobguard_worker`, `GRANT ${name} TO jobguard_migration WITH INHERIT FALSE, SET TRUE`]) {
+      await admin.query("BEGIN"); await admin.query(defect);
+      await expect(admin.query(preflight)).rejects.toMatchObject({ code: "42501", message: "LP12_OWNER_UNSAFE" });
+      await admin.query("ROLLBACK");
+    }
+  } finally { await admin.query("ROLLBACK"); admin.release(); }
+});
+
+it("binds a real credential through the existing private lookup owner", async () => {
+  const f = await session(), digest = randomBytes(32).toString("hex");
+  await db.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+    VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(), f.person, digest]);
+  const client = await db.runtime.connect();
+  try {
+    await client.query("BEGIN"); await client.query("SELECT app.bind_request('real',$1,$2)", [digest, f.tenant]);
+    expect((await client.query("SELECT app.current_actor() actor,app.current_tenant() tenant")).rows[0]).toEqual({ actor: f.member, tenant: f.tenant });
+  } finally { await client.query("ROLLBACK"); client.release(); }
+});
+
+it("posts, settles and reverses through the narrow money and audit owners", async () => {
+  const f = await session(), book = randomUUID(), receivable = randomUUID(), deferred = randomUUID(), clearing = randomUUID();
+  await db.owner.query("INSERT INTO app.ledger_book(id,tenant_id,code,currency,chart_status) VALUES($1,$2,'lp12','GBP','synthetic')", [book, f.tenant]);
+  for (const [id, type] of [[receivable, "receivable"], [deferred, "deferred_income"], [clearing, "provider_clearing"]])
+    await db.owner.query("INSERT INTO app.ledger_account(id,tenant_id,book_id,currency,code,class,mapping_status) VALUES($1,$2,$3,'GBP',$4,$4,'synthetic')", [id, f.tenant, book, type]);
+  const repo = new LedgerRepository(db.runtime), context = verifiedTenantContextFromMembership({ identityUserId: f.person, tenantId: f.tenant, membershipId: f.member } as Parameters<typeof verifiedTenantContextFromMembership>[0], { kind: "real", credential: f.credential }), hash = "a".repeat(64);
+  async function authorized(purpose: string, amount: number) {
+    const id = randomUUID();
+    await db.owner.query(`INSERT INTO app.financial_authorization(id,tenant_id,membership_id,purpose,amount_pence,currency,artifact_hash,status)
+      VALUES($1,$2,$3,$4,$5,'GBP',$6,'approved')`, [id, f.tenant, f.member, purpose, amount, hash]);
+    const proof = { authorizationId: id, actorRef: `membership:${f.member}`, permission: "finance:approve" as const };
+    return { proof, input: { schemaVersion: 1, bookId: book, amountPence: amount, currency: "GBP", sourceEventId: `lp12:${id}`,
+      provenanceRef: "fictional:lp12", artifactHash: hash, authorizationId: id, actorRef: proof.actorRef } };
+  }
+  const a = await authorized("plan_obligation", 1000);
+  const obligation = await repo.postPlanObligation(context, a.proof, { ...a.input, receivableAccountId: receivable,
+    deferredIncomeAccountId: deferred, provenanceKind: "synthetic_authorized_plan" });
+  const s = await authorized("plan_settlement", 400);
+  const settlement = await repo.postPlanSettlement(context, s.proof, { ...s.input, obligationJournalId: obligation,
+    clearingAccountId: clearing, receivableAccountId: receivable });
+  const r = await authorized("correction", 400);
+  await repo.reverse(context, r.proof, { schemaVersion: 1, bookId: book, originalJournalId: settlement,
+    sourceEventId: r.input.sourceEventId, provenanceRef: r.input.provenanceRef, artifactHash: hash,
+    authorizationId: r.proof.authorizationId, actorRef: r.proof.actorRef });
+  expect((await db.owner.query("SELECT count(*)::int n FROM app.journal WHERE tenant_id=$1", [f.tenant])).rows[0].n).toBe(3);
+  expect((await db.owner.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [f.tenant])).rows[0].n).toBe(3);
+});
+
+it("completes and replays a checked command after removing claim-table ownership", async () => {
+  const { UserCommandDispatcher } = await import("../src/commands.js");
+  const { AdoptInFlightJobMutation } = await import("../src/job-import-repository.js");
+  const fixture = await adoptionFixture(db), credential = randomBytes(32).toString("hex");
+  const f = { ...fixture.actor, credential }, job = fixture.input.jobId, id = randomUUID();
+  await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${f.person}@fictional.invalid`, f.person]);
+  await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [f.person, f.tenant, f.member]);
+  await db.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+    VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(), f.person, credential]);
+  const command = { version: "command.v1", commandId: id, commandType: "synthetic.lock", semanticKey: `lp12:${id}`,
+    actorMembershipId: f.member, subjectType: "job", subjectRef: job,
+    action: { actionType: "synthetic.lock", recipient: null, contentHash: "a".repeat(64), aggregateRevision: 1,
+      amountPence: null, currency: null, policyVersion: "synthetic_demo_activation.v3", expiresAt: new Date("2099-01-01") } };
+  const dispatcher = new UserCommandDispatcher(db.runtime), context = verifiedTenantContextFromMembership({ identityUserId: f.person, tenantId: f.tenant, membershipId: f.member } as Parameters<typeof verifiedTenantContextFromMembership>[0], { kind: "real", credential: f.credential });
+  await dispatcher.dispatch(context, fixture.command, new AdoptInFlightJobMutation(f.tenant, "synthetic_candidate", fixture.input));
+  expect(await dispatcher.dispatch(context, command, { mutate: async () => ({ locked: job }) })).toEqual({ locked: job });
+  expect(await dispatcher.dispatch(context, command, { mutate: async () => { throw new Error("replay mutated"); } })).toEqual({ locked: job });
+  expect((await db.owner.query("SELECT status FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2", [f.tenant, id])).rows[0].status).toBe("succeeded");
+});
+
+it("uses only the LP-11 bound tenant for money policies and denies wrong-tenant credential binding", async () => {
+  const policies = (await db.owner.query(`SELECT tablename, roles, cmd, qual, with_check
+    FROM pg_policies WHERE schemaname='app' AND policyname='lp12_money_tenant' ORDER BY tablename`)).rows;
+  const boundTenant = "(tenant_id = ( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))";
+  expect(policies).toEqual(["financial_authorization", "journal", "journal_line", "ledger_account", "membership"]
+    .map(tablename => ({ tablename, roles: "{jobguard_money_owner}", cmd: "ALL", qual: boundTenant, with_check: boundTenant })));
+  const f = await session(), other = await session(), digest = randomBytes(32).toString("hex");
+  await db.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+    VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(), f.person, digest]);
+  await expect(db.runtime.query("SELECT app.bind_request('real',$1,$2)", [digest, other.tenant]))
+    .rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+});
+
+it("accepts only PG16 creator ADMIN-only rows and exact temporary migration membership", async () => {
+  const sql = await readFile(new URL("../migrations/0768_lp12_narrow_owners.sql", import.meta.url), "utf8");
+  const preflight = sql.slice(0, sql.indexOf("-- A command claim"));
+  const admin = await db.owner.connect();
+  try {
+    await admin.query("BEGIN");
+    for (const name of lp12Owners) await admin.query(`GRANT ${name} TO postgres WITH ADMIN TRUE, INHERIT FALSE, SET FALSE`);
+    await admin.query(preflight);
+    await admin.query("ROLLBACK; BEGIN");
+    for (const name of lp12Owners) await admin.query(`GRANT ${name} TO jobguard_migration WITH ADMIN FALSE, INHERIT TRUE, SET TRUE`);
+    await admin.query("SET LOCAL ROLE jobguard_migration");
+    await admin.query(preflight);
+  } finally { await admin.query("ROLLBACK"); admin.release(); }
+});
+
+it("lists every helper and schema capability of the new owners, without grant options", async () => {
+  const name = "jobguard_money_owner";
+  const helpers = (await db.owner.query(`SELECT n.nspname||'.'||p.proname helper,a.is_grantable
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace,LATERAL aclexplode(p.proacl) a
+    WHERE a.grantee=$1::regrole AND p.proowner<>a.grantee ORDER BY 1`, [name])).rows;
+  expect(helpers).toEqual(["app.current_actor", "app.current_tenant", "app.lp11_policy_tenant"]
+    .map(helper => ({ helper, is_grantable: false })));
+  const schemas = (await db.owner.query(`SELECT n.nspname,a.privilege_type,a.is_grantable FROM pg_namespace n,
+    LATERAL aclexplode(n.nspacl) a WHERE a.grantee=$1::regrole ORDER BY 1,2`, [name])).rows;
+  expect(schemas).toEqual([{ nspname: "app", privilege_type: "USAGE", is_grantable: false }]);
+  expect((await db.owner.query(`SELECT c.oid FROM pg_class c,LATERAL aclexplode(c.relacl) a
+    WHERE a.grantee=$1::regrole AND a.is_grantable`, [name])).rows).toEqual([]);
+  for (const table of ["identity.session", "control_plane.practice_session", "control_plane.contractor_practice_session"]) {
+    expect((await db.owner.query("SELECT has_table_privilege('jobguard_binding_owner',$1,'SELECT') allowed", [table])).rows[0].allowed).toBe(false);
+  }
+  const proofColumns = (await db.owner.query(`SELECT a.attname,acl.privilege_type,acl.is_grantable
+    FROM pg_attribute a,LATERAL aclexplode(a.attacl) acl
+    WHERE a.attrelid='control_plane.practice_session'::regclass
+      AND acl.grantee='jobguard_binding_owner'::regrole ORDER BY a.attname`)).rows;
+  expect(proofColumns).toEqual(["environment", "expires_at", "revoked_at", "token_digest"]
+    .map(attname => ({ attname, privilege_type: "SELECT", is_grantable: false })));
+  expect((await db.owner.query(`SELECT has_function_privilege('jobguard_binding_owner',
+    'identity.sso_session_memberships(uuid,uuid)','EXECUTE') allowed`)).rows[0].allowed).toBe(false);
+});
+
+
+it("retains binding refusals at every moved posting and leaves money/audit unchanged", async () => {
+  const f = await session(), foreign = await session(), authorizationId = randomUUID();
+  await db.owner.query(`INSERT INTO app.financial_authorization(id,tenant_id,membership_id,purpose,amount_pence,currency,artifact_hash,status)
+    VALUES($1,$2,$3,'plan_obligation',1000,'GBP',$4,'approved')`, [authorizationId, foreign.tenant, foreign.member, "a".repeat(64)]);
+  const before = (await db.owner.query(`SELECT
+    (SELECT count(*) FROM app.journal) journals,(SELECT count(*) FROM app.journal_line) lines,
+    (SELECT count(*) FROM app.audit_event) events`)).rows;
+  const client = await db.runtime.connect();
+  try {
+    for (const bound of [false, true]) {
+      await client.query("BEGIN");
+      if (bound) await client.query("SELECT app.bind_request('real',$1,$2)", [f.credential, f.tenant]);
+      // Forge the legacy GUC to the authorization's tenant. LP-6c must still refuse.
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [foreign.tenant]);
+      for (const [signature] of lp12Moved.slice(1)) {
+        const open = signature.indexOf("("), types = signature.slice(open + 1, -1).split(",");
+        const values = types.map(() => null);
+        values[values.length - 2] = authorizationId;
+        await client.query("SAVEPOINT refused");
+        await expect(client.query(`SELECT ${signature.slice(0, open)}(${types.map((type, i) => `$${i + 1}::${type}`).join(",")})`, values))
+          .rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+        await client.query("ROLLBACK TO refused");
+      }
+      await client.query("ROLLBACK");
+    }
+  } finally { await client.query("ROLLBACK"); client.release(); }
+  expect((await db.owner.query(`SELECT
+    (SELECT count(*) FROM app.journal) journals,(SELECT count(*) FROM app.journal_line) lines,
+    (SELECT count(*) FROM app.audit_event) events`)).rows).toEqual(before);
+});
+
+
+it("leaves only the necessary command-table grants after removing table custody", async () => {
+  const rows = (await db.owner.query(`SELECT c.relname,a.privilege_type,a.is_grantable
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace,LATERAL aclexplode(c.relacl) a
+    WHERE n.nspname='app' AND c.relname=ANY($1::text[]) AND a.grantee='jobguard_command_writer'::regrole
+    ORDER BY c.relname,a.privilege_type`, [["command_lifecycle_claim", "command_type_registry", "repository_operational_record"]])).rows;
+  expect(rows).toEqual([
+    { relname: "command_lifecycle_claim", privilege_type: "INSERT", is_grantable: false },
+    { relname: "command_lifecycle_claim", privilege_type: "SELECT", is_grantable: false },
+    { relname: "command_type_registry", privilege_type: "SELECT", is_grantable: false },
+    { relname: "repository_operational_record", privilege_type: "INSERT", is_grantable: false },
+    { relname: "repository_operational_record", privilege_type: "SELECT", is_grantable: false },
+  ]);
+  expect((await db.owner.query(`SELECT c.relname,col.attname,a.privilege_type,a.is_grantable
+    FROM pg_class c JOIN pg_attribute col ON col.attrelid=c.oid,LATERAL aclexplode(col.attacl) a
+    WHERE c.oid='app.command_lifecycle_claim'::regclass AND a.grantee='jobguard_command_writer'::regrole
+    ORDER BY col.attname`)).rows).toEqual([
+    { relname: "command_lifecycle_claim", attname: "authorization_id", privilege_type: "UPDATE", is_grantable: false },
+    { relname: "command_lifecycle_claim", attname: "effect_ref", privilege_type: "UPDATE", is_grantable: false },
+    { relname: "command_lifecycle_claim", attname: "outcome", privilege_type: "UPDATE", is_grantable: false },
+  ]);
+});
+
+
+it("enumerates every surviving money signature and refuses unbound calls after ownership transfer", async () => {
+  const rows = (await db.owner.query<{ signature: string; name: string; types: string[] }>(`SELECT p.oid::regprocedure::text signature,p.proname name,
+    ARRAY(SELECT format_type(t,NULL) FROM unnest(p.proargtypes::oid[]) t) types
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='app' AND p.proname=ANY($1::text[]) ORDER BY 1`,
+  [["assert_financial_authorization", "post_plan_obligation", "post_plan_settlement", "reverse_journal"]])).rows;
+  const expected = (await db.owner.query<{ signature: string }>(`SELECT x::regprocedure::text signature
+    FROM unnest($1::text[]) x ORDER BY 1`, [lp12Moved.map(([signature]) => signature)])).rows;
+  expect(rows.map(r => r.signature)).toEqual(expected.map(r => r.signature));
+  const c = await db.runtime.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true)", [randomUUID(), randomUUID()]);
+    for (const r of rows) {
+      await c.query("SAVEPOINT attack");
+      await expect(c.query(`SELECT app.${r.name}(${r.types.map((t,i) => `$${i+1}::${t}`).join(",")})`, r.types.map(() => null)))
+        .rejects.toMatchObject({ code: "42501" });
+      await c.query("ROLLBACK TO attack");
+    }
+  } finally { await c.query("ROLLBACK"); c.release(); }
+});
+
+it("refuses a same-tenant forged author at each moved posting without a journal or audit effect", async () => {
+  const actor = await session(), peer = await session(actor.tenant), authorization = randomUUID();
+  await db.owner.query(`INSERT INTO app.financial_authorization(id,tenant_id,membership_id,purpose,amount_pence,currency,artifact_hash,status)
+    VALUES($1,$2,$3,'plan_obligation',1000,'GBP',$4,'approved')`, [authorization, actor.tenant, peer.member, "a".repeat(64)]);
+  const c = await db.runtime.connect();
+  try {
+    await c.query("BEGIN");
+    await c.query("SELECT app.bind_request('real',$1,$2)", [actor.credential, actor.tenant]);
+    await c.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.actor_id',$2,true)", [actor.tenant, peer.member]);
+    for (const [signature] of lp12Moved.slice(1)) {
+      const open = signature.indexOf("("), types = signature.slice(open+1,-1).split(",");
+      const values: unknown[] = types.map(() => null); values[values.length-2] = authorization;
+      await c.query("SAVEPOINT attack");
+      await expect(c.query(`SELECT ${signature.slice(0,open)}(${types.map((t,i) => `$${i+1}::${t}`).join(",")})`, values))
+        .rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+      await c.query("ROLLBACK TO attack");
+    }
+    expect((await c.query("SELECT app.current_actor() actor")).rows[0].actor).toBe(actor.member);
+  } finally { await c.query("ROLLBACK"); c.release(); }
+  for (const table of ["journal", "journal_line", "audit_event"]) {
+    expect((await db.owner.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`, [actor.tenant])).rows[0].n).toBe(0);
+  }
+});
+
+
+it("commits and replays an effect-binding adoption while refusing runtime claim updates", async () => {
+  const { UserCommandDispatcher } = await import("../src/commands.js");
+  const { AdoptInFlightJobMutation } = await import("../src/job-import-repository.js");
+  const f = await adoptionFixture(db), credential = randomBytes(32).toString("hex");
+  await db.owner.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${f.actor.person}@fictional.invalid`, f.actor.person]);
+  await db.owner.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)", [f.actor.person, f.actor.tenant, f.actor.member]);
+  await db.owner.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+    VALUES($1,$2,'synthetic_demo',$3,'fictional',clock_timestamp()+interval '1 hour')`, [randomUUID(), f.actor.person, credential]);
+  const context = verifiedTenantContextFromMembership({ identityUserId: f.actor.person, tenantId: f.actor.tenant,
+    membershipId: f.actor.member } as Parameters<typeof verifiedTenantContextFromMembership>[0], { kind: "real", credential });
+  const dispatcher = new UserCommandDispatcher(db.runtime);
+  const mutation = new AdoptInFlightJobMutation(f.actor.tenant, "synthetic_candidate", f.input);
+  const result = await dispatcher.dispatch(context, f.command, mutation);
+  expect(result).toMatchObject({ jobId: f.input.jobId, baselineId: f.input.baselineId });
+  expect(await dispatcher.dispatch(context, f.command, { mutate: async () => { throw new Error("replay mutated"); } })).toEqual(result);
+  const claim = (await db.owner.query(`SELECT c.effect_ref,c.authorization_id,r.status FROM app.command_lifecycle_claim c
+    JOIN app.command_receipt r USING(tenant_id,command_id) WHERE c.tenant_id=$1 AND c.command_id=$2`,
+  [f.actor.tenant, f.command.commandId])).rows[0];
+  expect(claim).toEqual({ effect_ref: { baselineId: f.input.baselineId }, authorization_id: expect.any(String), status: "succeeded" });
+  const client = await db.runtime.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT app.bind_request('real',$1,$2)", [credential, f.actor.tenant]);
+    for (const column of ["effect_ref", "outcome", "authorization_id"]) {
+      await client.query("SAVEPOINT refused");
+      await expect(client.query(`UPDATE app.command_lifecycle_claim SET ${column}=${column} WHERE tenant_id=$1 AND command_id=$2`,
+        [f.actor.tenant, f.command.commandId])).rejects.toMatchObject({ code: "42501" });
+      await client.query("ROLLBACK TO refused");
+    }
+  } finally { await client.query("ROLLBACK"); client.release(); }
+  expect((await db.owner.query("SELECT effect_ref,authorization_id FROM app.command_lifecycle_claim WHERE tenant_id=$1 AND command_id=$2",
+    [f.actor.tenant, f.command.commandId])).rows).toEqual([{ effect_ref: claim.effect_ref, authorization_id: claim.authorization_id }]);
+});

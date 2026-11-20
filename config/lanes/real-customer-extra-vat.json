@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-customer-extra-vat": {
+      "branches": [
+        "codex/sandbox/real-customer-extra-vat"
+      ],
+      "allow": [
+        "apps/web/app/customer/extras/extras.test.tsx",
+        "apps/web/app/customer/extras/extras.tsx",
+        "apps/web/app/customer/practice-pay-now/screen.test.tsx",
+        "apps/web/app/customer/practice-pay-now/screen.tsx",
+        "apps/web/e2e/MON-5-customer-journey.spec.ts",
+        "apps/web/e2e/customer-extra-approval.spec.ts",
+        "apps/web/e2e/helpers/j3-customer-approval.ts",
+        "apps/web/e2e/helpers/j3-integrity-approval.ts"
+      ]
+    }
+  }
+}

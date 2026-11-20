@@ -267,7 +267,7 @@ if (testPath) {
     if (readFileSync(testPath, "utf8").includes("bootstrapSyntheticDemo")) return;
     const admin = new Pool({ host: "127.0.0.1", port, user, password, database: "postgres" });
     try {
-      for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_worker", "jobguard_session_lookup"]) {
+      for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_worker", "jobguard_session_lookup", "jobguard_money_owner"]) {
         await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN
           CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
           END IF; END $$`);

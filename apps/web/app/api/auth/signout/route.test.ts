@@ -10,6 +10,9 @@ it("clears all three cookies only after identity revocation succeeds",async()=>{
   expect(response.status).toBe(200);expect(f.signout).toHaveBeenCalledWith({sessionToken:"identity",csrfToken:"csrf",origin:"https://practice.invalid"});
   for(const name of ["jobguard_session","jg_session","jg_practice_pair"])expect(response.cookies.get(name)?.value).toBe("");
   expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+  for (const name of ["jg_session", "jg_practice_pair"]) {
+    expect(response.headers.getSetCookie().find(cookie => cookie.startsWith(`${name}=`))).toContain("Max-Age=0");
+  }
 });
 it("retains browser cookies on revocation failure for an explicit retry",async()=>{
   f.signout.mockRejectedValue(new Error("storage"));const response=await POST(new Request("https://practice.invalid/api/auth/signout",{method:"POST"}));
