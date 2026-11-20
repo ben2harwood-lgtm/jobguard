@@ -26,25 +26,36 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
   const controller = new AbortController(); active.current = controller; controllers.current.add(controller);
   const requestEpoch = ++epoch.current; setBusy(true);
   let timedOut = false;
-  let timeout: ReturnType<typeof setTimeout> | undefined;
+  // Each authorised phase has a bounded wait, including its response body. A locked
+  // read can take up to two budgets; an unlocked read never starts the second phase.
+  const readPhase = async <T,>(request: () => Promise<T>): Promise<T> => {
+   let timeout: ReturnType<typeof setTimeout> | undefined;
+   try {
+    return await Promise.race([request(), new Promise<never>((_resolve, reject) => {
+     timeout = setTimeout(() => { if (timeout) timers.current.delete(timeout); timedOut = true; reject(new Error("READ_TIMEOUT")); }, 10000); timers.current.add(timeout);
+    })]);
+   } finally { clearTimeout(timeout); if (timeout) timers.current.delete(timeout); }
+  };
   try {
    const reading = (async () => {
     try {
-     const response = await fetch(`/api/jobs/${jobId}/final-check`, { cache: "no-store", signal: controller.signal });
-     if (!response.ok) throw new Error("The saved final check is unavailable. Load the saved final check to try again.");
-     const saved = finalCheckReadV1.parse(await response.json());
-     if (timedOut || controller.signal.aborted) throw new Error("READ_EXPIRED");
+     const saved = await readPhase(async () => {
+      const response = await fetch(`/api/jobs/${jobId}/final-check`, { cache: "no-store", signal: controller.signal });
+      if (!response.ok) throw new Error("The saved final check is unavailable. Load the saved final check to try again.");
+      return finalCheckReadV1.parse(await response.json());
+     });
+     if (timedOut || controller.signal.aborted || currentJob.current !== jobId || epoch.current !== requestEpoch) throw new Error("READ_EXPIRED");
      // The authorised unlocked projection is fixed; do not read hidden diagnostics.
-     const queue = saved.state === "unlocked" ? null : await fetch(`/api/jobs/${jobId}/final-check/disputes`, { cache: "no-store", signal: controller.signal });
-     if (queue && (queue.status === 401 || queue.status === 403)) throw new Error("ACCESS_UNAVAILABLE");
-     const open = queue?.ok ? (await queue.json() as unknown[]).length : 0;
+     const open = saved.state === "unlocked" ? 0 : await readPhase(async () => {
+      const queue = await fetch(`/api/jobs/${jobId}/final-check/disputes`, { cache: "no-store", signal: controller.signal });
+      if (queue.status === 401 || queue.status === 403) throw new Error("ACCESS_UNAVAILABLE");
+      return queue.ok ? (await queue.json() as unknown[]).length : 0;
+     });
      return { saved, open };
     } finally { controllers.current.delete(controller); }
    })();
    // A timeout ends the UI wait. Nothing cancels the network read: late replies are discarded by the lifetime, epoch and job guards.
-   const { saved, open } = await Promise.race([reading, new Promise<never>((_resolve, reject) => {
-    timeout = setTimeout(() => { if (timeout) timers.current.delete(timeout); timedOut = true; reject(new Error("READ_TIMEOUT")); }, 10000); timers.current.add(timeout);
-   })]);
+   const { saved, open } = await reading;
    if (currentJob.current === jobId && epoch.current === requestEpoch && !controller.signal.aborted) {
     savedJob.current = jobId; setRead(saved); setDisputes(open); setError("");
     if (saved.state === "failed" || saved.state === "unlocked" || saved.state === "completed") uncertain.current = false;
@@ -61,7 +72,6 @@ export function FinalCheckReveal({ jobId }: { jobId: string }) {
     setError("The saved final check is unavailable. Load the saved final check to try again.");
    }
   } finally {
-   clearTimeout(timeout); if (timeout) timers.current.delete(timeout);
    if (active.current === controller) active.current = null;
    if (epoch.current === requestEpoch) {
     if (reread.current) { reread.current = false; void load(); }
