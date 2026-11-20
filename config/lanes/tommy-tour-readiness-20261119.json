@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "tommy-tour-readiness-20261119": {
+      "branches": ["codex/sandbox/tommy-tour-readiness-20261119"],
+      "note": "Bounded product correction for the trace-observed Step 2 pricing-to-saved-workspace handoff: keep completion and Next unavailable until the same job's saved workspace and quote are ready. Preserve existing browser assertions, deadlines and all prior candidate changes. No API, DB, policy, fixture or other handler change.",
+      "allow": [
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "docs/receipts/tommy-tour-readiness-20261119.md"
+      ]
+    }
+  }
+}
