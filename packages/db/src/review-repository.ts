@@ -81,4 +81,16 @@ export class ConfirmProposalReview implements CommandMutation<{jobId:string;revi
   }
 }
 
+export class DiscardDraftJob implements CommandMutation<{ jobId: string; revision: number; status: "lost" }> {
+  constructor(private readonly tenantId: string) {}
+
+  async mutate(db: TenantTransaction, command: ConsequentialCommand) {
+    const result = await db.$client.query<{ jobId: string; revision: number; status: "lost" }>(
+      `SELECT id AS "jobId",revision,status FROM app.discard_draft_job($1,$2,$3,$4,$5,$6)`,
+      [this.tenantId, command.subjectRef, command.action.aggregateRevision, command.actorMembershipId, command.commandId, command.authorizationId],
+    );
+    return result.rows[0]!;
+  }
+}
+
 export function reviewContentHash(review:ProposalReview){return createHash("sha256").update(JSON.stringify(review)).digest("hex");}

@@ -466,3 +466,9 @@ it("starts /jobs/new with empty own-job text and a separate example hint",()=>{
   expect(html).toMatch(/<textarea[^>]*><\/textarea>/);
   expect(html).toContain("Describe your own job. The example is a hint only.");
 });
+
+it.each(["draft", "quoting", "accepted", "live", "invoiced", "paid", "lost"] as const)("offers discard only in draft Overview (%s)", status => {
+  const html = renderToStaticMarkup(<Overview site="Site" detail={{ job: { ...detailJob, status }, summary: job, value: null, checks: 0, photo: "" }}/>);
+  expect(html.includes("Discard this draft")).toBe(status === "draft");
+  expect(html).not.toContain("Yes, discard it");
+});

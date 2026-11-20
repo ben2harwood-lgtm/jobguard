@@ -45,7 +45,9 @@ export class JobPartiesRepository {
       const jobs=(await db.$client.query(`${practiceOwnedJobsSql("$2")} SELECT j.id,j.title,j.status,j.revision,coalesce(s.snapshot->'customer'->>'name','Details needed') AS "customerLabel",
       CASE WHEN s.snapshot IS NULL THEN 'Details needed' ELSE concat_ws(', ',s.snapshot->'site'->>'unit',s.snapshot->'site'->'addressLines'->>0,s.snapshot->'site'->>'postcode') END AS "siteLabel"
       FROM app.job j LEFT JOIN app.job_party_current x ON(x.tenant_id,x.job_id)=(j.tenant_id,j.id) LEFT JOIN app.job_party_snapshot s ON(s.tenant_id,s.binding_id)=(x.tenant_id,x.binding_id)
-      WHERE j.tenant_id=$1 AND ($2::text IS NULL OR j.id IN (SELECT id FROM practice_owned_job)) AND NOT EXISTS(SELECT 1 FROM app.sandbox_run r WHERE(r.tenant_id,r.job_id)=(j.tenant_id,j.id)) ORDER BY j.created_at,j.id`,[context.tenantId,practiceDigest??null])).rows;
+      WHERE j.tenant_id=$1 AND ($2::text IS NULL OR j.id IN (SELECT id FROM practice_owned_job)) AND NOT EXISTS(SELECT 1 FROM app.sandbox_run r WHERE(r.tenant_id,r.job_id)=(j.tenant_id,j.id))
+      AND NOT EXISTS(SELECT 1 FROM app.command_receipt r WHERE r.tenant_id=j.tenant_id AND r.command_type='job.discard_draft'
+        AND r.semantic_key='job:'||j.id::text||':discard' AND r.status='succeeded') ORDER BY j.created_at,j.id`,[context.tenantId,practiceDigest??null])).rows;
       return jobPartiesListV1.parse({version:"job-parties-list.v1",environment:"synthetic_demo",jobs});
     });
   }

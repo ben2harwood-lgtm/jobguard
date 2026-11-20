@@ -10,3 +10,8 @@ export const captureWorkspaceResponseV1=z.object({version:z.literal(1),environme
 export type CaptureWorkspaceResponse=z.infer<typeof captureWorkspaceResponseV1>;
 export const reviewSaveCommandV1=z.object({contractVersion:z.literal("proposal_review_command_v1"),expectedRevision:z.number().int().nonnegative(),review:proposalReviewV1});
 export const reviewConfirmCommandV1=z.object({contractVersion:z.literal("proposal_review_confirm_v1"),commandId:uuid,expectedRevision:z.number().int().positive()});
+export const discardDraftCommandV1 = z.strictObject({
+  contractVersion: z.literal("draft_discard_v1"),
+  commandId: uuid,
+  expectedRevision: z.number().int().min(0).max(2147483647),
+});
