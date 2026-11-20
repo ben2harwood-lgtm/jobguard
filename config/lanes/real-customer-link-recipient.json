@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-customer-link-recipient": {
+      "branches": [
+        "codex/sandbox/real-customer-link-recipient"
+      ],
+      "allow": [
+        "apps/web/app/ui/quote-editor-reference.test.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/e2e/real-customer-link-recipient.spec.ts"
+      ]
+    }
+  }
+}
