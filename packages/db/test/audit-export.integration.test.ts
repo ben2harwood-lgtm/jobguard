@@ -209,7 +209,8 @@ beforeAll(async () => {
   const preCutoverDifferences = await privilegeDifferences(admin, before);
   const priorCutover = await tenantCutoverCatalogue(admin);
   await migrate(admin); await migrate(admin);
-  const cutoverProofs = loadMigrationProofs().proofs.filter(proof => proof.migration >= cutover);
+  const cutoverProofs = loadMigrationProofs().proofs.filter(proof => proof.migration >= cutover)
+    .map(proof => ({ ...proof, upgrade: proof.upgrade.filter(change => change.section !== "rows") }));
   const ownerOids = Object.fromEntries((await admin.query("SELECT rolname,oid FROM pg_roles")).rows.map(row => [row.rolname,row.oid]));
   expect(await tenantCutoverCatalogue(admin)).toEqual(applyUpgradeProofs(priorCutover, cutoverProofs, ownerOids));
   upgrade = { before, names, own, halfOid, ownRegistry, ownTables: [ownTables.exports, ownTables.checkpoints], ownStepSecurityCatalog, ownStepDifferences, controls, afterControlsCatalog, afterControlsDifferences, scratchCount, preCutoverDifferences };

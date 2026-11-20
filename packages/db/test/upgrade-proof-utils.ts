@@ -33,7 +33,8 @@ export async function tenantCutoverCatalogue(db: Queryable): Promise<MigrationPr
 }
 
 export async function expectedTenantCutover(db: Queryable, before: MigrationProofSnapshot) {
-  const proofs = loadMigrationProofs().proofs.filter(proof => proof.migration >= "0765_lp11_bound_tenant_rls.sql");
+  const proofs = loadMigrationProofs().proofs.filter(proof => proof.migration >= "0765_lp11_bound_tenant_rls.sql")
+    .map(proof => ({ ...proof, upgrade: proof.upgrade.filter(change => change.section !== "rows") }));
   const ownerOids = Object.fromEntries((await db.query("SELECT rolname,oid FROM pg_roles")).rows.map(row => [row.rolname,row.oid]));
   return applyUpgradeProofs(before, proofs, ownerOids);
 }

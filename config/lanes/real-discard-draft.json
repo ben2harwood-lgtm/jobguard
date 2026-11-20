@@ -18,6 +18,7 @@
         "packages/db/migrations/0770_discard_draft_job.sql",
         "packages/db/src/job-parties-repository.ts",
         "packages/db/src/review-repository.ts",
+        "packages/db/test/audit-export.integration.test.ts",
         "packages/db/test/builder-acceptance-sent-head.integration.test.ts",
         "packages/db/test/discard-draft-job.integration.test.ts",
         "packages/db/test/extra-proceed-migration.test.ts",
@@ -33,7 +34,8 @@
         "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
         "packages/db/test/subscription-attempt-reconciliation.integration.test.ts",
         "packages/db/test/subscription-internal-owner.integration.test.ts",
-        "packages/db/test/subscription-pending-downgrade.integration.test.ts"
+        "packages/db/test/subscription-pending-downgrade.integration.test.ts",
+        "packages/db/test/upgrade-proof-utils.ts"
       ]
     }
   }
