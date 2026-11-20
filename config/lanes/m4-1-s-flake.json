@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "m4-1-s-flake": {
+      "branches": [
+        "codex/sandbox/m4-1-s-flake"
+      ],
+      "note": "M4-1-S-FLAKE (RED): Confirm scope takes the job's recovery command key before any row lock, so it can no longer deadlock with opening a recovery case on the same job. Real-PostgreSQL regression added.",
+      "allow": [
+        "packages/db/src/review-repository.ts",
+        "packages/db/test/m4-1-s-flake-lock-order.integration.test.ts"
+      ]
+    }
+  }
+}

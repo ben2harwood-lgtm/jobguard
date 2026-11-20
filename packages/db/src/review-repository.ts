@@ -60,6 +60,12 @@ async function ensureScopeIdentity(db:TenantTransaction,tenantId:string,jobId:st
 
 export class ConfirmProposalReview implements CommandMutation<{jobId:string;reviewId:string;jobRevision:number;status:"quoting"}> {
   constructor(private readonly review:ProposalReview, private readonly failAfterScope=false){assertReviewConfirmable(review);}
+  // M4-1-S-FLAKE: take the job's recovery command key (RecoveryCaseRepository's open lock) before any row lock. Otherwise
+  // opening a case (key, then the tenant's recovery-message source lock, then the job row) and this command (job row
+  // FOR UPDATE, then that source lock through the job update trigger) wait on each other and PostgreSQL cancels one.
+  async lock(db:TenantTransaction){
+    await db.$client.query("SELECT pg_advisory_xact_lock(hashtext(current_setting('app.tenant_id')),hashtext($1))",[this.review.jobId.toLowerCase()]);
+  }
   async mutate(db:TenantTransaction,command:ConsequentialCommand){
     const tenantId=(await db.$client.query<{tenant:string}>(`SELECT current_setting('app.tenant_id') tenant`)).rows[0]!.tenant;
     const locked=(await db.$client.query<{revision:number;state:string}>(`SELECT revision,state FROM app.proposal_review WHERE tenant_id=$1 AND id=$2 AND job_id=$3 FOR UPDATE`,[tenantId,this.review.reviewId,this.review.jobId])).rows[0];
