@@ -1,3 +1,4 @@
+import { loadMigrationProofs } from "./migration-proof-loader.js";
 import { testActorContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createHash as lp6dHash } from "node:crypto";
 // ENT-3d routines: parity, totality, the writer's own refusals, the guard, the catalogue and the upgrade proof (rule 9).
@@ -79,8 +80,14 @@ describe("ENT-3d routines", () => {
   // Raw, class (a): a request naming a company its actor is not bound to binds nothing, so the binding check
   // refuses first; unchanged() below proves no writes.
   await expect(record(x, {}, foreign.p.tenantId)).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
-  for (const setting of [null, "", "not-a-uuid", UNSET]) expect(await record(x, {}, setting), String(setting)).toEqual(refusedWith("not_permitted"));
-  for (const key of ["actor", "job", "command", "confirmation", "description", "note", "shown"] as const) expect(await record(x, { [key]: null }), key).toEqual(refusedWith("not_permitted"));
+  for (const setting of [null, "", "not-a-uuid", UNSET]) {
+   await expect(record(x, {}, setting), String(setting)).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+  }
+  await expect(record(x, { actor: null })).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+  for (const key of ["job", "command", "confirmation", "description", "note", "shown"] as const) expect(await record(x, { [key]: null }), key).toEqual(refusedWith("not_permitted"));
+  expect(await call("SELECT * FROM app.ent3d_record_resident_confirmation($1,$2,$3,$4,$5,$6,$7,$8)",
+   [x.members.supervisor.member.membershipId, x.jobId, randomUUID(), randomUUID(), description, note, null, shownFor(x, null)],
+   x.p.tenantId, false, x.members.owner.member.membershipId)).toEqual(refusedWith("not_permitted"));
   expect(await record(x, { photo: randomUUID(), shown: shownFor(x, sha("x")) })).toEqual(refusedWith("photo_not_accepted"));
   expect(await record(x, { shown: shownFor(x, null, { note: "Fictional other note" }) })).toEqual(refusedWith("confirmation_mismatch"));
   expect(await record(x, { shown: "A".repeat(64) })).toEqual(refusedWith("confirmation_mismatch"));
@@ -135,7 +142,11 @@ describe("ENT-3d routines", () => {
    ["ent3d_require_site_extra_evidence", "p_job uuid, p_variation uuid", "void", "v"],
    ["ent3d_site_extra_evidence", "p_job uuid, p_description text, p_note text, p_photo uuid, p_confirmation uuid, p_variation uuid", "TABLE(decision text, reason_code text, photo_sha256 text, content_sha256 text)", "s"],
   ]);
-  for (const r of rows) expect(r).toMatchObject({ prosecdef: false, proconfig: ["search_path=pg_catalog"], owner: "jobguard_migration", runtime: true, infrastructure: false, public: false, grantees: ["jobguard_migration", "jobguard_runtime"] });
+  const lp8b = loadMigrationProofs().proofs.find(p => p.migration === "0767_lp8b_outbox_evidence.sql")!;
+  const resident = lp8b.upgrade.find(change => change.section === "routines" && change.after?.nspname === "app" &&
+    change.after.proname === "ent3d_record_resident_confirmation");
+  if (resident?.section !== "routines" || !resident.after) throw new Error("Missing LP-8b resident confirmation proof");
+  for (const r of rows) expect(r).toMatchObject({ prosecdef: r.proname === resident.after.proname ? resident.after.prosecdef : false, proconfig: ["search_path=pg_catalog"], owner: "jobguard_migration", runtime: true, infrastructure: false, public: false, grantees: ["jobguard_migration", "jobguard_runtime"] });
   expect((await c.admin.query("SELECT count(*)::int n FROM pg_proc p WHERE p.proname ILIKE '%ent4b%' AND p.proname LIKE 'ent3d%'")).rows[0]!.n).toBe(0);
   // Exactly these five hold the prefix: nothing else in any schema carries the ENT-3d name.
   expect((await c.admin.query("SELECT count(*)::int n FROM pg_proc p WHERE p.proname LIKE 'ent3d\\_%'")).rows[0]!.n).toBe(5);

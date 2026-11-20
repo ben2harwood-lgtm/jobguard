@@ -30,9 +30,14 @@ async function expectExecutionRefused(tenant:string,authorization:string,actionT
  await f.admin.query(`INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,recipient,content_hash,immutable_content,aggregate_revision,amount_pence,currency,policy_version,authorization_expires_at)
  SELECT $3::uuid,tenant_id,id,'fake_fee_collection',$3::text,coalesce($4,action_type),recipient,content_hash,'synthetic test only',aggregate_revision,amount_pence,currency,policy_version,expires_at FROM app.action_authorization WHERE tenant_id=$1 AND id=$2`,[tenant,authorization,id,actionType??null]);
  const adapter:OutboundAdapter={name:"fake_fee_collection",supportsProviderDeduplication:true,deliver,reconcile:async()=>"not_found"};
- await new ActionExecutor(f.admin,new Map([[adapter.name,adapter]]),{emit:()=>{}}).execute(testTenantContext(tenant),id);
- expect(deliver).not.toHaveBeenCalled();
- expect((await f.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2",[tenant,id])).rows[0].n).toBe(0);
+ try {
+  await new ActionExecutor(f.admin,new Map([[adapter.name,adapter]]),{emit:()=>{}}).execute(testTenantContext(tenant),id);
+  expect(deliver).not.toHaveBeenCalled();
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2",[tenant,id])).rows[0].n).toBe(0);
+ } finally {
+  // Remove the synthetic historical row before probing another action type for the same approval.
+  await f.admin.query("DELETE FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [tenant,id]);
+ }
 }
 it("persists numbered immutable bytes, exact source/approval links; reads, download and approval never post or collect",async()=>{
  const x=await posted(),before=await moneyRows(x),command=issue();
