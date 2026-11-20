@@ -31,6 +31,8 @@ class FinalAccountSql {
   query = async (sql: string, values: any[] = []) => {
     this.calls.push(sql);
     const rows = (items: Row[]) => ({ rows: items, rowCount: items.length });
+    if (sql === "SELECT app.bind_request($1, $2, $3)") return rows([]);
+    if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return rows([{ actor: jobId, tenant: tenantId }]);
     if (sql.includes("authenticate_practice_session")) return rows([{ tenant_id: tenantId, membership_id: jobId, identity_user_id: scopeId }]);
     if (sql.includes("WITH RECURSIVE practice_owned_job")) return rows([{ id: jobId }]);
     if (sql.startsWith("SELECT 1 FROM app.membership")) {
@@ -86,6 +88,8 @@ class FinalAccountSql {
     if (sql.startsWith("INSERT INTO app.evidence_invalidation")) { this.invalidations.push({ id: values[0], evidence_id: values[2] }); return rows([{ id: values[0] }]); }
     if (sql.startsWith("SELECT e.job_id,e.scope_item_id")) return rows([]);
     if (sql.includes("FROM app.append_audit(")) return rows(fakeAuditAppend(values[0] as string, tenantId));
+    // Job-proof statement objects are absent from this double: the presence probe finds none.
+    if (sql.includes("pg_catalog.to_regclass(name)") || sql.includes("pg_catalog.to_regprocedure(name)")) return rows([]);
     if (sql.includes("AS tenant_id")) return rows([{ tenant_id: tenantId }]);
     if (sql.includes("lock_audit_head")) return rows([]);
     if (sql.includes("clock_timestamp() AS occurred_at")) return rows([{ occurred_at: new Date() }]);

@@ -1,3 +1,5 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
+import { verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,19 +8,20 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
+import { type AuthenticatedMembership } from "../src/tenant-context.js";
 import { practiceMaterialPool } from "../src/practice-session.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 export const LOCK_OWNER = "40000000-0000-4000-8000-000000000004";
 export const LOCK_USER = "30000000-0000-4000-8000-000000000003";
 export const LOCK_HASH = "a".repeat(64);
 export type LockFixture = { postgres: EmbeddedPostgres; directory: string; port: number; credential: string; admin: Pool; runtime: Pool; shadow: Pool; owner: Pool };
-export async function createLockFixture(install = true): Promise<LockFixture> {
+export async function createLockFixture(install = true, persistent = false): Promise<LockFixture> {
  const directory = await mkdtemp(join(tmpdir(), "sv5pre-pg16-")), port = await freePort(58400, 250), credential = randomUUID();
  const connection = { host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: credential };
- const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
+ const postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo"); const admin = new Pool(connection);
  if (install) { await migrate(admin); await installLegacySyntheticPartyFixtures(admin); }
  const pools: Pool[] = [];
@@ -30,9 +33,10 @@ export async function createLockFixture(install = true): Promise<LockFixture> {
  return { postgres, directory, port, credential, admin, runtime: pools[0]!, shadow: pools[1]!, owner: pools[2]! };
 }
 export async function closeLockFixture(f: LockFixture) { await closeTestPools(f.runtime, f.shadow, f.owner, f.admin); await f.postgres.stop();  }
-export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>): Promise<T> {
+/** `as` binds this raw transaction to one fixture member's own request (LP-6d), as main's tests do. */
+export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>, as?: { owner: Pool; membershipId: string }): Promise<T> {
  const db = await pool.connect();
- try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
+ try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); if (as) await bindTestClient(as.owner === pool ? db : as.owner, db, tenantId, as.membershipId); const result = await work(db); await db.query("COMMIT"); return result; }
  catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
 export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 3360000) {
@@ -43,6 +47,7 @@ export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 33
  const account = randomUUID();
  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic SV-4')", [account, tenantId]);
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [LOCK_OWNER, tenantId, account, LOCK_USER]);
+ const boundPolicies=(await admin.query("SELECT to_regprocedure('app.lp11_policy_tenant()') installed")).rows[0].installed;
  await asFixtureTenant(admin, tenantId, async db => {
   await db.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional final account','live')", [jobId, tenantId]);
   await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeItemId, tenantId, jobId]);
@@ -53,13 +58,20 @@ export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 33
   await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,description,net_pence,ordinal)
    VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional baseline',$7,1)`, [lineId, tenantId, jobId, revisionId, baselineId, scopeItemId, net]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3", [revisionId, tenantId, draftId]);
- });
- return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context: testTenantContext(tenantId), input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
+ },boundPolicies ? {owner:admin,membershipId:LOCK_OWNER} : undefined);
+ return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context: (await admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(admin, tenantId, LOCK_OWNER) : testTenantContext(tenantId, { membershipId: LOCK_OWNER }), input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
 }
 export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof seedAccount>>) {
- const repo = new FinalAccountLockRepository(f.runtime);
- await repo.acceptTerms(a.context, { actorMembershipId: LOCK_OWNER, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
- await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
+ const digest=(await f.admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])).rows[0].practice_session_digest;
+ if(digest){
+  const principal=(await f.runtime.query("SELECT * FROM app.authenticate_practice_session($1,$2)",[digest,a.tenantId])).rows[0];
+  a.context=verifiedTenantContextFromMembership({tenantId:a.tenantId,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership,{kind:"practice",credential:digest});
+  // The bound practice session acts as its own member; lock with that same member.
+  a.input={...a.input,actorMembershipId:principal.membership_id};
+ }
+ const repo = new FinalAccountLockRepository(digest?practiceMaterialPool(f.runtime,digest):f.runtime);
+ await repo.acceptTerms(a.context, { actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+ await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
  return repo;
 }
 
@@ -73,12 +85,17 @@ export async function publishFixtureCompletion(shadow: Pool, admin: Pool, tenant
   const hex=createHash("sha256").update(`sv5pre-fixture.v1:${namespace}:${tenantId}:${jobId}:${lock.id}:${label}`).digest("hex");
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-4${hex.slice(13,16)}-8${hex.slice(17,20)}-${hex.slice(20,32)}`;
  };
+ const requiresShadowBinding=(await admin.query("SELECT to_regprocedure('app.lp11_bind_shadow_job(uuid,uuid)') installed")).rows[0].installed;
+ const asWorker = <T>(work: (db: PoolClient) => Promise<T>) => asFixtureTenant(shadow,tenantId,async db=>{
+  if(requiresShadowBinding) await db.query("SELECT app.lp11_bind_shadow_job($1,$2)",[tenantId,jobId]);
+  return work(db);
+ });
  const manifestId=fixtureId("source","manifest"),runId=fixtureId("source","run"),executionId=fixtureId("source","execution"),checkId=overrides.checkId??fixtureId("source","check");
- await asFixtureTenant(shadow,tenantId,async db=>{
+ await asWorker(async db=>{
   await db.query("INSERT INTO app.final_check_manifest(tenant_id,job_id,id,lock_id,evidence_cutoff_at,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,'synthetic-fixture.v1','synthetic-fixture.v1')",[tenantId,jobId,manifestId,overrides.lockId??lock.id,overrides.cutoff??lock.cutoff]);
  });
  // The committed frozen inventory is now visible to the independent fixture reader.
- return asFixtureTenant(shadow,tenantId,async db=>{
+ return asWorker(async db=>{
   const sources=(await admin.query("SELECT s.*,e.id finalized_id,e.object_version_id finalized_version,e.sha256 finalized_hash,e.server_received_at::text finalized_received FROM app.final_check_manifest_source s LEFT JOIN app.evidence_object e ON(e.tenant_id,e.job_id,e.upload_id)=(s.tenant_id,s.job_id,s.upload_id) AND e.kind='original' WHERE s.tenant_id=$1 AND s.job_id=$2 AND s.manifest_id=$3 AND s.excluded_state IS NULL ORDER BY s.id",[tenantId,jobId,manifestId])).rows;
   await db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at,status) VALUES($1,$2,$3,'synthetic-fixture.v1',$4,'completed')",[tenantId,jobId,runId,lock.cutoff]);
   const signals=(await db.query("SELECT DISTINCT s.id FROM app.shadow_commercial_signal s JOIN app.shadow_signal_evidence e ON(e.tenant_id,e.job_id,e.signal_id)=(s.tenant_id,s.job_id,s.id) WHERE s.tenant_id=$1 AND s.job_id=$2 AND e.source_received_at<=$3::timestamptz ORDER BY s.id",[tenantId,jobId,lock.cutoff])).rows;
@@ -104,14 +121,34 @@ export async function publishEmptyCompletion(f: Pick<LockFixture,'shadow'|'admin
  return publishFixtureCompletion(f.shadow,f.admin,a.tenantId,a.jobId);
 }
 /** A fixture established before 0147 remains historical; it deliberately uses the old issue path. */
+/** Tests only: 0735 lets nobody accept for a never-imported, firm-less job in the shared practice
+ * tenant. Such fixture jobs use privileged unattributed acceptance, the pre-0735 history shape.
+ * Returns false (and writes nothing) when the job has a firm or 0735 is not installed. */
+export async function unattributedTermsHistory(admin: Pool, tenantId: string, jobId: string, actorMembershipId: string) {
+ if(tenantId!=="11111111-1111-4111-8111-111111111111")return false;
+ if(!(await admin.query("SELECT to_regprocedure('app.final_check_job_scope(uuid,uuid)') IS NOT NULL installed")).rows[0].installed)return false;
+ const boundPolicies=(await admin.query("SELECT to_regprocedure('app.lp11_policy_tenant()') installed")).rows[0].installed;
+ if((await asFixtureTenant(admin,tenantId,db=>db.query("SELECT app.final_check_job_scope($1,$2) digest",[tenantId,jobId]),boundPolicies ? {owner:admin,membershipId:actorMembershipId} : undefined)).rows[0].digest!==null)return false;
+ if((await admin.query("SELECT 1 FROM app.final_check_terms_acceptance WHERE tenant_id=$1 AND practice_session_digest IS NULL",[tenantId])).rowCount)return true;
+ await asFixtureTenant(admin,tenantId,async db=>{
+  await db.query("SET LOCAL session_replication_role='replica'");
+  await db.query("INSERT INTO app.final_check_terms_acceptance(tenant_id,id,terms_version,accepting_membership_id,accepted_at,command_id,audit_event_id) VALUES($1,$2,'synthetic_final_check_terms.v1',$3,clock_timestamp(),$4,$5)",[tenantId,randomUUID(),actorMembershipId,randomUUID(),randomUUID()]);
+ });
+ return true;
+}
 export async function prepareInvoicePrerequisites(admin: Pool, runtime: Pool, tenantId: string, jobId: string, actorMembershipId: string, revisionId: string) {
  if(!(await admin.query("SELECT to_regclass('app.shadow_final_check_completion') installed")).rows[0].installed) return;
  // Legacy fixtures transition a draft directly, without inserting job_activation (SH-1's track binding).
  // Establish the synthetic small-builder premise explicitly; never rewrite an existing track.
  await asFixtureTenant(admin,tenantId,db=>db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) SELECT tenant_id,id,'small_builder','synthetic_demo','legacy_synthetic_live_fixture' FROM app.job WHERE tenant_id=$1 AND id=$2 AND status IN ('live','invoiced','paid') ON CONFLICT(tenant_id,job_id) DO NOTHING",[tenantId,jobId]));
- const digest=(await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[tenantId,jobId])).rows[0].practice_session_digest;
- const context=testTenantContext(tenantId),repo=new FinalAccountLockRepository(digest?practiceMaterialPool(runtime,digest):runtime);
- await repo.acceptTerms(context,{actorMembershipId,commandId:randomUUID(),termsVersion:'synthetic_final_check_terms.v1'});
+ const boundPolicies=(await admin.query("SELECT to_regprocedure('app.lp11_policy_tenant()') installed")).rows[0].installed;
+ const own=(await admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[tenantId,jobId])).rows[0].practice_session_digest;
+ // 0735: an imported child without its own digest acts through the firm that owns its ancestry.
+ const digest=own ?? ((await admin.query("SELECT to_regprocedure('app.final_check_job_scope(uuid,uuid)') IS NOT NULL installed")).rows[0].installed
+  ? (await asFixtureTenant(admin,tenantId,db=>db.query("SELECT app.final_check_job_scope($1,$2) digest",[tenantId,jobId]),boundPolicies ? {owner:admin,membershipId:actorMembershipId} : undefined)).rows[0].digest : null);
+ const member=(await admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2",[tenantId,actorMembershipId])).rows[0];
+ const context=digest ? verifiedTenantContextFromMembership({identityUserId:member.identity_user_id,tenantId,membershipId:actorMembershipId} as Parameters<typeof verifiedTenantContextFromMembership>[0],{kind:"practice",credential:digest}) : await testBoundTenantContext(admin,tenantId,actorMembershipId),repo=new FinalAccountLockRepository(digest?practiceMaterialPool(runtime,digest):runtime);
+ if(!(await unattributedTermsHistory(admin,tenantId,jobId,actorMembershipId)))await repo.acceptTerms(context,{actorMembershipId,commandId:randomUUID(),termsVersion:'synthetic_final_check_terms.v1'});
  const scope=(await admin.query("SELECT DISTINCT scope_item_id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND line_kind='baseline'",[tenantId,jobId,revisionId])).rows;
  for(const item of scope) await repo.disposition(context,{jobId,actorMembershipId,commandId:randomUUID(),scopeItemId:item.scope_item_id,disposition:'done'});
  const revision=(await admin.query("SELECT revision FROM app.final_account_revision WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[tenantId,jobId,revisionId])).rows[0].revision;
@@ -120,7 +157,11 @@ export async function prepareInvoicePrerequisites(admin: Pool, runtime: Pool, te
  await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${material}'; GRANT jobguard_shadow TO ${login}`);
  // pg defaults database to user when absent; a fixture login is not a database.
  const database=(await admin.query("SELECT current_database() name")).rows[0].name;
- const shadow=new Pool({...connection,database,user:login,password:material,max:1});
+ // A connection string takes precedence over individual pg options. Its
+ // administrative credentials must never be reused for the shadow fixture.
+ const endpoint=connection.connectionString ? new URL(connection.connectionString) : undefined;
+ if(endpoint){endpoint.username=login;endpoint.password=material;}
+ const shadow=new Pool({...connection,connectionString:endpoint?.href,database,user:login,password:material,max:1});
  try { await publishFixtureCompletion(shadow,admin,tenantId,jobId); } finally { await shadow.end(); }
 }
 
@@ -165,6 +206,9 @@ export async function issueHistoricalInvoice(admin: Pool, tenantId: string, inpu
  const db = await admin.connect();
  try {
   await db.query('BEGIN'); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+  // LP-6d: the historical body reaches guarded helpers, so the issuing owner's persisted fixture credential is bound.
+  await testBoundTenantContext(admin, tenantId, input.actorMembershipId);
+  await db.query("SELECT app.bind_request('real',$1,$2)", [createHash('sha256').update(`lp6-test:${tenantId}:${input.actorMembershipId}`).digest('hex'), tenantId]);
   await db.query('SELECT * FROM app.historical_issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)', [tenantId, input.jobId, input.finalAccountRevisionId, input.actorMembershipId, input.commandId ?? randomUUID(), input.recipient ?? 'allocation@example.invalid', input.issuedOn ?? '2026-10-12']);
   await db.query('COMMIT');
  } catch (error) { await db.query('ROLLBACK'); throw error; } finally { db.release(); }

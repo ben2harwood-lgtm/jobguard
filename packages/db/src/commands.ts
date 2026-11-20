@@ -129,6 +129,9 @@ export class UserCommandDispatcher {
 /** The only boundary allowed to invoke a commercial adapter. It always rechecks the exact immutable grant. */
 export async function executeAuthorizedCommercialAction<T>(database: TenantTransaction, authorizationId: string, requested: ExactAction, invoke: () => Promise<T>): Promise<T> {
   uuid.parse(authorizationId); const action=actionSchema.parse(requested);
+  // LP-6d: runtime has no UPDATE on action_authorization, so the exclusive row lock is taken by a
+  // migration-owned definer first; the checked read below then sees the row as it stands after the wait.
+  await database.$client.query("SELECT app.lp6d_lock_action_authorization(nullif(current_setting('app.tenant_id',true),'')::uuid,$1,true)",[authorizationId]);
   const row=(await database.$client.query<Record<string,unknown>>(`SELECT a.* FROM app.action_authorization a
     JOIN app.decision_resolution r ON r.tenant_id=a.tenant_id AND r.id=a.resolution_id
     JOIN app.membership m ON m.tenant_id=a.tenant_id AND m.id=a.actor_membership_id
@@ -136,8 +139,12 @@ export async function executeAuthorizedCommercialAction<T>(database: TenantTrans
       AND m.revoked_at IS NULL AND (m.expires_at IS NULL OR m.expires_at>clock_timestamp())`,[authorizationId])).rows[0];
   const matches=row && row.action_type===action.actionType && row.recipient===action.recipient && row.content_hash===action.contentHash &&
     Number(row.aggregate_revision)===action.aggregateRevision && (row.amount_pence===null?action.amountPence===null:Number(row.amount_pence)===action.amountPence) &&
-    row.currency===action.currency && row.policy_version===action.policyVersion;
+    row.currency===action.currency && row.policy_version===action.policyVersion &&
+    row.expires_at instanceof Date && row.expires_at.getTime()===action.expiresAt.getTime();
   if(!matches) throw new CommandError("AUTHORIZATION_INVALID");
   if(!(await commercialOutboundClaimsEnabled(database))) throw new CommandError("AUTHORIZATION_INVALID");
+  const used=await database.$client.query(`INSERT INTO app.commercial_grant_use(tenant_id,authorization_id)
+    VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING authorization_id`,[row.tenant_id,authorizationId]);
+  if(!used.rowCount) throw new CommandError("AUTHORIZATION_INVALID");
   return invoke();
 }

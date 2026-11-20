@@ -2,6 +2,7 @@ import { beginRepositoryCommand, completeRepositoryCommand } from "./repository-
 import type { TenantTransaction } from "./tenant-context.js";
 import { seedSyntheticPartyFixture } from "./synthetic-party-fixture.js";
 import { Pool, type PoolClient } from "pg";
+import { randomBytes } from "node:crypto";
 import { migrate } from "./migrate.js";
 import {
   DEMO_ACCOUNT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_IDENTITY_USER_ID, DEMO_JOB_ID, DEMO_MEMBERSHIP_ID,
@@ -36,7 +37,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       runtimeRole.rolcreatedb || runtimeRole.rolcreaterole || runtimeRole.rolinherit || !runtimeRole.rolcanlogin) {
     throw new Error("jobguard_runtime does not have the required least-privilege posture");
   }
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_worker", "jobguard_session_lookup", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"]) {
     await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${name}') THEN
       CREATE ROLE ${name} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
       END IF; END $$`);
@@ -55,7 +56,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   // which is why the support route checks USAGE), but it is the one holder bootstrap cannot appoint or
   // remove. Accept exactly that shape and nothing else: any other member, or any holder that can use or
   // assume the role, fails closed. Neither bootstrap nor the migration appoints a support holder.
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_session_lookup", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"]) {
     const holders = await admin.query<{ member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean }>(
       `SELECT pg_get_userbyid(m.member) AS member,m.admin_option,m.inherit_option,m.set_option
        FROM pg_auth_members m WHERE m.roleid=(SELECT oid FROM pg_roles WHERE rolname=$1)`, [name]);
@@ -63,6 +64,13 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       throw new Error(`${name} has a holder other than the PostgreSQL 16 ADMIN-only creator membership`);
     }
   }
+  const workerHolders = await admin.query<{ safe: boolean }>(`
+    SELECT ((r.rolname=$1 AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option)
+      OR (r.rolcanlogin AND NOT (r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication OR r.rolbypassrls)
+        AND m.inherit_option AND NOT m.admin_option
+        AND (SELECT count(*) FROM pg_auth_members held WHERE held.member=r.oid)=1)) AS safe
+    FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.member WHERE m.roleid='jobguard_worker'::regrole`, [owner]);
+  if (workerHolders.rows.some(holder => !holder.safe)) throw new Error("jobguard_worker has an unsafe holder");
   await assertBindingOwnerHolders(admin, owner);
   await admin.query(`GRANT jobguard_migration TO ${quoteIdentifier(owner)}`);
   await admin.query(`GRANT jobguard_runtime TO ${quoteIdentifier(owner)}`);
@@ -146,6 +154,7 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
     await client.query("GRANT jobguard_audit_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
     await client.query("GRANT jobguard_command_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
     await client.query("GRANT jobguard_binding_owner TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
+    await client.query("GRANT jobguard_session_lookup TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
     await client.query("SET ROLE jobguard_migration");
     await migrate(client);
     const result = await client.query<{count:number}>("SELECT count(*)::int count FROM public.jobguard_schema_migration");
@@ -155,12 +164,15 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
     throw error;
   } finally {
     await client.query("RESET ROLE");
-    try { await client.query("REVOKE jobguard_binding_owner FROM jobguard_migration"); }
+    try { await client.query("REVOKE jobguard_session_lookup FROM jobguard_migration"); }
     finally {
-      try { await client.query("REVOKE jobguard_command_writer FROM jobguard_migration"); }
+      try { await client.query("REVOKE jobguard_binding_owner FROM jobguard_migration"); }
       finally {
-        try { await client.query("REVOKE jobguard_audit_writer FROM jobguard_migration"); }
-        finally { await assertBindingOwnerHolders(client, administrator); }
+        try { await client.query("REVOKE jobguard_command_writer FROM jobguard_migration"); }
+        finally {
+          try { await client.query("REVOKE jobguard_audit_writer FROM jobguard_migration"); }
+          finally { await assertBindingOwnerHolders(client, administrator); }
+        }
       }
     }
   }
@@ -169,23 +181,47 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
 async function seedDatabase(client: PoolClient) {
   await client.query("BEGIN");
   try {
-    await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     await client.query("SET LOCAL ROLE jobguard_migration");
-    await client.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
-    await client.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_EMPTY_TENANT_ID]);
+    const createdDemo = await client.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
+    const createdEmpty = await client.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_EMPTY_TENANT_ID]);
     await client.query("INSERT INTO identity.identity_user(id) VALUES($1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
-    await client.query("SET LOCAL ROLE jobguard_migration");
-    await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'JobGuard synthetic demo') ON CONFLICT DO NOTHING", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
-    await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
-    await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_EMPTY_TENANT_ID]);
-    await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Empty Workshop') ON CONFLICT DO NOTHING", [DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_TENANT_ID]);
-    await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
-    // Explicit owner-connected seed setup; runtime cannot manufacture a quoting job.
-    await client.query("SET LOCAL ROLE jobguard_migration");
+    const verifyDemoAccount = async () => {
+      // app.account's key is id alone. An old fixture in a different tenant
+      // cannot satisfy the canonical account check.
+      if (!(await client.query("SELECT 1 FROM app.account WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, DEMO_ACCOUNT_ID])).rowCount) {
+        throw new DemoBootstrapSafetyError("The demo account id already belongs to an older demo tenant in this database. It is not the database the current demo was set up on; use that database's address instead.");
+      }
+    };
+    if (createdDemo.rowCount) {
+      await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'JobGuard synthetic demo') ON CONFLICT DO NOTHING", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
+      await verifyDemoAccount();
+      await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
+    }
+    if (createdEmpty.rowCount) {
+      await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Empty Workshop')", [DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_TENANT_ID]);
+      await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
+    }
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    // Seed through a protected real session in the synthetic environment. This
+    // internal credential is revoked before commit; no practice sample trigger fires.
+    const seedDigest = randomBytes(32).toString("hex");
+    await client.query("INSERT INTO identity.user_email(email,user_id) VALUES('synthetic-seed@example.invalid',$1) ON CONFLICT DO NOTHING", [DEMO_IDENTITY_USER_ID]);
+    await client.query(`INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id)
+      VALUES($1,$2,$3) ON CONFLICT(user_id,tenant_id) DO NOTHING`, [DEMO_IDENTITY_USER_ID, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID]);
+    await client.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
+      VALUES(gen_random_uuid(),$2,'synthetic_demo',$1,'synthetic-seed',clock_timestamp()+interval '1 hour')`, [seedDigest, DEMO_IDENTITY_USER_ID]);
+    await client.query("SET LOCAL ROLE jobguard_runtime");
+    try {
+      await client.query("SELECT app.bind_request('real',$1,$2)", [seedDigest, DEMO_TENANT_ID]);
+    } catch (error) {
+      if ((error as { code?: string }).code !== "42501" || !(error instanceof Error) || error.message !== "REQUEST_BINDING_REFUSED") throw error;
+      throw new DemoBootstrapSafetyError("The demo membership or account is unavailable. If the account belongs to an older demo tenant, use that database's address.");
+    }
+    await client.query("SET LOCAL ROLE jobguard_migration");
+    await verifyDemoAccount();
+    // Explicit owner-connected seed setup; runtime cannot manufacture a quoting job.
     await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Practice kitchen','quoting') ON CONFLICT DO NOTHING", [DEMO_JOB_ID, DEMO_TENANT_ID]);
     await client.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',$1,'Kitchen extension','quoting'),('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',$1,'Loft conversion','quoting') ON CONFLICT DO NOTHING", [DEMO_TENANT_ID]);
-    await client.query("SET LOCAL ROLE jobguard_migration");
     for(const jobId of [DEMO_JOB_ID,"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"]) await seedSyntheticPartyFixture(client,DEMO_TENANT_ID,jobId);
     // SH-1's legacy binder runs on INSERT, whereas this fixture enters live by UPDATE.
     // Use the existing migration-owned binding path in the same fixture transaction.
@@ -207,6 +243,8 @@ async function seedDatabase(client: PoolClient) {
 
     }});
     for(const commandId of pendingSeedCommands)await completeRepositoryCommand({$client:client} as TenantTransaction,commandId);
+    await client.query("SET LOCAL ROLE jobguard_migration");
+    await client.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [seedDigest]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
 }

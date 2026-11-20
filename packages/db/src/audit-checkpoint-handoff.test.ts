@@ -16,10 +16,10 @@ const ownerUrl = parsedOwnerUrl.toString();
 const options = { ownerUrl, operator: "ben.ops-1" };
 let queries: Array<{ sql: string; values: unknown[] }>, handed: boolean, failure: string | undefined;
 let release: ReturnType<typeof vi.fn>, end: ReturnType<typeof vi.spyOn>, connect: ReturnType<typeof vi.spyOn>;
-let foundRole: string, database: string, operatorEvent: unknown[], mismatched: boolean;
+let foundRole: string, database: string, handoffArguments: unknown[], mismatched: boolean;
 beforeEach(() => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
-  queries = []; handed = false; failure = undefined; foundRole = "fixture_owner"; database = "jobguard_synthetic_demo"; operatorEvent = []; mismatched = false;
+  queries = []; handed = false; failure = undefined; foundRole = "fixture_owner"; database = "jobguard_synthetic_demo"; handoffArguments = []; mismatched = false;
   release = vi.fn();
   const client = { release, async query(sql: string, values: unknown[] = []) {
     queries.push({ sql, values });
@@ -31,9 +31,9 @@ beforeEach(() => {
     if (sql.includes("FROM app.audit_export_checkpoint")) return { rows: handed ? [{ sequence: "1", event_hash: headHash, event_sequence: "1", actual_hash: headHash }] : [] };
     if (sql.includes("current_setting")) return { rows: [{ tenant_id: tenant }] };
     if (sql.includes("clock_timestamp")) return { rows: [{ occurred_at: new Date("2026-10-11T22:30:00.000Z") }] };
-    if (sql.includes("FROM app.append_audit(")) {
-      operatorEvent = JSON.parse(values[0] as string);
-      return { rows: [{ sequence: 2, eventHash: "b".repeat(64), occurredAt: new Date("2026-10-11T22:30:00.000Z") }] };
+    if (sql.includes("FROM app.lp11_append_audit_handoff(")) {
+      handoffArguments = values;
+      return { rows: [{ sequence: "2", eventHash: "b".repeat(64) }] };
     }
     if (sql.startsWith("INSERT INTO audit_control.checkpoint")) return { rows: [{ recorded_at: new Date("2026-10-11T22:30:00.001Z") }] };
     if (sql.startsWith("INSERT INTO app.audit_export_checkpoint") && failure) throw Object.assign(new Error("driver detail omitted"), { code: failure });
@@ -84,10 +84,10 @@ it("[A14] trace locks before reads, uses only local settings and commits after c
   expect(queries.slice(lock - 2, lock).map(q => q.sql)).toEqual(["SELECT set_config('app.tenant_id', $1, true)", "SET LOCAL ROLE jobguard_migration"]);
   expect(queries.findIndex(q => q.sql.includes("FROM app.audit_event"))).toBeGreaterThan(lock);
   expect(queries.filter(q => /^SET ROLE/u.test(q.sql))).toEqual([]);
-  const append = queries.findIndex(q => q.sql.includes("FROM app.append_audit("));
+  const append = queries.findIndex(q => q.sql.includes("FROM app.lp11_append_audit_handoff("));
   const checkpoint = queries.findIndex(q => q.sql.startsWith("INSERT INTO audit_control.checkpoint"));
   const copy = queries.findIndex(q => q.sql.startsWith("INSERT INTO app.audit_export_checkpoint"));
-  expect(append).toBeLessThan(checkpoint); expect(checkpoint).toBeLessThan(copy);
+  expect(append).toBeGreaterThan(lock); expect(append).toBeLessThan(checkpoint); expect(checkpoint).toBeLessThan(copy);
   expect(queries.slice(copy + 1).map(q => q.sql)).toEqual(["COMMIT"]);
 });
 it("[A14] copy failure rolls back and produces one redacted JSON line with exit 1", async () => {
@@ -103,9 +103,10 @@ it("[C-OPS-4] requires a bounded plain operator label and records session user a
     await expect(runAuditCheckpointHandoff({ ...options, operator } as typeof options)).rejects.toMatchObject({ code: "AUDIT_CHECKPOINT_INVALID_INPUT" });
   }
   expect(connect).not.toHaveBeenCalled();
-  await runAuditCheckpointHandoff(options);
-  expect(operatorEvent[0]).not.toHaveProperty("occurredAt");
-  expect((operatorEvent[0] as { payload: unknown }).payload).toMatchObject({ references: { environment: "synthetic_demo", priorSequence: "1", operator: "ben.ops-1", sessionUser: "fixture_owner" } });
+  expect(await runAuditCheckpointHandoff(options)).toMatchObject({ outcomes: [{ outcome: "handed_off", sequence: 2 }] });
+  // The SQL routine records server time and session user itself. The real
+  // PostgreSQL [A6] assertion verifies both on the resulting event.
+  expect(handoffArguments).toEqual([tenant, "1", headHash, "ben.ops-1", expect.stringMatching(/^[0-9a-f-]{36}$/u)]);
 });
 it("[C-OPS-4] CLI requires operator, refuses duplicate/unknown flags and says nothing to do", async () => {
   for (const args of [[], ["--operator"], ["--operator", "bad label"], ["--operator", "ben", "--operator", "ben"], ["--operator", "ben", "--unknown", tenant], ["--operator", "ben", "--tenant", "invalid"]]) {

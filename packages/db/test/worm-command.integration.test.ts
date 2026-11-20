@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,18 +7,20 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
-import { withTenant } from "../src/tenant-context.js";
+import { withTenant, type TenantTransaction } from "../src/tenant-context.js";
 import { WormBoundaryError } from "@jobguard/storage";
 import { verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { WormCommandRepository } from "../src/worm-command-repository.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), evidence = randomUUID();
 const actor = randomUUID(), second = randomUUID(), samePerson = randomUUID(), user = randomUUID();
-const context = testTenantContext(tenant);
+// LP-6d: requests are bound to the submitting owner's own real session (the one the repository names).
+let context = testTenantContext(tenant, { membershipId: actor });
+let secondContext = testTenantContext(tenant, { membershipId: second });
 const sessionDigest = "a".repeat(64), secondDigest = "b".repeat(64);
 let upgradedRefusal: string;
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, executor: Pool, operator: Pool, dir: string, repo: WormCommandRepository, secondRepo: WormCommandRepository;
@@ -28,6 +31,12 @@ const tsa = { anchor: async () => ({ status: "pending" as const, reason: "servic
 const command = (extra: Record<string, unknown> = {}) => ({ version: "worm.command.v1", policyVersion: "synthetic_d07_v1",
   commandId: randomUUID(), idempotencyKey: randomUUID(), actorMembershipId: actor, jobId: job, evidenceId: evidence,
   action: "apply_hold", ...extra });
+function inWormScope<T>(pool: Pool, commandId: string, purpose: "execute" | "recover", work: (db: TenantTransaction) => Promise<T>, tenantId = tenant) {
+  return withTenant(pool, verifiedTenantContextForQueuedJob(tenantId), async db => {
+    await db.$client.query("SELECT worm_control.lp11_bind_worm_scope($1,$2,$3)", [tenantId, commandId, purpose]);
+    return work(db);
+  });
+}
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), "worm-pg-"));
   const port = await freePort(57400, 200);
@@ -61,6 +70,8 @@ beforeAll(async () => {
     await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [uid, tenant, member]);
     await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`worm-${uid}@fictional.invalid`, uid]);
   }
+  context = await testBoundTenantContext(admin, tenant, actor, sessionDigest);
+  secondContext = await testBoundTenantContext(admin, tenant, second, secondDigest);
   await importWatchdogFixtureJob(admin, tenant, job, "Synthetic retention");
   expect((await admin.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2", [tenant, job])).rows).toEqual([{ id: job }]);
   const key = `synthetic/tenants/${tenant}/manifest`;
@@ -75,21 +86,35 @@ beforeAll(async () => {
   await admin.query("CREATE ROLE worm_executor_login LOGIN PASSWORD 'synthetic-executor' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS");
   await admin.query("GRANT jobguard_worm_executor TO worm_executor_login");
   executor = new Pool({ ...config, user: "worm_executor_login", password: "synthetic-executor" });
-  // Upgrade a persisted predecessor attempt; repeat migrate must preserve rows and old routine bodies/ACLs.
+  // Upgrade a persisted predecessor attempt and compare rows, exact successor bodies and ACLs.
   const baseRepo = new WormCommandRepository(runtime, true, executor, undefined, sessionDigest);
+  const predecessorAttempt = async (commandId: string, outcome: "pending" | "refused", reason: string) => {
+    const pre = verifiedTenantContextForQueuedJob(tenant);
+    // Exercise the exact installed 0577 claim and finish before the scope exists.
+    await withTenant(executor, pre, db => db.$client.query("SELECT app.worm_claim($1)", [commandId]));
+    await withTenant(executor, pre, db => db.$client.query("SELECT app.worm_finish($1,1,$2,$3::jsonb)",
+      [commandId, outcome, JSON.stringify({ status: outcome, reason })]));
+  };
   const pending = command({ action: "request_anchor", subject: "manifest" });
-  await baseRepo.submit(context, pending); await baseRepo.execute(context, pending.commandId, storage, tsa);
+  await baseRepo.submit(context, pending); await predecessorAttempt(pending.commandId, "pending", "service_unavailable");
   const refused = command(); upgradedRefusal = refused.commandId;
   await baseRepo.submit(context, refused);
-  await baseRepo.execute(context, refused.commandId, { ...storage, hold: async () => {
-    throw new WormBoundaryError("NOT_AUTHORIZED");
-  } }, tsa);
+  await predecessorAttempt(refused.commandId, "refused", "storage_refused");
   const proof = await proofBefore(admin, ["app.worm_command", "app.worm_attempt", "app.worm_synthetic_version", "app.evidence_object"]);
   const oldRoutines = async () => (await admin.query("SELECT proname,pg_get_functiondef(oid) body,proacl::text FROM pg_proc WHERE pronamespace='app'::regnamespace AND proname IN ('worm_submit','worm_claim','worm_finish') ORDER BY proname")).rows;
   const before = await oldRoutines();
   await migrate(admin); await migrate(admin);
   expect(await proofDifferences(admin, proof)).toEqual({ rows: [], types: [] });
-  expect(await oldRoutines()).toEqual(before);
+  const after = await oldRoutines();
+  const metadata = (rows: { proname: string; body: string; proacl: string }[]) => rows.map(({ proname, proacl }) => ({ proname, proacl }));
+  expect(metadata(after)).toEqual(metadata(before));
+  const lp6d = await readFile(new URL("../migrations/0749_lp6d_remaining_routines.sql", import.meta.url), "utf8");
+  const lp11 = await readFile(new URL("../migrations/0765_lp11_bound_tenant_rls.sql", import.meta.url), "utf8");
+  for (const { proname, body } of after) {
+    const source = proname === "worm_submit" ? lp6d : lp11;
+    expect(body.split("$function$")[1]).toBe(source.split(`CREATE OR REPLACE FUNCTION app.${proname}(`)[1]!
+      .split("AS $$")[1]!.split("$$;")[0]);
+  }
   await admin.query("CREATE ROLE worm_operator_login LOGIN PASSWORD 'synthetic-operator' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS");
   await admin.query("GRANT jobguard_worm_operator TO worm_operator_login");
   operator = new Pool({ ...config, user: "worm_operator_login", password: "synthetic-operator" });
@@ -102,7 +127,7 @@ describe("durable synthetic WORM SQL", () => {
     const c = command({ action: "request_anchor", subject: "manifest" });
     const before = (await admin.query("SELECT to_jsonb(c) row FROM app.worm_command c ORDER BY id")).rows;
     await expect(secondRepo.submit(context, c)).rejects.toThrow("WORM_REFUSED");
-    await expect(repo.submit(testTenantContext(other), c)).rejects.toThrow("WORM_REFUSED");
+    await expect(repo.submit(testTenantContext(other, { membershipId: actor }), c)).rejects.toThrow("WORM_REFUSED");
     expect((await admin.query("SELECT to_jsonb(c) row FROM app.worm_command c ORDER BY id")).rows).toEqual(before);
     const first = await repo.submit(context, c);
     expect(await repo.submit(context, c)).toEqual(first);
@@ -112,16 +137,17 @@ describe("durable synthetic WORM SQL", () => {
     const digest = "c".repeat(64);
     await admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'synthetic-csrf',clock_timestamp()+interval '1 day','synthetic_demo')", [randomUUID(), user, digest]);
     const bound = new WormCommandRepository(runtime, true, executor, operator, digest), c = command({ action: "request_anchor", subject: "manifest" });
-    const first = await bound.submit(context, c);
+    const submittingContext = await testBoundTenantContext(admin, tenant, actor, digest);
+    const first = await bound.submit(submittingContext, c);
     await admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [digest]);
-    await expect(bound.submit(context, c)).rejects.toThrow("WORM_REFUSED");
+    await expect(bound.submit(submittingContext, c)).rejects.toThrow("WORM_REFUSED");
     expect((await admin.query("SELECT * FROM app.worm_command WHERE id=$1", [c.commandId])).rows).toEqual([first]);
   });
   it("exposes an existing audited refusal after upgrade without rewriting it", async () => {
     const before = (await admin.query("SELECT * FROM app.worm_command WHERE id=$1", [upgradedRefusal])).rows;
-    const alerts = await repo.operatorAlerts(context);
+    const alerts = await repo.operatorAlerts(verifiedTenantContextForQueuedJob(tenant));
     expect(alerts.filter(a => a.command_id === upgradedRefusal)).toHaveLength(1);
-    expect(await repo.operatorAlerts(context)).toEqual(alerts);
+    expect(await repo.operatorAlerts(verifiedTenantContextForQueuedJob(tenant))).toEqual(alerts);
     expect((await admin.query("SELECT * FROM app.worm_command WHERE id=$1", [upgradedRefusal])).rows).toEqual(before);
   });
   it("keeps executor credentials separate from runtime and audit authority", async () => {
@@ -133,50 +159,73 @@ describe("durable synthetic WORM SQL", () => {
       "SELECT * FROM app.worm_submit('{}'::jsonb)", "SELECT * FROM app.lock_audit_head()",
       "SELECT app.advance_audit_head(1,NULL)", "SELECT app.worm_audit(NULL,'applied','forged')",
       "INSERT INTO app.audit_event DEFAULT VALUES"]) {
-      await expect(withTenant(executor, context, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
+      await expect(withTenant(executor, verifiedTenantContextForQueuedJob(tenant), db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
     }
     const c = command();
     await repo.submit(context, c);
-    await withTenant(executor, context, db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]));
+    await inWormScope(executor, c.commandId, "execute", db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]));
     const before = (await admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [tenant])).rows;
-    await expect(withTenant(executor, context, async db => {
+    await expect(inWormScope(executor, c.commandId, "execute", async db => {
       await db.$client.query("SELECT * FROM app.worm_finish($1,1,'applied','{}'::jsonb)", [c.commandId]);
       throw new Error("synthetic executor rollback");
     })).rejects.toThrow("synthetic executor rollback");
     expect((await admin.query("SELECT status FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0].status).toBe("executing");
     expect((await admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [tenant])).rows).toEqual(before);
     // Leave no active hold to interfere with later independent commands.
-    await withTenant(executor, context, db => db.$client.query("SELECT * FROM app.worm_finish($1,1,'refused','{}'::jsonb)", [c.commandId]));
+    await inWormScope(executor, c.commandId, "execute", db => db.$client.query("SELECT * FROM app.worm_finish($1,1,'refused','{}'::jsonb)", [c.commandId]));
+  });
+  it("isolates executor reads from a foreign setting and clears the same connection after commit or rollback", async () => {
+    const c = command({ action: "request_anchor", subject: "manifest" });
+    const otherCommand = await repo.submit(context, command({ action: "request_anchor", subject: "manifest" }));
+    await repo.submit(context, c);
+    const client = await executor.connect();
+    try {
+      await client.query("BEGIN");
+      await expect(client.query("SELECT worm_control.lp11_bind_worm_scope($1,$2,'execute')", [other, c.commandId]))
+        .rejects.toMatchObject({ code: "42501", message: "WORM_REFUSED" });
+      await client.query("ROLLBACK");
+      for (const outcome of ["COMMIT", "ROLLBACK"]) {
+        await client.query("BEGIN");
+        await client.query("SELECT worm_control.lp11_bind_worm_scope($1,$2,'execute')", [tenant, c.commandId]);
+        await client.query("SELECT set_config('app.tenant_id',$1,true)", [other]);
+        expect((await client.query("SELECT id FROM app.worm_command ORDER BY id")).rows).toEqual([{ id: c.commandId }]);
+        expect((await client.query("SELECT id FROM app.worm_command WHERE id=$1", [otherCommand.id])).rows).toEqual([]);
+        await client.query(outcome);
+        expect((await client.query("SELECT id FROM app.worm_command")).rows).toEqual([]);
+      }
+    } finally { await client.query("ROLLBACK"); client.release(); }
+    expect((await admin.query("SELECT tenant_id FROM control_plane.lp11_worm_scope")).rows).toEqual([]);
   });
   it("limits operators to recovery and alert reads with no table authority", async () => {
-    await expect(withTenant(operator, context, db => db.$client.query(
+    await expect(withTenant(operator, verifiedTenantContextForQueuedJob(tenant), db => db.$client.query(
       "SELECT * FROM app.worm_submit($1::jsonb)", [JSON.stringify(command())]))).rejects.toMatchObject({ code: "42501" });
     for (const role of ["jobguard_runtime", "jobguard_worm_executor", "jobguard_migration"]) {
-      await expect(withTenant(operator, context, db => db.$client.query(`SET LOCAL ROLE ${role}`))).rejects.toMatchObject({ code: "42501" });
+      await expect(withTenant(operator, verifiedTenantContextForQueuedJob(tenant), db => db.$client.query(`SET LOCAL ROLE ${role}`))).rejects.toMatchObject({ code: "42501" });
     }
     // Check every overload and schema boundary, including PUBLIC app helpers.
     const routines = (await operator.query(`SELECT p.oid::text, p.oid::regprocedure::text signature,
       (has_schema_privilege(current_user,p.pronamespace,'USAGE') AND has_function_privilege(current_user,p.oid,'EXECUTE')) executable
       FROM pg_proc p WHERE p.pronamespace IN ('app'::regnamespace,'worm_control'::regnamespace) ORDER BY 2`)).rows;
     expect(routines.filter(r => r.executable).map(r => r.signature).sort()).toEqual([
-      "worm_control.worm_operator_alerts()", "worm_control.worm_reconcile(uuid,integer,boolean)", "worm_control.worm_recovery_target(uuid)",
+      "worm_control.lp11_bind_worm_scope(uuid,uuid,text)", "worm_control.worm_operator_alerts()",
+      "worm_control.worm_reconcile(uuid,integer,boolean)", "worm_control.worm_recovery_target(uuid)",
     ]);
     for (const r of routines.filter(r => !r.executable)) {
       const call = (await admin.query(`SELECT format('%I.%I(%s)',n.nspname,p.proname,
         (SELECT string_agg('NULL::'||format_type(arg,NULL),',' ORDER BY ord) FROM unnest(p.proargtypes::oid[]) WITH ORDINALITY a(arg,ord))) sql
         FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE p.oid=$1::oid`, [r.oid])).rows[0].sql;
-      await expect(withTenant(operator, context, db => db.$client.query(`SELECT ${call}`))).rejects.toMatchObject({ code: "42501" });
+      await expect(withTenant(operator, verifiedTenantContextForQueuedJob(tenant), db => db.$client.query(`SELECT ${call}`))).rejects.toMatchObject({ code: "42501" });
     }
     for (const table of ["app.audit_event", "audit_control.audit_head", "app.action_outbox", "infrastructure.outbox_signal", "app.journal", "app.journal_line", "app.worm_command", "app.worm_attempt"]) {
       for (const sql of [`INSERT INTO ${table} DEFAULT VALUES`, `UPDATE ${table} SET tenant_id=tenant_id`, `DELETE FROM ${table}`, `TRUNCATE ${table}`]) {
-        await expect(withTenant(operator, context, db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
+        await expect(withTenant(operator, verifiedTenantContextForQueuedJob(tenant), db => db.$client.query(sql))).rejects.toMatchObject({ code: "42501" });
       }
-      await expect(withTenant(operator, context, db => db.$client.query(`SELECT * FROM ${table}`))).rejects.toMatchObject({ code: "42501" });
+      await expect(withTenant(operator, verifiedTenantContextForQueuedJob(tenant), db => db.$client.query(`SELECT * FROM ${table}`))).rejects.toMatchObject({ code: "42501" });
     }
   });
   it("rejects wrong-job/cross-tenant references and unadmitted evidence", async () => {
     await expect(repo.submit(context, command({ jobId: randomUUID() }))).rejects.toThrow("WORM_REFUSED");
-    await expect(repo.submit(testTenantContext(other), command())).rejects.toThrow("WORM_REFUSED");
+    await expect(repo.submit(testTenantContext(other, { membershipId: actor }), command())).rejects.toThrow("WORM_REFUSED");
     await expect(repo.submit(context, command({ evidenceId: randomUUID() }))).rejects.toThrow("WORM_REFUSED");
     await expect(repo.submit(context, command({ action: "release_hold", releaseOf: randomUUID() }))).rejects.toThrow("WORM_REFUSED");
   });
@@ -211,29 +260,32 @@ describe("durable synthetic WORM SQL", () => {
     expect(await repo.submit(context, c)).toEqual(stored);
     expect((await admin.query("SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='worm.authorized' AND payload->'references'->>'command'=$2", [tenant, c.commandId])).rows).toHaveLength(1);
     // Finish this synthetic fixture as refused so subsequent hold cases remain independent.
-    await repo.execute(context, c.commandId, { ...storage, hold: async () => { throw new WormBoundaryError("INVALID_INPUT"); } }, tsa);
+    await repo.execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, { ...storage, hold: async () => { throw new WormBoundaryError("INVALID_INPUT"); } }, tsa);
   });
   it("atomically records one authorization/audit/outbox for concurrent duplicates, refusing either conflicting identity", async () => {
     const c = command();
     const [a, b] = await Promise.all([repo.submit(context, c), repo.submit(context, c)]);
     expect(a).toEqual(b);
     const noRead = { read: vi.fn(storage.read) };
-    await expect(repo.recover(context, { version: "worm.recovery.v1", commandId: c.commandId }, noRead)).rejects.toThrow("WORM_REFUSED");
+    await expect(repo.recover(verifiedTenantContextForQueuedJob(tenant), { version: "worm.recovery.v1", commandId: c.commandId }, noRead)).rejects.toThrow("WORM_REFUSED");
     expect(noRead.read).not.toHaveBeenCalled();
     await expect(repo.submit(context, { ...c, jobId: randomUUID() })).rejects.toThrow("WORM_REPLAY_CONFLICT");
     await expect(repo.submit(context, { ...c, commandId: randomUUID() })).rejects.toThrow("WORM_REPLAY_CONFLICT");
     await expect(repo.submit(context, { ...c, idempotencyKey: randomUUID() })).rejects.toThrow("WORM_REPLAY_CONFLICT");
-    await expect(secondRepo.submit(context, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second }))).rejects.toThrow("WORM_REFUSED");
-    await repo.execute(context, c.commandId, storage, tsa);
-    await repo.execute(context, c.commandId, storage, tsa); expect(held).toBe(true);
+    await expect(secondRepo.submit(secondContext, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second }))).rejects.toThrow("WORM_REFUSED");
+    await repo.execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, storage, tsa);
+    await repo.execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, storage, tsa); expect(held).toBe(true);
     await expect(repo.submit(context, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: samePerson }))).rejects.toThrow("WORM_REFUSED");
-    // Keep the independent two-person SQL control covered even though the
-    // repository now rejects this unbound membership before reaching it.
     await expect(withTenant(runtime, context, db => db.$client.query("SELECT * FROM app.worm_submit($1::jsonb)",
-      [JSON.stringify(command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: samePerson }))]))).rejects.toThrow("WORM_REFUSED");
+      [JSON.stringify(command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: samePerson }))]))).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+    // Keep the independent two-person SQL control covered even though the
+    // repository rejects the alternate membership before reaching it. Bind the
+    // original owner to exercise the same identity prohibition inside SQL.
+    await expect(withTenant(runtime, context, db => db.$client.query("SELECT * FROM app.worm_submit($1::jsonb)",
+      [JSON.stringify(command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: actor }))]))).rejects.toThrow("WORM_REFUSED");
     const release = command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second });
-    await secondRepo.submit(context, release); await repo.execute(context, release.commandId, storage, tsa); expect(held).toBe(false);
-    await expect(secondRepo.submit(context, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second }))).rejects.toThrow("WORM_REFUSED");
+    await secondRepo.submit(secondContext, release); await repo.execute(verifiedTenantContextForQueuedJob(tenant), release.commandId, storage, tsa); expect(held).toBe(false);
+    await expect(secondRepo.submit(secondContext, command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second }))).rejects.toThrow("WORM_REFUSED");
     const audit = await admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='worm.authorized' AND payload->'references'->>'command'=$2", [tenant, c.commandId]);
     expect(audit.rows).toHaveLength(1); expect(JSON.stringify(audit.rows)).not.toContain("synthetic/tenants");
   });
@@ -244,70 +296,70 @@ describe("durable synthetic WORM SQL", () => {
     await repo.submit(context, c);
     let calls = 0;
     const refusing = { ...storage, hold: async () => { calls++; throw new WormBoundaryError("INVALID_INPUT"); } };
-    expect((await repo.execute(context, c.commandId, refusing, tsa)).status).toBe("refused");
+    expect((await repo.execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, refusing, tsa)).status).toBe("refused");
     const fresh = new WormCommandRepository(runtime, true, executor, undefined, sessionDigest);
-    expect((await fresh.execute(context, c.commandId, refusing, tsa)).status).toBe("refused");
+    expect((await fresh.execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, refusing, tsa)).status).toBe("refused");
     expect(calls).toBe(1);
     expect((await admin.query("SELECT outcome FROM app.worm_attempt WHERE command_id=$1", [c.commandId])).rows).toEqual([{ outcome: "refused" }]);
     expect((await admin.query("SELECT id FROM app.audit_event WHERE tenant_id=$1 AND event_type='worm.refused' AND payload->'references'->>'command'=$2", [tenant, c.commandId])).rows).toHaveLength(1);
-    const alert = (await repo.operatorAlerts(context)).filter(a => a.command_id === c.commandId);
+    const alert = (await repo.operatorAlerts(verifiedTenantContextForQueuedJob(tenant))).filter(a => a.command_id === c.commandId);
     expect(alert).toEqual([{ command_id: c.commandId, evidence_id: evidence, action: "apply_hold",
       code: "WORM_STORAGE_REFUSED", severity: "critical", occurred_at: expect.any(Date) }]);
-    expect(await repo.operatorAlerts(testTenantContext(other))).toEqual([]);
-    await expect(repo.execute(testTenantContext(other), c.commandId, refusing, tsa)).rejects.toThrow("WORM_REFUSED");
+    expect(await repo.operatorAlerts(testTenantContext(other, { membershipId: actor }))).toEqual([]);
+    await expect(repo.execute(testTenantContext(other, { membershipId: actor }), c.commandId, refusing, tsa)).rejects.toThrow("WORM_REFUSED");
     expect(calls).toBe(1);
     for (const credentials of [runtime, executor]) {
-      await expect(withTenant(credentials, context, db => db.$client.query("SELECT * FROM worm_control.worm_operator_alerts()"))).rejects.toMatchObject({ code: "42501" });
+      await expect(withTenant(credentials, verifiedTenantContextForQueuedJob(tenant), db => db.$client.query("SELECT * FROM worm_control.worm_operator_alerts()"))).rejects.toMatchObject({ code: "42501" });
     }
     expect((await admin.query("SELECT * FROM app.evidence_object WHERE tenant_id=$1 AND id=$2", [tenant, evidence])).rows).toEqual(beforeEvidence);
     expect(held).toBe(beforeHeld);
     const retry = command();
     await repo.submit(context, retry);
-    expect((await repo.execute(context, retry.commandId, refusing, tsa)).status).toBe("refused");
-    expect((await repo.operatorAlerts(context)).filter(a => a.command_id === c.commandId)).toEqual(alert);
-    expect((await repo.operatorAlerts(context)).filter(a => a.command_id === retry.commandId)).toHaveLength(1);
+    expect((await repo.execute(verifiedTenantContextForQueuedJob(tenant), retry.commandId, refusing, tsa)).status).toBe("refused");
+    expect((await repo.operatorAlerts(verifiedTenantContextForQueuedJob(tenant))).filter(a => a.command_id === c.commandId)).toEqual(alert);
+    expect((await repo.operatorAlerts(verifiedTenantContextForQueuedJob(tenant))).filter(a => a.command_id === retry.commandId)).toHaveLength(1);
   });
   it("rolls back the alert and refusal when their audit cannot commit", async () => {
     const c = command();
     await repo.submit(context, c);
-    await withTenant(executor, context, db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]));
-    await expect(withTenant(executor, context, async db => {
+    await inWormScope(executor, c.commandId, "execute", db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]));
+    await expect(inWormScope(executor, c.commandId, "execute", async db => {
       await db.$client.query("SELECT * FROM app.worm_finish($1,1,'refused',$2::jsonb)",
         [c.commandId, JSON.stringify({ status: "refused", reason: "storage_refused" })]);
       throw new Error("synthetic audit failure");
     })).rejects.toThrow("synthetic audit failure");
-    expect((await repo.operatorAlerts(context)).filter(a => a.command_id === c.commandId)).toEqual([]);
+    expect((await repo.operatorAlerts(verifiedTenantContextForQueuedJob(tenant))).filter(a => a.command_id === c.commandId)).toEqual([]);
     expect((await admin.query("SELECT status FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0].status).toBe("executing");
     // Finish the fixture only after proving rollback, so the next test can raise a new hold.
-    await withTenant(executor, context, db => db.$client.query("SELECT * FROM app.worm_finish($1,1,'refused','{}'::jsonb)", [c.commandId]));
+    await inWormScope(executor, c.commandId, "execute", db => db.$client.query("SELECT * FROM app.worm_finish($1,1,'refused','{}'::jsonb)", [c.commandId]));
   });
   it("reconciles an unknown completed write once, audits the operator, and never rewrites storage", async () => {
     const c = command();
     await repo.submit(context, c);
     const write = vi.fn(async () => { held = true; throw new Error("synthetic lost acknowledgement"); });
-    expect((await repo.execute(context, c.commandId, { ...storage, hold: write }, tsa)).status).toBe("outcome_unknown");
+    expect((await repo.execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, { ...storage, hold: write }, tsa)).status).toBe("outcome_unknown");
     const recovery = { version: "worm.recovery.v1", commandId: c.commandId };
     const read = vi.fn(async (target: unknown) => {
       expect(target).toEqual({ tenantId: tenant, key: `synthetic/tenants/${tenant}/manifest`, versionId: "v1" });
       return storage.read();
     });
     const fresh = new WormCommandRepository(runtime, true, executor, operator, sessionDigest);
-    await expect(fresh.recover(testTenantContext(other), recovery, { read })).rejects.toThrow("WORM_REFUSED");
-    await expect(withTenant(operator, testTenantContext(other), db => db.$client.query(
+    await expect(fresh.recover(testTenantContext(other, { membershipId: actor }), recovery, { read })).rejects.toThrow("WORM_REFUSED");
+    await expect(withTenant(operator, testTenantContext(other, { membershipId: actor }), db => db.$client.query(
       "SELECT * FROM worm_control.worm_reconcile($1,1,true)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
     expect(read).not.toHaveBeenCalled();
     for (const credentials of [runtime, executor]) {
       const denied = new WormCommandRepository(runtime, true, executor, credentials);
-      await expect(denied.recover(context, recovery, { read })).rejects.toThrow("WORM_REFUSED");
-      await expect(withTenant(credentials, context, db => db.$client.query(
+      await expect(denied.recover(verifiedTenantContextForQueuedJob(tenant), recovery, { read })).rejects.toThrow("WORM_REFUSED");
+      await expect(withTenant(credentials, verifiedTenantContextForQueuedJob(tenant), db => db.$client.query(
         "SELECT * FROM worm_control.worm_reconcile($1,1,true)", [c.commandId]))).rejects.toMatchObject({ code: "42501" });
-      await expect(withTenant(credentials, context, db => db.$client.query("SET LOCAL ROLE jobguard_worm_operator"))).rejects.toMatchObject({ code: "42501" });
+      await expect(withTenant(credentials, verifiedTenantContextForQueuedJob(tenant), db => db.$client.query("SET LOCAL ROLE jobguard_worm_operator"))).rejects.toMatchObject({ code: "42501" });
     }
     expect(read).not.toHaveBeenCalled();
-    const results = await Promise.all([fresh.recover(context, recovery, { read }), fresh.recover(context, recovery, { read })]);
+    const results = await Promise.all([fresh.recover(verifiedTenantContextForQueuedJob(tenant), recovery, { read }), fresh.recover(verifiedTenantContextForQueuedJob(tenant), recovery, { read })]);
     expect(results.map(r => r.status)).toEqual(["applied", "applied"]);
-    await fresh.recover(context, recovery, { read });
-    await fresh.execute(context, c.commandId, { ...storage, hold: write }, tsa);
+    await fresh.recover(verifiedTenantContextForQueuedJob(tenant), recovery, { read });
+    await fresh.execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, { ...storage, hold: write }, tsa);
     expect(write).toHaveBeenCalledTimes(1);
     const audits = (await admin.query("SELECT actor_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='worm.reconciled' AND payload->'references'->>'command'=$2", [tenant, c.commandId])).rows;
     expect(audits).toHaveLength(1);
@@ -318,14 +370,14 @@ describe("durable synthetic WORM SQL", () => {
       FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [tenant])).rows as AuditEvent[];
     expect(() => verifyAuditChain(events)).not.toThrow();
     expect((await admin.query("SELECT outcome,attempt FROM app.worm_attempt WHERE command_id=$1", [c.commandId])).rows).toEqual([{ outcome: "applied", attempt: 1 }]);
-    await expect(withTenant(operator, context, db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(operator, verifiedTenantContextForQueuedJob(tenant), db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]))).rejects.toMatchObject({ code: "42501" });
     const release = command({ action: "release_hold", releaseOf: c.commandId, actorMembershipId: second });
-    await secondRepo.submit(context, release);
+    await secondRepo.submit(secondContext, release);
     const releaseWrite = vi.fn(async (_target: unknown, value: boolean) => { held = value; throw new Error("synthetic release acknowledgement lost"); });
-    expect((await fresh.execute(context, release.commandId, { ...storage, hold: releaseWrite }, tsa)).status).toBe("outcome_unknown");
+    expect((await fresh.execute(verifiedTenantContextForQueuedJob(tenant), release.commandId, { ...storage, hold: releaseWrite }, tsa)).status).toBe("outcome_unknown");
     const releaseRecovery = { version: "worm.recovery.v1", commandId: release.commandId };
-    expect((await fresh.recover(context, releaseRecovery, { read })).status).toBe("applied");
-    await fresh.recover(context, releaseRecovery, { read });
+    expect((await fresh.recover(verifiedTenantContextForQueuedJob(tenant), releaseRecovery, { read })).status).toBe("applied");
+    await fresh.recover(verifiedTenantContextForQueuedJob(tenant), releaseRecovery, { read });
     expect(releaseWrite).toHaveBeenCalledTimes(1);
     expect(held).toBe(false);
   });
@@ -339,14 +391,14 @@ describe("durable synthetic WORM SQL", () => {
   });
   it("persists pending TSA attempts across repository instances and cancels revoked queued authority", async () => {
     const c = command({ action: "request_anchor", subject: "manifest", actorMembershipId: second });
-    await secondRepo.submit(context, c); await repo.execute(context, c.commandId, storage, tsa);
+    await secondRepo.submit(secondContext, c); await repo.execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, storage, tsa);
     const fresh = new WormCommandRepository(runtime, true, executor, undefined, sessionDigest);
-    expect((await fresh.execute(context, c.commandId, storage, tsa)).status).toBe("pending");
+    expect((await fresh.execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, storage, tsa)).status).toBe("pending");
     const noRead = { read: vi.fn(storage.read) };
-    await expect(fresh.recover(context, { version: "worm.recovery.v1", commandId: c.commandId }, noRead)).rejects.toThrow("WORM_REFUSED");
+    await expect(fresh.recover(verifiedTenantContextForQueuedJob(tenant), { version: "worm.recovery.v1", commandId: c.commandId }, noRead)).rejects.toThrow("WORM_REFUSED");
     expect(noRead.read).not.toHaveBeenCalled();
     expect((await admin.query("SELECT * FROM app.worm_attempt WHERE command_id=$1", [c.commandId])).rows).toHaveLength(2);
-    const saved = await fresh.execute(context, c.commandId, storage, { anchor: async () => ({
+    const saved = await fresh.execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, storage, { anchor: async () => ({
       status: "anchored", token: new Uint8Array([1, 2]), query: new Uint8Array([3]),
       certificatePem: "synthetic-leaf", caCertificatePem: "synthetic-ca", signerSha256: "b".repeat(64),
       algorithm: "sha256", policyOid: "1.2.3", generatedAt: "2026-10-29T00:00:00Z", claim: "synthetic_integrity_and_existence_only",
@@ -354,9 +406,9 @@ describe("durable synthetic WORM SQL", () => {
     expect(saved.result).toMatchObject({ token: "AQI=", query: "Aw==", certificatePem: "synthetic-leaf" });
     expect((await admin.query("SELECT result FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0]?.result).toEqual(saved.result);
     const pending = command({ action: "request_anchor", subject: "manifest", actorMembershipId: second });
-    await secondRepo.submit(context, pending);
+    await secondRepo.submit(secondContext, pending);
     await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [tenant, second]);
-    expect((await fresh.execute(context, pending.commandId, storage, tsa)).status).toBe("cancelled");
+    expect((await fresh.execute(verifiedTenantContextForQueuedJob(tenant), pending.commandId, storage, tsa)).status).toBe("cancelled");
     await expect(fresh.submit(context, pending)).rejects.toThrow("WORM_REFUSED");
   });
   it("denies runtime claim/completion and executor role assumption, including forged applied holds", async () => {
@@ -366,40 +418,44 @@ describe("durable synthetic WORM SQL", () => {
       ["SET LOCAL ROLE jobguard_worm_executor", []],
     ] as const) {
       await expect(withTenant(runtime, context, db => db.$client.query(sql, [...args]))).rejects.toMatchObject({ code: "42501" });
+      await expect(withTenant(runtime, context, async db => {
+        await db.$client.query("SELECT set_config('app.actor_id',$1,true), set_config('app.worm_executor','true',true), set_config('app.worm_operator','true',true)", [second]);
+        return db.$client.query(sql, [...args]);
+      })).rejects.toMatchObject({ code: "42501" });
     }
     const c = command();
     await repo.submit(context, c);
-    await withTenant(executor, context, db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]));
+    await inWormScope(executor, c.commandId, "execute", db => db.$client.query("SELECT * FROM app.worm_claim($1)", [c.commandId]));
     await expect(withTenant(runtime, context, db => db.$client.query(
       "SELECT * FROM app.worm_finish($1,1,'applied','{}'::jsonb)", [c.commandId]))).rejects.toMatchObject({ code: "42501" });
     expect((await admin.query("SELECT status FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0]?.status).toBe("executing");
-    await expect(new WormCommandRepository(runtime, true, runtime).execute(context, c.commandId, storage, tsa)).rejects.toThrow("WORM_REFUSED");
+    await expect(new WormCommandRepository(runtime, true, runtime).execute(verifiedTenantContextForQueuedJob(tenant), c.commandId, storage, tsa)).rejects.toThrow("WORM_REFUSED");
     const recovery = { version: "worm.recovery.v1", commandId: c.commandId };
     const failedRead = { read: async () => { throw new Error("synthetic missing version"); } };
-    expect((await repo.recover(context, recovery, failedRead)).status).toBe("outcome_unknown");
-    expect((await repo.recover(context, recovery, { read: async () => ({ held: false, retainUntil: null }) })).status).toBe("outcome_unknown");
-    await expect(withTenant(executor, context, db => db.$client.query(
+    expect((await repo.recover(verifiedTenantContextForQueuedJob(tenant), recovery, failedRead)).status).toBe("outcome_unknown");
+    expect((await repo.recover(verifiedTenantContextForQueuedJob(tenant), recovery, { read: async () => ({ held: false, retainUntil: null }) })).status).toBe("outcome_unknown");
+    await expect(inWormScope(executor, c.commandId, "execute", db => db.$client.query(
       "SELECT * FROM app.worm_finish($1,1,'applied','{}'::jsonb)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
-    await expect(withTenant(operator, context, db => db.$client.query(
+    await expect(inWormScope(operator, c.commandId, "recover", db => db.$client.query(
       "SELECT * FROM worm_control.worm_reconcile($1,2,true)", [c.commandId]))).rejects.toThrow("WORM_REFUSED");
     const auditsBeforeRollback = (await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows[0].n;
-    await expect(withTenant(operator, context, async db => {
+    await expect(inWormScope(operator, c.commandId, "recover", async db => {
       await db.$client.query("SELECT * FROM worm_control.worm_reconcile($1,1,true)", [c.commandId]);
       throw new Error("synthetic audit transaction failure");
     })).rejects.toThrow("synthetic audit transaction failure");
     expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [tenant])).rows[0].n).toBe(auditsBeforeRollback);
     expect((await admin.query("SELECT status FROM app.worm_command WHERE id=$1", [c.commandId])).rows[0].status).toBe("outcome_unknown");
-    expect((await repo.recover(context, recovery, { read: async () => ({ held: true, retainUntil: null }) })).status).toBe("applied");
+    expect((await repo.recover(verifiedTenantContextForQueuedJob(tenant), recovery, { read: async () => ({ held: true, retainUntil: null }) })).status).toBe("applied");
     for (const name of ["worm_command", "worm_attempt", "worm_synthetic_version"]) {
-      expect((await withTenant(executor, testTenantContext(other), db => db.$client.query(`SELECT * FROM app.${name}`))).rows).toEqual([]);
-      await expect(withTenant(executor, context, db => db.$client.query(`UPDATE app.${name} SET tenant_id=$1`, [other]))).rejects.toMatchObject({ code: "42501" });
+      expect((await withTenant(executor, testTenantContext(other, { membershipId: actor }), db => db.$client.query(`SELECT * FROM app.${name}`))).rows).toEqual([]);
+      await expect(withTenant(executor, verifiedTenantContextForQueuedJob(tenant), db => db.$client.query(`UPDATE app.${name} SET tenant_id=$1`, [other]))).rejects.toMatchObject({ code: "42501" });
     }
   });
   it("enforces RLS and denies direct fixture/receipt/result writes and deletes", async () => {
     for (const name of ["worm_command", "worm_attempt", "worm_synthetic_version"]) {
       const catalog = (await admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=$1::regclass", [`app.${name}`])).rows[0];
       expect(catalog).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
-      expect((await withTenant(runtime, testTenantContext(other), db => db.$client.query(`SELECT * FROM app.${name}`))).rows).toEqual([]);
+      expect((await withTenant(runtime, testTenantContext(other, { membershipId: actor }), db => db.$client.query(`SELECT * FROM app.${name}`))).rows).toEqual([]);
       await expect(withTenant(runtime, context, db => db.$client.query(`DELETE FROM app.${name}`))).rejects.toMatchObject({ code: "42501" });
     }
     await expect(withTenant(runtime, context, db => db.$client.query("UPDATE app.worm_command SET status='applied'"))).rejects.toMatchObject({ code: "42501" });

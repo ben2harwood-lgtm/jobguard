@@ -12,6 +12,7 @@ it("S14 reads adopted proof originals through inherited ownership, retaining exa
   const job = randomUUID(), upload = randomUUID(), token = randomUUID(), bytes = generatePracticePng();
   let stranger = false;
   const query = vi.fn(async (sql: string, values: unknown[] = []) => {
+    if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: upload, tenant: DEMO_TENANT_ID }] };
     if (sql.includes("authenticate_practice_session")) return { rows: [{ tenant_id: DEMO_TENANT_ID, membership_id: upload, identity_user_id: job }] };
     if (sql.includes("WITH RECURSIVE practice_owned_job") && !sql.includes("synthetic_evidence_original")) return { rows: stranger ? [] : [{ id: job }] };
     if (sql.startsWith("SELECT id FROM app.evidence_upload") || sql.startsWith("SELECT 1 FROM app.evidence_upload")) return { rows: [{}] };

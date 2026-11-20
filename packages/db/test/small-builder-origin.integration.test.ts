@@ -1,3 +1,4 @@
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,14 +10,21 @@ import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { withTenant, verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID(), H="a".repeat(64);
-const context=(tenantId:string=T)=>verifiedTenantContextFromMembership({tenantId,membershipId:M,identityUserId:U} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
+const context=(tenantId:string=T)=>testTenantContext(tenantId,{membershipId:M});
 let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
 const migrationURL=new URL("../migrations/0128_shadow_persistence.sql",import.meta.url);
-// CH-3a/CH-2 row-level guards read the tenant from the session: fixture writes that touch live-job state run in a
-// transaction with app.tenant_id set, the way main's own fixtures do.
-async function asTenant<R>(tenant:string,work:(db:PoolClient)=>Promise<R>):Promise<R> {
+// Keep fixture writes under the principal whose persisted facts the guard validates.
+async function asTenant<R>(tenant:string,work:(db:PoolClient)=>Promise<R>,practiceDigest?:string):Promise<R> {
  const db=await admin.connect();
- try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);const out=await work(db);await db.query("COMMIT");return out}
+ try{
+  await db.query("BEGIN");
+  await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  if(practiceDigest)await db.query("SELECT app.bind_request('practice',$1,$2)",[practiceDigest,tenant]);
+  else await bindTestClient(admin,db,tenant,M);
+  const result=await work(db);
+  await db.query("COMMIT");
+  return result;
+ }
  catch(error){await db.query("ROLLBACK");throw error}finally{db.release()}
 }
 async function signal(jobId:string=J,tenantId:string=T,state="candidate") {
@@ -115,7 +123,7 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
     await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) SELECT $3,tenant_id,title,'live',practice_session_digest,practice_scenario,'imported',10000,'reference_fee_policy_v1',150 FROM app.job WHERE tenant_id=$1 AND practice_session_digest=$2 AND status='live'",[DEMO_TENANT_ID,auth.digest,job]);
     await db.query(`UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp()
       WHERE tenant_id=$1 AND command_id=$2`,[DEMO_TENANT_ID,fixtureCommand]);
-  });
+  },auth.digest);
   // The legacy live-job trigger binds the small-builder track only for non-imported live inserts, so bind the same track it bound for the home job.
   await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance,source_id) VALUES($1,$2,'small_builder','synthetic_demo','legacy_synthetic_live_fixture',$2)",[DEMO_TENANT_ID,job]);
   await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,DEMO_TENANT_ID,job]);
@@ -206,7 +214,7 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
     await db.query(`UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp()
       WHERE tenant_id=$1 AND command_id=$2`,[DEMO_TENANT_ID,fixtureCommand]);
     await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','pilot_no_charge','quote_activation')",[DEMO_TENANT_ID,job]);
-   });
+   },auth.digest);
    await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,DEMO_TENANT_ID,job]);
    const input={version:"variation-command.v1",action:"propose",proposalId:randomUUID(),scopeItemId:randomUUID(),existingScopeItemId:null,lineageParentScopeItemId:scope,description:"Synthetic tap",captureText:"Synthetic captured tap",price:{quantity:"1",unit:"item",unitRatePence:80000,direction:"addition"}};
    const application=new VariationApplication(runtime,session);
@@ -224,18 +232,16 @@ describe("SV-2 small-builder origins and withdrawal (B2, B3, DW4, DW5, DW8)",()=
  });
  it("enforces source only for catches and tenant/job-qualified references without adding future commands",async()=>{
   const existing=await signal(),wrongJob=await signal(K),wrongTenant=await signal(L,O);
-  const insert=async(kind:string,source:string|null)=>{
-   const client=await admin.connect(),p=proposal(),command=randomUUID();
-   try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true)",[T]);
+  const insert=(kind:string,source:string|null)=>asTenant(T,async client=>{
+    const p=proposal(),command=randomUUID();
     const type=kind==="jobguard_catch"?"ConfirmJobGuardCatch":kind==="final_review"?"AddFinalReviewExtra":"LogBuilderExtra";
     await client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,$3,$4,$5,'processing',$6)",[T,command,type,`extra-origin:${J}:${p.id}`,H,M]);
     await client.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'reserved')",[p.scopeItemId,T,J]);
     await client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description,origin) VALUES($1,$2,$3,$4,'text','Fictional capture','Synthetic',$5)",[p.id,T,J,p.scopeItemId,kind]);
     await client.query("INSERT INTO app.extra_origin(tenant_id,job_id,variation_id,job_track,kind,command_id,raising_membership_id,raising_role,provenance,source_signal_id) VALUES($1,$2,$3,'small_builder',$4,$5,$6,'owner','command',$7)",[T,J,p.id,kind,command,M,source]);
     await client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [T, command]);
-    await client.query("COMMIT");return p.id;
-   }catch(e){await client.query("ROLLBACK");throw e}finally{client.release()}
-  };
+    return p.id;
+  });
   await expect(insert("jobguard_catch",null)).rejects.toMatchObject({code:"23514"});
   await expect(insert("builder_logged",existing)).rejects.toMatchObject({code:"23514"});
   await expect(insert("final_review",existing)).rejects.toMatchObject({code:"23514"});

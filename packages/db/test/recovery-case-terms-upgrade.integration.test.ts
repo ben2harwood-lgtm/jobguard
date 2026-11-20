@@ -1,6 +1,7 @@
+import { seedPredecessorRecoveryMessage } from "./recovery-message-predecessor-data.js";
 import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
-import { seedLegacySandbox } from "./lp-legacy-sandbox-fixture.js";
+import { seedLegacySandbox, historicalAcceptedQuote } from "./lp-legacy-sandbox-fixture.js";
 import { practiceMaterialPool } from "../src/practice-session.js";
 import { prepareInvoicePrerequisites } from "./sv5pre-fixtures.js";
 // Written first; NOT RUN (sandbox cannot start PostgreSQL / a browser).
@@ -13,10 +14,11 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { recoveryCaseTermsHash } from "@jobguard/core";
-import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U, MIGRATION_URLS, migrate, withTenant, prepareActivationFixtureV3, PracticeActivationRepository, FinalAccountCommandService, PracticeInvoiceRepository, RecoveryCaseRepository, EvidencePackRepository, RecoveryMessageRepository, RecoveryCaseTermsRepository, QuoteRepository, QuoteDeliveryRepository, issuePracticeSession, SandboxRepository, RecoveryFollowUpRepository } from "../src/index.js";
+import { DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U, MIGRATION_URLS, migrate, withTenant, prepareActivationFixtureV3, PracticeActivationRepository, FinalAccountCommandService, PracticeInvoiceRepository, RecoveryCaseRepository, EvidencePackRepository, RecoveryMessageRepository, RecoveryCaseTermsRepository, QuoteRepository, QuoteDeliveryRepository, issuePracticeSession, authenticatePracticeSession, SandboxRepository, RecoveryFollowUpRepository } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
-const context=testTenantContext(T),actor={membershipId:M,identityUserId:U},messageActor={membershipId:M,actorRef:`membership:${M}`},name="0134_recovery_case_terms.sql",original=process.env.JOBGUARD_ENV;
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+let context=testTenantContext(T);
+const actor={membershipId:M,identityUserId:U},messageActor={membershipId:M,actorRef:`membership:${M}`},name="0134_recovery_case_terms.sql",original=process.env.JOBGUARD_ENV;
 let pg:EmbeddedPostgres,admin:Pool,upgrade:Pool,runtime:Pool,dir:string,port:number,job:string,caseId:string,packId:string,session:string;
 const compared=["app.recovery_case","app.recovery_message","app.recovery_message_event","app.recovery_message_approval","app.recovery_message_sink","app.action_authorization","app.command_receipt","app.audit_event"];
 const command=(c:string,id=randomUUID())=>({version:"recovery-case-terms-command.v1",action:"approve",commandId:id,caseId:c,termsVersion:"synthetic_recovery_fee_terms.v1",feePolicyVersion:"reference_fee_policy_v3",eligibilityPolicyVersion:"reference_recovery_eligibility_policy_v3",termsHash:recoveryCaseTermsHash(c)});
@@ -37,11 +39,19 @@ async function parties(owner:Pool,j:string){
 }
 async function seed(owner:Pool,run:Pool){
  await owner.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[T]);await owner.query("INSERT INTO identity.identity_user(id) VALUES($1)",[U]);const account=randomUUID();await owner.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional builder')",[account,T]);await owner.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[M,T,account,U]);
- const sessionId=await issuePracticeSession(run),digest=createHash("sha256").update(sessionId).digest("hex"),j=randomUUID(),scope=randomUUID(),revision=randomUUID();
+ context=(await owner.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(owner,T,M) : testTenantContext(T);
+ const sessionId=await issuePracticeSession(run),digest=createHash("sha256").update(sessionId).digest("hex");
+ const hasAllocator=(await owner.query("SELECT to_regprocedure('app.allocate_quote_job_reference(uuid)') installed")).rows[0].installed;
+ let j:string;
+ if (!hasAllocator) j=await historicalAcceptedQuote(owner,context,"Before terms migration",1880000,digest);
+ else {
+ context=(await authenticatePracticeSession(run,sessionId)).context;
+ j=randomUUID();const scope=randomUUID(),revision=randomUUID();
  await withTenant(owner,context,async db=>{await db.$client.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Before terms migration','quoting',$3,'capture')",[j,T,digest]);await db.$client.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,T,j]);await db.$client.query("INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,'Fictional work','1','item',1880000,1880000)",[revision,T,j,scope]);});
  await parties(owner,j);
  const quotes=new QuoteRepository(run),delivery=new QuoteDeliveryRepository(run);await quotes.saveDraft(context,{jobId:j,draftId:randomUUID(),expectedRevision:0,currency:"GBP",taxPolicyVersion:"candidate_m1_standard_v1",blockingQuestions:[],effectiveAt:new Date(),lines:[{id:randomUUID(),scopeItemId:scope,scopeRevisionId:revision,description:"Fictional work",origin:"captured",included:true,exclusionReason:null,quantity:"1",unit:"item",unitRatePence:1880000,discountPercent:"0",taxTreatment:"standard_rate_20",rateProvenance:"entered",category:"Work",region:null}]});
  const document=await delivery.preview(context,j,"practice-customer@example.invalid");await delivery.issue(context,j,{commandId:randomUUID(),documentId:document.documentId,contentHash:document.hash,recipient:"practice-customer@example.invalid"});await delivery.execute(context,j,document.documentId,"success");await withTenant(owner,context,async db=>{const row=(await db.$client.query(`SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2`,[T,j])).rows[0];await db.$client.query(`SELECT app.record_builder_attested_acceptance($1,$2,$3,$4,$5,$6,$7,2256000,$8,$9,'Fictional customer','email',clock_timestamp(),NULL)`,[T,randomUUID(),randomUUID(),j,document.documentId,document.document.documentVersion,document.hash,row.revision,M]);});
+ }
  await new PracticeActivationRepository(run).start(context,j,{commandId:randomUUID(),scenario:"no_charge"});
  await proofFixture(owner,j);
  // Setup: carry this fixture's already-issued session into the unchanged invoice call.
@@ -74,7 +84,7 @@ beforeAll(async()=>{
  await applyOutboundPause(upgrade);
  await admin.query("CREATE ROLE terms_upgrade_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO terms_upgrade_login");runtime=new Pool({host:"127.0.0.1",port,user:"terms_upgrade_login",password:"synthetic",database:"jobguard_synthetic_demo",max:4});({job,caseId,packId,session}=await seed(upgrade,runtime));
  const repo=new RecoveryMessageRepository(runtime),v=(await preview()).latest!,q=await repo.command(context,caseId,{version:"recovery-message-command.v1",action:"approve",commandId:randomUUID(),messageId:v.id,expectedRevision:v.revision,recipient:v.message.recipient,body:v.message.body,amountPence:v.message.amountPence,packId:v.message.packId,contentHash:v.message.contentHash},messageActor);
- await repo.command(context,caseId,{version:"recovery-message-command.v1",action:"advance",commandId:randomUUID(),messageId:v.id,expectedRevision:q.latest!.revision,outcome:"success"},messageActor);
+ await seedPredecessorRecoveryMessage(upgrade,T,caseId,q.latest!,messageActor,"succeeded");
  const sandbox=new SandboxRepository(runtime);await seedLegacySandbox(upgrade,session);const follow=new RecoveryFollowUpRepository(runtime),scheduled=await follow.schedule(context,caseId,{version:"recovery-follow-up-command.v1",action:"schedule",commandId:randomUUID(),sourceMessageId:v.id,expectedCaseRevision:2},messageActor);
  for(let tick=0;tick<3;tick++)await follow.advanceTime(context,caseId,{version:"recovery-follow-up-command.v1",action:"advance_time",commandId:randomUUID(),followUpId:scheduled.latest!.id},messageActor,(run,id)=>sandbox.advance(session,run,id));
 });
@@ -83,11 +93,16 @@ it("[T11] fresh catalog has only the new forced-RLS table, controlled functions 
  const table=(await admin.query("SELECT pg_get_userbyid(relowner) owner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.recovery_case_terms_approval'::regclass")).rows[0];expect(table).toEqual({owner:"jobguard_migration",relrowsecurity:true,relforcerowsecurity:true});
  const cols=await columns(admin,"app.recovery_case_terms_approval");expect(cols).toEqual([...["id","tenant_id","job_id","case_id"].map(name=>({name,type:"uuid"})),...["terms_version","fee_policy_version","eligibility_policy_version","policy_status","environment"].map(name=>({name,type:"text"})),{name:"terms_hash",type:"character(64)"},...["actor_membership_id","command_id","authorization_id"].map(name=>({name,type:"uuid"})),{name:"approved_at",type:"timestamp with time zone"}]);
  const policy=(await admin.query("SELECT polname,polcmd,pg_get_expr(polqual,polrelid) qual,pg_get_expr(polwithcheck,polrelid) check_expr,ARRAY(SELECT r::regrole::text FROM unnest(polroles) r ORDER BY r::regrole::text) roles FROM pg_policy WHERE polrelid='app.recovery_case_terms_approval'::regclass ORDER BY polname")).rows;
- const tenantQual="(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)";
+ const tenantQual="(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)";
+ const workerQual=`(tenant_id = (NULLIF((COALESCE(( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant),
+CASE
+    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_recovery_worker_tenant(job_id, case_id, NULL::uuid, NULL::uuid, 'row'::text)
+    ELSE NULL::uuid
+END))::text, ''::text))::uuid)`;
  // The lifecycle owner must inspect the terms effect; its SELECT-only policy is additive.
  expect(policy).toEqual([
   {polname:"lp5_command_read",polcmd:"r",qual:tenantQual,check_expr:null,roles:["jobguard_command_writer"]},
-  {polname:"tenant_isolation",polcmd:"*",qual:tenantQual,check_expr:tenantQual,roles:["jobguard_migration","jobguard_runtime"]},
+  {polname:"tenant_isolation",polcmd:"*",qual:workerQual,check_expr:tenantQual,roles:["jobguard_migration","jobguard_runtime"]},
  ]);
  const grants=(await admin.query("SELECT pg_get_userbyid(a.grantee) role,a.privilege_type FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.oid='app.recovery_case_terms_approval'::regclass AND a.grantee<>'jobguard_migration'::regrole ORDER BY 1,2")).rows;expect(grants).toEqual([{role:"jobguard_command_writer",privilege_type:"SELECT"},{role:"jobguard_runtime",privilege_type:"SELECT"}]);
  const constraints=(await admin.query("SELECT contype,pg_get_constraintdef(oid) def FROM pg_constraint WHERE conrelid='app.recovery_case_terms_approval'::regclass")).rows;expect(constraints.filter(c=>c.contype==='f')).toHaveLength(4);expect(constraints.filter(c=>c.contype==='u')).toHaveLength(3);expect(constraints.some(c=>c.def.includes("sha256"))).toBe(true);
@@ -103,6 +118,7 @@ it("[T11] populated before N, apply N alone, compare canonical named columns, th
  expect(await rolledBack(async db=>{await db.query("ALTER TABLE app.recovery_message ADD COLUMN ch7_nullable text");return differences(db,proof);})).toEqual([]);
  expect(await rolledBack(async db=>{const fn=(await db.query("SELECT pg_get_functiondef('app.half_even_ratio(bigint,bigint,bigint)'::regprocedure) def")).rows[0].def as string;await db.query(fn.replace("$function$","$function$/* later function control */"));return differences(db,proof);})).toEqual([]);
  expect(await rolledBack(async db=>{await db.query("SET LOCAL session_replication_role=replica");await db.query("INSERT INTO app.recovery_message SELECT gen_random_uuid(),tenant_id,job_id,case_id,case_sequence+1,pack_id,pack_revision,manifest_hash,attachment_hash,attachment_approval_id,gen_random_uuid(),request_hash,case_type,case_revision,amount_pence,currency,sender,recipient,body,policy_version,content_hash,immutable_content,actor_membership_id,environment,created_at FROM app.recovery_message WHERE tenant_id=$1 AND case_id=$2 LIMIT 1",[T,caseId]);return differences(db,proof);})).toEqual([]);
+ context=await testBoundTenantContext(upgrade,T,M);
  // The due follow-up permits a new reminder preview while preserving the delivered message.
  await expect(preview()).rejects.toMatchObject({code:"RECOVERY_TERMS_NOT_APPROVED"});await new RecoveryCaseTermsRepository(runtime).approve(context,job,command(caseId),actor);expect((await preview()).latest!.status).toBe("previewed");
 });

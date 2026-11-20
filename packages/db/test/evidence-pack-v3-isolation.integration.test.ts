@@ -1,6 +1,9 @@
+import { bindOwnSession } from "./tenant-context-test-utils.js";
+import { practiceMaterialPool } from "../src/practice-session.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { prepareEvidencePackV3Sources, withEvidencePackV3Snapshot } from "../src/evidence-pack-v3-sources.js";
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import { asFixtureTenant } from "./recovery-attribution-fixture.js";
 import { createEvidencePackV3Fixture, closeEvidencePackV3Fixture, readOrdinary, recordingPool, type V3Fixture } from "./evidence-pack-v3-fixture.js";
 let f: V3Fixture;
@@ -13,8 +16,11 @@ it("establishes read-only repeatable-read before tenant setup in PostgreSQL", as
     expect((await tx.$client.query("SHOW transaction_read_only")).rows[0].transaction_read_only).toBe("on");
     expect((await tx.$client.query("SELECT current_setting('app.tenant_id') tenant_id")).rows[0].tenant_id).toBe(f.source.tenantId);
   });
-  expect(statements.slice(0, 2)).toEqual([
-    { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY", values: undefined },
+  expect(statements.slice(0, 5)).toEqual([
+    { sql: "BEGIN ISOLATION LEVEL REPEATABLE READ", values: undefined },
+    { sql: "SELECT app.bind_request($1, $2, $3)", values: ["practice", f.auth.digest, f.source.tenantId] },
+    { sql: "SELECT app.current_actor() actor, app.current_tenant() tenant", values: undefined },
+    { sql: "SET TRANSACTION READ ONLY", values: undefined },
     { sql: "SELECT set_config('app.tenant_id', $1, true)", values: [f.source.tenantId] },
   ]);
   expect(statements.at(-1)?.sql).toBe("COMMIT");
@@ -27,13 +33,12 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
   const { ShadowObservationReader, FixtureObservationSources } = await import("../src/shadow-observation-reader.js");
   const { ShadowDetectionRepository } = await import("../src/shadow-detection-repository.js");
   const { detectShadowObservations } = await import("@jobguard/core");
-  await new FinalAccountLockRepository(f.runtime).acceptTerms(f.auth.context, { actorMembershipId: f.auth.membershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+  await new FinalAccountLockRepository(practiceMaterialPool(f.runtime,f.auth.digest)).acceptTerms(f.auth.context, { actorMembershipId: f.auth.membershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
   // Must-surface reads require a live, session-scoped small-builder job. The
   // ordinary pack fixture above has already reached invoiced, so create a live
   // job through the existing quote/activation writers rather than alter its state.
   const { prepareActivationFixtureV3 } = await import("../src/demo-seed.js");
   const { PracticeActivationRepository } = await import("../src/activation-repository.js");
-  const { practiceMaterialPool } = await import("../src/practice-session.js");
   const { RecoveryCaseRepository } = await import("../src/recovery-case-repository.js");
   const { recoverySourceCatalogueV1 } = await import("@jobguard/core");
   const scoped = practiceMaterialPool(f.runtime, f.auth.digest);
@@ -53,7 +58,7 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
     statements.length = 0;
     const before = await runtime.read(f.auth.context, caseId, f.auth.digest), commandId = randomUUID();
     await runtime.request(f.auth.context, caseId, f.auth.digest, { version: "evidence-pack-command.v3", commandId, format: "TEXT", expectedVisibleSourceRevision: before.visibleSourceRevision });
-    await executeEvidencePackV3(f.auth.context, { version: "evidence-pack-task.v3", tenantId: f.source.tenantId, commandId }, worker, async jobId => {
+    await executeEvidencePackV3(verifiedTenantContextForQueuedJob(f.source.tenantId), { version: "evidence-pack-task.v3", tenantId: f.source.tenantId, commandId }, worker, async jobId => {
       const { observations, captures } = await reader.read(f.auth.context, { version: "shadow-observation-read.v1", jobId });
       await detector.persist(f.auth.context, { version: "shadow-detection-batch.v1", jobId, observations, captures, proposals: detectShadowObservations(observations, captures, new Date().toISOString()) });
     }, "synthetic_demo");
@@ -64,7 +69,7 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
     return { bytes: pack.artifactText, revision: before.visibleSourceRevision, sql: statements.map(s => s.sql) };
   };
   const zero = await run();
-  await asFixtureTenant(f.shadow, f.source.tenantId, async db => {
+  await asFixtureTenant(f.admin, f.source.tenantId, async db => {
     for (let n = 0; n < 100; n++) await db.query(`INSERT INTO app.shadow_commercial_signal
       (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
       VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SB02',clock_timestamp(),'Hidden fixture','low','held_for_final_check')`, [f.source.tenantId, jobId, randomUUID()]);
@@ -73,8 +78,10 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
   // At activation, an ordinary read/material fetch must not wait on hidden-table
   // locks. The negative control proves the lock is effective; this is not a
   // claim of identical HTTP latency. Must-surface detection is intentionally separate.
-  const ordinaryMaterial = await asFixtureTenant(f.admin, f.source.tenantId, async db =>
-    (await db.query("SELECT app.evidence_pack_v3_material($1,$2,true) material", [f.source.tenantId, caseId])).rows[0].material);
+  const ordinaryMaterial = await asFixtureTenant(f.admin, f.source.tenantId, async db => {
+    await bindOwnSession(db, f.auth.digest);
+    return (await db.query("SELECT app.evidence_pack_v3_material($1,$2,true) material", [f.source.tenantId, caseId])).rows[0].material;
+  });
   const blocker = await f.admin.connect();
   try {
     await blocker.query("BEGIN");
@@ -85,6 +92,8 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
     })).rejects.toMatchObject({ code: "55P03" });
     await asFixtureTenant(f.admin, f.source.tenantId, async db => {
       await db.query("SET LOCAL lock_timeout='500ms'");
+      // LP-6d: the raw read is the practice owner's own bound request.
+      await bindOwnSession(db, f.auth.digest);
       const result = await db.query(`SELECT app.read_evidence_pack_v3($1,$2,$3) view,
         app.evidence_pack_v3_material($1,$2,true) material`, [f.source.tenantId, caseId, f.auth.digest]);
       expect(result.rows[0].view.visibleSourceRevision).toBe(zero.revision);
@@ -127,7 +136,7 @@ it("ordinary-source bytes and held-request SQL are identical before/after ordina
   };
   const beforeHidden = (await f.admin.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE job_id=$1", [f.source.jobId])).rows[0].n;
   const zeroSources = JSON.stringify(await readOrdinary(f)), zero = await held();
-  await asFixtureTenant(f.shadow, f.source.tenantId, async db => {
+  await asFixtureTenant(f.admin, f.source.tenantId, async db => {
     for (let n = 0; n < 25; n++) await db.query(`INSERT INTO app.shadow_commercial_signal
       (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
       VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:CH8-V',clock_timestamp(),'Fictional held extra','low','held_for_final_check')`,

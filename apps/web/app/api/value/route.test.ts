@@ -59,12 +59,12 @@ it("database errors are redacted", async () => {
  expect((await response.json()).code).toBe("BUSINESS_VALUE_UNAVAILABLE");
 });
 
-it("a company cookie selects the persisted company bridge even alongside a practice cookie",async()=>{
+it("a practice cookie selects practice authority even alongside a company cookie",async()=>{
  const {CompanyValueApplication}=await import("@jobguard/api/workspace");
  const mapped={version:"business-value-result.v1",state:"mapped",tenantId:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",label:"mapped, inspectable",environment:"synthetic_demo",jobs:[],subscription:[]} as const;
  const company=vi.spyOn(CompanyValueApplication.prototype,"readBusiness").mockResolvedValue({...mapped,jobs:[],subscription:[]});
  const response=await route.GET(new Request("https://fictional.invalid/api/value",{headers:{cookie:"jobguard_session=company-cookie; jg_session=practice-cookie"}}));
- expect(response.status).toBe(200);expect(await response.json()).toEqual(mapped);
- expect(company).toHaveBeenCalledWith({sessionToken:"company-cookie",origin:"https://fictional.invalid"},{});
- expect(f.authenticate).not.toHaveBeenCalled();expect(response.headers.get("cache-control")).toBe("private, no-store");
+ expect(response.status).toBe(503);expect(await response.json()).toEqual({version:"business-value-result.v1",state:"unavailable",code:"BUSINESS_VALUE_BINDING_HELD"});
+ expect(company).not.toHaveBeenCalled();
+ expect(f.authenticate).toHaveBeenCalledWith({},"current-cookie");expect(response.headers.get("cache-control")).toBe("private, no-store");
 });

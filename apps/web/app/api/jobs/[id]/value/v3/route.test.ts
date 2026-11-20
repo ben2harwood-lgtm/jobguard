@@ -41,9 +41,9 @@ it("preserves repeated window selectors for the shared strict validator",async()
  expect(f.readJob).toHaveBeenCalledWith(id,{from:["2026-10-01T00:00:00Z","2026-10-02T00:00:00Z"],toExclusive:"2026-11-01T00:00:00Z"});
 });
 
-it("a company job link uses company credentials and keeps practice data out of its read",async()=>{
+it("a job link with both cookies uses practice authority without reading company data",async()=>{
  const {CompanyValueApplication,heldJobValueV3}=await import("@jobguard/api/workspace");
  const company=vi.spyOn(CompanyValueApplication.prototype,"readJob").mockResolvedValue(heldJobValueV3(id));
  const response=await GET(new Request(`https://synthetic.invalid/api/jobs/${id}/value/v3`,{headers:{cookie:"jobguard_session=company-cookie; jg_session=practice"}}),{params:Promise.resolve({id})});
- expect(response.status).toBe(200);expect(company).toHaveBeenCalledWith({sessionToken:"company-cookie",origin:"https://synthetic.invalid"},id,{});expect(f.workspace).not.toHaveBeenCalled();
+ expect(response.status).toBe(200);expect(await response.json()).toEqual({version:"job-value.v3",status:"incomplete",jobId:id,receipt:null});expect(company).not.toHaveBeenCalled();expect(f.workspace).toHaveBeenCalledTimes(1);expect(f.readJob).toHaveBeenCalledWith(id,{});
 });

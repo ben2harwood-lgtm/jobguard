@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-190": {
+      "branches": ["codex/sandbox/later-safety-190"],
+      "allow": [
+        "apps/web/app/api/decisions/route.ts",
+        "apps/web/app/api/decisions/route.test.ts"
+      ]
+    }
+  }
+}

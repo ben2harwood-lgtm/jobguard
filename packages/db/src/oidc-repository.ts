@@ -15,7 +15,7 @@ export class OidcRepository {
   await withTenant(this.pool,context,async db=>{
    const row=(await db.$client.query<{id:string}>("SELECT identity.oidc_create($1,$2::jsonb) id",[digest,JSON.stringify(metadata)])).rows[0]!;
    await this.audit(db.$client,row.id,"sso.oidc.connection.created","identity:oidc");
-  });
+  }, "identity-oidc");
  }
  async save(id:string,request:unknown,connection:unknown,link:{sessionId:string;userId:string;digest:string;csrf:string}|null):Promise<void> {
   await this.transaction(async c=>{

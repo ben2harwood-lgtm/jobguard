@@ -1,3 +1,5 @@
+import { testActorContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { createHash as lp6dHash } from "node:crypto";
 // ENT-3d routines: parity, totality, the writer's own refusals, the guard, the catalogue and the upgrade proof (rule 9).
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -14,17 +16,26 @@ afterAll(async () => { await c?.close(); });
 const where = (x: SiteFixture) => ({ ctx: x.ctx, jobId: x.jobId });
 /** Call a routine as the runtime login inside one tenant transaction (the tenant setting is a parameter so it can be absent, empty or malformed). */
 const UNSET = Symbol("unset");
-async function call(sql: string, args: unknown[], setting: string | null | typeof UNSET = f.p.tenantId, readOnly = false) {
+async function call(sql: string, args: unknown[], setting: string | null | typeof UNSET = f.p.tenantId, readOnly = false, actor?: unknown) {
+ // LP-6d: a named actor that is an active member of the stamped company calls as its own bound request. Anyone
+ // else (no or a malformed setting, a foreign company, a null or revoked actor) binds nothing.
+ const tenant = typeof setting === "string" && /^[0-9a-f-]{36}$/iu.test(setting) ? setting.toLowerCase() : undefined;
+ const member = typeof actor === "string" && tenant
+  ? (await c.admin.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())", [tenant, actor])).rows[0] : undefined;
+ const credential = member ? lp6dHash("sha256").update(`lp6-test:${tenant}:${actor as string}`).digest("hex") : undefined;
+ if (tenant && credential) await testBoundTenantContext(c.admin, tenant, actor as string, credential);
  const client = await c.runtime.connect();
  try {
-  await client.query(readOnly ? "BEGIN READ ONLY" : "BEGIN");
+  await client.query("BEGIN");
   if (setting !== UNSET) await client.query("SELECT set_config('app.tenant_id',$1,true)", [setting]);
+  if (credential) await client.query("SELECT app.bind_request('real',$1,$2)", [credential, tenant]);
+  if (readOnly) await client.query("SET TRANSACTION READ ONLY");
   const rows = (await client.query(sql, args)).rows; await client.query("COMMIT"); return rows;
  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 const record = (x: SiteFixture, over: Partial<Record<"actor" | "job" | "command" | "confirmation" | "description" | "note" | "photo" | "shown", unknown>> = {}, setting: string | null | typeof UNSET = x.p.tenantId) => {
  const a = { actor: x.members.supervisor.member.membershipId, job: x.jobId, command: randomUUID(), confirmation: randomUUID(), description, note, photo: null, shown: shownFor(x, null), ...over };
- return call("SELECT outcome,reason_code,content_sha256,document_sha256 FROM app.ent3d_record_resident_confirmation($1,$2,$3,$4,$5,$6,$7,$8)", [a.actor, a.job, a.command, a.confirmation, a.description, a.note, a.photo, a.shown], setting);
+ return call("SELECT outcome,reason_code,content_sha256,document_sha256 FROM app.ent3d_record_resident_confirmation($1,$2,$3,$4,$5,$6,$7,$8)", [a.actor, a.job, a.command, a.confirmation, a.description, a.note, a.photo, a.shown], setting, false, a.actor);
 };
 const refusedWith = (reason: string) => [{ outcome: "refused", reason_code: reason, content_sha256: null, document_sha256: null }];
 
@@ -50,11 +61,11 @@ describe("ENT-3d routines", () => {
   expect(await call(sql, [null, null, null, null, null, null], f.p.tenantId, true)).toEqual([{ decision: "photo_refused", reason_code: "photo_not_accepted", photo_sha256: null, content_sha256: null }]);
   for (const setting of [null, "", "not-a-uuid", UNSET]) for (const photoId of [p.id, null]) expect(await call(sql, [f.jobId, description, note, photoId, null, null], setting, true), String(setting)).toEqual([{ decision: "photo_refused", reason_code: "photo_not_accepted", photo_sha256: null, content_sha256: null }]);
   expect(await call(sql, [f.jobId, description, note, p.id, null, null], other.p.tenantId, true)).toEqual([{ decision: "photo_refused", reason_code: "photo_not_accepted", photo_sha256: null, content_sha256: null }]);
-  expect(await call(sql, [f.jobId, description, note, p.id, null, null], f.p.tenantId.toUpperCase(), true)).toEqual([{ decision: "accepted", reason_code: "accepted", photo_sha256: p.sha256, content_sha256: shownFor(f, p.sha256) }]);
-  for (const nullArg of [0, 1, 2]) { const args = [f.jobId, description, note, null, null, null]; args[nullArg] = null; expect((await call(sql, args, f.p.tenantId, true))[0]!.decision).toBe("photo_refused"); }
+  expect(await call(sql, [f.jobId, description, note, p.id, null, null], f.p.tenantId.toUpperCase(), true, f.p.membershipId)).toEqual([{ decision: "accepted", reason_code: "accepted", photo_sha256: p.sha256, content_sha256: shownFor(f, p.sha256) }]);
+  for (const nullArg of [0, 1, 2]) { const args = [f.jobId, description, note, null, null, null]; args[nullArg] = null; expect((await call(sql, args, f.p.tenantId, true, f.p.membershipId))[0]!.decision).toBe("photo_refused"); }
   // An unknown confirmation is refused; the photo cannot be the confirmation.
-  expect(await call(sql, [f.jobId, description, note, null, randomUUID(), null], f.p.tenantId, true)).toEqual([{ decision: "confirmation_refused", reason_code: "confirmation_not_bound", photo_sha256: null, content_sha256: null }]);
-  expect((await call(sql, [f.jobId, description, note, p.id, p.id, null], f.p.tenantId, true))[0]!.decision).toBe("confirmation_refused");
+  expect(await call(sql, [f.jobId, description, note, null, randomUUID(), null], f.p.tenantId, true, f.p.membershipId)).toEqual([{ decision: "confirmation_refused", reason_code: "confirmation_not_bound", photo_sha256: null, content_sha256: null }]);
+  expect((await call(sql, [f.jobId, description, note, p.id, p.id, null], f.p.tenantId, true, f.p.membershipId))[0]!.decision).toBe("confirmation_refused");
   expect(await evidenceCounts(c, f)).toEqual(before);
  });
  it("[E22] routine 4 refuses by its own authority check, each writing nothing; the same content again is existing, a different one conflicts", async () => {
@@ -65,7 +76,9 @@ describe("ENT-3d routines", () => {
   expect(await record(x, { job: randomUUID() })).toEqual(refusedWith("not_permitted"));
   expect(await record(x, { job: await smallJob(c, x) })).toEqual(refusedWith("not_permitted"));
   const foreign = await siteFixture(c); expect(await record(x, { job: foreign.jobId })).toEqual(refusedWith("not_permitted"));
-  expect(await record(x, {}, foreign.p.tenantId)).toEqual(refusedWith("not_permitted"));
+  // Raw, class (a): a request naming a company its actor is not bound to binds nothing, so the binding check
+  // refuses first; unchanged() below proves no writes.
+  await expect(record(x, {}, foreign.p.tenantId)).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
   for (const setting of [null, "", "not-a-uuid", UNSET]) expect(await record(x, {}, setting), String(setting)).toEqual(refusedWith("not_permitted"));
   for (const key of ["actor", "job", "command", "confirmation", "description", "note", "shown"] as const) expect(await record(x, { [key]: null }), key).toEqual(refusedWith("not_permitted"));
   expect(await record(x, { photo: randomUUID(), shown: shownFor(x, sha("x")) })).toEqual(refusedWith("photo_not_accepted"));
@@ -76,7 +89,9 @@ describe("ENT-3d routines", () => {
   const revoked = await siteFixture(c); await command(c, revoked, { kind: "grant.revoke", grantId: revoked.members.supervisor.grant });
   expect(await record(revoked)).toEqual(refusedWith("not_permitted"));
   const gone = await siteFixture(c); await command(c, gone, { kind: "membership.revoke", membershipId: gone.members.supervisor.member.membershipId });
-  expect(await record(gone)).toEqual(refusedWith("not_permitted"));
+  // Raw, class (a): the revoked membership leaves no active credential, so no request binds and the binding check refuses first;
+  // the count below proves nothing was written.
+  await expect(record(gone)).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
   const cancelled = await siteFixture(c); await cancel(c, cancelled);
   expect(await record(cancelled)).toEqual(refusedWith("not_permitted"));
   for (const y of [revoked, gone, cancelled]) expect((await c.admin.query("SELECT count(*)::int n FROM app.evidence_object WHERE tenant_id=$1 AND evidence_type='resident_confirmation'", [y.p.tenantId])).rows[0]!.n).toBe(0);
@@ -89,7 +104,7 @@ describe("ENT-3d routines", () => {
   expect(await record(x, { confirmation, note: "Fictional other note", shown: shownFor(x, null, { note: "Fictional other note" }) })).toEqual([{ outcome: "conflict", reason_code: "conflict", content_sha256: null, document_sha256: null }]);
   expect(await evidenceCounts(c, x)).toEqual(afterFirst);
   // a command id that already has a receipt and no document conflicts
-  const used = randomUUID(); await new SiteExtraRepository(c.runtime).logSiteExtra(x.ctx, x.members.supervisor.member, { commandId: used, jobId: x.jobId, note, description });
+  const used = randomUUID(); await new SiteExtraRepository(c.runtime).logSiteExtra(await testActorContext(c.admin, x.ctx, x.members.supervisor.member), x.members.supervisor.member, { commandId: used, jobId: x.jobId, note, description });
   const afterUsed = await evidenceCounts(c, x);
   expect(await record(x, { command: used })).toEqual([{ outcome: "conflict", reason_code: "conflict", content_sha256: null, document_sha256: null }]);
   expect(await evidenceCounts(c, x)).toEqual(afterUsed);
@@ -99,13 +114,13 @@ describe("ENT-3d routines", () => {
   expect(await record(x, { confirmation: half })).toEqual([{ outcome: "conflict", reason_code: "conflict", content_sha256: null, document_sha256: null }]);
  });
  it("[E23] routine 5 fails closed for an absent, empty or malformed tenant setting, a missing origin and a missing variation, and passes for a note-only extra", async () => {
-  const x = await siteFixture(c), made = await new SiteExtraRepository(c.runtime).logSiteExtra(x.ctx, x.members.supervisor.member, v3(x));
+  const x = await siteFixture(c), made = await new SiteExtraRepository(c.runtime).logSiteExtra(await testActorContext(c.admin, x.ctx, x.members.supervisor.member), x.members.supervisor.member, v3(x));
   const sql = "SELECT app.ent3d_require_site_extra_evidence($1,$2)";
   for (const setting of [null, "", "not-a-uuid", UNSET]) await expect(call(sql, [x.jobId, made.variationId], setting), String(setting)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
-  await expect(call(sql, [x.jobId, randomUUID()])).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
-  await expect(call(sql, [randomUUID(), made.variationId], x.p.tenantId)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
-  await expect(call(sql, [x.jobId, made.variationId], f.p.tenantId)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
-  await expect(call(sql, [x.jobId, made.variationId], x.p.tenantId)).resolves.toEqual([{ ent3d_require_site_extra_evidence: "" }]);
+  await expect(call(sql, [x.jobId, randomUUID()], x.p.tenantId, false, x.p.membershipId)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
+  await expect(call(sql, [randomUUID(), made.variationId], x.p.tenantId, false, x.p.membershipId)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
+  await expect(call(sql, [x.jobId, made.variationId], f.p.tenantId, false, f.p.membershipId)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
+  await expect(call(sql, [x.jobId, made.variationId], x.p.tenantId, false, x.p.membershipId)).resolves.toEqual([{ ent3d_require_site_extra_evidence: "" }]);
  });
  it("[E24] the catalogue shows exactly the five routines with the stated signatures, volatility, ownership and grants", async () => {
   const rows = (await c.admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args,pg_get_function_result(p.oid) result,p.provolatile,p.prosecdef,p.proconfig,pg_get_userbyid(p.proowner) owner,
@@ -184,7 +199,7 @@ describe("ENT-3d upgrade proof (rule 9)", () => {
     expect(Number(saved.byte_length)).toBe(bytes.length);
     return { id, sha256, objectKey };
    });
-   await extras.raiseExtra(x.ctx, direct(x, x.members.supervisor)); await extras.raiseExtra(x.ctx, direct(x, x.members.supervisor, { evidenceId: p.id }));
+   await extras.raiseExtra(await testActorContext(up.admin, x.ctx, x.members.supervisor.member), direct(x, x.members.supervisor)); await extras.raiseExtra(await testActorContext(up.admin, x.ctx, x.members.supervisor.member), direct(x, x.members.supervisor, { evidenceId: p.id }));
    const run: Run = (sql, values) => up.admin.query(sql, values);
    const preColumns: Record<string, string[]> = {}, preKeys: Record<string, string[]> = {};
    for (const t of tables) {

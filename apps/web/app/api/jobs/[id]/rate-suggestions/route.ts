@@ -14,7 +14,7 @@ export async function POST(request: Request, { params }: Params) {
     refuseRateIdentity(request);
     if (new URL(request.url).search) throw new Error("INVALID_ACCEPTANCE");
     rateOrigin(request);
-    const { application, token } = await rateSession();
+    const { application, token } = await rateSession(request);
     return NextResponse.json(await application.accept(token, (await params).id, await request.json()), { headers: rateHeaders });
   } catch (error) { return rateFailure(error); }
 }

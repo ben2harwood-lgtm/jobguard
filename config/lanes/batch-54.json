@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-54": {
+      "branches": [
+        "codex/sandbox/batch-54"
+      ],
+      "note": "RED: union of later-safety-40, 50, 35, 39, 47, 38 and 65; no migrations. NOPR.",
+      "allow": [
+        "apps/api/src/fee-collection/postgres-reservation-store.test.ts",
+        "apps/api/src/fee-collection/postgres-reservation-store.ts",
+        "apps/web/app/lib/merchant-order-server.test.mts",
+        "apps/web/app/lib/merchant-order-server.ts",
+        "apps/web/e2e/M2-2-S.spec.ts",
+        "packages/db/src/supplier-document-repository.ts",
+        "packages/db/test/audit-api-file-supplier-document.test.ts",
+        "packages/db/test/customer-signin-lock-order.integration.test.ts",
+        "packages/db/test/fee-reservation.integration.test.ts",
+        "packages/db/test/recovery.integration.test.ts",
+        "packages/db/test/supplier-documents.integration.test.ts"
+      ]
+    }
+  }
+}

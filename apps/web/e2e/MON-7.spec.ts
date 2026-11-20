@@ -23,7 +23,7 @@ test("MON-7a cited property facts persist for a homeowner across reload, Jobs an
   const forged=await page.request.post(`/api/jobs/${id}/prevention-checks/company`,{data:{...personCommand,commandId:crypto.randomUUID(),customerType:"business",isIndividual:false}});expect(forged.status()).toBe(400);
   for(const fact of before.property){const card=page.getByTestId(`prevention-${fact.kind}`);await expect(card).toContainText(fact.source.id);await expect(card).toContainText(fact.source.name);await expect(card).toContainText(fact.retrievedAt);}
   await page.reload();await panel(page,id);await expect(page.getByTestId("prevention-article_4-status")).toHaveText("unknown");expect((await read(page,id)).property).toEqual(before.property);
-  await page.goto("/");await page.locator(`a[href="/jobs/${id}"]`).first().click();await panel(page,id);
+  await page.goto("/classic");await page.locator(`a[href="/jobs/${id}"]`).first().click();await panel(page,id);
   expect((await read(page,id)).property).toEqual(before.property);
   const returning=await browser.newContext({baseURL:"http://127.0.0.1:3000",viewport:page.viewportSize()!,storageState:await page.context().storageState()});
   const stranger=await browser.newContext({baseURL:"http://127.0.0.1:3000"});const missing=await browser.newContext({baseURL:"http://127.0.0.1:3000"});

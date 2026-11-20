@@ -9,6 +9,7 @@ const fields = ["tenantId", "tenant_id", "requested_tenant_id", "membershipId", 
 function fixture() {
  const session = randomUUID(), tenant = randomUUID(), member = randomUUID(), user = randomUUID(), row = randomUUID();
  const client = { query: vi.fn(async (sql: string): Promise<{ rows: Record<string, unknown>[] }> => {
+  if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: member, tenant }] };
   if (sql.includes("revoke_contractor")) return { rows: [{ result: { session: row, member, revokedAt: "2026-10-12T12:00:00.123456Z" } }] };
   if (sql.includes("current_setting")) return { rows: [{ tenant_id: tenant }] };
   if (sql.includes("lock_audit_head")) return { rows: [] };
@@ -52,7 +53,7 @@ it("[PH17] passes the real stamped context whole through withTenant and returns 
  expect(f.client.query.mock.calls.at(-1)?.[0]).toBe("COMMIT");
 });
 it.each([null, {}, { unexpected: true }])("[PH17] refuses an invalid database answer and rolls back", async result => {
- const f = fixture(); f.client.query.mockImplementation(async sql => sql.includes("revoke_contractor") ? { rows: [{ result }] } : { rows: [] });
+ const f = fixture(); f.client.query.mockImplementation(async sql => sql === "SELECT app.current_actor() actor, app.current_tenant() tenant" ? { rows: [{ actor: f.member, tenant: f.tenant }] } : sql.includes("revoke_contractor") ? { rows: [{ result }] } : { rows: [] });
  await expect(f.app.revoke(f.principal, body)).rejects.toMatchObject({ code: "PRACTICE_SESSION_UNAVAILABLE" });
  expect(f.client.query.mock.calls.some(call => (call[0].includes("INSERT INTO app.audit_event") || call[0].includes("FROM app.append_audit(")))).toBe(false);
  expect(f.client.query.mock.calls.at(-1)?.[0]).toBe("ROLLBACK");
@@ -67,7 +68,7 @@ it("[PH17] strips all unexpected PostgreSQL text from thrown errors and public f
  expect(contractorPracticeSessionHttpFailure({ code: "MODE_FORBIDDEN", detail: "private" }).status).toBe(503);
 });
 it.each(["MODE_FORBIDDEN", "UNAUTHENTICATED", "PRACTICE_SESSION_IMMUTABLE", "PRACTICE_SESSION_AUDIT_REQUIRED", "private PostgreSQL diagnostic"])("[PH17] repository translates only exact routine message %s", async message => {
- const f = fixture(); f.client.query.mockImplementation(async sql => { if (sql.includes("revoke_contractor")) throw Object.assign(new Error(message), { detail: f.session }); return { rows: [] }; });
+ const f = fixture(); f.client.query.mockImplementation(async sql => { if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") return { rows: [{ actor: f.member, tenant: f.tenant }] }; if (sql.includes("revoke_contractor")) throw Object.assign(new Error(message), { detail: f.session }); return { rows: [] }; });
  const error = await f.app.revoke(f.principal, body).catch(error => error);
  expect(error).toMatchObject({ code: message === "MODE_FORBIDDEN" || message === "UNAUTHENTICATED" ? message : "PRACTICE_SESSION_UNAVAILABLE" });
  expect(error).not.toHaveProperty("detail"); expect(error).not.toHaveProperty("cause"); expect(error.message + error.stack).not.toContain(f.session);

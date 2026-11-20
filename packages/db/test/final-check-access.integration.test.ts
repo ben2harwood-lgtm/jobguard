@@ -1,6 +1,6 @@
 import {afterAll,beforeAll,expect,it} from "vitest";
 import {randomUUID} from "node:crypto";
-import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,availableFinalCheck,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
+import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,availableFinalCheck,finalCheckTenant,finalCheckShadowJob,type FinalCheckFixture} from "./final-check-fixture.js";
 import {FinalCheckRepository} from "../src/final-check-repository.js";
 let f:FinalCheckFixture;beforeAll(async()=>{f=await createFinalCheckFixture()},60000);afterAll(async()=>closeFinalCheckFixture(f));
 const tables=['final_check_disposition_binding','final_check_manifest','final_check_manifest_source','final_check_processing_source','final_check_reveal_proof','final_check_run_binding','final_check_source_attempt'];
@@ -10,7 +10,13 @@ it("SV5-23 actual catalogs prove ownership, FORCE RLS, qualified FKs and no runt
  for(const table of tables){await expect(f.runtime.query(`SELECT * FROM app.${table}`)).rejects.toMatchObject({code:'42501'});}
  const grants=(await f.admin.query("SELECT p.proname,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_shadow',p.oid,'EXECUTE') shadow FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname IN('begin_final_check','read_final_check_manifest','record_final_check_source_result','complete_final_check','read_final_check_reveal','record_final_check_disposition','read_final_check_disputes')")).rows;
  expect(grants).toHaveLength(7);for(const g of grants){const builder=['read_final_check_reveal','record_final_check_disposition','read_final_check_disputes'].includes(g.proname);expect(g.runtime).toBe(builder);expect(g.shadow).toBe(!builder);}
- const fks=(await f.admin.query("SELECT c.conname,ref.relname referenced,array(SELECT a.attname FROM unnest(c.conkey) WITH ORDINALITY k(num,ord) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.num ORDER BY k.ord)::text[] names FROM pg_constraint c JOIN pg_class owner ON owner.oid=c.conrelid JOIN pg_class ref ON ref.oid=c.confrelid WHERE c.contype='f' AND owner.relname=ANY($1::text[])",[tables])).rows;expect(fks).toHaveLength(21);for(const fk of fks){expect(Array.isArray(fk.names)).toBe(true);expect(fk.names).toContain('tenant_id');if(fk.referenced==='evidence_upload')expect(fk.names).toEqual(['tenant_id','upload_id']);else if(!['audit_event','command_receipt','membership'].includes(fk.referenced))expect(fk.names).toContain('job_id');}
+ const fks=(await f.admin.query("SELECT c.conname,ref.relname referenced,array(SELECT a.attname FROM unnest(c.conkey) WITH ORDINALITY k(num,ord) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.num ORDER BY k.ord)::text[] names FROM pg_constraint c JOIN pg_class owner ON owner.oid=c.conrelid JOIN pg_class ref ON ref.oid=c.confrelid WHERE c.contype='f' AND owner.relname=ANY($1::text[])",[tables])).rows;expect(fks).toHaveLength(22);expect(fks.filter(fk=>fk.conname==='final_check_attempt_predecessor')).toEqual([{conname:'final_check_attempt_predecessor',referenced:'final_check_manifest',names:['tenant_id','job_id','predecessor_manifest_id']}]);for(const fk of fks){expect(Array.isArray(fk.names)).toBe(true);expect(fk.names).toContain('tenant_id');if(fk.referenced==='evidence_upload')expect(fk.names).toEqual(['tenant_id','upload_id']);else if(!['audit_event','command_receipt','membership'].includes(fk.referenced))expect(fk.names).toContain('job_id');}
+ const privateHelpers=(await f.admin.query(`SELECT p.proname,pg_get_userbyid(p.proowner) owner,p.prosecdef,p.proconfig,
+  has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_shadow',p.oid,'EXECUTE') shadow,
+  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END FROM aclexplode(p.proacl) a WHERE a.privilege_type='EXECUTE' AND a.grantee<>p.proowner ORDER BY 1)::text[] grantees
+  FROM pg_proc p WHERE p.oid=ANY($1::text[]::regprocedure[]::oid[]) ORDER BY p.proname`,[['app.final_check_omitted_uploads(uuid,uuid,uuid)','app.require_final_check_rerun(uuid,uuid,uuid)','app.verify_final_check_predecessor_structure(uuid,uuid,uuid,uuid,timestamptz)']])).rows;
+ expect(privateHelpers.map(r=>r.proname)).toEqual(['final_check_omitted_uploads','require_final_check_rerun','verify_final_check_predecessor_structure']);
+ for(const helper of privateHelpers)expect(helper).toMatchObject({owner:'jobguard_migration',prosecdef:false,proconfig:['search_path=pg_catalog, app'],runtime:false,shadow:false,grantees:[]});
 });
 it("SV5-21 replay rechecks revocation/expiry and wrong session identity; SV5-22 unknown/foreign job refuses uniformly",async()=>{
  const a=await seedFinalCheckJob(f),r=await availableFinalCheck(f,a),repo=new FinalCheckRepository(f.runtime);await repo.disposition(a.context,a.jobId,a.digest,r.body);
@@ -25,11 +31,11 @@ it("SV5-22 missing/malformed tenant fails closed and pooled transactions lose co
 });
 it("SV5-24 before lock zero/many signals yield identical controlled response",async()=>{
  const a=await seedFinalCheckJob(f),repo=new FinalCheckRepository(f.runtime),before=await repo.read(a.context,a.jobId,a.digest);
- await finalCheckTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Synthetic hidden extra','low')",[a.tenantId,a.jobId,randomUUID(),randomUUID()]));
+ await finalCheckShadowJob(f.shadow,a.tenantId,a.jobId,db=>db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Synthetic hidden extra','low')",[a.tenantId,a.jobId,randomUUID(),randomUUID()]));
  expect(await repo.read(a.context,a.jobId,a.digest)).toEqual(before);expect(before).toEqual({state:'unlocked',items:[]});
 });
 it("SV5-22 own source integrity validator refuses an after-cutoff or same-tenant wrong-job source",async()=>{
- const a=await seedFinalCheckJob(f);await a.lock();const m=await new FinalCheckRepository(f.shadow).begin(a.context,a.jobId);
+ const a=await seedFinalCheckJob(f);await a.lock();const m=await new FinalCheckRepository(f.shadow).begin(a.workerContext,a.jobId);
  await expect(finalCheckTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.final_check_processing_source(tenant_id,job_id,manifest_id,id,source_kind,source_ref,source_received_at,adapter_version,input_hash,processable,frozen_input) VALUES($1,$2,$3,$4,'pending_upload',$4,clock_timestamp()+interval '1 day','synthetic-observation.v1',$5,false,'{}')",[a.tenantId,a.jobId,m.id,randomUUID(),'a'.repeat(64)]))).rejects.toThrow('FINAL_CHECK_SOURCE_CHANGED');
 });
 it("SV5-24 before-lock disposition refuses before any hidden signal/proof lookup",async()=>{
@@ -41,8 +47,19 @@ it("SV5-21 expired session cannot execute or replay a disposition",async()=>{
 it("SV5-24 real builder requests preserve identical runtime statement sequence with zero/many pre-lock signals",async()=>{
  const {FinalCheckApplication}=await import('../../../apps/api/src/final-check.application.js');const {readFile}=await import('node:fs/promises');const a=await seedFinalCheckJob(f);
  process.env.JOBGUARD_ENV='synthetic_demo';const app=new FinalCheckApplication(f.runtime,a.sessionId);
- async function read(){const start=f.logs.length,out=[await app.get(a.jobId),await app.disputes(a.jobId)];await new Promise<void>(resolve=>setTimeout(resolve,25));const statements=f.logs.slice(start).filter(s=>s.includes(`SV5:${f.runtime.options.user}:`)&&/(?:statement|execute [^:]+):/u.test(s)).map(s=>s.replace(/^.*?(?:statement|execute [^:]+):/su,''));expect(statements.length).toBeGreaterThan(0);expect(statements.join('\n')).not.toMatch(/\bshadow_commercial_signal\b|\bshadow_signal_\w+\b/u);return {out,statements};}
- const zero=await read();await finalCheckTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Synthetic hidden proposal','low')",[a.tenantId,a.jobId,randomUUID(),randomUUID()]));expect(await read()).toEqual(zero);
+ async function read(){
+  const tag=randomUUID(),start=`sv5-start-${tag}`,end=`sv5-end-${tag}`;
+  await f.runtime.query(`SELECT 1 /* ${start} */`);
+  const out=[await app.get(a.jobId),await app.disputes(a.jobId)];
+  await f.runtime.query(`SELECT 1 /* ${end} */`);
+  await expect.poll(()=>f.logs.join('').includes(end)).toBe(true);
+  const lines=f.logs.join('').split('\n'),first=lines.findIndex(line=>line.includes(start)),last=lines.findIndex(line=>line.includes(end));
+  expect(first).toBeGreaterThanOrEqual(0);expect(last).toBeGreaterThan(first);
+  const statements=lines.slice(first+1,last).filter(s=>s.includes(`SV5:${f.runtime.options.user}:`)&&/(?:statement|execute [^:]+):/u.test(s)).map(s=>s.replace(/^.*?(?:statement|execute [^:]+):/u,''));
+  expect(statements.length).toBeGreaterThan(0);expect(statements.join('\n')).not.toMatch(/\bshadow_commercial_signal\b|\bshadow_signal_\w+\b/u);
+  return {out,statements};
+ }
+ const zero=await read();await finalCheckShadowJob(f.shadow,a.tenantId,a.jobId,db=>db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),'Synthetic hidden proposal','low')",[a.tenantId,a.jobId,randomUUID(),randomUUID()]));expect(await read()).toEqual(zero);
  // Inspect this piece's own routine branch as well: server log_statement shows outer calls, not nested PL/pgSQL reads.
  const sql=await readFile(new URL('../migrations/0238_final_check.sql',import.meta.url),'utf8'),routine=sql.slice(sql.indexOf('CREATE FUNCTION app.read_final_check_reveal'),sql.indexOf('CREATE FUNCTION app.record_final_check_disposition'));
  expect(routine.indexOf("IF NOT FOUND THEN RETURN jsonb_build_object('state','unlocked'")).toBeLessThan(routine.indexOf('app.shadow_commercial_signal'));

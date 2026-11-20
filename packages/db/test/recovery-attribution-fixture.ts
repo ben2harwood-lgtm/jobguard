@@ -1,3 +1,5 @@
+import { practiceMaterialPool } from "../src/practice-session.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
 import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 // Synthetic parent fixtures only. No source qualification or financial authority is implied.
 import { randomUUID } from "node:crypto";
@@ -5,16 +7,17 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool, type PoolClient } from "pg";
+import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { recoveryAttributionRevisionV1, attributionPredicates, candidateM1TaxPolicy, money, addMoney } from "@jobguard/core";
 import { migrate } from "../src/migrate.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { unattributedTermsHistory } from "./sv5pre-fixtures.js";
 export const LOCK_OWNER = "40000000-0000-4000-8000-000000000004";
 export const LOCK_USER = "30000000-0000-4000-8000-000000000003";
 export const LOCK_HASH = "a".repeat(64);
-export type LockFixture = { postgres: EmbeddedPostgres; directory: string; port: number; credential: string; admin: Pool; runtime: Pool; shadow: Pool; owner: Pool };
+export type LockFixture = { postgres: EmbeddedPostgres; directory: string; port: number; credential: string; admin: Pool; runtime: Pool; shadow: Pool; owner: Pool; connectionEnds: Promise<void>[] };
 export async function createLockFixture(install = true): Promise<LockFixture> {
  const directory = await mkdtemp(join(tmpdir(), "sv4-pg16-")), port = await freePort(58400, 250), credential = randomUUID();
  const connection = { host: "127.0.0.1", port, database: "postgres", user: "postgres", password: credential };
@@ -23,7 +26,13 @@ export async function createLockFixture(install = true): Promise<LockFixture> {
  const bootstrap = new Pool(connection);
  await bootstrap.query("CREATE DATABASE jobguard_synthetic_demo"); await bootstrap.end();
  connection.database="jobguard_synthetic_demo";
- const admin = new Pool(connection);
+ const connectionEnds: Promise<void>[] = [];
+ const fixturePool = (config: PoolConfig) => {
+  const pool = new Pool(config);
+  pool.on("connect", client => connectionEnds.push(new Promise<void>(resolve => client.once("end", resolve))));
+  return pool;
+ };
+ const admin = fixturePool(connection);
  if (install) {
   for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner"]) await admin.query(`DO $do$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS; END IF; END $do$`);
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
@@ -32,15 +41,28 @@ export async function createLockFixture(install = true): Promise<LockFixture> {
  for (const role of ["jobguard_runtime", "jobguard_shadow", "jobguard_migration"]) {
   const login = `sv4_${randomUUID().replaceAll("-", "")}`;
   if (install) await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${credential}'; GRANT ${role} TO ${login}`);
-  pools.push(new Pool({ ...connection, user: install ? login : "postgres", max: 4 }));
+  pools.push(fixturePool({ ...connection, user: install ? login : "postgres", max: 4 }));
  }
- return { postgres, directory, port, credential, admin, runtime: pools[0]!, shadow: pools[1]!, owner: pools[2]! };
+ return { postgres, directory, port, credential, admin, runtime: pools[0]!, shadow: pools[1]!, owner: pools[2]!, connectionEnds };
 }
-export async function closeLockFixture(f: LockFixture) { await closeTestPools(f.runtime, f.shadow, f.owner, f.admin); await f.postgres.stop(); await rm(f.directory, { recursive: true, force: true }); }
+export async function closeLockFixture(f: LockFixture) {
+ await closeTestPools(f.runtime, f.shadow, f.owner, f.admin);
+ await Promise.all(f.connectionEnds);
+ await f.postgres.stop();
+ await rm(f.directory, { recursive: true, force: true });
+}
 export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>): Promise<T> {
  const db = await pool.connect();
  try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); const result = await work(db); await db.query("COMMIT"); return result; }
  catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
+}
+/** Retain the restricted writer role with the fixture owner's actual request binding. */
+export async function boundAttributionOwner<T>(f:LockFixture,tenantId:string,work:(db:PoolClient)=>Promise<T>):Promise<T>{
+ return asFixtureTenant(f.admin,tenantId,async db=>{
+  await bindTestClient(f.admin,db,tenantId,LOCK_OWNER);
+  await db.query("SET LOCAL ROLE jobguard_migration");
+  return work(db);
+ });
 }
 export async function seedAccount(admin: Pool, tenantId: string = randomUUID(), net = 3360000, practiceDigest: string | null = null) {
  const tax=candidateM1TaxPolicy.calculateGroup(money(net),"standard_rate_20"),gross=addMoney(money(net),tax);
@@ -50,7 +72,10 @@ export async function seedAccount(admin: Pool, tenantId: string = randomUUID(), 
  const account = randomUUID();
  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic SV-4')", [account, tenantId]);
  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING", [LOCK_OWNER, tenantId, account, LOCK_USER]);
+ const requiresBinding=(await admin.query("SELECT to_regprocedure('app.lp11_policy_tenant()') installed")).rows[0].installed;
  await asFixtureTenant(admin, tenantId, async db => {
+  if(requiresBinding && practiceDigest!==null) await db.query("SELECT app.bind_request('practice',$1,$2)",[practiceDigest,tenantId]);
+  else if(requiresBinding) await bindTestClient(admin,db,tenantId,LOCK_OWNER);
   if (practiceDigest !== null && (await db.query("SELECT to_regclass('app.lp_job_insert_permit') IS NOT NULL installed")).rows[0].installed) await permitPracticeHomeJob(db, {tenantId,jobId,actorMembershipId:LOCK_OWNER,
    title:"Fictional final account",status:"live",practiceSessionDigest:practiceDigest});
   await db.query("INSERT INTO app.job(id,tenant_id,title,status,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional final account','live',$3::text,CASE WHEN $3::text IS NULL THEN NULL ELSE 'home' END)", [jobId, tenantId, practiceDigest]);
@@ -63,12 +88,20 @@ export async function seedAccount(admin: Pool, tenantId: string = randomUUID(), 
    VALUES($1,$2,$3,$4,'baseline',$5,$6,$5,'Fictional baseline',$7,1)`, [lineId, tenantId, jobId, revisionId, baselineId, scopeItemId, net]);
   await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3", [revisionId, tenantId, draftId]);
  });
- return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context: testTenantContext(tenantId), input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
+ return { tenantId, jobId, scopeItemId, baselineId, draftId, revisionId, lineId, context: (await admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? await testBoundTenantContext(admin, tenantId, LOCK_OWNER) : testTenantContext(tenantId, { membershipId: LOCK_OWNER }), input: { jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), finalAccountRevisionId: revisionId, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" as const } };
 }
 export async function prepareLock(f: LockFixture, a: Awaited<ReturnType<typeof seedAccount>>) {
- const repo = new FinalAccountLockRepository(f.runtime);
- await repo.acceptTerms(a.context, { actorMembershipId: LOCK_OWNER, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
- await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: LOCK_OWNER, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
+ const digest=(await f.admin.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2",[a.tenantId,a.jobId])).rows[0].practice_session_digest;
+ if(digest){
+  const principal=(await f.runtime.query("SELECT * FROM app.authenticate_practice_session($1,$2)",[digest,a.tenantId])).rows[0];
+  a.context=verifiedTenantContextFromMembership({tenantId:a.tenantId,membershipId:principal.membership_id,identityUserId:principal.identity_user_id} as AuthenticatedMembership,{kind:"practice",credential:digest});
+  // The bound practice session acts as its own member; lock with that same member.
+  a.input={...a.input,actorMembershipId:principal.membership_id};
+ }
+ const repo = new FinalAccountLockRepository(digest?practiceMaterialPool(f.runtime,digest):f.runtime);
+ if (!(await unattributedTermsHistory(f.admin, a.tenantId, a.jobId, a.input.actorMembershipId)))
+  await repo.acceptTerms(a.context, { actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(), termsVersion: "synthetic_final_check_terms.v1" });
+ await repo.disposition(a.context, { jobId: a.jobId, actorMembershipId: a.input.actorMembershipId, commandId: randomUUID(), scopeItemId: a.scopeItemId, disposition: "done" });
  return repo;
 }
 

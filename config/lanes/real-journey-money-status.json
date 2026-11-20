@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-journey-money-status": {
+      "branches": [
+        "codex/sandbox/real-journey-money-status"
+      ],
+      "note": "RED: real-journey-money-status. Builder-visible saved acceptance, invoice payment and locked-bill projections only. NOPR=1; no migrations or writes.",
+      "allow": [
+        "apps/web/app/(designed)/designed-ui.tsx",
+        "apps/web/app/(designed)/home-screens.tsx",
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/real-designed-screens.test.tsx",
+        "apps/web/e2e/real-journey-money-status.spec.ts"
+      ]
+    }
+  }
+}

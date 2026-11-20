@@ -1,9 +1,9 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { pauseCommercialOutbound } from "./commercial-outbound-pause-fixture.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
 import { SubscriptionExecutor } from "../src/subscription-executor.js";
 import { subscriptionConsentText } from "@jobguard/core";
-import { IdentityRepository, SubscriptionRepository } from "../src/index.js";
+import { IdentityRepository, SubscriptionRepository, SubscriptionPersistenceError } from "../src/index.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
 import { SubscriptionApplication } from "../../../apps/api/src/subscription.application.js";
 import { randomUUID } from "node:crypto";
@@ -18,7 +18,7 @@ describe("MON-2A C2/C3 billing action races", () => {
  it("M0-13a pause refuses subscription execution without consuming queued work, then resumes one effect",async()=>{
   const {a,issued}=await preparedPeriod(f);
   const approved=await command(f,a,{version:"subscription-command.v1",kind:"approve_simulation",statementId:issued.statementId,contentHash:issued.artifactHash,amountPence:issued.amountPence,expectedRevision:1});
-  const before=await readSubscription(f,a),context=testTenantContext(a.tenantId);
+  const before=await readSubscription(f,a),context=a.context;
   let calls=0;
   const executor=new SubscriptionExecutor(new SubscriptionRepository(f.runtime),{
    async execute(work){calls++;return {version:"subscription-simulated-result.v1" as const,synthetic:true as const,workId:work.workId,resultId:randomUUID(),outcome:"settled" as const};},
@@ -45,6 +45,10 @@ describe("MON-2A C2/C3 billing action races", () => {
    resolve:async()=>({credentials:{sessionToken:token,csrfToken,origin,tenantHeader:a.tenantId},digest})},new SubscriptionRepository(f.runtime));
   const action={version:"subscription-command.v1",kind:"approve_simulation",statementId:issued.statementId,contentHash:issued.artifactHash,amountPence:issued.amountPence,expectedRevision:1};
   const id=randomUUID(),first=await app.command({},id,action);
+  expect(await app.command({},id,action)).toEqual(first);
+  await expect(app.command({},randomUUID(),action)).rejects.toMatchObject({
+   name:"SubscriptionPersistenceError",code:"SUBSCRIPTION_STATEMENT_ALREADY_APPROVED",
+  });
   expect(await app.command({},id,action)).toEqual(first);
   const saved=await readSubscription(f,company);
   expect(saved.work).toHaveLength(1);expect(saved.attempts).toHaveLength(1);expect(saved.results).toHaveLength(1);
@@ -83,7 +87,7 @@ describe("MON-2A C2/C3 billing action races", () => {
   await workTenant(f.admin,a.tenantId,async db=>{
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query("UPDATE app.subscription_plan_change SET effective_date='2026-09-01' WHERE tenant_id=$1",[a.tenantId]);
-  });
+  }, { membershipId: a.actorId });
   const results=await Promise.allSettled([
    command(f,a,{version:"subscription-command.v1",kind:"apply_change",changeId:pending.changeId,sourceId,expectedRevision:1}),
    command(f,a,{...terms(a,"Builder",1),kind:"change"}),
@@ -104,5 +108,22 @@ describe("MON-2A C2/C3 billing action races", () => {
   const claims=await Promise.allSettled([1,2].map(()=>command(f,a,{version:"subscription-command.v1",kind:"execute_simulation",workId,expectedRevision:1})));
   expect(claims.filter(r=>r.status==="fulfilled")).toHaveLength(1);
   expect(await count(f,a,"subscription_simulated_attempt")).toBe(1);
+ });
+});
+
+// Driver errors are injected here only to exercise the narrow error boundary without PostgreSQL.
+// The billing action case above proves the actual constraint and rollback on PostgreSQL.
+describe("subscription constraint classification", () => {
+ it.each([
+  ["23505", "subscription_simulated_work_tenant_id_statement_id_key", "SUBSCRIPTION_STATEMENT_ALREADY_APPROVED"],
+  ["23505", "subscription_simulated_work_pkey", "SUBSCRIPTION_UNAVAILABLE"],
+  ["23505", undefined, "SUBSCRIPTION_UNAVAILABLE"],
+  ["08006", "subscription_simulated_work_tenant_id_statement_id_key", "SUBSCRIPTION_UNAVAILABLE"],
+ ])("maps %s / %s to %s", async (code, constraint, expected) => {
+  const error=Object.assign(new Error("private database details"),{code,constraint});
+  const pool={connect:async()=>{throw error;}};
+  const repository=new SubscriptionRepository(pool as unknown as ConstructorParameters<typeof SubscriptionRepository>[0]);
+  await expect(repository.read(testTenantContext("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),"a".repeat(64)))
+   .rejects.toEqual(new SubscriptionPersistenceError(expected as SubscriptionPersistenceError["code"]));
  });
 });

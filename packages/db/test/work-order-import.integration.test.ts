@@ -10,23 +10,25 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { contractorPermissionMatrix, contractorRoles, encodeWorkOrderCsv, watchdogActive, type ContractorRole } from "@jobguard/core";
 import {
   ContractorPartyRepository, ContractorRepository, JobSchedulingRepository, MIGRATION_URLS, SorRepository, WorkOrderRepository, addBranchClient, assertContractorPartiesRequired, canonicalJson, demoFile, demoRow, migrate, prepareWorkOrderDemo, sha256Hex,
-  verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type WorkOrderDemo,
+  verifiedTenantContextFromMembership, requireContractorRequestContext, withTenant, type AuthenticatedMembership, type VerifiedTenantContext, type WorkOrderDemo,
 } from "../src/index.js";
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, parties: ContractorPartyRepository, orders: WorkOrderRepository, rates: SorRepository, scheduling: JobSchedulingRepository;
 const ENT2_TABLES = ["schedule_of_rates", "sor_version", "sor_item", "import_batch", "import_row_receipt", "work_order", "work_order_revision", "work_order_line", "work_order_current", "job_assignment", "site_visit"];
 const SPINE_TABLES = ["job", "scope_identity", "job_commercial_track", "contractor_party_binding", "contractor_resident_contact", "job_party_binding", "job_party_current", "command_receipt", "audit_event"];
-const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
+// LP-6d: guarded routines need a bound request, so each fixture principal carries its own persisted credential context.
+const ctx = (p: AuthenticatedMembership): VerifiedTenantContext => requireContractorRequestContext(p);
 const resident = (n: number) => ({ name: `Fictional Resident ${String(n).padStart(4, "0")}`, phone: `0000${String(n).padStart(6, "0")}`, email: `resident${String(n).padStart(4, "0")}@resident-canary.invalid` });
 const view = (p: AuthenticatedMembership) => contractors.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
 const command = async (p: AuthenticatedMembership, fields: Record<string, unknown>) => contractors.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view(p)).revision, ...fields });
 async function member(p: AuthenticatedMembership, role: string, scope: { kind: string; id: string }, clientId: string | null = null) {
   const id = randomUUID();
   await command(p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope, clientId, contractId: null });
-  const row = (await admin.query<{ identity_user_id: string }>("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [p.tenantId, id])).rows[0]!;
-  return { ...p, membershipId: id, identityUserId: row.identity_user_id } as AuthenticatedMembership;
+  // LP-6d: the member acts through its own persisted contractor practice session.
+  return memberSessionPrincipal(admin, runtime, p.tenantId, id);
 }
 async function org(siteCount = 5) { const p = await contractors.startPractice(randomUUID()); await seedActiveContractorAgreement(admin,p.tenantId); const demo = await prepareWorkOrderDemo(runtime, p, { siteCount }); return { p, demo }; }
 const counts = async (tenantId: string, tables = [...ENT2_TABLES, ...SPINE_TABLES]) => Object.fromEntries(await Promise.all(tables.map(async t => [t, (await admin.query(`SELECT count(*)::int n FROM app.${t} WHERE tenant_id=$1`, [tenantId])).rows[0].n as number])));
@@ -357,7 +359,7 @@ describe("ENT-2 DW4 live from import, with no fee setup", () => {
     const saved = await importOf(p, csv), workOrderId = saved.rows[0]!.workOrderId!;
     const retained = { overview: await orders.overview(p), batch: await orders.batch(p, saved.batchId), revisions: await orders.revisions(p, workOrderId) };
     const before = await counts(p.tenantId);
-    await withTenant(admin, testTenantContext(p.tenantId), async db => {
+    await withTenant(admin, ctx(p), async db => {
       const assignment = randomUUID();
       await db.$client.query("SELECT app.assign_commercial_track($1,$2,'small_builder',$3,1,'operations:test')", [p.tenantId, assignment, `synthetic-agreement:${p.tenantId}`]);
       const { appendAuditBatch } = await import("../src/index.js");
@@ -389,7 +391,7 @@ describe("ENT-2 DW6 personal data and origin", () => {
       // The audit payload allowlist: identifiers, hashes and the operational classification only.
       for (const event of (await admin.query("SELECT event_type,payload FROM app.audit_event WHERE tenant_id=$1 AND event_type LIKE 'contractor.work_order%'", [p.tenantId])).rows) {
         expect(Object.keys(event.payload).sort()).toEqual(["classifications", "hashes", "references"]); expect(Object.keys(event.payload.hashes)).toEqual(["document"]);
-        expect(Object.keys(event.payload.references).sort()).toEqual(event.event_type === "contractor.work_order_import.recorded" ? ["auditTrust", "batchId", "commandId", "environment"] : ["auditTrust", "commandId", "environment", "revisionId", "workOrderId"]);
+        expect(Object.keys(event.payload.references).sort()).toEqual(event.event_type === "contractor.work_order_import.recorded" ? ["auditActorKind", "auditActorRef", "auditTrust", "batchId", "commandId", "environment"] : ["auditActorKind", "auditActorRef", "auditTrust", "commandId", "environment", "revisionId", "workOrderId"]);
       }
     } finally { spies.forEach(s => s.mockRestore()); }
   });
@@ -585,6 +587,81 @@ describe("ENT-2 per-order authority: a manager scoped to one branch has no reach
     };
   };
 
+  it("requires an exact expectedRevision for revise, including cancellation, as the runtime role", async () => {
+    const s = await seed(80), before = await counts(fixture.p.tenantId);
+    const stale = { ok: false, code: "40001", message: "STALE_REVISION" };
+    for (const payload of [commitPayloads(s.a).revise(), commitPayloads(s.a).cancel()]) {
+      for (const expectedRevision of [undefined, null, 0, 2]) {
+        expect(await probe(adminAll, commitSql, [adminAll.membershipId, JSON.stringify({ ...payload, expectedRevision })]), `revise ${payload.status}, expectedRevision=${expectedRevision}`).toEqual(stale);
+        expect(await stateOf(s.a.id)).toEqual({ revision: 1, status: "ordered" });
+        expect(await revisionCount(s.a.id)).toBe(1);
+        expect(await counts(fixture.p.tenantId)).toEqual(before);
+      }
+      expect(await probe(adminAll, commitSql, [adminAll.membershipId, JSON.stringify(payload)]), `correct revision, ${payload.status}`).toMatchObject({ ok: true, value: { result: { revision: 2 } } });
+    }
+  });
+
+  it("requires expectedRevision zero for create, refusing missing, null and wrong values without writing an order", async () => {
+    const s = await seed(82), row = rowB(83), jobId = randomUUID(), workOrderId = randomUUID();
+    const rollback = new Error("roll expected-revision create probe back");
+    await expect(withTenant(runtime, ctx(adminAll), async db => {
+      const c = db.$client;
+      await c.query("SET LOCAL ROLE jobguard_runtime");
+      await c.query("SELECT app.work_order_begin($1,$2,'Expected revision probe')", [adminAll.membershipId, jobId]);
+      await parties.bindInTransaction(db, adminAll, { version: "contractor-party-import.v1", environment: "synthetic_demo", commandId: randomUUID(), jobId, workOrderId, expectedJobRevision: 0, clientId: demoB.clientId, contractId: demoB.contractId, siteRevisionId: row.siteRevisionId, resident: { kind: "contact", contact: (row.resident as { contact: unknown }).contact } });
+      const payload = { ...commitPayloads(s.b).revise(), kind: "create", jobId, workOrderId, reference: "WO-EXPECTED-REVISION" };
+      const before = (await c.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2", [fixture.p.tenantId, jobId])).rows;
+      for (const expectedRevision of [undefined, null, 1, 0]) {
+        await c.query("SAVEPOINT expected_revision_create");
+        let outcome: unknown;
+        try { outcome = { ok: true, result: (await c.query(commitSql, [adminAll.membershipId, JSON.stringify({ ...payload, expectedRevision })])).rows[0].result }; }
+        catch (error) { outcome = { ok: false, code: (error as { code?: string }).code, message: (error as Error).message }; }
+        finally { await c.query("ROLLBACK TO SAVEPOINT expected_revision_create"); }
+        expect(outcome, `create expectedRevision=${expectedRevision}`).toMatchObject(expectedRevision === 0
+          ? { ok: true, result: { revision: 1 } }
+          : { ok: false, code: "40001", message: "STALE_REVISION" });
+        expect((await c.query("SELECT id FROM app.work_order WHERE tenant_id=$1 AND id=$2", [fixture.p.tenantId, workOrderId])).rows).toEqual([]);
+        expect((await c.query("SELECT status,revision FROM app.job WHERE tenant_id=$1 AND id=$2", [fixture.p.tenantId, jobId])).rows).toEqual(before);
+      }
+      throw rollback;
+    })).rejects.toBe(rollback);
+  });
+
+  it("detects the old missing-revision bypass in a transactional scratch routine and restores it", async () => {
+    const s = await seed(84);
+    const credential = sha256Hex(`work-order-revision-probe:${randomUUID()}`);
+    await testBoundTenantContext(admin, adminAll.tenantId, adminAll.membershipId, credential);
+    const c = await admin.connect();
+    const comparison = "cur.revision IS DISTINCT FROM (payload->>'expectedRevision')::integer";
+    const definition = (await c.query("SELECT pg_get_functiondef('app.work_order_commit(uuid,jsonb)'::regprocedure) definition")).rows[0].definition as string;
+    expect(definition.split(comparison)).toHaveLength(2);
+    const payload: Record<string, unknown> = { ...commitPayloads(s.a).revise() };
+    delete payload.expectedRevision;
+    const attempt = async () => {
+      await c.query("SAVEPOINT expected_revision_mutation");
+      try {
+        await c.query("SET LOCAL ROLE jobguard_runtime");
+        return { ok: true, result: (await c.query(commitSql, [adminAll.membershipId, JSON.stringify(payload)])).rows[0].result };
+      } catch (error) { return { ok: false, code: (error as { code?: string }).code, message: (error as Error).message }; }
+      finally { await c.query("ROLLBACK TO SAVEPOINT expected_revision_mutation"); }
+    };
+    try {
+      await c.query("BEGIN");
+      await c.query("SELECT app.bind_request('real',$1,$2)", [credential, adminAll.tenantId]);
+      await c.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.p.tenantId]);
+      expect(await attempt()).toEqual({ ok: false, code: "40001", message: "STALE_REVISION" });
+      await c.query(definition.replace(comparison, "cur.revision<>(payload->>'expectedRevision')::integer"));
+      // Restoring <> makes the missing-key refusal assertion fail: the revision succeeds.
+      expect(await attempt()).toMatchObject({ ok: true, result: { revision: 2 } });
+    } finally {
+      await c.query("ROLLBACK");
+      c.release();
+    }
+    expect((await admin.query("SELECT pg_get_functiondef('app.work_order_commit(uuid,jsonb)'::regprocedure) definition")).rows[0].definition).toBe(definition);
+    expect(await stateOf(s.a.id)).toEqual({ revision: 1, status: "ordered" });
+    expect(await revisionCount(s.a.id)).toBe(1);
+  });
+
   it("answers a branch-A admin's party check on a branch-B order with the not-found whatever is guessed: the check is no yes/no oracle on another branch's resident contact", async () => {
     const s = await seed(40), row = rowB(41), resident = { kind: "contact", contact: (row.resident as { contact: unknown }).contact }, wrong = JSON.stringify({ kind: "none", reason: "void_property" });
     const check = "SELECT app.work_order_parties_unchanged($1,$2,$3,$4,$5,$6::jsonb) same", args = [s.b.id, demoB.clientId, demoB.contractId, row.siteRevisionId];
@@ -624,7 +701,9 @@ describe("ENT-2 per-order authority: a manager scoped to one branch has no reach
       }
       throw new Error("roll the probe back");
     }).catch(error => { if ((error as Error).message !== "roll the probe back") throw error; });
-    expect(created).toEqual([refused, { ok: true }]);
+    // LP-6d: the request is bound to the tenant-wide admin, so branch A's admin is refused before any lookup
+    // (42501, the stricter router-ruled refusal); the tenant-wide admin's identical create is still accepted.
+    expect(created).toEqual([{ ok: false, code: "42501", message: "REQUEST_BINDING_REFUSED" }, { ok: true }]);
     expect((await admin.query("SELECT count(*)::int n FROM app.work_order WHERE reference='WO-PROBE-CREATE'")).rows[0].n).toBe(0);
   });
 
@@ -636,6 +715,82 @@ describe("ENT-2 per-order authority: a manager scoped to one branch has no reach
     expect(await revisedBy(adminA, [row1(demo, 50, { expectedRevision: 2, priority: "emergency" })], "own-a.csv")).toEqual([["revised", null]]);
     expect(await revisedBy(adminB, [rowB(51, { expectedRevision: 2, priority: "emergency" })], "own-b.csv")).toEqual([["revised", null]]);
     expect([await stateOf(s.a.id), await stateOf(s.b.id), await stateOf(t.a.id), await stateOf(t.b.id)]).toEqual([{ revision: 3, status: "ordered" }, { revision: 3, status: "ordered" }, { revision: 2, status: "cancelled" }, { revision: 2, status: "cancelled" }]);
+  });
+
+  it("refuses a branch admin importing their own client's order onto another branch's team without writing an assignment", async () => {
+    const { p, demo } = fixture;
+    const before = await counts(p.tenantId, ["job_assignment", "work_order", "work_order_revision", "job", "contractor_party_binding"]);
+    const result = await importOf(adminA, demoFile([row1(demo, 70, { teamId: demoB.teamId, assignedMembershipIds: [] })]), "cross-team-create.csv");
+    expect(result.rows.map(r => [r.outcome, r.errorCode])).toEqual([["rejected", "ASSIGNMENT_INVALID"]]);
+    expect(await counts(p.tenantId, Object.keys(before))).toEqual(before);
+    expect((await admin.query("SELECT id FROM app.work_order WHERE tenant_id=$1 AND client_id=$2 AND reference=$3", [p.tenantId, demo.clientId, "WO-DEMO-0070"])).rows).toEqual([]);
+  });
+
+  it("refuses a branch admin revising their own client's order onto another branch's team and preserves the current assignment", async () => {
+    const { p, demo } = fixture;
+    const created = (await importOf(adminA, demoFile([row1(demo, 71)]), "own-team-create.csv")).rows[0]!;
+    expect(created).toMatchObject({ outcome: "created" });
+    const assignments = async () => (await admin.query("SELECT * FROM app.job_assignment WHERE tenant_id=$1 AND work_order_id=$2 ORDER BY id", [p.tenantId, created.workOrderId])).rows;
+    const before = await assignments();
+    expect(before.length).toBeGreaterThan(0);
+    expect(before.every(r => r.team_id === demo.teamId)).toBe(true);
+    const result = await importOf(adminA, demoFile([row1(demo, 71, { expectedRevision: 1, teamId: demoB.teamId, assignedMembershipIds: [] })]), "cross-team-revise.csv");
+    expect(result.rows.map(r => [r.outcome, r.errorCode])).toEqual([["rejected", "ASSIGNMENT_INVALID"]]);
+    expect(await assignments()).toEqual(before);
+    expect(await stateOf(created.workOrderId!)).toEqual({ revision: 1, status: "ordered" });
+    expect(await revisionCount(created.workOrderId!)).toBe(1);
+    const currentTeam = await withTenant(runtime, ctx(adminA), db => db.$client.query("SELECT app.contractor_job_team(job_id) team_id FROM app.work_order WHERE tenant_id=$1 AND id=$2", [p.tenantId, created.workOrderId]));
+    expect(currentTeam.rows[0].team_id).toBe(demo.teamId);
+  });
+
+  it("detects a scratch mutation removing the destination-team guard and rolls the mutation back", async () => {
+    const s = await seed(75);
+    // LP-6d: work_order_commit is guarded, so the probe binds the branch-A admin's own credential first.
+    const credential = sha256Hex(`work-order-team-probe:${randomUUID()}`);
+    await testBoundTenantContext(admin, adminA.tenantId, adminA.membershipId, credential);
+    const c = await admin.connect();
+    const guard = "  IF NOT coalesce(app.contractor_allowed(actor,'organisation.manage',team_value) OR app.contractor_allowed(actor,'data.import',t),false) THEN RAISE EXCEPTION 'ASSIGNMENT_INVALID' USING ERRCODE='22023'; END IF;";
+    const definition = (await c.query("SELECT pg_get_functiondef('app.work_order_commit(uuid,jsonb)'::regprocedure) definition")).rows[0].definition as string;
+    expect(definition.split(guard)).toHaveLength(2);
+    try {
+      await c.query("BEGIN");
+      await c.query("SELECT app.bind_request('real',$1,$2)", [credential, adminA.tenantId]);
+      await c.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.p.tenantId]);
+      const payload = { ...commitPayloads(s.a).revise(), team: { teamId: demoB.teamId, membershipIds: [] } };
+      const attempt = async () => {
+        await c.query("SAVEPOINT team_scope_probe");
+        try { return { ok: true, result: (await c.query(commitSql, [adminA.membershipId, JSON.stringify(payload)])).rows[0].result }; }
+        catch (error) { return { ok: false, code: (error as { code?: string }).code, message: (error as Error).message }; }
+        finally { await c.query("ROLLBACK TO SAVEPOINT team_scope_probe"); }
+      };
+      expect(await attempt()).toEqual({ ok: false, code: "22023", message: "ASSIGNMENT_INVALID" });
+      await c.query(definition.replace(guard, ""));
+      // The same rejection assertion would now fail: the unauthorized revision succeeds.
+      expect(await attempt()).toMatchObject({ ok: true, result: { revision: 2 } });
+    } finally {
+      await c.query("ROLLBACK");
+      c.release();
+    }
+    expect((await admin.query("SELECT pg_get_functiondef('app.work_order_commit(uuid,jsonb)'::regprocedure) definition")).rows[0].definition).toBe(definition);
+    expect(await stateOf(s.a.id)).toEqual({ revision: 1, status: "ordered" });
+  });
+
+  it("keeps managed-team imports and revisions working and lets tenant-wide data.import assign either branch's team", async () => {
+    const { p, demo } = fixture;
+    const authority = await withTenant(runtime, ctx(finance), db => db.$client.query("SELECT app.contractor_allowed($1,'data.import',$2) importer, app.contractor_allowed($1,'organisation.manage',$3) manager", [finance.membershipId, p.tenantId, demoB.teamId]));
+    expect(authority.rows[0]).toEqual({ importer: true, manager: false });
+    for (const [actor, n, initialTeam, revisedTeam] of [
+      [adminA, 72, demo.teamId, demo.teamId],
+      [finance, 73, demoB.teamId, demo.teamId],
+      [finance, 74, demo.teamId, demoB.teamId],
+    ] as const) {
+      const created = (await importOf(actor, demoFile([row1(demo, n, { teamId: initialTeam, assignedMembershipIds: [] })]), `allowed-team-${n}.csv`)).rows[0]!;
+      expect(created).toMatchObject({ outcome: "created", errorCode: null });
+      const revised = (await importOf(actor, demoFile([row1(demo, n, { expectedRevision: 1, priority: "emergency", teamId: revisedTeam, assignedMembershipIds: [] })]), `allowed-team-revise-${n}.csv`)).rows[0]!;
+      expect(revised).toMatchObject({ outcome: "revised", errorCode: null });
+      const team = await withTenant(runtime, ctx(actor), db => db.$client.query("SELECT app.contractor_job_team(job_id) team_id FROM app.work_order WHERE tenant_id=$1 AND id=$2", [p.tenantId, created.workOrderId]));
+      expect(team.rows[0].team_id).toBe(revisedTeam);
+    }
   });
 });
 
@@ -652,10 +807,12 @@ describe("ENT-2 tenant boundary", () => {
     // A principal naming tenant B with tenant A's membership, or tenant A's with an unrelated membership, is a non-member everywhere.
     await expect(importOf({ ...a.p, tenantId: b.p.tenantId }, demoFile([row1(b.demo, 2)]))).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(orders.overview({ ...b.p, membershipId: a.p.membershipId })).rejects.toMatchObject({ code: "NOT_FOUND" });
-    // The controlled routines refuse to run without a transaction-local tenant, and a tenant context made by hand never reaches PostgreSQL.
+    // LP-6d refuses unbound routines before business validation; a hand-built context never reaches PostgreSQL.
+    const beforeUnbound = await counts(a.p.tenantId);
     for (const sql of ["SELECT app.work_order_begin($1,$2,'x')", "SELECT app.work_order_commit($1,'{}'::jsonb)", "SELECT app.import_batch_record($1,'{}'::jsonb)", "SELECT app.import_sor_version($1,'{}'::jsonb)", "SELECT app.work_order_parties_unchanged($1,$1,$1,$1,$1,'{}'::jsonb)"]) {
-      await expect(runtime.query(sql, sql.includes("$2") ? [a.p.membershipId, randomUUID()] : [a.p.membershipId]), sql).rejects.toMatchObject({ message: expect.stringMatching(/^(NOT_FOUND|MODE_FORBIDDEN|INVALID_COMMAND)$/u) });
+      await expect(runtime.query(sql, sql.includes("$2") ? [a.p.membershipId, randomUUID()] : [a.p.membershipId]), sql).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
     }
+    expect(await counts(a.p.tenantId)).toEqual(beforeUnbound);
     await expect(withTenant(runtime, { tenantId: a.p.tenantId } as never, db => db.$client.query("SELECT 1"))).rejects.toMatchObject({ code: "INVALID_TENANT_CONTEXT" });
     await expect(importOf({ ...a.p, tenantId: "not-a-uuid" }, demoFile([row1(a.demo, 3)]))).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect((await counts(a.p.tenantId)).work_order).toBe(0);
@@ -680,7 +837,8 @@ describe("ENT-2 office reads", () => {
     // The assigned operative reads the job's order through the assignment, not through import authority.
     const unassigned = await member(p, "operative", { kind: "team", id: demo.teamId });
     await expect(orders.revisions(unassigned, first.rows[0]!.workOrderId!)).rejects.toMatchObject({ code: "NOT_FOUND" });
-    const assigned = { ...p, membershipId: demo.operativeMembershipId, identityUserId: (await admin.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [demo.operativeMembershipId])).rows[0].identity_user_id } as AuthenticatedMembership;
+    // LP-6d: the assigned operative reads through its own persisted contractor practice session.
+    const assigned = await memberSessionPrincipal(admin, runtime, p.tenantId, demo.operativeMembershipId);
     expect((await orders.revisions(assigned, first.rows[0]!.workOrderId!)).revisions).toHaveLength(2);
     await expect(orders.overview(assigned)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });

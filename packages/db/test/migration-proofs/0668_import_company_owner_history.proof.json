@@ -1,0 +1,6 @@
+{
+  "migration": "0668_import_company_owner_history.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

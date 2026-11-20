@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-hook-timeout": {
+      "branches": ["codex/sandbox/ci-hook-timeout"],
+      "note": "CI-HOOK-TIMEOUT: increase db integration hook setup budget for CI stability.",
+      "allow": ["packages/db/vitest.config.ts"]
+    }
+  }
+}

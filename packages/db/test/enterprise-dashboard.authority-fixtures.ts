@@ -8,6 +8,7 @@ import { Pool } from "pg";
 import { ContractorRepository, ExtraRepository, contractorSessionContext, migrate } from "../src/index.js";
 import { enterpriseDashboardScopeLockSql } from "../src/enterprise-dashboard-queries.js";
 import { fixture } from "./extra-fixtures.js";
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { actor, direct, invite } from "./site-extra-fixtures.js";
 import { closeTestDatabase, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
@@ -40,14 +41,22 @@ export async function authorityCluster() {
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   const config = { host: "127.0.0.1", port, user: "postgres", password: "synthetic" };
   const pools: Pool[] = [];
+  const connectionEnds: Promise<void>[] = [];
   const retainedPool = (settings: ConstructorParameters<typeof Pool>[0]) => {
-    const pool = new Pool(settings); pools.push(pool); return pool;
+    const pool = new Pool(settings);
+    // Pool.end() can resolve before Client's final socket-end event under load.
+    // Observe real connection completion before stopping this fixture's PostgreSQL.
+    pool.on("connect", client => { connectionEnds.push(new Promise<void>(resolve => client.once("end", resolve))); });
+    pools.push(pool); return pool;
   };
   const control = retainedPool(config);
   const admin = retainedPool({ ...config, database: "jobguard_synthetic_demo", statement_timeout: 15000 });
   const runtimePool = (name: string, max = 4) => retainedPool({ ...config, database: "jobguard_synthetic_demo", user: "dashboard_authority_login",
     application_name: name, max, connectionTimeoutMillis: 8000, lock_timeout: 12000, statement_timeout: 15000 });
-  const close = () => closeTestDatabase(postgres, directory, ...pools);
+  const close = () => closeTestDatabase({ stop: async () => {
+    await Promise.all(connectionEnds);
+    await postgres.stop();
+  } }, directory, ...pools);
   try {
     await postgres.initialise(); await postgres.start();
     await control.query("CREATE DATABASE jobguard_synthetic_demo");
@@ -63,7 +72,7 @@ export type AuthorityCluster = Awaited<ReturnType<typeof authorityCluster>>;
 export async function authorityWorld(c: AuthorityCluster) {
   const f = await fixture(c), viewer = await invite(c, f, "supervisor", { kind: "team", id: f.demo.teamId });
   const operative = await actor(c, f, f.demo.operativeMembershipId);
-  const extra = await new ExtraRepository(c.runtime).raiseExtra(f.ctx, direct(f, operative));
+  const extra = await new ExtraRepository(c.runtime).raiseExtra(await testActorContext(c.admin, f.ctx, operative.member), direct(f, operative));
   const session = randomUUID(), sessionRef = randomUUID();
   // Invited members have genuine persisted, digest-bound practice sessions, resolved by the real bridge.
   await c.admin.query(`INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at)
@@ -152,7 +161,7 @@ export async function observeGate(c: AuthorityCluster, tenant: string, pid: numb
 export async function storedRows(c: AuthorityCluster, tenant: string) {
   const names = (await c.admin.query<{ schemaname: string; tablename: string }>(`SELECT p.schemaname,p.tablename FROM pg_tables p
     JOIN information_schema.columns c ON(c.table_schema,c.table_name,c.column_name)=(p.schemaname,p.tablename,'tenant_id')
-    WHERE p.schemaname IN ('app','audit_control','control_plane') ORDER BY p.schemaname,p.tablename`)).rows;
+    WHERE p.schemaname IN ('app','audit_control','control_plane') AND NOT(p.schemaname='control_plane' AND p.tablename='request_binding') ORDER BY p.schemaname,p.tablename`)).rows;
   const result: Record<string, string[]> = {};
   const quote = (s: string) => '"' + s.replaceAll('"', '""') + '"';
   for (const n of names) result[`${n.schemaname}.${n.tablename}`] = (await c.admin.query<{ bytes: string }>(

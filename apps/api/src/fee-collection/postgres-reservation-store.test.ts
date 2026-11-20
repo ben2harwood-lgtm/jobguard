@@ -46,6 +46,9 @@ describe("PostgresReservationStore transaction adapter", () => {
     const f = setup();
     expect(await f.store.transaction(ctx.tenantId, async (_book, sources) => sources.collection(id(5), id(6)))).toMatchObject({ tenantId: ctx.tenantId });
     expect(f.sources).toHaveBeenCalledWith(f.db);
+    // Preserve the exact credential-bearing context through the in-transaction writer.
+    expect(mocks.withTenant).toHaveBeenCalledWith(expect.anything(), f.context, expect.any(Function));
+    expect(f.query.mock.calls.some(([sql]) => sql.includes("lp6e_append_outbox_audit") || sql.includes("to_regprocedure"))).toBe(false);
     expect(f.query.mock.calls.map(([sql]) => sql.split(" ")[0])).toEqual(["INSERT", "SELECT", "SELECT", "SELECT"]);
     expect(f.query.mock.calls[1]![0]).toContain("app.lock_fee_reservation_book");
     expect(f.query.mock.calls.at(-1)![0]).toContain("$3::jsonb");
@@ -58,6 +61,24 @@ describe("PostgresReservationStore transaction adapter", () => {
     expect(sql).toContain("app.replace_fee_reservation_book");
     expect(sql).not.toContain("FOR UPDATE");
     expect(sql).not.toContain("UPDATE app.fee_reservation_book");
+  });
+  it("maps malformed JSON from the authority routine to a typed refusal and preserves unrelated errors", async () => {
+    for (const code of ["22P02", "40001"]) {
+      const f = setup();
+      const error = Object.assign(new Error("routine failure"), { code });
+      const query = f.query.getMockImplementation()!;
+      f.query.mockImplementation(async (sql, values) => {
+        if (sql.startsWith("SELECT app.replace_fee_reservation_book")) throw error;
+        return query(sql, values);
+      });
+      const result = f.store.transaction(ctx.tenantId, async () => undefined);
+      if (code === "22P02") {
+        await expect(result).rejects.toBeInstanceOf(FeeCollectionError);
+        await expect(result).rejects.toMatchObject({ code: "COLLECTION_REFUSED" });
+      } else {
+        await expect(result).rejects.toBe(error);
+      }
+    }
   });
   it("refuses a mismatched verified tenant before starting a transaction", async () => {
     const f = setup();

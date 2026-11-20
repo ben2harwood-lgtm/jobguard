@@ -12,6 +12,7 @@ describe("SV-3 worker boundary and terms gate", () => {
   it("passes each stamped context whole per call; repeated invocations never retain it", async () => {
     const p=ports(),worker=new ShadowDetectionWorker(p,"synthetic_demo",()=>at),context=testTenantContext(tenantId);
     await worker.start();await worker.execute(context,task);await worker.execute(context,task);
+    expect(p.hasAcceptedTerms).toHaveBeenCalledWith(context,jobId);
     expect(p.read).toHaveBeenCalledWith(context,{version:"shadow-observation-read.v1",jobId});
     expect(p.persist).toHaveBeenCalledTimes(2);expect(vi.mocked(p.persist).mock.calls[0]![1]).toEqual(vi.mocked(p.persist).mock.calls[1]![1]);
   });
@@ -66,17 +67,18 @@ describe("SV-3 / SV-4 accepted terms integration port",()=>{
     const {ShadowObservationReader}=await import(new URL("../../../packages/db/src/shadow-observation-reader.ts",import.meta.url).href);
     const query=vi.fn(async(sql:string,values?:unknown[])=>{
       if(sql.includes("to_regclass"))return {rows:[{available:true}]};
-      if(sql.includes("FROM app.final_check_terms_acceptance"))return {rows:[],rowCount:0};
+      if(sql.includes("app.final_check_runtime_job_terms"))return {rows:[{accepted:false}]};
       return {rows:[]};
     });
     const pool={query,connect:vi.fn(async()=>({query,release:vi.fn()}))} as unknown as import("pg").Pool;
     const reader=new ShadowObservationReader(pool,{decode:async()=>null}),p=ports();
-    p.assertTermsRelation=()=>reader.assertTermsRelation();p.hasAcceptedTerms=c=>reader.hasAcceptedTerms(c);
+    p.assertTermsRelation=()=>reader.assertTermsRelation();p.hasAcceptedTerms=(c,j)=>reader.hasAcceptedTerms(c,j);
     const worker=new ShadowDetectionWorker(p,"synthetic_demo");await worker.start();
     await expect(worker.execute(testTenantContext(tenantId),task)).rejects.toThrow("SHADOW_TERMS_NOT_ACCEPTED");
-    const terms=query.mock.calls.filter(([sql])=>sql.includes("FROM app.final_check_terms_acceptance"));
-    expect(terms).toHaveLength(1);expect(terms[0]![0]).toContain("terms_version=$2");
-    expect(terms[0]![1]).toEqual([tenantId,"synthetic_final_check_terms.v1"]);
+    const terms=query.mock.calls.filter(([sql])=>sql.includes("app.final_check_runtime_job_terms"));
+    expect(terms).toHaveLength(1);expect(terms[0]![0]).toContain("app.final_check_runtime_job_terms($1,$2)");
+    expect(terms[0]![1]).toEqual([jobId,"synthetic_final_check_terms.v1"]);
+    expect(query).toHaveBeenCalledWith("SELECT set_config('app.tenant_id', $1, true)",[tenantId]);
     expect(p.read).not.toHaveBeenCalled();expect(p.propose).not.toHaveBeenCalled();expect(p.persist).not.toHaveBeenCalled();
   });
 });
@@ -88,24 +90,30 @@ describe("SV-3 actual shared worker composition",()=>{
   const queries=vi.fn(async(sql:string)=>sql.includes("pg_auth_members")?{rows:[{safe:true}]}:sql.includes("to_regclass")?{rows:[{available}]}:sql.includes("final_check_terms_acceptance")?{rows:[],rowCount:0}:{rows:[]});
   vi.doMock("pg",()=>({Pool:class{query=queries;connect=async()=>({query:queries,release:vi.fn()});end=async()=>undefined;}}));
   vi.doMock("graphile-worker",async()=>({...await vi.importActual<Record<string,unknown>>("graphile-worker"),run:registered}));
-  vi.doMock("@jobguard/db",async()=>({...await vi.importActual<Record<string,unknown>>("@jobguard/db"),ActionExecutor:class{execute=execute;}}));
+  vi.doMock("@jobguard/db",async()=>({...await vi.importActual<Record<string,unknown>>("@jobguard/db"),ActionExecutor:class{
+   execute(context:{tenantId:string},actionId:string,beforeClaim:(actionType:string)=>void) {
+    expect(context.tenantId).toBe(tenantId);
+    return execute(actionId,beforeClaim);
+   }
+  }}));
   const listener=vi.spyOn(process,"once").mockReturnValue(process);
   vi.stubEnv("GRAPHILE_DATABASE_URL","postgresql://localhost/graphile");
   vi.stubEnv("RUNTIME_DATABASE_URL","postgresql://localhost/runtime");
+  vi.stubEnv("WORKER_DATABASE_URL","postgresql://localhost/outbound-worker");
   vi.stubEnv("SHADOW_DATABASE_URL","postgresql://localhost/shadow");vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
   try{
    vi.resetModules();await expect(import("./worker.js")).rejects.toThrow("TERMS_RELATION_UNAVAILABLE");expect(registered).not.toHaveBeenCalled();
    available=true;vi.resetModules();await import("./worker.js");expect(registered).toHaveBeenCalledTimes(1);
    const options=registered.mock.calls[0]![0] as unknown as {taskList:Record<string,(raw:unknown)=>Promise<void>>};
-   expect(Object.keys(options.taskList)).toEqual(["discover_outbox","execute_outbox","detect_shadow_evidence","final_check","discover_final_check_requests","final_check_practice_run","discover_demo_source_holds","hold_demo_sources","discover_evidence_pack_requests","build_evidence_pack_v3","discover_extra_escalations","escalate_overdue_extras","discover_retention_reviews","raise_retention_reviews"]);
+   expect(Object.keys(options.taskList)).toEqual(["discover_outbox","execute_outbox","detect_shadow_evidence","final_check","discover_final_check_requests","final_check_practice_run","discover_demo_source_holds","hold_demo_sources","discover_evidence_pack_requests","build_evidence_pack_v3","discover_readiness_plans","readiness_schedule","readiness_evaluate","discover_extra_escalations","escalate_overdue_extras","discover_retention_reviews","raise_retention_reviews"]);
    // Practice mode includes final-check, evidence-pack and synthetic escalation tasks, never outbox delivery.
    vi.stubEnv("JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY","1");vi.resetModules();await import("./worker.js");
    const practice=registered.mock.calls[1]![0] as unknown as {taskList:Record<string,unknown>;crontab:string};
-   expect(Object.keys(practice.taskList)).toEqual(["discover_extra_escalations","escalate_overdue_extras","discover_final_check_requests","final_check_practice_run","discover_evidence_pack_requests","build_evidence_pack_v3","discover_demo_source_holds","hold_demo_sources"]);expect(practice.crontab).toBe("*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds\n*/1 * * * * discover_extra_escalations");
+   expect(Object.keys(practice.taskList)).toEqual(["discover_extra_escalations","escalate_overdue_extras","discover_readiness_plans","readiness_schedule","readiness_evaluate","discover_final_check_requests","final_check_practice_run","discover_evidence_pack_requests","build_evidence_pack_v3","discover_demo_source_holds","hold_demo_sources"]);expect(practice.crontab).toBe("*/1 * * * * discover_final_check_requests\n*/1 * * * * discover_evidence_pack_requests\n*/1 * * * * discover_demo_source_holds\n*/1 * * * * discover_readiness_plans\n*/1 * * * * discover_extra_escalations");
    vi.stubEnv("JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY","");
    await options.taskList.execute_outbox!({tenantId,actionId:jobId});
-   expect(execute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({tenantId}),jobId,expect.any(Function));
-   const beforeClaim=execute.mock.calls[0]![2] as (actionType:string)=>void;
+   expect(execute).toHaveBeenCalledExactlyOnceWith(jobId,expect.any(Function));
+   const beforeClaim=execute.mock.calls[0]![1] as (actionType:string)=>void;
    for(const environment of ["production_billing","pilot_no_charge","provider_sandbox","disabled"]){
     vi.stubEnv("JOBGUARD_ENV",environment);
     for(const actionType of ["future.action","fee.post"])

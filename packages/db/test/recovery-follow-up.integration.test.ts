@@ -1,3 +1,4 @@
+import { bindTestClient, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -44,13 +45,15 @@ async function code(run: () => Promise<unknown>): Promise<string> {
  * owner, accepted document, authorization and lifecycle before binding v3. */
 async function activatePursuitFixture(client: import("pg").PoolClient, tenant: string, job: string, expected: number) {
   const row = (await client.query("SELECT d.id,d.document_version,d.content_hash,m.id actor FROM app.quote_document_version d JOIN app.membership m ON m.tenant_id=d.tenant_id AND m.role='owner' AND m.revoked_at IS NULL WHERE d.tenant_id=$1 AND d.job_id=$2", [tenant, job])).rows[0];
-  const command = randomUUID(), decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
-  await client.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.switch_live',$3,$4,'processing',$5)", [command, tenant, `pursuit-fixture:${job}`, row.content_hash, row.actor]);
-  await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
-  await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
-  await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
+  const credential = createHash('sha256').update(randomUUID()).digest('hex');
+  await testBoundTenantContext(client as unknown as Pool, tenant, row.actor, credential);
+  await client.query("SELECT app.bind_request('real',$1,$2)",[credential,tenant]);
+  const command = randomUUID(), significant = {version:'command.v1',commandId:command,commandType:'job.switch_live',semanticKey:`pursuit-fixture:${job}`,actorMembershipId:row.actor,subjectType:'job',subjectRef:job,
+    action:{actionType:'job.switch_live',recipient:null,contentHash:row.content_hash,aggregateRevision:row.document_version,amountPence:null,currency:null,policyVersion:'synthetic_demo_activation.v3',expiresAt:new Date(Date.now()+3600000).toISOString()}};
+  const claim=(await client.query("SELECT app.begin_command($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb) result",['command.v1',command,'job.switch_live',significant.semanticKey,{tenantId:tenant,actorMembershipId:row.actor,subjectType:'job',subjectRef:job},{aggregateRevision:row.document_version},significant])).rows[0].result;
+  const authorization=claim.authorizationId;
   const result = await client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
-  await client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, command]);
+  await client.query("SELECT app.complete_command($1,'{}'::jsonb)", [command]);
   return result;
 }
 
@@ -190,7 +193,7 @@ beforeAll(async () => {
   await installLegacySyntheticPartyFixtures(admin);
   token = await issuePracticeSession(runtime); digest = hash(token);
   fixture = await seedDemoFixture(admin, digest);
-  ctx = testTenantContext(DEMO_TENANT_ID);
+  ctx = testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID });
   messages = new RecoveryMessageRepository(runtime); packs = new EvidencePackRepository(runtime); cases = new RecoveryCaseRepository(runtime);
   repo = new RecoveryFollowUpRepository(runtime, messages); sandbox = new SandboxRepository(runtime);
 }, 180_000);
@@ -1129,11 +1132,12 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
     expect(clock).toHaveLength(1);
     expect(rows[0]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: { clock: clock[0]!.payloadHash },
-      references: { auditTrust: "lower_trust", caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
+      // LP-6e 0758: actor_ref keeps the clock's domain claim; sealed fields name the bound session member.
+      references: { auditTrust: "lower_trust", auditActorKind: "bound_member", auditActorRef: expect.stringMatching(/^membership:[a-f0-9-]{36}$/u), caseId: base.caseId, commandId, jobId: fixture.jobId, runId: base.runId },
     });
     expect(rows[1]!.payload).toEqual({
       classifications: { action: "commercial" }, hashes: {},
-      references: { auditTrust: "lower_trust", caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
+      references: { auditTrust: "lower_trust", auditActorKind: "bound_member", auditActorRef: expect.stringMatching(/^membership:[a-f0-9-]{36}$/u), caseId: base.caseId, decisionId: due[0]!.decision_id, jobId: fixture.jobId },
     });
     expect(rows[1]!.id).toBe(due[0]!.audit_event_id);
     await verifyChain();
@@ -1153,6 +1157,7 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
       expect((await owner.query("UPDATE audit_control.audit_head SET sequence=0,event_hash=NULL WHERE tenant_id=$1", [DEMO_TENANT_ID])).rowCount).toBe(1);
       await owner.query("SET LOCAL session_replication_role = origin");
       await owner.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+      await bindTestClient(admin, owner, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID);
       expect(Number((await owner.query("SELECT app.evaluate_recovery_follow_ups($1,$2) AS n", [DEMO_TENANT_ID, base.runId])).rows[0].n)).toBe(0);
       const rows = (await owner.query(`SELECT id,tenant_id AS "tenantId",sequence::int,version,actor_ref AS "actorRef",
         event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",occurred_at AS "occurredAt",payload,

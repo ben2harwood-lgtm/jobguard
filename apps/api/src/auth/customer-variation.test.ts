@@ -48,6 +48,20 @@ describe("MON-5 exact customer extra approval", () => {
   try {await (action==="variations/read"?controller.read(raw,{headers},reply):controller.approve(raw,{headers},reply));throw new Error("Expected refusal");}
   catch(error){expect(error).toBeInstanceOf(HttpException);expect((error as HttpException).getStatus()).toBe(401);expect((error as HttpException).getResponse()).toEqual({code:"CUSTOMER_REFUSED"});}
  });
+ it("gives a named refusal for a pre-lock priced extra approved after final-account lock", async () => {
+  const f = fixture();
+  const refuseApproval = () => f.query.mockResolvedValueOnce({rows:[{result:{jobId:job}}]})
+   .mockRejectedValueOnce({code:"42501",message:"VARIATION_LOCKED_BY_FINAL_ACCOUNT",detail:"PRIVATE_SOURCE"});
+  const failure = {code:"VARIATION_LOCKED_BY_FINAL_ACCOUNT",message:"This extra cannot be approved because the final account is complete."};
+  refuseApproval();
+  const response = await customerVariationHttp(() => f.app, "variation-approvals", new Request(`${origin}/api/customer-portal/variation-approvals`, {method:"POST",headers,body:JSON.stringify(command)}));
+  expect(response.status).toBe(409); expect(await response.json()).toEqual(failure);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  refuseApproval();
+  const controller = new CustomerVariationController(() => f.app);
+  await expect(controller.approve(command, {headers}, {setHeader:vi.fn()})).rejects.toMatchObject({status:409,response:failure});
+  expect(f.query).toHaveBeenCalledTimes(4);
+ });
  it("routes customer mutations before the legacy cookie shortcut and refuses other builder paths",async()=>{
   const guard=new ApplicationAuthGuard(()=>{throw new Error("no member authority");});
   const ctx=(path:string)=>({switchToHttp:()=>({getRequest:()=>({path,method:"POST",headers})})}) as ExecutionContext;

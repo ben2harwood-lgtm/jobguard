@@ -7,16 +7,36 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { extraOriginHashV1, ExtraPersistenceError, extraOriginV1 } from "@jobguard/core";
 import { ExtraRepository, insertVariationProposal, withTenant, auditPayloadV1Schema, verifyAuditChain, appendAuditBatch, type AuditEvent, type TenantTransaction } from "../src/index.js";
 import { cluster, fixture, raise, rawVariation, rawOrigin, receipt, finishRaw, terminalizeFixtureReceipt, newTables, newOriginColumns, ownerTx, visitAndEvidence, originSql, originHashInput, noteCanary, descriptionCanary, extraIdFor, type Cluster, type Fixture } from "./extra-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 let c: Cluster, repo: ExtraRepository;
 beforeAll(async () => { c = await cluster(); repo = new ExtraRepository(c.runtime); }, 60_000);
 afterAll(async () => { await c?.close(); });
-const rawAttempt = async (f: Fixture, type = "LogSiteExtra", kind = "site_user", originFields: Record<string, unknown> = {}, receiptFields: { status?: string; semanticKey?: string } = {}, complete = false) => withTenant(c.admin, f.ctx, async db => {
+const rawAttempt = async (f: Fixture, type = "LogSiteExtra", kind = "site_user", originFields: Record<string, unknown> = {}, receiptFields: { status?: string; semanticKey?: string } = {}, complete = false, prepare?: (db: TenantTransaction) => Promise<unknown>) => withTenant(c.admin, f.ctx, async db => {
+ await prepare?.(db);
  const id = randomUUID(), command = await receipt(db, f.p.tenantId, f.jobId, id, f.p.membershipId, type, randomUUID(), receiptFields);
  await rawVariation(db, f.p.tenantId, f.jobId, id, kind);
  const row = await rawOrigin(db, f, id, command, { kind, ...originFields });
  if (complete) await finishRaw(db, f, id, command, row.origin_hash); await terminalizeFixtureReceipt(db,f.p.tenantId,command,{variationId:id}); return row;
 });
+// Bind the fixture's actual actor at the SQL transport boundary, retaining the
+// uppercase context being tested instead of making it a session identifier.
+async function uppercaseRequest(f: Fixture) {
+ const credential=sha256Hex(`lp6-test:${f.p.tenantId}:${f.p.membershipId}`);
+ await testBoundTenantContext(c.admin,f.p.tenantId,f.p.membershipId,credential);
+ const pool=new Proxy(c.runtime,{get(target,key){
+  if(key==='connect')return async()=>{
+   const client=await target.connect();
+   return {release:()=>client.release(),query:async(sql:string,values?:unknown[])=>{
+    const result=await client.query(sql,values);
+    if(sql==='BEGIN')await client.query("SELECT app.bind_request('real',$1,$2)",[credential,f.p.tenantId]);
+    return result;
+   }};
+  };
+  const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;
+ }});
+ return {repo:new ExtraRepository(pool),upper:testTenantContext(f.p.tenantId.toUpperCase(),{membershipId:f.p.membershipId,bindRequest:false})};
+}
 async function checkChain(f: Fixture) {
  const rows = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [f.p.tenantId])).rows;
  verifyAuditChain(rows.map(r => ({ id: r.id, version: r.version, tenantId: r.tenant_id, sequence: Number(r.sequence), actorRef: r.actor_ref, eventType: r.event_type, subjectType: r.subject_type, subjectRef: r.subject_ref, occurredAt: r.occurred_at, payload: r.payload, payloadHash: r.payload_hash, previousHash: r.previous_hash, eventHash: r.event_hash })) as AuditEvent[]);
@@ -109,7 +129,7 @@ describe("ENT-4b origin persistence", () => {
  it("[DW6] audit uses closed ID/hash keys; capture metadata never appears in audit or errors", async () => {
   const f = await fixture(c), raw = raise(f, { deviceId: "fictional-device-canary", deviceCapturedAt: "2026-10-01T01:02:03.000001Z" }); await repo.raiseExtra(f.ctx, raw);
   const events = (await c.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 AND event_type='contractor.extra.raised'", [f.p.tenantId])).rows;
-  expect(events).toHaveLength(1); for (const row of events) { expect(auditPayloadV1Schema.safeParse(row.payload).success).toBe(true); expect(Object.keys(row.payload.references).sort()).toEqual(["auditTrust", "command", "environment", "extra", "job"]); expect(Object.keys(row.payload.hashes)).toEqual(["origin"]); for (const [key,value] of Object.entries(row.payload.references)) { if(key === "auditTrust") expect(value).toBe("lower_trust"); else expect(value).toMatch(/^(?:[a-f0-9-]{36}|synthetic_demo)$/u); } for (const canary of [noteCanary, descriptionCanary, raw.deviceId, raw.deviceCapturedAt]) expect(JSON.stringify(row)).not.toContain(canary); }
+  expect(events).toHaveLength(1); for (const row of events) { expect(auditPayloadV1Schema.safeParse(row.payload).success).toBe(true); expect(Object.keys(row.payload.references).sort()).toEqual(["auditActorKind", "auditActorRef", "auditTrust", "command", "environment", "extra", "job"]); expect(Object.keys(row.payload.hashes)).toEqual(["origin"]); for (const [key,value] of Object.entries(row.payload.references)) { if(key === "auditTrust") expect(value).toBe("lower_trust"); else if(key === "auditActorKind") expect(value).toBe("bound_member"); else if(key === "auditActorRef") expect(value).toMatch(/^membership:[a-f0-9-]{36}$/u); else expect(value).toMatch(/^(?:[a-f0-9-]{36}|synthetic_demo)$/u); } for (const canary of [noteCanary, descriptionCanary, raw.deviceId, raw.deviceCapturedAt]) expect(JSON.stringify(row)).not.toContain(canary); }
   await expect(repo.raiseExtra(f.ctx, { ...raw, kind: noteCanary })).rejects.toMatchObject({ message: "INVALID_COMMAND" });
  });
  it("[R1] office, instruction, import, parties, unknown commands cannot write or relabel site origins", async () => {
@@ -171,12 +191,17 @@ describe("ENT-4b origin persistence", () => {
   for (const table of newTables) { expect((await c.runtime.query(`SELECT * FROM app.${table}`)).rowCount).toBe(0); await expect(c.runtime.query(`INSERT INTO app.${table}(tenant_id) VALUES($1)`, [a.p.tenantId])).rejects.toBeDefined(); }
  });
  it("[S2] new tenant tables have FORCE RLS, tenant policy and migration ownership", async () => {
-  for (const table of newTables) {
-   const row = (await c.admin.query("SELECT c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,p.polname,p.polcmd FROM pg_class c JOIN pg_policy p ON p.polrelid=c.oid WHERE c.oid=$1::regclass ORDER BY p.polname", [`app.${table}`])).rows;
-   const expected = [{ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "tenant_isolation", polcmd: "*" }];
-   if (["extra_duplicate_link", "extra_order_line_link"].includes(table)) expected.unshift({ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "lp5b_command_read", polcmd: "r" });
-   expect(row).toEqual(expected);
-  }
+  // Pin the ENT-4b policy inventory at the predecessor. The upgrade proof
+  // separately checks the full post-cutover policy inventory.
+  const predecessor = await jobDoorsDatabase(true, "0765_lp11_bound_tenant_rls.sql");
+  try {
+   for (const table of newTables) {
+    const row = (await predecessor.owner.query("SELECT c.relrowsecurity,c.relforcerowsecurity,pg_get_userbyid(c.relowner) owner,p.polname,p.polcmd FROM pg_class c JOIN pg_policy p ON p.polrelid=c.oid WHERE c.oid=$1::regclass ORDER BY p.polname", [`app.${table}`])).rows;
+    const expected = [{ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "tenant_isolation", polcmd: "*" }];
+    if (["extra_duplicate_link", "extra_order_line_link"].includes(table)) expected.unshift({ relrowsecurity: true, relforcerowsecurity: true, owner: "jobguard_migration", polname: "lp5b_command_read", polcmd: "r" });
+    expect(row).toEqual(expected);
+   }
+  } finally { await predecessor.close(); }
  });
  it("[S3] exactly SELECT/INSERT; invoker functions uncallable by runtime/PUBLIC; least privilege preserved", async () => {
   for (const table of newTables) expect((await c.admin.query("SELECT privilege_type FROM information_schema.role_table_grants WHERE grantee='jobguard_runtime' AND table_schema='app' AND table_name=$1 ORDER BY privilege_type", [table])).rows.map(r => r.privilege_type)).toEqual(["INSERT", "SELECT"]);
@@ -242,8 +267,8 @@ describe("ENT-4b origin persistence", () => {
   await expect(rawAttempt(f, "LogSiteExtra", "site_user", { site_visit_id: visit })).rejects.toMatchObject({ code: "23503" });
   const grant = await ownerTx(c, f.p.tenantId, async db => { const id = randomUUID(); await db.$client.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id) VALUES($1,$2,$3,'supervisor','tenant',$1)", [f.p.tenantId, id, f.p.membershipId]); return id; });
   await expect(rawAttempt(f, "LogSiteExtra", "site_user", { raising_grant_id: grant })).rejects.toMatchObject({ code: "23514" });
-  await ownerTx(c, f.p.tenantId, db => db.$client.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$3)", [f.p.tenantId, randomUUID(), f.p.membershipId]));
-  await expect(rawAttempt(f)).rejects.toMatchObject({ code: "23514" });
+  const revoke = (db: TenantTransaction) => db.$client.query("INSERT INTO app.contractor_membership_revocation(tenant_id,id,membership_id) VALUES($1,$2,$3)", [f.p.tenantId, randomUUID(), f.p.membershipId]);
+  await expect(rawAttempt(f, "LogSiteExtra", "site_user", {}, {}, false, revoke)).rejects.toMatchObject({ code: "23514" });
  });
  it("[S6] every stored contractor hash equals the pure mirror with six-digit timestamp text", async () => {
   const f = await fixture(c); await repo.raiseExtra(f.ctx, raise(f, { deviceId: "fictional-device", deviceCapturedAt: "2026-10-01T01:02:03.123456Z" }));
@@ -251,20 +276,33 @@ describe("ENT-4b origin persistence", () => {
  });
  it("[S9] scanner and seven pinned bridges stay byte-identical", async () => {
   const hashes = {
+   // S9 re-pin to these bytes approved by Ben, 14 Nov 2026, router chat: "Yes, repin" (pins first moved in repair 10, 13 Nov, on the checker's source acceptance).
+   // LP-6d repair 10 (13 Nov 2026): re-pinned only the seven files this branch changed. Contractor principals now carry
+   // their bound request context in a module-private WeakMap set by the one session constructor, read through
+   // requireContractorRequestContext; party/work-order/SoR/scheduling repositories take AuthenticatedMembership. Checker accepted on source: prechecks/lp-6d-r10-403be3a6-s9-and-oracle.md.
    // renewed caller review 28 Oct (jg-checks, ch9-p2 review)
-   "packages/db/src/practice-session.ts": "9b765f410777c28334f9f7d8388e0a3c6e30f52bb6d4b4070c9b69e4ecbf1b14",
-   "packages/db/src/contractor-repository.ts": "56b95b80360434f0cf58376ef2ec44d0354b194e5080bcfd9414ac283971006c",
-   "packages/db/src/contractor-party-repository.ts": "e5852288e5355b53f7548c4d5741aef54ee55a2b8a66dd56a54b08963cd1fdb0",
+   // renewed caller review 4 Nov 2026 (Ben: 'Yes, update S9')
+   // Renewed caller source review 6 Nov 2026, later-safety-108 repair 4: v1 ownership now requires the succeeded import receipt.
+   // Persisted-session authentication, synthetic-only gate and the sole context constructor are unchanged; RED review remains required.
+   // 13 Nov 2026: refreshed for REAL-WAYIN-LINKED-PRACTICE (0734) at the coordinator-reviewed e76c9b33 file; Ben: "Yes, land it" (card jobguard-wayin-direct-yes-2026-11-11).
+   // re-pin approved by Ben, 15 Nov 2026, router chat: Yes, refresh them
+   // LP-6d R4 re-pin (contractor-repository.ts resolveSession refusal-only fallback; context-boundary.test.ts) approved by Ben, 15 Nov 2026, router chat: "Yes, update them"
+   "packages/db/src/practice-session.ts": "ca87026313b99e833e4145ba853c021bb0ffbebcd76279510155cfc62a64de56",
+   "packages/db/src/contractor-repository.ts": "6c0bbd9b64a9c886b3ad08e8956803bad100ea31c2ca5ca6b367e46d59d55e3d",
+   "packages/db/src/contractor-party-repository.ts": "93729040b706e520f24e757d14ef9c8e78fe32c835071aa05a2f421ec3bd11bd",
+   // 15 Nov 2026 catch-up to main (router): each pin above is one side's approved value (each file changed on one side only).
    // Renewed caller review 5 Nov 2026: Ben approved batch-41 ("Yes, all three") in the router chat.
    // ~/.local/share/full-steam/coordinator/prechecks/batch-41.md: importCsvInTransaction makes no new context;
    // ConnectorPromotionRepository.promote uses context and principal from the same persisted session.
-   "packages/db/src/work-order-repository.ts": "51e64ceaa39564c8d1b083fbb6b24048143455dfe76080ff63309ce7d808dfb6",
-   "packages/db/src/sor-repository.ts": "b66552d4d408c5e476ab9bff44324cf160b741561b5a03926c0697853e31514f",
-   "packages/db/src/job-scheduling-repository.ts": "7517df3c6597af44f651c8b704c9bd91c4f40894ce5aa58e3b4fcea16cc9eb57",
-   "packages/db/src/work-order-fixtures.ts": "703b2f726e9d4256cbd0a1908676f2cd401d64bad28741853f8131183cd0a0ea",
+   "packages/db/src/work-order-repository.ts": "406ec23ac5d01d7cdcb5e0649047357f729fc6fdf1aeb919f0e491deac0ab87b",
+   "packages/db/src/sor-repository.ts": "d3ac04e13826761e6c0fc0c8dc45fbb2cdf4813e5d01fd5f073b9c4bb9f930fe",
+   "packages/db/src/job-scheduling-repository.ts": "dcc7884fc3ff5bb3c878834a81824e4270e0775de666c61f9ccb031c9430c4de",
+   "packages/db/src/work-order-fixtures.ts": "7a819ffa0a3fc465dfb44133d887b86500672afb82fcc203f6b66a4bb6dc18d4",
+   // Ben 6 Nov router-chat "yes": exactly the emergency-notice and retention-timer constructor sites.
+   // Hold: break-glass identity design goes to Ben before real data.
    // Scanner bytes change only for the renewed caller review citation above.
-   "apps/api/src/auth/context-boundary.test.ts": "413a60bc0bf8ee4d113b068a6ed6a54710e7f2cb8507206f41b4d83d1e3e80a7"
-};
+   "apps/api/src/auth/context-boundary.test.ts": "fc755e00b1ebeb0c272da001d2edcde711e4fd0d87bb5e575152fc5d0eea64ab"
+  };
   for (const [file, hash] of Object.entries(hashes)) expect(sha256Hex(await readFile(new URL(`../../../${file}`, import.meta.url), "utf8")), file).toBe(hash);
  });
  it("[C3] all fixtures are synthetic_demo and every raised identity is a new scope item", async () => {
@@ -288,7 +326,7 @@ describe("ENT-4b origin persistence", () => {
   return refusal;
  }
  it("[S4] a stamped context with an UPPER-CASE tenant id commits a valid extra", async () => {
-  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase());
+  const f = await fixture(c), {upper,repo} = await uppercaseRequest(f);
   expect(upper.tenantId).not.toBe(f.p.tenantId); expect(upper.tenantId.toLowerCase()).toBe(f.p.tenantId);
   const input = raise(f), e = await repo.raiseExtra(upper, input);
   expect(await countRows(f, e.variationId, input.commandId)).toEqual({ command_receipt: 1, variation: 1, extra_origin: 1, extra_event: 1, audit_event: 1 });
@@ -296,7 +334,7 @@ describe("ENT-4b origin persistence", () => {
   await checkChain(f);
  });
  it("[S4] both spellings of one tenant identify one extra for one client capture ID", async () => {
-  const f = await fixture(c), upper = testTenantContext(f.p.tenantId.toUpperCase()), original = raise(f, { clientCaptureId: randomUUID() });
+  const f = await fixture(c), {upper,repo} = await uppercaseRequest(f), original = raise(f, { clientCaptureId: randomUUID() });
   const a = await repo.raiseExtra(upper, original), retry = { ...original, commandId: randomUUID() };
   expect(await repo.raiseExtra(f.ctx, retry)).toEqual(a);
   expect(await repo.raiseExtra(upper, { ...original, commandId: randomUUID() })).toEqual(a);

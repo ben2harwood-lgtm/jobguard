@@ -13,7 +13,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 const reason="Your supplier reduced a bill you hadn’t paid yet. That’s a saving, not money back in your account, so it isn’t counted as recovered money and there’s no fee on it.";
 const expected={version:"recovery-eligibility-review.v3",policyVersion:"reference_recovery_eligibility_policy_v3",fixture:"F21",outcome:"excluded",qualifyingPrincipal:{pence:0,currency:"GBP"},reason,reasonHeld:false,terminal:false,productionEnabled:false,
  lines:[{kind:"principal",debtorType:"business",netPence:9000,qualifyingPrincipal:{pence:0,currency:"GBP"},reason,reasonHeld:false}]};
-const ctx=testTenantContext(T),actor={membershipId:M,identityUserId:U};
+const ctx=testTenantContext(T,{membershipId:M}),actor={membershipId:M,identityUserId:U};
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,runtimeConfig:PoolConfig,adminConfig:PoolConfig;
 const previousEnvironment=process.env.JOBGUARD_ENV;
 async function start(){

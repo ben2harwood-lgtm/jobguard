@@ -1,3 +1,6 @@
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
+import { snapshotRows } from "./upgrade-proof-utils.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -7,19 +10,25 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { contractorRoles, customerTypes, referenceApprovalRulesV1, jobPartiesCommandResultV1, type ContractorPartyImport } from "@jobguard/core";
-import { ContractorRepository, ContractorPartyRepository, assertContractorPartiesRequired, JobRepository, JobPartiesRepository, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type TenantTransaction } from "../src/index.js";
+import { ContractorRepository, ContractorPartyRepository, assertContractorPartiesRequired, JobRepository, JobPartiesRepository, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, requireContractorRequestContext, withTenant, type AuthenticatedMembership, type TenantTransaction } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractors: ContractorRepository, parties: ContractorPartyRepository;
 const tables = ["contractor_client_customer", "contractor_party_binding", "contractor_resident_contact"];
 const document = { version: "client-contract.v1", reference: "FICTIONAL", startsOn: "2026-10-01", endsOn: null, sorVersionIds: [], tenderedAdjustment: { numerator: "0", denominator: "1" }, photoRule: "required", vatCode: "synthetic-unreviewed", exportedNotBilledAlertDays: 30 };
 const resident = { kind: "contact" as const, contact: { version: "resident-contact.v1" as const, name: "Fictional Resident Canary", phone: "00000123456", email: "resident-canary@example.invalid" } };
 const linkInput = (customerRevisionId: string) => ({ version: "contractor-customer-link.v1", environment: "synthetic_demo", commandId: randomUUID(), customerRevisionId });
-const ctx = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
+const sessions = new WeakMap<AuthenticatedMembership, ReturnType<typeof verifiedTenantContextFromMembership>>();
+const ctx = (p: AuthenticatedMembership) => {
+  const context = sessions.get(p);
+  if (!context) throw new Error("Synthetic fixture session missing");
+  return context;
+};
 const query = (p: AuthenticatedMembership) => contractors.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
 const command = async (p: AuthenticatedMembership, fields: Record<string, unknown>) => contractors.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await query(p)).revision, ...fields });
 async function setup(type = "insurer") {
-  const session = randomUUID(), p = await contractors.startPractice(session); await seedActiveContractorAgreement(admin,p.tenantId); const v = await query(p);
-  const job = (await new JobRepository(runtime).create(ctx(p), ["job:update"], { title: "Fictional contractor job" })).id as string;
+  const session = randomUUID(), p = await contractors.startPractice(session); sessions.set(p, verifiedTenantContextFromMembership(p, { kind: "contractor_practice", credential: session })); await seedActiveContractorAgreement(admin,p.tenantId); const v = await query(p);
+  const job = randomUUID();
+  await withTenant(runtime, ctx(p), db => db.$client.query("SELECT app.work_order_begin($1,$2,$3)", [p.membershipId, job, "Fictional contractor job"]));
   const jp = new JobPartiesRepository(runtime);
   const customer = jobPartiesCommandResultV1.parse(await jp.command(ctx(p), p.membershipId, job, { version: "job-parties-command.v1", commandId: randomUUID(), action: "create_customer", customer: { version: "customer.v1", name: "Fictional Client", type, email: "client@example.invalid" } }));
   const site = jobPartiesCommandResultV1.parse(await jp.command(ctx(p), p.membershipId, job, { version: "job-parties-command.v1", commandId: randomUUID(), action: "create_site", site: { version: "site.v1", addressLines: ["1 Fictional Street"], town: "London", postcode: "SW1A1AA" } }));
@@ -86,7 +95,8 @@ describe("CH-3b PostgreSQL guarantees", () => {
       const id = randomUUID(), scope = role === "client_approver" ? { kind: "client", id: f.client } : role === "operative" ? { kind: "team", id: f.v.teams[0]!.id } : { kind: "tenant", id: f.p.tenantId };
       await command(f.p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope, clientId: role === "client_approver" ? f.client : null, contractId: null });
       const row = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [id]))).rows[0];
-      const actor = { ...f.p, membershipId: id, identityUserId: row.identity_user_id };
+      // LP-6d: each refused role acts through its own persisted credential, so the refusal is the scope check, not the binding.
+      const actor = await memberSessionPrincipal(admin, runtime, f.p.tenantId, id);
       for (const jobId of [f.job, randomUUID()]) await expect(parties.readResident(actor, jobId)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
     }
     // ENT-1 refuses to invite an owner (0054:233): the owner row is the practice principal itself, and the refusal is asserted.
@@ -132,7 +142,10 @@ describe("CH-3b PostgreSQL guarantees", () => {
       const grants = (await admin.query("SELECT pg_get_userbyid(p.proowner) owner,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure FROM pg_proc p WHERE p.oid=$1::regprocedure", [signature])).rows[0];
       expect(grants).toEqual({ owner: "jobguard_migration", runtime: true, infrastructure: false });
     }
-    await expect(runtime.query("SELECT app.bind_contractor_parties($1,$2::jsonb)", [f.p.membershipId, JSON.stringify(f.input)])).rejects.toMatchObject({ message: "NOT_FOUND" });
+    // LP-6d refuses the unbound call before any party/job lookup.
+    const beforeUnbound = await snapshotRows(admin, ["app.contractor_party_binding", "app.command_receipt"]);
+    await expect(runtime.query("SELECT app.bind_contractor_parties($1,$2::jsonb)", [f.p.membershipId, JSON.stringify(f.input)])).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+    expect(await snapshotRows(admin, ["app.contractor_party_binding", "app.command_receipt"])).toEqual(beforeUnbound);
     // Every CH-3b function pins search_path; the three routines and the record trigger function are the only SECURITY DEFINER ones.
     const functions = (await admin.query("SELECT p.proname,p.prosecdef,p.proconfig,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',p.oid,'EXECUTE') infrastructure FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1::text[]) ORDER BY p.proname", [["bind_contractor_parties", "link_contractor_customer", "read_contractor_resident", "require_contractor_party_receipt", "require_contractor_party_record", "valid_contractor_resident"]])).rows;
     const pinned = ["search_path=pg_catalog"];
@@ -162,22 +175,22 @@ it("DW6 contractor tenants keep CH-3a recognition and switch-live guarantees thr
   await f.jp.command(context, f.p.membershipId, second, { version: "job-parties-command.v1", commandId: randomUUID(), action: "bind", expectedJobRevision: 0, parties: { version: "job-parties.v1", customerRevisionId: f.customer.revisionId, siteRevisionId: f.site.revisionId } });
   expect((await f.jp.view(context, f.p.membershipId, f.job)).recognition.map(r => r.jobId).sort()).toEqual([f.job, second].sort());
   // Ruling 103: owner-only quoting setup; the commands below still use runtime.
-  await new JobRepository(admin).transition(context, ["job:update"], { jobId: f.job, expectedRevision: 1, to: "quoting", reason: "start_quote" });
-  const proposal = await jobs.reserveProposal(context, ["quote:edit"], { jobId: f.job, sourceHash: "a".repeat(64), sourceReference: "synthetic:ch3b" });
-  const scope = await jobs.confirmProposal(context, ["quote:edit"], { jobId: f.job, proposalId: proposal.id, description: "Fictional repair", quantityDecimal: "1", unit: "item", unitPricePence: 10000, totalPence: 10000 });
-  await new QuoteRepository(runtime).saveDraft(context, { jobId: f.job, draftId: randomUUID(), expectedRevision: 0, currency: "GBP", taxPolicyVersion: "candidate_m1_standard_v1", effectiveAt: new Date(), actorRef: `membership:${f.p.membershipId}`, lines: [{ id: randomUUID(), scopeItemId: scope.scope_item_id, scopeRevisionId: scope.id, description: "Fictional repair", origin: "captured", included: true, exclusionReason: null, quantity: "1", unit: "item", unitRatePence: 10000, discountPercent: "0", taxTreatment: "standard_rate_20", rateProvenance: "entered", category: "repair", region: "London" }] });
-  const artifact = await new QuoteDeliveryRepository(runtime).preview(context, f.job, "client@example.invalid");
+  await new JobRepository(admin).transition(context, ["job:update"], { jobId: second, expectedRevision: 1, to: "quoting", reason: "start_quote" });
+  const proposal = await jobs.reserveProposal(context, ["quote:edit"], { jobId: second, sourceHash: "a".repeat(64), sourceReference: "synthetic:ch3b" });
+  const scope = await jobs.confirmProposal(context, ["quote:edit"], { jobId: second, proposalId: proposal.id, description: "Fictional repair", quantityDecimal: "1", unit: "item", unitPricePence: 10000, totalPence: 10000 });
+  await new QuoteRepository(runtime).saveDraft(context, { jobId: second, draftId: randomUUID(), expectedRevision: 0, currency: "GBP", taxPolicyVersion: "candidate_m1_standard_v1", effectiveAt: new Date(), actorRef: `membership:${f.p.membershipId}`, lines: [{ id: randomUUID(), scopeItemId: scope.scope_item_id, scopeRevisionId: scope.id, description: "Fictional repair", origin: "captured", included: true, exclusionReason: null, quantity: "1", unit: "item", unitRatePence: 10000, discountPercent: "0", taxTreatment: "standard_rate_20", rateProvenance: "entered", category: "repair", region: "London" }] });
+  const artifact = await new QuoteDeliveryRepository(runtime).preview(context, second, "client@example.invalid");
   const expiresAt = new Date(Date.now() + 60000), recipients = ["client@example.invalid"];
-  await dispatcher.dispatch(context, { version: "command.v1", commandId: randomUUID(), commandType: "quote.send", semanticKey: `quote-send:${artifact.documentId}`, actorMembershipId: f.p.membershipId, subjectType: "quote_document", subjectRef: artifact.documentId, authorizationId: randomUUID(), action: { actionType: "quote.send", recipient: JSON.stringify(recipients), contentHash: artifact.hash, aggregateRevision: artifact.document.documentVersion, amountPence: null, currency: null, policyVersion: "free-quote-send.v1", expiresAt } }, new IssueQuoteMutation({ tenantId: f.p.tenantId, jobId: f.job, documentId: artifact.documentId, outboxActionId: randomUUID(), recipients, immutableContent: new TextDecoder().decode(artifact.pdf) }));
-  const revision = (await jobs.get(context, ["job:view"], f.job)).revision;
-  await dispatcher.dispatch(context, { version: "command.v1", commandId: randomUUID(), commandType: "quote.acceptance.attest", semanticKey: `accept:${f.job}`, actorMembershipId: f.p.membershipId, subjectType: "quote_document", subjectRef: artifact.documentId, action: { actionType: "quote.acceptance.attest", recipient: "Fictional Client", contentHash: artifact.hash, aggregateRevision: artifact.document.documentVersion, amountPence: 12000, currency: "GBP", policyVersion: "builder-attestation.v1", expiresAt } }, new RecordBuilderAcceptanceMutation(f.p.tenantId, { version: "quote-acceptance.v1", acceptanceId: randomUUID(), jobId: f.job, documentId: artifact.documentId, documentVersion: artifact.document.documentVersion, documentHash: artifact.hash, acceptedTotalPence: 12000, expectedJobRevision: revision, statedCustomerName: "Fictional Client", statedMethod: "email", acceptedAt: new Date(), evidenceId: null }));
-  const acceptedRevision = (await jobs.get(context, ["job:view"], f.job)).revision;
-  const input = { version: "switch-live.v1", activationId: randomUUID(), capSnapshotId: randomUUID(), syntheticObligationId: randomUUID(), jobId: f.job, acceptedDocumentId: artifact.documentId, acceptedDocumentVersion: artifact.document.documentVersion, acceptedDocumentHash: artifact.hash, expectedJobRevision: acceptedRevision, acceptedNetValuePence: 10000, recoveryCapPence: 150, mode: "synthetic_demo", activationTermsVersion: "synthetic_demo_illustrative.v1", feePolicyVersion: "reference_fee_policy_v1", activatedAt: new Date() };
-  const command = { version: "command.v1" as const, commandId: randomUUID(), commandType: "job.switch_live", semanticKey: `switch:${f.job}`, actorMembershipId: f.p.membershipId, subjectType: "job", subjectRef: f.job, action: { actionType: "job.switch_live", recipient: null, contentHash: artifact.hash, aggregateRevision: artifact.document.documentVersion, amountPence: 7900, currency: "GBP" as const, policyVersion: "synthetic_demo_illustrative.v1", expiresAt } };
+  await dispatcher.dispatch(context, { version: "command.v1", commandId: randomUUID(), commandType: "quote.send", semanticKey: `quote-send:${artifact.documentId}`, actorMembershipId: f.p.membershipId, subjectType: "quote_document", subjectRef: artifact.documentId, authorizationId: randomUUID(), action: { actionType: "quote.send", recipient: JSON.stringify(recipients), contentHash: artifact.hash, aggregateRevision: artifact.document.documentVersion, amountPence: null, currency: null, policyVersion: "free-quote-send.v1", expiresAt } }, new IssueQuoteMutation({ tenantId: f.p.tenantId, jobId: second, documentId: artifact.documentId, outboxActionId: randomUUID(), recipients, immutableContent: new TextDecoder().decode(artifact.pdf) }));
+  const revision = (await jobs.get(context, ["job:view"], second)).revision;
+  await dispatcher.dispatch(context, { version: "command.v1", commandId: randomUUID(), commandType: "quote.acceptance.attest", semanticKey: `accept:${second}`, actorMembershipId: f.p.membershipId, subjectType: "quote_document", subjectRef: artifact.documentId, action: { actionType: "quote.acceptance.attest", recipient: "Fictional Client", contentHash: artifact.hash, aggregateRevision: artifact.document.documentVersion, amountPence: 12000, currency: "GBP", policyVersion: "builder-attestation.v1", expiresAt } }, new RecordBuilderAcceptanceMutation(f.p.tenantId, { version: "quote-acceptance.v1", acceptanceId: randomUUID(), jobId: second, documentId: artifact.documentId, documentVersion: artifact.document.documentVersion, documentHash: artifact.hash, acceptedTotalPence: 12000, expectedJobRevision: revision, statedCustomerName: "Fictional Client", statedMethod: "email", acceptedAt: new Date(), evidenceId: null }));
+  const acceptedRevision = (await jobs.get(context, ["job:view"], second)).revision;
+  const input = { version: "switch-live.v1", activationId: randomUUID(), capSnapshotId: randomUUID(), syntheticObligationId: randomUUID(), jobId: second, acceptedDocumentId: artifact.documentId, acceptedDocumentVersion: artifact.document.documentVersion, acceptedDocumentHash: artifact.hash, expectedJobRevision: acceptedRevision, acceptedNetValuePence: 10000, recoveryCapPence: 150, mode: "synthetic_demo", activationTermsVersion: "synthetic_demo_illustrative.v1", feePolicyVersion: "reference_fee_policy_v1", activatedAt: new Date() };
+  const command = { version: "command.v1" as const, commandId: randomUUID(), commandType: "job.switch_live", semanticKey: `switch:${second}`, actorMembershipId: f.p.membershipId, subjectType: "job", subjectRef: second, action: { actionType: "job.switch_live", recipient: null, contentHash: artifact.hash, aggregateRevision: artifact.document.documentVersion, amountPence: 7900, currency: "GBP" as const, policyVersion: "synthetic_demo_illustrative.v1", expiresAt } };
   const [first, replay] = await Promise.all([dispatcher.dispatch(context, command, new SwitchJobLiveMutation(f.p.tenantId, "synthetic_demo", input)), dispatcher.dispatch(context, command, new SwitchJobLiveMutation(f.p.tenantId, "synthetic_demo", input))]);
-  expect(first).toEqual(replay); expect((await jobs.get(context, ["job:view"], f.job)).status).toBe("live");
-  expect((await f.jp.view(context, f.p.membershipId, f.job)).recognition.find(r => r.jobId === f.job)?.startedAt).not.toBeNull();
-  expect((await withTenant(runtime, context, db => db.$client.query("SELECT count(*)::int n FROM app.job_activation WHERE job_id=$1", [f.job]))).rows[0].n).toBe(1);
+  expect(first).toEqual(replay); expect((await jobs.get(context, ["job:view"], second)).status).toBe("live");
+  expect((await f.jp.view(context, f.p.membershipId, second)).recognition.find(r => r.jobId === second)?.startedAt).not.toBeNull();
+  expect((await withTenant(runtime, context, db => db.$client.query("SELECT count(*)::int n FROM app.job_activation WHERE job_id=$1", [second]))).rows[0].n).toBe(1);
 }, 60000);
 
 
@@ -209,11 +222,14 @@ it('binds the exact customer/payer/site revisions, contract version, provenance 
 });
 it('denies a job UUID colliding with an ENT-1 team; team membership is not a job assignment',async()=>{
  const f=await setup();await parties.linkCustomer(f.p,f.client,linkInput(f.customer.revisionId!));
- const job=(await new JobRepository(runtime).create(ctx(f.p),['job:update'],{id:f.v.teams[0]!.id,title:'Fictional colliding ID'})).id;
+ const job=f.v.teams[0]!.id;await withTenant(runtime,ctx(f.p),db=>db.$client.query("SELECT app.work_order_begin($1,$2,$3)",[f.p.membershipId,job,'Fictional colliding ID']));
  await parties.bind(f.p,{...f.input,jobId:job,commandId:randomUUID(),workOrderId:randomUUID()});
  const member=randomUUID();await command(f.p,{kind:'member.invite',id:member,role:'supervisor',email:'supervisor@example.invalid',scope:{kind:'team',id:job},clientId:null,contractId:null});
  const identity=(await withTenant(runtime,ctx(f.p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[member]))).rows[0].identity_user_id;
  const actor={...f.p,membershipId:member,identityUserId:identity};
+ const context = await testBoundTenantContext(admin, actor.tenantId, actor.membershipId);
+ Object.assign(actor, { context });
+ sessions.set(actor, context);
  expect((await withTenant(runtime,ctx(actor),db=>db.$client.query("SELECT app.contractor_allowed($1,'resident.read',$2) allowed",[member,job]))).rows[0].allowed).toBe(true);
  await expect(parties.readResident(actor,job)).rejects.toMatchObject({code:'NOT_FOUND'});
 });
@@ -238,8 +254,10 @@ const effects = (f: Fixture) => withTenant(runtime, ctx(f.p), async db => (await
   [f.job, f.input.commandId, [f.customer.revisionId]])).rows[0]);
 async function invite(f: Fixture, role: string): Promise<AuthenticatedMembership> {
   const id = randomUUID(); await command(f.p, { kind: "member.invite", id, role, email: `${id}@fictional.invalid`, scope: { kind: "tenant", id: f.p.tenantId }, clientId: null, contractId: null });
-  const row = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT identity_user_id FROM app.membership WHERE id=$1", [id]))).rows[0];
-  return { ...f.p, membershipId: id, identityUserId: row.identity_user_id };
+  // LP-6d: the invited member acts through its own persisted contractor practice session.
+  const actor = await memberSessionPrincipal(admin, runtime, f.p.tenantId, id);
+  sessions.set(actor, requireContractorRequestContext(actor));
+  return actor;
 }
 async function reviseCustomer(f: Fixture, type: string, name = "Fictional Client") {
   const current = (await withTenant(runtime, ctx(f.p), db => db.$client.query("SELECT max(revision)::int n FROM app.customer_revision WHERE customer_id=$1", [f.customer.id]))).rows[0].n;

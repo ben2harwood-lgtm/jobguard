@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-120": {
+      "branches": ["codex/sandbox/later-safety-120"],
+      "note": "LATER-SAFETY-120: synthetic offline replay and permanent error mapping; no migration.",
+      "allow": [
+        "packages/db/src/site-extra-repository.ts",
+        "packages/db/test/site-extra-evidence-compatibility.test.ts",
+        "apps/api/src/offline-upload.application.ts",
+        "apps/api/src/offline-upload.application.test.ts",
+        "packages/db/test/site-extra-replay-after-invoice.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -28,15 +28,17 @@ export class InterimDraftApplication {
   async read(credentials: TenantRequestCredentials, jobId: string) {
     this.assertSynthetic();
     const session = await this.identity.session(credentials.sessionToken);
+    if (session.memberships.length !== 1) throw new InterimDraftRepositoryError("NOT_FOUND");
     const context = await resolveVerifiedTenantContext(this.identity.provider, {
       sessionToken: credentials.sessionToken, requestedTenantId: session.memberships[0]?.tenantId,
       csrfToken: session.csrfToken, origin: credentials.origin ?? this.identity.allowedOrigin,
     }, this.identity.allowedOrigin);
-    return this.view(await this.repository.read(context, jobId), "Stored draft book loaded.");
+    return this.view(await this.repository.read(context, jobId, this.identity.provider.digest(`session:${credentials.sessionToken}`)), "Stored draft book loaded.");
   }
   async command(credentials: TenantRequestCredentials, jobId: string, raw: unknown) {
     this.assertSynthetic();
     const session = await this.identity.session(credentials.sessionToken);
+    if (session.memberships.length !== 1) throw new InterimDraftRepositoryError("NOT_FOUND");
     const context = await resolveVerifiedTenantContext(this.identity.provider, {
       sessionToken: credentials.sessionToken, requestedTenantId: session.memberships[0]?.tenantId,
       csrfToken: credentials.csrfToken, origin: credentials.origin,
@@ -51,16 +53,17 @@ export class InterimDraftApplication {
 export function interimDraftFailure(error: unknown) {
   let status: number, code: string, message: string;
   if (error instanceof InterimDraftRepositoryError) {
-    code = `INTERIM_DRAFT_${error.code}`;
-    status = { INVALID_INPUT: 400, NOT_FOUND: 404, CONFLICT: 409, UNAVAILABLE: 503, DARK: 404 }[error.code];
+    code = error.code === "JOB_NOT_LIVE" ? error.code : `INTERIM_DRAFT_${error.code}`;
+    status = { INVALID_INPUT: 400, NOT_FOUND: 404, CONFLICT: 409, UNAVAILABLE: 503, DARK: 404, FORBIDDEN: 403, UNAUTHENTICATED: 401, JOB_NOT_LIVE: 409 }[error.code];
     message = { INVALID_INPUT: "Check the draft record and job. Tenant, actor and enable flags are not accepted.",
-      NOT_FOUND: "Draft book not found.", CONFLICT: "This command or record was already used with different content. Nothing was added.",
+      FORBIDDEN: "You don't have permission.", UNAUTHENTICATED: "Sign in with an active company session.",
+      JOB_NOT_LIVE: "This job is not live.", NOT_FOUND: "Draft book not found.", CONFLICT: "This command or record was already used with different content. Nothing was added.",
       UNAVAILABLE: "Drafts are unavailable. Retry the same command to check its outcome.", DARK: "Not found." }[error.code];
   } else if (error instanceof InterimApplicationError) {
     code = error.code; status = error.code === "INVALID_INPUT" ? 400 : 409; message = error.message;
   } else {
     const auth = identityStatus(error); status = auth.status; code = auth.code;
-    message = status === 503 ? "Drafts are unavailable. Retry the same command to check its outcome." : "Sign in with an active company session and try again.";
+    message = status === 503 ? "Drafts are unavailable. Retry the same command to check its outcome." : status === 403 ? "You don't have permission." : "Sign in with an active company session.";
   }
   return { status, body: { version: "interim.draft-error.v1", code, message } };
 }

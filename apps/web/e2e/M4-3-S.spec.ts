@@ -146,7 +146,7 @@ test("maps immutable customer sources, verifies exports server-side and invalida
   // The Jobs home is a deliberately filtered fixture list that hides capture-created jobs (packages/db/src/demo-runtime.ts)
   // and a capture-created job page has no link back to it (workspace-shell.tsx), so no Jobs row exists to click for this
   // job. Leave through Jobs, then reopen the saved job by a fresh navigation (not a reload) and read the persisted pack.
-  await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
+  await page.goto("/classic"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
   await page.goto(`/jobs/${source.jobId}#recovery-cases`);
   await expect(page.getByTestId("pack-manifest-hash")).toHaveText(changed.manifestHash);
   const second = await browser.newContext({ storageState: await page.context().storageState() });

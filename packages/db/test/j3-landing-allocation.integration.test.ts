@@ -1,3 +1,5 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
+import { loadReviewedInventory } from "./lp-0-catalog.js";
 import { applyOutboundPause } from "./outbound-pause-fixture.js";
 // CI: real PostgreSQL, genuine writers; only evidence/classifier inputs are fixtures.
 import {beforeAll,afterAll,expect,it} from "vitest";
@@ -18,11 +20,13 @@ import {VariationRepository,insertPricedVariation,approvePricedVariation} from "
 import {PracticeFeedRepository} from "../src/practice-feed-repository.js";
 import {PracticeInvoiceRepository} from "../src/practice-invoice-repository.js";
 import {withTenant} from "../src/tenant-context.js";
-import {testTenantContext} from "./tenant-context-test-utils.js";
-import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
+import {testTenantContext, testBoundTenantContext} from "./tenant-context-test-utils.js";
+import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,finalCheckShadowJob,type FinalCheckFixture} from "./final-check-fixture.js";
 import {pngBytes} from "./site-extra-evidence-fixtures.js";
+// LP-6d: guarded practice reads run inside the practice session's own bound request.
+const bindPractice=(db:{query:(sql:string,values?:unknown[])=>Promise<unknown>},digest:string,tenant:string)=>db.query("SELECT app.bind_request('practice',$1,$2)",[digest,tenant]);
 const hash="a".repeat(64);
-async function combinedReceiptFixture(f:FinalCheckFixture){
+async function combinedReceiptFixture(f:FinalCheckFixture,lateCatch=false){
  const baselineNetPence=3000000;
  process.env.JOBGUARD_ENV="synthetic_demo";
  await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[DEMO_TENANT_ID]);
@@ -32,7 +36,7 @@ async function combinedReceiptFixture(f:FinalCheckFixture){
   await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional allocator builder')",[account,DEMO_TENANT_ID]);
   await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,account,DEMO_IDENTITY_USER_ID]);
  });
- const session=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,session),context=testTenantContext(DEMO_TENANT_ID),actor={membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID};
+ const session=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,session),context=auth.context,actor={membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID};
  const scoped=practiceMaterialPool(f.runtime,auth.digest),jobId=await prepareActivationFixtureV3(f.admin,context,"shadow-30000",baselineNetPence,scoped,baselineNetPence,auth.digest);
  await new PracticeActivationRepository(scoped).start(context,jobId,{commandId:randomUUID(),scenario:"no_charge"});
  const scope=(await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY created_at,id LIMIT 1",[DEMO_TENANT_ID,jobId])).rows[0].id as string;
@@ -69,44 +73,53 @@ async function combinedReceiptFixture(f:FinalCheckFixture){
   await price(id,"Fictional builder capture",amount);
  }
  let drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId});
- await locks.acceptTerms(context,{actorMembershipId:actor.membershipId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
+ await locks.acceptTerms(auth.context,{actorMembershipId:actor.membershipId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),scopeItemId:scope,disposition:"done"});
  // A value read is identical with no hidden signals and with held signals.
- const readBeforeLock=()=>finalCheckTenant(f.runtime,DEMO_TENANT_ID,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[jobId,auth.digest])).rows[0].result);
+ const readBeforeLock=()=>finalCheckTenant(f.runtime,DEMO_TENANT_ID,async db=>{await bindPractice(db,auth.digest,DEMO_TENANT_ID);return (await db.query("SELECT app.read_value_job($1,$2) result",[jobId,auth.digest])).rows[0].result;});
  expect(await readBeforeLock()).toBeNull();
  const signals=[randomUUID(),randomUUID()];
- for(const [index,signalId] of signals.entries())await finalCheckTenant(f.shadow,DEMO_TENANT_ID,async db=>{
+ for(const [index,signalId] of signals.entries())await finalCheckShadowJob(f.shadow,DEMO_TENANT_ID,jobId,async db=>{
   await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),$5,'low','held_for_final_check')",[DEMO_TENANT_ID,jobId,signalId,workIds[index],"Fictional catch"]);
   const e=(await f.admin.query("SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,evidence])).rows[0];
   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[DEMO_TENANT_ID,jobId,signalId,evidence,e.object_version_id,e.sha256,e.received]);
  });
  expect(await readBeforeLock()).toBeNull();
- const lock=await locks.lock(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
- const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(context,jobId);
- for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(context,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:s.evidenceId===evidence?signals:[]});}
+ const lock=await locks.lock(auth.context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
+ const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(verifiedTenantContextForQueuedJob(context.tenantId),jobId);
+ for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(verifiedTenantContextForQueuedJob(context.tenantId),jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:s.evidenceId===evidence?signals:[]});}
  const classifications:FinalCheckClassification[]=signals.map(signalId=>({signalId,expectedRevision:0,outcome:"reveal",references:[],comparisons:{baselineItemIds:[scope],captureIds:manifest.comparisons.captures.map(c=>(c as {id:string}).id),lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}}));
- const run=await worker.reconcile(context,jobId,manifest.id,classifications) as {runId:string;lockId:string};
+ const run=await worker.reconcile(verifiedTenantContextForQueuedJob(context.tenantId),jobId,manifest.id,classifications) as {runId:string;lockId:string};
  // Reconciliation makes the result available; publication authorizes invoicing.
- await new FinalCheckCompletionRepository(f.shadow).publish(context,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
- const catches=[];
- for(const [index,signalId] of signals.entries()){
+ await new FinalCheckCompletionRepository(f.shadow).publish(verifiedTenantContextForQueuedJob(context.tenantId),{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
+ const catches:{caseId:string;workId:string;commercialRevisionId:string}[]=[];
+ const confirmCatch=async(index:number)=>{
+  const signalId=signals[index]!;
   const confirm=await new FinalCheckRepository(scoped).confirmCatch(context,jobId,auth.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:run.lockId,runId:run.runId,signalId,expectedSignalRevision:1}) as {variationId:string};
-  const priced=await price(confirm.variationId,"Fictional catch",index===0?50000:30000);
+  const priced=await price(confirm.variationId,"Fictional catch",index===0?50000:lateCatch?32000:30000);
   const caseId=(await f.admin.query("SELECT id FROM app.recovery_case WHERE tenant_id=$1 AND job_id=$2 AND case_type='missed_variation_final_account' AND source_refs ? $3",[DEMO_TENANT_ID,jobId,'variation:'+confirm.variationId])).rows[0].id as string;
   catches.push({caseId,workId:workIds[index]!,commercialRevisionId:priced.id});
- }
+ };
+ for(const index of lateCatch?[0]:[0,1])await confirmCatch(index);
  drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
  const issue={jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind:"final" as const,recipient:"practice-customer@example.invalid",issuedOn:"2026-10-28"};
- const invoice=await locks.issueInvoice(context,issue);
- expect(invoice).toMatchObject({netPence:3440000,totalPence:4128000});
- expect(await locks.issueInvoice(context,issue)).toEqual(invoice);
+ let invoice=await locks.issueInvoice(auth.context,issue);
+ const combinedInvoice=invoice;
+ expect(invoice).toMatchObject(lateCatch?{netPence:3410000,totalPence:4092000}:{netPence:3440000,totalPence:4128000});
+ expect(await locks.issueInvoice(auth.context,issue)).toEqual(invoice);
+ if(lateCatch){
+  await confirmCatch(1);
+  drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId,expectedRevision:drafted.revision});
+  invoice=await locks.issueInvoice(auth.context,{...issue,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind:"supplementary"});
+  expect(invoice).toMatchObject({netPence:32000,totalPence:38400});
+ }
  const invoices=new PracticeInvoiceRepository(scoped);
- const payment=await invoices.recordReceipt(context,{jobId,invoiceId:invoice.invoiceId,actorMembershipId:actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence:4128000,method:"bank_transfer",reference:"Fictional combined receipt"});
+ const payment=await invoices.recordReceipt(context,{jobId,invoiceId:invoice.invoiceId,actorMembershipId:actor.membershipId,commandId:randomUUID(),paidOn:"2026-10-28",amountPence:lateCatch?38400:4128000,method:"bank_transfer",reference:"Fictional combined receipt"});
  for(const action of ["advance","match_receipt"] as const){
-  const view=await feed.command(context,actor,auth.digest,jobId,{version:"practice-feed-command.v1",action,commandId:randomUUID(),expectedRevision:feedRevision,movement:"receipt-41280",...(action==="advance"?{step:"settled"}:{paymentId:payment.paymentId})});
+  const view=await feed.command(context,actor,auth.digest,jobId,{version:"practice-feed-command.v1",action,commandId:randomUUID(),expectedRevision:feedRevision,movement:lateCatch?"receipt-384":"receipt-41280",...(action==="advance"?{step:"settled"}:{paymentId:payment.paymentId})});
   feedRevision=view.revision;
  }
- return {context,actor,auth,session,jobId,lock,invoice,paymentId:payment.paymentId,invoices,catches,locks,scoped,drafted};
+ return {context,actor,auth,session,jobId,lock,invoice,combinedInvoice,paymentId:payment.paymentId,invoices,catches,locks,scoped,drafted};
 }
 let f:FinalCheckFixture;const environment=process.env.JOBGUARD_ENV;
 beforeAll(async()=>{f=await createFinalCheckFixture();},120000);
@@ -143,6 +156,61 @@ async function assess(x:Combined,index:number,lineId:string,expectedAttributionR
  expect(await repository.assess(x.context,x.jobId,x.auth.digest,command)).toEqual(saved);
  return saved;
 }
+it("a later supplementary catch reaches receipt allocation and attribution after a combined final; exact-R0 mutation fails",async()=>{
+ const x=await combinedReceiptFixture(f,true);
+ const {readFile}=await import("node:fs/promises");
+ const identity="app.receipt_fact_invoice_line(uuid,uuid,uuid,uuid,uuid,uuid,uuid)";
+ const definition=(await f.admin.query("SELECT pg_get_functiondef($1::regprocedure) definition",[identity])).rows[0].definition as string;
+ const security=async()=>(await f.admin.query("SELECT proowner,proacl,prosecdef,proconfig FROM pg_proc WHERE oid=$1::regprocedure",[identity])).rows;
+ const before=await security();
+ // Scratch mutation uses the exact predecessor body, whose only difference is
+ // the final-binding predicate. Restore it even when the regression fails.
+ const predecessor=await readFile(new URL("../migrations/0413_j3_combined_invoice.sql",import.meta.url),"utf8");
+ const oldFunction=predecessor.slice(predecessor.indexOf("CREATE OR REPLACE FUNCTION app.receipt_fact_invoice_line("));
+ try{
+  await f.admin.query(oldFunction.slice(0,oldFunction.indexOf("END $$;")+9));
+  await expect(produce(x)).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+ }finally{await f.admin.query(definition);}
+ expect(await security()).toEqual(before);
+ const saved=await produce(x);
+ expect(saved).toHaveProperty("allocationRevisionId");
+ const snapshot=await app(x).view(x.jobId);
+ expect(snapshot.rows).toHaveLength(1);
+ const line=snapshot.rows.find(row=>row.commercialRevisionId===x.catches[1]!.commercialRevisionId)!;
+ expect(line).toMatchObject({invoiceId:x.invoice.invoiceId,net:{numerator:"32000",denominator:"1"}});
+ await allocate(x,1,line.lineAllocationId);
+ const attributed=await assess(x,1,line.lineId);
+ expect(attributed).toMatchObject({assessmentOutcome:"eligible_for_review",remainingPrincipal:{numerator:"32000",denominator:"1"}});
+ const {attributionValueReceipt}=await import("../../../apps/api/src/recovery-attribution-value.js");
+ expect(attributionValueReceipt(attributed).fee.pence).toBe(3200);
+ // The copied catch A at R2 was already billed at R1. The supplementary has
+ // only B, and neither its receipt facts nor the private helper can allocate A.
+ expect(snapshot.rows.some(row=>row.commercialRevisionId===x.catches[0]!.commercialRevisionId)).toBe(false);
+ const copied=(await f.admin.query("SELECT id FROM app.final_account_line WHERE tenant_id=$1 AND job_id=$2 AND final_account_revision_id=$3 AND commercial_revision_id=$4",[x.context.tenantId,x.jobId,x.drafted.id,x.catches[0]!.commercialRevisionId])).rows[0].id as string;
+ const binding=(await f.admin.query("SELECT check_id FROM app.final_account_invoice_binding WHERE tenant_id=$1 AND invoice_id=$2",[x.context.tenantId,x.invoice.invoiceId])).rows[0];
+ const checkLine=(db:import("pg").PoolClient,lineId=line.lineId)=>db.query("SELECT app.receipt_fact_invoice_line($1,$2,$3,$4,$5,$6,$7)",[x.context.tenantId,x.jobId,x.invoice.invoiceId,lineId,x.drafted.id,x.lock.id,binding.check_id]);
+ await expect(finalCheckTenant(f.admin,x.context.tenantId,db=>checkLine(db,copied))).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+ // Owner-only corruption probes are rolled back, including all trigger changes.
+ // Keep the supplementary's own binding intact to exercise the final predicate.
+ for(const attack of ["different_lock","sibling_revision"] as const){
+  await expect(finalCheckTenant(f.admin,x.context.tenantId,async db=>{
+   const forged=randomUUID();
+   if(attack==="sibling_revision"){
+    await db.query(`INSERT INTO app.final_account_revision SELECT (jsonb_populate_record(NULL::app.final_account_revision,
+     to_jsonb(r)||jsonb_build_object('id',$4::text,'revision',r.revision+1,'source_hash',$5::text,'previous_revision_id',$6::text))).*
+     FROM app.final_account_revision r WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[x.context.tenantId,x.jobId,x.drafted.id,forged,createHash("sha256").update(forged).digest("hex"),x.lock.finalAccountRevisionId]);
+   }
+   await db.query("ALTER TABLE app.final_account_invoice_binding DISABLE TRIGGER ALL");
+   if(attack==="different_lock")await db.query("UPDATE app.final_account_invoice_binding SET lock_id=$3 WHERE tenant_id=$1 AND invoice_id=$2",[x.context.tenantId,x.combinedInvoice.invoiceId,forged]);
+   else await db.query("UPDATE app.final_account_invoice_binding SET revision_id=$3 WHERE tenant_id=$1 AND invoice_id=$2",[x.context.tenantId,x.combinedInvoice.invoiceId,forged]);
+   await db.query("ALTER TABLE app.final_account_invoice_binding ENABLE TRIGGER ALL");
+   await checkLine(db);
+  })).rejects.toThrow("STORED_RECEIPT_LINE_BINDING_REQUIRED");
+ }
+ await finalCheckTenant(f.admin,x.context.tenantId,db=>checkLine(db));
+ // Both failures rolled back; a normal read still proves the saved attribution.
+ expect((await new RecoveryAttributionRepository(f.runtime).history(x.context,x.jobId,x.auth.digest)).find(row=>row.assessmentId===attributed.assessmentId)).toEqual(attributed);
+});
 it("combined J3 value retains £3,600 captures and £800/£80/£720 recovery, refuses foreign reads, and appends a reversal revision",async()=>{
  const x=await combinedReceiptFixture(f);const produced=await produce(x);
  if(!("allocationRevisionId" in produced)||!produced.allocationRevisionId)throw new Error("Expected saved receipt revision");
@@ -163,7 +231,7 @@ it("combined J3 value retains £3,600 captures and £800/£80/£720 recovery, re
  expect(serializeExactPence(sumExactPence(assessments.map(a=>parseExactPence(attributionValueReceipt(a).yoursBeforeVatAndTax))))).toEqual({numerator:"72000",denominator:"1"});
  // Read through the same lock-gated projection used by the J3 report. Its
  // public contract retains locked capture IDs, while the invoice uses copies.
- const readValue=()=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>(await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result);
+ const readValue=()=>finalCheckTenant(f.runtime,x.context.tenantId,async db=>{await bindPractice(db,x.auth.digest,x.context.tenantId);return (await db.query("SELECT app.read_value_job($1,$2) result",[x.jobId,x.auth.digest])).rows[0].result;});
  const auditBefore=(await f.admin.query("SELECT count(*)::int n FROM app.audit_event")).rows;
  const raw=await readValue();expect(await readValue()).toEqual(raw);
  const receipt=mapValueReceipt(raw);
@@ -180,7 +248,9 @@ it("combined J3 value retains £3,600 captures and £800/£80/£720 recovery, re
  const foreign=await issuePracticeSession(f.runtime);
  await expect(new ReceiptCaseAllocationApplication(f.runtime,foreign).view(x.jobId)).rejects.toMatchObject({code:"NOT_FOUND"});
  const foreignAuth=await authenticatePracticeSession(f.runtime,foreign);
- await expect(finalCheckTenant(f.runtime,x.context.tenantId,db=>db.query("SELECT app.read_value_job($1,$2)",[x.jobId,foreignAuth.digest]))).rejects.toThrow("VALUE_FORBIDDEN");
+ // LP-6d: a foreign practice credential cannot be bound here, and the caller's own bound request cannot read with it.
+ await expect(finalCheckTenant(f.runtime,x.context.tenantId,db=>db.query("SELECT app.read_value_job($1,$2)",[x.jobId,foreignAuth.digest]))).rejects.toThrow("REQUEST_BINDING_REFUSED");
+ await expect(finalCheckTenant(f.runtime,x.context.tenantId,async db=>{await bindPractice(db,x.auth.digest,x.context.tenantId);return db.query("SELECT app.read_value_job($1,$2)",[x.jobId,foreignAuth.digest]);})).rejects.toThrow(/REQUEST_BINDING_REFUSED|VALUE_FORBIDDEN/u);
  const {StoredReceiptCaseAllocationRepository}=await import("../src/stored-receipt-case-allocation-repository.js");
  await expect(new StoredReceiptCaseAllocationRepository(f.runtime,"synthetic_demo").command(testTenantContext(randomUUID()),x.jobId,x.auth.digest,{version:"stored-receipt-case-command.v1",action:"review",commandId:randomUUID(),factLineId:snapshot.rows[0]!.lineAllocationId,caseId:x.catches[0]!.caseId,workId:x.catches[0]!.workId,expectedCaseRevision:1})).rejects.toThrow();
  // Original locked baseline cannot borrow a catch's recovery case.
@@ -208,8 +278,7 @@ it("combined J3 value retains £3,600 captures and £800/£80/£720 recovery, re
  }
 });
 it("combined value reader preserves authority and matches its LP-0 definition hash",async()=>{
- const {readFile}=await import("node:fs/promises");
- const inventory=JSON.parse(await readFile(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json",import.meta.url),"utf8")) as {recorded:{routines:{identity:string;definitionSha256:string|null}[]}};
+ const {inventory}=await loadReviewedInventory();
  const routine=inventory.recorded.routines.find(row=>row.identity==="function:app.read_value_job(uuid,text)")!;
  expect(routine.definitionSha256).toMatch(/^[a-f0-9]{64}$/u);
  const row=(await f.admin.query(`SELECT pg_get_userbyid(proowner) owner,prosecdef security_definer,proconfig settings,

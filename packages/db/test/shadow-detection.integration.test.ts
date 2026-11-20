@@ -12,13 +12,19 @@ import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { withTenant } from "../src/tenant-context.js";
 import { verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { listDecisionInbox } from "../src/decision-repository.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 import { freePort, closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID();
 const at="2026-10-01T00:00:00Z", credential=randomUUID();
 let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
-const pool=(user:string,database="postgres")=>new Pool({host:"127.0.0.1",port,database,user,password:credential,max:2});
+const pool=(user:string,database="jobguard_synthetic_demo")=>new Pool({host:"127.0.0.1",port,database,user,password:credential,max:2});
 async function fixtureContext<R>(p:Pool,tenant:string,work:(db:PoolClient)=>Promise<R>){const db=await p.connect();try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);const result=await work(db);await db.query("COMMIT");return result}catch(e){await db.query("ROLLBACK");throw e}finally{db.release()}}
+function onShadowJob<R>(jobId:string, work:(db:PoolClient)=>Promise<R>){
+ return fixtureContext(shadow,T,async db=>{
+  await db.query("SELECT app.lp11_bind_shadow_job($1,$2)",[T,jobId]);
+  return work(db);
+ });
+}
 async function seed(p:Pool=admin){
  await installLegacySyntheticPartyFixtures(p);
  for(const [tenant,job] of [[T,J],[T,K],[O,L]]){await p.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[tenant]);await p.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional SV-3 job','live')",[job,tenant]);await p.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT DO NOTHING",[tenant,job]);}
@@ -29,10 +35,10 @@ async function seed(p:Pool=admin){
 async function setup(){
  directory=await mkdtemp(join(tmpdir(),"sv3-pg16-"));port=await freePort(58500,500);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:credential,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
- await postgres.initialise();await postgres.start();admin=pool("postgres");await migrate(admin);await seed();
+ await postgres.initialise();await postgres.start();await postgres.createDatabase("jobguard_synthetic_demo");admin=pool("postgres");await migrate(admin);await seed();
  for(const [login,role] of [["sv3_runtime","jobguard_runtime"],["sv3_shadow","jobguard_shadow"],["sv3_emergency","jobguard_shadow_emergency_access"]]){await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD '${credential}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT ${role} TO ${login}`);}
  runtime=pool("sv3_runtime");shadow=pool("sv3_shadow");emergency=pool("sv3_emergency");
- await withTenant(runtime,testTenantContext(T),db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[T,M,randomUUID(),"synthetic_final_check_terms.v1"]));
+ await withTenant(runtime,testTenantContext(T,{membershipId:M}),db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[T,M,randomUUID(),"synthetic_final_check_terms.v1"]));
 }
 async function evidence(o:Observation,p:Pool=admin){
  await fixtureContext(p,o.tenantId,async db=>{
@@ -59,7 +65,7 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
  });
  it.each(["draft","rejected","withdrawn"] as const)("P: a %s never-priced capture is matched, with no fee eligibility or Decision",async state=>{
   const o=observation(),scope=randomUUID(),variation=randomUUID();await evidence(o);
-  await fixtureContext(admin,T,async db=>{await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,T,J]);await db.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description,state) VALUES($1,$2,$3,$4,'text','outside tap','outside tap',$5)",[variation,T,J,scope,state==="withdrawn"?"draft":state]);if(state==="withdrawn")await db.query("INSERT INTO app.variation_withdrawal(tenant_id,job_id,id,variation_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,$5,'builder_withdrawn')",[T,J,randomUUID(),variation,M])});
+  await fixtureContext(admin,T,async db=>{await bindTestClient(admin,db,T,M);await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scope,T,J]);await db.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description,state) VALUES($1,$2,$3,$4,'text','outside tap','outside tap',$5)",[variation,T,J,scope,state==="withdrawn"?"draft":state]);if(state==="withdrawn")await db.query("INSERT INTO app.variation_withdrawal(tenant_id,job_id,id,variation_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,$5,'builder_withdrawn')",[T,J,randomUUID(),variation,M])});
   const capture=shadowCaptureV1.parse({version:"shadow-capture.v1",tenantId:T,jobId:J,id:variation,scopeItemId:scope,revisionId:variation,serverRecordedAt:at,valuePence:null,kind:"log_extra",state,scopeArea:"job",description:"outside tap",recordedPhase:"pre_lock",aiStructured:false,sourceRef:variation});
   const request=batch([o],[capture]);request.proposals=[proposalFromObservation(o,"ai_proposal","synthetic.v1",at,{lock:"before_lock",adoption:"after_adoption"})];
   await new ShadowDetectionRepository(shadow).persist(testTenantContext(T),request);
@@ -76,11 +82,11 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
   expect(firing).toHaveLength(1);expect(firing[0]).toMatchObject({rule:"prior_written_agreement",rule_version:"shadow_attribution_policy_v3",source_ref:o.evidence.id});
   expect((await admin.query("SELECT state,disclosed_before_lock FROM app.shadow_commercial_signal WHERE id=$1",[s])).rows).toEqual([{state:"surfaced_early",disclosed_before_lock:true}]);
   expect((await admin.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE signal_id=$1 ORDER BY reason",[s])).rows).toEqual([{reason:"disclosed_before_lock"},{reason:"surfaced_early"}]);
-  const inbox=await withTenant(runtime,testTenantContext(T),db=>listDecisionInbox(db,J));expect(inbox).toContainEqual(expect.objectContaining({decision_id:firing[0].decision_id,kind:"must_surface_signal",classification:"mandatory",title:"outside tap"}));
+  const inbox=await withTenant(runtime,testTenantContext(T,{membershipId:M}),db=>listDecisionInbox(db,J));expect(inbox).toContainEqual(expect.objectContaining({decision_id:firing[0].decision_id,kind:"must_surface_signal",classification:"mandatory",title:"outside tap"}));
   const args=[T,J,s,firing[0].id,firing[0].decision_id,firing[0].disclosure_event_id,"prior_written_agreement","shadow_attribution_policy_v3",o.evidence.id,o.evidence.objectVersionId,JSON.stringify({...o.facts,description:"changed"})];
-  await expect(withTenant(shadow,testTenantContext(T),db=>db.$client.query(routine,args))).rejects.toMatchObject({code:"23505"});
+  await expect(onShadowJob(J,db=>db.query(routine,args))).rejects.toMatchObject({code:"23505"});
   await expect(admin.query("UPDATE app.shadow_commercial_signal SET disclosed_before_lock=false WHERE id=$1",[s])).rejects.toMatchObject({code:"55000"});
-  await expect(withTenant(shadow,testTenantContext(T),db=>db.$client.query("UPDATE app.shadow_commercial_signal SET state='revealed' WHERE id=$1",[s]))).rejects.toMatchObject({code:"55000"});
+  await expect(onShadowJob(J,db=>db.query("UPDATE app.shadow_commercial_signal SET state='revealed' WHERE id=$1",[s]))).rejects.toMatchObject({code:"55000"});
   expect((await admin.query("SELECT payload FROM app.audit_event WHERE id=$1",[firing[0].audit_event_id])).rows[0].payload.references).toMatchObject({rule:"prior_written_agreement",ruleVersion:"shadow_attribution_policy_v3"});
  });
  it("DW6: an unmatched supplier item is held evidence without a finding, disclosure, notification or outbox action",async()=>{
@@ -94,7 +100,7 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
   const base=observation(),o=observation({...base,facts:{...base.facts,customerClearlyRequested:true,needsPriorWrittenAgreement:true,significantWork:{basis:"synthetic_fixture",sourceRef:"synthetic:rollback",significant:true}}});await evidence(o);
   const noFire=observation({...o,facts:{...o.facts,customerClearlyRequested:false,needsPriorWrittenAgreement:false,significantWork:null}}),request=batch([noFire]);await new ShadowDetectionRepository(shadow).persist(testTenantContext(T),request);
   const args=firingArgs(o,request.proposals[0]!.signalId),before=(await admin.query("SELECT count(*)::int n FROM app.audit_event")).rows;
-  await expect(withTenant(shadow,testTenantContext(T),async db=>{await db.$client.query(routine,args);throw new Error("rollback")})).rejects.toThrow("rollback");
+  await expect(onShadowJob(J,async db=>{await db.query(routine,args);throw new Error("rollback")})).rejects.toThrow("rollback");
   for(const [table,id] of [["decision",args[4]],["shadow_disclosure_event",args[5]],["shadow_must_surface_firing",args[3]],["job_finding",args[3]]])expect((await admin.query(`SELECT id FROM app.${table} WHERE id=$1`,[id])).rows).toEqual([]);
   expect((await admin.query("SELECT count(*)::int n FROM app.audit_event")).rows).toEqual(before);
  });
@@ -132,7 +138,8 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
     await db.query("INSERT INTO app.shadow_disclosure_event(tenant_id,job_id,id,signal_id,route,actor_ref,before_lock) VALUES($1,$2,$3,$4,'defect','synthetic:T1',true)",[T,job,disclosure,signal]);
    }
    await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)",[T,J,signalJ,o.evidence.id,o.evidence.objectVersionId,o.evidence.sha256,o.evidence.serverReceivedAt]);
-   // Audit parents are genuine chain entries; neither FK triggers nor guards are disabled.
+   // Bind the fixture's persisted owner before writing genuine chain entries.
+   await bindTestClient(admin,db,T,M);
    await db.query("SELECT app.append_shadow_audit($1,$2,'shadow.disclosed')",[disclosureJ,J]);
    await db.query("SELECT app.append_shadow_audit($1,$2,'shadow.disclosed')",[disclosureK,K]);
    await db.query("SET CONSTRAINTS ALL IMMEDIATE");await db.query("SET CONSTRAINTS ALL DEFERRED");
@@ -157,7 +164,7 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
   const args=firingArgs(observation({...o,facts:{...o.facts,customerClearlyRequested:true,needsPriorWrittenAgreement:true,significantWork:{basis:"synthetic_fixture",sourceRef:"synthetic:boundary",significant:true}}}),request.proposals[0]!.signalId);
   await expect(shadow.query(routine,args)).rejects.toMatchObject({code:"42501"});
   await expect(withTenant(shadow,testTenantContext(O),db=>db.$client.query(routine,args))).rejects.toMatchObject({code:"42501"});
-  await expect(withTenant(shadow,testTenantContext(T),db=>db.$client.query(routine,[...args.slice(0,1),K,...args.slice(2)]))).rejects.toMatchObject({code:"23503"});
+  await expect(onShadowJob(K,db=>db.query(routine,[...args.slice(0,1),K,...args.slice(2)]))).rejects.toMatchObject({code:"23503"});
   for(const table of ["evidence_object","job","variation","decision"])await expect(shadow.query(`SELECT * FROM app.${table}`)).rejects.toMatchObject({code:"42501"});
   for(const table of ["shadow_commercial_signal","shadow_signal_evidence","shadow_must_surface_firing"])await expect(runtime.query(`SELECT * FROM app.${table}`)).rejects.toMatchObject({code:"42501"});
   await expect(withTenant(runtime,testTenantContext(T),db=>db.$client.query(routine,args))).rejects.toMatchObject({code:"42501"});
@@ -165,7 +172,7 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
  it("reader uses runtime RLS, verified immutable sources, and refuses absent terms",async()=>{
   const o=observation();await evidence(o);const sources=new FixtureObservationSources([o]),reader=new ShadowObservationReader(runtime,sources);
   expect(await sources.decode({tenantId:O,jobId:L,kind:o.kind,evidenceId:o.evidence.id,objectVersionId:o.evidence.objectVersionId,sha256:o.evidence.sha256,text:o.text})).toBeNull();
-  const result=await reader.read(testTenantContext(T),{version:"shadow-observation-read.v1",jobId:J});expect(result.observations).toContainEqual(expect.objectContaining({evidence:expect.objectContaining({id:o.evidence.id})}));
+  const result=await reader.read(testTenantContext(T,{membershipId:M}),{version:"shadow-observation-read.v1",jobId:J});expect(result.observations).toContainEqual(expect.objectContaining({evidence:expect.objectContaining({id:o.evidence.id})}));
   await expect(reader.read(testTenantContext(O),{version:"shadow-observation-read.v1",jobId:J})).rejects.toThrow("OBSERVATION_JOB_UNAVAILABLE");
  });
  it("rule and disclosure audits preserve the existing audit.v1 payload contract and chain",async()=>{
@@ -240,7 +247,7 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
   const args=firingArgs(o,request.proposals[0]!.signalId);args[6]="safety";
   for(const alteration of ["ALTER TABLE app.final_check_terms_acceptance RENAME TO sv3_missing_terms", "ALTER TABLE app.final_check_terms_acceptance ENABLE ROW LEVEL SECURITY; CREATE POLICY sv3_hide_terms ON app.final_check_terms_acceptance AS RESTRICTIVE FOR SELECT TO jobguard_migration USING(false)"]){
    const db=await admin.connect();try{
-    await db.query("BEGIN");await db.query(alteration);await db.query("SELECT set_config('app.tenant_id',$1,true)",[T]);
+    await db.query("BEGIN");await db.query(alteration);await db.query("SELECT set_config('app.tenant_id',$1,true)",[T]);await bindTestClient(admin,db,T,M);
     await db.query("SAVEPOINT alert");
     await expect(db.query(routine,args)).rejects.toMatchObject({code:"55000",message:expect.stringMatching(/TERMS_(?:RELATION_UNAVAILABLE|NOT_ACCEPTED)/u)});
     await db.query("ROLLBACK TO SAVEPOINT alert");
@@ -250,10 +257,13 @@ describe("SV-3 real PostgreSQL detection, atomic disclosure and permissions",()=
    }finally{await db.query("ROLLBACK");db.release()}
   }
   const reader=new ShadowObservationReader(runtime,new FixtureObservationSources([]));await reader.assertTermsRelation();
-  expect(await reader.hasAcceptedTerms(testTenantContext(T))).toBe(true);
-  expect(await reader.hasAcceptedTerms(testTenantContext(O))).toBe(false);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T,{membershipId:M}),J)).toBe(true);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T,{membershipId:M}),K)).toBe(true);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T,{membershipId:M}),L)).toBe(false);
+  expect(await reader.hasAcceptedTerms(testTenantContext(T,{membershipId:M}),randomUUID())).toBe(false);
+  expect(await reader.hasAcceptedTerms(testTenantContext(O),L)).toBe(false);
   await expect(withTenant(runtime,testTenantContext(T),db=>db.$client.query("INSERT INTO app.final_check_terms_acceptance(tenant_id) VALUES($1)",[T]))).rejects.toMatchObject({code:"42501"});
-  await withTenant(shadow,testTenantContext(T),db=>db.$client.query(routine,args));
+  await onShadowJob(J,db=>db.query(routine,args));
   expect((await admin.query("SELECT rule FROM app.shadow_must_surface_firing WHERE id=$1",[args[3]])).rows).toEqual([{rule:"safety"}]);
  });
 });

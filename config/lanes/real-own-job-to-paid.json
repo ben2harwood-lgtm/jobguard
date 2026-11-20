@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-own-job-to-paid": {
+      "branches": [
+        "codex/sandbox/real-own-job-to-paid"
+      ],
+      "note": "RED REAL-OWN-JOB-TO-PAID repair 2; NOPR. Landing follows DEMO-S-FC-COMPANY-DB #688, migration 0700.",
+      "allow": [
+        "apps/web/app/ui/customer-invoices.test.tsx",
+        "apps/web/app/ui/customer-invoices.tsx",
+        "apps/web/app/ui/final-account-lock.test.tsx",
+        "apps/web/app/ui/final-account-lock.tsx",
+        "apps/web/e2e/SV-4.spec.ts",
+        "apps/web/e2e/real-own-job-to-paid.spec.ts"
+      ]
+    }
+  }
+}

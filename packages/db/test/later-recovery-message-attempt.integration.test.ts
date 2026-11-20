@@ -1,3 +1,4 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { testTenantContext } from './tenant-context-test-utils.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -33,13 +34,19 @@ const reviewerOf = async () => ({ membershipId: fixture.memberId, identityUserId
  * owner, accepted document, authorization and lifecycle before binding v3. */
 async function activatePursuitFixture(client: import("pg").PoolClient, tenant: string, job: string, expected: number) {
   const row = (await client.query("SELECT d.id,d.document_version,d.content_hash,m.id actor FROM app.quote_document_version d JOIN app.membership m ON m.tenant_id=d.tenant_id AND m.role='owner' AND m.revoked_at IS NULL WHERE d.tenant_id=$1 AND d.job_id=$2", [tenant, job])).rows[0];
-  const command = randomUUID(), decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
-  await client.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.switch_live',$3,$4,'processing',$5)", [command, tenant, `pursuit-fixture:${job}`, row.content_hash, row.actor]);
-  await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
-  await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
-  await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
+  const { bound } = (await client.query("SELECT app.lp6e_request_binding_present() bound")).rows[0];
+  if (bound) {
+    const { matches } = (await client.query("SELECT (app.current_tenant(), app.current_actor())=($1::uuid,$2::uuid) matches", [tenant, row.actor])).rows[0];
+    if (!matches) throw new Error("Evidence fixture is bound to a different actor");
+  } else {
+    await bindTestClient(client, client, tenant, row.actor);
+  }
+  const command = randomUUID(), significant = {version:'command.v1',commandId:command,commandType:'job.switch_live',semanticKey:`pursuit-fixture:${job}`,actorMembershipId:row.actor,subjectType:'job',subjectRef:job,
+    action:{actionType:'job.switch_live',recipient:null,contentHash:row.content_hash,aggregateRevision:row.document_version,amountPence:null,currency:null,policyVersion:'synthetic_demo_activation.v3',expiresAt:new Date(Date.now()+3600000).toISOString()}};
+  const claim=(await client.query("SELECT app.begin_command($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb) result",['command.v1',command,'job.switch_live',significant.semanticKey,{tenantId:tenant,actorMembershipId:row.actor,subjectType:'job',subjectRef:job},{aggregateRevision:row.document_version},significant])).rows[0].result;
+  const authorization=claim.authorizationId;
   const result = await client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
-  await client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, command]);
+  await client.query("SELECT app.complete_command($1,'{}'::jsonb)", [command]);
   return result;
 }
 
@@ -64,7 +71,7 @@ async function seedPursuitFixture() {
             expect(document).toEqual([{ id: args[5] }]);
             return activatePursuitFixture(target, String(args[0]), primaryJob, Number(args[2]));
           }
-          if (sql === "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')" && args?.[1] === primaryJob) {
+          if (sql === "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT (tenant_id,job_id) DO NOTHING" && args?.[1] === primaryJob) {
             expect(tracks++).toBe(0);
             const bound = await target.query('SELECT job_track,environment FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2', args);
             expect(bound.rows).toEqual([{ job_track: 'small_builder', environment: 'synthetic_demo' }]);
@@ -146,7 +153,7 @@ async function makeMember(role: string, revoked: boolean): Promise<RecoveryMessa
 async function inIsolatedWorld<T>(run: () => Promise<T>): Promise<T> {
   const saved = { fixture, context, actor };
   fixture = await seedPursuitFixture();
-  context = testTenantContext(fixture.tenantId);
+  context = testTenantContext(fixture.tenantId, { membershipId: fixture.memberId });
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   try { return await run(); } finally { ({ fixture, context, actor } = saved); }
 }
@@ -201,13 +208,14 @@ beforeAll(async () => {
   const postgresLog: string[] = [];
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: 'postgres', password: 'synthetic', persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ['--lc-messages=C', '--encoding=UTF8'], onLog: message => { postgresLog.push(message); } });
   try { await postgres.initialise(); await postgres.start(); } catch (error) { throw new Error(`${String(error)}\n${postgresLog.join('\n')}`); }
-  admin = new Pool({ host: '127.0.0.1', port, user: 'postgres', password: 'synthetic', database: 'postgres' });
+  await postgres.createDatabase('jobguard_synthetic_demo');
+  admin = new Pool({ host: '127.0.0.1', port, user: 'postgres', password: 'synthetic', database: 'jobguard_synthetic_demo' });
   // CH-3a: every job needs fictional parties before its quote document and live switch; the shared fixture recipe supplies them.
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin); fixture = await seedPursuitFixture();
   await admin.query("CREATE ROLE message_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO message_login");
-  runtime = new Pool({ host: '127.0.0.1', port, user: 'message_login', password: 'synthetic', database: 'postgres', max: 12 });
-  context = testTenantContext(fixture.tenantId);
-  otherContext = testTenantContext(fixture.otherTenantId);
+  runtime = new Pool({ host: '127.0.0.1', port, user: 'message_login', password: 'synthetic', database: 'jobguard_synthetic_demo', max: 12 });
+  context = testTenantContext(fixture.tenantId, { membershipId: fixture.memberId });
+  otherContext = testTenantContext(fixture.otherTenantId, { membershipId: fixture.memberId });
   repo = new RecoveryMessageRepository(runtime); packs = new EvidencePackRepository(runtime); cases = new RecoveryCaseRepository(runtime);
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   // A non-owner member and a revoked owner in the same tenant, for authority checks.

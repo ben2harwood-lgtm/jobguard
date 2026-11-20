@@ -62,7 +62,7 @@ it.each(["proof","terms","approval","stale_eligibility","unallocated_refund","wr
   });
  }
  if(attack==="cross_tenant"||attack==="cross_job"){
-  await expect(finalCheckTenant(f.runtime,attack==="cross_tenant"?randomUUID():x.context.tenantId,db=>db.query("SELECT app.write_success_fee_v3($1,$2,$3::jsonb,NULL)",[attack==="cross_job"?randomUUID():x.jobId,x.auth.digest,{version:"success-fee-command.v1",commandId:randomUUID(),action:"review",expectedPostingRevision:0}]))).rejects.toThrow();
+  await expect(finalCheckTenant(f.runtime,attack==="cross_tenant"?randomUUID():x.context.tenantId,db=>db.query("SELECT app.write_success_fee_v3($1,$2,$3::jsonb,NULL)",[attack==="cross_job"?randomUUID():x.jobId,x.auth.digest,{version:"success-fee-command.v1",commandId:randomUUID(),action:"review",expectedPostingRevision:0}]),{practiceDigest:x.auth.digest})).rejects.toThrow();
  }else await expect(x.approve(r)).rejects.toThrow(attack==="wrong_mode"?"SUCCESS_FEE_FORBIDDEN":attack==="approval"?"SUCCESS_FEE_REVIEW_REQUIRED":"SUCCESS_FEE_SOURCE_CHANGED");
  expect(await journals(x)).toHaveLength(0);
  expect((await f.admin.query("SELECT count(*)::int n FROM app.success_fee_derivation WHERE tenant_id=$1 AND job_id=$2",[x.context.tenantId,x.jobId])).rows).toEqual([{n:0}]);

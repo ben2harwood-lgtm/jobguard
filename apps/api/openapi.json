@@ -6129,6 +6129,21 @@
         ]
       }
     },
+    "/auth/signout": {
+      "post": {
+        "operationId": "IdentityController_signout",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Non-enumerating sign-out acknowledgement"
+          }
+        },
+        "summary": "Revoke this builder session and clear its cookie",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
     "/auth/session": {
       "get": {
         "operationId": "IdentityController_session",
@@ -6139,6 +6154,72 @@
           }
         },
         "summary": "Read persisted session and current memberships",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/auth/members/commands": {
+      "post": {
+        "operationId": "IdentityController_administerMember",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "action",
+                  "requested_tenant_id",
+                  "membershipId"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "enum": [
+                      "member-administration.v1"
+                    ]
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "remove",
+                      "change_role"
+                    ]
+                  },
+                  "requested_tenant_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "membershipId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "estimator",
+                      "foreman",
+                      "operative",
+                      "finance",
+                      "read_only"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Membership and checked audit committed atomically"
+          }
+        },
+        "summary": "Verified owner removes or changes a member; last owner is protected",
         "tags": [
           "identity"
         ]

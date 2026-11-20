@@ -78,16 +78,17 @@ async function secondContextReads(browser: Browser, context: BrowserContext, tes
 // C7 asks to "open the job from Jobs". Captured practice jobs are by design not listed on the Jobs home, so (Ben's decision) this is met by
 // going to Jobs and reopening the saved job on a fresh navigation, plus the second browser context above.
 async function reopenFromJobs(page: Page, jobId: string) {
-  await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
+  await page.goto("/classic"); await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
   await page.goto(`/jobs/${jobId}`); await expect(page.locator("#captured-job-workspace")).toHaveAttribute("data-job-id", jobId); await ready(page);
 }
 
 test("a NEW stranger session cannot snapshot or connect a captured job before its creator touches the feed", async ({ page, context, browser }, testInfo) => {
   // Capture creates the binding, but reviewing proposals does not read/register the feed.
-  const captureResponse = page.waitForResponse(response => response.url().endsWith("/api/jobs/capture") && response.request().method() === "POST");
-  await openReview(page);
-  const captured = await captureResponse; expect(captured.status()).toBe(201);
-  const { jobId } = await captured.json(); expect(jobId).toBeTruthy();
+  const captureResponse = page.waitForResponse(response => response.url().endsWith("/api/jobs/capture") && response.request().method() === "POST")
+    .then(async response => ({ status: response.status(), body: await response.json() }));
+  const [captured] = await Promise.all([captureResponse, openReview(page)]);
+  expect(captured.status).toBe(201);
+  const { jobId } = captured.body; expect(jobId).toBeTruthy();
   const stranger = await browser.newContext(contextOptions(testInfo));
   try {
     expect((await stranger.request.post("/api/session")).status()).toBe(200);

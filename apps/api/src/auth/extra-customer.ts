@@ -24,10 +24,10 @@ export class ExtraCustomerApplication {
         [tenant, job, client, this.identity.provider.digest(`customer-session:${token}`), JSON.stringify(input)],
       )).rows[0]!.result;
       const project = (raw: unknown) => {
-        const item = raw as { requestId: string; timingInputs?: { visit: VisitTimingSource | null; requests: TimingRequest[]; facts: ApprovalTimingFact[]; workStatus: OperativeWorkStatus | null } };
+        const item = raw as { requestId: string; timingInputs?: { visit: VisitTimingSource | null; requests: TimingRequest[]; facts: ApprovalTimingFact[]; workStatus: OperativeWorkStatus | null; proceedIds: string[] } };
         if (!item.timingInputs) return item;
         const { timingInputs: timing, ...rest } = item;
-        return { ...rest, ...deriveVisitApprovalTiming(timing.visit ?? undefined, timing.requests, timing.facts, item.requestId, timing.workStatus ?? undefined) };
+        return { ...rest, ...deriveVisitApprovalTiming(timing.visit ?? undefined, timing.requests, timing.facts, item.requestId, timing.workStatus ?? undefined, timing.proceedIds ?? []) };
       };
       if (input.action === "queue") return { items: (result as { items: unknown[] }).items.map(project) };
       return input.action === "view" ? project(result) : result;

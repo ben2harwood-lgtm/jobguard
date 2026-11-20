@@ -5,7 +5,7 @@ import { Pool } from "pg";
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { E2E_RUNTIME_URL } from "../global-setup";
-import { withSyntheticShadow } from "./final-account-lock-journey";
+import { shadowJobQuery, withSyntheticShadow } from "./final-account-lock-journey";
 
 /** The pre-lock worker leg of the recipe. All originals were written through
  * product HTTP routes. Uses the real reader, detector and restricted sink;
@@ -23,8 +23,8 @@ export async function holdShadowRecipeSources(context: VerifiedTenantContext, fo
   await withSyntheticShadow(context.tenantId, async shadow => {
    const reader = new ShadowObservationReader(runtime, { async decode(source) {
     return source.kind === "completion_photo" ? decodePracticePhoto(source.sha256, hash("completion-photo"), hash("j3-drainage-photo")) : null;
-   } });
-   expect(await reader.hasAcceptedTerms(context)).toBe(true);
+   } }, shadow);
+   expect(await reader.hasAcceptedTerms(context, jobId)).toBe(true);
    const { observations, captures } = await reader.read(context, { version: "shadow-observation-read.v1", jobId });
    expect(observations.map(o => o.facts.estimatedValuePence).sort()).toEqual([30000, 50000]);
    await expect(reader.read(foreignContext, { version: "shadow-observation-read.v1", jobId })).rejects.toThrow("OBSERVATION_JOB_UNAVAILABLE");
@@ -36,7 +36,8 @@ export async function holdShadowRecipeSources(context: VerifiedTenantContext, fo
    await expect(sink.persist(foreignContext, batch)).rejects.toThrow("DETECTION_BINDING_MISMATCH");
    await sink.persist(context, batch);
    await sink.persist(context, batch); // Worker replay creates no second signal.
-   const held = (await shadow.query("SELECT state,estimated_value_pence FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 ORDER BY estimated_value_pence", [context.tenantId, jobId])).rows;
+   const query = shadowJobQuery(shadow, context.tenantId, jobId);
+   const held = (await query("SELECT state,estimated_value_pence FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 ORDER BY estimated_value_pence", [context.tenantId, jobId])).rows;
    expect(held).toEqual([{ state: "held_for_final_check", estimated_value_pence: "30000" }, { state: "held_for_final_check", estimated_value_pence: "50000" }]);
   });
  } finally { await runtime.end(); }

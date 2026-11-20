@@ -16,13 +16,13 @@ afterEach(() => vi.unstubAllEnvs());
 it("CH9-B01/B06 held company binding authenticates before refusing; no tenant-wide aggregate", async () => {
  const { app, query, connect } = fixture();
  expect(await app.readBusiness({})).toEqual({ version: "business-value-result.v1", state: "unavailable", code: "BUSINESS_VALUE_BINDING_HELD" });
- expect(query).toHaveBeenCalledExactlyOnceWith("SELECT * FROM app.authenticate_practice_session($1)", [expect.stringMatching(/^[a-f0-9]{64}$/u)]);
+ expect(query).toHaveBeenCalledExactlyOnceWith("SELECT p.*, app.practice_owner_digest($1) owner_digest FROM app.authenticate_practice_session($1) p", [expect.stringMatching(/^[a-f0-9]{64}$/u)]);
  expect(connect).not.toHaveBeenCalled();
 });
 it("CH9-B02/B09 repeated reads only reauthenticate; no producer, meter or hidden-state query", async () => {
  const { app, query } = fixture();
  expect(await app.readBusiness({})).toEqual(await app.readBusiness({}));
- expect(query.mock.calls.map(call => call[0])).toEqual(Array(2).fill("SELECT * FROM app.authenticate_practice_session($1)"));
+ expect(query.mock.calls.map(call => call[0])).toEqual(Array(2).fill("SELECT p.*, app.practice_owner_digest($1) owner_digest FROM app.authenticate_practice_session($1) p"));
 });
 it.each([
  { tenantId: "foreign" }, { sessionDigest: "forged" }, { actor: "owner" }, { price: 0 }, { count: 0 }, { trial: true },

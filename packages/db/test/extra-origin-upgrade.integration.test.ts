@@ -5,7 +5,8 @@ import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ExtraRepository, MIGRATION_URLS, migrate, withTenant } from "../src/index.js";
 import { cluster, fixture, rawVariation, rawOrigin, receipt, ownerTx, newOriginColumns, newTables, type Cluster } from "./extra-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
+import { jobDoorsActor } from "./lp-job-doors-fixtures.js";
 // [MO3-5] Literal pre-0122 lists copied from the merged columnsAt0115; never built from the live catalogue.
 const columnsBefore0122: Record<string, string[]> = {
  extra_origin: ["tenant_id uuid", "job_id uuid", "variation_id uuid", "job_track character varying(16)", "kind character varying(32)", "command_id uuid", "raising_membership_id uuid", "raising_role character varying(40)", "server_recorded_at timestamp with time zone", "device_id character varying(200)", "device_captured_at timestamp with time zone", "evidence_hash character(64)", "provenance character varying(40)", "source_capture_kind character varying(32)", "source_capture_hash character(64)"],
@@ -155,7 +156,9 @@ describe("ENT-4b additive upgrade", () => {
   for (const table of tables) expect(await namedColumnRows(c.admin, table), `[MO3-1] ${table} scratch row changes were rolled back`).toEqual(rowsBeforeControls[table]);
   // Round 1: read the actual SH-1 backfill, preserving its unknown identities (written first, NOT RUN).
   for (const old of before.extra_origin!.filter((row: Record<string, any>) => row.provenance === "backfilled_synthetic_fixture")) {
-   expect(await new ExtraRepository(c.runtime).readExtra(testTenantContext(old.tenant_id), old.job_id, old.variation_id)).toMatchObject({ version: "extra-record-legacy.v1", origin: { version: "extra-origin-legacy.v1", legacy: true, provenance: old.provenance, commandId: null, raisingMembershipId: null } });
+   const oldMember = await jobDoorsActor(c.admin, old.tenant_id);
+   const context = await testBoundTenantContext(c.admin, old.tenant_id, oldMember.member);
+   expect(await new ExtraRepository(c.runtime).readExtra(context, old.job_id, old.variation_id)).toMatchObject({ version: "extra-record-legacy.v1", origin: { version: "extra-origin-legacy.v1", legacy: true, provenance: old.provenance, commandId: null, raisingMembershipId: null } });
   }
   expect((await c.admin.query("SELECT * FROM public.jobguard_schema_migration WHERE migration_name='0122_extra_origin_persistence.sql'")).rowCount).toBe(1);
   await seedActiveContractorAgreement(c.admin,f.p.tenantId);

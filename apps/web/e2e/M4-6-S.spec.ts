@@ -1,3 +1,4 @@
+import { bindPracticeRequest } from "./helpers/bind-practice-request";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 // The synthetic demo tenant (packages/db/src/demo-seed.ts), inlined as the other specs do: @jobguard/db is ESM-only and cannot load in a Playwright spec.
@@ -58,7 +59,7 @@ async function assertLayout(page: Page, names: string[]) {
 /** The saved state, read the three ways a builder can meet it: after a reload, after leaving through Jobs and reopening the job, and from a second browser context. */
 async function persisted(page: Page, browser: Browser, jobId: string, assert: (target: Page) => Promise<void>) {
   await page.reload(); await assert(page);
-  await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
+  await page.goto("/classic"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
   await page.goto(`/jobs/${jobId}#recovery-cases`); await assert(page);
   const second = await browser.newContext({ storageState: await page.context().storageState() });
   try { const other = await second.newPage(); await other.goto(`/jobs/${jobId}#recovery-cases`); await assert(other); }
@@ -70,7 +71,7 @@ test("passing practice time only makes the reminder ready to review; only approv
   const database = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
   const rows = async (sql: string, args: unknown[] = []) => {
     const client = await database.connect();
-    try { await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]); return (await client.query(sql, args)).rows; }
+    try { await client.query("BEGIN"); await bindPracticeRequest(client, page, DEMO_TENANT_ID); return (await client.query(sql, args)).rows; }
     finally { await client.query("ROLLBACK"); client.release(); }
   };
   const evidence = async () => (await rows(

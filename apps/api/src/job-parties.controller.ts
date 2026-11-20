@@ -15,7 +15,7 @@ export class JobPartiesController {
   private async execute<T>(work: () => Promise<T>): Promise<T> {
     try { return await work(); } catch (error) {
       if (!(error instanceof JobPartiesError)) throw error;
-      throw new HttpException({ code: error.code }, error.code === "FORBIDDEN" ? 403 : error.code === "NOT_FOUND" ? 404 : error.code === "INVALID_PARTIES" ? 400 : 409);
+      throw new HttpException({ code: error.code, ...(error.fields.length ? { fields: error.fields } : {}) }, error.code === "FORBIDDEN" ? 403 : error.code === "NOT_FOUND" ? 404 : error.code === "INVALID_PARTIES" ? 400 : 409);
     }
   }
   @Get() @ApiOperation({ summary: "Read job-parties-workspace.v1 with tenant-scoped identity suggestions" })

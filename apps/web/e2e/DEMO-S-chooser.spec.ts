@@ -29,7 +29,8 @@ async function signIn(page: Page) {
   const code = await page.getByTestId("fixture-code").textContent();
   await page.getByLabel("Eight-digit code").fill(code!);
   await page.getByRole("button", { name: "Verify code" }).click();
-  await expect(page.getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
+  await page.waitForURL("**/practice-company");
+  await expect(page.getByRole("heading", { name: "You're signed in.", exact: true })).toBeVisible();
 }
 async function api(page: Page, operation: string, command?: unknown, runId?: string) {
   return page.evaluate(async ({ operation, command, runId }) => {
@@ -180,7 +181,7 @@ test("DEMO-S launches a fresh shadow job, resumes it and resets without inventin
   const jobId = new URL(page.url()).searchParams.get("jobId");
   expect(jobId).toBeTruthy(); expect(requests).toHaveLength(2);
   await expect(page.getByRole("link", { name: "← Practice chooser", exact: true })).toHaveAttribute("href", new URL(selectionUrl).pathname + new URL(selectionUrl).search);
-  await page.getByRole("button", { name: "Create or recover the J3 capture", exact: true }).click();
+  await page.getByRole("button", { name: "Create or resume the £30,000 practice job", exact: true }).click();
   await expect(page.getByLabel("Saved job reference")).toHaveValue(jobId!);
   expect(requests[0]).toEqual(requests[1]); expect(requests[0]!.captureId).toBe(runId);
   await page.getByRole("link", { name: "Continue this job through its real controls", exact: true }).click();

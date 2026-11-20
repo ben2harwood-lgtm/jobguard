@@ -7,7 +7,7 @@ const tenantId = randomUUID(), jobId = randomUUID(), actorId = randomUUID();
 const credentials = { sessionToken: "s".repeat(32), csrfToken: "c".repeat(24), tenantHeader: tenantId, origin: "https://fixture.invalid" };
 function fixture() {
   const membership = { id: actorId, identityUserId: actorId, tenantId, role: "owner", email: "owner@fictional.invalid" };
-  const authenticate = vi.fn(async () => ({ identityUserId: actorId, sessionId: randomUUID(), csrfToken: credentials.csrfToken }));
+  const authenticate = vi.fn(async () => Object.defineProperty({ identityUserId: actorId, sessionId: randomUUID(), csrfToken: credentials.csrfToken }, "sessionCredential", { value: "a".repeat(64), enumerable: false }));
   const findMembership = vi.fn(async () => membership);
   const repository = { command: vi.fn(), read: vi.fn(async () => ({ preview: { exact: "server preview" }, decisions: [], records: [] })) };
   const identity = { allowedOrigin: credentials.origin, provider: { authenticate, findMembership, digest: vi.fn(() => "a".repeat(64)) } };

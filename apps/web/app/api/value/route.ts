@@ -18,7 +18,9 @@ export async function GET(request: Request) {
   // last value before the shared service authenticates and validates selection.
   const query = Object.fromEntries([...new Set(params.keys())].map(key =>
    [key, params.getAll(key).length === 1 ? params.get(key) : params.getAll(key)]));
-  const company = request.headers.get("cookie")?.split(";").some(v=>v.trim().startsWith("jobguard_session="));
+  const cookies = request.headers.get("cookie")?.split(";").map(value => value.trim()) ?? [];
+  const company = cookies.some(value => value.startsWith("jobguard_session="))
+   && !cookies.some(value => value.startsWith("jg_session="));
   const result = company
    ? await new CompanyValueApplication(subscriptionAuthority(identityApplication()),new ValueBusinessReader(syntheticPool())).readBusiness({...await identityCredentials(request),origin:request.headers.get("origin")??identityApplication().allowedOrigin},query)
    : await (await workspaceApplication()).businessValue.readBusiness(query);

@@ -29,7 +29,17 @@ const uuid = z.guid({ error: "Invalid uuid" });
 export const jobPartiesV1 = z.object({ version: z.literal("job-parties.v1"), customerRevisionId: uuid, siteRevisionId: uuid,
   payingPartyRevisionId: uuid.nullable().prefault(null),
 });
+export const jobPartiesFormV1 = z.object({
+  version: z.literal("job-parties-command.v1"), commandId: uuid, action: z.literal("save_form"),
+  expectedJobRevision: z.number().int().nonnegative(), expectedBindingId: uuid.nullable(),
+  customer: customerV1,
+  customerRef: z.object({ id: uuid, revisionId: uuid, expectedRevision: z.number().int().positive() }).nullable(),
+  site: siteV1, savedSiteRevisionId: uuid.nullable(),
+  reuseSiteId: uuid.nullable(), expectedReuseRevisionId: uuid.nullable(), confirmSamePlace: z.boolean(),
+  payingPartyRevisionId: uuid.nullable(), expectedPayerRevisionId: uuid.nullable(), correct: z.boolean(), reason: z.string().trim().min(1).max(500).optional(),
+});
 export const jobPartiesCommandV1 = z.discriminatedUnion("action", [
+  jobPartiesFormV1,
   z.object({ version: z.literal("job-parties-command.v1"), commandId: uuid, action: z.literal("create_customer"), customer: customerV1 }),
   z.object({ version: z.literal("job-parties-command.v1"), commandId: uuid, action: z.literal("revise_customer"), customerId: uuid, expectedRevision: z.number().int().positive(), customer: customerV1 }),
   z.object({ version: z.literal("job-parties-command.v1"), commandId: uuid, action: z.literal("create_site"), site: siteV1,
@@ -65,3 +75,9 @@ export const jobPartiesImportResultV1 = z.object({ version: z.literal("job-parti
 export const jobPartiesListV1 = z.object({ version: z.literal("job-parties-list.v1"), environment: z.literal("synthetic_demo"),
   jobs: z.array(z.object({ id: uuid, title: z.string(), status: z.enum(["draft","quoting","accepted","live","invoiced","paid","lost"]), revision: z.number().int().nonnegative(), customerLabel: z.string(), siteLabel: z.string() })),
 });
+
+export function partiesFieldErrors(issues: ReadonlyArray<{ path: readonly PropertyKey[] }>): Array<{ field: string; message: string }> {
+  const labels: Record<string, string> = { name: "Customer name", type: "Customer type", email: "Practice email (.invalid only)", phone: "Phone", companyNumber: "Company number", addressLines: "Site address (one to four lines)", town: "Town", unit: "Unit or flat", uprn: "UPRN", reason: "Correction reason" };
+  const fields = [...new Set(issues.map(issue => String(issue.path.find(part => part === "postcode" || Object.hasOwn(labels, String(part))) ?? "form")))].slice(0, 12);
+  return fields.map(field => ({ field, message: field === "postcode" ? "Check UK postcode. Use a valid-format practice postcode, such as SW1A 1AA. Nothing was saved." : `Check ${labels[field] ?? "customer and site details"}. Nothing was saved.` }));
+}

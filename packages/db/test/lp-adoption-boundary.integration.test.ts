@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AdoptInFlightJobMutation } from "../src/job-import-repository.js";
 import { UserCommandDispatcher } from "../src/commands.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 import { adoptionAuthority, adoptionFixture, callAdoption, importedShape, insertJob, jobDoorCounts, jobDoorsActor, jobDoorsDatabase, transaction, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 
 let db: JobDoorsDatabase;
@@ -32,7 +32,10 @@ describe("LP-2 imported insertion boundary", () => {
 
   it.each(["customer", "site", "payer"] as const)("[LP2-A05] missing %s refuses before a job or party effect", async name => {
     const f = await adoptionAuthority(db), before = await jobDoorCounts(db.owner, f.actor.tenant);
-    await expect(transaction(db.owner, f.actor.tenant, client => callAdoption(client, f, { [name]: randomUUID() }))).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
+    await expect(transaction(db.owner, f.actor.tenant, async client => {
+      await bindTestClient(db.owner, client, f.actor.tenant, f.actor.member);
+      return callAdoption(client, f, { [name]: randomUUID() });
+    })).rejects.toMatchObject({ code: "22023", message: "JOB_PARTIES_REQUIRED" });
     expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
   });
 
@@ -87,7 +90,7 @@ describe("LP-2 imported insertion boundary", () => {
   it("[LP2-A05] [LP2-A06] the current checked adoption preserves parties, weaker attestation and historical v1 values without billing", async () => {
     const f = await adoptionFixture(db), dispatcher = new UserCommandDispatcher(db.runtime);
     const mutation = new AdoptInFlightJobMutation(f.actor.tenant, "synthetic_candidate", f.input);
-    const result = await dispatcher.dispatch(testTenantContext(f.actor.tenant), f.command, mutation);
+    const result = await dispatcher.dispatch(testTenantContext(f.actor.tenant, { membershipId: f.actor.member }), f.command, mutation);
     expect(result).toMatchObject({ jobId: f.input.jobId, baselineId: f.input.baselineId, provenance: "imported",
       lineageStrength: "builder_attested_weaker", acceptedNetValuePence: 100100, recoveryCapPence: 1502, billing: "none", historicFeesCreated: 0 });
     expect((await db.owner.query(`SELECT j.status,j.provenance,j.accepted_quote_version_id,j.baseline_quote_version_id,
@@ -104,7 +107,7 @@ describe("LP-2 imported insertion boundary", () => {
       expect((await db.owner.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1`, [f.actor.tenant])).rows[0]!.n).toBe(0);
     }
     const before = await jobDoorCounts(db.owner, f.actor.tenant);
-    expect(await dispatcher.dispatch(testTenantContext(f.actor.tenant), f.command, mutation)).toEqual(result);
+    expect(await dispatcher.dispatch(testTenantContext(f.actor.tenant, { membershipId: f.actor.member }), f.command, mutation)).toEqual(result);
     expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
     await expect(transaction(db.runtime, f.actor.tenant, client => client.query("UPDATE app.imported_job_baseline SET accepted_net_value_pence=100101 WHERE tenant_id=$1 AND job_id=$2", [f.actor.tenant, f.input.jobId]))).rejects.toMatchObject({ code: "42501" });
   });
@@ -112,12 +115,12 @@ describe("LP-2 imported insertion boundary", () => {
   it("[LP2-A05] adoption failure after its business writes rolls back parties, job, receipt, authorization and audit together", async () => {
     const f = await adoptionFixture(db), mutation = new AdoptInFlightJobMutation(f.actor.tenant, "synthetic_candidate", f.input);
     const before = await jobDoorCounts(db.owner, f.actor.tenant);
-    await expect(new UserCommandDispatcher(db.runtime).dispatch(testTenantContext(f.actor.tenant), f.command, {
+    await expect(new UserCommandDispatcher(db.runtime).dispatch(testTenantContext(f.actor.tenant, { membershipId: f.actor.member }), f.command, {
       async mutate(database, command) { await mutation.mutate(database, command); throw new Error("LP2 synthetic rollback"); },
     })).rejects.toThrow("LP2 synthetic rollback");
     expect(await jobDoorCounts(db.owner, f.actor.tenant)).toEqual(before);
     // Reusing the pool after rollback must allow the same exact operation to commit.
-    await expect(new UserCommandDispatcher(db.runtime).dispatch(testTenantContext(f.actor.tenant), f.command, mutation)).resolves.toMatchObject({ jobId: f.input.jobId });
+    await expect(new UserCommandDispatcher(db.runtime).dispatch(testTenantContext(f.actor.tenant, { membershipId: f.actor.member }), f.command, mutation)).resolves.toMatchObject({ jobId: f.input.jobId });
   });
 });
 
@@ -135,6 +138,7 @@ describe("LP-2 private permit consumption", () => {
   it.each(["job", "shape", "backend", "transaction"])("[LP2-A04] a permit bound to another %s cannot authorize insertion", async field => {
     const actor = await jobDoorsActor(db.owner), job = randomUUID();
     await expect(transaction(db.owner, actor.tenant, async client => {
+      await bindTestClient(db.owner, client, actor.tenant, actor.member);
       await mint(client, actor.tenant, job, actor.member, field === "job" ? { job: randomUUID() }
         : field === "shape" ? { shape: true } : field === "backend" ? { backend: 0 } : { transaction: "1" });
       await client.query("SET LOCAL ROLE jobguard_migration");
@@ -145,6 +149,7 @@ describe("LP-2 private permit consumption", () => {
   it("[LP2-A04] [LP2-A10] an exact permit is consumed once and rollback restores both insertion and permit atomically", async () => {
     const actor = await jobDoorsActor(db.owner), job = randomUUID(), before = await jobDoorCounts(db.owner, actor.tenant);
     await expect(transaction(db.owner, actor.tenant, async client => {
+      await bindTestClient(db.owner, client, actor.tenant, actor.member);
       await mint(client, actor.tenant, job, actor.member);
       // The unchanged work-order guard independently requires the migration role.
       await client.query("SET LOCAL ROLE jobguard_migration");

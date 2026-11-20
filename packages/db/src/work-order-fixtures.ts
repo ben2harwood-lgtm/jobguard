@@ -1,10 +1,11 @@
+import type { AuthenticatedMembership } from "./tenant-context.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { encodeWorkOrderCsv, referenceApprovalRulesV1, type WorkOrderSampleId } from "@jobguard/core";
 import { ContractorPartyRepository } from "./contractor-party-repository.js";
-import { ContractorRepository } from "./contractor-repository.js";
+import { ContractorRepository, requireContractorRequestContext } from "./contractor-repository.js";
 import { SorRepository } from "./sor-repository.js";
-import { verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "./tenant-context.js";
+import { withTenant } from "./tenant-context.js";
 
 /**
  * Generated, fictional fixtures for ENT-2 (C3): the demo organisation's housing association, contract, schedule of rates, sites and operative,
@@ -25,11 +26,16 @@ export type WorkOrderDemo = {
 };
 const contractDocument = (sorVersionId: string) => ({ version: "client-contract.v1", reference: "FICTIONAL-HA-2026", startsOn: "2026-01-01", endsOn: null, sorVersionIds: [sorVersionId], tenderedAdjustment: { numerator: "-35", denominator: "1000" }, photoRule: "required", vatCode: "synthetic-unreviewed", exportedNotBilledAlertDays: 30 });
 
-/** Idempotent per organisation; safe to call from two browsers at once (one tenant-level session lock). */
+/** Idempotent per organisation; safe to call from two browsers at once (one tenant-level transaction lock). */
 export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedMembership, options: { siteCount?: number } = {}): Promise<WorkOrderDemo> {
   const lock = await pool.connect();
+  let failed = false;
+  let discard = false;
   try {
-    await lock.query("SELECT pg_advisory_lock(hashtextextended($1,56))", [principal.tenantId]);
+    // Keep this coordinator connection pinned under transaction-mode pooling.
+    // Business commands retain their separate transactions on the existing pool.
+    await lock.query("BEGIN");
+    await lock.query("SELECT pg_advisory_xact_lock(hashtextextended($1,56))", [principal.tenantId]);
     const contractors = new ContractorRepository(pool), parties = new ContractorPartyRepository(pool), rates = new SorRepository(pool);
     const view = () => contractors.query(principal, { version: "contractor-query.v1", tenantId: principal.tenantId, resource: "organisation" });
     const command = async (fields: Record<string, unknown>) => contractors.command(principal, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view()).revision, ...fields });
@@ -41,7 +47,7 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedM
       const contracts = await contractors.query(principal, { version: "contractor-query.v1", tenantId: principal.tenantId, resource: "contracts" });
       const version = contracts.contracts.filter(c => c.client_id === existing.id).at(-1)!;
       const document = version.document as ReturnType<typeof contractDocument>;
-      const stored = await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => ({
+      const stored = await withTenant(pool, requireContractorRequestContext(principal), async db => ({
         // The generator creates numbered streets in numeric order; transaction timestamps and random UUIDs cannot recover that order.
         sites: (await db.$client.query<{ id: string; address_line: string }>("SELECT id,payload->'addressLines'->>0 address_line FROM app.site_revision WHERE payload->'addressLines'->>0 LIKE '% Fictional Demo Street'"))
           .rows.sort((a, b) => a.address_line.localeCompare(b.address_line, "en", { numeric: true }) || a.id.localeCompare(b.id)).map(r => r.id),
@@ -60,7 +66,7 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedM
     const contractVersionId = (await command({ kind: "contract.revise", clientId, contractId, document: contractDocument(sor.versionId), rules: referenceApprovalRulesV1 })).id;
     const siteRevisionIds: string[] = [];
     const customerRevisionId = randomUUID();
-    await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => {
+    await withTenant(pool, requireContractorRequestContext(principal), async db => {
       const customerId = randomUUID();
       await db.$client.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [principal.tenantId, customerId]);
       await db.$client.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES($1,$2,$3,1,$4::jsonb)", [principal.tenantId, customerRevisionId, customerId, JSON.stringify({ version: "customer.v1", name: demoClientName, type: "housing_association", email: "lettings@fictional.invalid" })]);
@@ -74,9 +80,20 @@ export async function prepareWorkOrderDemo(pool: Pool, principal: AuthenticatedM
     await parties.linkCustomer(principal, clientId, { version: "contractor-customer-link.v1", environment: "synthetic_demo", commandId: randomUUID(), customerRevisionId });
     const operativeMembershipId = (await command({ kind: "member.invite", role: "operative", email: "demo.operative@fictional.invalid", scope: { kind: "team", id: team.id }, clientId: null, contractId: null })).id;
     return { clientId, contractId, contractVersionId, scheduleId, sorVersionId: sor.versionId, siteRevisionIds, teamId: team.id, branchId: team.branch_id, operativeMembershipId, adjustment: { numerator: "-35", denominator: "1000" }, issuedOn: "2026-10-08" };
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
-    await lock.query("SELECT pg_advisory_unlock(hashtextextended($1,56))", [principal.tenantId]).catch(() => undefined);
-    lock.release();
+    // This transaction owns only the coordinator lock, so rollback also handles
+    // early returns and acquisition failures without changing partial seed writes.
+    try {
+      await lock.query("ROLLBACK");
+    } catch (error) {
+      discard = true;
+      if (!failed) throw error;
+    } finally {
+      lock.release(discard);
+    }
   }
 }
 
@@ -100,7 +117,7 @@ export async function addBranchClient(pool: Pool, principal: AuthenticatedMember
   const document = { ...contractDocument(demo.sorVersionId), reference: `FICTIONAL-${label.toUpperCase()}-2026`, tenderedAdjustment: demo.adjustment };
   const contractVersionId = (await command({ kind: "contract.revise", clientId, contractId, document, rules: referenceApprovalRulesV1 })).id;
   const customerRevisionId = randomUUID();
-  await withTenant(pool, verifiedTenantContextFromMembership(principal), async db => {
+  await withTenant(pool, requireContractorRequestContext(principal), async db => {
     const customerId = randomUUID();
     await db.$client.query("INSERT INTO app.customer(tenant_id,id) VALUES($1,$2)", [principal.tenantId, customerId]);
     await db.$client.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) VALUES($1,$2,$3,1,$4::jsonb)", [principal.tenantId, customerRevisionId, customerId, JSON.stringify({ version: "customer.v1", name, type: "housing_association", email: "lettings@fictional.invalid" })]);

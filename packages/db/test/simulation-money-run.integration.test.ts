@@ -37,7 +37,7 @@ it("rejects fabricated sources, changed replay payloads, cross-job reads and rev
  await expect(y.run({version,action:"read",commandId:randomUUID(),runId:a.runId,sourceHash:a.sourceHash})).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
  await expect(repo.command(testTenantContext(randomUUID()),x.jobId,x.auth.digest,c)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
  await f.admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1",[x.auth.digest]);
- await expect(x.run(c)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
+ await expect(repo.command(testTenantContext(x.context.tenantId,{membershipId:x.auth.membershipId,bindRequest:false}),x.jobId,x.auth.digest,c)).rejects.toThrow("SUCCESS_FEE_FORBIDDEN");
 });
 it("unknown events are visible; changed sources invalidate review/restore, and reversal exposes the missing compensation writer",async()=>{
  const x=await setup(),statements=new SimulationFeeStatementRepository(f.runtime),collection=new SimulationFeeCollectionRepository(f.runtime);
@@ -88,7 +88,7 @@ it("withheld payments collect GBP282, compensate and refund GBP250, and reconcil
  const issue=()=>statements.command(x.context,x.jobId,x.auth.digest,{version:"simulation-fee-statement-command.v1",action:"issue",commandId:randomUUID()});
  const run=(raw:unknown)=>collection.command(x.context,x.jobId,x.auth.digest,raw);
  // Terminal fake-rail facts come only from the operator connection, as in the collection suite; the repository refuses them.
- const rail=(raw:unknown)=>finalCheckTenant(f.admin,x.context.tenantId,async db=>{await db.query("SELECT set_config('app.practice_material_digest',$1,true)",[x.auth.digest]);return (await db.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb) result",[x.jobId,x.auth.digest,raw])).rows[0].result;});
+ const rail=(raw:unknown)=>finalCheckTenant(f.admin,x.context.tenantId,async db=>{await db.query("SELECT set_config('app.practice_material_digest',$1,true)",[x.auth.digest]);return (await db.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb) result",[x.jobId,x.auth.digest,raw])).rows[0].result;},{practiceDigest:x.auth.digest});
  const settle=async(attemptId:string)=>{const c={version:"simulation-fee-collection-command.v1",action:"settle",commandId:randomUUID(),attemptId};await rail(c);await rail(c);};
  await x.allocate(0);await x.approve(await x.review());
  await x.allocate(1);await x.approve(await x.review(1));

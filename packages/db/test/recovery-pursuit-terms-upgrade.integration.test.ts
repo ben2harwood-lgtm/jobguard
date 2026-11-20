@@ -1,3 +1,4 @@
+import { seedPredecessorRecoveryMessage } from "./recovery-message-predecessor-data.js";
 import { applyOutboundPause } from "./outbound-pause-fixture.js";
 import { seedLegacySandbox } from "./lp-legacy-sandbox-fixture.js";
 // Written before 0207. Real PostgreSQL only; CI execution required, NOT RUN locally.
@@ -12,7 +13,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { EvidencePackRepository, MIGRATION_URLS, RecoveryMessageRepository, RecoveryFollowUpRepository, SandboxRepository, migrate, withTenant } from "../src/index.js";
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack, scratchReplaceFunction } from "./upgrade-proof-utils.js";
 const name = "0259_recovery_pursuit_terms_required.sql", password = randomUUID();
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
@@ -26,7 +27,7 @@ async function preview(f: Fixture, caseId: string) {
   // Shared evidence fixture has claim revisions but no opening events. Populate
   // the historical opening fact before pursuit, as the existing journey does.
   await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,encode(sha256(convert_to($6,'UTF8')),'hex'))", [randomUUID(), f.tenantId, f.jobId, caseId, randomUUID(), caseId]);
-  const ctx = testTenantContext(f.tenantId), actor = { membershipId: f.memberId, actorRef: `membership:${f.memberId}` }, packs = new EvidencePackRepository(runtime), repo = new RecoveryMessageRepository(runtime);
+  const ctx = testTenantContext(f.tenantId,{membershipId:f.memberId}), actor = { membershipId: f.memberId, actorRef: `membership:${f.memberId}` }, packs = new EvidencePackRepository(runtime), repo = new RecoveryMessageRepository(runtime);
   const pack = await packs.generate(ctx, caseId, { commandId: randomUUID() }, actor.actorRef);
   await packs.approveAttachment(ctx, caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, actor.actorRef);
   const ready = await repo.read(ctx, caseId), input = { version: "recovery-message-preview.v1", commandId: randomUUID(), expectedCaseRevision: ready.readiness.caseRevision, packId: pack.id };
@@ -41,26 +42,28 @@ beforeAll(async () => {
   expect(position).toBeGreaterThan(0);
   directory = await mkdtemp(join(tmpdir(), "jg-pursuit-upgrade-")); const port = await freePort(62400, 100);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start(); admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: "postgres" });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo"); admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: "jobguard_synthetic_demo" });
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS.slice(0, position)) { await admin.query(await readFile(url, "utf8")); await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [basename(fileURLToPath(url))]); }
   await applyOutboundPause(admin);
   await installLegacySyntheticPartyFixtures(admin);
   await admin.query(`CREATE ROLE pursuit_upgrade_login LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO pursuit_upgrade_login`);
-  runtime = new Pool({ host: "127.0.0.1", port, user: "pursuit_upgrade_login", password, database: "postgres", max: 4 });
+  runtime = new Pool({ host: "127.0.0.1", port, user: "pursuit_upgrade_login", password, database: "jobguard_synthetic_demo", max: 4 });
   for (const policy of [null, "reference_fee_policy_v1"]) {
     const f = await seedEvidencePackFixture(admin);
     if (policy === null) { // Negative historical fixture before N; not a policy conversion path.
       const db = await admin.connect(); try { await db.query("BEGIN"); await db.query("SET LOCAL session_replication_role=replica"); await db.query("UPDATE app.job SET fee_policy_version=NULL,baseline_quote_version_id=NULL,accepted_net_value_pence=NULL,recovery_cap_pence=NULL WHERE tenant_id=$1 AND id=$2", [f.tenantId, f.jobId]); await db.query("COMMIT"); } finally { db.release(); }
     }
     const customer = await preview(f, f.customerCaseId), merchant = await preview(f, f.caseId), repo = new RecoveryMessageRepository(runtime), v = merchant.state.latest!;
-    const delivered = await repo.command(merchant.ctx, f.caseId, { version: "recovery-message-command.v1", action: "advance", commandId: randomUUID(), messageId: v.id, expectedRevision: v.revision, outcome: "success" }, merchant.actor);
+    await seedPredecessorRecoveryMessage(admin, f.tenantId, f.caseId, v, merchant.actor, "succeeded");
+    const delivered = await repo.read(merchant.ctx, f.caseId);
     expect(delivered.sinkCount).toBe(1);
     saved.push({ f, input: customer.input, approval: customer.approval, view: customer.state.latest!, merchant: delivered });
   }
   // A real pre-N v1 delivered pursuit and due reminder, kept as historical data.
   const f = await seedEvidencePackFixture(admin, { practice: true }), initial = await preview(f, f.customerCaseId), repo = new RecoveryMessageRepository(runtime), v = initial.state.latest!;
-  const delivered = await repo.command(initial.ctx, f.customerCaseId, { version: "recovery-message-command.v1", action: "advance", commandId: randomUUID(), messageId: v.id, expectedRevision: v.revision, outcome: "success" }, initial.actor);
+  await seedPredecessorRecoveryMessage(admin, f.tenantId, f.customerCaseId, v, initial.actor, "succeeded");
+  const delivered = await repo.read(initial.ctx, f.customerCaseId);
   const sandbox = new SandboxRepository(runtime), follow = new RecoveryFollowUpRepository(runtime);
   await seedLegacySandbox(admin, f.sessionToken!);
   const scheduled = await follow.schedule(initial.ctx, f.customerCaseId, { version: "recovery-follow-up-command.v1", action: "schedule", commandId: randomUUID(), sourceMessageId: v.id, expectedCaseRevision: delivered.readiness.caseRevision }, initial.actor);
@@ -84,7 +87,7 @@ it("HistoricalPursuitPreserved: own migration alone, named rows/types/identities
   await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [name]);
   await migrate(admin); await migrate(admin); expect(await proofDifferences(admin, proof)).toEqual({ rows: [], types: [] });
   for (const { f, input, approval, view, merchant } of saved) {
-    const repo = new RecoveryMessageRepository(runtime), ctx = testTenantContext(f.tenantId), actor = { membershipId: f.memberId, actorRef: `membership:${f.memberId}` };
+    const repo = new RecoveryMessageRepository(runtime), ctx = testTenantContext(f.tenantId,{membershipId:f.memberId}), actor = { membershipId: f.memberId, actorRef: `membership:${f.memberId}` };
     expect((await repo.preview(ctx, f.customerCaseId, input, actor)).latest).toEqual(view);
     expect((await repo.command(ctx, f.customerCaseId, approval, actor)).latest).toEqual(view);
     await expect(repo.preview(ctx, f.customerCaseId, { ...input, packId: randomUUID() }, actor)).rejects.toMatchObject({ code: "RECOVERY_MESSAGE_COMMAND_CONFLICT" });
@@ -101,15 +104,18 @@ it("HistoricalPursuitPreserved: own migration alone, named rows/types/identities
 it("RawPreviewApprovalSinkRefused: historical null/v1 approvals cannot authorize new row writes; every attempted write rolls back", async () => {
   const proof = await proofBefore(admin, tables), counts = async () => Promise.all(tables.map(async table => (await admin.query(`SELECT count(*)::int n FROM ${table}`)).rows[0].n)), before = await counts();
   for (const { f, view } of saved) {
-    const ctx = testTenantContext(f.tenantId), action = view.approval!.outboxActionId;
+    const ctx = testTenantContext(f.tenantId,{membershipId:f.memberId}), action = view.approval!.outboxActionId;
     await expect(withTenant(runtime, ctx, async db => {
-      await db.$client.query("UPDATE app.action_outbox SET status='cancelled' WHERE tenant_id=$1 AND id=$2", [f.tenantId, action]);
+      expect((await db.$client.query("SELECT app.control_outbox($1,'cancel') changed", [action])).rows).toEqual([{changed:true}]);
       return db.$client.query("INSERT INTO app.recovery_message SELECT gen_random_uuid(),tenant_id,job_id,case_id,case_sequence+1,pack_id,pack_revision,manifest_hash,attachment_hash,attachment_approval_id,gen_random_uuid(),request_hash,case_type,case_revision,amount_pence,currency,sender,recipient,body,policy_version,content_hash,immutable_content,actor_membership_id,environment,created_at FROM app.recovery_message WHERE tenant_id=$1 AND id=$2", [f.tenantId, view.id]);
     })).rejects.toMatchObject({ code: "23514", message: "RECOVERY_TERMS_NOT_APPROVED" });
     await expect(withTenant(runtime, ctx, db => db.$client.query("INSERT INTO app.recovery_message_approval SELECT * FROM app.recovery_message_approval WHERE tenant_id=$1 AND message_id=$2", [f.tenantId, view.id]))).rejects.toMatchObject({ code: "23514", message: "RECOVERY_TERMS_NOT_APPROVED" });
-    await expect(withTenant(runtime, ctx, async db => {
-      await db.$client.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.tenantId, action]);
-      return db.$client.query("INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)", [randomUUID(), f.tenantId, f.jobId, f.customerCaseId, view.id, action, view.message.recipient, view.message.body, view.message.contentHash, view.message.attachmentHash]);
+    await expect(rolledBack(admin, async client => {
+      await client.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [f.tenantId, action]);
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenantId]);
+      await bindTestClient(admin, client, f.tenantId, f.memberId);
+      await client.query("SET LOCAL ROLE jobguard_runtime");
+      return client.query("INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)", [randomUUID(), f.tenantId, f.jobId, f.customerCaseId, view.id, action, view.message.recipient, view.message.body, view.message.contentHash, view.message.attachmentHash]);
     })).rejects.toMatchObject({ code: "23514", message: "RECOVERY_TERMS_NOT_APPROVED" });
   }
   expect(await proofDifferences(admin, proof)).toEqual({ rows: [], types: [] });
@@ -117,7 +123,7 @@ it("RawPreviewApprovalSinkRefused: historical null/v1 approvals cannot authorize
 });
 
 it("ReminderUsesSameGuard: new reminder on a historical v1 pursuit is refused, leaving the delivered original unchanged", async () => {
-  const { f, followUp } = reminder, ctx = testTenantContext(f.tenantId), actor = { membershipId: f.memberId, actorRef: `membership:${f.memberId}` }, repo = new RecoveryMessageRepository(runtime);
+  const { f, followUp } = reminder, ctx = testTenantContext(f.tenantId,{membershipId:f.memberId}), actor = { membershipId: f.memberId, actorRef: `membership:${f.memberId}` }, repo = new RecoveryMessageRepository(runtime);
   const original = await repo.read(ctx, f.customerCaseId), proof = await proofBefore(admin, tables), follow = new RecoveryFollowUpRepository(runtime);
   await expect(follow.openReview(ctx, f.customerCaseId, { version: "recovery-follow-up-command.v1", action: "open_review", commandId: randomUUID(), followUpId: followUp.id, expectedRevision: followUp.revision, expectedCaseRevision: original.readiness.caseRevision, packId: original.readiness.packId! }, actor)).rejects.toMatchObject({ code: "RECOVERY_TERMS_NOT_APPROVED" });
   expect(await repo.read(ctx, f.customerCaseId)).toEqual(original);

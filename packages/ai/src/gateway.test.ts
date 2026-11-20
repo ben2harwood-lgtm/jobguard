@@ -1,9 +1,11 @@
 import { fixtureAiSession } from "./testing.js";
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { AiGatewayError, AiGateway, FixtureAiProvider, createLiveAiProvider } from "./index.js";
 
-const hash = "a".repeat(64);
+const hashContent = (content: string) => createHash("sha256").update(content, "utf8").digest("hex");
+const hash = hashContent("Fit five doors. Rate unknown.");
 const request = {
   contractVersion: "ai_gateway_request_v1",
   fixtureId: "valid",
@@ -27,11 +29,58 @@ describe("fixture-only AI gateway", () => {
     });
   });
 
-  it("rejects missing and out-of-bounds citation sources", async () => {
+  it.each([
+    { sourceId: "other", start: 0, end: 2 },
+    { sourceId: "walkaround", start: 0, end: request.sources[0].content.length + 1 },
+  ])("rejects missing and out-of-bounds citation sources %#", async citation => {
     const gateway = new AiGateway(new FixtureAiProvider({
-      valid: { output: { item: "doors", ratePence: null }, citations: [{ sourceId: "other", start: 0, end: 2 }] },
+      valid: { output: { item: "doors", ratePence: null }, citations: [citation] },
     }), fixtureAiSession);
     await expect(gateway.generate(request, outputSchema)).rejects.toMatchObject({ code: "invalid_citation" });
+  });
+
+  it.each([
+    { name: "wrong-content hash", sources: [{ ...request.sources[0], sha256: hashContent("Different private content") }] },
+    { name: "identical duplicate ids", sources: [request.sources[0], request.sources[0]] },
+    { name: "different-content duplicate ids", sources: [request.sources[0], {
+      ...request.sources[0], content: "Different private content", sha256: hashContent("Different private content"),
+    }] },
+    { name: "normalized line endings", sources: [{ ...request.sources[0], content: "Fit\r\ndoors", sha256: hashContent("Fit\ndoors") }] },
+    { name: "normalized Unicode", sources: [{ ...request.sources[0], content: "Cafe\u0301", sha256: hashContent("Café") }] },
+  ])("rejects invalid source provenance before provider or repair: $name", async ({ sources }) => {
+    const provider = new FixtureAiProvider({ valid: { output: { item: 3 }, citations: [] } });
+    const execute = vi.spyOn(provider, "execute");
+    const repair = vi.fn(() => ({ item: "doors", ratePence: null }));
+    const error = await new AiGateway(provider, fixtureAiSession).generate(
+      { ...request, sources }, outputSchema, { repair },
+    ).catch((failure: unknown) => failure);
+    expect(error).toBeInstanceOf(AiGatewayError);
+    expect(error).toMatchObject({ code: "invalid_request", message: "Invalid AI source provenance" });
+    expect(error).not.toHaveProperty("cause");
+    expect(String(error)).toBe("AiGatewayError: Invalid AI source provenance");
+    expect(JSON.stringify(error)).toBe(JSON.stringify(new AiGatewayError("invalid_request", "Invalid AI source provenance")));
+    expect(execute).not.toHaveBeenCalled();
+    expect(repair).not.toHaveBeenCalled();
+  });
+
+  it("preserves exact hashes and citations for distinct sources, shared content, empty content and UTF-8", async () => {
+    const sources = [
+      request.sources[0],
+      { ...request.sources[0], id: "same-content" },
+      ...["", "Café 🛠️\nFit doors", "Cafe\u0301\r\nFit doors"].map((content, index) => ({
+        ...request.sources[0], id: `source-${index}`, content, sha256: hashContent(content),
+      })),
+    ];
+    // Citation offsets remain UTF-16 code units; hashes cover exact UTF-8 bytes.
+    const citations = sources.filter(source => source.content.length > 0).map(source => ({
+      sourceId: source.id, start: 0, end: source.content.length,
+    }));
+    const provider = new FixtureAiProvider({ valid: { output: { item: "doors", ratePence: null }, citations } });
+    const execute = vi.spyOn(provider, "execute");
+    const result = await new AiGateway(provider, fixtureAiSession).generate({ ...request, sources }, outputSchema);
+    expect(result.citations).toEqual(citations);
+    expect(result.provenance.sourceHashes).toEqual(Object.fromEntries(sources.map(source => [source.id, source.sha256])));
+    expect(execute).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ sources }), undefined);
   });
 
   it("permits at most one bounded structured-output repair", async () => {

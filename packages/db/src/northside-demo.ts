@@ -26,11 +26,16 @@ export type NorthsideSeed = {
 const pad = (n: number, width = 4) => String(n).padStart(width, "0");
 const addDays = (iso: string, days: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 
-/** Idempotent per organisation (one tenant-level session lock): a second call returns the stored seed and writes nothing. */
+/** Idempotent per organisation (one tenant-level transaction lock): a second call returns the stored seed and writes nothing. */
 export async function seedNorthsideDemo(pool: Pool, owner: AuthenticatedMembership, context: VerifiedTenantContext): Promise<NorthsideSeed> {
   const lock = await pool.connect();
+  let failed = false;
+  let discard = false;
   try {
-    await lock.query("SELECT pg_advisory_lock(hashtextextended($1,57))", [owner.tenantId]);
+    // Keep this coordinator connection pinned under transaction-mode pooling.
+    // Business commands retain their separate transactions on the existing pool.
+    await lock.query("BEGIN");
+    await lock.query("SELECT pg_advisory_xact_lock(hashtextextended($1,57))", [owner.tenantId]);
     const contractors = new ContractorRepository(pool), orders = new WorkOrderRepository(pool);
     const view = () => contractors.query(owner, { version: "contractor-query.v1", tenantId: owner.tenantId, resource: "organisation" });
     const command = async (fields: Record<string, unknown>) => contractors.command(owner, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: (await view()).revision, ...fields });
@@ -82,9 +87,20 @@ export async function seedNorthsideDemo(pool: Pool, owner: AuthenticatedMembersh
       if (result.counts.rejected !== 0) throw new Error(`The generated Northside orders were refused: ${JSON.stringify(result).slice(0, 600)}`);
     }
     return await storedSeed(pool, owner, context);
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
-    await lock.query("SELECT pg_advisory_unlock(hashtextextended($1,57))", [owner.tenantId]).catch(() => undefined);
-    lock.release();
+    // This transaction owns only the coordinator lock, so rollback also handles
+    // early returns and acquisition failures without changing partial seed writes.
+    try {
+      await lock.query("ROLLBACK");
+    } catch (error) {
+      discard = true;
+      if (!failed) throw error;
+    } finally {
+      lock.release(discard);
+    }
   }
 }
 
@@ -143,7 +159,14 @@ export async function northsideExtras(pool: Pool, member: AuthenticatedMembershi
       : "app.xa_covers($2,ARRAY[$3::text],o.job_id,'job.read') IS NOT NULL";
     const rows = (await db.$client.query(`
       SELECT o.variation_id,o.job_id,w.reference,v.description,v.capture_text,o.evidence_id IS NOT NULL has_photo,o.resident_confirmation_evidence_id IS NOT NULL confirmed,
-        (SELECT e.kind FROM app.extra_event e WHERE e.tenant_id=o.tenant_id AND e.variation_id=o.variation_id ORDER BY e.sequence DESC LIMIT 1) state,
+        (SELECT e.kind FROM app.extra_event e
+ WHERE(e.tenant_id,e.job_id,e.variation_id)=(o.tenant_id,o.job_id,o.variation_id)
+ AND (e.kind<>'duplicate' OR NOT EXISTS(
+  SELECT 1 FROM app.extra_duplicate_link l
+  JOIN app.extra_duplicate_link u ON(u.tenant_id,u.job_id,u.reverses_link_id)=(l.tenant_id,l.job_id,l.id) AND u.kind='unlink'
+  WHERE(l.tenant_id,l.job_id,l.duplicate_id,l.command_id)=(e.tenant_id,e.job_id,e.variation_id,e.command_id) AND l.kind='link'
+ ))
+ ORDER BY e.sequence DESC LIMIT 1) state,
         (SELECT CASE b.source_kind WHEN 'server_sor' THEN s.net_pence::text ELSE r.signed_delta_pence::text END
           FROM app.extra_approval_revision_binding b
           LEFT JOIN app.extra_sor_revision s ON(s.tenant_id,s.job_id,s.variation_id,s.id)=(b.tenant_id,b.job_id,b.variation_id,b.sor_revision_id)

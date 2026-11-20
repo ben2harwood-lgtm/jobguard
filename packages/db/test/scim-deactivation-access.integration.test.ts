@@ -1,14 +1,17 @@
 /** ENT-10a2 D2. NOT RUN (sandbox cannot start PostgreSQL / a browser). */
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
-import { ActionExecutor,appendOutboundAction,withTenant,type OutboundAction,type OutboundAdapter } from "../src/index.js";
+import { appendOutboundAction,withTenant,type OutboundAction,type OutboundAdapter } from "../src/index.js";
+import { WorkerActionExecutor } from "../src/worker-action-executor.js";
+import { outboundWorkerPool } from "../src/worker-pool.js";
 import { auditRows,canonicalRows,createScimHarness,deactivate,fixture,memberIn,person,sha256,type ScimFixture,type ScimHarness,type ScimPerson } from "./scim-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 let h:ScimHarness;
 beforeAll(async()=>{h=await createScimHarness("jg-scim-access-");},120000);
 afterAll(async()=>{await h?.close();});
 async function runtimeCheck(f:ScimFixture,p:ScimPerson,permission:string,target=f.principal.tenantId) {
- return withTenant(h.runtime,testTenantContext(f.principal.tenantId),async db=>(await db.$client.query("SELECT app.contractor_member_active($1) active,app.contractor_allowed($1,$2,$3) allowed",[p.membershipId,permission,target])).rows[0]);
+ const context=testTenantContext(f.principal.tenantId,{membershipId:f.principal.membershipId});
+ return withTenant(h.runtime,context,async db=>(await db.$client.query("SELECT app.contractor_member_active($1) active,app.contractor_allowed($1,$2,$3) allowed",[p.membershipId,permission,target])).rows[0]);
 }
 async function worker(f:ScimFixture,p:ScimPerson) {
  const context=await h.identityApp.context({...p.bound,requestedTenantId:f.principal.tenantId});
@@ -22,7 +25,11 @@ async function approvedAction(f:ScimFixture,p:ScimPerson) {
  await h.admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[resolutionId,tenant,decisionId,p.membershipId]);
  await h.admin.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'send_quote','customer@synthetic.invalid',$6,1,'synthetic.v1',$7)",[authorizationId,tenant,decisionId,resolutionId,p.membershipId,contentHash,expiresAt]);
  const action:OutboundAction={version:"outbound-action.v1",id:randomUUID(),authorizationId,adapter:"fake_capture",providerEffectKey:randomUUID(),actionType:"send_quote",recipient:"customer@synthetic.invalid",contentHash,immutableContent:content,aggregateRevision:1,amountPence:null,currency:null,policyVersion:"synthetic.v1",authorizationExpiresAt:expiresAt};
- await withTenant(h.runtime,testTenantContext(tenant),db=>appendOutboundAction(db,tenant,action));return action;
+ await withTenant(h.runtime,testTenantContext(tenant,{membershipId:f.principal.membershipId}),db=>appendOutboundAction(db,tenant,action));return action;
+}
+async function executeAction(action: OutboundAction, adapter: OutboundAdapter) {
+ const worker = new WorkerActionExecutor(await outboundWorkerPool(h.runtime),new Map([[adapter.name,adapter]]),{emit:()=>undefined});
+ await worker.execute(action.id);
 }
 const permissions={
  admin:["organisation.read","organisation.manage","client.invite","contract.read","contract.manage"],
@@ -75,7 +82,7 @@ describe("[D2] ENT-10a2 immediate request refusal",()=>{
   const f=await fixture(h),p=await person(f,"commercial_manager"),work=await worker(f,p),action=await approvedAction(f,p);await f.app.checkWorkerAction(work.context,work.action);await deactivate(f,p);
   await expect(f.app.checkWorkerAction(work.context,work.action)).rejects.toMatchObject({code:"SSO_FORBIDDEN"});let calls=0;
   const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:unexpected"};},reconcile:async()=>"unknown"};
-  await new ActionExecutor(h.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined}).execute(work.context,action.id);
+  await executeAction(action,adapter);
   expect(calls).toBe(0);expect((await h.admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",[f.principal.tenantId,action.id])).rows[0].status).toBe("pending");expect((await h.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2",[f.principal.tenantId,action.id])).rows[0].n).toBe(0);
  });
  it("[G6] provider cannot re-sign-in or relink by address and a fresh code session lists nothing",async()=>{
@@ -90,7 +97,7 @@ describe("[D2] ENT-10a2 immediate request refusal",()=>{
   expect(await h.provider.authenticate(p.bound.sessionToken)).toBeUndefined();await expect(h.identityApp.context({...p.bound,requestedTenantId:f.principal.tenantId})).rejects.toMatchObject({code:"UNAUTHENTICATED"});
   expect(await h.provider.authenticate(p.ordinary.sessionToken)).toBeDefined();expect((await h.identityApp.session(p.ordinary.sessionToken)).memberships).toEqual([]);await expect(h.identityApp.context({...p.ordinary,requestedTenantId:f.principal.tenantId})).rejects.toMatchObject({code:"TENANT_FORBIDDEN"});
   await expect(f.app.checkWorkerAction(work.context,work.action)).rejects.toMatchObject({code:"SSO_FORBIDDEN"});let calls=0;
-  const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:unexpected"};},reconcile:async()=>"unknown"};await new ActionExecutor(h.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined}).execute(work.context,action.id);expect(calls).toBe(0);
+  const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:unexpected"};},reconcile:async()=>"unknown"};await executeAction(action,adapter);expect(calls).toBe(0);
   expect((await h.admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",[f.principal.tenantId,action.id])).rows[0].status).toBe("pending");expect((await h.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2",[f.principal.tenantId,action.id])).rows[0].n).toBe(0);
   await expect(f.signin(p.email,p.subject,false,["commercial_manager"])).rejects.toMatchObject({code:"MEMBERSHIP_REVOKED"});await expect(f.signin(p.email,randomUUID(),false,["commercial_manager"])).rejects.toMatchObject({code:"LINK_REQUIRED"});
   const request=await h.provider.requestCode({email:p.email,purpose:"signin",ip:randomUUID()}),credentials={...await h.provider.verifyCode(p.email,"signin",request.fixtureCode!),origin:f.ordinary.origin};expect((await h.identityApp.session(credentials.sessionToken)).memberships).toEqual([]);await expect(h.identityApp.context({...credentials,requestedTenantId:f.principal.tenantId})).rejects.toMatchObject({code:"TENANT_FORBIDDEN"});
@@ -118,8 +125,38 @@ describe("[D2] ENT-10a2 immediate request refusal",()=>{
    }
    await expect(company.service.command(company.command(false,0),member.bound)).resolves.toMatchObject({required:false});
    for(const permission of permissions.admin)expect((await runtimeCheck(company,member,permission)).allowed).toBe(true);await expect(company.app.checkWorkerAction(work.context,work.action)).resolves.toBeUndefined();let calls=0;
-   const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:retained"};},reconcile:async()=>"unknown"};await new ActionExecutor(h.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined}).execute(work.context,action.id);expect(calls).toBe(0);
+   const adapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,deliver:async()=>{calls++;return {kind:"succeeded",providerReference:"synthetic:retained"};},reconcile:async()=>"unknown"};await executeAction(action,adapter);expect(calls).toBe(0);
   }
   await auditRows(h,f.principal.tenantId);await auditRows(h,other.principal.tenantId);
  });
+});
+
+it("[G4] SSO operative bootstrap consumes a private permit and refuses a suspended entitlement without writes",async()=>{
+ const f=await fixture(h),p=await person(f,"operative");
+ expect((await h.admin.query("SELECT count(*)::integer n FROM app.role_grant WHERE tenant_id=$1 AND membership_id=$2 AND role='operative'",[f.principal.tenantId,p.membershipId])).rows[0].n).toBe(1);
+ expect((await h.admin.query("SELECT * FROM identity.lp6d_sso_grant_permit")).rows).toEqual([]);
+ await h.admin.query("INSERT INTO app.contractor_agreement_status_revision(tenant_id,id,assignment_id,revision,status,schema_version,environment,fictional_source) SELECT tenant_id,$2,assignment_id,revision+1,'suspended',schema_version,environment,$3 FROM app.contractor_agreement_status_revision WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1",[f.principal.tenantId,randomUUID(),`fictional-fixture:${randomUUID()}`]);
+ const tables=["app.role_grant","identity.sso_grant","identity.sso_subject","identity.sso_session_binding","identity.lp6d_sso_grant_permit"];
+ const before=await Promise.all(tables.map(table=>canonicalRows(h,table)));
+ await expect(f.signin(`held@${f.domain}`,randomUUID(),false,["operative"])).rejects.toThrow();
+ expect(await Promise.all(tables.map(table=>canonicalRows(h,table)))).toEqual(before);
+});
+
+it("[G4] every login and business role lacks the SSO permit and private operative decision, including forged GUCs",async()=>{
+ const owner=(await h.admin.query("SELECT pg_get_userbyid(proowner) owner,prosecdef FROM pg_proc WHERE oid='identity.sso_complete(uuid,jsonb,character,uuid,character,text,timestamp with time zone)'::regprocedure")).rows[0];
+ expect(owner).toEqual({owner:"jobguard_migration",prosecdef:true});
+ const roles=(await h.admin.query("SELECT rolname FROM pg_roles WHERE rolcanlogin AND NOT rolsuper UNION SELECT unnest(ARRAY['jobguard_runtime','jobguard_identity','jobguard_infrastructure','jobguard_shadow']) rolname")).rows;
+ for(const {rolname} of roles){
+  const rights=(await h.admin.query("SELECT has_function_privilege($1,'app.lp6d_sso_operative_roles_decision(uuid)','EXECUTE') callable,has_table_privilege($1,'identity.lp6d_sso_grant_permit','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') marker",[rolname])).rows[0];
+  expect(rights,rolname).toEqual({callable:false,marker:false});
+ }
+ for(const pool of [h.runtime,h.identity]){
+  const client=await pool.connect();
+  try{
+   await client.query("BEGIN");
+   await client.query("SELECT set_config('app.lp6d_sso_grant_permit','true',true)");
+   await expect(client.query("INSERT INTO identity.lp6d_sso_grant_permit VALUES($1,$2,$3,pg_backend_pid(),pg_current_xact_id())",[randomUUID(),randomUUID(),randomUUID()])).rejects.toMatchObject({code:"42501"});
+  }finally{await client.query("ROLLBACK");client.release();}
+  await expect(pool.query("SELECT app.lp6d_sso_operative_roles_decision($1)",[randomUUID()])).rejects.toMatchObject({code:"42501"});
+ }
 });

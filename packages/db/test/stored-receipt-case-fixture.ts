@@ -1,5 +1,6 @@
-// Fake source documents only. All constraints/triggers stay enabled; quote,
-// activation, variation, final account, invoice, feed and receipt use writers.
+// Fake source documents only. All constraints/triggers stay enabled. Historical
+// quotes use SQL fixture data; current quotes and all later steps use writers.
+import {historicalAcceptedQuote} from "./lp-legacy-sandbox-fixture.js";
 import {createHash,randomUUID} from "node:crypto";
 import {priceVariation} from "@jobguard/core";
 import {prepareActivationFixtureV3,DEMO_TENANT_ID,DEMO_MEMBERSHIP_ID,DEMO_IDENTITY_USER_ID} from "../src/demo-seed.js";
@@ -37,8 +38,12 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
   await db.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional allocator builder')",[account,DEMO_TENANT_ID]);
   await db.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[DEMO_MEMBERSHIP_ID,DEMO_TENANT_ID,account,DEMO_IDENTITY_USER_ID]);
  });
- const session=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,session),context=testTenantContext(DEMO_TENANT_ID),actor={membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID};
- const scoped=practiceMaterialPool(f.runtime,auth.digest),jobId=await prepareActivationFixtureV3(f.admin,context,baselineNetPence===3000000?"shadow-30000":"Fictional receipt allocation",baselineNetPence,scoped,baselineNetPence,auth.digest);
+ const session=await issuePracticeSession(f.runtime),auth=await authenticatePracticeSession(f.runtime,session),context=(await f.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed ? auth.context : testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID }),actor={membershipId:DEMO_MEMBERSHIP_ID,identityUserId:DEMO_IDENTITY_USER_ID};
+ const scoped=practiceMaterialPool(f.runtime,auth.digest);
+ const hasAllocator=(await f.admin.query("SELECT to_regprocedure('app.allocate_quote_job_reference(uuid)') installed")).rows[0].installed;
+ const title=baselineNetPence===3000000?"shadow-30000":"Fictional receipt allocation";
+ const jobId=hasAllocator ? await prepareActivationFixtureV3(f.admin,context,title,baselineNetPence,scoped,baselineNetPence,auth.digest)
+  : await historicalAcceptedQuote(f.admin,context,title,baselineNetPence,auth.digest);
  await new PracticeActivationRepository(scoped).start(context,jobId,{commandId:randomUUID(),scenario:"no_charge"});
  const scope=(await f.admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed' ORDER BY created_at,id LIMIT 1",[DEMO_TENANT_ID,jobId])).rows[0].id as string;
  // Synthetic certificate image using the existing valid PNG fixture helper.
@@ -81,24 +86,36 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
   await price(variationId,"Fictional later extra");
  }
  let drafted=await assembly.assemble(context,{version:"final-account.assemble.v1",commandId:randomUUID(),jobId,actorMembershipId:actor.membershipId});
- await locks.acceptTerms(context,{actorMembershipId:actor.membershipId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
+ await locks.acceptTerms(auth.context,{actorMembershipId:actor.membershipId,commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"});
  await locks.disposition(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),scopeItemId:scope,disposition:"done"});
  const signal=randomUUID(), hiddenSignal=randomUUID(), otherCatchSignal=randomUUID();
  const signals=mixedFinalCheck?[signal,hiddenSignal,otherCatchSignal]:twoCatches?[signal,otherCatchSignal]:[signal];
- if(kind==="F7")for(const signalId of signals)await finalCheckTenant(f.shadow,DEMO_TENANT_ID,async db=>{
+ if(kind==="F7")for(const signalId of signals)await finalCheckTenant(f.admin,DEMO_TENANT_ID,async db=>{
   await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),$5,'low','held_for_final_check')",[DEMO_TENANT_ID,jobId,signalId,signalId===signal?workId:randomUUID(),signalId===hiddenSignal?'CH8-R1 unrevealed description':signalId===otherCatchSignal?'CH8-R1 other catch proof':'Fictional catch']);
   const e=(await f.admin.query("SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,evidence])).rows[0];
   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[DEMO_TENANT_ID,jobId,signalId,evidence,e.object_version_id,e.sha256,e.received]);
  });
  if(beforeLock)await beforeLock({context,jobId,signalId:signal,digest:auth.digest});
- const lock=await locks.lock(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
- const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(context,jobId);
- for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(context,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:kind==="F7"&&s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:kind==="F7"&&s.evidenceId===evidence?signals:[]});}
+ const lock=await locks.lock(auth.context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedRevision:drafted.revision,declarationVersion:"final_account_declaration.v1"});
+ // Test-only queued shadow work has no member session; use the synthetic helper,
+ // leaving the production queued-context constructor confined to its allowlist.
+ const workerContext=testTenantContext(context.tenantId, { bound: false });
+ const worker=new FinalCheckRepository(f.shadow),manifest=await worker.begin(workerContext,jobId);
+ for(const s of manifest.sources){if(s.sourceKind==="builder_capture_not_scanned"&&!s.processable)continue;await worker.record(workerContext,jobId,manifest.id,s.id,randomUUID(),{version:"final-check.source-result.v1",inputHash:s.inputHash,status:kind==="F7"&&s.evidenceId===evidence?"detected":"zero_result",failureCode:null,signalIds:kind==="F7"&&s.evidenceId===evidence?signals:[]});}
  const signalRevisions=beforeLock?new Map((await f.admin.query("SELECT id,revision FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2",[DEMO_TENANT_ID,jobId])).rows.map(row=>[row.id,row.revision as number])):null;
  const classifications:FinalCheckClassification[]=kind==="F7"?signals.map(signalId=>({signalId,expectedRevision:signalRevisions?.get(signalId)??0,outcome:signalId===hiddenSignal?"not_enough_evidence" as const:"reveal" as const,references:[],comparisons:{baselineItemIds:[scope],captureIds:[],lockedLineIds:manifest.comparisons.lines.map(l=>l.id)}})):[];
- const run=await worker.reconcile(context,jobId,manifest.id,classifications) as {runId:string;lockId:string};
+ const run=await worker.reconcile(workerContext,jobId,manifest.id,classifications) as {runId:string;lockId:string};
  // Reconciliation makes the result available; publication authorizes invoicing.
- await new FinalCheckCompletionRepository(f.shadow).publish(context,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId:randomUUID()});
+ const checkId=randomUUID();
+ const boundShadow=(await f.admin.query("SELECT to_regprocedure('app.lp11_bind_shadow_job(uuid,uuid)') IS NOT NULL installed")).rows[0].installed;
+ if(boundShadow){
+  await new FinalCheckCompletionRepository(f.shadow).publish(workerContext,{version:"final-check-publication.v1",jobId,runId:run.runId,checkId});
+ } else {
+  // Upgrade fixtures seed the predecessor's certificate with its original trigger and role.
+  await finalCheckTenant(f.shadow,context.tenantId,db=>db.query(
+   "INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,run_id,status) VALUES($1,$2,$3,$4,'completed')",
+   [context.tenantId,jobId,checkId,run.runId]));
+ }
  const issue=async(invoiceKind:"final"|"supplementary")=>locks.issueInvoice(context,{jobId,actorMembershipId:actor.membershipId,commandId:randomUUID(),finalAccountRevisionId:drafted.id,expectedSourceHash:drafted.sourceHash,invoiceKind,recipient:"practice-customer@example.invalid",issuedOn:"2026-10-28"});
  let main=sv6?.combined?null:await issue("final");let invoiceId=main?.invoiceId??"";
  if(kind==="F7"){
@@ -138,5 +155,5 @@ export async function realReceiptFixture(f:FinalCheckFixture,kind:"F5"|"F7"="F7"
  if(kind==="F7")caseId=(await f.admin.query("SELECT id FROM app.recovery_case WHERE tenant_id=$1 AND job_id=$2 AND case_type='missed_variation_final_account' AND source_refs ? $3",[DEMO_TENANT_ID,jobId,'variation:'+variationId])).rows[0].id;
  else caseId=(await new RecoveryCaseRepository(scoped).command(context,jobId,{version:"recovery-case-command.v1",action:"open",commandId:randomUUID(),caseType:"withheld_customer_payment",expectedRevision:0,counterparty:"Fictional payer",book:"builder_customer",sourceType:"customer_invoice",sourceRefs:[invoiceId],claimedNetPence:80000,reviewerRef:`membership:${actor.membershipId}`},actor)).id;
  const snapshot=await producer.readCurrent(context,actor,auth.digest,{jobId}),fact=snapshot.rows.find(r=>r.paymentId===paymentId&&r.lineId===line)!;
- return {f,context,actor,auth,session,jobId,scope,evidence,lock,main:main!,invoiceId,line,caseId,workId,producer,produced,paymentId,deposit,scoped,invoices,receipt,produce,fact,signal,hiddenSignal,otherCatchSignal,run};
+ return {f,context,workerContext,actor,auth,session,jobId,scope,evidence,lock,main:main!,invoiceId,line,caseId,workId,producer,produced,paymentId,deposit,scoped,invoices,receipt,produce,fact,signal,hiddenSignal,otherCatchSignal,run};
 }

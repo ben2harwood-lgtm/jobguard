@@ -1,11 +1,12 @@
 import { currentCommandRegistryRows, lp5RegistryRows } from "./lp5-command-catalog.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { customerSigninLink, ActionExecutor, type OutboundAdapter } from "../src/outbox.js";
+import { withTenant } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 // CI only: real PostgreSQL proves atomic consumption, RLS, current binding and upgrade behavior.
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { beforeAll, afterAll, expect, it, vi } from "vitest";
-import { startBeforeMigration, applyMigration, startSession, ownerTx, type Cluster } from "./contractor-practice-session-fixtures.js";
+import { startBeforeMigration, applyMigration, startSession, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { MIGRATION_URLS, migrate } from "../src/migrate.js";
 import { verifyAuditChain } from "../src/audit.js";
 import { snapshot } from "./contractor-entitlement-fixtures.js";
@@ -61,7 +62,7 @@ beforeAll(async () => {
   // Retain the predecessor data-preservation assertion, with only the explicit redaction effects.
   for (const table of Object.keys(beforeUpgrade)) {
     const rows = beforeUpgrade[table] as Record<string,unknown>[];
-    if (table === "app.customer_portal_grant") expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,revoked_at:expect.any(String)} : row));
+    if (table === "app.customer_portal_grant") expect(after[table]).toEqual(rows.map(row => ({...row,quote_document_id:null,quote_document_version:null,quote_document_hash:null,...(row.tenant_id===w.tenant ? {revoked_at:expect.any(String)} : {})})));
     else if (table === "app.action_outbox") expect(after[table]).toEqual(rows.map(row => row.tenant_id===w.tenant ? {...row,immutable_content:redactedContent,content_hash:redactedHash,status:"cancelled",updated_at:expect.any(String)} : row));
     else if (table === "app.command_type_registry") expect(after[table]).toEqual((await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",[JSON.stringify(currentCommandRegistryRows)])).rows[0].data);
     else if (table === "app.audit_event") {
@@ -91,7 +92,10 @@ async function world(role = "owner") {
   await c.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
   await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fixture.invalid`, user]);
   await c.admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional builder')", [tenant, account]);
-  await ownerTx(c, tenant, db => db.$client.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,$5)", [tenant, member, account, user, role]));
+  const membership = "INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,$5)";
+  const memberValues = [tenant, member, account, user, role];
+  if (contractor) await withTenant(c.admin, contractor.context, db => db.$client.query(membership,memberValues));
+  else await c.admin.query(membership,memberValues);
   await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, tenant, member]);
   await c.admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'fictional-csrf-token',clock_timestamp()+interval '1 hour','synthetic_demo')", [session, user, digest]);
   await c.admin.query("INSERT INTO app.job(tenant_id,id,title) VALUES($1,$2,'Fictional portal job')", [tenant, job]);
@@ -161,6 +165,8 @@ it("session is scoped to one job/customer/tenant and sign-out revokes server-sid
   expect((await use(w, k, "resolve")).rows[0].result).toMatchObject({ jobId: w.job, customerId: w.customer, companyId: w.account });
   for (const changes of [{ job: randomUUID() }, { customer: randomUUID() }, { tenant: randomUUID() }]) await expect(use(w, k, "resolve", changes)).rejects.toMatchObject(refused);
   await use(w, k, "signout"); await expect(use(w, k, "resolve")).rejects.toMatchObject(refused);
+  expect((await c.admin.query("SELECT revoked_at IS NOT NULL revoked FROM app.customer_portal_session WHERE tenant_id=$1 AND token_digest=$2", [w.tenant, k.sessionDigest])).rows).toEqual([{ revoked: true }]);
+  await expect(use(w, k, "signout")).rejects.toMatchObject(refused);
 });
 it.each(["revoked", "expired", "issuer_revoked", "stale"])("sessions refuse %s after redemption", async kind => {
   const w = await world(), k = await issue(w); await use(w, k);
@@ -169,6 +175,7 @@ it.each(["revoked", "expired", "issuer_revoked", "stale"])("sessions refuse %s a
   if (kind === "issuer_revoked") await c.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [w.tenant, w.member]);
   if (kind === "stale") await c.admin.query("INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload) SELECT tenant_id,$2,customer_id,revision+1,payload FROM app.customer_revision WHERE tenant_id=$1 AND id=$3", [w.tenant, randomUUID(), w.revision]);
   await expect(use(w, k, "resolve")).rejects.toMatchObject(refused);
+  await expect(use(w, k, "signout")).rejects.toMatchObject(refused);
 });
 it("new tables have FORCE RLS and no direct runtime, identity or infrastructure access", async () => {
   for (const table of ["customer_portal_grant", "customer_portal_session", "customer_variation_approval"]) {
@@ -187,8 +194,8 @@ it("finance can execute only the exact fake sign-in email; unrelated sends remai
  let deliveries=0;
  const adapter:OutboundAdapter={name:"fake_email",supportsProviderDeduplication:false,deliver:async (action, link)=>{expect(action.immutableContent).toBe(k.reference);expect(link).toBe(k.path);deliveries++;return {kind:"succeeded",providerReference:"fictional-delivery"};},reconcile:async()=>"unknown"};
  const executor=new ActionExecutor(c.runtime,new Map([[adapter.name,adapter]]),{emit:()=>undefined},hmac);
- await executor.execute(testTenantContext(w.tenant),outbox);expect(deliveries).toBe(1);
- await executor.execute(testTenantContext(w.tenant),outbox);expect(deliveries).toBe(1);
+ await executor.execute(testTenantContext(w.tenant, { membershipId:w.member }),outbox);expect(deliveries).toBe(1);
+ await executor.execute(testTenantContext(w.tenant, { membershipId:w.member }),outbox);expect(deliveries).toBe(1);
  // Redeem the actual delivered link once; replay cannot create another session.
  await use(w,k);await expect(use(w,k)).rejects.toMatchObject(refused);
  expect((await c.admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",[w.tenant,outbox])).rows[0].status).toBe("succeeded");
@@ -204,7 +211,7 @@ it("finance can execute only the exact fake sign-in email; unrelated sends remai
  await c.admin.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at,amount_pence,currency) SELECT $1,tenant_id,$2,$3,actor_membership_id,$6,$7,content_hash,aggregate_revision,$8,expires_at,$9,CASE WHEN $9::bigint IS NULL THEN NULL ELSE 'GBP' END FROM app.action_authorization WHERE tenant_id=$4 AND id=(SELECT authorization_id FROM app.action_outbox WHERE tenant_id=$4 AND id=$5)",[a,d,r,w.tenant,outbox,variant.action,variant.recipient,variant.policy,variant.amount]);
  // Pin the reused identifier to UUID before converting its provider-effect key to text.
  await c.admin.query("INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,recipient,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at,amount_pence,currency) SELECT $1::uuid,tenant_id,$2,adapter,$1::uuid::text,$5,$6,content_hash,immutable_content,aggregate_revision,$7,authorization_expires_at,$8,CASE WHEN $8::bigint IS NULL THEN NULL ELSE 'GBP' END FROM app.action_outbox WHERE tenant_id=$3 AND id=$4",[other,a,w.tenant,outbox,variant.action,variant.recipient,variant.policy,variant.amount]);
- await executor.execute(testTenantContext(w.tenant),other);expect(deliveries).toBe(1);
+ await executor.execute(testTenantContext(w.tenant, { membershipId:w.member }),other);expect(deliveries).toBe(1);
  expect((await c.admin.query("SELECT status FROM app.action_outbox WHERE tenant_id=$1 AND id=$2",[w.tenant,other])).rows[0].status).toBe("pending");
  }
 

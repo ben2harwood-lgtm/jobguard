@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-s-trial-prep": {
+      "branches": ["codex/sandbox/demo-s-trial-prep"],
+      "note": "DEMO-S-TRIAL-PREP: prepared fictional company quote and proof parents only; no authority or migration.",
+      "allow": [
+        "packages/db/test/free-first-job-lifecycle-fixtures.ts",
+        "packages/db/test/free-first-job-trial-prep.integration.test.ts"
+      ]
+    }
+  }
+}

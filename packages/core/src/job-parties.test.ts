@@ -32,3 +32,21 @@ describe("customer.v1, site.v1 and job-parties.v1", () => {
     expect(result).not.toHaveProperty("tenantId"); expect(result).not.toHaveProperty("provenance");
   });
 });
+
+describe("atomic party form validation", () => {
+  it("validates the whole form and returns bounded named errors without raw input", async () => {
+    const { jobPartiesFormV1, partiesFieldErrors } = await import("./job-parties.js");
+    const parsed = jobPartiesFormV1.safeParse({ version: "job-parties-command.v1", commandId: "11111111-1111-4111-8111-111111111111", action: "save_form",
+      expectedJobRevision: 0, expectedBindingId: null, customer: { version: "customer.v1", name: "", type: "person" }, customerRef: null,
+      site: { ...site, postcode: "ZZ1 1ZZ", town: "" }, savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null,
+      confirmSamePlace: false, payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) throw new Error("Expected invalid complete form");
+    expect(partiesFieldErrors(parsed.error.issues)).toEqual([
+      { field: "name", message: "Check Customer name. Nothing was saved." },
+      { field: "town", message: "Check Town. Nothing was saved." },
+      { field: "postcode", message: "Check UK postcode. Use a valid-format practice postcode, such as SW1A 1AA. Nothing was saved." },
+    ]);
+    expect(partiesFieldErrors(Array.from({ length: 100 }, () => ({ path: ["customer", "email"] })))).toEqual([{ field: "email", message: "Check Practice email (.invalid only). Nothing was saved." }]);
+  });
+});

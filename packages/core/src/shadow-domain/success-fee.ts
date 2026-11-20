@@ -118,8 +118,11 @@ export function deriveShadowSuccessFee(input: ShadowSuccessFeeInput) {
         }
         else {
             const original = originals.get(event.reversesSourceRef ?? "")!;
-            for (const a of allocated)
+            for (const a of allocated) {
                 original.remaining.set(a.lineId, addExactPence(original.remaining.get(a.lineId)!, a.gross));
+                const known = current.get(a.lineId)!;
+                known.remaining = addExactPence(known.remaining, negate(a.gross));
+            }
         }
     }
     uniqueShadowIds(f.principalEntries.filter(e => e.direction === "recovery").map(e => e.facts.proof.sourceRef));

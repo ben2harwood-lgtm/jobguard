@@ -29,7 +29,7 @@ it("LP-5 schema probes use native connect(callback) through both transaction and
   expect(f.connect).toHaveBeenCalledWith(expect.any(Function));
   expect(await probing).toEqual(f.result);expect(barrier).not.toHaveBeenCalled();
   expect(f.client.release).toHaveBeenCalledOnce();
-  const client = await scoped.connect();await client.query("BEGIN");await client.query("COMMIT");client.release();
+  const client = await scoped.connect();await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id', $1, true)",["10000000-0000-4000-8000-000000000001"]);await client.query("COMMIT");client.release();
   expect(barrier).toHaveBeenCalledExactlyOnceWith(f.client);
   expect(f.client.release).toHaveBeenCalledTimes(2);
   expect(f.query.mock.calls.map(([sql]) => sql)).toContain("SELECT set_config('app.practice_material_digest', $1, true)");

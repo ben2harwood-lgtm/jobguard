@@ -1,0 +1,117 @@
+{
+  "migration": "0762_northside_hosted_agreement.sql",
+  "lp0": [
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.northside_register(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "e8369daf4e9cbf5412f672f6f88673224627af5f38c447ffcf1ec94f4cebf852",
+        "staticWrites": [
+          "app.northside_run"
+        ],
+        "staticCalls": [
+          "app.contractor_practice_home_deadline",
+          "app.current_actor",
+          "app.current_tenant",
+          "app.practice_company_made_up"
+        ]
+      },
+      "after": {
+        "identity": "function:app.northside_register(uuid,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "2a3277660a28045c908d1a07a8c71f529ac41e26850e80e901cd487a32a33c9b",
+        "staticWrites": [
+          "app.contractor_agreement_status_revision",
+          "app.enterprise_agreement_version",
+          "app.northside_run"
+        ],
+        "staticCalls": [
+          "app.append_audit",
+          "app.contractor_member_active",
+          "app.contractor_practice_home_deadline",
+          "app.current_actor",
+          "app.current_tenant",
+          "app.final_lock_hash",
+          "app.practice_company_made_up"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.ef_derive_northside(uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "563ba49ec3d7396d124bf4aabd30c2890add310f1881704d62e8f7c75cba8e7c",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.contractor_practice_home_deadline",
+          "app.contractor_practice_session_digest",
+          "app.current_actor",
+          "app.current_tenant",
+          "app.ef_actor",
+          "app.ef_derive"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.ef_derive_northside(uuid,uuid,text)|jobguard_migration",
+        "group": "a-owner-routines"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.ef_derive_northside(uuid,uuid,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-exec-recovery-money"
+      }
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "ef_derive_northside",
+        "args": "p_session uuid, p_command uuid, p_period text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

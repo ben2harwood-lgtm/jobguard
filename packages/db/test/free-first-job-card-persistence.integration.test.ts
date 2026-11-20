@@ -22,10 +22,10 @@ describe("MON3 B CARD-01 persisted fictional card facts",()=>{
  });
  it("no runtime completion execution or direct writes, even for owner",async()=>{
   const a=await meterCompany(f);await verifyBusiness(f,a);const attempt=await requestCard(f,a);
-  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon3_record_card_fixture($1,$2,$3,$4::jsonb)",[a.tenantId,a.digest,randomUUID(),JSON.stringify(resultFixture(attempt.attemptId))]))).rejects.toMatchObject({code:'42501'});
+  await expect(workTenant(f.runtime,a.tenantId,db=>db.query("SELECT app.mon3_record_card_fixture($1,$2,$3,$4::jsonb)",[a.tenantId,a.digest,randomUUID(),JSON.stringify(resultFixture(attempt.attemptId))]), { membershipId: a.actorId })).rejects.toMatchObject({code:'42501'});
   for(const table of ['trial_business_verification','trial_card_attempt','trial_card_result','trial_admission']){
-   await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`SELECT * FROM app.${table}`))).rejects.toMatchObject({code:'42501'});
-   for(const sql of [`DELETE FROM app.${table}`,`INSERT INTO app.${table} DEFAULT VALUES`,`UPDATE app.${table} SET tenant_id=tenant_id`,`TRUNCATE app.${table}`])await expect(workTenant(f.runtime,a.tenantId,db=>db.query(sql))).rejects.toMatchObject({code:'42501'});
+   await expect(workTenant(f.runtime,a.tenantId,db=>db.query(`SELECT * FROM app.${table}`), { membershipId: a.actorId })).rejects.toMatchObject({code:'42501'});
+   for(const sql of [`DELETE FROM app.${table}`,`INSERT INTO app.${table} DEFAULT VALUES`,`UPDATE app.${table} SET tenant_id=tenant_id`,`TRUNCATE app.${table}`])await expect(workTenant(f.runtime,a.tenantId,db=>db.query(sql), { membershipId: a.actorId })).rejects.toMatchObject({code:'42501'});
   }
  });
  it("immutable facts reject update/delete/truncate and identity replacement",async()=>{

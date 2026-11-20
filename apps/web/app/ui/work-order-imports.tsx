@@ -59,7 +59,7 @@ export function WorkOrderImports() {
     } finally { setBusy(false); }
   }
   return <main className={styles.main}>
-    <Link href="/">Back to Jobs</Link>
+    <Link href="/classic">Back to Jobs</Link>
     <h1>Work orders</h1>
     <p>Choose one of the generated fictional files and import it. Orders become live jobs straight away, with no quote or fee set-up. Nothing is sent, and no real people are involved.</p>
     <p role="status" data-testid="register-status">{status}</p>

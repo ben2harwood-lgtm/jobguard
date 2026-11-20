@@ -25,12 +25,41 @@ async function member(options: { revoked?: boolean } = {}) {
 async function claimed(job: string, actor: string) {
   const upload = await h.pre.upload(job), finalizeId = randomUUID(), completeId = randomUUID();
   await h.repos.evidence.finalize(h.ctx, { commandId: finalizeId, uploadId: upload.id, objectVersionId: "v1", evidenceType: "electrical_certificate" });
-  await h.repos.proof.complete(h.ctx, { version: "proof.complete.v1", commandId: completeId, actorMembershipId: actor, jobId: job, scopeItemId: h.st(job).scope, stage: "electrical-stage", evidenceId: upload.id, requiredEvidenceType: "electrical_certificate", decisionId: null });
+  await h.repos.proof.complete(testTenantContext(h.tenant,{membershipId:actor}), { version: "proof.complete.v1", commandId: completeId, actorMembershipId: actor, jobId: job, scopeItemId: h.st(job).scope, stage: "electrical-stage", evidenceId: upload.id, requiredEvidenceType: "electrical_certificate", decisionId: null });
   return { select_generated: upload.id, finalize: finalizeId, complete: completeId } as const;
 }
 const actions = ["select_generated", "finalize", "complete"] as const;
 
 describe("proof application records", () => {
+  it("a fresh completion refused as already complete commits no response, receipt, identity or audit", async () => {
+    const job = await h.live(), actor = await member(), ids = await claimed(job, actor);
+    const firstResponse = { version: "practice-proof-view.v1", completion: { commandId: ids.complete } };
+    const firstSpec = { commandId: ids.complete, jobId: job, action: "complete" as const, requestHash: hashOf(ids.complete) };
+    await records.record(h.ctx, { ...firstSpec, response: firstResponse });
+    const originalEvidence = h.st(job).upload.id;
+    delete h.st(job).upload; delete h.st(job).evidence;
+    const evidenceId = await h.pre.evidence(job), commandId = randomUUID();
+    const snapshot = async () => ({
+      completions: (await h.admin.query("SELECT * FROM app.stage_completion WHERE job_id=$1 ORDER BY id", [job])).rows,
+      audits: (await h.admin.query("SELECT * FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence", [h.tenant])).rows,
+    });
+    const before = await snapshot();
+    const completing = vi.fn(async (db: Parameters<ProofApplicationRecords["recordIn"]>[0]) => {
+      await records.recordIn(db, h.tenant, { commandId, jobId: job, action: "complete", requestHash: hashOf(commandId), response: { unexpected: true } });
+    });
+    await expect(h.repos.proof.complete(testTenantContext(h.tenant, { membershipId: actor }), {
+      version: "proof.complete.v1", commandId, actorMembershipId: actor, jobId: job,
+      scopeItemId: h.st(job).scope, stage: "electrical-stage", evidenceId,
+      requiredEvidenceType: "electrical_certificate", decisionId: null,
+    }, completing)).rejects.toMatchObject({ code: "PROOF_NOT_FINAL", message: "already_complete" });
+    expect(evidenceId).not.toBe(originalEvidence);
+    expect(completing).not.toHaveBeenCalled();
+    expect(await snapshot()).toEqual(before);
+    for (const table of ["command_receipt", "watchdog_command_identity", "watchdog_command_result", "proof_application_response"])
+      expect((await h.admin.query(`SELECT 1 FROM app.${table} WHERE tenant_id=$1 AND command_id=$2`, [h.tenant, commandId])).rowCount).toBe(0);
+    expect(await records.replay(h.ctx, { ...firstSpec, actorMembershipId: actor })).toEqual({ response: firstResponse });
+  });
+
   it.each(actions)("%s: the first response is recorded once and replayed unchanged for the same request", async action => {
     const job = await h.live(), actor = await member(), ids = await claimed(job, actor), commandId = ids[action];
     const request = hashOf({ job, action, commandId });
@@ -88,13 +117,13 @@ describe("proof application records", () => {
 
     const completeId = randomUUID(), completeSpec = { commandId: completeId, jobId: job, action: "complete" as const, requestHash: hashOf({ job, completeId }) };
     const completion = { version: "proof.complete.v1", commandId: completeId, actorMembershipId: actor, jobId: job, scopeItemId: h.st(job).scope, stage: "electrical-stage", evidenceId: upload.id, requiredEvidenceType: "electrical_certificate", decisionId: null };
-    await expect(h.repos.proof.complete(h.ctx, completion, lost)).rejects.toThrow("lost before the answer was stored");
+    await expect(h.repos.proof.complete(testTenantContext(h.tenant,{membershipId:actor}), completion, lost)).rejects.toThrow("lost before the answer was stored");
     expect((await h.admin.query("SELECT 1 FROM app.stage_completion WHERE tenant_id=$1 AND command_id=$2", [h.tenant, completeId])).rowCount).toBe(0);
-    await h.repos.proof.complete(h.ctx, completion, async db => { await records.recordIn(db, h.tenant, { ...completeSpec, response: { as: "completed" } }); });
+    await h.repos.proof.complete(testTenantContext(h.tenant,{membershipId:actor}), completion, async db => { await records.recordIn(db, h.tenant, { ...completeSpec, response: { as: "completed" } }); });
     expect((await h.admin.query("SELECT 1 FROM app.stage_completion WHERE tenant_id=$1 AND command_id=$2", [h.tenant, completeId])).rowCount).toBe(1);
     expect(await records.replay(h.ctx, { ...completeSpec, actorMembershipId: actor })).toEqual({ response: { as: "completed" } });
     const replayedCompletion = vi.fn(async () => {});
-    await h.repos.proof.complete(h.ctx, completion, replayedCompletion);
+    await h.repos.proof.complete(testTenantContext(h.tenant,{membershipId:actor}), completion, replayedCompletion);
     expect(replayedCompletion).not.toHaveBeenCalled();
   });
 

@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { mapValueReceipt } from "@jobguard/core";
 import { extractCaptureFixture } from "@jobguard/ai";
 import { ShadowJourney, ShadowSavedReport } from "./journey";
-import { parseShadowReport, shadowCaptureText, shadowSteps } from "./journey-model";
+import { parseShadowReport, shadowCaptureText } from "./journey-model";
 vi.stubGlobal("React", React);
 const jobId = randomUUID();
 function report() { return {
@@ -16,12 +16,17 @@ function report() { return {
   status: "incomplete", reason: "producer_bindings_held", producers: { sources: "HELD", derivation: "HELD", subscription: "HELD", postedMoney: "HELD" }, asOf: null, receipt: null },
 }; }
 it("has nine guided steps, source-only £30,000 input and no saved success before a read", async () => {
- expect(shadowSteps).toHaveLength(9);
  const proposal = await extractCaptureFixture(randomUUID(), shadowCaptureText, "deterministic-local-v1");
  expect(proposal.lines).toHaveLength(5);
  expect(proposal.lines.reduce((total, line) => total + (line.unitPricePence.value ?? 0), 0)).toBe(3000000);
  const html = renderToStaticMarkup(<ShadowJourney />);
- for (const text of ["£3,200", "£400", "£500", "£300", "£34,400", "£41,280", "Q £800", "£80", "£720", "£3,600", "£0", "only saved customer responses count as approval", "customer portal"]) expect(html).toContain(text);
+ for (const text of ["£3,200", "£400", "£500", "£300", "£34,400", "£41,280", "£800 recovered", "£80", "£720", "£3,600", "£0", "only saved customer responses count as approval", "customer portal"]) expect(html).toContain(text);
+ expect(html.match(/<li>/gu)).toHaveLength(9);
+ // The start button uses its visible plain-English copy as its accessible name.
+ const visible = html.replace(/<[^>]*>/gu, " ");
+ expect(visible).not.toMatch(/landing allocations|SV-6 assessment|target Q|J3 capture|\bRED\b|verdict|observations|0 of 2/i);
+ expect(html).toContain('<button>Create or resume the £30,000 practice job</button>');
+ expect(html).toContain('<button type="submit">Load this job’s saved results</button>');
  expect(html).not.toContain("Saved job evidence"); expect(html).not.toContain("You finished");
 });
 it("reports every capture state fee-free without implying customer approval or verified payment", () => {
@@ -29,7 +34,7 @@ it("reports every capture state fee-free without implying customer approval or v
  const parsed = parseShadowReport({ ...raw, account: { ...raw.account, captures: ["draft", "priced", "approved", "rejected", "withdrawn"].map((state, i) => ({ id: randomUUID(), state, description: `Fictional capture ${i}`, origin: i === 0 ? "final_review" : "builder_logged", netPence: i === 0 ? 40000 : 320000 })) } }, jobId);
  const html = renderToStaticMarkup(<ShadowSavedReport report={parsed} />);
  expect(html.match(/recovery fee £0/gu)).toHaveLength(5); expect(html).toContain("No invoice issued"); expect(html).toContain("complete the Final Check first");
- expect(html).toContain("CH-8"); expect(html).toContain("CH-9"); expect(html).not.toContain("SV-6 historical assessments");
+ expect(html).toContain("Supporting evidence packs"); expect(html).toContain("Job value report"); expect(html).not.toContain("Saved fee calculations");
 });
 it("rejects another job, pre-lock reveal/count/history/pack leaks and client completion flags", () => {
  const raw = report();
@@ -67,8 +72,9 @@ it("accepts the full mapped v3 value receipt for the same locked job", () => {
  const parsed = parseShadowReport(saved, jobId);
  expect(parsed.value).toEqual(value);
  const html = renderToStaticMarkup(<ShadowSavedReport report={parsed} />);
- expect(html).toContain("CH-9 value report: mapped; source-linked receipt saved");
- expect(html).not.toContain("CH-9 value report: mapped; producer bindings held");
+ expect(html).toContain("Job value report: mapped; figures and supporting records saved");
+ expect(html).not.toContain("Job value report: mapped; supporting records are not ready yet");
+ expect(html).not.toContain("Saved practice payment"); expect(html).not.toContain("a completed practice payment is matched to each extra");
  expect(() => parseShadowReport({ ...saved, value: { ...value, jobId: randomUUID() } }, jobId)).toThrow();
  expect(() => parseShadowReport({ ...saved, value: { ...value, receipt: { ...value.receipt,
   sources: { ...value.receipt.sources, lockId: randomUUID() } } } }, jobId)).toThrow();
@@ -103,9 +109,13 @@ function completeReport() {
 it("shows complete only for the server's complete status and never for an incomplete one", () => {
  const html = renderToStaticMarkup(<ShadowSavedReport report={parseShadowReport(completeReport(), jobId)} />);
  expect(html).toContain("Complete. All nine steps are saved on this job."); expect(html).not.toContain("Incomplete");
- expect(html).toContain("an approved pack proves"); expect(html).toContain("Settlement");
+ expect(html).not.toMatch(/\bRED\b|verdict|observations|0 of 2|SV-6/i);
+ expect(html).toContain("Supporting evidence packs: approved packs are saved with records linked to each extra.");
+ expect(html).toContain("<dt>Saved practice payment</dt><dd>Saved practice data: a completed practice payment is matched to each extra.</dd>");
  const incomplete = renderToStaticMarkup(<ShadowSavedReport report={parseShadowReport(report(), jobId)} />);
- expect(incomplete).not.toContain("Complete."); expect(incomplete).toContain("not all approved yet");
+ expect(incomplete).not.toContain("Complete."); expect(incomplete).toContain("Supporting evidence packs: not all approved yet.");
+ expect(incomplete).not.toContain("approved packs are saved with records linked to each extra");
+ expect(incomplete).not.toContain("Saved practice payment"); expect(incomplete).not.toContain("a completed practice payment is matched to each extra");
 });
 it("refuses a complete status that contradicts its own saved parts", () => {
  const good = completeReport();

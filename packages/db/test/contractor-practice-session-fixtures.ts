@@ -1,10 +1,11 @@
+import { applyRequestBindingFoundation } from "./request-binding-fixture.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
 import { expect } from "vitest";
-import { cluster, ownerTx, type Cluster } from "./extra-fixtures.js";
-import { MIGRATION_URLS, ContractorRepository, ContractorPartyRepository, WorkOrderRepository, contractorSessionContext, issuePracticeSession, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, type VerifiedTenantContext } from "../src/index.js";
+import { cluster, fixtureOwnerContext, ownerTx, type Cluster } from "./extra-fixtures.js";
+import { MIGRATION_URLS, ContractorRepository, ContractorPartyRepository, WorkOrderRepository, contractorSessionContext, issuePracticeSession, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, verifiedTenantContextFromMembership, type VerifiedTenantContext } from "../src/index.js";
 export { cluster, ownerTx };
 export type { Cluster };
 export const migrationName = "0138_practice_session_hardening.sql";
@@ -25,6 +26,10 @@ export async function startBeforeMigration(name = migrationName, database?: stri
   await c.admin.query(await readFile(url, "utf8"));
   await c.admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [entry]);
  }
+ // 0150 seeds without a session bridge and proves the exact predecessor list.
+ // LP-6d: the out-of-order binding foundation reads 0138's practice session digest, so a starter at or
+ // before 0138 stays a historical unbound schema (the request fixtures then run unbound, as before LP-6).
+ if (name !== "0562_lp6a_request_binding.sql" && name !== "0150_membership_authority_fix.sql" && name > "0138_practice_session_hardening.sql") await applyRequestBindingFoundation(c.admin);
  await seedHomeOwner(c); return c;
 }
 export async function applyMigration(c: Cluster, name = migrationName) {
@@ -37,7 +42,10 @@ export async function startSession(c: Cluster, home = false, activeAgreement = t
  const session = home ? await issuePracticeSession(c.runtime) : randomUUID();
  const p = await new ContractorRepository(c.runtime).startPractice(session);
  if (activeAgreement) await seedActiveContractorAgreement(c.admin, p.tenantId);
- const context: VerifiedTenantContext = await contractorSessionContext(c.runtime, session);
+ const hasBinding = (await c.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') IS NOT NULL AS installed")).rows[0].installed;
+ const context: VerifiedTenantContext = hasBinding ? await contractorSessionContext(c.runtime, session) : verifiedTenantContextFromMembership(p);
+ const boundPolicies = (await c.admin.query("SELECT to_regprocedure('app.lp11_policy_tenant()') IS NOT NULL AS installed")).rows[0].installed;
+ if (boundPolicies) fixtureOwnerContext(c, p.tenantId, () => contractorSessionContext(c.runtime, session));
  return { session, p, context, home };
 }
 export const startSessionWithHomeRecord = (c: Cluster) => startSession(c, true);
@@ -74,10 +82,20 @@ export const resolvers = (c: Cluster) => [
  (session: string) => contractorSessionContext(c.runtime, session),
 ];
 export async function currentCommand(c: Cluster, f: SessionFixture, fields: Record<string, unknown>) {
- const view = await new ContractorRepository(c.runtime).query(f.p, { version: "contractor-query.v1", tenantId: f.p.tenantId, resource: "organisation" });
- return { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: view.revision, ...fields };
+ // LP-6d: while a switch is acting, the owner's session binds as the worker, so the owner cannot
+ // read its own workspace. The fixture reads the same tenant command revision through the harness owner.
+ const revision = Number((await c.admin.query("SELECT count(*) n FROM app.command_receipt WHERE tenant_id=$1 AND command_type LIKE 'contractor.%'", [f.p.tenantId])).rows[0].n);
+ return { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: revision, ...fields };
 }
 export async function companyRows(c: Cluster, tenant: string) {
  const tables = ["app.membership", "app.contractor_member", "app.role_grant", "app.role_grant_revocation", "app.team_membership", "app.org_unit", "app.team"];
  return Object.fromEntries(await Promise.all(tables.map(async table => [table, (await c.admin.query(`SELECT row_to_json(x)::text bytes FROM ${table} x WHERE tenant_id=$1 ORDER BY row_to_json(x)::text COLLATE "C"`, [tenant])).rows])));
+}
+
+/** LP-6d: a member's own persisted contractor practice session, resolved like a real request. */
+export async function memberSessionPrincipal(admin: { query: (sql: string, values?: unknown[]) => Promise<{ rows: any[] }> }, runtime: import("pg").Pool, tenantId: string, membershipId: string) {
+ const user = (await admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [tenantId, membershipId])).rows[0]!.identity_user_id as string;
+ const session = randomUUID();
+ await admin.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) SELECT $1,$2,$3,$4,$5,r.t,r.t+interval '1 day' FROM (SELECT clock_timestamp() t) r", [session, tenantId, membershipId, user, digestOf(session)]);
+ return new ContractorRepository(runtime).resolveSession(session);
 }

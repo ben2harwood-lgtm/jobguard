@@ -1,14 +1,18 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createWorkFixture, closeWorkFixture, seedWorkJob, workTenant, boundaryLock, CH4_HASH, type WorkFixture, type WorkJob } from "./job-work-state-fixtures.js";
 
 // Private-seam foundation evidence only. MON1-I owns real source command wiring.
 // Replica mode is confined to activation's pre-existing FK/trigger fixture; the
 // routine, trip storage and qualifying approval inserts use normal enforcement.
+function boundTripFixture<T>(f: WorkFixture, a: WorkJob, work: (db: PoolClient) => Promise<T>) {
+  return workTenant(f.admin, a.tenantId, work, { membershipId: a.actorId });
+}
 async function activated(f: WorkFixture) {
   const a = await seedWorkJob(f), activation = randomUUID(), baseline = randomUUID();
-  await workTenant(f.admin, a.tenantId, async db => {
+  await boundTripFixture(f, a, async db => {
     await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,100000,'accepted')", [baseline,a.tenantId,a.jobId,CH4_HASH]);
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT DO NOTHING",[a.tenantId,a.jobId]);
@@ -21,7 +25,7 @@ async function activated(f: WorkFixture) {
 }
 async function priced(f: WorkFixture, a: WorkJob, net: number, at: string, approve = true, existing?: { variation: string; revision: string; sequence: number }, origin = "builder_logged") {
   const variation = existing?.variation ?? randomUUID(), revision = randomUUID(), approval = randomUUID(), scope = randomUUID(), sequence = (existing?.sequence ?? 0) + 1;
-  await workTenant(f.admin, a.tenantId, async db => {
+  await boundTripFixture(f, a, async db => {
     if (!existing) {
       await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scope, a.tenantId, a.jobId]);
       await db.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description,origin) VALUES($1,$2,$3,$4,'text','Fictional final-review extra','Fictional extra',$5)", [variation, a.tenantId, a.jobId, scope, origin]);
@@ -40,7 +44,7 @@ async function capture(db: PoolClient, a: WorkJob, source: string, kind = "varia
   return (await db.query("SELECT app.mon1_capture_small_trip($1,$2,$3,$4) id", [a.tenantId, a.jobId, kind, source])).rows[0]!.id as string | null;
 }
 async function trip(f: WorkFixture, a: WorkJob, source: string) {
-  return workTenant(f.admin, a.tenantId, db => capture(db, a, source));
+  return boundTripFixture(f, a, db => capture(db, a, source));
 }
 async function observations(f: WorkFixture, a: WorkJob) {
   return (await f.admin.query(`SELECT id,trip_id,revision,previous_observation_id,net_pence::text,source_id,source_hash,to_char(effective_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') effective_at FROM app.job_small_trip_observation WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision`, [a.tenantId, a.jobId])).rows;
@@ -59,7 +63,7 @@ describe("MON1-T private seam race and transactional guarantees", () => {
   it("M1T-06 overlapping authoritative approval INSERT plus capture transactions serialize to one trip", async () => {
     const a = await activated(f), first = await priced(f,a,300001,"2026-10-02T12:00:00.000001Z",false), second = await priced(f,a,300001,"2026-10-03T12:00:00Z",false);
     async function deliver(p: typeof first, at: string) {
-      return workTenant(f.admin,a.tenantId,async db=> {
+      return boundTripFixture(f, a, async db=> {
         // Source owner locks tenant BEFORE source/business locks, as MON1-I must.
         await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text,184))",[a.tenantId]);
         await approveSource(db,a,p,300001,at);
@@ -81,7 +85,7 @@ describe("MON1-T private seam race and transactional guarantees", () => {
   it("M1T-06 failed transaction rolls back trip, observation and audit changes together", async () => {
     const a = await activated(f), p = await priced(f,a,300001,"2026-10-02T12:00:00Z",false);
     const audit = (await f.admin.query("SELECT row_to_json(t)::text bytes FROM app.audit_event t WHERE tenant_id=$1 ORDER BY sequence",[a.tenantId])).rows;
-    await expect(workTenant(f.admin,a.tenantId,async db => {
+    await expect(boundTripFixture(f, a, async db => {
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text,184))",[a.tenantId]);
       await approveSource(db,a,p,300001,"2026-10-02T12:00:00Z");
       expect(await capture(db,a,p.approval)).toEqual(expect.any(String));
@@ -95,6 +99,9 @@ describe("MON1-T private seam race and transactional guarantees", () => {
 
   it.each(["lock_first","approval_first"])("M1T-07 tenant-first serialized %s foundation transactions", async order => {
     const a = await activated(f), p = await priced(f,a,300001,"2026-10-02T12:00:00Z",false);
+    // Preserve the meter's independent cutoff check with an existing approval
+    // dated beyond the lock; the new trigger refuses any actual post-lock insert.
+    const beyondCutoff = order === "lock_first" ? await priced(f,a,300001,"2099-01-01T00:00:00Z") : null;
     const first = await f.admin.connect(), second = await f.admin.connect();
     async function fixtureLock(db: PoolClient) {
       // Existing SV-4 lock command authority is held. This is its storage boundary.
@@ -104,7 +111,11 @@ describe("MON1-T private seam race and transactional guarantees", () => {
       await db.query("SET LOCAL session_replication_role='origin'");
     }
     try {
-      for(const db of [first,second]) { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]); }
+      for(const db of [first,second]) {
+        await db.query("BEGIN");
+        await bindTestClient(f.admin,db,a.tenantId,a.actorId);
+        await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+      }
       await first.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text,184))",[a.tenantId]);
       let id: string | null = null;
       if (order === "lock_first") await fixtureLock(first);
@@ -114,9 +125,14 @@ describe("MON1-T private seam race and transactional guarantees", () => {
       const waiting = second.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text,184))",[a.tenantId]);
       await first.query("COMMIT"); await waiting;
       if (order === "lock_first") {
-        await approveSource(second,a,p,300001,(await second.query("SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') at")).rows[0]!.at as string);
-        await expect(capture(second,a,p.approval)).rejects.toThrow("INVALID_SMALL_TRIP_SOURCE");
+        const at = (await second.query("SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') at")).rows[0]!.at as string;
+        await expect(approveSource(second,a,p,300001,at)).rejects.toMatchObject({ code: "42501", message: "VARIATION_LOCKED_BY_FINAL_ACCOUNT" });
         await second.query("ROLLBACK");
+        expect(await observations(f,a)).toEqual([]);
+        expect((await f.admin.query("SELECT id FROM app.variation_approval WHERE tenant_id=$1 AND id=$2",[a.tenantId,p.approval])).rows).toEqual([]);
+        // The meter's own guard still rejects a missing/refused source in a fresh transaction.
+        await expect(trip(f,a,p.approval)).rejects.toThrow("INVALID_SMALL_TRIP_SOURCE");
+        await expect(trip(f,a,beyondCutoff!.approval)).rejects.toThrow("INVALID_SMALL_TRIP_SOURCE");
         expect(await observations(f,a)).toEqual([]);
       } else {
         await fixtureLock(second); await second.query("COMMIT");
@@ -142,8 +158,8 @@ describe("MON1-T private seam race and transactional guarantees", () => {
     const rows = await observations(f,a); expect(rows).toHaveLength(2);
     expect(rows[1]).toMatchObject({revision:2,previous_observation_id:rows[0]!.id});
     for(const table of ["job_small_trip_event","job_small_trip_observation"]) {
-      await expect(workTenant(f.admin,a.tenantId,db=>db.query(`UPDATE app.${table} SET net_pence=0 WHERE tenant_id=$1`,[a.tenantId]))).rejects.toThrow();
-      await expect(workTenant(f.admin,a.tenantId,db=>db.query(`DELETE FROM app.${table} WHERE tenant_id=$1`,[a.tenantId]))).rejects.toThrow();
+      await expect(boundTripFixture(f, a, db=>db.query(`UPDATE app.${table} SET net_pence=0 WHERE tenant_id=$1`,[a.tenantId]))).rejects.toThrow();
+      await expect(boundTripFixture(f, a, db=>db.query(`DELETE FROM app.${table} WHERE tenant_id=$1`,[a.tenantId]))).rejects.toThrow();
     }
     expect(await observations(f,a)).toEqual(rows);
   });

@@ -8,7 +8,9 @@ import type { IdentityApplication } from "./auth/identity.application.js";
 import { AuthError } from "./auth/auth-provider.js";
 function setup(environment: string | undefined = "synthetic_demo", enabled: string | undefined = "true") {
   const tenant = randomUUID(), user = randomUUID(), member = randomUUID();
-  const provider = { authenticate: vi.fn(async () => ({ identityUserId: user, sessionId: randomUUID(), csrfToken: "c".repeat(24) })),
+  const provider = { authenticate: vi.fn(async () => Object.defineProperty(
+    { identityUserId: user, sessionId: randomUUID(), csrfToken: "c".repeat(24) },
+    "sessionCredential", { value: "a".repeat(64) })),
     findMembership: vi.fn(async (_p: unknown, selected: string) => selected === tenant ? { id: member, identityUserId: user, tenantId: tenant, role: "owner", email: "fictional@example.invalid" } : undefined), digest: vi.fn(() => "a".repeat(64)) };
   const identity = { provider, allowedOrigin: "https://fictional.invalid" } as unknown as IdentityApplication;
   const repository = { command: vi.fn(async () => ({ state: "awaiting_instruction" })), read: vi.fn(async () => ({ document: null })) };

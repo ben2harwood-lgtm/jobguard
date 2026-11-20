@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-123": {
+      "branches": ["codex/sandbox/later-safety-123"],
+      "note": "LATER-SAFETY-123-CATCHUP; RED session/target disclosure. Exact union with origin/main cc7e1cc891edf80d8dbfce8d7560607c497f00d4; no behavior or test expectation changes; no migration.",
+      "allow": [
+        "apps/web/app/api/northside/route.ts",
+        "apps/web/app/api/northside/route.test.ts"
+      ]
+    }
+  }
+}

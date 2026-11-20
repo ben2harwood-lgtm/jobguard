@@ -27,16 +27,27 @@ async function writePricedRevision(db:TenantTransaction,tenantId:string,r:Variat
  }
  if(enforceLive&&row.job_closed===true)throw new Error("ACTIVATION_REQUIRED");
  if(row.current_revision_id!==r.previousRevisionId)throw new VariationRevisionConflict();
- await db.$client.query(`INSERT INTO app.variation_revision(id,tenant_id,job_id,variation_id,scope_item_id,revision,previous_revision_id,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version)SELECT $1,$2,job_id,id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16 FROM app.variation WHERE tenant_id=$2 AND id=$17`,[r.id,tenantId,r.scopeItemId,r.revision,r.previousRevisionId,r.description,r.quantity,r.unit,r.unitRatePence,r.signedDeltaPence,r.contentHash,r.confirmedByMembershipId,r.rateProvenance.kind,r.rateProvenance.sourceRef,r.rateProvenance.sourceHash,r.rateProvenance.rateVersion,r.variationId]);
+ try { await db.$client.query(`INSERT INTO app.variation_revision(id,tenant_id,job_id,variation_id,scope_item_id,revision,previous_revision_id,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version)SELECT $1,$2,job_id,id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16 FROM app.variation WHERE tenant_id=$2 AND id=$17`,[r.id,tenantId,r.scopeItemId,r.revision,r.previousRevisionId,r.description,r.quantity,r.unit,r.unitRatePence,r.signedDeltaPence,r.contentHash,r.confirmedByMembershipId,r.rateProvenance.kind,r.rateProvenance.sourceRef,r.rateProvenance.sourceHash,r.rateProvenance.rateVersion,r.variationId]); } catch(error:unknown) {
+  if((error as {code?:string})?.code==="23514" && error instanceof Error && error.message==="CATCH_PRICE_LOCKED")throw new VariationRevisionConflict("CATCH_PRICE_LOCKED");
+  throw error;
+ }
  await db.$client.query(`INSERT INTO app.variation_rate_observation(id,tenant_id,job_id,variation_id,revision_id,unit,unit_rate_pence,provenance_kind,source_ref,source_hash,rate_version)SELECT $1,$2,job_id,id,$3,$4,$5,$6,$7,$8,$9 FROM app.variation WHERE tenant_id=$2 AND id=$10`,[randomUUID(),tenantId,r.id,r.unit,r.unitRatePence,r.rateProvenance.kind,r.rateProvenance.sourceRef,r.rateProvenance.sourceHash,r.rateProvenance.rateVersion,r.variationId]);
  await db.$client.query(`UPDATE app.variation SET state='priced',current_revision_id=$1 WHERE tenant_id=$2 AND id=$3`,[r.id,tenantId,r.variationId]);
  return true;
 }
+/** Only the named database refusal becomes a commercial conflict. */
+function rethrowVariationLock(error: unknown): never {
+ if(error instanceof Error && error.message === "VARIATION_LOCKED_BY_FINAL_ACCOUNT")
+  throw new VariationRevisionConflict("VARIATION_LOCKED_BY_FINAL_ACCOUNT");
+ throw error;
+}
 /** Pricing a variation appends exactly one audit event in the same transaction; an exact replay appends none.
  * Capture commands price through writePricedRevision and keep their own single capture event. */
 export async function insertPricedVariation(db:TenantTransaction,tenantId:string,r:VariationRevision){
+ try {
  if(await writePricedRevision(db,tenantId,r,true))await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${r.confirmedByMembershipId}`,eventType:"variation.priced",subjectType:"variation",subjectRef:r.variationId,payload:{references:{revisionId:r.id,revision:String(r.revision)},hashes:{contentHash:r.contentHash},classifications:{action:"commercial"}}}]);
  return r;
+ } catch(error) { rethrowVariationLock(error); }
 }
 async function storedApproval(db:TenantTransaction,tenantId:string,revisionId:string):Promise<VariationApproval>{
  const stored=(await db.$client.query(`SELECT id,revision_id,revision,content_hash,signed_delta_pence::text signed_delta_pence,method,actor_membership_id,evidence_id,approved_at FROM app.variation_approval WHERE tenant_id=$1 AND revision_id=$2`,[tenantId,revisionId])).rows[0];
@@ -46,6 +57,7 @@ async function storedApproval(db:TenantTransaction,tenantId:string,revisionId:st
 /** Approval is idempotent on its own id: an exact committed replay returns the stored approval before any stale-write check,
  * a reused id with a different payload is a typed conflict, and every returned field is read back from the stored row. */
 export async function approvePricedVariation(db:TenantTransaction,tenantId:string,variationId:string,a:VariationApproval){
+ try {
  const v=await db.$client.query(`SELECT job_id,current_revision_id,state,(SELECT j.status<>'live' FROM app.job j WHERE j.tenant_id=$1 AND j.id=variation.job_id) job_closed,(SELECT jsonb_build_object('variation_id',x.variation_id,'revision_id',x.revision_id,'revision',x.revision,'hash',x.content_hash,'delta',x.signed_delta_pence::text,'method',x.method,'actor',x.actor_membership_id,'evidence',x.evidence_id) FROM app.variation_approval x WHERE x.tenant_id=$1 AND x.id=$3) prior FROM app.variation WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[tenantId,variationId,a.id]);
  const row=v.rows[0];
  let prior=row?.prior as Record<string,unknown>|null|undefined;
@@ -72,6 +84,7 @@ export async function approvePricedVariation(db:TenantTransaction,tenantId:strin
   await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${a.actorMembershipId}`,eventType:"variation.approved",subjectType:"variation",subjectRef:variationId,payload:{references:{revisionId:a.revisionId,method:a.method},hashes:{contentHash:a.contentHash},classifications:{action:"commercial"}}}]);
  }
  return storedApproval(db,tenantId,a.revisionId);
+ } catch(error) { rethrowVariationLock(error); }
 }
 
 export type VariationWorkspaceRow={id:string;scopeItemId:string;existingScopeItemId:string|null;lineageParentScopeItemId:string|null;description:string;captureText:string;state:string;currentRevisionId:string|null;revisions:Array<{id:string;revision:number;description:string;quantity:string;unit:string;unitRatePence:number;signedDeltaPence:number;contentHash:string;approved:boolean;approvalMethod:string|null;rejected:boolean;actor:string;source:string}>};

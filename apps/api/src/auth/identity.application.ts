@@ -1,3 +1,4 @@
+import { memberAdministrationV1, memberAdministrationResultV1 } from "./member-administration.js";
 import { z } from "zod";
 import { IdentityRepository, type VerifiedTenantContext } from "@jobguard/db";
 import { parseIdentityEnvironment } from "@jobguard/config";
@@ -21,10 +22,21 @@ export class IdentityApplication {
     const {version: _version,...input}=identityRequestV1.parse(raw);
     return {version:"identity-request-response.v1" as const,environment:"synthetic_demo" as const,...await this.provider.requestCode({...input,ip})};
   }
-  async verify(raw:unknown,origin:string|undefined) {
+  async verify(raw:unknown,origin:string|undefined,credentials:TenantRequestCredentials = {}) {
     this.requireOrigin(origin);
     const input=identityVerifyV1.parse(raw);
-    return this.provider.verifyCode(input.email,input.purpose,input.code,input.invitationId);
+    if(input.purpose === "invitation") await this.requireSessionCsrf(credentials);
+    return this.provider.verifyCode(input.email,input.purpose,input.code,input.invitationId,input.purpose === "invitation" ? credentials.sessionToken : undefined);
+  }
+  private async requireSessionCsrf(credentials:TenantRequestCredentials):Promise<void> {
+    const principal=credentials.sessionToken?await this.provider.authenticate(credentials.sessionToken):undefined;
+    if(principal && (!credentials.csrfToken || credentials.csrfToken!==principal.csrfToken))throw new AuthError("ORIGIN_FORBIDDEN");
+  }
+  async signout(credentials:TenantRequestCredentials) {
+    this.requireOrigin(credentials.origin);
+    await this.requireSessionCsrf(credentials);
+    if(credentials.sessionToken)await this.provider.revokeSession(credentials.sessionToken);
+    return {version:"identity-signed-out.v1" as const,environment:"synthetic_demo" as const};
   }
   async principal(token:string|undefined):Promise<AuthPrincipal> {
     const principal=token?await this.provider.authenticate(token):undefined;
@@ -36,6 +48,20 @@ export class IdentityApplication {
   }
   context(request:TenantRequestCredentials):Promise<VerifiedTenantContext> {
     return resolveVerifiedTenantContext(this.provider,request,this.allowedOrigin);
+  }
+  async administerMember(raw:unknown,credentials:TenantRequestCredentials) {
+    const input=memberAdministrationV1.parse(raw);
+    await this.context({...credentials,requestedTenantId:input.requested_tenant_id});
+    const digest=this.provider.digest(`session:${credentials.sessionToken}`);
+    // Identity credential only. SQL derives the current owner from the session again
+    // under the tenant lock; stale application context never supplies an actor/role.
+    const sql=input.action==="remove"
+      ? "SELECT identity.member_remove($1,$2,$3) result"
+      : "SELECT identity.member_change_role($1,$2,$3,$4) result";
+    const values=input.action==="remove" ? [digest,input.requested_tenant_id,input.membershipId]
+      : [digest,input.requested_tenant_id,input.membershipId,input.role];
+    const result=await this.provider.repository.pool.query<{result:unknown}>(sql,values);
+    return memberAdministrationResultV1.parse(result.rows[0]?.result);
   }
   async invite(raw:unknown,credentials:TenantRequestCredentials) {
     const input=identityInvitationV1.parse(raw);

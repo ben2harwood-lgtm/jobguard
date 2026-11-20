@@ -8,10 +8,10 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, PracticeInvoiceRepository, withTenant } from "../src/index.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testTenantContext, bindTestClient } from "./tenant-context-test-utils.js";
 
 const T = randomUUID(), A = randomUUID(), U = randomUUID(), M = randomUUID(), H = "a".repeat(64);
-const context = testTenantContext(T);
+const context = testTenantContext(T, { membershipId: M });
 let pg: EmbeddedPostgres | undefined, admin: Pool, runtime: Pool, writer: Pool, dir: string;
 let repo: PracticeInvoiceRepository;
 type Fixture = { jobId: string; invoiceId: string; draftId: string; revisionId: string; quoteId: string; command: ReturnType<typeof issue> };
@@ -65,15 +65,15 @@ beforeAll(async () => {
   const port = await freePort(59600,300);
   pg = new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,
     createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
-  await pg.initialise(); await pg.start();
-  admin = new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
+  await pg.initialise(); await pg.start(); await pg.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"postgres",password:"synthetic"});
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin);
   await admin.query(`INSERT INTO control_plane.tenant(id) VALUES($1)`,[T]);
   await admin.query(`INSERT INTO identity.identity_user(id) VALUES($1)`,[U]);
   await admin.query(`INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Synthetic invoice audit')`,[A,T]);
   await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')`,[M,T,A,U]);
   await admin.query(`CREATE ROLE invoice_audit_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO invoice_audit_login`);
-  const options = {host:"127.0.0.1",port,database:"postgres",user:"invoice_audit_login",password:"synthetic",max:4};
+  const options = {host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"invoice_audit_login",password:"synthetic",max:4};
   runtime = new Pool(options); writer = new Pool({...options,max:1}); repo = new PracticeInvoiceRepository(runtime);
 },60000);
 afterAll(async () => { await closeTestPools(runtime,writer,admin); await pg?.stop(); if(dir) await rm(dir,{recursive:true,force:true}); });
@@ -148,6 +148,8 @@ describe("practice invoice audit regressions (real PostgreSQL)", () => {
     try {
       await holder.query("BEGIN");
       await holder.query(`SELECT set_config('app.tenant_id',$1,true)`,[T]);
+      // LP-6d: the holding issuer is the practice member's own bound request.
+      await bindTestClient(admin,holder,T,M);
       // The stored issuer takes and retains the exact advisory xact lock.
       await holder.query(`SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,
         [T,f.jobId,f.invoiceId,M,randomUUID(),pending.netPence,pending.reason,preview.previewHash]);

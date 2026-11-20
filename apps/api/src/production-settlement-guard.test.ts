@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { MAX_MONEY_PENCE } from "@jobguard/core";
-import { ActionExecutor, verifiedTenantContextForQueuedJob, type OutboundAdapter } from "@jobguard/db";
+import { WorkerActionExecutor, type OutboundAdapter } from "@jobguard/db";
 import type { Pool } from "pg";
 import { postFeeObligation } from "./effects/fee-posting.js";
 import {
@@ -22,24 +23,21 @@ const cash = () => ({
 function outbox(actionType: string, mode?: string) {
   const row = { id: otherId, adapter: "fake_capture", authorization_id: otherId,
     provider_effect_key: "synthetic:outbox", action_type: actionType,
-    recipient: "fixture@example.invalid", content_hash: "a".repeat(64), immutable_content: "fixture",
+    recipient: "fixture@example.invalid", content_hash: createHash("sha256").update("fixture").digest("hex"), immutable_content: "fixture",
     aggregate_revision: 1, amount_pence: 101, currency: "GBP", policy_version: "fixture.v1",
     authorization_expires_at: "2099-01-01T00:00:00Z", created_at: "2026-01-01T00:00:00Z", status: "pending" };
   const query = vi.fn(async (sql: string) => {
     if (sql === "SELECT outbound_control.claims_enabled() AS enabled") return { rows: [{ enabled: true }], rowCount: 1 };
-    if (sql.startsWith("SELECT o.*,a.actor_membership_id AS authorization_actor FROM app.action_outbox")) return { rows: [row], rowCount: 1 };
-    if (sql.startsWith("SELECT app.mon8_feature_decision")) return { rows: [{ decision: { version: "plan-entitlement-decision.v1", environment: "synthetic_demo", feature: "approval_chains", entitlement: "included", executable: true, reason: "available" } }], rowCount: 1 };
-    if (sql.startsWith("SELECT count(*)::int n")) return { rows: [{ n: 0 }], rowCount: 1 };
-    // ENT-5 checks a client send's sender authority separately; model it as granted here.
-    if (sql.includes("app.xc_send_authority(")) return { rows: [{ allowed: true }], rowCount: 1 };
+    if (sql.startsWith("SELECT app.claim_worker_action(")) return { rows: [{ claim: { action: row, attempt: 1, token: jobId } }], rowCount: 1 };
+    if (sql.startsWith("SELECT app.complete_worker_action(")) return { rows: [{ completed: true }], rowCount: 1 };
     return { rows: [], rowCount: 0 };
   });
-  const pool = { connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool;
+  const pool = { query, connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool;
   const adapter: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false,
     deliver: vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "synthetic:delivered" })),
     reconcile: async () => "unknown" };
-  const executor = new ActionExecutor(pool, new Map([[adapter.name, adapter]]), { emit: vi.fn() });
-  return { query, adapter, run: () => executor.execute(verifiedTenantContextForQueuedJob(tenantId), otherId,
+  const executor = new WorkerActionExecutor(pool, new Map([[adapter.name, adapter]]), { emit: vi.fn() });
+  return { query, adapter, run: () => executor.execute(otherId,
     persistedActionType => requireOutboxSettlementEligibility(mode ?? "disabled", persistedActionType)) };
 }
 

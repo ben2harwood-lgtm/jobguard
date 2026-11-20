@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { withTenant, verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID(), H="a".repeat(64);
 const context=(tenantId:string=T)=>verifiedTenantContextFromMembership({tenantId,membershipId:M,identityUserId:U} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
@@ -19,6 +20,12 @@ async function asTenant<R>(tenant:string,work:(db:PoolClient)=>Promise<R>):Promi
  try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);const out=await work(db);await db.query("COMMIT");return out}
  catch(error){await db.query("ROLLBACK");throw error}finally{db.release()}
 }
+async function onShadowJob<R>(tenant:string,job:string,work:(db:PoolClient)=>Promise<R>):Promise<R> {
+ return withTenant(shadow,context(tenant),async db=>{
+  await db.$client.query("SELECT app.lp11_bind_shadow_job($1,$2)",[tenant,job]);
+  return work(db.$client);
+ });
+}
 async function signal(jobId:string=J,tenantId:string=T,state="candidate") {
  const id=randomUUID();await admin.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
  VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-v1',clock_timestamp(),'Fictional outside tap','low',$5)`,[tenantId,jobId,id,randomUUID(),state]);return id;
@@ -26,7 +33,8 @@ async function signal(jobId:string=J,tenantId:string=T,state="candidate") {
 async function setup() {
  directory=await mkdtemp(join(tmpdir(),"sv2-pg16-"));port=59000+Math.floor(Math.random()*500);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
- await postgres.initialise();await postgres.start();admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
+ await postgres.initialise();await postgres.start();await postgres.createDatabase("jobguard_synthetic_demo");
+ admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic",database:"jobguard_synthetic_demo"});await migrate(admin);await installLegacySyntheticPartyFixtures(admin);
  for(const [tenant,job] of [[T,J],[T,K],[O,L]]) {
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING",[tenant]);
   await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional SV-2 job','live')",[job,tenant]);
@@ -38,7 +46,7 @@ async function setup() {
   await admin.query(`CREATE ROLE ${login} LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT ${role} TO ${login}`);
  }
  // Name the database: with none, pg connects to a database called after the login, which does not exist.
- const pool=(user:string)=>new Pool({host:"127.0.0.1",port,database:"postgres",user,password:"synthetic",max:4});
+ const pool=(user:string)=>new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user,password:"synthetic",max:4});
  runtime=pool("sv2_runtime");shadow=pool("sv2_shadow");emergency=pool("sv2_emergency");
 }
 async function cleanup(){await closeTestPools(runtime,shadow,emergency,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true});}
@@ -50,8 +58,10 @@ describe("SV-2 real PostgreSQL persistence (DW3–DW7)",()=>{
   for(const [tenant,job,state] of [[T,J,"revealed"],[T,J,"candidate"],[T,J,"held_for_final_check"],[T,K,"revealed"],[O,L,"revealed"]])await signal(job,tenant,state);
   expect((await admin.query("SELECT id FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND state='revealed'",[T,J])).rowCount).toBeGreaterThan(0);
   expect((await admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=ANY($2::uuid[])",[T,[J,K]])).rows[0].n).toBe(0);
-  expect(await new ShadowRepository(runtime).reveal(context(),{version:"shadow-read.v1",jobId:J})).toEqual([]);
-  expect(await new ShadowRepository(runtime).reveal(context(),{version:"shadow-read.v1",jobId:K})).toEqual([]);
+  // LP-6d: the owner's own signed-in request reads; the empty answer is the pre-lock split, not a refusal.
+  const own=await testBoundTenantContext(admin,T,M);
+  expect(await new ShadowRepository(runtime).reveal(own,{version:"shadow-read.v1",jobId:J})).toEqual([]);
+  expect(await new ShadowRepository(runtime).reveal(own,{version:"shadow-read.v1",jobId:K})).toEqual([]);
   await expect(runtime.query("SELECT * FROM app.reveal_shadow_signals($1,$2)",[T,J])).rejects.toMatchObject({code:"42501"});
   await expect(withTenant(runtime,context(O),db=>db.$client.query("SELECT * FROM app.reveal_shadow_signals($1,$2)",[T,J]))).rejects.toMatchObject({code:"42501"});
  });
@@ -79,7 +89,7 @@ describe("SV-2 real PostgreSQL persistence (DW3–DW7)",()=>{
   expect((await admin.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE signal_id=$1",[id])).rows).toEqual(expect.arrayContaining([{reason:"disclosed_before_lock"},{reason:"surfaced_early"}]));
   await expect(admin.query("UPDATE app.shadow_commercial_signal SET disclosed_before_lock=false WHERE id=$1",[id])).rejects.toMatchObject({code:"55000"});
   await expect(admin.query("UPDATE app.shadow_commercial_signal SET first_builder_visible_at=NULL WHERE id=$1",[id])).rejects.toMatchObject({code:"55000"});
-  await expect(withTenant(shadow,context(),db=>db.$client.query("UPDATE app.shadow_commercial_signal SET state='revealed' WHERE id=$1",[id]))).rejects.toMatchObject({code:"55000"});
+  await expect(onShadowJob(T,J,db=>db.query("UPDATE app.shadow_commercial_signal SET state='revealed' WHERE id=$1",[id]))).rejects.toMatchObject({code:"55000"});
   await expect(repo.supportDisclosure(context(),{...request,signalId:await signal()})).rejects.toMatchObject({code:"23505"});
   for(const route of ["must_surface_override","export","data_subject_access","defect"]) {
    const s=await signal();await withTenant(shadow,context(),db=>db.$client.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,$5)",[T,J,s,randomUUID(),route]));
@@ -93,7 +103,7 @@ describe("SV-2 real PostgreSQL persistence (DW3–DW7)",()=>{
    GRANT jobguard_shadow_emergency_access TO sv2_admin_only WITH ADMIN TRUE, INHERIT FALSE, SET FALSE`);
   expect((await admin.query("SELECT pg_has_role('sv2_admin_only','jobguard_shadow_emergency_access','MEMBER') AS member,pg_has_role('sv2_admin_only','jobguard_shadow_emergency_access','USAGE') AS usage,pg_has_role('sv2_admin_only','jobguard_shadow_emergency_access','SET') AS \"set\"")).rows)
    .toEqual([{member:true,usage:false,set:false}]);
-  const adminOnly=new Pool({host:"127.0.0.1",port,database:"postgres",user:"sv2_admin_only",password:"synthetic",max:2});
+  const adminOnly=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"sv2_admin_only",password:"synthetic",max:2});
   try{
    const id=await signal(),eventId=randomUUID();
    await expect(new ShadowRepository(adminOnly).supportDisclosure(context(),{version:"shadow-support-disclosure.v1",jobId:J,signalId:id,eventId})).rejects.toMatchObject({code:"42501",message:"separate support permission required"});
@@ -110,14 +120,14 @@ describe("SV-2 real PostgreSQL persistence (DW3–DW7)",()=>{
    await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')`,[upload,T,J,`synthetic/${upload}`,H]);
    await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','proof_photo',$5,'version-v1',$6,10,'image/png','standard_evidence',$7,clock_timestamp())`,[e,T,upload,J,`synthetic/${upload}`,H,received]);
   });
-  const link=(jobId=J,tenantId=T,version="version-v1",hash=H,time=received)=>withTenant(shadow,context(tenantId),db=>db.$client.query(`INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)`,[tenantId,jobId,id,e,version,hash,time]));
+  const link=(jobId=J,tenantId=T,version="version-v1",hash=H,time=received)=>onShadowJob(tenantId,jobId,db=>db.query(`INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)`,[tenantId,jobId,id,e,version,hash,time]));
   for(const [job,tenant,version,hash,time] of [[K,T,"version-v1",H,received],[L,O,"version-v1",H,received],[J,T,"wrong",H,received],[J,T,"version-v1","b".repeat(64),received],[J,T,"version-v1",H,new Date("1900-01-01")]] as const)await expect(link(job,tenant,version,hash,time)).rejects.toMatchObject({code:"23503"});
   await link();await expect(link()).rejects.toMatchObject({code:"23505"});
   await expect(admin.query("UPDATE app.shadow_signal_evidence SET source_received_at=clock_timestamp() WHERE signal_id=$1",[id])).rejects.toMatchObject({code:"55000"});
  });
  it("qualifies every shadow link by tenant/job, and classifications by run/signal",async()=>{
   const id=await signal(),other=await signal(K),run=randomUUID();
-  await withTenant(shadow,context(),db=>db.$client.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic-v1',clock_timestamp())",[T,J,run]));
+  await onShadowJob(T,J,db=>db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic-v1',clock_timestamp())",[T,J,run]));
   const statements=[
    ["INSERT INTO app.shadow_signal_ineligibility(tenant_id,job_id,id,signal_id,reason,source_ref) VALUES($1,$2,$3,$4,'attribution_disputed','synthetic')",[T,K,randomUUID(),id]],
    ["INSERT INTO app.shadow_signal_classification(tenant_id,job_id,id,run_id,signal_id,outcome) VALUES($1,$2,$3,$4,$5,'not_enough_evidence')",[T,J,randomUUID(),run,other]],
@@ -126,10 +136,10 @@ describe("SV-2 real PostgreSQL persistence (DW3–DW7)",()=>{
    ["INSERT INTO app.shadow_disclosure_event(tenant_id,job_id,id,signal_id,route,actor_ref,before_lock) VALUES($1,$2,$3,$4,'defect','synthetic',true)",[T,K,randomUUID(),id]],
    ["UPDATE app.shadow_commercial_signal SET coalesced_into_signal_id=$1 WHERE id=$2",[other,id]],
   ] as const;
-  for(const [sql,args] of statements)await expect(withTenant(shadow,context(),db=>db.$client.query(sql,[...args]))).rejects.toMatchObject({code:sql.includes("shadow_disclosure_event")?"42501":"23503"});
+  for(const [sql,args] of statements)await expect(onShadowJob(T,sql.startsWith("UPDATE")?J:args[1],db=>db.query(sql,[...args]))).rejects.toMatchObject({code:sql.includes("shadow_disclosure_event")?"42501":"23503"});
   // The controlled disclosure routine also rejects same-tenant wrong-job references.
   await expect(withTenant(shadow,context(),db=>db.$client.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,'defect')",[T,K,id,randomUUID()]))).rejects.toMatchObject({code:"23503"});
-  const classify=()=>withTenant(shadow,context(),db=>db.$client.query("INSERT INTO app.shadow_signal_classification(tenant_id,job_id,id,run_id,signal_id,outcome) VALUES($1,$2,$3,$4,$5,'not_enough_evidence')",[T,J,randomUUID(),run,id]));
+  const classify=()=>onShadowJob(T,J,db=>db.query("INSERT INTO app.shadow_signal_classification(tenant_id,job_id,id,run_id,signal_id,outcome) VALUES($1,$2,$3,$4,$5,'not_enough_evidence')",[T,J,randomUUID(),run,id]));
   await classify();await expect(classify()).rejects.toMatchObject({code:"23505"});
   // Superuser fixtures isolate FK behavior from RLS denial and routine permission checks.
   // A still-unclassified signal keeps the (tenant, run, signal) uniqueness from raising 23505 ahead of the foreign key.
@@ -171,7 +181,7 @@ it('SB-03: Disclosure through support, export, a data-subject access response or
 
 it('SB-26: Links across tenants or jobs on signals, locks, allocations, attributions or periods', async () => {
  const id=await signal(),run=randomUUID();
- await withTenant(shadow,context(),db=>db.$client.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic:SB26',clock_timestamp())",[T,J,run]));
+ await onShadowJob(T,J,db=>db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic:SB26',clock_timestamp())",[T,J,run]));
  const classify=(tenant:string,job:string)=>admin.query("INSERT INTO app.shadow_signal_classification(tenant_id,job_id,id,run_id,signal_id,outcome) VALUES($1,$2,$3,$4,$5,'not_enough_evidence')",[tenant,job,randomUUID(),run,id]);
  for(const [tenant,job] of [[T,K],[O,L]]) await expect(classify(tenant!,job!)).rejects.toMatchObject({code:'23503'});
  await classify(T,J);

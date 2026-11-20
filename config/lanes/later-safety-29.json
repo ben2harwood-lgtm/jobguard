@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-29": {
+      "branches": [
+        "codex/sandbox/later-safety-29"
+      ],
+      "note": "LATER-SAFETY-29-CATCHUP landing group, including batch-44 and LATER-SAFETY-20; exact working-tree diff from origin/main, excluding config/lanes/. Main successor rows and 0683-0685 are retained through ordered migration proof discovery; 0665-0677 do not replace discover_readiness_plans. RED: tenant-bound discovery routine; independent check required.",
+      "allow": [
+        "apps/api/src/readiness-scheduler.test.ts",
+        "apps/api/src/readiness-scheduler.ts",
+        "apps/api/src/readiness-store.test.ts",
+        "apps/api/src/readiness-store.ts",
+        "apps/api/src/readiness-task.test.ts",
+        "apps/api/src/readiness-task.ts",
+        "apps/api/src/shadow-detection.worker.test.ts",
+        "apps/api/src/sv5pre-worker-registration.test.ts",
+        "apps/api/src/worker.ts",
+        "packages/core/src/readiness.test.ts",
+        "packages/core/src/readiness.ts",
+        "packages/db/migration-notes/0683_readiness_plan_discovery.md",
+        "packages/db/migration-notes/0684_readiness_discovery_guard.md",
+        "packages/db/migration-notes/0685_readiness_bad_timezone.md",
+        "packages/db/migrations/0683_readiness_plan_discovery.sql",
+        "packages/db/migrations/0684_readiness_discovery_guard.sql",
+        "packages/db/migrations/0685_readiness_bad_timezone.sql",
+        "packages/db/test/contractor-entitlement-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0683_readiness_plan_discovery.proof.json",
+        "packages/db/test/migration-proofs/0684_readiness_discovery_guard.proof.json",
+        "packages/db/test/migration-proofs/0685_readiness_bad_timezone.proof.json",
+        "packages/db/test/readiness-store.integration.test.ts",
+        "packages/db/test/readiness-timer.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
-vi.mock("@jobguard/db", () => ({ PracticeAccessError: class extends Error {} }));
+vi.mock("@jobguard/db", () => ({ PracticeAccessError: class extends Error {}, closeOutboundWorkerPool: vi.fn() }));
 vi.mock("@jobguard/api/workspace", () => ({ SYNTHETIC_SESSION: "fictional" }));
 const identity = vi.hoisted(() => ({ create: vi.fn(() => ({})) }));
 vi.mock("@jobguard/api/identity", () => ({ createIdentityApplication: identity.create }));
@@ -23,7 +23,7 @@ describe("Cloudflare demo database lifetime", () => {
     vi.stubEnv("DATABASE_URL", "postgresql://runtime:fictional@db.invalid/jobguard_synthetic_demo");
     const first = syntheticPool(), second = syntheticPool();
     expect(first).not.toBe(second);
-    expect(first.options).toMatchObject({ max: 1, maxUses: 1, connectionString: process.env.DATABASE_URL });
+    for (const pool of [first, second]) expect(pool.options).toMatchObject({ max: 3, maxUses: 1, connectionTimeoutMillis: 10_000, connectionString: process.env.DATABASE_URL });
     expect((globalThis as { __jobguardSyntheticPool?: unknown }).__jobguardSyntheticPool).toBeUndefined();
     await Promise.all([first.end(), second.end()]);
   });

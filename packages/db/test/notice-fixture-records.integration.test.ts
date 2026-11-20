@@ -31,7 +31,7 @@ describe("M4-19 append-only durable synthetic notice book (real PostgreSQL)", ()
       // Owner-only lifecycle fixture; never a product status override.
       await db.query("SET LOCAL session_replication_role=replica");
       await db.query("UPDATE app.job SET status='draft' WHERE tenant_id=$1 AND id=$2", [x.a.tenantId, x.a.jobId]);
-    });
+    }, { membershipId: x.a.actorId });
     for (const operation of ["prepare", "append"]) {
       const value = operation === "prepare" ? rev : { input: rev };
       for (const context of [x.a.context, y.a.context]) {
@@ -50,7 +50,7 @@ describe("M4-19 append-only durable synthetic notice book (real PostgreSQL)", ()
       await workTenant(f.admin, x.a.tenantId, async db => {
         await db.query("SET LOCAL session_replication_role=replica");
         await db.query("UPDATE app.job SET status=$3 WHERE tenant_id=$1 AND id=$2", [x.a.tenantId, x.a.jobId, status]);
-      });
+      }, { membershipId: x.a.actorId });
       expect(await x.send(x.revision())).toMatchObject({ sequence: 1, kind: "revision" });
     }
   });
@@ -61,7 +61,7 @@ describe("M4-19 append-only durable synthetic notice book (real PostgreSQL)", ()
       await workTenant(f.admin, x.a.tenantId, async db => {
         await db.query("SET LOCAL session_replication_role=replica");
         await db.query("UPDATE app.job SET status=$3 WHERE tenant_id=$1 AND id=$2", [x.a.tenantId, x.a.jobId, status]);
-      });
+      }, { membershipId: x.a.actorId });
       expect(await x.send(rev)).toEqual(first);
       expect((await x.read()).records).toEqual(original.records);
       // Exercise both SQL replay paths, including append, which the repository's prepare replay avoids.
@@ -70,7 +70,7 @@ describe("M4-19 append-only durable synthetic notice book (real PostgreSQL)", ()
         const result = await workTenant(f.runtime, x.a.tenantId, async db => (await db.query(
           "SELECT app.notice_fixture_records($1,$2,$3,$4,$5::jsonb) result",
           [x.a.jobId, x.n, x.a.digest, operation, JSON.stringify(value)],
-        )).rows[0].result);
+        )).rows[0].result, { membershipId: x.a.actorId, bindRequest: false });
         expect(operation === "prepare" ? result.replay : result).toEqual(first);
       }
       await expect(x.repo.command(y.a.context, y.actor, rev)).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
@@ -167,17 +167,17 @@ describe("M4-19 append-only durable synthetic notice book (real PostgreSQL)", ()
     }
     await expect(x.repo.read(x.a.context, x.a.jobId, randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND", message: "NOT_FOUND" });
     for (const sql of ["SELECT * FROM app.notice_fixture_record", "UPDATE app.notice_fixture_record SET record='{}'", "DELETE FROM app.notice_fixture_record"]) {
-      await expect(workTenant(f.runtime, x.a.tenantId, db => db.query(sql))).rejects.toMatchObject({ code: "42501" });
+      await expect(workTenant(f.runtime, x.a.tenantId, db => db.query(sql), { membershipId: x.a.actorId })).rejects.toMatchObject({ code: "42501" });
     }
     const policy = (await f.admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.notice_fixture_record'::regclass")).rows[0];
     expect(policy).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
     await workTenant(f.admin, y.a.tenantId, async db => {
       await db.query("SET LOCAL ROLE jobguard_migration");
       expect((await db.query("SELECT * FROM app.notice_fixture_record WHERE notice_id=$1", [x.n])).rows).toEqual([]);
-    });
+    }, { membershipId: y.a.actorId });
     await workTenant(f.runtime, x.a.tenantId, async db => {
       await db.query("SELECT app.notice_fixture_records($1,$2,NULL,'read','{}')", [x.a.jobId, x.n]);
       expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows[0].t).toBe(x.a.tenantId);
-    });
+    }, { membershipId: x.a.actorId });
   });
 });

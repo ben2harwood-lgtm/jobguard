@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { ContractorRepository, contractorSessionContext, type VerifiedTenantContext } from '@jobguard/db';
 import { ContractorBundleCheckApplication, BundleCheckError } from '@jobguard/api/evidence-bundle';
+import { contractorBundleCheckV1 } from '@jobguard/api/evidence-bundle-contracts';
 import { syntheticPool } from './synthetic-server';
 import { practiceStorage } from './northside-server';
 
@@ -13,7 +14,9 @@ export async function checkContractorBundle(raw: unknown) {
   const pool = syntheticPool();
   const context: VerifiedTenantContext = await contractorSessionContext(pool, token!);
   const actor = await new ContractorRepository(pool).resolveSession(token!);
-  return new ContractorBundleCheckApplication(pool, practiceStorage()).check(context, actor, raw);
+  const parsed = contractorBundleCheckV1.safeParse(raw);
+  if (!parsed.success) throw new BundleCheckError('INVALID_INPUT');
+  return new ContractorBundleCheckApplication(pool, practiceStorage(context, parsed.data.jobId, pool)).check(context, actor, raw);
 }
 export function bundleCheckFailure(error: unknown) {
   const code = (error as { code?: string })?.code;

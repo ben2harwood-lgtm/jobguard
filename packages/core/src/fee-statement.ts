@@ -45,10 +45,24 @@ export type FeeStatement = Readonly<{
 /** Read-only projection. Source rows remain authoritative; this function has no effect or persistence port. */
 export function projectFeeStatement(raw: unknown): FeeStatement {
   const input = feeStatementInputV1.parse(raw);
+  const sources = new Map<string, { outcome: FeeStatementInputV1["outcomes"][number]; principal: bigint; gross: bigint }>();
+  for (const outcome of input.outcomes) {
+    if (sources.has(outcome.sourceId)) throw new Error("Outcome source identities must be unique");
+    sources.set(outcome.sourceId, { outcome, principal: BigInt(outcome.eligibleNetPence), gross: BigInt(outcome.grossCashPence) });
+  }
   let eligible = 0n, gross = 0n;
   const outcomes = input.outcomes.map((outcome) => {
     const sign = outcome.state === "reversed" ? -1n : outcome.state === "eligible" ? 1n : 0n;
     if (outcome.state === "eligible" && outcome.evidenceState !== "verified") throw new Error("Eligible outcomes require verified proof");
+    if (outcome.state === "reversed") {
+      const source = outcome.reversesSourceId === null ? undefined : sources.get(outcome.reversesSourceId);
+      if (!source || source.outcome.state !== "eligible" || source.outcome.caseId !== outcome.caseId) {
+        throw new Error("Reversals require an eligible source in the same case");
+      }
+      source.principal -= BigInt(outcome.eligibleNetPence);
+      source.gross -= BigInt(outcome.grossCashPence);
+      if (source.principal < 0n || source.gross < 0n) throw new Error("Reversals cannot exceed immutable landing sources");
+    }
     eligible += sign * BigInt(outcome.eligibleNetPence); gross += sign * BigInt(outcome.grossCashPence);
     return Object.freeze({ sourceId: outcome.sourceId, caseId: outcome.caseId, state: outcome.state,
       eligiblePrincipal: money(outcome.eligibleNetPence), grossCash: money(outcome.grossCashPence),

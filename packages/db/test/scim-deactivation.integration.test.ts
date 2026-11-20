@@ -7,7 +7,7 @@ import { EvidenceService,LedgerRepository,MIGRATION_URLS,ScimRepository,migrate 
 import { ScimApplication } from "../../../apps/api/src/auth/sso/scim.application.js";
 import { scimBearerFor } from "../../../apps/api/src/auth/sso/scim.contracts.js";
 import { auditRows,canonicalRows,createScimHarness,deactivate,fixture,memberIn,person,sha256,type ScimFixture,type ScimHarness,type ScimPerson } from "./scim-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 let h:ScimHarness;
 beforeAll(async()=>{h=await createScimHarness("jg-scim-deactivation-");},120000);
@@ -25,15 +25,15 @@ async function historyFixture(f:ScimFixture) {
  await h.admin.query("INSERT INTO app.ledger_book(id,tenant_id,code,currency,chart_status) VALUES($1,$2,'scim-history','GBP','synthetic')",[book,tenant]);
  await h.admin.query("INSERT INTO app.ledger_account(id,tenant_id,book_id,currency,code,class,mapping_status) VALUES($1,$2,$3,'GBP','AR','receivable','synthetic'),($4,$2,$3,'GBP','DEF','deferred_income','synthetic')",[receivable,tenant,book,deferred]);
  await h.admin.query("INSERT INTO app.financial_authorization(id,tenant_id,membership_id,purpose,amount_pence,currency,artifact_hash,status) VALUES($1,$2,$3,'plan_obligation',1000,'GBP',$4,'approved')",[authorizationId,tenant,f.principal.membershipId,artifactHash]);
- await new LedgerRepository(h.runtime).postPlanObligation(testTenantContext(tenant),{authorizationId,actorRef:"operations:synthetic-history",permission:"finance:approve"},{schemaVersion:1,journalId,bookId:book,amountPence:1000,currency:"GBP",sourceEventId:`history:${journalId}`,provenanceRef:"synthetic:history-fixture",artifactHash,authorizationId,actorRef:"operations:synthetic-history",receivableAccountId:receivable,deferredIncomeAccountId:deferred,provenanceKind:"synthetic_authorized_plan"});
+ await new LedgerRepository(h.runtime).postPlanObligation(testTenantContext(tenant,{membershipId:f.principal.membershipId}),{authorizationId,actorRef:"operations:synthetic-history",permission:"finance:approve"},{schemaVersion:1,journalId,bookId:book,amountPence:1000,currency:"GBP",sourceEventId:`history:${journalId}`,provenanceRef:"synthetic:history-fixture",artifactHash,authorizationId,actorRef:"operations:synthetic-history",receivableAccountId:receivable,deferredIncomeAccountId:deferred,provenanceKind:"synthetic_authorized_plan"});
  const jobId=randomUUID();await importWatchdogFixtureJob(h.admin,tenant,jobId,"Fictional retained history");
  const bytes=new Uint8Array([255,216,0,0,255,217]);let objectKey="";
  const service=new EvidenceService(h.runtime,{
   createUploadUrl:async()=>"synthetic-upload",createDownloadUrl:async()=>"synthetic-download",
   readExactVersion:async()=>({key:objectKey,versionId:"synthetic-history-v1",bytes,byteLength:bytes.length,contentType:"image/jpeg"}),deleteExactVersion:async()=>undefined,
  });
- const upload=await service.beginUpload(testTenantContext(tenant),{jobId,scopeItemId:null,expectedSha256:createHash("sha256").update(bytes).digest("hex"),contentType:"image/jpeg",maximumBytes:100,expiresAt:new Date(Date.now()+600000)});
- objectKey=upload.objectKey;await service.finalize(testTenantContext(tenant),{uploadId:upload.id,objectVersionId:"synthetic-history-v1",evidenceType:"site_photo"});
+ const upload=await service.beginUpload(testTenantContext(tenant,{membershipId:f.principal.membershipId}),{jobId,scopeItemId:null,expectedSha256:createHash("sha256").update(bytes).digest("hex"),contentType:"image/jpeg",maximumBytes:100,expiresAt:new Date(Date.now()+600000)});
+ objectKey=upload.objectKey;await service.finalize(testTenantContext(tenant,{membershipId:f.principal.membershipId}),{uploadId:upload.id,objectVersionId:"synthetic-history-v1",evidenceType:"site_photo"});
 }
 async function refusalCount() {return Number((await h.admin.query("SELECT count(*) n FROM identity.sso_refusal_event")).rows[0].n);}
 async function record(f:ScimFixture,eventId:string) {return (await h.admin.query("SELECT * FROM identity.scim_event WHERE tenant_id=$1 AND connection_id=$2 AND source_event_id=$3",[f.principal.tenantId,f.connectionId,eventId])).rows[0];}
@@ -147,7 +147,9 @@ describe("[D1] ENT-10a2 database deactivation",()=>{
   const a=await fixture(h),b=await fixture(h);await deactivate(a,{subject:randomUUID()});await deactivate(b,{subject:randomUUID()});
   const client=await h.admin.connect();try{
    for(const setting of [undefined,"","invalid",a.principal.tenantId,randomUUID()]){
-    await client.query("BEGIN; SET LOCAL ROLE jobguard_migration");if(setting!==undefined)await client.query("SELECT set_config('app.tenant_id',$1,true)",[setting]);
+    await client.query("BEGIN");
+    if(setting===a.principal.tenantId)await bindTestClient(h.admin,client,a.principal.tenantId,a.principal.membershipId);
+    await client.query("SET LOCAL ROLE jobguard_migration");if(setting!==undefined)await client.query("SELECT set_config('app.tenant_id',$1,true)",[setting]);
     const rows=(await client.query("SELECT tenant_id FROM identity.scim_event")).rows;expect(rows).toEqual(setting===a.principal.tenantId?[{tenant_id:a.principal.tenantId}]:[]);await client.query("ROLLBACK");
    }
   }finally{await client.query("ROLLBACK");client.release();}
@@ -156,7 +158,7 @@ describe("[D1] ENT-10a2 database deactivation",()=>{
   const f=await fixture(h),p=await person(f),cases=[{subject:randomUUID(),outcome:"ignored",cause:"SCIM_SUBJECT_NOT_LINKED"},{subject:f.principal.identityUserId,outcome:"refused",cause:"SCIM_OWNER_PROTECTED"},{subject:p.subject,outcome:"deactivated",cause:"SCIM_DEACTIVATED"},{subject:p.subject,outcome:"ignored",cause:"SCIM_ALREADY_INACTIVE"}];
   for(const c of cases){const eventId=randomUUID(),before=(await auditRows(h,f.principal.tenantId)).length;expect(await deactivate(f,c,eventId)).toMatchObject({outcome:c.outcome,cause:c.cause});
    const row=await record(f,eventId),events=(await auditRows(h,f.principal.tenantId)).slice(before);expect(events).toHaveLength(1);expect(events[0]).toMatchObject({event_type:`sso.scim.${c.outcome}`,actor_ref:"identity:scim",subject_type:"sso-connection",subject_ref:f.connectionId});
-   expect(events[0].payload).toEqual({references:{auditTrust:"lower_trust",environment:"synthetic_demo",code:c.cause},hashes:{document:row.event_hash},classifications:{action:"security"}});expect(JSON.stringify(events[0].payload)).not.toContain(c.subject);expect(JSON.stringify(events[0].payload)).not.toContain(p.email);
+   expect(events[0].payload).toEqual({references:{auditTrust:"lower_trust",auditActorKind:"system",auditActorRef:expect.stringMatching(/^system:database:[A-Za-z0-9_]+$/u),environment:"synthetic_demo",code:c.cause},hashes:{document:row.event_hash},classifications:{action:"security"}});expect(JSON.stringify(events[0].payload)).not.toContain(c.subject);expect(JSON.stringify(events[0].payload)).not.toContain(p.email);
   }
   expect((await h.admin.query("SELECT count(*)::int n FROM identity.scim_event WHERE tenant_id=$1",[f.principal.tenantId])).rows[0].n).toBe(4);
  });
@@ -180,7 +182,7 @@ describe("[D1] ENT-10a2 database deactivation",()=>{
   for(const table of ["app.journal","app.journal_line","app.evidence_object"])expect(before[table]!.length).toBeGreaterThan(0);
   await deactivate(f,{subject:f.principal.identityUserId});await deactivate(f,{subject:randomUUID()});const eventId=randomUUID();await deactivate(f,p,eventId);
   expect(await snapshot(tables)).toEqual(before);expect(await canonicalRows(h,"app.audit_event","id=ANY($1::uuid[])",[ids])).toEqual(earlier);
-  for(const query of ["UPDATE identity.scim_event SET outcome=outcome WHERE tenant_id=$1 AND source_event_id=$2","DELETE FROM identity.scim_event WHERE tenant_id=$1 AND source_event_id=$2"]){const client=await h.admin.connect();try{await client.query("BEGIN; SET LOCAL ROLE jobguard_migration");await client.query("SELECT set_config('app.tenant_id',$1,true)",[f.principal.tenantId]);await expect(client.query(query,[f.principal.tenantId,eventId])).rejects.toMatchObject({code:"55000"});}finally{await client.query("ROLLBACK");client.release();}}
+  for(const query of ["UPDATE identity.scim_event SET outcome=outcome WHERE tenant_id=$1 AND source_event_id=$2","DELETE FROM identity.scim_event WHERE tenant_id=$1 AND source_event_id=$2"]){const client=await h.admin.connect();try{await client.query("BEGIN");await bindTestClient(h.admin,client,f.principal.tenantId,f.principal.membershipId);await client.query("SET LOCAL ROLE jobguard_migration");await expect(client.query(query,[f.principal.tenantId,eventId])).rejects.toMatchObject({code:"55000"});}finally{await client.query("ROLLBACK");client.release();}}
  });
  it("[H4] public refusals remain global and proved invalid input or conflict audits only its company",async()=>{
   const a=await fixture(h),b=await fixture(h),p=await person(a),routeHash=sha256("scim"),beforeGlobal=await refusalCount(),beforeA=await companySnapshot(a.principal.tenantId),beforeB=await companySnapshot(b.principal.tenantId);

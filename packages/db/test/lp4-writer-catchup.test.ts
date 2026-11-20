@@ -10,10 +10,17 @@ const replacements = new Map(functions(readFileSync(new URL(sealingMigration, di
 const main = new Map<string, { file: string; sql: string }>();
 const final = new Map<string, string>();
 const recreatedWriters: { name: string; file: string; sql: string }[] = [];
+// LP-6d (0749) only prefixes a request-binding guard to these writers; its own test below pins that the
+// predecessor body survives verbatim, so the latest-main comparisons keep reading the predecessor.
+const lp6dMigration = "0749_lp6d_remaining_routines.sql";
+const lp6dGuarded: { name: string; sql: string; predecessor: string | undefined }[] = [];
 for (const file of readdirSync(directory).filter(f => /^\d{4}.*\.sql$/.test(f)).sort()) {
   for (const fn of functions(readFileSync(new URL(file, directory), "utf8"))) {
+    if (file === lp6dMigration) { lp6dGuarded.push({ ...fn, predecessor: final.get(fn.name) }); if (file > sealingMigration && replacements.has(fn.name)) recreatedWriters.push({ ...fn, file }); continue; }
     final.set(fn.name, fn.sql);
-    if (file !== sealingMigration) main.set(fn.name, { file, sql: fn.sql });
+    // LP-6e (0758) replaces the private sealer itself; it is the sole direct writer, not a converted caller.
+    if (file === "0758_lp6e_audit_attribution.sql" && fn.name === "app.lp4_seal_audit") continue;
+    if (file !== sealingMigration && !(file === "0660_baseline_ancestry_audit_trust.sql" && fn.name === "app.decision_check_command") && !(file === "0698_final_check_post_invoice_rerun.sql" && fn.name === "app.guard_final_check_manifest")) main.set(fn.name, { file, sql: fn.sql });
     if (file > sealingMigration && replacements.has(fn.name)) recreatedWriters.push({ ...fn, file });
   }
 }
@@ -52,6 +59,25 @@ describe("LP-4 catch-up preserves latest main routine behaviour", () => {
     expect(replacement).not.toMatch(directWrite);
     expect(replacement).not.toContain("app.lock_audit_head()");
   });
+  it("LATER-SAFETY-87 pins the complete successor decision writer", () => {
+    const successor = functions(readFileSync(new URL("0660_baseline_ancestry_audit_trust.sql", directory), "utf8"))
+      .filter(fn => fn.name === "app.decision_check_command");
+    expect(successor).toHaveLength(1);
+    expect(final.get("app.decision_check_command")).toBe(successor[0]!.sql);
+    expect(successor[0]!.sql).toContain("iv.job_id=next_job.id AND iv.source_job_id=source.id");
+    expect(successor[0]!.sql).toContain("rv.command_type='job.adopt_in_flight' AND rv.status='succeeded'");
+    expect(successor[0]!.sql).toContain("rv.semantic_key='import:'||next_job.id::text AND rv.result->>'jobId'=next_job.id::text AND rv.result->>'sourceJobId'=source.id::text");
+  });
+  it("LATER-SAFETY-142 pins the complete append-only manifest guard successor", () => {
+    const successor=functions(readFileSync(new URL("0698_final_check_post_invoice_rerun.sql",directory),"utf8"))
+      .filter(fn=>fn.name==="app.guard_final_check_manifest");
+    expect(successor).toHaveLength(1);
+    expect(final.get("app.guard_final_check_manifest")).toBe(successor[0]!.sql);
+    expect(successor[0]!.sql).toContain("removed:=app.require_final_check_rerun(NEW.tenant_id,NEW.job_id,predecessor.id)");
+    expect(successor[0]!.sql).toContain("NEW.withdrawn_predecessor_source_ids:=removed");
+    expect(successor[0]!.sql).toMatch(sealedCall);
+    expect(successor[0]!.sql).not.toMatch(directWrite);
+  });
   it("LP-0 retains the sealed definition and call inventory for every rerouted writer", () => {
     const catalogue = JSON.parse(readFileSync(new URL("../../../docs/contracts/lp-0-effective-privileges-v1.json", import.meta.url), "utf8"));
     const identities = catalogue.recorded.routines.map((row: { identity: string }) => row.identity);
@@ -63,6 +89,17 @@ describe("LP-4 catch-up preserves latest main routine behaviour", () => {
       expect(rows[0].staticCalls, name).toContain("app.lp4_seal_audit");
       expect(rows[0].staticCalls, name).not.toContain("app.lock_audit_head");
       expect(rows[0].staticWrites, name).not.toContain("app.audit_event");
+    }
+  });
+  it("LP-6d keeps every LP-4 writer's predecessor body verbatim behind its binding guard", () => {
+    const body = (sql: string) => /\bAS\s+(\$\w*\$)([\s\S]*?)\1/i.exec(sql)![2]!;
+    const writers = lp6dGuarded.filter(fn => fn.name in lp4WriterSources);
+    expect(writers.map(fn => fn.name).sort()).toEqual(["app.decision_check_command", "app.enterprise_baseline_import"]);
+    for (const { name, sql, predecessor } of writers) {
+      expect(predecessor, name).toBeDefined();
+      expect(body(sql), name).toContain(body(predecessor!).trim());
+      expect(body(sql).indexOf("LP6D_BOUND"), name).toBeGreaterThan(-1);
+      expect(sql, name).not.toMatch(directWrite);
     }
   });
   it("every re-created LP-4 audit writer keeps its sealer call", () => {

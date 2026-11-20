@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-79-auth": {
+      "branches": [
+        "codex/sandbox/later-safety-79-auth"
+      ],
+      "allow": [
+        "packages/db/migration-notes/0960_abandoned_visit_authority.md",
+        "packages/db/migrations/0722_abandoned_visit_authority.sql",
+        "packages/db/migrations/0960_abandoned_visit_authority.sql",
+        "packages/db/test/extra-proceed-migration.test.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
+        "packages/db/test/late-source-import-migration.test.ts",
+        "packages/db/test/lp5-command-catalog.ts",
+        "packages/db/test/m2-1-migration-proof.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0722_abandoned_visit_authority.proof.json",
+        "packages/db/test/migration-proofs/0960_abandoned_visit_authority.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts",
+        "packages/db/test/serious-b5-upgrade.integration.test.ts",
+        "packages/db/test/site-visit-abandoned.integration.test.ts",
+        "packages/db/test/site-visit-authority.integration.test.ts"
+      ]
+    }
+  }
+}

@@ -87,3 +87,39 @@ describe("practice invoice audit regressions (scripted SQL responses)", () => {
     expect(query.mock.calls.some(([sql]) => sql.includes("app.issue_practice_customer_credit_note"))).toBe(true);
   });
 });
+
+it("batch invoice projection uses one owned snapshot, explicit empty groups and the existing mapper", async () => {
+  const empty = randomUUID(), digest = "d".repeat(64);
+  const { repo, query } = scriptedPool(sql => sql.includes("group_job_id") ? [
+    { ...invoice, group_job_id: jobId, paid_pence: "2000", credited_pence: "1000" },
+    { id: null, group_job_id: empty },
+  ] : sql.startsWith("SELECT i.*") ? [{ ...invoice, paid_pence: "2000", credited_pence: "1000" }] : []);
+  const batch = await repo.listForJobs(context, [jobId, empty], digest);
+  expect(batch).toEqual([{ jobId, invoices: await repo.list(context, jobId) }, { jobId: empty, invoices: [] }]);
+  const statements = query.mock.calls.filter(([sql]) => sql.includes("group_job_id"));
+  expect(statements).toHaveLength(1);
+  expect(statements[0]?.[1]).toEqual([tenantId, digest, [jobId, empty]]);
+  expect(statements[0]?.[0]).toContain("practice_owned_job");
+  expect(statements[0]?.[0]).toContain("app.sandbox_run");
+  expect(statements[0]?.[0]).toContain("app.customer_payment_reversal");
+});
+it("batch refuses missing owned groups and never reads all invoices for an empty list or invalid digest", async () => {
+  const { repo, query } = scriptedPool(() => []);
+  expect(await repo.listForJobs(context, [], "d".repeat(64))).toEqual([]);
+  expect(query).not.toHaveBeenCalled();
+  await expect(repo.listForJobs(context, [jobId], "")).rejects.toThrow("UNAUTHENTICATED");
+  expect(query).not.toHaveBeenCalled();
+  await expect(repo.listForJobs(context, [jobId], "d".repeat(64))).rejects.toThrow("NOT_FOUND");
+});
+it("guarded batch retains the practice material digest binding", async () => {
+  const { GuardedPracticeInvoiceRepository } = await import("./guarded-practice-invoice-repository.js");
+  const { createHash } = await import("node:crypto");
+  const session = randomUUID(), digest = createHash("sha256").update(session).digest("hex");
+  const { repo, query } = scriptedPool(sql => sql.includes("group_job_id") ? [{ id: null, group_job_id: jobId }] : []);
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  try {
+    const guarded = new GuardedPracticeInvoiceRepository(repo.pool, session);
+    expect(await guarded.listForJobs(context, [jobId], digest)).toEqual([{ jobId, invoices: [] }]);
+    expect(query.mock.calls).toContainEqual(["SELECT set_config('app.practice_material_digest', $1, true)", [digest]]);
+  } finally { vi.unstubAllEnvs(); }
+});

@@ -1,3 +1,4 @@
+import { testTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { beforeAll,afterAll,expect,it } from "vitest";
 import { createWorkFixture,closeWorkFixture,meterCompany,workTenant,type WorkFixture } from "./free-first-job-admission-fixtures.js";
@@ -19,7 +20,7 @@ async function setup(existing=false){
  const lifecycle=new SmallBuilderDemoRepository(f.runtime),repo=new SmallBuilderTrialDemoRepository(f.runtime);
  const run=await lifecycle.execute(a.context,a.digest,"create",null,create());if(!("runId" in run))throw new Error("run");
  const bind={version:"trial-demo-command.v1",action:"bind",commandId:randomUUID(),runId:run.runId,firstJobId:a.jobId,secondJobId:other.jobId};
- const call=(raw:unknown)=>repo.execute(a.context,a.digest,raw);return {a,other,run,bind,call,repo,lifecycle};
+ const call=(raw:unknown)=>repo.execute(testTenantContext(a.tenantId,{membershipId:a.actorId,bindRequest:false}),a.digest,raw);return {a,other,run,bind,call,repo,lifecycle};
 }
 it("binds and resumes real sources, exact duplicate commands have one immutable effect",async()=>{
  const s=await setup(),before=(await f.admin.query("SELECT count(*)::int n FROM app.job_activation WHERE tenant_id=$1",[s.a.tenantId])).rows[0].n;
@@ -74,7 +75,7 @@ it("cannot charge without accepted effective terms or accept caller clock/backda
 it("binding is FORCE RLS, tenant-FK-bound, private and immutable",async()=>{
  const s=await setup();await s.call(s.bind);
  expect((await f.admin.query("SELECT relrowsecurity,relforcerowsecurity,has_table_privilege('jobguard_runtime',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') allowed FROM pg_class WHERE oid='app.demo_trial_binding'::regclass")).rows[0]).toEqual({relrowsecurity:true,relforcerowsecurity:true,allowed:false});
- for(const sql of ["SELECT * FROM app.demo_trial_binding","UPDATE app.demo_trial_binding SET run_id=gen_random_uuid()","DELETE FROM app.demo_trial_binding","TRUNCATE app.demo_trial_binding"])await expect(workTenant(f.runtime,s.a.tenantId,db=>db.query(sql))).rejects.toThrow();
+ for(const sql of ["SELECT * FROM app.demo_trial_binding","UPDATE app.demo_trial_binding SET run_id=gen_random_uuid()","DELETE FROM app.demo_trial_binding","TRUNCATE app.demo_trial_binding"])await expect(workTenant(f.runtime,s.a.tenantId,db=>db.query(sql), { membershipId: s.a.actorId })).rejects.toThrow();
  await expect(f.admin.query("UPDATE app.demo_trial_binding SET second_job_id=first_job_id WHERE tenant_id=$1",[s.a.tenantId])).rejects.toThrow("DEMO_IMMUTABLE");
 });
 

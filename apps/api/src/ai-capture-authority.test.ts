@@ -16,7 +16,13 @@ async function setup() {
   const membership = identity.fixtureMemberships()[0]!;
   const credentials = { ...session, requestedTenantId: membership.tenantId, origin: "https://example.test" };
   const row = { id, tenant_id: membership.tenantId, content_text: "Stored capture", sha256: digest("Stored capture"), visibility: "public" };
-  const query = vi.fn(async (sql: string) => ({ rows: sql.includes("FROM app.capture_source") ? [row] : [] }));
+  const captureRows = vi.fn(() => [row]);
+  const query = vi.fn(async (sql: string) => {
+    if (sql === "SELECT app.current_actor() actor, app.current_tenant() tenant") {
+      return { rows: [{ actor: membership.id, tenant: membership.tenantId }] };
+    }
+    return { rows: sql.includes("FROM app.capture_source") ? captureRows() : [] };
+  });
   const release = vi.fn();
   const pool = { connect: vi.fn(async () => ({ query, release })) } as unknown as Pool;
   const provider = new FixtureAiProvider({ capture: { output: { ok: true }, citations: [{ sourceId: id, start: 0, end: 14 }] } });
@@ -25,7 +31,7 @@ async function setup() {
   const request = { contractVersion: "ai_gateway_request_v1", fixtureId: "capture", operation: "capture_job_record_proposal",
     promptVersion: "test", schemaVersion: "test", timeoutMs: 1000, maxOutputTokens: 128,
     sources: [{ id, tenantId: membership.tenantId, visibility: "public", content: "Caller text", sha256: digest("Caller text") }] };
-  return { identity, membership, credentials, row, query, pool, execute, authority, request, expire: () => { now += 86_400_001; } };
+  return { identity, membership, credentials, row, captureRows, query, pool, execute, authority, request, expire: () => { now += 86_400_001; } };
 }
 const output = z.object({ ok: z.boolean() });
 describe("stored capture AI authority (fake provider; no live route)", () => {
@@ -42,9 +48,10 @@ describe("stored capture AI authority (fake provider; no live route)", () => {
     const s = await setup();
     if (scenario === "other tenant") s.row.tenant_id = "another-tenant";
     if (scenario === "wrong visibility") s.row.visibility = "hidden";
-    if (scenario === "missing source") s.query.mockResolvedValue({ rows: [] });
+    if (scenario === "missing source") s.captureRows.mockReturnValue([]);
     if (scenario === "corrupt hash") s.row.sha256 = "0".repeat(64);
     await expect(s.authority.generate(s.request, output)).rejects.toMatchObject({ code: "invalid_request" });
+    expect(s.captureRows).toHaveBeenCalledTimes(1);
     expect(s.execute).not.toHaveBeenCalled();
   });
   it.each(["revoked member", "missing session", "expired session", "wrong tenant"])("refuses %s before storage or provider execution", async scenario => {
@@ -59,11 +66,12 @@ describe("stored capture AI authority (fake provider; no live route)", () => {
   });
   it("rechecks membership after loading sources", async () => {
     const s = await setup();
-    s.query.mockImplementation(async sql => {
-      if (sql.includes("FROM app.capture_source")) s.identity.revoke(s.membership.id);
-      return { rows: sql.includes("FROM app.capture_source") ? [s.row] : [] };
+    s.captureRows.mockImplementation(() => {
+      s.identity.revoke(s.membership.id);
+      return [s.row];
     });
     await expect(s.authority.generate(s.request, output)).rejects.toMatchObject({ code: "invalid_request" });
+    expect(s.captureRows).toHaveBeenCalledTimes(1);
     expect(s.execute).not.toHaveBeenCalled();
   });
 });

@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-137": {
+      "branches": [
+        "codex/sandbox/later-safety-137"
+      ],
+      "allow": [
+        "packages/db/test/recovery-timeline-import-anchor.integration.test.ts"
+      ]
+    }
+  }
+}

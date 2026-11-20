@@ -1,9 +1,10 @@
+import { sourceFixtureUrl } from "../source-fixture-url.js";
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { renderBillingExport } from "@jobguard/core";
 import type { OutboundAction } from "@jobguard/db";
 import { createInMemorySftpServer } from "./sftp.synthetic.js";
-import { capabilityReport, connectorCapabilities, conformanceChecks, runConnectorConformance } from "./conformance-kit.js";
+import { stagedInputCapabilityReport, capabilityReport, connectorCapabilities, conformanceChecks, runConnectorConformance } from "./conformance-kit.js";
 import type { ConnectorUnderTest } from "./conformance-kit.js";
 import { createBadConnectorFixture } from "./conformance-kit.bad-fixture.js";
 
@@ -25,7 +26,7 @@ function action(): OutboundAction {
 }
 
 const synthetic: ConnectorUnderTest = {
-  sourceEntry: fileURLToPath(new URL("./sftp.synthetic.ts", import.meta.url)),
+  sourceEntry: fileURLToPath(sourceFixtureUrl("./sftp.synthetic.ts", import.meta.url)),
   create(scenario) {
     const server = createInMemorySftpServer(new Map([[id(2), id(1)]]));
     const connect = () => server.connect(environment, scope, scenario === "unknown" ? "unknown_accepted" : "success").adapter;
@@ -37,7 +38,7 @@ const synthetic: ConnectorUnderTest = {
   },
 };
 const bad: ConnectorUnderTest = {
-  sourceEntry: fileURLToPath(new URL("./conformance-kit.bad-fixture.ts", import.meta.url)),
+  sourceEntry: fileURLToPath(sourceFixtureUrl("./conformance-kit.bad-fixture.ts", import.meta.url)),
   create: (scenario, writers) => createBadConnectorFixture(action(), scenario, writers),
 };
 
@@ -47,6 +48,11 @@ describe("ENT-13b shared synthetic conformance (no provider or release evidence)
   });
   it("fails every named check for the deliberately bad connector", async () => {
     expect(await runConnectorConformance(bad)).toEqual(conformanceChecks.map(check => ({ check, passed: false })));
+  });
+  it("reports export acknowledgements as synthetic staging with live gates unavailable", () => {
+    expect(stagedInputCapabilityReport()).toEqual({ work_orders: "synthetic_only", billing_status: "synthetic_only",
+      materials_issues: "synthetic_only", export_delivery: "synthetic_only", durable_restart: "unavailable",
+      partner_conformance: "unavailable", data_flow_approval: "unavailable", g5: "unavailable" });
   });
   it("records every missing capability as unavailable", () => {
     expect(Object.values(capabilityReport({}))).toEqual(connectorCapabilities.map(() => "unavailable"));

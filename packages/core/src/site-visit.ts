@@ -23,7 +23,7 @@ export const siteVisitCompletedV1 = z.object({ version: z.literal("site-visit-co
 /** No money field, no resident field and no address in either read (the site worker sees the work, not the price or the person). */
 export const siteAssignedJobsV1 = z.object({
  version: z.literal("site-assigned-jobs.v1"), ...head,
- jobs: z.array(z.object({ jobId: uuid, workOrderId: uuid, reference: z.string().min(1).max(100), priority: z.enum(["routine", "urgent", "emergency"]), issuedOn: day, dueOn: day.nullable(), openVisitId: uuid.nullable() }).strict()).max(200),
+ jobs: z.array(z.object({ jobId: uuid, workOrderId: uuid, reference: z.string().min(1).max(100), priority: z.enum(["routine", "urgent", "emergency"]), issuedOn: day, dueOn: day.nullable(), openVisitId: uuid.nullable(), lastCompletedVisit: z.object({ visitId: uuid, closeoutAnswer: z.enum(closeoutAnswers) }).strict().nullable().optional() }).strict()).max(200),
  truncated: z.boolean(),
 }).strict();
 export const siteOrderLinesV1 = z.object({

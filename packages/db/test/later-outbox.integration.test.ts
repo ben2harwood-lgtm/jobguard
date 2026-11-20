@@ -30,7 +30,7 @@ const TENANT = "91000000-0000-4000-8000-000000000001";
 const ACCOUNT = "92000000-0000-4000-8000-000000000001";
 const USER = "93000000-0000-4000-8000-000000000001";
 const MEMBER = "94000000-0000-4000-8000-000000000001";
-const context = testTenantContext(TENANT);
+const context = testTenantContext(TENANT, { membershipId: MEMBER });
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 let postgres: EmbeddedPostgres;
@@ -45,13 +45,14 @@ const adminCredential = randomUUID(), runtimeCredential = randomUUID(), infrastr
  * owner, accepted document, authorization and lifecycle before binding v3. */
 async function activatePursuitFixture(client: import("pg").PoolClient, tenant: string, job: string, expected: number) {
   const row = (await client.query("SELECT d.id,d.document_version,d.content_hash,m.id actor FROM app.quote_document_version d JOIN app.membership m ON m.tenant_id=d.tenant_id AND m.role='owner' AND m.revoked_at IS NULL WHERE d.tenant_id=$1 AND d.job_id=$2", [tenant, job])).rows[0];
-  const command = randomUUID(), decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
-  await client.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.switch_live',$3,$4,'processing',$5)", [command, tenant, `pursuit-fixture:${job}`, row.content_hash, row.actor]);
-  await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
-  await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
-  await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
+  // The evidence fixture already bound this owner before entering the activation seam.
+  expect((await client.query("SELECT app.current_actor() actor,app.current_tenant() tenant")).rows).toEqual([{ actor: row.actor, tenant }]);
+  const command = randomUUID(), significant = {version:'command.v1',commandId:command,commandType:'job.switch_live',semanticKey:`pursuit-fixture:${job}`,actorMembershipId:row.actor,subjectType:'job',subjectRef:job,
+    action:{actionType:'job.switch_live',recipient:null,contentHash:row.content_hash,aggregateRevision:row.document_version,amountPence:null,currency:null,policyVersion:'synthetic_demo_activation.v3',expiresAt:new Date(Date.now()+3600000).toISOString()}};
+  const claim=(await client.query("SELECT app.begin_command($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb) result",['command.v1',command,'job.switch_live',significant.semanticKey,{tenantId:tenant,actorMembershipId:row.actor,subjectType:'job',subjectRef:job},{aggregateRevision:row.document_version},significant])).rows[0].result;
+  const authorization=claim.authorizationId;
   const result = await client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
-  await client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, command]);
+  await client.query("SELECT app.complete_command($1,'{}'::jsonb)", [command]);
   return result;
 }
 
@@ -76,7 +77,7 @@ async function seedPursuitFixture() {
             expect(document).toEqual([{ id: args[5] }]);
             return activatePursuitFixture(target, String(args[0]), primaryJob, Number(args[2]));
           }
-          if (sql === "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')" && args?.[1] === primaryJob) {
+          if (sql === "INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT (tenant_id,job_id) DO NOTHING" && args?.[1] === primaryJob) {
             expect(tracks++).toBe(0);
             const bound = await target.query('SELECT job_track,environment FROM app.job_commercial_track WHERE tenant_id=$1 AND job_id=$2', args);
             expect(bound.rows).toEqual([{ job_track: 'small_builder', environment: 'synthetic_demo' }]);
@@ -107,7 +108,8 @@ beforeAll(async () => {
   });
   await postgres.initialise();
   await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: adminCredential });
+  await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: adminCredential });
   await migrate(admin);
   await admin.query(`
     INSERT INTO control_plane.tenant(id) VALUES('${TENANT}');
@@ -120,8 +122,8 @@ beforeAll(async () => {
     CREATE ROLE outbox_infrastructure LOGIN PASSWORD '${infrastructureCredential}' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
     GRANT jobguard_infrastructure TO outbox_infrastructure;
   `);
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "outbox_runtime", password: runtimeCredential, application_name: "outbox-test-business-worker", max: 5 });
-  infrastructure = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "outbox_infrastructure", password: infrastructureCredential });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "outbox_runtime", password: runtimeCredential, application_name: "outbox-test-business-worker", max: 5 });
+  infrastructure = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "outbox_infrastructure", password: infrastructureCredential });
   admin.on("error", () => undefined);
   runtime.on("error", () => undefined);
   infrastructure.on("error", () => undefined);
@@ -196,7 +198,7 @@ describe("LATER-B9 PostgreSQL outcome guarantees", () => {
   it("ruling 112 owner retry delivers once after definite failure while automatic execution honours back-off", async () => {
     await installLegacySyntheticPartyFixtures(admin);
     const fixture = await seedPursuitFixture();
-    const ctx = testTenantContext(fixture.tenantId);
+    const ctx = testTenantContext(fixture.tenantId, { membershipId: fixture.memberId });
     const actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
     const caseId = fixture.customerCaseId;
     await admin.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",
@@ -259,7 +261,7 @@ describe("LATER-B9 PostgreSQL outcome guarantees", () => {
     expect(calls).toBe(0); expect(await events(action.id)).toHaveLength(0);
     await admin.query("UPDATE app.action_outbox SET next_attempt_at=clock_timestamp() WHERE id=$1", [action.id]);
     await Promise.all([executor.execute(context, action.id), executor.execute(context, action.id)]);
-    expect(calls).toBe(1); expect(await events(action.id)).toHaveLength(1);
+    expect(calls).toBe(1); expect((await events(action.id)).map(event => event.event_type)).toEqual(["outbox.claimed", "outbox.succeeded"]);
   });
   it("L019 safeRetry cannot release unknown; concurrent reconciliation records evidence once", async () => {
     const action = await appendAction();
@@ -272,15 +274,15 @@ describe("LATER-B9 PostgreSQL outcome guarantees", () => {
     fake.reconcile = async () => { if (++arrived === 2) release(); await barrier; return "not_found"; };
     await Promise.all([reconcileOutbox(runtime, context, action.id, fake), reconcileOutbox(runtime, context, action.id, fake)]);
     expect(await statusOf(action.id)).toBe("retryable");
-    const history = await events(action.id); expect(history).toHaveLength(2);
-    expect(history[1].payload.references.reconciliation).toBe("not_found");
+    const history = await events(action.id); expect(history.map(event => event.event_type)).toEqual(["outbox.claimed", "outbox.outcome_unknown", "outbox.retryable"]);
+    expect(history[2].payload.references.reconciliation).toBe("not_found");
   });
-  it.each(["succeeded", "retryable", "outcome_unknown"] as const)("L020 committed %s has one event; duplicate execution has none", async kind => {
+  it.each(["succeeded", "retryable", "outcome_unknown"] as const)("L020 committed %s has one outcome event; duplicate execution has none", async kind => {
     const action = await appendAction();
     const fake = adapter(async () => kind === "succeeded" ? { kind, providerReference: "synthetic" } : { kind, code: "synthetic" });
     const executor = new ActionExecutor(runtime, new Map([[fake.name, fake]]), telemetry);
     await executor.execute(context, action.id); await executor.execute(context, action.id);
-    expect(await events(action.id)).toEqual([{ event_type: `outbox.${kind}`, payload: expect.any(Object) }]);
+    expect(await events(action.id)).toEqual([{ event_type: "outbox.claimed", payload: expect.any(Object) }, { event_type: `outbox.${kind}`, payload: expect.any(Object) }]);
   });
   it("L020 refusal is audited and invalid operator command rolls back with no event", async () => {
     const action = await appendAction({ expiresAt: "2000-01-01T00:00:00Z" });
@@ -293,11 +295,11 @@ describe("LATER-B9 PostgreSQL outcome guarantees", () => {
   it("L020 audit failure rolls back durable outcome and attempt together", async () => {
     const action = await appendAction();
     await admin.query(`CREATE FUNCTION app.later_b9_reject_audit() RETURNS trigger LANGUAGE plpgsql AS $$
-      BEGIN IF NEW.subject_ref='${action.id}' THEN RAISE EXCEPTION 'synthetic audit failure'; END IF; RETURN NEW; END $$;
+      BEGIN IF NEW.subject_ref='${action.id}' AND NEW.event_type='outbox.succeeded' THEN RAISE EXCEPTION 'synthetic audit failure'; END IF; RETURN NEW; END $$;
       CREATE TRIGGER later_b9_reject_audit BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION app.later_b9_reject_audit()`);
     const fake = adapter(async () => ({ kind: "succeeded", providerReference: "synthetic" }));
     await expect(new ActionExecutor(runtime, new Map([[fake.name, fake]]), telemetry).execute(context, action.id)).rejects.toThrow("synthetic audit failure");
-    expect(await statusOf(action.id)).toBe("executing"); expect(await events(action.id)).toHaveLength(0);
+    expect(await statusOf(action.id)).toBe("executing"); expect((await events(action.id)).map(event => event.event_type)).toEqual(["outbox.claimed"]);
     const attempts = await admin.query("SELECT outcome FROM app.action_attempt WHERE action_id=$1", [action.id]);
     expect(attempts.rows).toEqual([{ outcome: "started" }]);
   });

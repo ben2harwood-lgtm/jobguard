@@ -6,6 +6,7 @@ import { CommandError, UserCommandDispatcher, type CommandMutation, type Consequ
 import { meterPlaceAdmissionHold } from "./meter-place-admission.js";
 import { practiceOwnedJobsSql } from "./practice-session.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { isRequestBindingRefusal } from "./request-binding-error.js";
 import { importFixtureV3, importTargetJobIdV3, importPublicRequestHashV3 } from "./job-import-v3-fixtures.js";
 import { ImportPreAdoptionRepository, importedCatchCommand } from "./import-pre-adoption-repository.js";
 
@@ -34,6 +35,8 @@ async function owned(db: TenantTransaction, tenantId: string, digest: string, jo
     : "SELECT app.ch5_import_actor($2,$1) membership_id", [digest, tenantId])).rows[0];
   } catch (error) {
     if (error instanceof Error && ["METER_FORBIDDEN", "FORBIDDEN"].includes(error.message)) throw new JobImportV3Error("FORBIDDEN");
+    // LP-6d: a request bound to another actor or company refuses at binding; keep the main FORBIDDEN code.
+    if (isRequestBindingRefusal(error)) throw new JobImportV3Error("FORBIDDEN");
     throw error;
   }
   if (!principal || (expectedActor !== undefined && uuid.parse(principal.membership_id) !== uuid.parse(expectedActor))) throw new JobImportV3Error("FORBIDDEN");
@@ -102,7 +105,7 @@ export class JobImportV3Repository {
     const prior = async () => withTenant(this.pool, context, async db => {
       await owned(db, context.tenantId, digest, sourceJobId);
       const row = (await db.$client.query<{ public_request_hash: string; result: unknown }>(
-        "SELECT public_request_hash,result FROM app.job_import_v3 WHERE tenant_id=$1 AND command_id=$2 AND session_digest=$3",
+        `SELECT public_request_hash,result FROM app.job_import_v3 WHERE tenant_id=$1 AND command_id=$2 AND (tenant_id<>'11111111-1111-4111-8111-111111111111'::uuid OR session_digest=$3)`,
         [context.tenantId, prepared.input.commandId, digest])).rows[0];
       if (!row) return null;
       if (row.public_request_hash !== publicHash) throw new JobImportV3Error("COMMAND_CONFLICT");
@@ -130,7 +133,7 @@ export class JobImportV3Repository {
       const row = (await db.$client.query<{ snapshot: unknown; result: unknown; adopted_at: Date; admission?: { outcome?: string; sourceHash?: string } }>(
         `SELECT snapshot,result,adopted_at,(SELECT jsonb_build_object('outcome',e.payload#>>'{references,capacityOutcome}','sourceHash',e.payload#>>'{hashes,meterSourceHash}')
           FROM app.audit_event e WHERE e.tenant_id=$1 AND e.subject_type='job' AND e.subject_ref=($2::uuid)::text AND e.event_type='job.imported_baseline_attested' LIMIT 1) admission
-          FROM app.job_import_v3 WHERE tenant_id=$1 AND job_id=$2 AND session_digest=$3`,
+          FROM app.job_import_v3 WHERE tenant_id=$1 AND job_id=$2 AND (tenant_id<>'11111111-1111-4111-8111-111111111111'::uuid OR session_digest=$3)`,
         [context.tenantId, importedJobId, digest])).rows[0];
       if (!row) throw new JobImportV3Error("NOT_FOUND");
       return { version: "job-import-read.v3" as const, environment: "synthetic_demo" as const, realExternalActions: 0 as const, result: assertImportResultV3(row.snapshot, row.result), snapshot: adoptJobV3.parse(row.snapshot), adoptedAt: row.adopted_at.toISOString(),

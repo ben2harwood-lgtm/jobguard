@@ -1,4 +1,5 @@
 "use client";
+import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { practiceFactsCommandV1, practiceFactsCatalogueV1, type PracticeFactKey, type PracticeFeedStep } from "@jobguard/core";
 import { practiceFactsResponseV1, type PracticeFactsResponse } from "../../../api/src/practice-facts.contracts";

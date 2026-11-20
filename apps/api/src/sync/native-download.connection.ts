@@ -1,5 +1,5 @@
 import { mobileAccessV1, mobilePartitionV1, type SyncJobProjectionV1 } from "@jobguard/core";
-import { withTenant } from "@jobguard/db";
+import { isRequestBindingRefusal, withTenant } from "@jobguard/db";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
 import { AuthError, type MemoryAuthProvider } from "../auth/auth-provider.js";
@@ -161,7 +161,7 @@ export class SyntheticNativeDownloadConnection {
         }, tx);
       });
     } catch (error) {
-      if (error instanceof AuthError) return null;
+      if (error instanceof AuthError || isRequestBindingRefusal(error)) return null;
       // After rollback, report expected checkpoint denials as missing current authority.
       if (error instanceof Error && ["SYNC_CHECKPOINT_STALE", "SYNC_CHECKPOINT_INVALID"].includes(error.message)) {
         return null;

@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "later-safety-155": {
+      "branches": ["codex/sandbox/later-safety-155"],
+      "allow": [
+        "packages/ai/src/gateway.ts",
+        "packages/ai/src/gateway.test.ts",
+        "docs/fixtures/ai/golden-run.v1.json"
+      ]
+    }
+  }
+}

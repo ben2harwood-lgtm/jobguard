@@ -77,7 +77,7 @@ human ground truth, a held-out benchmark or G2 release evidence.
 synthetic snapshot using `supplier-line-snapshot.v1`. The caller supplies a verified
 tenant context and the authenticated server principal's identity user/membership
 IDs. Every create, read, correction and replay checks current active owner
-membership, including identity, expiry and revocation. No HTTP route is registered. Snapshot creation and correction remain outside the
+membership, including identity, expiry and revocation. The dark HTTP line-review seam is described below. Snapshot creation and correction remain outside the
 LP-5 command lifecycle: they use this seam's local command/replay and audit
 protocol, and lifecycle dispatch is held until a separately approved integration.
 The seam requires `JOBGUARD_ENV=synthetic_demo`; it cannot accept real uploads or
@@ -353,3 +353,49 @@ the same branch. The Git index remains unmerged because this sandbox prohibits
 Git writes. Required GitHub CI, real PostgreSQL/browser suites, commit-bound
 lane validation and independent RED review at the final head remain landing
 gates. No suite or review is claimed from this handoff beyond the checks above.
+
+## M2-3/M2-4 dark line-review screen (m2-lines-review)
+
+The synthetic job workspace now links to `/jobs/[id]/supplier-lines`. Its
+`/api/jobs/[id]/supplier-lines` GET/POST boundary authenticates the persisted
+practice session and verifies job ownership before every read, command and
+replay. Tenant and actor come only from that session's `VerifiedTenantContext`
+and authenticated identity. Strict request schemas reject tenant/actor/fact
+fields. Foreign and nonexistent jobs receive the same refusal. Responses use
+`Cache-Control: no-store`.
+
+GET requires `version=supplier-lines-read.v1`; optional snapshot/revision fields
+reproduce historical results through the existing repository. Without a stored
+snapshot it returns a fixed, clearly labelled fictional proposal, with stable
+job/tenant-bound source identities and page/hash citations. This is a generated
+practice example, not actual extraction, source authenticity evidence, a labelled
+corpus or held-out evaluation. No provider is called. It replaces none of the
+live M2-3/G2 requirements. The earlier single-line workspace remains separate.
+
+An explicit `supplier-lines-confirm.v1` command supplies command/snapshot IDs and
+every reviewed line version exactly once. The server retains the source facts;
+HTTP cannot supply or replace them. The screen requires an individual review
+checkbox for every proposed line. Only that human action creates the immutable
+snapshot and audit event through `0624_supplier_line_corrections.sql`; reading or computing AI/match output
+confirms nothing. The screen displays original quantities, packs, net basis,
+source citations, each group's flags and unresolved sources independently of
+the overall match completeness. A complete relationship can still flag short
+or excess delivery/billing. Confirmation does not assert actual delivery or debt.
+
+Corrections use the existing strict `supplier-line-correction.v1` command, allow
+an explicit order choice or withdrawal to automatic matching, and retain all
+stored-correction locking, replay, revision, append-only audit and source immutability rules.
+A stale revision returns HTTP 409 and requires reloading the current review.
+The review screen introduces no migration. Its inherited order and correction migrations
+already landed on main as `0606_dark_merchant_order.sql` and `0624_supplier_line_corrections.sql`; this catch-up retains them. No money or external action
+path is added; G0–G5 stay closed. PostgreSQL and browser suites plus independent
+RED review remain required; local mocked tests do not prove database isolation.
+
+The inherited dark order command uses the M2-1 checked protocol: migration 0606
+registers `purchase_order.send.dark`, and approval uses `app.begin_command`,
+`app.append_audit` and `app.complete_command`. Its immutable merchant artifact
+binds `revisionAuthorityHash` to the persisted revision; checked completion also
+verifies the exact approved artifact hash and outbox effect. Legacy purchase-order
+completion and the other main result adapters retain their existing checks.
+Manual attestation receives its actor from the trusted authenticated caller,
+separately from the strict request DTO, and rechecks current owner membership.

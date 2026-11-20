@@ -16,11 +16,11 @@ async function identity(sql:string,args:unknown[]) {
  try {await db.query("BEGIN");await db.query("SET LOCAL ROLE jobguard_identity");const r=await db.query(sql,args);await db.query("COMMIT");return r;}
  catch(error){await db.query("ROLLBACK");throw error;}finally{db.release();}
 }
-async function fixture() {
+async function fixture(signedDeltaPence=50000) {
  const a=await seedFinalCheckJob(f), revealed=await availableFinalCheck(f,a);
  const {variationId}=await new FinalCheckRepository(f.runtime).confirmCatch(a.context,a.jobId,a.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:revealed.lockId,runId:revealed.runId,signalId:revealed.signalId,expectedSignalRevision:1}) as {variationId:string};
  const row=(await f.admin.query("SELECT * FROM app.variation WHERE tenant_id=$1 AND id=$2",[a.tenantId,variationId])).rows[0];
- const priced=priceVariation({id:randomUUID(),variationId,previous:null,proposal:{version:"variation-proposal.v1",id:variationId,jobId:a.jobId,scopeItemId:row.scope_item_id,existingScopeItemId:null,lineageParentScopeItemId:null,captureKind:"text",captureText:row.description,description:row.description,suggestion:null},description:row.description,contentHash:"e".repeat(64),confirmed:{quantity:"1",unit:"item",unitRatePence:50000,direction:"addition",confirmedByMembershipId:FINAL_CHECK_ACTOR,rateProvenance:{kind:"human_entered",sourceRef:"synthetic://builder-entered",sourceHash:"8".repeat(64),rateVersion:"builder-price-v1"}}});
+ const priced=priceVariation({id:randomUUID(),variationId,previous:null,proposal:{version:"variation-proposal.v1",id:variationId,jobId:a.jobId,scopeItemId:row.scope_item_id,existingScopeItemId:null,lineageParentScopeItemId:null,captureKind:"text",captureText:row.description,description:row.description,suggestion:null},description:row.description,contentHash:"e".repeat(64),confirmed:{quantity:"1",unit:"item",unitRatePence:Math.abs(signedDeltaPence),direction:signedDeltaPence<0?"omission":"addition",confirmedByMembershipId:FINAL_CHECK_ACTOR,rateProvenance:{kind:"human_entered",sourceRef:"synthetic://builder-entered",sourceHash:"8".repeat(64),rateVersion:"builder-price-v1"}}});
  await withTenant(f.runtime,a.context,db=>insertPricedVariation(db,a.tenantId,priced));
  const customer=(await f.admin.query("SELECT b.customer_id FROM app.job_party_current pc JOIN app.job_party_binding b ON(b.tenant_id,b.job_id,b.id)=(pc.tenant_id,pc.job_id,pc.binding_id) WHERE pc.tenant_id=$1 AND pc.job_id=$2",[a.tenantId,a.jobId])).rows[0].customer_id as string;
  await f.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES('fictional-extra-builder@fixture.invalid',$1) ON CONFLICT DO NOTHING",[FINAL_CHECK_USER]);
@@ -72,7 +72,8 @@ it("changed payload under a successful command cannot replay, and another comman
  await expect(run(a)).rejects.toMatchObject(refused);expect(await approvals(a)).toHaveLength(1);expect(await claims(a)).toHaveLength(1);
 });
 it("a newly priced revision makes the displayed old revision stale",async()=>{
- const a=await fixture();await withTenant(f.runtime,a.context,db=>insertPricedVariation(db,a.tenantId,{...a.priced,id:randomUUID(),revision:2,previousRevisionId:a.priced.id,signedDeltaPence:51000,contentHash:"f".repeat(64)}));
+ // LS-77 fixes a catch price after its first positive price; start at zero so re-pricing remains allowed.
+ const a=await fixture(0);await withTenant(f.runtime,a.context,db=>insertPricedVariation(db,a.tenantId,{...a.priced,id:randomUUID(),revision:2,previousRevisionId:a.priced.id,unitRatePence:51000,signedDeltaPence:51000,contentHash:"f".repeat(64)}));
  await expect(run(a)).rejects.toMatchObject(refused);expect(await claims(a)).toEqual([]);
 });
 it("raw runtime INSERT cannot manufacture customer provenance; identity has only the checked routine",async()=>{
@@ -89,9 +90,9 @@ it("another real job's revision cannot be approved or replayed through this cust
  expect(await approvals(a)).toEqual([]);expect(await approvals(b)).toEqual([]);
 });
 it("a signed omission stays negative and creates no positive catch claim",async()=>{
- const a=await fixture();
- await withTenant(f.runtime,a.context,db=>insertPricedVariation(db,a.tenantId,{...a.priced,id:randomUUID(),revision:2,previousRevisionId:a.priced.id,signedDeltaPence:-5000,contentHash:"f".repeat(64)}));
- const command={...a.command,target:{...a.command.target,revision:2,hash:"f".repeat(64),amount:{pence:-5000,currency:"GBP"}}};
+ // LS-77 fixes a catch price after its first positive price; make the omission its first price.
+ const a=await fixture(-5000);
+ const command=a.command;
  await run(a,command);expect((await approvals(a))[0]).toMatchObject({signed_delta_pence:"-5000",method:"customer_authenticated"});expect(await claims(a)).toEqual([]);
 });
 it("an existing foreign tenant/job cannot use this tenant's customer session",async()=>{

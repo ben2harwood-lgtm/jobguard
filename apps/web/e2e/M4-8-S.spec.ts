@@ -40,7 +40,7 @@ test("M4-8 suggested matches prefill the form but require evidence, review and e
 test("DW1 persists exact approved allocations and source identities across reload, Jobs navigation and a second context", async ({ page, browser, context }, testInfo) => {
   const fixture = await allocateBoth(page), saved = await readAllocations(page, fixture.jobId);
   expect(saved.allocations).toHaveLength(2);
-  const persisted = await allocationDatabase(fixture.jobId);
+  const persisted = await allocationDatabase(page, fixture.jobId);
   expect(persisted.allocated).toHaveLength(2);
   for (const source of fixture.cases) {
     const allocation = saved.allocations.find(row => row.caseId === source.caseId)!;
@@ -63,7 +63,7 @@ test("DW1 persists exact approved allocations and source identities across reloa
   await page.reload(); await readyAllocations(page); await value(page, "eligible-net", "£2,820.00");
   expect((await readAllocations(page, fixture.jobId)).allocations).toEqual(saved.allocations);
   // Captured jobs use the previously accepted Jobs substitute: Jobs, then a new saved-job URL navigation.
-  await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
+  await page.goto("/classic"); await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
   await page.goto(`/jobs/${fixture.jobId}#recovery-allocations`); await readyAllocations(page);
   await value(page, "allocated-tax", "£564.00");
   const options = {
@@ -88,7 +88,7 @@ test("DW1 persists exact approved allocations and source identities across reloa
 
 test("DW4 appends an approved reversal, reopens case 2 and keeps the original source facts", async ({ page }) => {
   const fixture = await allocateBoth(page), saved = await readAllocations(page, fixture.jobId), second = fixture.cases[1]!;
-  const databaseBefore = await allocationDatabase(fixture.jobId);
+  const databaseBefore = await allocationDatabase(page, fixture.jobId);
   const feedBefore = await (await page.request.get(`/api/jobs/${fixture.jobId}/practice-feed`)).json();
   await post(page, `${fixture.receiptPath}/reversals`, { version: "practice-customer-receipt.reverse.v1", commandId: crypto.randomUUID(), invoiceId: fixture.invoiceId, paymentId: second.paymentId, reason: "Correct a fictional duplicate receipt" });
   await allocationPanel(page).getByRole("button", { name: "Load saved allocations", exact: true }).click(); await readyAllocations(page);
@@ -102,7 +102,7 @@ test("DW4 appends an approved reversal, reopens case 2 and keeps the original so
   await value(page, "fee-execution-state", "Paused — recovery changed");
   const after = await readAllocations(page, fixture.jobId);
   expect(after.allocations.map(stable)).toEqual(saved.allocations.map(stable));
-  expect((await allocationDatabase(fixture.jobId)).originals).toEqual(databaseBefore.originals);
+  expect((await allocationDatabase(page, fixture.jobId)).originals).toEqual(databaseBefore.originals);
   expect(after.allocations.find(row => row.id === allocation.id)?.reversedPence).toBe(300000);
   expect(after.lines.filter(row => row.reversesId !== null).length).toBeGreaterThan(0);
   for (const row of after.lines.filter(row => row.reversesId !== null)) expect(saved.lines.some(original => original.id === row.reversesId)).toBe(true);
@@ -193,7 +193,7 @@ test("pauses after unknown command and failed refresh until a successful saved-s
 
 test("B2/B6 selects an issued credit note and preserves its source through exact reversal approval", async ({ page }) => {
   const fixture = await allocateBoth(page), before = await readAllocations(page, fixture.jobId);
-  const databaseBefore = await allocationDatabase(fixture.jobId);
+  const databaseBefore = await allocationDatabase(page, fixture.jobId);
   const allocated = before.allocations.find(row => row.caseId === fixture.cases[1]!.caseId)!;
   const creditPath = `/api/jobs/${fixture.jobId}/customer-invoices/${fixture.invoiceId}/credit-notes`;
   const credit = { invoiceId: fixture.invoiceId, netPence: 50000, reason: "Fictional credit against recovered work" };
@@ -215,7 +215,7 @@ test("B2/B6 selects an issued credit note and preserves its source through exact
   const after = await readAllocations(page, fixture.jobId);
   expect(after.allocations.map(stable)).toEqual(before.allocations.map(stable));
   expect(after.allocations.find(row => row.id === allocated.id)?.reversedPence).toBe(60000);
-  expect((await allocationDatabase(fixture.jobId)).originals).toEqual(databaseBefore.originals);
+  expect((await allocationDatabase(page, fixture.jobId)).originals).toEqual(databaseBefore.originals);
   expect(after.receipts.map(({ availablePence: _available, ...original }) => original)).toEqual(before.receipts.map(({ availablePence: _available, ...original }) => original));
   expect(after.reversalSources.filter(source => source.sourceId === creditId && source.availableGrossPence > 0)).toHaveLength(0);
 });

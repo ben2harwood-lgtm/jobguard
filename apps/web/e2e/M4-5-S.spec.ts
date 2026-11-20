@@ -1,12 +1,19 @@
+import { bindPracticeRequest } from "./helpers/bind-practice-request";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 // The synthetic demo tenant (packages/db/src/demo-seed.ts), inlined as the other specs do: @jobguard/db is ESM-only and cannot load in a Playwright spec.
 const DEMO_TENANT_ID = "11111111-1111-4111-8111-111111111111";
-import { E2E_RUNTIME_URL } from "./global-setup";
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { E2E_ADMIN_DATABASE_URL, E2E_RUNTIME_URL } from "./global-setup";
+import { expect, test, type Browser, type Page, type TestInfo } from "@playwright/test";
 import { get, persistedRecoverySources, post, recordedProof } from "./helpers/recovery-sources";
 
 const banner = "Practice sandbox — synthetic data; nothing is sent or charged";
+// Capture the completed scenario as a separate test artifact.
+const screenshots = new WeakMap<TestInfo, string>();
+test.afterEach(async ({ page }, testInfo) => {
+  const path = screenshots.get(testInfo);
+  if (path) await page.screenshot({ path, fullPage: true });
+});
 const customerBody = "Practice message — not sent. Our practice records show £320.00 net remains in this case. Please review the attached example records.";
 const supplierBody = "Practice message — not sent. Our practice supplier records show £320.00 net is questioned in this supplier correction case. Please review the attached example supplier records.";
 const changed = "Review the changed message before approving";
@@ -52,15 +59,18 @@ async function assertLayout(page: Page, names: string[]) {
 async function persistence(page: Page, browser: Browser, jobId: string, caseId: string, label: string, sink: string) {
   const saved = (await state(page, caseId)).latest;
   const assert = async (target: Page) => {
-    await V(target, "pursuit-delivery", label); await V(target, "pursuit-sink-count", sink);
-    await V(target, "pursuit-content-hash", saved.message.contentHash);
-    await V(target, "pursuit-body", saved.message.body);
-    await V(target, "pursuit-attachment-hash", saved.attachment.contentHash);
-    await V(target, "pursuit-pack-revision", String(saved.attachment.packRevision));
-    const reloaded = (await state(target, caseId)).latest;
+    const [read] = await Promise.all([
+      state(target, caseId),
+      V(target, "pursuit-delivery", label), V(target, "pursuit-sink-count", sink),
+      V(target, "pursuit-content-hash", saved.message.contentHash), V(target, "pursuit-body", saved.message.body),
+      V(target, "pursuit-attachment-hash", saved.attachment.contentHash),
+      V(target, "pursuit-pack-revision", String(saved.attachment.packRevision)),
+    ]);
+    const reloaded = read.latest;
     expect(reloaded.id).toBe(saved.id); expect(reloaded.message.sourceRefs).toEqual(saved.message.sourceRefs);
     expect(reloaded.attachment.sources).toEqual(saved.attachment.sources);
-    for (const href of await target.getByTestId("pursuit-sources").getByRole("link").evaluateAll(items => items.map(item => item.getAttribute("href")))) {
+    const sources = await target.getByTestId("pursuit-sources").getByRole("link").evaluateAll(items => items.map(item => item.getAttribute("href")));
+    await Promise.all(sources.map(async href => {
       const source = target.locator(href!);
       await expect(source).toHaveCount(1);
       await source.evaluate(element => { (element as HTMLDetailsElement).open = true; });
@@ -68,15 +78,21 @@ async function persistence(page: Page, browser: Browser, jobId: string, caseId: 
       await expect(source).toContainText("SHA-256");
       await expect(source.locator("pre")).toBeVisible();
       await source.evaluate(element => { (element as HTMLDetailsElement).open = false; });
-    }
+    }));
     await assertLayout(target, ["Refresh saved messages", "Preview factual message"]);
   };
   await page.reload(); await assert(page);
-  await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
-  await page.goto(`/jobs/${jobId}#recovery-cases`); await assert(page);
   const second = await browser.newContext({ storageState: await page.context().storageState() });
-  try { const other = await second.newPage(); await other.goto(`/jobs/${jobId}#recovery-cases`); await assert(other); }
-  finally { await second.close(); }
+  const jobPath = `/jobs/${jobId}#recovery-cases`;
+  try {
+    await Promise.all([
+      (async () => {
+        await page.goto("/classic"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
+        await page.goto(jobPath); await assert(page);
+      })(),
+      (async () => { const other = await second.newPage(); await other.goto(jobPath); await assert(other); })(),
+    ]);
+  } finally { await second.close(); }
 }
 
 test("previews, approves and simulates one factual customer message that is delivered exactly once", async ({ page, browser, request }, testInfo) => {
@@ -163,18 +179,25 @@ test("previews, approves and simulates one factual customer message that is deli
   await V(page, "pursuit-content-hash", saved.message.contentHash);
   // A captured practice job has no card on the Jobs home to click (it lists only the seeded fixtures), so leave through Jobs
   // and reopen the saved job by a fresh navigation, then read it from a separate browser context as well.
-  await page.goto("/"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
-  await page.goto(`/jobs/${source.jobId}#recovery-cases`);
-  await V(page, "pursuit-delivery", "Simulated delivery — nothing sent"); await V(page, "pursuit-sink-count", "1");
   const second = await browser.newContext({ storageState: await page.context().storageState() });
+  const jobPath = `/jobs/${source.jobId}#recovery-cases`;
   try {
-    const other = await second.newPage();
-    await other.goto(`/jobs/${source.jobId}#recovery-cases`);
-    await V(other, "pursuit-delivery", "Simulated delivery — nothing sent"); await V(other, "pursuit-sink-count", "1");
-    await V(other, "pursuit-content-hash", saved.message.contentHash); await V(other, "pursuit-body", customerBody);
+    await Promise.all([
+      (async () => {
+        await page.goto("/classic"); await expect(page.getByRole("heading", { name: "Jobs in this demo", exact: true })).toBeVisible();
+        await page.goto(jobPath);
+        await V(page, "pursuit-delivery", "Simulated delivery — nothing sent"); await V(page, "pursuit-sink-count", "1");
+      })(),
+      (async () => {
+        const other = await second.newPage();
+        await other.goto(jobPath);
+        await V(other, "pursuit-delivery", "Simulated delivery — nothing sent"); await V(other, "pursuit-sink-count", "1");
+        await V(other, "pursuit-content-hash", saved.message.contentHash); await V(other, "pursuit-body", customerBody);
+      })(),
+    ]);
   } finally { await second.close(); }
   await assertLayout(page, ["Refresh saved messages", "Preview factual message"]);
-  await page.screenshot({ path: `test-results/M4-5-S-customer-${testInfo.project.name}.png`, fullPage: true });
+  screenshots.set(testInfo, `test-results/M4-5-S-customer-${testInfo.project.name}.png`);
 });
 
 test("uses supplier wording and recipient, shows an unknown outcome as unknown, and checks rather than resends", async ({ page, browser }, testInfo) => {
@@ -207,7 +230,7 @@ test("uses supplier wording and recipient, shows an unknown outcome as unknown, 
   const database = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
   const client = await database.connect();
   try {
-    await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await client.query("BEGIN"); await bindPracticeRequest(client, page, DEMO_TENANT_ID);
     const associated = await client.query(`SELECT r.document_id,r.ordered_quantity::text,d.job_id
       FROM app.goods_receipt r JOIN app.purchase_order_draft d ON (d.tenant_id,d.id)=(r.tenant_id,r.order_draft_id)
       WHERE r.tenant_id=$1 AND r.job_id=$2 AND r.document_id=$3`, [DEMO_TENANT_ID, source.jobId, delivery.id]);
@@ -262,7 +285,7 @@ test("uses supplier wording and recipient, shows an unknown outcome as unknown, 
   expect(checked.sink[0]).toMatchObject({ recipient: "practice-supplier@example.invalid", body: supplierBody });
   expect(checked.latest.history.map((event: { kind: string }) => event.kind)).toEqual(["previewed", "approved", "started", "outcome_unknown", "reconcile_started", "reconciled"]);
   await persistence(page, browser, source.jobId, caseId, "Simulated delivery — nothing sent", "1");
-  await page.screenshot({ path: `test-results/M4-5-S-supplier-${testInfo.project.name}.png`, fullPage: true });
+  screenshots.set(testInfo, `test-results/M4-5-S-supplier-${testInfo.project.name}.png`);
 });
 
 test("revocation and changed evidence both block execution and nothing is sent", async ({ page, browser }, testInfo) => {
@@ -309,7 +332,7 @@ test("revocation and changed evidence both block execution and nothing is sent",
   await expect(button(page, "Preview factual message")).toBeDisabled();
   // The preview button is disabled here, and a disabled button cannot take focus, so the focus check starts from an enabled control.
   await assertLayout(page, ["Refresh saved messages", "Preview factual message"]);
-  await page.screenshot({ path: `test-results/M4-5-S-blocked-${testInfo.project.name}.png`, fullPage: true });
+  screenshots.set(testInfo, `test-results/M4-5-S-blocked-${testInfo.project.name}.png`);
 });
 
 
@@ -352,7 +375,7 @@ test("an interrupted claim becomes uncertain after its lease and can be checked 
   expect(executing.attempts).toBe(1); expect(executing.claimAbandoned).toBe(false);
   await page.reload(); await V(page, "pursuit-delivery", "Delivery in progress — check again shortly");
   // Only the elapsed-time input is faked, in the existing real synthetic PostgreSQL fixture. No outcome/approval is fabricated.
-  const clock = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
+  const clock = new Pool({ connectionString: E2E_ADMIN_DATABASE_URL, max: 1 });
   const db = await clock.connect();
   try {
     await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);

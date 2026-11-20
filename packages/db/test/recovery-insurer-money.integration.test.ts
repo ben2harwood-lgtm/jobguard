@@ -10,7 +10,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { MIGRATION_URLS, migrate, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryEligibilityV3Repository, RecoveryPaymentPayerRepository, PracticeFeedRepository, withTenant, appendAuditBatch, readRecoveryEligibilityV3, type VerifiedTenantContext, type RecoveryEligibilityV3Review } from "../src/index.js";
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { evaluateRecoveryEligibilityV3, recoveryEligibilityCommandV3, recoveryEligibilityViewV3, recoveryFixtureDefinitionV3, RecoveryEligibilityV3Error } from "@jobguard/core";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 import { proofBefore, proofDifferences, rolledBack } from "./upgrade-proof-utils.js";
@@ -89,7 +89,7 @@ class PreviousRecoveryEligibilityV3Repository {
  }
 }
 
-const ctx=testTenantContext(T), actor={membershipId:M,identityUserId:U};
+const ctx=testTenantContext(T, { membershipId: M }), actor={membershipId:M,identityUserId:U};
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool;
 const originalEnvironment=process.env.JOBGUARD_ENV;
 const accessValue=["syn","thetic"].join("");
@@ -153,6 +153,9 @@ async function fixture(type="withheld_customer_payment",insurer=true,before=fals
  try{
   await evidenceClient.query("BEGIN");await evidenceClient.query("SET LOCAL ROLE jobguard_migration");
   await evidenceClient.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true)",[T,auth.digest]);
+  if ((await evidenceClient.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed) {
+   await evidenceClient.query("SELECT app.bind_request('practice',$1,$2)",[auth.digest,T]);
+  }
   await evidenceClient.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES($1,$2,$3,$4,$5,'application/pdf',1,'standard_evidence','verified','stored-version',now(),now()+interval '1 day')",[upload,T,jobId,objectKey,"a".repeat(64)]);
   await evidenceClient.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES($1,$2,$3,$4,'original','synthetic_bank_receipt',$5,'stored-version',$6,1,'application/pdf','standard_evidence',now(),now())",[evidence,T,upload,jobId,objectKey,"a".repeat(64)]);
   await evidenceClient.query("COMMIT");
@@ -193,9 +196,11 @@ it("[A4 DB12] refuses stale, repeated state, missing/foreign evidence and non-in
 });
 it("[A4 A5 DB12] definer entry points refuse missing, mismatched and malformed tenant context",async()=>{
  const f=await fixture();
- await expect(runtime.query("SELECT app.lock_recovery_payer_job($1,$2,$3)",[T,f.jobId,M])).rejects.toThrow("PAYER_MARK_FORBIDDEN");
+ const before=await proofBefore(admin,["app.job","app.recovery_payment_payer_mark","app.recovery_eligibility_v3_review","app.recovery_claim_line","app.command_receipt","app.command_lifecycle_claim","app.action_authorization","app.audit_event"]);
+ await expect(runtime.query("SELECT app.lock_recovery_payer_job($1,$2,$3)",[T,f.jobId,M])).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
  for(const value of [randomUUID(),"malformed"]){
-  const client=await runtime.connect();try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[value,f.auth.digest]);await expect(client.query("SELECT app.lock_recovery_payer_job($1,$2,$3)",[T,f.jobId,M])).rejects.toThrow("PAYER_MARK_FORBIDDEN");}finally{await client.query("ROLLBACK");client.release();}
+  const client=await runtime.connect();try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[value,f.auth.digest]);await expect(client.query("SELECT app.lock_recovery_payer_job($1,$2,$3)",[T,f.jobId,M])).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});}finally{await client.query("ROLLBACK");client.release();}
+  expect(await proofDifferences(admin,before)).toEqual({rows:[],types:[]});
  }
 });
 it("[A3 A4 DB13 DB17] catalogs enforce standard F, RLS, owner and fixed search paths",async()=>{
@@ -261,7 +266,7 @@ it("[A4 DB12] owner role, revocation, other-session digest, other job and case t
   try{await expect(f.marks.command(ctx,f.jobId,input,actor,f.auth.digest)).rejects.toThrow("PAYER_MARK_FORBIDDEN");}finally{await admin.query("UPDATE app.membership SET role='owner' WHERE tenant_id=$1 AND id=$2",[T,M]);}
  }
  await admin.query("UPDATE app.membership SET revoked_at=now() WHERE tenant_id=$1 AND id=$2",[T,M]);
- try{await expect(f.marks.command(ctx,f.jobId,input,actor,f.auth.digest)).rejects.toThrow("PAYER_MARK_FORBIDDEN");}finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[T,M]);}
+ try{await expect(f.marks.command(testTenantContext(T,{membershipId:M,bindRequest:false}),f.jobId,input,actor,f.auth.digest)).rejects.toThrow("PAYER_MARK_FORBIDDEN");}finally{await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2",[T,M]);}
  await expect(f.marks.command(ctx,f.jobId,input,actor,g.auth.digest)).rejects.toThrow("RECOVERY_JOB_NOT_FOUND");
  await expect(f.marks.command(ctx,f.jobId,{...input,sourceEventId:(await markInput(g)).sourceEventId},actor,f.auth.digest)).rejects.toThrow("PAYER_MARK_SOURCE_REQUIRED");
  await expect(g.marks.command(ctx,g.jobId,await markInput(g),actor,g.auth.digest)).rejects.toThrow("RECOVERY_CASE_NOT_FOUND");
@@ -293,6 +298,7 @@ it("[B1 B2 DB16] independent F19 wording preserves Q and compensation header",as
 it("[A4 DB12] preview evidence, no binding and another tenant refuse with exact codes",async()=>{
  const f=await fixture();await f.advance("receipt-3000");const input=await markInput(f),preview=randomUUID();
  await rolledBack(admin,async client=>{
+  await client.query("SELECT app.bind_request('practice',$1,$2)",[f.auth.digest,T]);
   await client.query("SET LOCAL ROLE jobguard_migration");await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true)",[T,f.auth.digest]);
   await client.query("INSERT INTO app.evidence_object(id,tenant_id,job_id,kind,original_evidence_id,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)SELECT $2,tenant_id,job_id,'preview',id,evidence_type,object_key||'/preview','preview-version',sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at FROM app.evidence_object WHERE id=$1",[f.evidence,preview]);
   // The uncommitted preview is intentionally tested through the same migration transaction,
@@ -314,12 +320,14 @@ it("[A7 DB14] changed job replay conflicts when both jobs belong to the authoriz
 it("[A3 A4 DB13] trigger pins supplied time and rejects changed stored evidence bytes",async()=>{
  const f=await fixture();await f.advance("receipt-3000");const input=await markInput(f);const saved=await f.marks.command(ctx,f.jobId,input,actor,f.auth.digest);
  await rolledBack(admin,async client=>{
+  await client.query("SELECT app.bind_request('practice',$1,$2)",[f.auth.digest,T]);
   await client.query("SET LOCAL ROLE jobguard_migration");await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[T,f.auth.digest]);
   const pinned=await client.query("INSERT INTO app.recovery_payment_payer_mark(id,tenant_id,job_id,source_event_id,revision,state,party_binding_id,actor_membership_id,command_id,payload_hash,created_at)SELECT gen_random_uuid(),tenant_id,job_id,source_event_id,2,'withdrawn',party_binding_id,actor_membership_id,gen_random_uuid(),payload_hash,'2000-01-01'::timestamptz FROM app.recovery_payment_payer_mark WHERE id=$1 RETURNING created_at=transaction_timestamp() pinned",[saved.id]);
   expect(pinned.rows).toEqual([{pinned:true}]);
  });
  await f.advance("receipt-384");const other=await markInput(f,"receipt-384");
  await rolledBack(admin,async client=>{
+  await client.query("SELECT app.bind_request('practice',$1,$2)",[f.auth.digest,T]);
   await client.query("SET LOCAL ROLE jobguard_migration");await client.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true),set_config('app.recovery_eligibility_environment','synthetic_demo',true)",[T,f.auth.digest]);
   await expect(client.query("INSERT INTO app.recovery_payment_payer_mark(id,tenant_id,job_id,source_event_id,revision,state,evidence_id,evidence_object_version_id,evidence_sha256,evidence_received_at,party_binding_id,actor_membership_id,command_id,payload_hash)SELECT gen_random_uuid(),tenant_id,job_id,$2,1,'customer_own',evidence_id,evidence_object_version_id,$3,evidence_received_at,party_binding_id,actor_membership_id,gen_random_uuid(),payload_hash FROM app.recovery_payment_payer_mark WHERE id=$1",[saved.id,other.sourceEventId,"b".repeat(64)])).rejects.toThrow("PAYER_MARK_EVIDENCE_REQUIRED");
  });
@@ -373,7 +381,13 @@ it("[A4 DB12] an existing original evidence file from another tenant is refused 
  const client=await admin.connect();try{
   await client.query("BEGIN");await client.query("INSERT INTO control_plane.tenant(id)VALUES($1)",[tenant]);
   await client.query("INSERT INTO app.job(id,tenant_id,title)VALUES($1,$2,'Foreign evidence control')",[job,tenant]);
+  const account=randomUUID(),user=randomUUID(),membership=randomUUID(),credential=createHash("sha256").update(randomUUID()).digest("hex");
+  await client.query("INSERT INTO identity.identity_user(id) VALUES($1)",[user]);
+  await client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional foreign evidence firm')",[account,tenant]);
+  await client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[membership,tenant,account,user]);
+  await testBoundTenantContext(client,tenant,membership,credential);
   await client.query("SET LOCAL ROLE jobguard_migration");await client.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  await client.query("SELECT app.bind_request('real',$1,$2)",[credential,tenant]);
   await client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at)VALUES($1,$2,$3,$4,$5,'application/pdf',1,'standard_evidence','verified','foreign-version',now(),now()+interval '1 day')",[upload,tenant,job,objectKey,"a".repeat(64)]);
   await client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at)VALUES($1,$2,$3,$4,'original','synthetic_bank_receipt',$5,'foreign-version',$6,1,'application/pdf','standard_evidence',now(),now())",[evidence,tenant,upload,job,objectKey,"a".repeat(64)]);
   await client.query("COMMIT");

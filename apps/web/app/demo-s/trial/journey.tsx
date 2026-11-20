@@ -74,7 +74,7 @@ export function TrialJourney(){
   <ol><li>This guide needs two accepted jobs and an approved reference identity for your company. Company job capture and identity approval have no public screen yet, so they are prepared beforehand and never invented here.</li>
    <li>Bind the two jobs below, then try Skip for now on the first job. That job goes live and the free trial starts.</li>
    <li>Try the second job without a card, add and complete the fictional card, and accept monthly terms on Plans.</li>
-   <li>End the trial by closing the first job or by switching the second job live. Compare the saved sources with the day-90 preview.</li></ol>
+   <li>End the trial by completing the first job’s final account, closing the first job or switching the second job live. Compare the saved sources with the day-90 preview.</li></ol>
   <p>Anything not done is listed in the stored report. A refusal never records a successful trial.</p>
   {error&&<p role="alert">{error}</p>}
   {pending&&<button style={button} disabled={busy} onClick={()=>void send(pending)}>Retry exact saved request</button>}
@@ -84,6 +84,7 @@ export function TrialJourney(){
   {report&&<><p>{report.archived?"Archived run":report.status==="complete"?"Every step has saved records":"In progress"}. Trial eligibility and subscription history survive reset.</p>
    <p><a href="/plans">Accepted subscription terms and saved periods</a> · <a href="/meter">Jobs on the go</a></p>
    <section aria-label="Trial actions"><h2>Try the trial commands</h2>
+    {report.first.start&&!report.archived&&<a style={{...button,display:"inline-block"}} href={`/demo-s/trial/final-account?${new URLSearchParams({tenantId:tenant,runId:run,jobId:report.first.jobId})}`}>Open first job final account and Final Check</a>}
     {!report.first.start&&report.firstEligibility.offerSkip&&report.first.target&&<button style={button} disabled={disabled} onClick={()=>activate("first")}>Skip for now</button>}
     {!report.first.start&&report.first.target&&report.firstEligibility.cardGate==="completed"&&<button style={button} disabled={disabled} onClick={()=>activate("first")}>Switch first job live</button>}
     {report.first.start&&report.second.target&&<button style={button} disabled={disabled} onClick={()=>activate("second")}>{report.secondEligibility.cardGate==="completed"?"Switch second job live":"Try second job without a card"}</button>}

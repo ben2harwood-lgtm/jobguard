@@ -21,8 +21,8 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "jg-serious-b7-"));
   const port = await freePort(59000, 200);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-  await postgres.initialise(); await postgres.start();
-  admin = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "synthetic" });
+  await postgres.initialise(); await postgres.start(); await postgres.createDatabase("jobguard_synthetic_demo");
+  admin = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "postgres", password: "synthetic" });
   // An actual previous schema, with populated pack sources, before applying 0166.
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
   for (const url of MIGRATION_URLS) {
@@ -44,7 +44,7 @@ beforeAll(async () => {
   // The runner also sees the already-applied expand-compatible definition safely.
   await migrate(admin);
   await admin.query("CREATE ROLE serious_b7_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO serious_b7_login");
-  runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "serious_b7_login", password: "synthetic" });
+  runtime = new Pool({ host: "127.0.0.1", port, database: "jobguard_synthetic_demo", user: "serious_b7_login", password: "synthetic" });
 }, 120_000);
 afterAll(async () => {
   if (oldEnvironment === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = oldEnvironment;
@@ -121,8 +121,9 @@ describe("SERIOUS-B7 PostgreSQL authority and sources", () => {
     let pending: Promise<unknown> | undefined;
     try {
       await holder.query("BEGIN");
-      await holder.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+      await holder.query("SELECT set_config('app.tenant_id','33333333-3333-4333-8333-333333333333',true)");
       await holder.query("SELECT set_config('app.evidence_pack_approval_fence','on',true)");
+      expect((await holder.query("SELECT * FROM app.authenticate_practice_session($1,$2)", ["0".repeat(64), fixture.tenantId])).rowCount).toBe(0);
       expect((await holder.query("SELECT * FROM app.authenticate_practice_session($1,$2)", [fixture.sessionDigest, fixture.tenantId])).rowCount).toBe(1);
       pending = revoker.query(table.startsWith("control_plane") ? "UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1" : "UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1", [table.startsWith("control_plane") ? fixture.sessionDigest : fixture.memberId]);
       await waitForWaiter(holder);

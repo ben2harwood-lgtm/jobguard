@@ -53,7 +53,7 @@ async function post(f: Fixture, action: Action, amount: number, original?: strin
   options: { income?: string; clearing?: string; receivable?: string; book?: string; auth?: string; beforeCommit?: () => Promise<void> } = {}) {
   const auth = options.auth ?? await authorization(f, action, amount);
   const journal = randomUUID(), audit = randomUUID();
-  return withTenant(runtime, testTenantContext(f.tenant), async d => {
+  return withTenant(runtime, testTenantContext(f.tenant, { membershipId: f.member }), async d => {
     await d.$client.query("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='10s'");
     if (action === "plan_obligation") {
       await d.$client.query("SELECT app.post_plan_obligation($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
@@ -73,7 +73,7 @@ async function post(f: Fixture, action: Action, amount: number, original?: strin
   });
 }
 async function balances(f: Fixture) {
-  return withTenant(runtime, testTenantContext(f.tenant), async d => {
+  return withTenant(runtime, testTenantContext(f.tenant, { membershipId: f.member }), async d => {
     const rows = (await d.$client.query("SELECT account_id,balance_pence::text FROM app.ledger_balance WHERE book_id=$1", [f.book])).rows;
     return Object.fromEntries(rows.map(row => [row.account_id, Number(row.balance_pence)]));
   });
@@ -220,18 +220,18 @@ describe("MIGFIX-2 controlled ledger corrections", () => {
     const reversalKey = (await admin.query("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conrelid='app.journal'::regclass AND conname='journal_full_reversal_uq' AND contype='u'")).rows;
     expect(reversalKey).toEqual([{ definition: "UNIQUE (tenant_id, reverses_journal_id)" }]);
     const f = await fixture();
-    await expect(withTenant(runtime, testTenantContext(f.tenant), d => d.$client.query("INSERT INTO app.journal DEFAULT VALUES"))).rejects.toMatchObject({ code: "42501" });
-    await expect(withTenant(runtime, testTenantContext(f.tenant), d => d.$client.query("SELECT app.post_recovery_fee_candidate('{}')"))).rejects.toMatchObject({ code: "0A000" });
+    await expect(withTenant(runtime, testTenantContext(f.tenant, { membershipId: f.member }), d => d.$client.query("INSERT INTO app.journal DEFAULT VALUES"))).rejects.toMatchObject({ code: "42501" });
+    await expect(withTenant(runtime, testTenantContext(f.tenant, { membershipId: f.member }), d => d.$client.query("SELECT app.post_recovery_fee_candidate('{}')"))).rejects.toMatchObject({ code: "0A000" });
     await expect(new DisabledQualifyingLandingPostingPort().postQualifyingLanding()).rejects.toMatchObject({ code: "RECOVERY_FEE_POSTING_DISABLED" });
     // Repository still uses the same callable contract.
     const auth = await authorization(f, "plan_obligation", 1000);
-    await new LedgerRepository(runtime).postPlanObligation(testTenantContext(f.tenant), { authorizationId: auth, actorRef: `membership:${f.member}`, permission: "finance:approve" },
+    await new LedgerRepository(runtime).postPlanObligation(testTenantContext(f.tenant, { membershipId: f.member }), { authorizationId: auth, actorRef: `membership:${f.member}`, permission: "finance:approve" },
       { schemaVersion: 1, bookId: f.book, amountPence: 1000, currency: "GBP", sourceEventId: randomUUID(), provenanceRef: "synthetic", artifactHash: hash,
         authorizationId: auth, actorRef: `membership:${f.member}`, receivableAccountId: f.receivable, deferredIncomeAccountId: f.income, provenanceKind: "synthetic_authorized_plan" });
     expect(await balances(f)).toEqual({ [f.receivable]: 1000, [f.income]: -1000 });
     const before = await effects(f), missingAuditAuth = await authorization(f, "plan_obligation", 1000);
     const priorAudit = (await admin.query("SELECT audit_event_id FROM app.journal WHERE tenant_id=$1", [f.tenant])).rows[0].audit_event_id;
-    await expect(withTenant(runtime, testTenantContext(f.tenant), d => d.$client.query(
+    await expect(withTenant(runtime, testTenantContext(f.tenant, { membershipId: f.member }), d => d.$client.query(
       "SELECT app.post_plan_obligation($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
       [randomUUID(), f.book, f.receivable, f.income, 1000, "GBP", randomUUID(), "synthetic_authorized_plan", "synthetic", hash, missingAuditAuth, priorAudit],
     ))).rejects.toMatchObject({ code: "23514" });

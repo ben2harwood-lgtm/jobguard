@@ -12,7 +12,7 @@ export type WalkthroughStep = {
   title: string;
   words: string;
   isDone: () => boolean;
-  autoAction: (target: HTMLElement, signal: AbortSignal) => void | Promise<void>;
+  autoAction: (target: HTMLElement, signal: AbortSignal, present?: (title: string, words: string) => Promise<void>) => void | Promise<void>;
 };
 type Box = { left: number; top: number; width: number; height: number };
 export function visibleTarget(selector: string): HTMLElement | null {
@@ -30,28 +30,152 @@ export function visibleTarget(selector: string): HTMLElement | null {
   return element;
 }
 
-export function Walkthrough({ steps, onClose }: { steps: readonly WalkthroughStep[]; onClose: () => void }) {
-  const [index, setIndex] = useState(0), [playing, setPlaying] = useState(false);
+export function readingTime(title: string, words: string) {
+  return Math.min(15_000, 4_000 + `${title} ${words}`.trim().split(/\s+/).filter(Boolean).length * 250);
+}
+
+/** Only viewer autoplay opts nested screen actions into presentation pacing. */
+export const viewerPlayback = new WeakSet<AbortSignal>();
+export function viewerPacing() {
+  if (typeof navigator !== "undefined" && navigator.webdriver) return false;
+  return !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+/** Only explicit Next or cancellation releases reading before its timer.
+ * Callers requesting a reduced-motion manual hold still wait for Next. */
+export function readingPause(ms: number, reduced: boolean, signal: AbortSignal, registerSkip: (skip: () => void) => void) {
+  return new Promise<void>(resolve => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = () => {
+      clearTimeout(timer); signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    registerSkip(finish);
+    if (signal.aborted) finish();
+    else {
+      signal.addEventListener("abort", finish, { once: true });
+      if (!reduced) timer = setTimeout(finish, ms);
+    }
+  });
+}
+
+/** Keep even the last control above the dock, after its normal scrollIntoView. */
+export function clearPhoneDock(target: HTMLElement, dock: HTMLElement) {
+  if (window.innerWidth > 480) return;
+  // Reveal it inside its own scroll box (the walkthrough screen scrolls separately) before clearing the dock.
+  target.scrollIntoView?.({ block: "nearest", behavior: "instant" });
+  const rect = target.getBoundingClientRect(), bar = dock.getBoundingClientRect();
+  const overlap = rect.bottom - (bar.top - 12);
+  if (rect.top < 12) window.scrollBy({ top: rect.top - 12, behavior: "instant" });
+  else if (overlap > 0 && rect.height < bar.top - 12) window.scrollBy({ top: overlap, behavior: "instant" });
+}
+
+export function Walkthrough({ steps, onClose, initialIndex = 0 }: { steps: readonly WalkthroughStep[]; onClose: (index: number) => void; initialIndex?: number }) {
+  const [index, setIndex] = useState(initialIndex), [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false), [done, setDone] = useState(false), [error, setError] = useState("");
   const [box, setBox] = useState<Box | null>(null), [finished, setFinished] = useState(false), [waiting, setWaiting] = useState(false);
   const card = useRef<HTMLElement>(null), action = useRef<AbortController | null>(null), running = useRef(false);
+  const instructionOnly = steps.every(step => step.id.startsWith("core-guide-"));
+  const [expanded, setExpanded] = useState(instructionOnly), [holding, setHolding] = useState(false);
+  const skip = useRef<(() => void) | null>(null);
+  const currentPlaying = useRef(playing);
+  const lastInput = useRef<number | null>(null);
+  const pointers = useRef(new Set<number>()), touches = useRef(new Set<number>());
+  currentPlaying.current = playing;
   const step = steps[index];
-  const stop = () => { action.current?.abort(); setPlaying(false); };
+  const cancel = () => {
+    action.current?.abort(); action.current = null;
+    skip.current = null; running.current = false;
+  };
+  const stop = () => { cancel(); setBusy(false); setPlaying(false); setHolding(false); };
+  const stopKey = (event: React.KeyboardEvent) => { if (event.key === " " || event.key === "Enter") stop(); };
   // Restore focus, page spacing and target styling on exit, including navigation/unmount.
   useEffect(() => {
     const previous = document.activeElement, padding = document.body.style.paddingBottom;
-    document.body.style.paddingBottom = "360px";
-    return () => { action.current?.abort(); document.body.style.paddingBottom = padding; if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
+    const reserve = () => { document.body.style.paddingBottom = `${card.current?.getBoundingClientRect().height ?? 360}px`; };
+    reserve();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(reserve);
+    if (card.current) observer?.observe(card.current);
+    function pointer(event: PointerEvent) {
+      if (!event.isTrusted) return;
+      if (event.type === "pointerdown") { lastInput.current = performance.now(); pointers.current.add(event.pointerId); }
+      else pointers.current.delete(event.pointerId);
+    }
+    function touch(event: TouchEvent) {
+      if (!event.isTrusted) return;
+      if (event.type === "touchstart") lastInput.current = performance.now();
+      for (const contact of Array.from(event.changedTouches)) {
+        if (event.type === "touchstart") touches.current.add(contact.identifier);
+        else touches.current.delete(contact.identifier);
+      }
+    }
+    function key(event: KeyboardEvent) { if (event.isTrusted) lastInput.current = performance.now(); }
+    const blur = () => { pointers.current.clear(); touches.current.clear(); };
+    document.addEventListener("pointerdown", pointer, true);
+    document.addEventListener("pointerup", pointer, true);
+    document.addEventListener("pointercancel", pointer, true);
+    document.addEventListener("touchstart", touch, true);
+    document.addEventListener("touchend", touch, true);
+    document.addEventListener("touchcancel", touch, true);
+    document.addEventListener("keydown", key, true);
+    window.addEventListener("blur", blur);
+    return () => {
+      document.removeEventListener("pointerdown", pointer, true);
+      document.removeEventListener("pointerup", pointer, true);
+      document.removeEventListener("pointercancel", pointer, true);
+      document.removeEventListener("touchstart", touch, true);
+      document.removeEventListener("touchend", touch, true);
+      document.removeEventListener("touchcancel", touch, true);
+      document.removeEventListener("keydown", key, true);
+      window.removeEventListener("blur", blur); blur();
+      observer?.disconnect(); cancel(); document.body.style.paddingBottom = padding; if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
   }, []);
   useEffect(() => {
-    if (!step || finished) return;
+    if (!step) return;
+    if (finished) { card.current?.focus({ preventScroll: true }); return; }
+    document.querySelectorAll("[data-walk-action]").forEach(element => element.removeAttribute("data-walk-action"));
     setDone(false); setError(""); setBox(null);
     card.current?.focus({ preventScroll: true });
     let highlighted: HTMLElement | null = null;
-    function update() {
-      const target = step!.spotlightTarget?.() ?? visibleTarget(step!.target);
-      if (highlighted !== target) { highlighted?.classList.remove(styles.target!); highlighted = target; highlighted?.classList.add(styles.target!); }
+    let hadHighlight = false;
+    let settling: { top: number; height: number; equal: number; moved: boolean } | null = null;
+    function update(poll = false) {
+      const root = visibleTarget(step!.target);
+      const target = step!.spotlightTarget?.() ?? (root?.matches("button, input, textarea, select, a[href]") ? root : root?.querySelector<HTMLElement>("textarea, input, select, button, a[href]") ?? root);
+      if (highlighted !== target) {
+        settling = null;
+        highlighted?.classList.remove(styles.target!);
+        highlighted = target;
+        highlighted?.classList.add(styles.target!);
+        if (highlighted) {
+          const recentInput = lastInput.current !== null && performance.now() - lastInput.current < 1_000;
+          const manualInput = !running.current && !currentPlaying.current && (recentInput || pointers.current.size > 0 || touches.current.size > 0);
+          // Saving parties changes the target to preview. Only explicit navigation
+          // or playback may move this hand step, even after a slow save response.
+          if (card.current && (!hadHighlight || !manualInput) && !(hadHighlight && step!.id === "walk-3" && !running.current && !currentPlaying.current)) {
+            clearPhoneDock(highlighted, card.current);
+            const rect = highlighted.getBoundingClientRect();
+            settling = { top: rect.top + (window.scrollY ?? 0), height: rect.height, equal: 0, moved: false };
+          }
+          hadHighlight = true;
+        }
+      }
       if (target) {
+        if (settling && poll) {
+          const recentInput = lastInput.current !== null && performance.now() - lastInput.current < 1_000;
+          const manualInput = !running.current && !currentPlaying.current && (recentInput || pointers.current.size > 0 || touches.current.size > 0);
+          const rect = target.getBoundingClientRect(), top = rect.top + (window.scrollY ?? 0);
+          // Only settle a newly highlighted control. Document coordinates ignore
+          // viewer scrolling; fresh manual input permanently cancels this retry.
+          if (manualInput) settling = null;
+          else if (top !== settling.top || rect.height !== settling.height) {
+            settling = { top, height: rect.height, equal: 0, moved: true };
+          } else if (++settling.equal === 2) {
+            const moved = settling.moved; settling = null;
+            if (moved && card.current) clearPhoneDock(target, card.current);
+          }
+        }
         const rect = target.getBoundingClientRect();
         setBox({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
         setDone(step!.isDone());
@@ -60,9 +184,10 @@ export function Walkthrough({ steps, onClose }: { steps: readonly WalkthroughSte
     const target = visibleTarget(step.target);
     target?.scrollIntoView({ block: "center", behavior: "instant" });
     update();
-    const interval = window.setInterval(update, 200);
-    window.addEventListener("resize", update); window.addEventListener("scroll", update, true);
-    return () => { clearInterval(interval); highlighted?.classList.remove(styles.target!); window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); };
+    const interval = window.setInterval(() => update(true), 200);
+    const track = () => update();
+    window.addEventListener("resize", track); window.addEventListener("scroll", track, true);
+    return () => { clearInterval(interval); highlighted?.classList.remove(styles.target!); window.removeEventListener("resize", track); window.removeEventListener("scroll", track, true); };
   }, [step, finished]);
   function advance() {
     if (!step || !visibleTarget(step.target) || !step.isDone()) return;
@@ -72,12 +197,37 @@ export function Walkthrough({ steps, onClose }: { steps: readonly WalkthroughSte
   }
   async function show() {
     if (!step || running.current) return;
+    // The input requesting tour execution must not outlive it as a manual hold.
+    lastInput.current = null;
     running.current = true; setBusy(true); setError("");
     const controller = new AbortController(); action.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), step.timeoutMs ?? 12_000);
+    let continueStep = false;
+    let remaining = step.timeoutMs ?? 12_000, started = performance.now();
+    let timeout = window.setTimeout(() => controller.abort(), remaining);
+    const present = async (title: string, words: string) => {
+      if (navigator.webdriver || controller.signal.aborted || continueStep) return;
+      clearTimeout(timeout); remaining -= performance.now() - started;
+      setHolding(true);
+      await readingPause(readingTime(title, words), matchMedia("(prefers-reduced-motion: reduce)").matches, controller.signal, next => { skip.current = () => {
+        // Autoplay Next releases this step, including later presentation holds.
+        // Completion still waits for the saved result below.
+        continueStep = playing; next();
+      }; });
+      controller.signal.throwIfAborted();
+      skip.current = null; setHolding(false);
+      started = performance.now(); timeout = window.setTimeout(() => controller.abort(), Math.max(0, remaining));
+    };
+    if (playing && viewerPacing()) viewerPlayback.add(controller.signal);
     try {
-      const target = visibleTarget(step.target);
+      let target = visibleTarget(step.target);
+      // Autoplay can enter the next step before its saved screen has mounted.
+      // Keep the same deadline and cancellation boundary while it becomes visible.
+      while (!target && !controller.signal.aborted) {
+        await new Promise(resolve => window.setTimeout(resolve, 100));
+        target = visibleTarget(step.target);
+      }
       if (!target) throw new Error("This step's control is unavailable. Stop the tour or return when the screen is ready.");
+      if (controller.signal.aborted) return;
       if (!step.isDone()) {
         const delay = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 650;
         await new Promise<void>(resolve => {
@@ -86,42 +236,68 @@ export function Walkthrough({ steps, onClose }: { steps: readonly WalkthroughSte
         });
         if (controller.signal.aborted) return;
         await Promise.race([
-          step.autoAction(target, controller.signal),
+          step.autoAction(target, controller.signal, present),
           new Promise<void>(resolve => controller.signal.addEventListener("abort", () => resolve(), { once: true })),
         ]);
       }
       while (!controller.signal.aborted && !step.isDone()) await new Promise(resolve => window.setTimeout(resolve, 100));
-      if (!controller.signal.aborted && visibleTarget(step.target)) advance();
+      if (!controller.signal.aborted && visibleTarget(step.target)) {
+        clearTimeout(timeout);
+        if (viewerPlayback.has(controller.signal) && !continueStep) {
+          setHolding(true);
+          await readingPause(readingTime(step.title, step.words), false, controller.signal, next => { skip.current = next; });
+          if (action.current === controller) { skip.current = null; setHolding(false); }
+        }
+        if (!controller.signal.aborted) advance();
+      }
       else throw new Error("Stopped. This step has not been confirmed; check the screen before continuing.");
-    } catch (failure) { setPlaying(false); setError(failure instanceof Error ? failure.message : "The step could not complete."); }
-    finally { clearTimeout(timeout); running.current = false; setBusy(false); }
+    } catch (failure) {
+      if (action.current === controller) { setPlaying(false); setError(failure instanceof Error ? failure.message : "The step could not complete."); }
+    } finally {
+      viewerPlayback.delete(controller.signal); clearTimeout(timeout);
+      if (action.current === controller) { skip.current = null; running.current = false; setBusy(false); setHolding(false); }
+    }
   }
   useEffect(() => { if (waiting && done && !busy) advance(); }, [waiting, done, busy]);
   useEffect(() => { if (playing && !busy && !finished) void show(); }, [playing, busy, index, finished]); // one action at a time
   useEffect(() => {
-    function escape(event: KeyboardEvent) { if (event.key === "Escape" && !event.defaultPrevented) { action.current?.abort(); setPlaying(false); onClose(); } }
+    function escape(event: KeyboardEvent) {
+      if (event.target instanceof Element && event.target.closest('dialog[open], [role=dialog], [role=alertdialog], [aria-modal=true]') || document.querySelector("dialog:modal")) return;
+      if (event.key === "Escape" && !event.defaultPrevented) { stop(); onClose(index); } }
     window.addEventListener("keydown", escape); return () => window.removeEventListener("keydown", escape);
-  }, [onClose]);
+  }, [onClose, index]);
   if (!step) return null;
   return <>
     {box && !finished && <><div aria-hidden="true" className={styles.spotlight} style={box} />
       {(busy || playing) && <div aria-hidden="true" className={styles.pointer} style={{ left: box.left + Math.min(box.width / 2, 40), top: box.top + box.height / 2 }}>➤</div>}</>}
-    <section ref={card} tabIndex={-1} className={styles.card} aria-label="Guided walkthrough">
+    <section ref={card} tabIndex={-1} className={`${styles.card} ${expanded || finished ? styles.expanded : styles.collapsed}`} aria-label="Guided walkthrough">
       <div aria-live="polite" aria-atomic="true">
         <h2>{finished ? "Tour complete" : `Step ${index + 1} of ${steps.length} · ${step.title}`}</h2>
-        <p>{finished ? "The walkthrough reached its end. Only the real screens and saved records establish job progress." : step.words}</p>
+        <p className={styles.words}>{finished ? instructionOnly ? "The walkthrough reached its end. Only the real screens and saved records establish job progress." : "That's the whole job. You have followed the example from the first words to the saved final report." : step.words}</p>
       </div>
+      {holding && <div className={styles.progress} role="timer" aria-label="Reading time; Next continues now"><span style={{ animationDuration: `${readingTime(step.title, step.words)}ms` }} /></div>}
       {error && <p role="alert">{error}</p>}
       {!box && !finished && <p role="status">Waiting for this step's control to become visible.</p>}
       {!finished && <div className={styles.controls}>
-        <button disabled={index === 0 || busy || playing} onClick={() => { stop(); setWaiting(false); setIndex(value => value - 1); }}>Back</button>
-        <button disabled={busy || playing || !box} onClick={() => { setWaiting(true); visibleTarget(step.target)?.focus(); }}>I'll do it</button>
-        <button disabled={busy || playing || !box} onClick={() => void show()}>Show me</button>
-        <button disabled={!done || busy || playing} onClick={advance}>Next</button>
-        <button disabled={playing || busy || !box} onClick={() => setPlaying(true)}>Play the whole thing</button>
-        {(playing || busy) && <button onClick={stop}>Stop playback</button>}
+        <button className={styles.secondary} disabled={index === 0 || busy || playing} onClick={() => { stop(); setWaiting(false); setIndex(value => value - 1); }}>Back</button>
+        {step.id === "walk-3" && <button className={styles.secondary} disabled={busy || playing || !box} onClick={() => {
+          const target = step.spotlightTarget?.();
+          target?.scrollIntoView({ block: "center", behavior: "instant" });
+          if (target && card.current) clearPhoneDock(target, card.current);
+          target?.focus({ preventScroll: true });
+        }}>Go to customer/site or quote preview</button>}
+        <button className={styles.secondary} disabled={busy || playing || !box} onClick={() => { setWaiting(true); visibleTarget(step.target)?.focus({ preventScroll: true }); }}>I'll do it</button>
+        <button className={holding ? styles.secondary : undefined} disabled={busy || playing || !box} onClick={() => void show()}>Show me</button>
+        <button className={holding ? undefined : styles.secondary} disabled={!holding && (!done || busy || playing)} onClick={() => holding ? skip.current?.() : advance()}>Next</button>
+        <button className={playing || busy ? styles.secondary : undefined} disabled={playing || busy || !box} onClick={() => setPlaying(true)}>Play the whole thing</button>
+        <button className={styles.more} aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? "Less" : "More"}</button>
+        {(playing || busy) && <button onPointerDown={stop} onKeyDown={stopKey} onClick={stop}>Stop playback</button>}
       </div>}
-      <button onClick={() => { stop(); onClose(); }}>Close walkthrough</button>
+      {finished && <div className={styles.controls}>
+        <button onClick={() => { stop(); location.assign("/jobs/new"); }}>Start my own job</button>
+        <button onClick={() => { stop(); onClose(index); document.getElementById("walk-report")?.click(); }}>Read the report again</button>
+      </div>}
+      <button className={styles.close} onPointerDown={stop} onKeyDown={stopKey} onClick={() => { stop(); onClose(index); }}>Close walkthrough</button>
     </section>
   </>;
 }

@@ -31,7 +31,7 @@ describe("DEMO-J5 attacks against command and source boundaries",()=>{
   expect(report.first.timeline?.active).toBe(false);
   expect(report.status).toBe("incomplete");
   expect(report.missing).toEqual([
-   "Final Check: a company job has no public final account route yet, so lock and Final Check cannot end a trial from this guide.",
+   "Final Check: open the first job final account, set dispositions, accept final check terms and complete it, then run and load the saved Final Check.",
    "Pro-ration: no billing period is issued yet. A period can only be issued after it ends; conversion rules stay on the accepted terms.",
   ]);
   expect(report.subscription.agreements).toEqual(input.subscription.agreements);

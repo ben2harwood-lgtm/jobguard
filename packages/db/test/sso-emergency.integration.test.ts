@@ -8,14 +8,13 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ContractorRepository, EnterpriseIdentityRepository, IdentityRepository, SsoRequiredRepository, MIGRATION_URLS, migrate, verifyAuditChain, withTenant, type AuditEvent } from "../src/index.js";
+import { ContractorRepository, EnterpriseIdentityRepository, IdentityRepository, SsoRequiredRepository, MIGRATION_URLS, migrate, verifyAuditChain, withTenant, verifiedTenantContextFromMembership, type AuditEvent } from "../src/index.js";
 import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
 import { SsoApplication } from "../../../apps/api/src/auth/sso/sso.application.js";
 import { SsoRequiredApplication } from "../../../apps/api/src/auth/sso/sso-required.application.js";
 import { generateTestIdentityProvider } from "../../../apps/api/src/auth/sso/test-identity-provider.js";
 import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
 import { LedgerRepository, EvidenceService } from "../src/index.js";
 import type { PrivateVersionedStorage } from "@jobguard/storage";
@@ -78,9 +77,16 @@ async function fixture(configure=true,link=true) {
  const enable=()=>service.command(command(true,0),bound!);
  return {principal,provider,connectionId,domain,email,ordinary,bound,sessionId,idp,connection,app,service,command,signin,enable};
 }
-async function memberIn(user:string,tenant:string,role="finance") {
+function fixtureOwnerContext(f:Awaited<ReturnType<typeof fixture>>) {
+ return verifiedTenantContextFromMembership(f.principal,{kind:"real",credential:f.provider.digest(`session:${f.bound!.sessionToken}`)});
+}
+async function bindFixtureOwner(client:PoolClient,f:Awaited<ReturnType<typeof fixture>>) {
+ await client.query("SELECT app.bind_request('real',$1,$2)",[f.provider.digest(`session:${f.bound!.sessionToken}`),f.principal.tenantId]);
+}
+async function memberIn(user:string,f:Awaited<ReturnType<typeof fixture>>,role="finance") {
+ const tenant=f.principal.tenantId;
  const account=(await admin.query("SELECT id FROM app.account WHERE tenant_id=$1 LIMIT 1",[tenant])).rows[0].id,id=randomUUID();
- await withTenant(admin,testTenantContext(tenant),db=>db.$client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,$5)",[id,tenant,account,user,role]));
+ await withTenant(admin,fixtureOwnerContext(f),db=>db.$client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,$5)",[id,tenant,account,user,role]));
  await admin.query("INSERT INTO identity.membership_locator VALUES($1,$2,$3)",[user,tenant,id]);return id;
 }
 async function counts() {
@@ -102,6 +108,7 @@ describe("ENT-10d emergency PostgreSQL boundary",()=>{
   try {
    await client.query("BEGIN");
    await client.query("SELECT set_config('app.tenant_id',$1,true)",[f.principal.tenantId]);
+   await bindFixtureOwner(client,f);
    await client.query("SAVEPOINT expired_window");
    const rule=(await client.query("SELECT id FROM identity.sso_emergency_approver_rule WHERE version='company-owner-only.v1'")).rows[0].id;
    const expiredApproval=randomUUID(),expiredCommand=randomUUID(),freshCommand=randomUUID();
@@ -149,12 +156,12 @@ describe("ENT-10d emergency PostgreSQL boundary",()=>{
  it("[S11] refused and owner-fixture uses preserve journal, evidence, earlier audit and every identity authority row byte-for-byte",async()=>{
   const f=await fixture();await f.enable();
   // Nonempty immutable records are created through merged posting/evidence services before comparison.
-  const context=testTenantContext(f.principal.tenantId),book=randomUUID(),receivable=randomUUID(),deferred=randomUUID(),authorization=randomUUID(),journal=randomUUID(),hash="a".repeat(64);
+  const context=verifiedTenantContextFromMembership(f.principal,{kind:"real",credential:f.provider.digest(`session:${f.bound!.sessionToken}`)}),book=randomUUID(),receivable=randomUUID(),deferred=randomUUID(),authorization=randomUUID(),journal=randomUUID(),hash="a".repeat(64);
   await admin.query("INSERT INTO app.ledger_book(id,tenant_id,code,currency,chart_status) VALUES($1,$2,$3,'GBP','synthetic')",[book,f.principal.tenantId,`fixture:${book}`]);
   for(const [id,code,kind] of [[receivable,"AR","receivable"],[deferred,"DEF","deferred_income"]])await admin.query("INSERT INTO app.ledger_account(id,tenant_id,book_id,currency,code,class,mapping_status) VALUES($1,$2,$3,'GBP',$4,$5,'synthetic')",[id,f.principal.tenantId,book,code,kind]);
   await admin.query("INSERT INTO app.financial_authorization(id,tenant_id,membership_id,purpose,amount_pence,currency,artifact_hash,status) VALUES($1,$2,$3,'plan_obligation',1000,'GBP',$4,'approved')",[authorization,f.principal.tenantId,f.principal.membershipId,hash]);
   await new LedgerRepository(runtime).postPlanObligation(context,{authorizationId:authorization,actorRef:"member:synthetic",permission:"finance:approve"},{schemaVersion:1,journalId:journal,bookId:book,amountPence:1000,currency:"GBP",sourceEventId:`fixture:${journal}`,provenanceRef:"synthetic:ENT-10d",artifactHash:hash,authorizationId:authorization,actorRef:"member:synthetic",receivableAccountId:receivable,deferredIncomeAccountId:deferred,provenanceKind:"synthetic_authorized_plan"});
-  await installLegacySyntheticPartyFixtures(admin);const job=randomUUID();await importWatchdogFixtureJob(admin,f.principal.tenantId,job);
+  await installLegacySyntheticPartyFixtures(admin);const job=randomUUID();await importWatchdogFixtureJob(admin,f.principal.tenantId,job,"Fictional watchdog job","live",{db:await import("../src/index.js"),context});
   const bytes=validPng();
   // The storage adapter is the only external effect fake; upload and verified evidence are real PostgreSQL rows.
   let key="";
@@ -195,7 +202,8 @@ async function canonical(table:string,tenant?:string) {
 }
 const created=["identity.sso_emergency_approval","identity.sso_emergency_use","identity.sso_emergency_window","identity.sso_required_event"];
 const beforeUse=(f:OwnerFixture)=>Promise.all(created.map(t=>canonical(t,f.principal.tenantId)));
-async function grant(tenant:string,membership:string,role:string,email:string) {
+async function grant(f:OwnerFixture,membership:string,role:string,email:string) {
+ const tenant=f.principal.tenantId;
  let clientId:string|null=null;
  if(role==="client_approver"){
   clientId=randomUUID();
@@ -203,10 +211,11 @@ async function grant(tenant:string,membership:string,role:string,email:string) {
   await admin.query("INSERT INTO app.client_organisation(tenant_id,id,branch_id,name,client_type) VALUES($1,$2,$3,'Synthetic client','person')",[tenant,clientId,branchId]);
  }
  await admin.query("INSERT INTO app.contractor_member(tenant_id,membership_id,email,client_id) VALUES($1,$2,$3,$4)",[tenant,membership,email,clientId]);
- if(role!=="client_approver")await withTenant(admin,testTenantContext(tenant),db=>db.$client.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id) VALUES($1,$2,$3,$4,'tenant',$1)",[tenant,randomUUID(),membership,role]));
+ if(role!=="client_approver")await withTenant(admin,fixtureOwnerContext(f),db=>db.$client.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id) VALUES($1,$2,$3,$4,'tenant',$1)",[tenant,randomUUID(),membership,role]));
 }
 async function pastUse(f:OwnerFixture,commandId:string) {
  const c=await admin.connect();try{await c.query("BEGIN");await c.query("SELECT set_config('app.tenant_id',$1,true)",[f.principal.tenantId]);
+ await bindFixtureOwner(c,f);
  const approval=randomUUID(),rule=(await c.query("SELECT id FROM identity.sso_emergency_approver_rule")).rows[0].id;
  await c.query("INSERT INTO identity.sso_emergency_approval(tenant_id,id,membership_id,rule_id,approver_ref,reason_hash,approved_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,clock_timestamp()-interval '16 minutes',clock_timestamp()-interval '15 minutes')",[f.principal.tenantId,approval,f.principal.membershipId,rule,`membership:${f.principal.membershipId}`,createHash("sha256").update(emergencyReason).digest("hex")]);
  const event=(await c.query("SELECT identity.sso_required_append($1,$2,$3,'emergency',false,$4,(SELECT max(revision) FROM identity.sso_required_event WHERE tenant_id=$1)) result",[f.principal.tenantId,f.connectionId,f.principal.membershipId,emergencyReason])).rows[0].result.eventId;
@@ -224,8 +233,8 @@ describe("ENT-10e owner emergency records",()=>{
    const claimant={email:`${role}@${f.domain}`,principal:{identityUserId:randomUUID()}};
    await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[claimant.principal.identityUserId]);
    await admin.query("INSERT INTO identity.user_email VALUES($1,$2)",[claimant.email,claimant.principal.identityUserId]);
-   const membership=await memberIn(claimant.principal.identityUserId,f.principal.tenantId,role);
-   await grant(f.principal.tenantId,membership,role,claimant.email);
+   const membership=await memberIn(claimant.principal.identityUserId,f,role);
+   await grant(f,membership,role,claimant.email);
    const before=await beforeUse(f),logs=await canonical("identity.sso_emergency_event",f.principal.tenantId),events=await audit(f.principal.tenantId);
    const code=await requestSigninCode(f.provider,claimant.email);
    await expect(f.service.emergency({...inputV2(f),email:claimant.email,code:code.fixtureCode},origin)).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});expect(await beforeUse(f)).toEqual(before);
@@ -249,7 +258,7 @@ describe("ENT-10e owner emergency records",()=>{
   const submit=async()=>{const code=await requestSigninCode(b.provider,b.email);return a.service.emergency({...inputV2(a),email:b.email,code:code.fixtureCode},origin);};
   await expect(submit()).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});expect(await beforeUse(a)).toEqual(aBefore);expect(await canonical("identity.sso_emergency_event",a.principal.tenantId)).toEqual(aLogs);
   expect((await admin.query("SELECT code FROM identity.sso_refusal_event ORDER BY created_at DESC LIMIT 1")).rows[0].code).toBe("EMERGENCY_MEMBER_NOT_ACTIVE");
-  const membership=await memberIn(b.principal.identityUserId,a.principal.tenantId,"admin");await grant(a.principal.tenantId,membership,"admin",b.email);
+  const membership=await memberIn(b.principal.identityUserId,a,"admin");await grant(a,membership,"admin",b.email);
   await expect(submit()).rejects.toMatchObject({code:"SSO_EMERGENCY_REFUSED"});expect(await beforeUse(a)).toEqual(aBefore);expect((await admin.query("SELECT cause_code FROM identity.sso_emergency_event WHERE tenant_id=$1",[a.principal.tenantId])).rows).toEqual([{cause_code:"EMERGENCY_NOT_OWNER"}]);
   await admin.query("UPDATE app.membership SET role='owner' WHERE tenant_id=$1 AND id=$2",[a.principal.tenantId,membership]);
   expect((await submit()).required).toBe(false);expect(await Promise.all([...created,"identity.sso_emergency_event"].map(t=>canonical(t,b.principal.tenantId)))).toEqual(bBefore);

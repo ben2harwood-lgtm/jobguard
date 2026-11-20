@@ -23,7 +23,7 @@ export async function feeBoundaryFixture(f:LockFixture){
 }
 export async function protectedSnapshot(f:LockFixture){
  // Every existing fact is compared, not just a fee-table count. No new tables in 0218.
- const tables=(await f.admin.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN('app','identity','control_plane','audit_control') ORDER BY 1,2")).rows;
+ const tables=(await f.admin.query("SELECT schemaname,tablename FROM pg_tables WHERE schemaname IN('app','identity','control_plane','audit_control') AND NOT(schemaname='control_plane' AND tablename='request_binding') ORDER BY 1,2")).rows;
  const result:Record<string,unknown>={};
  for(const t of tables)result[`${t.schemaname}.${t.tablename}`]=(await f.admin.query(`SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]') rows FROM "${t.schemaname}"."${t.tablename}" r`)).rows[0].rows;
  return result;

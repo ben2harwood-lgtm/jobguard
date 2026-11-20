@@ -1,3 +1,5 @@
+import { outboundWorkerPool } from "./worker-pool.js";
+vi.mock("./worker-pool.js", () => ({ outboundWorkerPool: vi.fn() }));
 import { fakeAuditAppend } from "./audit-protocol-test-fixture.js";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
@@ -69,17 +71,10 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
       authorization_expires_at: new Date("2099-01-01"), created_at: new Date(), status,
     };
     const query: Query = async (sql, values = []) => {
-      if (sql.startsWith("SELECT o.*")) {
-        // Model the membership predicate against the current stored role.
-        const permitted = !/m\.role\s*=\s*'owner'/u.test(sql) || role === "owner";
-        return { rows: permitted ? [{ ...row, status }] : [] };
-      }
-      if (sql.startsWith("SELECT count(*)")) return { rows: [{ n: 0 }] };
-      if (sql.includes("FROM app.append_audit(")) return { rows: fakeAuditAppend(String(values?.[0]), tenantId) };
-      if (sql.startsWith("SELECT nullif(current_setting")) return { rows: [{ tenant_id: tenantId }] };
-      if (sql.startsWith("UPDATE app.action_outbox SET status='executing'")) status = "executing";
-      if (sql.startsWith("UPDATE app.action_outbox SET status=$2")) status = String(values[1]);
-      if (transactionSql(sql) || sql.startsWith("UPDATE ") || sql.startsWith("INSERT ")) return { rows: [] };
+      if (sql.startsWith("SELECT id FROM app.action_outbox")) return { rows: [], rowCount: 1 };
+      if (sql.includes("outbound_control.claims_enabled")) return { rows: [{ enabled: true }] };
+      if (sql.includes("app.claim_worker_action")) return { rows: [{ claim: role === "owner" ? row : null }] };
+      if (transactionSql(sql)) return { rows: [] };
       throw new Error(`Unexpected SQL: ${sql}`);
     };
     const adapter: OutboundAdapter = {
@@ -89,6 +84,7 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
     };
     // The queued row was approved while the actor was an owner.
     role = "read_only";
+    vi.mocked(outboundWorkerPool).mockResolvedValue(poolWithQuery(query));
     await new ActionExecutor(poolWithQuery(query), new Map([[adapter.name, adapter]]), { emit: () => undefined })
       .execute(context, id);
     expect(adapter.deliver).not.toHaveBeenCalled();
@@ -127,7 +123,8 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
             await bothReads.promise;
           }
           return { rows };
-        } else if (sql.startsWith("INSERT INTO app.merchant(")) staged.merchant.push(values);
+        } else if (sql.startsWith("SELECT r.id,r.version")) return { rows: [] };
+        else if (sql.startsWith("INSERT INTO app.merchant(")) staged.merchant.push(values);
         else if (sql.startsWith("INSERT INTO app.merchant_sku(")) staged.sku.push(values);
         else if (sql.startsWith("INSERT INTO app.material_rate_revision(")) staged.rate.push(values);
         else if (sql === "COMMIT") {
@@ -142,7 +139,8 @@ describe("AUDIT-FIX-DBSRC-08 blocking regressions (SQL protocol doubles)", () =>
       return { query, release: () => undefined };
     } } as unknown as Pool;
     const repo = new MaterialRepository(pool);
-    const results = await Promise.allSettled([repo.addRate(context, rate), repo.addRate(context, rate)]);
+    // LATER-SAFETY-138: identical retries are reused, so the racer differs in price to stay stale.
+    const results = await Promise.allSettled([repo.addRate(context, rate), repo.addRate(context, { ...rate, pricePence: rate.pricePence + 500 })]);
     expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
     const failure = results.find(r => r.status === "rejected");
     expect(failure).toMatchObject({ status: "rejected", reason: new Error("STALE_MATERIAL_RATE_REVISION") });

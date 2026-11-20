@@ -30,3 +30,21 @@ describe("ENT-5 customer session transport boundary",()=>{
   expect(response.status).toBe(409);expect(await response.json()).toEqual({code:"STALE_REVISION"});expect(response.headers.get("cache-control")).toBe("no-store");
  });
 });
+
+// LATER-SAFETY-60: the customer transport must retain the server's proceed facts.
+it.each(["view", "queue"])("projects proceed breaches through the customer %s", async action => {
+ const f=fixture();
+ const item={requestId,timingInputs:{visit:null,requests:[{id:requestId,preapproval_required:true,superseded_us:null}],facts:[],workStatus:null,proceedIds:[requestId]}};
+ f.query.mockReset().mockResolvedValueOnce({rows:[{result:{extraApprover:true}}]})
+  .mockResolvedValueOnce({rows:[{result:action==="queue"?{items:[item]}:item}]});
+ const result=await f.app.run({version:"extra-customer.v1",action,jobId:job,...(action==="view"?{requestId}:{})},{headers});
+ const expected={requestId,doneWithoutRequiredPreapproval:true,workTiming:null,approvalTimings:[]};
+ expect(result).toEqual(action==="queue"?{items:[expected]}:expected);
+});
+it("keeps the previous result when customer timing has no proceed IDs", async () => {
+ const f=fixture();
+ f.query.mockReset().mockResolvedValueOnce({rows:[{result:{extraApprover:true}}]})
+  .mockResolvedValueOnce({rows:[{result:{requestId,timingInputs:{visit:null,requests:[{id:requestId,preapproval_required:true,superseded_us:null}],facts:[],workStatus:null}}}]});
+ expect(await f.app.run({version:"extra-customer.v1",action:"view",jobId:job,requestId},{headers}))
+  .toMatchObject({doneWithoutRequiredPreapproval:"not_derived"});
+});

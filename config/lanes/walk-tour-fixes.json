@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "walk-tour-fixes": {
+      "branches": [
+        "codex/sandbox/walk-tour-fixes"
+      ],
+      "note": "WALK-TOUR-FIXES: scoped guided walkthrough tester repairs; no migrations.",
+      "allow": [
+        "apps/web/app/ui/walkthrough/walkthrough.tsx",
+        "apps/web/app/ui/walkthrough/walkthrough.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/screen-actions.ts",
+        "apps/web/app/practice-company/walkthrough/screen-actions.test.ts",
+        "apps/web/e2e/WALK-1.spec.ts",
+        "apps/web/e2e/WALK-3.spec.ts"
+      ]
+    }
+  }
+}

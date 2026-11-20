@@ -26,7 +26,7 @@ const TENANT = "91000000-0000-4000-8000-000000000001";
 const ACCOUNT = "92000000-0000-4000-8000-000000000001";
 const USER = "93000000-0000-4000-8000-000000000001";
 const MEMBER = "94000000-0000-4000-8000-000000000001";
-const context = testTenantContext(TENANT);
+const context = testTenantContext(TENANT, { membershipId: MEMBER });
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 let postgres: EmbeddedPostgres;
@@ -147,7 +147,7 @@ describe("transactional outbox and fake worker execution", () => {
       "SELECT action_id,tenant_id FROM infrastructure.outbox_signal WHERE action_id=$1", [action.id],
     )).rows[0];
     expect(signal).toEqual({ action_id: action.id, tenant_id: TENANT });
-    const signalledContext = testTenantContext(signal!.tenant_id);
+    const signalledContext = testTenantContext(signal!.tenant_id, { membershipId: MEMBER });
     const snapshot = () => withTenant(runtime, context, async (db) => ({
       outbox: (await db.$client.query("SELECT * FROM app.action_outbox WHERE id=$1", [action.id])).rows,
       attempts: (await db.$client.query("SELECT * FROM app.action_attempt WHERE action_id=$1 ORDER BY attempt_number", [action.id])).rows,
@@ -194,7 +194,7 @@ describe("transactional outbox and fake worker execution", () => {
       provider_reference: "synthetic:quote-delivered",
       error_code: null,
     })]);
-    expect(after.audit).toHaveLength(before.audit.length + 1);
+    expect(after.audit).toHaveLength(before.audit.length + 2);
   });
 
   it("publishes no routing signal and sends nothing when the business transaction rolls back", async () => {

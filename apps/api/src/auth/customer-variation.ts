@@ -3,6 +3,13 @@ import { z } from "zod";
 import type { IdentityApplication } from "./identity.application.js";
 import type { IdentityHttpRequest } from "./identity-http.js";
 import { CustomerSigninApplication, CustomerRefused, customerRefusal, customerToken } from "./customer-signin.js";
+class CustomerVariationLocked extends Error {}
+export function customerVariationFailure(error: unknown) {
+  if (error instanceof CustomerVariationLocked) return { status: 409, body: {
+    code: "VARIATION_LOCKED_BY_FINAL_ACCOUNT", message: "This extra cannot be approved because the final account is complete.",
+  } };
+  return customerRefusal(error);
+}
 export const CUSTOMER_VARIATION_APPLICATION = "CUSTOMER_VARIATION_APPLICATION";
 export const customerVariationActions = ["variations/read", "variation-approvals"] as const;
 export type CustomerVariationAction = typeof customerVariationActions[number];
@@ -21,6 +28,8 @@ export class CustomerVariationApplication {
         [tenantId, jobId, customerId, this.identity.provider.digest(`customer-session:${token}`), action === "variations/read" ? null : JSON.stringify(input)],
       )).rows[0]!.result;
     } catch (error) {
+      const databaseError = error as { code?: string; message?: string };
+      if (databaseError?.code === "42501" && databaseError.message === "VARIATION_LOCKED_BY_FINAL_ACCOUNT") throw new CustomerVariationLocked();
       if (error instanceof z.ZodError || (error as { code?: string })?.code === "42501") throw new CustomerRefused();
       throw error;
     }
@@ -29,5 +38,5 @@ export class CustomerVariationApplication {
 export async function customerVariationHttp(application: () => CustomerVariationApplication, action: CustomerVariationAction, request: Request) {
   const headers = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
   try { return Response.json(await application().run(action, await request.json(), { headers: Object.fromEntries(request.headers.entries()) }), { headers }); }
-  catch (error) { const failure = customerRefusal(error); return Response.json(failure.body, { status: failure.status, headers }); }
+  catch (error) { const failure = customerVariationFailure(error); return Response.json(failure.body, { status: failure.status, headers }); }
 }

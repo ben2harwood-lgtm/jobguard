@@ -1,3 +1,5 @@
+import { outboundWorkerPool } from "../src/worker-pool.js";
+import { bindTestClient, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
 import { testTenantContext } from './tenant-context-test-utils.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -34,13 +36,19 @@ const reviewerOf = async () => ({ membershipId: fixture.memberId, identityUserId
  * owner, accepted document, authorization and lifecycle before binding v3. */
 async function activatePursuitFixture(client: import("pg").PoolClient, tenant: string, job: string, expected: number) {
   const row = (await client.query("SELECT d.id,d.document_version,d.content_hash,m.id actor FROM app.quote_document_version d JOIN app.membership m ON m.tenant_id=d.tenant_id AND m.role='owner' AND m.revoked_at IS NULL WHERE d.tenant_id=$1 AND d.job_id=$2", [tenant, job])).rows[0];
-  const command = randomUUID(), decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
-  await client.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'job.switch_live',$3,$4,'processing',$5)", [command, tenant, `pursuit-fixture:${job}`, row.content_hash, row.actor]);
-  await client.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'job.switch_live')", [decision, tenant, job]);
-  await client.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, row.actor]);
-  await client.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'job.switch_live',$6,$7,'synthetic_demo_activation.v3',clock_timestamp()+interval '1 hour')", [authorization, tenant, decision, resolution, row.actor, row.content_hash, row.document_version]);
+  const { bound } = (await client.query("SELECT app.lp6e_request_binding_present() bound")).rows[0];
+  if (bound) {
+    const { matches } = (await client.query("SELECT (app.current_tenant(), app.current_actor())=($1::uuid,$2::uuid) matches", [tenant, row.actor])).rows[0];
+    if (!matches) throw new Error("Evidence fixture is bound to a different actor");
+  } else {
+    await bindTestClient(client, client, tenant, row.actor);
+  }
+  const command = randomUUID(), significant = {version:'command.v1',commandId:command,commandType:'job.switch_live',semanticKey:`pursuit-fixture:${job}`,actorMembershipId:row.actor,subjectType:'job',subjectRef:job,
+    action:{actionType:'job.switch_live',recipient:null,contentHash:row.content_hash,aggregateRevision:row.document_version,amountPence:null,currency:null,policyVersion:'synthetic_demo_activation.v3',expiresAt:new Date(Date.now()+3600000).toISOString()}};
+  const claim=(await client.query("SELECT app.begin_command($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb) result",['command.v1',command,'job.switch_live',significant.semanticKey,{tenantId:tenant,actorMembershipId:row.actor,subjectType:'job',subjectRef:job},{aggregateRevision:row.document_version},significant])).rows[0].result;
+  const authorization=claim.authorizationId;
   const result = await client.query("SELECT app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [tenant, randomUUID(), randomUUID(), job, row.id, row.document_version, row.content_hash, expected, row.actor, command, authorization]);
-  await client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [tenant, command]);
+  await client.query("SELECT app.complete_command($1,'{}'::jsonb)", [command]);
   return result;
 }
 
@@ -59,7 +67,6 @@ async function seedPursuitFixture() {
             expect(args[7]).toBe('reference_fee_policy_v1');
             return activatePursuitFixture(target, String(args[0]), String(args[1]), Number(args[2]));
           }
-          if (sql.startsWith('INSERT INTO app.job_commercial_track(')) sql += ' ON CONFLICT DO NOTHING';
           return target.query(sql, args);
         };
       } });
@@ -133,7 +140,7 @@ async function inIsolatedWorld<T>(run: () => Promise<T>, world: 'current_pursuit
   const saved = { fixture, context, actor };
   // The v1 landing protocol needs its own v1 activation/cap; only the six legacy supplier tests opt in.
   fixture = world === 'legacy_supplier_landing' ? await seedEvidencePackFixture(admin) : await seedPursuitFixture();
-  context = testTenantContext(fixture.tenantId);
+  context = testTenantContext(fixture.tenantId, { membershipId: fixture.memberId });
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   try { return await run(); } finally { ({ fixture, context, actor } = saved); }
 }
@@ -193,8 +200,8 @@ beforeAll(async () => {
   await migrate(admin); await installLegacySyntheticPartyFixtures(admin); fixture = await seedPursuitFixture();
   await admin.query("CREATE ROLE message_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO message_login");
   runtime = new Pool({ host: '127.0.0.1', port, user: 'message_login', password: 'synthetic', database: 'jobguard_synthetic_demo', max: 12 });
-  context = testTenantContext(fixture.tenantId);
-  otherContext = testTenantContext(fixture.otherTenantId);
+  context = testTenantContext(fixture.tenantId, { membershipId: fixture.memberId });
+  otherContext = testTenantContext(fixture.otherTenantId, { membershipId: fixture.memberId });
   repo = new RecoveryMessageRepository(runtime); packs = new EvidencePackRepository(runtime); cases = new RecoveryCaseRepository(runtime);
   actor = { membershipId: fixture.memberId, actorRef: `membership:${fixture.memberId}` };
   // A non-owner member and a revoked owner in the same tenant, for authority checks.
@@ -654,7 +661,17 @@ describe('raw runtime SQL stays fail-closed', () => {
     const grants = (await admin.query(`SELECT table_name::text AS table_name,array_agg(privilege_type::text ORDER BY privilege_type::text) privileges FROM information_schema.role_table_grants WHERE grantee='jobguard_runtime' AND table_schema='app' AND table_name=ANY($1) GROUP BY table_name ORDER BY table_name`, [tables])).rows;
     expect(grants).toEqual(tables.map(table_name => ({ table_name, privileges: ['INSERT', 'SELECT'] })));
     const definers = (await admin.query(`SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.prosecdef AND p.proname LIKE '%recovery_message%'`)).rows;
-    expect(definers).toEqual([]);
+    // LP-6d's one checked revocation routine replaces runtime's direct UPDATE on action_authorization.revoked_at.
+    expect(definers.map(row => row.proname).sort()).toEqual([
+      'lp6d_recovery_message_sink_worker', 'record_worker_recovery_message', 'revoke_recovery_message_authorization',
+    ]);
+    expect((await admin.query(`SELECT
+      has_function_privilege('jobguard_runtime','app.record_worker_recovery_message(uuid)','EXECUTE') runtime_record,
+      has_function_privilege('jobguard_runtime','app.lp6d_recovery_message_sink_worker(uuid,text)','EXECUTE') runtime_bridge,
+      has_function_privilege('jobguard_worker','app.record_worker_recovery_message(uuid)','EXECUTE') worker_record,
+      has_function_privilege('jobguard_worker','app.lp6d_recovery_message_sink_worker(uuid,text)','EXECUTE') worker_bridge`)).rows).toEqual([
+      {runtime_record:false,runtime_bridge:false,worker_record:true,worker_bridge:false},
+    ]);
   });
 });
 
@@ -710,7 +727,7 @@ describe('the effect boundary re-checks the case, the evidence and the approver 
   it('records nothing when the approving member was revoked after the claim was taken', async () => {
     const owner = await makeMember('owner', false);
     const base = await previewed();
-    const state = await repo.command(context, base.caseId, approveCommand(base.view), owner);
+    const state = await repo.command(await testBoundTenantContext(admin,fixture.tenantId,owner.membershipId), base.caseId, approveCommand(base.view), owner);
     const view = state.latest!;
     const holder = await admin.connect();
     try {
@@ -779,7 +796,7 @@ describe('the effect boundary re-checks the case, the evidence and the approver 
     expect(await code(() => rawSink(repacked.caseId, repacked.view)), 'pack rebuilt').toBe('23514');
     // The approving owner was revoked.
     const owner = await makeMember('owner', false), base = await previewed();
-    const byOwner = (await repo.command(context, base.caseId, approveCommand(base.view), owner)).latest!;
+    const byOwner = (await repo.command(await testBoundTenantContext(admin,fixture.tenantId,owner.membershipId), base.caseId, approveCommand(base.view), owner)).latest!;
     await claimExecuting(byOwner.approval!.outboxActionId);
     await admin.query('UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1', [owner.membershipId]);
     expect(await code(() => rawSink(base.caseId, byOwner)), 'approver revoked').toBe('23514');
@@ -1238,9 +1255,12 @@ describe('source writes serialize with the final effect check (P2-1)', () => {
       const sink = await runtime.connect(), writer = await runtime.connect();
       try {
         await sink.query('BEGIN'); await sink.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        // LP-6d: both held-open transactions are the owner's own bound requests.
+        await bindTestClient(admin, sink, fixture.tenantId, fixture.memberId);
         await sink.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))", [fixture.tenantId, caseId]);
         await sink.query("SELECT app.lock_recovery_message_sources($1)", [fixture.tenantId]);
         await writer.query('BEGIN'); await writer.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        await bindTestClient(admin, writer, fixture.tenantId, fixture.memberId);
         let completed = false;
         const invalidation = writer.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'object_revoked')", [randomUUID(), fixture.tenantId, fixture.proofId, fixture.memberId]).then(() => { completed = true; });
         await until(async () => (await admin.query("SELECT 1 FROM pg_stat_activity WHERE query LIKE 'INSERT INTO app.evidence_invalidation%' AND wait_event='advisory'")).rowCount !== 0, 'source writer held at the effect boundary');
@@ -1302,6 +1322,7 @@ describe('a recovery command id is claimed tenant-wide (Codex P2)', () => {
     try {
       // The shared dispatcher's order: claim the receipt, then the approval mutation takes the case lock.
       await dispatcher.query('BEGIN');
+      await bindTestClient(admin, dispatcher, fixture.tenantId, actor.membershipId);
       await dispatcher.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'recovery.message.approve',$3,repeat('b',64),'processing',$4)",
         [command.commandId, fixture.tenantId, command.commandId, actor.membershipId]);
       const outcome = repo.preview(context, caseId, command, actor).then(() => 'committed', (error: { code?: string; message?: string }) => error.code ?? error.message);
@@ -1318,6 +1339,7 @@ describe('a recovery command id is claimed tenant-wide (Codex P2)', () => {
     const holder = await admin.connect();
     try {
       await holder.query('BEGIN');
+      await bindTestClient(admin, holder, fixture.tenantId, actor.membershipId);
       await holder.query("INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,actor_membership_id) VALUES($1,$2,'other.family',$3,repeat('a',64),'processing',$4)",
         [command.commandId, fixture.tenantId, command.commandId, actor.membershipId]);
       const outcome = repo.preview(context, caseId, command, actor).then(() => 'committed', (error: { code?: string }) => error.code);
@@ -1665,6 +1687,52 @@ describe('a message states the one current case figures, approved landings inclu
     }, 'legacy_supplier_landing');
   });
 
+  it('keeps the actor-less sink route unavailable to requests, raw runtime writes and foreign queue tenants', async () => {
+    await inIsolatedWorld(async () => {
+      const { caseId, view } = await approved();
+      const outbox = view.approval!.outboxActionId;
+      await admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE id=$1", [outbox]);
+      expect(await code(() => inTenant(query => query('SELECT app.lp6d_recovery_message_sink_worker($1,$2)', [outbox, 'bound'])))).toBe('42501');
+      const sink = await runtime.connect();
+      try {
+        await sink.query('BEGIN');
+        await sink.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        const refused = async (sql: string, args: unknown[], expected: string) => {
+          await sink.query('SAVEPOINT refused');
+          expect(await code(() => sink.query(sql, args))).toBe(expected);
+          await sink.query('ROLLBACK TO refused');
+        };
+        await refused('SELECT app.lp6d_share_sink_authorization_worker($1,$2)', [fixture.tenantId, outbox], '42501');
+        await refused(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'raw','synthetic_demo',0)`, [randomUUID(), fixture.tenantId, fixture.jobId, caseId, view.id, outbox, view.message.recipient, view.message.body, view.message.contentHash, view.message.attachmentHash], '42501');
+        await sink.query("SELECT set_config('app.tenant_id',$1,true)", [randomUUID()]);
+        await refused('SELECT app.record_worker_recovery_message($1)', [outbox], '42501');
+        await refused('SELECT app.lp6d_recovery_message_sink_worker($1,$2)', [outbox, 'foreign'], '42501');
+        await sink.query("SELECT set_config('app.tenant_id','',true)");
+        await refused('SELECT app.record_worker_recovery_message($1)', [outbox], '42501');
+        await refused('SELECT app.lp6d_recovery_message_sink_worker($1,$2)', [outbox, 'missing'], '42501');
+      } finally { await sink.query('ROLLBACK'); sink.release(); }
+      expect(await sinkCount(view.id)).toBe(0);
+      expect(await outboxStatus(outbox)).toBe('executing');
+    });
+  });
+
+  it('refuses an actor-less worker delivery whose approved amount changed after a landing', async () => {
+    await inIsolatedWorld(async () => {
+      await activateJobForLanding();
+      const { caseId, view } = await approved('merchant_overcharge');
+      await land(caseId, 12000);
+      const outbox = view.approval!.outboxActionId;
+      const worker = await outboundWorkerPool(runtime);
+      const claimed = await worker.query("SELECT app.claim_worker_action($1,ARRAY['fake_recovery_message']) claim", [outbox]);
+      expect(claimed.rows[0].claim).toMatchObject({action:{id:outbox}});
+      await expect(worker.query("SELECT app.record_worker_recovery_message($1)", [outbox])).rejects.toMatchObject({code:"23514"});
+      expect(await sinkCount(view.id)).toBe(0);
+      expect(await outboxStatus(outbox)).toBe('executing');
+      expect(await count('SELECT count(*) n FROM app.landing_allocation WHERE case_id=$1', [caseId])).toBe(1);
+    }, 'legacy_supplier_landing');
+  });
+
   it('serializes a delivery and the approved-landing routine on the one case lock, in both orders', async () => {
     await inIsolatedWorld(async () => {
       await activateJobForLanding();
@@ -1673,6 +1741,8 @@ describe('a message states the one current case figures, approved landings inclu
       const landing = await runtime.connect();
       try {
         await landing.query('BEGIN'); await landing.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+        // LP-6d: this held-open landing transaction is the owner's own bound request.
+        await bindTestClient(admin, landing, fixture.tenantId, fixture.memberId);
         await landing.query('SELECT app.approve_synthetic_landing($1::jsonb) id', [await landingCommand(first.caseId, 12000)]);
         const running = executorWith(practiceAdapter()).execute(context, first.view.approval!.outboxActionId);
         await until(() => waitingForCaseLock(first.caseId), 'the delivery held behind the landing routine');
@@ -1684,13 +1754,14 @@ describe('a message states the one current case figures, approved landings inclu
       expect(await count('SELECT count(*) n FROM app.landing_allocation WHERE case_id=$1', [first.caseId])).toBe(1);
       // Order 2: a delivery transaction holds the case lock at the sink, so the landing routine waits and lands only after the delivery committed.
       const second = await approved('merchant_overcharge');
-      await admin.query("UPDATE app.action_outbox SET status='executing',claimed_at=clock_timestamp() WHERE id=$1", [second.view.approval!.outboxActionId]);
+      const worker = await outboundWorkerPool(runtime), secondAction = second.view.approval!.outboxActionId;
+      const claim = await worker.query("SELECT app.claim_worker_action($1,ARRAY['fake_recovery_message']) claim", [secondAction]);
+      expect(claim.rows[0].claim).toMatchObject({action:{id:secondAction}});
       const command = await landingCommand(second.caseId, 12000);
-      const sink = await runtime.connect();
+      const sink = await worker.connect();
       try {
-        await sink.query('BEGIN'); await sink.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
-        await sink.query(`INSERT INTO app.recovery_message_sink(id,tenant_id,job_id,case_id,message_id,outbox_action_id,recipient,body,content_hash,attachment_hash,provider_reference,environment,real_external_actions)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'locked','synthetic_demo',0)`, [randomUUID(), fixture.tenantId, fixture.jobId, second.caseId, second.view.id, second.view.approval!.outboxActionId, second.view.message.recipient, second.view.message.body, second.view.message.contentHash, second.view.message.attachmentHash]);
+        await sink.query('BEGIN');
+        await sink.query('SELECT app.record_worker_recovery_message($1)', [secondAction]);
         let landed = false;
         const landing2 = approveLanding(command).then(() => { landed = true; });
         await until(() => waitingForCaseLock(second.caseId), 'the landing routine held behind the delivery');

@@ -1,9 +1,13 @@
+import { closeWorkerFixtureDatabase } from "./worker-login-fixture.js";
+import { outboundWorkerPool } from "../src/worker-pool.js";
+import { WorkerActionExecutor } from "../src/worker-action-executor.js";
+import { assertV3AuditChain } from "./lp4-writer-catchup-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { authenticatePracticeSession, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID,
   issuePracticeSession, migrate, practiceMaterialPool } from "../src/index.js";
@@ -13,8 +17,10 @@ import { PurchaseOrderApplication } from "../../../apps/api/src/purchase-order.a
 import { PurchaseOrderActionRepository } from "../src/purchase-order-action-repository.js";
 import { FakeMerchantOrderPort } from "../src/purchase-order-action.js";
 import { ActionExecutor, operateOutbox } from "../src/outbox.js";
-import { withTenant } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindIssuedCredential, withTenant } from "../src/tenant-context.js";
+import { verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/tenant-context.js";
+import { rolledBack } from "./upgrade-proof-utils.js";
+import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 import type { WorkFixture } from "./job-work-state-fixtures.js";
 import { MaterialRepository } from "../src/material-repository.js";
@@ -37,7 +43,8 @@ beforeAll(async () => {
   // migration through the normal runner. Fresh install is covered by tenancy's runner.
   await migrate({ query: async (sql: string, values?: unknown[]) => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
-      && ["_dark_merchant_order.sql", "_order_attestation_session.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+      && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
+        "_lp11_bound_tenant_rls.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -300,10 +307,11 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
       action: { ...f.approved.action, contentHash: preview.contentHash } })).rejects.toThrow("AUTHORIZATION_INVALID");
     expect(await effects(f.auth.context.tenantId)).toEqual(before);
     const valid = await f.repo.approve(f.auth.context, f.scope, f.approved);
+    await assertV3AuditChain(admin, f.auth.context.tenantId);
     expect(valid).toMatchObject({ environment: "synthetic_demo", realExternalActions: 0 });
-    expect((await admin.query(`SELECT version,payload->'references'->>'auditTrust' trust FROM app.audit_event
+    expect((await admin.query(`SELECT version,actor_ref,payload->'references'->>'auditActorKind' actor_kind,payload->'references'->>'auditTrust' trust FROM app.audit_event
       WHERE tenant_id=$1 AND event_type='command.succeeded' AND payload->'references'->>'commandId'=$2`,
-      [f.auth.context.tenantId, f.approved.commandId])).rows).toEqual([{ version: "audit.v2", trust: "checked_operation" }]);
+      [f.auth.context.tenantId, f.approved.commandId])).rows).toEqual([{ version: "audit.v3", actor_ref: `membership:${f.approved.actorMembershipId}`, actor_kind: "bound_member", trust: "checked_operation" }]);
   });
   it("changed quantity cancels the queued old authority before any fake delivery", async () => {
     const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);
@@ -331,7 +339,7 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fictional.invalid`,user]);
     await admin.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
       VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 hour')`, [randomUUID(),user,digest,randomUUID()]);
-    return { actor, digest };
+    return { actor, digest, context: verifiedTenantContextFromMembership({ tenantId, membershipId: actor, identityUserId: user } as AuthenticatedMembership, { kind: "real", credential: digest }) };
   }
   it("the session alone supplies the recorded actor, including another owner's session and replay conflicts", async () => {
     const f = await darkFixture(), other = await sessionFor(f);
@@ -339,13 +347,42 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await expect(f.repo.attestManual(f.auth.context, f.manual,
       { sessionDigest: f.auth.digest, actorMembershipId: other.actor })).rejects.toThrow();
     expect(await effects(f.auth.context.tenantId)).toEqual(before);
-    const fact = await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: other.digest });
+    // ORDER_OTHER_OWNER_BINDING: bind the very session whose actor must be recorded.
+    const fact = await f.repo.attestManual(other.context, f.manual, { sessionDigest: other.digest });
     expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE id=$1", [fact.attestationId])).rows)
       .toEqual([{ actor_membership_id: other.actor }]);
     expect((await admin.query("SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='purchase_order.manual_attested'", [f.auth.context.tenantId])).rows)
       .toEqual([{ actor_ref: `membership:${other.actor}` }]);
     await expect(f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest })).rejects.toThrow("IDEMPOTENCY_CONFLICT");
-    expect(await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: other.digest })).toEqual(fact);
+    expect(await f.repo.attestManual(other.context, f.manual, { sessionDigest: other.digest })).toEqual(fact);
+  });
+
+  it.each(["revoked", "expired", "forged"])("%s practice digest refuses with no attestation or audit", async boundary => {
+    const f = await fixture(), revision = await f.orders.revise(f.job, f.input);
+    // Keep the real material scope, so RLS cannot mask a missing actor digest check.
+    const pool = practiceMaterialPool(runtime, f.auth.digest), repo = new PurchaseOrderActionRepository(pool);
+    const manual = { version: "manual-order-attestation.v1", jobId: f.job, revisionId: revision.id,
+      commandId: randomUUID(), supplierReference: `synthetic-${randomUUID()}` };
+    expect((await repo.preview(f.auth.context, { version: "merchant-order-scope.v1", jobId: f.job, revisionId: revision.id })).order.revisionId)
+      .toBe(revision.id);
+    const token = boundary === "forged" ? randomUUID() : f.token;
+    const digest = createHash("sha256").update(token).digest("hex");
+    if (boundary === "revoked") await admin.query("UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [digest]);
+    if (boundary === "expired") await admin.query("UPDATE control_plane.practice_session SET expires_at=clock_timestamp()-interval '1 second' WHERE token_digest=$1", [digest]);
+    const before = await effects();
+    await expect(repo.attestManual(f.auth.context, manual, { sessionDigest: digest })).rejects.toThrow("ORDER_ACTION_INVALID");
+    expect(await effects()).toEqual(before);
+    // Bypass TypeScript validation too: the practice bridge must not resolve an actor. Since LP-6b a revoked or
+    // expired session is already refused when the request is bound, before the bridge runs.
+    const bridge = withTenant(pool, f.auth.context, db => db.$client.query(
+      "SELECT * FROM app.authenticate_practice_session($1,$2)", [digest, f.auth.context.tenantId]));
+    if (boundary === "forged") expect((await bridge).rows).toEqual([]);
+    else await expect(bridge).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await effects()).toEqual(before);
+    const { jobId: _jobId, ...request } = manual;
+    await expect(new MerchantOrderApplication(runtime, token).execute(f.job,
+      { ...request, version: "merchant-order-screen.v1", kind: "manual" })).rejects.toThrow("UNAUTHENTICATED");
+    expect(await effects()).toEqual(before);
   });
   it.each(["revoked_session", "expired_session", "revoked_owner", "expired_owner", "admin", "finance", "foreign", "missing", "malformed"])("%s refuses with no attestation or audit", async boundary => {
     const f = await darkFixture(), other = await sessionFor(f, ["admin","finance"].includes(boundary) ? boundary : "owner");
@@ -373,15 +410,16 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
   });
   it("a transient database check failure leaves the order pending without an audit outcome", async () => {
     const f = await darkFixture(), queued = await f.repo.approve(f.auth.context, f.scope, f.approved);
+    const workerPool = await outboundWorkerPool(runtime);
     const pool = { connect: async () => {
-      const client = await runtime.connect();
+      const client = await workerPool.connect();
       return { release: () => client.release(), query: (sql: string, values?: unknown[]) => {
-        if (sql.includes("SELECT app.require_watchdog_live")) throw new Error("synthetic connection failure");
+        if (sql.includes("SELECT app.claim_worker_action")) throw new Error("synthetic connection failure");
         return client.query(sql,values);
       } };
     } } as unknown as Pool;
     const before = await effects(f.auth.context.tenantId);
-    await expect(new ActionExecutor(pool,new Map([[f.port.name,f.port]]),{emit(){}}).execute(f.auth.context,queued.outboxActionId))
+    await expect(new WorkerActionExecutor(pool,new Map([[f.port.name,f.port]]),{emit(){}}).execute(queued.outboxActionId))
       .rejects.toThrow("synthetic connection failure");
     expect((await admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [queued.outboxActionId])).rows).toEqual([{status:"pending"}]);
     expect(await effects(f.auth.context.tenantId)).toEqual(before);
@@ -438,7 +476,7 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await admin.query(`INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at)
       SELECT $1,user_id,'synthetic_demo',$2,$3,clock_timestamp()+interval '1 hour'
       FROM identity.session WHERE token_digest=$4`, [randomUUID(),nextDigest,randomUUID(),f.auth.digest]);
-    expect(await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: nextDigest })).toEqual(fact);
+    expect(await f.repo.attestManual(await testBoundTenantContext(admin,f.auth.context.tenantId,f.auth.membershipId,nextDigest), f.manual, { sessionDigest: nextDigest })).toEqual(fact);
     expect((await effects(f.auth.context.tenantId)).purchase_order_manual_attestation).toBe(before.purchase_order_manual_attestation! + 1);
     expect((await effects(f.auth.context.tenantId)).audit_event).toBe(before.audit_event! + 1);
     expect(await f.repo.attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest })).toEqual(fact);
@@ -474,4 +512,70 @@ describe("M2-1 dark approved merchant action on PostgreSQL", () => {
     await expect(operateOutbox(runtime, f.auth.context, queued.outboxActionId, "retry", true)).rejects.toThrow("UNSAFE_OUTBOX_COMMAND");
     expect(f.port.placedCount).toBe(0);
   });
+});
+
+// Use a template copy of fully migrated fictional data, as in the mandate gate
+// suite. The database name, rather than a caller-controlled mode, is the boundary.
+it("refuses direct manual attestations outside the demo database; dropping the gate admits the same insert", async () => {
+  const f = await darkFixture();
+  const id = randomUUID(), commandId = randomUUID();
+  const insert = async (db: Pick<PoolClient, "query">) => {
+    await db.query(`INSERT INTO app.watchdog_command_identity(tenant_id,command_id,job_id,command_type,request_hash)
+      VALUES($1,$2,$3,'purchase_order.attest_manual',$4)`, [f.auth.context.tenantId, commandId, f.job, "a".repeat(64)]);
+    expect((await db.query("SELECT app.current_tenant() tenant")).rows).toEqual([{ tenant:f.auth.context.tenantId }]);
+    return db.query(`INSERT INTO app.purchase_order_manual_attestation(id,tenant_id,job_id,draft_id,revision_id,
+      merchant_id,actor_membership_id,command_id,supplier_reference_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [id, f.auth.context.tenantId, f.job, f.preview.order.draftId, f.revision.id,
+        f.preview.order.merchantId, f.auth.membershipId, commandId, "b".repeat(64)]);
+  };
+  const { host, port, password } = (admin as unknown as { options: { host: string; port: number; password: string } }).options;
+  const base = { host, port, password };
+  await closeWorkerFixtureDatabase(admin);
+  await closeTestPools(runtime, admin);
+  const control = new Pool({ ...base, user: "postgres", database: "postgres", max: 1 });
+  try { await control.query("CREATE DATABASE jobguard_order_attestation_outside TEMPLATE jobguard_synthetic_demo"); }
+  finally {
+    await control.end();
+    admin = new Pool({ ...base, user: "postgres", database: "jobguard_synthetic_demo" });
+    runtime = new Pool({ ...base, user: "jobguard_runtime", database: "jobguard_synthetic_demo", max: 5 });
+  }
+  const outside = new Pool({ ...base, user: "postgres", database: "jobguard_order_attestation_outside", max: 1 });
+  const outsideRuntime = new Pool({ ...base, user: "jobguard_runtime", database: "jobguard_order_attestation_outside", max: 1 });
+  const counts = async () => (await outside.query(`SELECT
+    (SELECT count(*) FROM app.purchase_order_manual_attestation)::int attestations,
+    (SELECT count(*) FROM app.watchdog_command_identity)::int commands`)).rows;
+  try {
+    expect((await outside.query("SELECT current_database() name")).rows[0].name).toBe("jobguard_order_attestation_outside");
+    const context = await testBoundTenantContext(outside, f.auth.context.tenantId, f.auth.membershipId);
+    const before = await counts();
+    await expect(withTenant(outsideRuntime, context, db => insert(db.$client)))
+      .rejects.toMatchObject({ message: "MODE_FORBIDDEN", code: "42501" });
+    expect(await counts()).toEqual(before);
+    expect((await outside.query("SELECT id FROM app.purchase_order_manual_attestation WHERE id=$1", [id])).rows).toEqual([]);
+
+    // Scratch mutation: the exact insert succeeds without this trigger. Rollback
+    // restores both the trigger and every inserted row even if an assertion fails.
+    await rolledBack(outside, async db => {
+      await db.query("DROP TRIGGER a_manual_attestation_synthetic ON app.purchase_order_manual_attestation");
+      await db.query("SET LOCAL ROLE jobguard_runtime");
+      await bindIssuedCredential(db, context);
+      expect((await db.query("SELECT app.lp11_policy_tenant() tenant")).rows).toEqual([{ tenant:f.auth.context.tenantId }]);
+      expect((await db.query(`SELECT roles::text[],qual,with_check FROM pg_policies
+        WHERE schemaname='app' AND tablename='purchase_order_manual_attestation'`)).rows).toEqual([{
+        roles:["jobguard_runtime"],
+        qual:"(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+        with_check:"(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+      }]);
+      expect((await insert(db)).rows).toEqual([{ id }]);
+    });
+    expect(await counts()).toEqual(before);
+    await expect(withTenant(outsideRuntime, context, db => insert(db.$client)))
+      .rejects.toMatchObject({ message: "MODE_FORBIDDEN", code: "42501" });
+    expect(await counts()).toEqual(before);
+  } finally { await closeTestPools(outsideRuntime, outside); }
+
+  // The normal session-bound repository still attests in the synthetic database.
+  const fact = await new PurchaseOrderActionRepository(runtime).attestManual(f.auth.context, f.manual, { sessionDigest: f.auth.digest });
+  expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE id=$1", [fact.attestationId])).rows)
+    .toEqual([{ actor_membership_id: f.auth.membershipId }]);
 });

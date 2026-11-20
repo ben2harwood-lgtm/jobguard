@@ -26,10 +26,10 @@ test("MON1-J: Builder's five distinct started jobs show the next job included af
  const runtime=new Pool({connectionString:E2E_RUNTIME_URL,max:1});
  const f={admin,runtime} as WorkFixture;
  try {
-  const a=await meterCompany(f), token=randomUUID();
+  const token = randomUUID();
   const digest=createHmac("sha256","sbox-only-identity-hmac-secret-32-bytes").update(`session:${token}`).digest("hex");
-  await admin.query("UPDATE identity.session SET token_digest=$1 WHERE id=$2",[digest,a.sessionId]);
-  await historicalAgreement(f,{...a,digest},"Builder");
+  const a = await meterCompany(f, undefined, digest);
+  await historicalAgreement(f,a,"Builder");
   await activateMeterJob(f,a);
   await context.addCookies([{name:"jobguard_session",value:token,url:"http://127.0.0.1:3000"}]);
   await expectMeter(page,"0 of 7 jobs on the go","Next job included");
@@ -41,7 +41,7 @@ test("MON1-J: Builder's five distinct started jobs show the next job included af
   // Another company's reference must never appear in this company list.
   const other = await meterCompany(f);
   await historicalAgreement(f, other, "Builder"); await activateMeterJob(f, other); await insertPhoto(f, other, "now");
-  await page.goto("/");
+  await page.goto("/classic");
   const line = page.getByTestId("jobs-on-the-go-line");
   await expect(line).toHaveText("5 of 7 jobs on the go");
   await expect(line.locator("..")).toContainText("Next job included");
@@ -55,7 +55,7 @@ test("MON1-J: Builder's five distinct started jobs show the next job included af
   await expectMeter(page,"5 of 7 jobs on the go","Next job included");
   // Authenticated read failure leaves the rest of the home page usable.
   await page.route("**/api/meter/current", route => route.fulfill({ status: 503, json: { code: "METER_UNAVAILABLE" } }));
-  await page.goto("/");
+  await page.goto("/classic");
   await expect(page.getByTestId("jobs-on-the-go-line")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Start the demo", exact: true })).toBeVisible();
  } finally { await runtime.end(); await admin.end(); }
@@ -66,10 +66,10 @@ test("MON1-J: real starts, finish tail, London stop, restart, Solo grace and cap
  const runtime=new Pool({connectionString:E2E_RUNTIME_URL,max:1});
  const f={admin,runtime} as WorkFixture;
  try {
-  const a=await meterCompany(f), token=randomUUID();
+  const token = randomUUID();
   const digest=createHmac("sha256","sbox-only-identity-hmac-secret-32-bytes").update(`session:${token}`).digest("hex");
-  await admin.query("UPDATE identity.session SET token_digest=$1 WHERE id=$2",[digest,a.sessionId]);
-  await historicalAgreement(f,{...a,digest},"Solo"); await activateMeterJob(f,a);
+  const a = await meterCompany(f, undefined, digest);
+  await historicalAgreement(f,a,"Solo"); await activateMeterJob(f,a);
   await context.addCookies([{name:"jobguard_session",value:token,url:"http://127.0.0.1:3000"}]);
   const count=(n:number)=>expectMeter(page,`${n} of 4 jobs on the go`,
    n===6 ? "Further places need a move to Builder." : undefined,
@@ -137,7 +137,7 @@ test("MON1-J: real starts, finish tail, London stop, restart, Solo grace and cap
 
 test("MON1-J: practice and failed meter reads leave the jobs page usable without a figure", async ({ page }) => {
  await page.request.post("/api/session");
- await page.goto("/");
+ await page.goto("/classic");
  await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible();
  await expect(page.getByTestId("jobs-on-the-go-line")).toHaveCount(0);
  await page.route("**/api/meter/current", route => route.fulfill({ status: 503, json: { code: "METER_UNAVAILABLE" } }));

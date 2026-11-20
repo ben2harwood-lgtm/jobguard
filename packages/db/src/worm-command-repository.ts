@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { WormBoundaryError, type WormStorage, type TimestampResult, type TimestampRequest } from "@jobguard/storage";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -54,14 +55,22 @@ export class WormCommandRepository {
     private readonly executorPool?: Pool, private readonly operatorPool?: Pool,
     private readonly sessionDigest = "") {}
   private async transaction<T>(pool: Pool, context: VerifiedTenantContext,
-    work: (db: TenantTransaction) => Promise<T>): Promise<T> {
+    work: (db: TenantTransaction) => Promise<T>, scope?: { operation: "execute" | "recover" | "alerts"; commandId: string | null }): Promise<T> {
     let rejected: WormCommandError | undefined;
+    let entered = false;
     try {
       return await withTenant(pool, context, async db => {
-        try { return await work(db); }
+        entered = true;
+        try {
+          if (scope) await db.$client.query("SELECT worm_control.lp11_bind_worm_scope($1,$2,$3)",
+            [context.tenantId, scope.commandId, scope.operation]);
+          return await work(db);
+        }
         catch (error) { rejected = refusal(error); throw rejected; }
       });
     } catch (error) {
+      // The protected binder may refuse before the callback (including revoked replay).
+      if (!entered && error instanceof RequestBindingRefusedError) throw new WormCommandError("WORM_REFUSED");
       // BEGIN/connect, COMMIT, rollback and release failures cannot prove refusal.
       if (rejected && error === rejected) throw rejected;
       throw new WormCommandError("WORM_UNCONFIRMED");
@@ -115,7 +124,8 @@ export class WormCommandRepository {
     this.requireDark();
     if (!this.operatorPool) throw new WormCommandError("WORM_REFUSED");
     return this.transaction(this.operatorPool, context, async db =>
-      (await db.$client.query<WormOperatorAlert>("SELECT * FROM worm_control.worm_operator_alerts()")).rows
+      (await db.$client.query<WormOperatorAlert>("SELECT * FROM worm_control.worm_operator_alerts()")).rows,
+      { operation: "alerts", commandId: null },
     );
   }
 
@@ -154,7 +164,7 @@ export class WormCommandRepository {
       const c = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_claim($1)", [commandId])).rows[0]!;
       const claimed = !!prior && ["queued", "pending"].includes(prior.status) && c.status === "executing";
       return { c, claimed };
-    });
+    }, { operation: "execute", commandId });
     if (!claim.claimed) return claim.c;
     const { c } = claim;
     const target = { tenantId: context.tenantId, key: c.object_key, versionId: c.object_version_id };
@@ -184,7 +194,7 @@ export class WormCommandRepository {
         [commandId, c.attempts, status, JSON.stringify(material)])).rows[0]!;
       // worm_finish appends its restricted audit event atomically.
       return finished;
-    });
+    }, { operation: "execute", commandId });
   }
 
   /** Operator reconciliation only: exact-version reads, never a storage mutation or retry.
@@ -198,7 +208,8 @@ export class WormCommandRepository {
     if (!this.operatorPool) throw new WormCommandError("WORM_REFUSED");
     const { commandId } = parsed.data;
     const c = await this.transaction(this.operatorPool, context, async db =>
-      (await db.$client.query<WormReceipt>("SELECT * FROM worm_control.worm_recovery_target($1)", [commandId])).rows[0]!
+      (await db.$client.query<WormReceipt>("SELECT * FROM worm_control.worm_recovery_target($1)", [commandId])).rows[0]!,
+      { operation: "recover", commandId },
     );
     if (c.status === "applied") return c;
     let observed: boolean | null = null;
@@ -214,7 +225,7 @@ export class WormCommandRepository {
         [commandId, c.attempts, observed])).rows[0]!;
       // The restricted SQL routine appends the audit event in this transaction.
       return finished;
-    });
+    }, { operation: "recover", commandId });
   }
 
   /** No policy inferred from hold release; D07 has not approved expiry or deletion. */

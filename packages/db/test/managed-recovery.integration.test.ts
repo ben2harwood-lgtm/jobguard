@@ -1,3 +1,5 @@
+import { assertV3AuditChain } from "./lp4-writer-catchup-fixture.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 // Real PostgreSQL regressions, executed in CI; builder sandbox cannot bind localhost.
 import { createHash, randomUUID } from "node:crypto";
 import { electManagedRecovery } from "@jobguard/core";
@@ -33,8 +35,9 @@ it("persists the exact election; concurrent replays produce one authorization an
  const preview=await repo().preview(f.context,f.job,id,f.actor);
  expect(preview.serviceChargeInvoice?.points).toBe(5);
  expect(preview.serviceChargeInvoice?.electionHash).toBe(results[0]!.election!.bindingHash);
- const audit=(await c.admin.query("SELECT version,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='managed_recovery.elected'",[f.tenant,id])).rows;
- expect(audit).toEqual([{version:'audit.v2',payload:{references:{jobId:f.job,commandId:input.commandId,auditTrust:'checked_operation'},
+ const audit=(await c.admin.query("SELECT version,actor_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='managed_recovery.elected'",[f.tenant,id])).rows;
+ await assertV3AuditChain(c.admin, f.tenant);
+ expect(audit).toEqual([{version:'audit.v3',actor_ref:`membership:${f.actor.membershipId}`,payload:{references:{jobId:f.job,commandId:input.commandId,auditTrust:'checked_operation',auditActorKind:'bound_member',auditActorRef:`membership:${f.actor.membershipId}`},
   hashes:{election:results[0]!.election!.bindingHash},classifications:{action:'commercial'}}}]);
 });
 it("no election means no service-charge document, and the success fee stays identical", async () => {
@@ -78,6 +81,7 @@ it("pursuit before opt-in is permanently refused, including races; a replay rema
  const id = await newCase(c,f), db = await c.runtime.connect();
  try {
   await db.query('BEGIN'); await db.query("SELECT set_config('app.tenant_id',$1,true)",[f.tenant]);
+  await db.query("SELECT app.bind_request('real',$1,$2)",[f.sessionDigest,f.tenant]);
   await start(c,f,id,db);
   expect((await db.query('SELECT count(*)::int n FROM app.managed_recovery_pursuit WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows).toEqual([{n:1}]);
   const pending = repo().elect(f.context,f.job,command(id),f.actor);
@@ -184,12 +188,14 @@ it('persists the solicitor-letter election separately at ten points',async()=>{
  expect(preview.serviceChargeInvoice).toMatchObject({service:'solicitor_letter',points:10,principal:{pence:3200,currency:'GBP'}});
 });
 
+// Raw direct SQL, class (a): a missing, malformed, forged or other owner's session digest names a session this
+// request is not bound to, so the binding check refuses first (42501); the counts assert nothing was written.
 it.each([null, '', 'invalid', '0'.repeat(64)])('direct election refuses supplied actor without valid session (%s)', async digest => {
  const id=await newCase(c,f),before=await counts(c);
  await expect(withTenant(c.runtime,f.context,db=>db.$client.query(
   'SELECT app.mon9_elect($1::text,$2,$3,$4,$5,$6,$7,5,$8)',
   [digest,f.job,id,f.actor.membershipId,randomUUID(),randomUUID(),'drafted_for_you',command(id).termsVersion]
- ))).rejects.toMatchObject({code:'42501',message:'MANAGED_RECOVERY_FORBIDDEN'});
+ ))).rejects.toMatchObject({code:'42501',message:'REQUEST_BINDING_REFUSED'});
  expect(await counts(c)).toEqual(before);
 });
 it('direct election refuses an owner mismatched to the session without a preceding repository check', async()=>{
@@ -197,7 +203,7 @@ it('direct election refuses an owner mismatched to the session without a precedi
  await expect(withTenant(c.runtime,f.context,db=>db.$client.query(
   'SELECT app.mon9_elect($1::text,$2,$3,$4,$5,$6,$7,5,$8)',
   [other.sessionDigest,f.job,id,f.actor.membershipId,randomUUID(),randomUUID(),'drafted_for_you',command(id).termsVersion]
- ))).rejects.toMatchObject({code:'42501',message:'MANAGED_RECOVERY_FORBIDDEN'});
+ ))).rejects.toMatchObject({code:'42501',message:'REQUEST_BINDING_REFUSED'});
  expect(await counts(c)).toEqual(before);
 });
 
@@ -206,7 +212,9 @@ it('requires session ownership even with a matching processing receipt and appro
  const h=createHash('sha256').update(['managed-recovery-election-command.v1',f.job,id,
   input.selection.service,input.selection.points,input.termsVersion].join('\n')).digest('hex');
  let elected: Record<string,unknown> | undefined;
- const completed=await new UserCommandDispatcher(c.admin).dispatch(f.context,{
+ // LP-6d: the command runs in the owner's own request for the very session it names, so mon9_session's own
+// binding agrees and only the credential each probe supplies changes.
+ const completed=await new UserCommandDispatcher(c.admin).dispatch(await testBoundTenantContext(c.admin,f.tenant,f.actor.membershipId,f.sessionDigest),{
   version:'command.v1',commandId:input.commandId,commandType:'managed_recovery.elect',
   semanticKey:`managed-recovery:${f.job}:${id}`,actorMembershipId:f.actor.membershipId,
   subjectType:'recovery_case',subjectRef:id,
@@ -219,7 +227,8 @@ it('requires session ownership even with a matching processing receipt and appro
   // Same valid receipt/approval for every attempt: only the credential changes.
   for(const digest of [null,'0'.repeat(64),other.sessionDigest]){
    await db.$client.query('SAVEPOINT bad_session');
-   await expect(call(digest)).rejects.toMatchObject({code:'42501',message:'MANAGED_RECOVERY_FORBIDDEN'});
+   // Raw direct SQL, class (a): a credential this request is not bound to is refused by the binding check first.
+   await expect(call(digest)).rejects.toMatchObject({code:'42501',message:'REQUEST_BINDING_REFUSED'});
    await db.$client.query('ROLLBACK TO SAVEPOINT bad_session');
    await db.$client.query('RELEASE SAVEPOINT bad_session');
   }

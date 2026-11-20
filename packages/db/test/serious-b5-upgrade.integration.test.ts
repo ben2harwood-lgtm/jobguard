@@ -1,6 +1,7 @@
-import { lp5ReadTables, lp5bReadTables, lp5RegistryRows, lp5Signatures, lp5bRoutines, lp5bReadViews } from "./lp5-command-catalog.js";
+import { lp5ReadTables, lp5bReadTables, lp5RegistryRows, abandonedSiteVisitRegistryRow, lp5Signatures, lp5bRoutines, lp5bReadViews } from "./lp5-command-catalog.js";
 import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 import { catalogueAdditions } from "./upgrade-proof-utils.js";
+import { lp11EmptyTables } from "./later-empty-tables.js";
 // Dispatcher/CI only: upgrade/data/catalogue evidence requires real PostgreSQL.
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -423,8 +424,7 @@ async function withMon8Additions(before: Awaited<ReturnType<typeof snapshot>>) {
   const acl=(await f.admin.query("SELECT $1::aclitem[]::text[] acl",[row.proacl])).rows[0].acl;
   expect(acl).toEqual(name==="mon8_company_feature" ? ["jobguard_migration=X/jobguard_migration","jobguard_runtime=X/jobguard_migration"] : ["jobguard_migration=X/jobguard_migration"]);
  }
- const position=(r:typeof additions[number])=>after.routines.findIndex(x=>JSON.stringify(x)===JSON.stringify(r));
- return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
+ return {...before,routines:catalogueAdditions(before.routines, additions, after.routines)};
 }
 // Standing ruling 113: additive expectations for ENT-10-OIDC-B objects only.
 async function withOidcAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -536,12 +536,7 @@ async function contractorAgreementAdditions(before: Awaited<ReturnType<typeof sn
  expect(Object.keys(before.rows)).not.toContain(`app.${table}`);
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname)).toBe(false);
  for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
- const additive = <T>(old: T[], added: T[], live: T[]): T[] => {
-  // Earlier additions were inserted using the final catalogue's positions. Order
-  // the complete expected set at those positions, retaining every prior value.
-  const position = (row: T) => live.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
-  return [...old, ...added].sort((a, b) => position(a) - position(b));
- };
+ const additive = catalogueAdditions;
  return { rows: { ...before.rows, [`app.${table}`]: [] }, routines: additive(before.routines, routines, after.routines),
   relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
 }
@@ -575,7 +570,7 @@ async function attributionAdditions(before: Awaited<ReturnType<typeof snapshot>>
  for(const t of tables)expect(Object.keys(before.rows)).not.toContain('app.'+t);
  for(const r of relations)expect(before.relations.some(b=>b.nspname===r.nspname&&b.relname===r.relname)).toBe(false);
  for(const r of routines)expect(before.routines.some(b=>b.nspname===r.nspname&&b.proname===r.proname&&b.args===r.args)).toBe(false);
- const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ const additive = catalogueAdditions;
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>['app.'+t,[]]))},
   routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
@@ -598,10 +593,7 @@ async function separableFinalCheckAdditions(prior: Awaited<ReturnType<typeof sna
  const policies = after.policies.filter(p => p.schemaname === "app" && tables.includes(p.tablename));
  expect(policies.map(p => [p.tablename, p.policyname]).sort()).toEqual(tables.map(t => [t, "tenant_isolation"]).sort());
  for (const table of tables) expect(Object.keys(prior.rows)).not.toContain(`app.${table}`);
- const additive = <T>(old: T[], added: T[], live: T[]): T[] => {
-  const position = (row: T) => live.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
-  return [...old, ...added].sort((a, b) => position(a) - position(b));
- };
+ const additive = catalogueAdditions;
  return { rows: { ...prior.rows, ...Object.fromEntries(tables.map(t => [`app.${t}`, []])) }, routines: additive(prior.routines, routines, after.routines),
   relations: additive(prior.relations, relations, after.relations), policies: additive(prior.policies, policies, after.policies) };
 }
@@ -622,8 +614,7 @@ async function workStateCommandAdditions(before: Awaited<ReturnType<typeof snaps
  const routines = after.routines.filter(r => r.nspname === "app" && identities.some(([name, args]) => r.proname === name && r.args === args));
  expect(routines.map(r => [r.proname, r.args])).toEqual(identities);
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
- const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+ return { ...before, routines: catalogueAdditions(before.routines, routines, after.routines) };
 }
 // SV-7A (0303): only the intake and authorized SHARE-lock routines, migration-owned, definer, runtime EXECUTE only.
 async function sourceIntakeAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -633,8 +624,7 @@ async function sourceIntakeAdditions(before: Awaited<ReturnType<typeof snapshot>
  expect(routines.map(r => [r.proname, r.args])).toEqual(identities);
  for (const r of routines) expect(r).toMatchObject({ prosecdef: true, proacl: "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}", proconfig: ["search_path=pg_catalog"] });
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
- const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+ return { ...before, routines: catalogueAdditions(before.routines, routines, after.routines) };
 }
 // Dispatcher-assigned catalogue rows: only objects created by 0208.
 async function smallTripAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -656,10 +646,7 @@ async function smallTripAdditions(before: Awaited<ReturnType<typeof snapshot>>) 
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
  for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
  for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
- const additive = <T>(old: T[], added: T[], live: T[]): T[] => {
-  const position = (row: T) => live.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
-  return [...old, ...added].sort((a, b) => position(a) - position(b));
- };
+ const additive = catalogueAdditions;
  return { rows: { ...before.rows, ...Object.fromEntries(tables.map(t => [`app.${t}`, []])) },
   routines: additive(before.routines, routines, after.routines),
   relations: additive(before.relations, relations, after.relations), policies: additive(before.policies, policies, after.policies) };
@@ -760,10 +747,7 @@ async function lifecycleSourceAdditions(before: Awaited<ReturnType<typeof snapsh
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
  for (const r of relations) expect(before.relations.some(b => b.nspname === r.nspname && b.relname === r.relname)).toBe(false);
  for (const p of policies) expect(before.policies.some(b => b.schemaname === p.schemaname && b.tablename === p.tablename && b.policyname === p.policyname)).toBe(false);
- const additive = <T>(old: T[], added: T[], live: T[]): T[] => {
-  const position = (row: T) => live.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
-  return [...old, ...added].sort((a, b) => position(a) - position(b));
- };
+ const additive = catalogueAdditions;
  return { rows: { ...before.rows, ...Object.fromEntries(tables.map(t => [`app.${t}`, []])) },
   routines: additive(expectedRoutines, routines, after.routines),
   relations: additive(expectedRelations, relations, after.relations), policies: additive(before.policies, [...policies, ...newSourcePolicies], after.policies) };
@@ -783,8 +767,7 @@ async function placeAdmissionAdditions(before: Awaited<ReturnType<typeof snapsho
   const acl = (await f.admin.query("SELECT $1::aclitem[]::text[] acl", [r.proacl])).rows[0].acl;
   expect(acl).toEqual(["jobguard_migration=X/jobguard_migration"]);
  }
- const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+ return { ...before, routines: catalogueAdditions(before.routines, routines, after.routines) };
 }
 // Dispatcher-assigned catalogue row: 0361 creates only this private refusal routine.
 async function jobImportV3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -801,8 +784,7 @@ async function jobImportV3Additions(before: Awaited<ReturnType<typeof snapshot>>
   const acl = (await f.admin.query("SELECT $1::aclitem[]::text[] acl", [r.proacl])).rows[0].acl;
   expect(acl).toEqual(["jobguard_migration=X/jobguard_migration"]);
  }
- const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+ return { ...before, routines: catalogueAdditions(before.routines, routines, after.routines) };
 }
 // Standing ruling 113: only this exact new read-only signature extends the snapshot.
 async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -815,8 +797,7 @@ async function with0200Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  ARRAY(SELECT CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee)::text END FROM aclexplode(p.proacl) a WHERE privilege_type='EXECUTE' ORDER BY 1) executors
  FROM pg_proc p WHERE p.oid='app.mon8_retained_contractor_workspace(uuid,jsonb)'::regprocedure`)).rows;
  expect(grants).toEqual([{owner:"jobguard_migration",executors:["jobguard_migration","jobguard_runtime"]}]);
- const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
- return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
+ return {...before,routines:catalogueAdditions(before.routines, additions, after.routines)};
 }
 // C248/C249: one added guard; C238 retains its exact identity and privileges.
 // SV-5 catch/readers (0281–0283, 0295): five catch routines and the private practice-source predicate;
@@ -841,8 +822,7 @@ async function catchAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
   FROM pg_proc p WHERE p.oid='app.final_check_practice_source_current(app.final_check_processing_source)'::regprocedure`)).rows;
  expect(helperAcl).toEqual([{owner:"jobguard_migration",executors:["jobguard_migration"]}]);
  for (const r of routines) expect(before.routines.some(b => b.nspname === r.nspname && b.proname === r.proname && b.args === r.args)).toBe(false);
- const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+ return { ...before, routines: catalogueAdditions(before.routines, routines, after.routines) };
 }
 // DEMO-I: exactly the private lifecycle objects installed by 0313; no extra grants.
 async function demoRunAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -875,7 +855,7 @@ async function demoRunAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  for(const t of tables)expect(Object.keys(before.rows)).not.toContain(`app.${t}`);
  for(const r of relations)expect(before.relations.some(b=>b.nspname===r.nspname&&b.relname===r.relname)).toBe(false);
  for(const r of routines)expect(before.routines.some(b=>b.nspname===r.nspname&&b.proname===r.proname&&b.args===r.args)).toBe(false);
- const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ const additive = catalogueAdditions;
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},
   routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
@@ -900,7 +880,7 @@ async function keyRegistryAdditions(before: Awaited<ReturnType<typeof snapshot>>
  expect(tableAcl).toEqual([...tables].sort().map(relname=>({relname,owner:"jobguard_migration",relrowsecurity:true,relforcerowsecurity:true,non_owner_grants:false})));
  const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
  expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"tenant_scope"]).sort());
- const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ const additive = catalogueAdditions;
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},
  routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
@@ -920,8 +900,7 @@ async function with0245Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  const restated=(rows:typeof before.routines)=>rows.filter(r=>r.nspname==='app' && r.proname==='serialize_final_check_evidence' && r.args==='');
  expect(restated(before.routines)).toHaveLength(1);
  expect(restated(after.routines)).toEqual(restated(before.routines));
- const position=(row:unknown)=>after.routines.findIndex(r=>JSON.stringify(r)===JSON.stringify(row));
- return {...before,routines:[...before.routines,...additions].sort((a,b)=>position(a)-position(b))};
+ return {...before,routines:catalogueAdditions(before.routines, additions, after.routines)};
 }
 // MON-1 0380: enumerate only its committed projection, policy and seven routines.
 // Every predecessor row, privilege, routine posture and policy stays compared.
@@ -962,7 +941,7 @@ async function workAdmissionAdditions(before: Awaited<ReturnType<typeof snapshot
  expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policies[0]!.roles])).rows[0].roles).toEqual(['jobguard_migration']);
  expect(policies[0]!.qual).toBe(policies[0]!.with_check);
  expect(policies[0]!.qual).toContain("current_setting('app.tenant_id'");
- const append=<T>(old:T[],added:T[],actual:T[])=>[...old,...added].sort((a,b)=>actual.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-actual.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ const append = catalogueAdditions;
  return {rows:{...before.rows,'app.meter_work_ledger':[]},routines:append(before.routines,routines,after.routines),relations:append(before.relations,relations,after.relations),policies:append(before.policies,policies,after.policies)};
 }
 // CH-5 / 0362: exactly one immutable import aggregate, its policy and checked writer.
@@ -1028,7 +1007,7 @@ async function storedReceiptCaseAdditions(before: Awaited<ReturnType<typeof snap
  for(const policy of policies) expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policy.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
  const guards=(await f.admin.query("SELECT tgname,tgenabled FROM pg_trigger WHERE tgrelid='app.recovery_case_allocation'::regclass AND tgfoid='app.guard_legacy_stored_receipt_cash()'::regprocedure")).rows;
  expect(guards).toEqual([{tgname:"stored_receipt_cash_guard",tgenabled:"O"}]);
- const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ const additive = catalogueAdditions;
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
 // M4-9-S: exact private catch ledger additions, no predecessor catalogue relaxed.
@@ -1061,7 +1040,7 @@ async function successFeeCatchAdditions(before: Awaited<ReturnType<typeof snapsh
  const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
  expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"success_fee_tenant"]).sort());
  for(const p of policies)expect((await f.admin.query("SELECT $1::name[]::text[] roles",[p.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
- const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ const additive = catalogueAdditions;
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},
   routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
@@ -1095,7 +1074,7 @@ async function paymentFeeAdditions(before: Awaited<ReturnType<typeof snapshot>>)
  const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
  expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"payment_fee_tenant"]).sort());
  for(const policy of policies)expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policy.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
- const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ const additive = catalogueAdditions;
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
 // M4-10-S: exact additive 0490 table/index/routine/privilege expectations.
@@ -1128,7 +1107,7 @@ async function simulationStatementAdditions(before: Awaited<ReturnType<typeof sn
  const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
  expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"success_fee_tenant"]).sort());
  for(const policy of policies)expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policy.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
- const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ const additive = catalogueAdditions;
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
 async function simulationCollectionAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -1159,7 +1138,7 @@ async function simulationCollectionAdditions(before: Awaited<ReturnType<typeof s
  const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
  expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"success_fee_tenant"]).sort());
  for(const policy of policies)expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policy.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
- const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ const additive = catalogueAdditions;
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
 async function simulationMoneyAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -1190,7 +1169,7 @@ async function simulationMoneyAdditions(before: Awaited<ReturnType<typeof snapsh
  const policies=after.policies.filter(p=>p.schemaname==="app"&&tables.includes(p.tablename));
  expect(policies.map(p=>[p.tablename,p.policyname]).sort()).toEqual(tables.map(t=>[t,"success_fee_tenant"]).sort());
  for(const policy of policies)expect((await f.admin.query("SELECT $1::name[]::text[] roles",[policy.roles])).rows[0].roles).toEqual(["jobguard_migration"]);
- const additive=<T>(old:T[],added:T[],live:T[])=>[...old,...added].sort((a,b)=>live.findIndex(r=>JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r=>JSON.stringify(r)===JSON.stringify(b)));
+ const additive = catalogueAdditions;
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t=>[`app.${t}`,[]]))},routines:additive(before.routines,routines,after.routines),relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
 // 0306 adds only these objects; every predecessor catalogue row still compares in full.
@@ -1239,7 +1218,7 @@ async function jobDoorAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
  const ownerAcl = (await f.admin.query("SELECT $1::text[]::aclitem[] acl",[["jobguard_migration=X/jobguard_migration"]])).rows[0].acl;
  const previous = before.routines.map(r => withdrawn.some(i => r.nspname === "app" && r.proname === i.proname && r.args === i.args)
   ? {...r,proacl:ownerAcl,...(r.proname === "guard_imported_job" ? {prosecdef:false,proconfig:["search_path=pg_catalog"]} : {})} : r);
- const additive = <T>(old:T[],added:T[],live:T[]) => [...old,...added].sort((a,b) => live.findIndex(r => JSON.stringify(r) === JSON.stringify(a)) - live.findIndex(r => JSON.stringify(r) === JSON.stringify(b)));
+ const additive = catalogueAdditions;
  return {rows:{...before.rows,[`app.${table}`]:[]},routines:additive(previous,routines,after.routines),
   relations:additive(before.relations,relations,after.relations),policies:additive(before.policies,policies,after.policies)};
 }
@@ -1451,8 +1430,7 @@ async function lp3Additions(before: Awaited<ReturnType<typeof snapshot>>) {
  expect(policies.map(p => [p.tablename,p.policyname]).sort()).toEqual(tables.map(t => [t,"tenant_isolation"]).sort());
  for (const p of policies) expect((await f.admin.query("SELECT $1::name[]::text[] roles",[p.roles])).rows[0].roles).toEqual(["jobguard_migration","jobguard_runtime"]);
  for (const r of relations) expect(before.relations.some(b => b.nspname===r.nspname && b.relname===r.relname)).toBe(false);
- const union = <T>(old: T[], additions: T[], live: T[]) => [...old,...additions].sort((a,b) =>
-  live.findIndex(r => JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r => JSON.stringify(r)===JSON.stringify(b)));
+ const union = catalogueAdditions;
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t => [`app.${t}`,[]]))},
   routines:union(routines,added,after.routines), relations:union(before.relations,relations,after.relations),
   policies:union(before.policies,policies,after.policies)};
@@ -1512,7 +1490,7 @@ async function timelineStoreAdditions(before: Awaited<ReturnType<typeof snapshot
  }
  const columns = (await f.admin.query("SELECT c.relname,a.attname,a.attacl::text[] acl FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relname=ANY($1::text[]) AND a.attacl IS NOT NULL ORDER BY c.relname,a.attname", [tables])).rows;
  expect(columns).toEqual([]);
- const union = <T>(old:T[], added:T[], live:T[]) => [...old,...added].sort((a,b) => live.findIndex(r => JSON.stringify(r)===JSON.stringify(a))-live.findIndex(r => JSON.stringify(r)===JSON.stringify(b)));
+ const union = catalogueAdditions;
  return {rows:{...before.rows,...Object.fromEntries(tables.map(t => [`app.${t}`,[]]))},
   relations:union(before.relations,relations,after.relations),routines:union(before.routines,routines,after.routines),policies:union(before.policies,policies,after.policies)};
 
@@ -1525,8 +1503,7 @@ async function demoSettleAddition(before: Awaited<ReturnType<typeof snapshot>>) 
  expect(routines[0]).toMatchObject({args:"p_job uuid, p_session text, p_command jsonb",prosecdef:true,proconfig:["search_path=pg_catalog"]});
  expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[routines[0]!.proacl])).rows[0].acl.sort()).toEqual(["jobguard_migration=X/jobguard_migration","jobguard_runtime=X/jobguard_migration"]);
  expect(before.routines.some(r => r.nspname === "app" && r.proname === "simulation_fee_demo_settle")).toBe(false);
- const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return {...before,routines:[...before.routines,...routines].sort((a,b)=>position(a)-position(b))};
+ return {...before,routines:catalogueAdditions(before.routines, routines, after.routines)};
 }
 // 0518: four demo-only routines, which only the runtime role can run. Its request table is in the
 // infrastructure schema, which this snapshot doesn't cover; shadow-demo-guide.integration.test.ts covers it.
@@ -1539,8 +1516,7 @@ async function shadowDemoGuideAdditions(before: Awaited<ReturnType<typeof snapsh
   expect(before.routines.some(b => b.nspname === "app" && b.proname === r.proname)).toBe(false);
   expect((await f.admin.query("SELECT $1::aclitem[]::text[] acl",[r.proacl])).rows[0].acl.sort()).toEqual(["jobguard_migration=X/jobguard_migration","jobguard_runtime=X/jobguard_migration"]);
  }
- const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return {...before,routines:[...before.routines,...routines].sort((a,b)=>position(a)-position(b))};
+ return {...before,routines:catalogueAdditions(before.routines, routines, after.routines)};
 }
 // m4-withheld-source / 0489: one private validator, with no runtime execute grant.
 async function withheldSourceAddition(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -1551,8 +1527,7 @@ async function withheldSourceAddition(before: Awaited<ReturnType<typeof snapshot
   proacl:"{jobguard_migration=X/jobguard_migration}",proconfig:["search_path=pg_catalog"]});
  expect((await f.admin.query("SELECT pg_get_userbyid($1::oid) owner",[routines[0]!.proowner])).rows).toEqual([{owner:"jobguard_migration"}]);
  expect(before.routines.some(r => r.nspname === "app" && r.proname === "success_fee_withheld_source")).toBe(false);
- const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return {...before,routines:[...before.routines,...routines].sort((a,b)=>position(a)-position(b))};
+ return {...before,routines:catalogueAdditions(before.routines, routines, after.routines)};
 }
 // CH-9 part 2: exact read-only additions; all predecessor catalogue rows remain compared.
 async function valueSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -1566,8 +1541,7 @@ async function valueSourceAdditions(before: Awaited<ReturnType<typeof snapshot>>
    proconfig: r.proname === "read_value_job" ? ["search_path=pg_catalog, app", "TimeZone=UTC"] : ["search_path=pg_catalog, app"] });
   expect((await f.admin.query("SELECT pg_get_userbyid($1::oid) owner", [r.proowner])).rows).toEqual([{ owner: "jobguard_migration" }]);
  }
- const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+ return { ...before, routines: catalogueAdditions(before.routines, routines, after.routines) };
 }
 
 async function integrityReviewAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -1594,8 +1568,7 @@ async function integrityReviewAdditions(before: Awaited<ReturnType<typeof snapsh
    ? ["jobguard_migration=X/jobguard_migration", "jobguard_runtime=X/jobguard_migration"]
    : ["jobguard_migration=X/jobguard_migration"]);
  }
- const position = (row: typeof routines[number]) => after.routines.findIndex(r => JSON.stringify(r) === JSON.stringify(row));
- return { ...before, routines: [...before.routines, ...routines].sort((a, b) => position(a) - position(b)) };
+ return { ...before, routines: catalogueAdditions(before.routines, routines, after.routines) };
 }
 
 async function integritySourceAdditions(before: Awaited<ReturnType<typeof snapshot>>) {
@@ -1684,12 +1657,35 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  Object.assign(expected, await lp4AuditAdditions(expected));
  Object.assign(expected, await lp5CommandAdditions(expected));
 
+ const connectorPolicies = async () => (await f.admin.query(
+  "SELECT * FROM pg_policies WHERE schemaname='connector' ORDER BY tablename,policyname",
+ )).rows;
  if (proofs.length) {
   expect(await snapshot()).toEqual(expected);
   await migrate(f.admin);
  }
  const owners = (await f.admin.query("SELECT rolname, oid FROM pg_roles")).rows;
- const withProofs = applyUpgradeProofs(expected, proofs, Object.fromEntries(owners.map(r => [r.rolname, r.oid])));
+ const ownerOids = Object.fromEntries(owners.map(r => [r.rolname, r.oid]));
+ const isConnectorPolicy = (change: typeof proofs[number]["upgrade"][number]) =>
+  change.section === "policies" && (change.before ?? change.after)?.schemaname === "connector";
+ const connectorProofs = proofs.map(proof => ({ ...proof, upgrade: proof.upgrade.filter(isConnectorPolicy) }));
+ const cutover = connectorProofs.find(proof => proof.migration === "0765_lp11_bound_tenant_rls.sql");
+ const connectorBefore = cutover?.upgrade.flatMap(change => change.before ? [change.before] : []) ?? [];
+ // The connector schema was added by proof-bearing migrations. Its reviewed
+ // 0762 predecessor records cover all seven policies, including their ACLs.
+ expect(connectorBefore).toHaveLength(7);
+ const withProofs = applyUpgradeProofs(expected, proofs.map(proof => ({
+  ...proof, upgrade: proof.upgrade.filter(change => !isConnectorPolicy(change)),
+ })), ownerOids);
+ const connectorExpected = applyUpgradeProofs({ rows: {}, routines: [], relations: [], policies: connectorBefore },
+  connectorProofs, ownerOids).policies;
+ withProofs.rows = { ...lp11EmptyTables, ...withProofs.rows };
+ // snapshot() never covers the infrastructure schema; 0732's infrastructure.final_check_cycle_exhausted
+ // proof row is pinned exactly (owner, ACL, body) by real-fc-typed-recovery instead, as migfix-7 does.
+ withProofs.routines = withProofs.routines.filter(row => row.nspname !== "infrastructure");
+ // 0722 is a named later successor, composed from its exact committed upgrade proof.
+ expect((withProofs.rows["app.command_type_registry"] as { command_type: string }[])
+  .filter(row => row.command_type === "CloseAbandonedSiteVisit")).toEqual([abandonedSiteVisitRegistryRow]);
  // Sort only committed expected values using the server collation, never select live objects as allowances.
  if (proofs.length) for (const [section, fields] of [
   ["routines", ["nspname", "proname", "args"]], ["relations", ["nspname", "relname"]],
@@ -1699,8 +1695,10 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
   withProofs[section] = sorted.rows.map(r => r.value);
  }
  expect(await snapshot()).toEqual(withProofs);
+ expect(await connectorPolicies()).toEqual(connectorExpected);
  await migrate(f.admin);
  expect(await snapshot()).toEqual(withProofs);
+ expect(await connectorPolicies()).toEqual(connectorExpected);
  expect((await f.admin.query("SELECT count(*)::int n FROM public.jobguard_schema_migration WHERE migration_name=$1", [own])).rows[0].n).toBe(1);
 }, 180000);
 

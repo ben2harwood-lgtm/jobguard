@@ -13,7 +13,7 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool;
 const previousEnvironment = process.env.JOBGUARD_ENV;
-const context = testTenantContext(T), actor = { membershipId: M, identityUserId: U };
+const context = testTenantContext(T, { membershipId: M }), actor = { membershipId: M, identityUserId: U };
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
   const directory = await mkdtemp(join(tmpdir(), "jg-pf1b-money-")), port = await freePort(62000, 100), value = randomUUID();

@@ -1,4 +1,5 @@
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { jobDoorsActor } from "./lp-job-doors-fixtures.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -109,7 +110,7 @@ it("migration-owner writes cannot reinterpret an unbound legacy creator",async()
  const auth=await authenticatePracticeSession(runtime,await issuePracticeSession(runtime));
  const client=await admin.connect();try{
   await client.query("BEGIN");await client.query("SET LOCAL ROLE jobguard_migration");
-  await client.query("SELECT set_config('app.tenant_id',$1,true)",[DEMO_TENANT_ID]);
+  await client.query("SELECT app.bind_request('practice',$1,$2)",[auth.digest,DEMO_TENANT_ID]);
   await expect(client.query("UPDATE app.job SET practice_session_digest=$1,practice_scenario='capture' WHERE tenant_id=$2 AND id=$3",[auth.digest,DEMO_TENANT_ID,legacyJob])).rejects.toThrow("PRACTICE_OWNER_IMMUTABLE");
  }finally{await client.query("ROLLBACK");client.release();}
 });
@@ -179,15 +180,17 @@ it("two practice material catalogues never share versions, descriptions, rates o
 
 it("the non-practice material path retains tenant-wide revisions and descriptions",async()=>{
  const tenant=randomUUID(),jobId=randomUUID(),scopeItemId=randomUUID();
- await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[tenant]);
+ const { member }=await jobDoorsActor(admin,tenant);
  await admin.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Fictional real-tenant path')",[jobId,tenant]);
  await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')",[scopeItemId,tenant,jobId]);
- const context=testTenantContext(tenant);
+ const context=await testBoundTenantContext(admin,tenant,member);
  const repo=new MaterialRepository(runtime);
  const input={merchantName:"M",sku:"S",description:"Original tenant description",pricePence:2000,priceUnit:"each" as const,taxBasis:"net" as const,effectiveFrom:"2026-10-01",sourceLabel:"synthetic fixture",expectedVersion:0};
  const first=await repo.addRate(context,input);
  await repo.addRequirement(context,{jobId,scopeItemId,skuId:first.skuId,quantity:"2",unit:"each",expectedRevision:0});
- await expect(repo.addRate(context,input)).rejects.toThrow("STALE_MATERIAL_RATE_REVISION");
+ // LATER-SAFETY-138: an identical retry reuses the latest agreement; a changed one is still stale.
+ expect(await repo.addRate(context,input)).toEqual(first);
+ await expect(repo.addRate(context,{...input,pricePence:2500})).rejects.toThrow("STALE_MATERIAL_RATE_REVISION");
  const next=await repo.addRate(context,{...input,description:"Later description",pricePence:3000,effectiveFrom:"2026-10-08",expectedVersion:1});
  expect(next).toMatchObject({version:2,merchantId:first.merchantId,skuId:first.skuId});
  expect(await repo.view(context,jobId,"2026-10-07")).toMatchObject([{description:input.description,rateVersion:1,status:"applicable",netPence:4000}]);

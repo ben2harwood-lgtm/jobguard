@@ -1,3 +1,4 @@
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { expect } from "vitest";
 import { PlanEntitlementsApplication } from "../../../apps/api/src/plan-entitlements.application.js";
@@ -23,7 +24,7 @@ export async function companyService(f: WorkFixture, a: SubscriptionCompany) {
   const sessionToken = randomUUID().repeat(2), csrfToken = randomUUID(), origin = "https://jobguard.invalid";
   const digest = provider.digest(`session:${sessionToken}`);
   await f.admin.query("UPDATE identity.session SET token_digest=$2,csrf_token=$3 WHERE id=$1", [a.sessionId, digest, csrfToken]);
-  const bound = { ...a, digest };
+  const bound = { ...a, digest, context: await testBoundTenantContext(f.admin,a.tenantId,a.actorId,digest) };
   return { a: bound, app: companyPlanEntitlements(f.runtime, new IdentityApplication(provider, origin),
     { sessionToken, csrfToken, origin, requestedTenantId: a.tenantId }) };
 }
@@ -54,7 +55,7 @@ export async function retainedExport(f: WorkFixture, a: SubscriptionCompany) {
 }
 export async function retained(f: WorkFixture, a: SubscriptionCompany, exports: () => Promise<unknown>) {
   const tables = ["job", "quote_document_version", "final_account_revision", "final_account_line"];
-  const data = await workTenant(f.runtime, a.tenantId, async db => {
+  const data = await withTenant(f.runtime, a.context, async ({ $client: db }) => {
     const result: Record<string, unknown> = {};
     for (const table of tables) result[table] = (await db.query(`SELECT row_to_json(t)::text bytes FROM app.${table} t WHERE tenant_id=$1 ORDER BY id`, [a.tenantId])).rows;
     return result;

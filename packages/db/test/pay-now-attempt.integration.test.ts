@@ -38,7 +38,7 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
     await db.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[t,command]);
     await db.query("INSERT INTO app.variation_revision(tenant_id,job_id,id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version) VALUES($1,$2,$3,$4,$5,1,'Fictional catch','1','item',500,500,$6,$7,'human_entered','synthetic://fixture',$6,'fixture-v1')",[t,j,priced,variation,scope,h,a.actorId]);
     await db.query("UPDATE app.variation SET current_revision_id=$3,state='priced' WHERE tenant_id=$1 AND id=$2",[t,variation,priced]);
-   });
+   }, { membershipId: a.actorId });
    const {VariationRepository,approvePricedVariation}=await import("../src/variation-repository.js");
    await new VariationRepository(c.runtime).transact(a.context,db=>approvePricedVariation(db,t,variation,{
     id:approval,revisionId:priced,revision:1,contentHash:h,signedDeltaPence:500,method:"builder_attestation",
@@ -128,7 +128,7 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
  it("enforces FORCE RLS, private grants, immutable rows and restores caller settings",async()=>{
   const a=await fixture(),repo=new PayNowAttemptRepository(c.runtime);await repo.command(a.context,a.actor,a.input);
   for(const sql of ["SELECT * FROM app.pay_now_fake_attempt","UPDATE app.pay_now_fake_attempt SET record='{}'","DELETE FROM app.pay_now_fake_attempt"]){
-   await expect(workTenant(c.runtime,a.tenantId,db=>db.query(sql))).rejects.toMatchObject({code:"42501"});
+   await expect(workTenant(c.runtime,a.tenantId,db=>db.query(sql), { membershipId: a.actorId })).rejects.toMatchObject({code:"42501"});
   }
   for(const sql of ["UPDATE app.pay_now_fake_attempt SET record=record WHERE tenant_id=$1","DELETE FROM app.pay_now_fake_attempt WHERE tenant_id=$1"]){
    await expect(c.admin.query(sql,[a.tenantId])).rejects.toMatchObject({code:"55000"});
@@ -137,6 +137,6 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
   await workTenant(c.runtime,a.tenantId,async db=>{
    await db.query("SELECT app.pay_now_fake_attempt($1,$2,$3,'prepare',$4::jsonb)",[a.tenantId,a.digest,a.jobId,JSON.stringify(a.input)]);
    expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows[0].t).toBe(a.tenantId);
-  });
+  }, { membershipId: a.actorId, bindRequest: false });
  });
 });

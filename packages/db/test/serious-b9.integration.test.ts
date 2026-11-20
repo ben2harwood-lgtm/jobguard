@@ -22,7 +22,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
-const context = testTenantContext(DEMO_TENANT_ID);
+const context = testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID });
 const actor = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
 const priorEnvironment = process.env.JOBGUARD_ENV;
 const passphrase = randomUUID();
@@ -140,7 +140,7 @@ async function fixture({ claim1 = 3_440_000, claim2 = 250_000, settle = true, co
     commandId: randomUUID(), recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
   if (subset) {
     await admin.query("UPDATE app.final_account_draft SET revision=2,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID, draftId, revisionId]);
-    const supplementary = await new FinalAccountLockRepository(scoped).issueInvoice(context, { jobId, actorMembershipId: actor.membershipId, commandId: randomUUID(),
+    const supplementary = await new FinalAccountLockRepository(scoped).issueInvoice(auth.context, { jobId, actorMembershipId: actor.membershipId, commandId: randomUUID(),
       finalAccountRevisionId: revisionId, expectedSourceHash: hash(revisionId), invoiceKind: "supplementary", recipient: "allocation@example.invalid", issuedOn: "2026-10-12" });
     invoice = { ...invoice, id: supplementary.invoiceId, taxPence: supplementary.taxPence };
   }

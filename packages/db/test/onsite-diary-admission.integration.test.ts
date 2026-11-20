@@ -67,7 +67,7 @@ describe("SV-7A on-site admission attacks", () => {
    expect(claim.kind).toBe("claim");
    completionReached = true;
    await db.query("SELECT app.complete_command($1::uuid,'{}'::jsonb)", [commandId]);
-  })).rejects.toThrow("AUTHORIZATION_INVALID");
+  }, { membershipId: a.actorId })).rejects.toThrow("AUTHORIZATION_INVALID");
   expect(completionReached).toBe(commandType !== "unknown.lp5.main.writer");
   expect(await counts(a)).toEqual(before);
  });
@@ -77,7 +77,7 @@ describe("SV-7A on-site admission attacks", () => {
   await workTenant(f.admin, a.tenantId, async db => {
    await db.query("SET LOCAL session_replication_role='replica'");
    await db.query("UPDATE app.job_activation SET activated_at=clock_timestamp()-interval '70 days' WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId]);
-  });
+  }, { membershipId: a.actorId });
   for (let i = 0; i < 6; i++) await activateMeterJob(f, await seedWorkJob(f, a.tenantId));
   const before = await counts(a), input = diary();
   await expect(intake(a, input)).rejects.toEqual(new JobWorkStateError("METER_UPGRADE_REQUIRED"));
@@ -90,7 +90,7 @@ describe("SV-7A on-site admission attacks", () => {
   expect(await intake(a, input)).toEqual(saved); expect(await counts(a)).toEqual(before);
  });
  it.each(["draft", "accepted", "invoiced", "paid"])("non-live %s refuses without effects", async status => {
-  const a = await company(); await workTenant(f.admin, a.tenantId, db => db.query("UPDATE app.job SET status=$2 WHERE tenant_id=$1 AND id=$3", [a.tenantId, status, a.jobId]));
+  const a = await company(); await workTenant(f.admin, a.tenantId, db => db.query("UPDATE app.job SET status=$2 WHERE tenant_id=$1 AND id=$3", [a.tenantId, status, a.jobId]), { membershipId: a.actorId });
   const before = await counts(a); await expect(intake(a)).rejects.toThrow("JOB_NOT_LIVE"); expect(await counts(a)).toEqual(before);
  });
  it("cross-tenant access, missing job and wrong-job command reuse fail closed", async () => {
@@ -104,7 +104,7 @@ describe("SV-7A on-site admission attacks", () => {
  });
  it("the on-site diary receipt stays identical after a real derived hidden signal", async () => {
   const a = await company(), input = diary(), receipt = await intake(a, input), before = await events(a);
-  await workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)", [a.tenantId, a.actorId, randomUUID(), "synthetic_final_check_terms.v1"]));
+  await workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)", [a.tenantId, a.actorId, randomUUID(), "synthetic_final_check_terms.v1"]), { membershipId: a.actorId });
   const reader = new ShadowObservationReader(f.runtime, new FixtureObservationSources([]));
   const { observations } = await reader.read(a.context, { version: "shadow-observation-read.v1", jobId: a.jobId });
   expect(observations).toHaveLength(1);
@@ -117,8 +117,8 @@ describe("SV-7A on-site admission attacks", () => {
   const a = await company(), b = await seedWorkJob(f, a.tenantId); await activateMeterJob(f, b); await intake(a);
   const source = (await f.admin.query("SELECT to_jsonb(r) value FROM app.job_site_source_receipt r WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0].value;
   const forged = { ...source, id: randomUUID(), job_id: b.jobId };
-  await expect(workTenant(f.admin, a.tenantId, db => db.query("INSERT INTO app.job_site_source_receipt SELECT (jsonb_populate_record(NULL::app.job_site_source_receipt,$1::jsonb)).*", [JSON.stringify(forged)]))).rejects.toThrow("INVALID_WORK_SOURCE");
-  await expect(workTenant(f.runtime, a.tenantId, db => db.query("INSERT INTO app.job_site_source_receipt SELECT (jsonb_populate_record(NULL::app.job_site_source_receipt,$1::jsonb)).*", [JSON.stringify(forged)]))).rejects.toMatchObject({ code: "42501" });
+  await expect(workTenant(f.admin, a.tenantId, db => db.query("INSERT INTO app.job_site_source_receipt SELECT (jsonb_populate_record(NULL::app.job_site_source_receipt,$1::jsonb)).*", [JSON.stringify(forged)]), { membershipId: a.actorId })).rejects.toThrow("INVALID_WORK_SOURCE");
+  await expect(workTenant(f.runtime, a.tenantId, db => db.query("INSERT INTO app.job_site_source_receipt SELECT (jsonb_populate_record(NULL::app.job_site_source_receipt,$1::jsonb)).*", [JSON.stringify(forged)]), { membershipId: a.actorId })).rejects.toMatchObject({ code: "42501" });
   expect(await events(b)).toEqual([]);
  });
 

@@ -1,7 +1,9 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 // M4-23-SB, RED. Real PostgreSQL; synthetic data and existing writers only.
 // Coverage limits are executable TODOs below. A withheld-payment recovery is
 // deliberately not described as the plan's merchant-overcharge Chain A.
 import { randomUUID } from "node:crypto";
+import { Pool } from "pg";
 import { verifyStandalonePack } from "@jobguard/core";
 import { FakeTrueLayerAisAdapter, SyntheticAisTokenVault, aisHash, type AisPage } from "../src/ais-adapter.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
@@ -29,12 +31,20 @@ import { testTenantContext } from "./tenant-context-test-utils.js";
 import { catchFeeFixture } from "./success-fee-catch-fixture.js";
 import { recoveryFeeFixture } from "./success-fee-recovery-fixture.js";
 import { realReceiptFixture } from "./stored-receipt-case-fixture.js";
-import { createFinalCheckFixture, closeFinalCheckFixture, finalCheckTenant, type FinalCheckFixture } from "./final-check-fixture.js";
+import { createFinalCheckFixture, closeFinalCheckFixture, finalCheckShadowJob, finalCheckTenant, type FinalCheckFixture } from "./final-check-fixture.js";
 
 let f: FinalCheckFixture;
+let support: Pool;
 const environment = process.env.JOBGUARD_ENV;
-beforeAll(async () => { f = await createFinalCheckFixture(); }, 120_000);
+beforeAll(async () => {
+  f = await createFinalCheckFixture();
+  const login = "acceptance_shadow_support", password = randomUUID();
+  const ddl = await f.admin.query("SELECT format('CREATE ROLE %I LOGIN NOSUPERUSER NOBYPASSRLS IN ROLE jobguard_shadow_emergency_access PASSWORD %L',$1::text,$2::text) ddl", [login,password]);
+  await f.admin.query(ddl.rows[0].ddl);
+  support = new Pool({ ...f.admin.options, user: login, password, max: 1 });
+}, 120_000);
 afterAll(async () => {
+  await support?.end();
   if (f) await closeFinalCheckFixture(f);
   if (environment === undefined) delete process.env.JOBGUARD_ENV;
   else process.env.JOBGUARD_ENV = environment;
@@ -80,6 +90,8 @@ function collection(x: Subject) {
   // Only the CI fake-rail operator connection supplies terminal outcomes. No HTTP path.
   const rail = (raw: unknown) => finalCheckTenant(f.admin, x.context.tenantId, async db => {
     await db.query("SELECT set_config('app.practice_material_digest',$1,true)", [x.auth.digest]);
+    // LP-6d: the guarded fee read inside the writer needs the practice owner's bound request.
+    await db.query("SELECT app.bind_request('practice',$1,$2)", [x.auth.digest, x.context.tenantId]);
     return (await db.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb) result",
       [x.jobId, x.auth.digest, raw])).rows[0].result;
   });
@@ -292,7 +304,7 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
       });
       // Detector input only: bind the existing evidenced signal to the real
       // capture through the shadow role's normal update grants, guards enabled.
-      await finalCheckTenant(f.shadow, x.context.tenantId, db => db.query(
+      await finalCheckShadowJob(f.shadow, x.context.tenantId, x.jobId, db => db.query(
         "UPDATE app.shadow_commercial_signal SET matched_variation_id=$1,outcome='builder_captured',revision=revision+1 WHERE tenant_id=$2 AND job_id=$3 AND id=$4",
         [captureId, x.context.tenantId, x.jobId, x.signalId]));
     })).rejects.toThrow("FINAL_CHECK_SOURCE_CHANGED");
@@ -300,7 +312,7 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
     const x = source!, worker = new FinalCheckRepository(f.shadow);
     const manifestId = (await f.admin.query("SELECT id FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2",
       [x.context.tenantId, x.jobId])).rows[0].id as string;
-    const manifest = await worker.manifest(x.context, x.jobId, manifestId);
+    const manifest = await worker.manifest(verifiedTenantContextForQueuedJob(x.context.tenantId), x.jobId, manifestId);
     expect(manifest.signals.map(signal => signal.signalId)).toContain(x.signalId);
     expect(manifest.sources.some(s => s.evidenceId !== null && s.status === "detected")).toBe(true);
     const captureIds = manifest.comparisons.captures.map(c => (c as { id: string }).id);
@@ -310,9 +322,9 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
     const expectedRevision = manifest.signals.find(s => s.signalId === x.signalId)!.revision;
     // Valid comparisons remove the setup refusal: this now reaches the actual
     // matched-variation-in-capture-register guard against a forged reveal.
-    await expect(worker.reconcile(x.context, x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
+    await expect(worker.reconcile(verifiedTenantContextForQueuedJob(x.context.tenantId), x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
       outcome: "reveal", references: [], comparisons }])).rejects.toThrow("FINAL_CHECK_SOURCE_CHANGED");
-    const result = await worker.reconcile(x.context, x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
+    const result = await worker.reconcile(verifiedTenantContextForQueuedJob(x.context.tenantId), x.jobId, manifest.id, [{ signalId: x.signalId, expectedRevision,
       outcome: "builder_captured", references: [captureId], comparisons }]) as { runId: string; lockId: string };
     await expect(new FinalCheckRepository(practiceMaterialPool(f.runtime, x.auth.digest)).confirmCatch(x.context, x.jobId, x.auth.digest, {
       version: "final-check.catch.v1", commandId: randomUUID(), lockId: result.lockId, runId: result.runId,
@@ -329,7 +341,7 @@ describe("M4-23-SB integrated sandbox outcomes", () => {
     let source: Subject | undefined;
     await expect(realReceiptFixture(f, "F7", "receipt-line-allocation-command.v1", false, false, async x => {
       source = { context: x.context, jobId: x.jobId, auth: { digest: x.digest } };
-      await new ShadowRepository(f.admin).supportDisclosure(x.context, {
+      await new ShadowRepository(support).supportDisclosure(verifiedTenantContextForQueuedJob(x.context.tenantId), {
         version: "shadow-support-disclosure.v1", jobId: x.jobId, signalId: x.signalId, eventId: randomUUID(),
       });
     })).rejects.toThrow("FINAL_CHECK_SOURCE_CHANGED");

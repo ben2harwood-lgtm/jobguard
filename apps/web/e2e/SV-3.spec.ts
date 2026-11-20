@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect, test } from "@playwright/test";
 import { openLiveWatchdogJob } from "./helpers/capture-journey";
+import { withBoundShadowJob } from "./helpers/final-account-lock-journey";
 import { testTenantContext } from "../../../packages/db/test/tenant-context-test-utils";
 import { withTenant } from "../../../packages/db/src/tenant-context";
 const T="11111111-1111-4111-8111-111111111111";
@@ -79,13 +80,13 @@ test("I: mandatory must-surface Decision survives reload and return through Jobs
    await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[upload,T,jobId,upload]);
    await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','completion_photo',$5,'synthetic-v1',repeat('a',64),100,'image/png','standard_evidence','2026-10-01','2026-10-01')",[evidence,T,upload,jobId,upload]);
   });
-  await withTenant(shadow,testTenantContext(T),async db=>{
-   await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,estimated_value_pence,must_surface_now) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:I','2026-10-01','Fictional significant extra','low',800000,true)",[T,jobId,signal]);
-   await db.$client.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'synthetic-v1',repeat('a',64),'2026-10-01')",[T,jobId,signal,evidence]);
+  await withBoundShadowJob(shadow,T,jobId,async db=>{
+   await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,estimated_value_pence,must_surface_now) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:I','2026-10-01','Fictional significant extra','low',800000,true)",[T,jobId,signal]);
+   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'synthetic-v1',repeat('a',64),'2026-10-01')",[T,jobId,signal,evidence]);
   });
-  await withTenant(shadow,testTenantContext(T),db=>db.$client.query("SELECT app.surface_shadow_signal_early($1,$2,$3,$4,$5,$6,'prior_written_agreement','shadow_attribution_policy_v3',$7,'synthetic-v1',$8::jsonb)",
+  await withBoundShadowJob(shadow,T,jobId,db=>db.query("SELECT app.surface_shadow_signal_early($1,$2,$3,$4,$5,$6,'prior_written_agreement','shadow_attribution_policy_v3',$7,'synthetic-v1',$8::jsonb)",
    [T,jobId,signal,firing,decision,disclosure,evidence,JSON.stringify({workReference:"synthetic:I",scopeArea:"job",description:"Fictional significant extra",status:"requested",estimatedValuePence:800000,safetyImplication:false,customerClearlyRequested:true,needsPriorWrittenAgreement:true,significantWork:{basis:"synthetic_fixture",sourceRef:"synthetic:I",significant:true},activeDispute:false,silenceMateriallyWorsensDispute:false,disclosureDuty:false})]));
-  async function verify(){await page.goto('/');await page.getByRole('button',{name:/Decisions/u}).first().click();const primary=page.getByRole('button',{name:/Fictional significant extra/u});await primary.focus();await expect(primary).toBeFocused();const target=await primary.boundingBox();expect(target!.height).toBeGreaterThanOrEqual(44);expect(target!.width).toBeGreaterThanOrEqual(44);await page.keyboard.press('Enter');await expect(page.getByTestId('decision-source-ref')).toHaveText(signal);await expect(page.locator('.decision-detail .decision-kind')).toHaveText('mandatory');await expect(page.getByRole('button',{name:'Dismiss suggestion',exact:true})).toHaveCount(0);
+  async function verify(){await page.goto('/classic');await page.getByRole('button',{name:/Decisions/u}).first().click();const primary=page.getByRole('button',{name:/Fictional significant extra/u});await primary.focus();await expect(primary).toBeFocused();const target=await primary.boundingBox();expect(target!.height).toBeGreaterThanOrEqual(44);expect(target!.width).toBeGreaterThanOrEqual(44);await page.keyboard.press('Enter');await expect(page.getByTestId('decision-source-ref')).toHaveText(signal);await expect(page.locator('.decision-detail .decision-kind')).toHaveText('mandatory');await expect(page.getByRole('button',{name:'Dismiss suggestion',exact:true})).toHaveCount(0);
    const response=await page.request.get(`/api/decisions?tenantId=${T}&jobId=${jobId}`);expect(response.status()).toBe(200);expect((await response.json()).decisions).toContainEqual(expect.objectContaining({id:decision,classification:'mandatory',source:expect.objectContaining({subjectRef:signal})}));}
   await verify();await page.reload();await verify();await page.getByRole('button',{name:'← Jobs',exact:true}).click();await verify();
   await expect(page.getByText('Practice sandbox — synthetic data; nothing is sent or charged',{exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
@@ -97,6 +98,10 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
  const testStarted=Date.now();
  await page.addInitScript(installIntervalBarrier);
  await openLiveWatchdogJob(page);const jobId=new URL(page.url()).pathname.split('/').pop()!;
+ // Per-firm terms: the job's own practice firm accepts, then the page re-reads so its
+ // Final Check disputes read answers 200 (before acceptance it is FINAL_CHECK_FORBIDDEN).
+ const firmTerms=await page.request.post(`/api/jobs/${jobId}/final-account/terms`,{data:{version:"final-check-terms.accept.v1",commandId:randomUUID(),termsVersion:"synthetic_final_check_terms.v1"}});expect(firmTerms.status()).toBe(200);
+ await Promise.all([page.waitForResponse(response=>response.url().endsWith(`/api/jobs/${jobId}/final-check`)&&response.status()===200),page.reload()]);
  const credential=process.env.SV3_E2E_OWNER_CREDENTIAL??["sbox","e2e","owner"].join('-');
  const admin=new Pool({host:"127.0.0.1",port:55432,database:"jobguard_synthetic_demo",user:"postgres",password:credential,max:1});
  const login=`sv3_q_browser_${randomUUID().replaceAll('-','')}`,value=randomUUID(),evidence=randomUUID(),upload=randomUUID();let shadow:Pool|undefined;
@@ -207,7 +212,7 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
     if(failures.length)throw failures[0];
    }
    const views:Array<{responseShape:string;counts:(string|null)[];badges:(string|null)[];errors:(string|null)[];cacheKeys:string[];notifications:unknown[];analytics:unknown[];storage:Array<Array<Array<string|null>>>}>=[];
-   try{await drain();for(const route of ['/',`/jobs/${jobId}`]){
+   try{await drain();for(const route of ['/classic',`/jobs/${jobId}`]){
     await stopAndDrain(page,drain);
     navigation={departingRequests:new Set([...inFlight].filter(request=>request.frame()===page.mainFrame())),committed:false};
     try{
@@ -216,8 +221,14 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
      expect(destination!.status(),'Q destination document returned HTTP 200').toBe(200);
      expect(destination!.url(),'Q destination response is the requested page').toBe(new URL(route,page.url()).href);
     }finally{navigation=undefined}
-    if(route==='/'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
-    else{const price=page.getByRole('button',{name:'Price the work',exact:true});await expect(price).toBeVisible();await price.click();await expect(page.locator('.quote-editor')).toBeVisible()} // a fresh load of the job shows the scope summary first; the quote editor opens from this button, as in startWatchdogJob
+    if(route==='/classic'){await expect(page.getByRole('button',{name:/Decisions/u}).first()).toBeVisible();await page.getByRole('button',{name:/Decisions/u}).first().click();await expect(page.getByRole('heading',{name:'Decision Inbox'})).toBeVisible()}
+    else{
+     const price=page.getByRole('button',{name:'Price the work',exact:true});await expect(price).toBeVisible();
+     // Opening the editor remounts FinalCheckReveal and aborts its scope-view read.
+     // Capture that response completely before changing views, just as before navigation.
+     await drain();
+     await price.click();await expect(page.locator('.quote-editor')).toBeVisible();
+    } // a fresh load of the job shows the scope summary first; the quote editor opens from this button, as in startWatchdogJob
     await drain();
     const view=await page.evaluate(()=>{
      const read=(selector:string)=>[...document.querySelectorAll(selector)].map(n=>n.textContent);
@@ -238,9 +249,9 @@ test("Q: every visible count/badge/error, cache key, storage and notification su
    return Object.fromEntries(surfaces.map(channel=>[channel,channel==='cacheHeaders'?[...responses].map(([url,data])=>({url,headers:data.headers})).sort((a,b)=>a.url.localeCompare(b.url)):channel==='responseShape'?{views:views.map(v=>v.responseShape),responses:[...responses].map(([url,data])=>({url,status:data.status,body:data.body})).sort((a,b)=>a.url.localeCompare(b.url))}:views.map(v=>v[channel])])) as Record<typeof surfaces[number],unknown>;
   }
   const zero=await replay();
-  await withTenant(shadow,testTenantContext(T),async db=>{for(let n=0;n<25;n++){
-   const signal=randomUUID();await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q','2026-10-01','Private fictional extra','low','held_for_final_check')",[T,jobId,signal]);
-   await db.$client.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'Q:v1',repeat('a',64),'2026-10-01')",[T,jobId,signal,evidence]);
+  await withBoundShadowJob(shadow,T,jobId,async db=>{for(let n=0;n<25;n++){
+   const signal=randomUUID();await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q','2026-10-01','Private fictional extra','low','held_for_final_check')",[T,jobId,signal]);
+   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'Q:v1',repeat('a',64),'2026-10-01')",[T,jobId,signal,evidence]);
   }});
   expect((await admin.query("SELECT count(*)::int n FROM app.shadow_signal_evidence WHERE job_id=$1 AND evidence_id=$2",[jobId,evidence])).rows).toEqual([{n:25}]);
   const many=await replay();

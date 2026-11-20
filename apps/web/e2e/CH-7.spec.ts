@@ -43,7 +43,7 @@ for(const [name,button,movement,q,reason] of [
   expect(saved.eligibilityV3.result.productionEnabled).toBe(false);expect(saved.landedNetPence).toBe(0);expect(saved.feeJobLiabilityPence).toBe(0);
   await page.reload();await verify(page);
   // Captured jobs are not listed by the existing home projection. Navigate through Jobs, then the saved job's URL.
-  await page.goto("/");await expect(page.getByRole("heading",{name:"Jobs",exact:true})).toBeVisible();await page.goto(`/jobs/${jobId}#recovery-cases`);await verify(page);
+  await page.goto("/classic");await expect(page.getByRole("heading",{name:"Jobs",exact:true})).toBeVisible();await page.goto(`/jobs/${jobId}#recovery-cases`);await verify(page);
   const cookies=(await context.cookies()).filter(c=>c.name==="jg_session"),second=await browser.newContext({...(testInfo.project.use.baseURL?{baseURL:testInfo.project.use.baseURL}:{}),...(testInfo.project.use.viewport?{viewport:testInfo.project.use.viewport}:{}),storageState:{cookies,origins:[]}});
   try{const reply=await second.request.get(`/api/jobs/${jobId}/recovery-cases`);expect(reply.ok()).toBe(true);expect((await reply.json()).cases.find((c:{id:string})=>c.id===saved.id).eligibilityV3).toEqual(saved.eligibilityV3);const view=await second.newPage();await view.goto(`/jobs/${jobId}#recovery-cases`);await verify(view);}finally{await second.close();}
  });

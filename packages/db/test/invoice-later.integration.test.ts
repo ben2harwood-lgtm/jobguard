@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
@@ -8,10 +8,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, PracticeInvoiceRepository, CustomerBillingCommandService, withTenant } from "../src/index.js";
 import { prepareBaselineInvoice } from "./sv5pre-fixtures.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures, syntheticOwnerPool } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 
 const T = randomUUID(), A = randomUUID(), U = randomUUID(), M = randomUUID(), H = "a".repeat(64);
-const context = testTenantContext(T), credential = randomUUID();
+const context = testTenantContext(T, { membershipId: M }), credential = randomUUID();
 let pg: EmbeddedPostgres | undefined, admin: Pool, runtime: Pool, repo: PracticeInvoiceRepository;
 beforeAll(async () => {
  const directory = await mkdtemp(join(tmpdir(), "invoice-later-pg-")), port = await freePort(60200, 150);
@@ -46,7 +46,8 @@ async function creditCommand(f: Awaited<ReturnType<typeof fresh>>, netPence = 10
  const input = { jobId: f.jobId, invoiceId: f.invoice.id, netPence, reason: "Synthetic correction" };
  return { ...input, actorMembershipId: M, commandId: randomUUID(), previewHash: (await repo.previewCredit(context,input)).previewHash };
 }
-const callCredit = (input: Awaited<ReturnType<typeof creditCommand>>) => withTenant(runtime,context,async db =>
+// LP-6d: a direct credit call runs in its named actor's own bound request (the fixture member M by default).
+const callCredit = (input: Awaited<ReturnType<typeof creditCommand>>, as = context) => withTenant(runtime,as,async db =>
  (await db.$client.query(`SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,
  [T,input.jobId,input.invoiceId,input.actorMembershipId,input.commandId,input.netPence,input.reason,input.previewHash])).rows[0]);
 async function auditCount(jobId: string) {
@@ -154,12 +155,63 @@ describe("LATER-B16 persisted invoice facts", () => {
    } finally { releaseCommit(); await firstObserved; await second?.catch(()=>undefined); }
   });
  }
+ it("LATER-SAFETY-95 rejects a colliding changed credit payload and preserves exact replay", async () => {
+  const f = await fresh(), input = { ...await creditCommand(f,12), reason:"3abc" };
+  const first = await callCredit(input);
+  await expect(callCredit({...input,netPence:123,reason:"abc"})).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  expect(await callCredit(input)).toEqual(first);
+  expect((await repo.creditView(context,f.jobId,f.invoice.id)).credits).toHaveLength(1);
+ });
+ it("LATER-SAFETY-95 old-digest mutation exposes the collision; restored routine safely replays legacy receipts", async () => {
+  const f = await fresh(), input = { ...await creditCommand(f,12), reason:"3abc" };
+  const db = await admin.connect();
+  const signature = "app.issue_practice_customer_credit_note(uuid,uuid,uuid,uuid,uuid,bigint,text,text)";
+  try {
+   await db.query("BEGIN"); await db.query(`SELECT set_config('app.tenant_id',$1,true)`,[T]); await bindTestClient(admin,db,T,M);
+   const original = (await db.query(`SELECT pg_get_functiondef($1::regprocedure) definition`,[signature])).rows[0].definition as string;
+   const structured = "jsonb_build_object('job',p_job,'invoice',p_invoice,'net',p_net_pence,'reason',p_reason,'preview',p_preview_hash)::text";
+   expect(original).toContain(structured);
+   // Scratch mutation lives only in this transaction. ROLLBACK restores the installed routine even on failure.
+   await db.query(original.replace(structured,"p_job::text||p_invoice::text||p_net_pence::text||p_reason||p_preview_hash"));
+   const direct = async (net: number, reason: string) => (await db.query(
+    `SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [T,input.jobId,input.invoiceId,M,input.commandId,net,reason,input.previewHash])).rows[0];
+   const first = await direct(12,"3abc");
+   // The regression assertion itself must fail with the old concatenation: it incorrectly replays.
+   await expect(expect(direct(123,"abc")).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT")).rejects.toThrow();
+   expect(await direct(123,"abc")).toEqual(first);
+   await db.query(original);
+   expect(await direct(12,"3abc")).toEqual(first);
+   await db.query("SAVEPOINT changed_payload");
+   await expect(direct(123,"abc")).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+   await db.query("ROLLBACK TO SAVEPOINT changed_payload");
+   expect((await db.query(`SELECT count(*)::int n FROM app.customer_credit_note WHERE tenant_id=$1 AND invoice_id=$2`,[T,input.invoiceId])).rows[0].n).toBe(1);
+   expect(await direct(12,"3abc")).toEqual(first);
+  } finally { await db.query("ROLLBACK"); db.release(); }
+ });
+ it("LATER-SAFETY-95 exact pre-change replay preserves the raw reason digest", async () => {
+  const f = await fresh(), input = { ...await creditCommand(f,12), reason:"  Synthetic correction  " };
+  const db = await admin.connect();
+  try {
+   await db.query("BEGIN"); await db.query(`SELECT set_config('app.tenant_id',$1,true)`,[T]); await bindTestClient(admin,db,T,M);
+   const original = (await db.query(`SELECT pg_get_functiondef('app.issue_practice_customer_credit_note(uuid,uuid,uuid,uuid,uuid,bigint,text,text)'::regprocedure) definition`)).rows[0].definition as string;
+   const predecessor = await readFile(new URL("../migrations/0190_credit_command_replay.sql",import.meta.url),"utf8");
+   await db.query(predecessor.slice(predecessor.indexOf("CREATE OR REPLACE FUNCTION"),predecessor.lastIndexOf("COMMIT;")));
+   const direct = async (reason: string) => (await db.query(
+    `SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [T,input.jobId,input.invoiceId,M,input.commandId,input.netPence,reason,input.previewHash])).rows[0];
+   const first = await direct(input.reason);
+   await db.query(original);
+   expect(await direct(input.reason)).toEqual(first);
+   await expect(direct(input.reason.trim())).rejects.toThrow("IDEMPOTENCY_PAYLOAD_CONFLICT");
+  } finally { await db.query("ROLLBACK"); db.release(); }
+ });
  it("L082 concurrent identical direct credit commands return one credit and replay", async () => {
   const f = await fresh(), input = await creditCommand(f);
   const holder = await runtime.connect();
   let pending: ReturnType<typeof callCredit> | undefined;
   try {
-   await holder.query("BEGIN"); await holder.query(`SELECT set_config('app.tenant_id',$1,true)`,[T]);
+   await holder.query("BEGIN"); await holder.query(`SELECT set_config('app.tenant_id',$1,true)`,[T]); await bindTestClient(admin,holder,T,M);
    const first = (await holder.query(`SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,
     [T,input.jobId,input.invoiceId,M,input.commandId,input.netPence,input.reason,input.previewHash])).rows[0];
    pending = callCredit(input); const observed = pending.then(value=>({value}),error=>({error}));
@@ -190,14 +242,17 @@ describe("LATER-B16 persisted invoice facts", () => {
   expect(events.rowCount).toBe(1);
  });
  it("L082 owner expiry while waiting for the invoice lock refuses the credit", async () => {
-  const f = await fresh(), input = await creditCommand(f), actor = randomUUID();
-  await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')`,[actor,T,A,U]);
+  const f = await fresh(), input = await creditCommand(f), actor = randomUUID(), actorUser = randomUUID();
+  // Give this owner its own identity so credential resolution cannot select the fixture's other owner M.
+  await admin.query(`INSERT INTO identity.identity_user(id) VALUES($1)`,[actorUser]);
+  await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')`,[actor,T,A,actorUser]);
+  const actorContext = await testBoundTenantContext(admin,T,actor);
   const holder = await admin.connect();
   let pending: ReturnType<typeof callCredit> | undefined;
   try {
    await holder.query("BEGIN");
    await holder.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text||':'||$2::uuid::text,0))`,[T,f.invoice.id]);
-   pending = callCredit({...input,actorMembershipId:actor});
+   pending = callCredit({...input,actorMembershipId:actor},actorContext);
    const observed = pending.then(value=>({value}),error=>({error:error as Error}));
    let waiting = false;
    for(let attempt=0;attempt<100&&!waiting;attempt++) {
@@ -214,15 +269,20 @@ describe("LATER-B16 persisted invoice facts", () => {
  it("L082 credit authority is rechecked before replay and invoice lookup", async () => {
   const f = await fresh(), input = await creditCommand(f);
   await callCredit(input);
+  // Raw direct SQL, class (a): a request naming an actor it is not bound to (an unknown member, or an expired
+  // membership that can no longer bind) is refused by the binding check first; nothing is written.
   for (const target of [input,{...input,jobId:randomUUID(),invoiceId:randomUUID()}]) {
-   await expect(callCredit({...target,actorMembershipId:randomUUID()})).rejects.toThrow("FORBIDDEN");
+   await expect(callCredit({...target,actorMembershipId:randomUUID()})).rejects.toThrow("REQUEST_BINDING_REFUSED");
   }
   const expired = randomUUID();
   await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role,expires_at) VALUES($1,$2,$3,$4,'owner',clock_timestamp()-interval '1 hour')`,[expired,T,A,U]);
-  await expect(callCredit({...input,actorMembershipId:expired})).rejects.toThrow("FORBIDDEN");
+  await expect(callCredit({...input,actorMembershipId:expired})).rejects.toThrow("REQUEST_BINDING_REFUSED");
+  expect((await repo.creditView(context,f.jobId,f.invoice.id)).credits).toHaveLength(1);
   const foreign = await fresh();
   await expect(withTenant(runtime,testTenantContext(randomUUID()),db=>db.$client.query(`SELECT * FROM app.issue_practice_customer_credit_note($1,$2,$3,$4,$5,$6,$7,$8)`,
-   [T,foreign.jobId,foreign.invoice.id,M,randomUUID(),1,"Synthetic correction",H]))).rejects.toThrow("tenant context mismatch");
+   [T,foreign.jobId,foreign.invoice.id,M,randomUUID(),1,"Synthetic correction",H]))).rejects.toThrow("REQUEST_BINDING_REFUSED");
+  // (class a: a context for an unknown tenant binds no request, so it is refused before the tenant check; nothing written)
+  expect((await repo.creditView(context,foreign.jobId,foreign.invoice.id)).credits).toHaveLength(0);
  });
 });
 

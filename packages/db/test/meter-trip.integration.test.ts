@@ -1,6 +1,7 @@
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { randomUUID } from "node:crypto";
 import { readSmallTrip } from "../src/meter-small-trip.js";
+import { insertVariationProposal, VariationRepository } from "../src/variation-repository.js";
 import { withTenant } from "../src/tenant-context.js";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -9,9 +10,12 @@ import { createWorkFixture, closeWorkFixture, seedWorkJob, workTenant, boundaryL
 // Private-seam foundation evidence only. MON1-I owns real source command wiring.
 // Replica mode is confined to activation's pre-existing FK/trigger fixture; the
 // routine, trip storage and qualifying approval inserts use normal enforcement.
+function boundTripFixture<T>(f: WorkFixture, a: WorkJob, work: (db: PoolClient) => Promise<T>) {
+  return workTenant(f.admin, a.tenantId, work, { membershipId: a.actorId });
+}
 async function activated(f: WorkFixture) {
   const a = await seedWorkJob(f), activation = randomUUID(), baseline = randomUUID();
-  await workTenant(f.admin, a.tenantId, async db => {
+  await boundTripFixture(f, a, async db => {
     await db.query("INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status) VALUES($1,$2,$3,1,$4,100000,'accepted')", [baseline,a.tenantId,a.jobId,CH4_HASH]);
     await db.query("SET LOCAL session_replication_role='replica'");
     await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT DO NOTHING",[a.tenantId,a.jobId]);
@@ -24,7 +28,7 @@ async function activated(f: WorkFixture) {
 }
 async function priced(f: WorkFixture, a: WorkJob, net: number, at: string, approve = true, existing?: { variation: string; revision: string; sequence: number }, origin: "builder_logged" | "final_review" = "builder_logged") {
   const variation = existing?.variation ?? randomUUID(), revision = randomUUID(), approval = randomUUID(), scope = randomUUID(), sequence = (existing?.sequence ?? 0) + 1;
-  await workTenant(f.admin, a.tenantId, async db => {
+  await boundTripFixture(f, a, async db => {
     if (!existing) {
       await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scope, a.tenantId, a.jobId]);
       await db.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description,origin) VALUES($1,$2,$3,$4,'text','Fictional final-review extra','Fictional extra',$5)", [variation, a.tenantId, a.jobId, scope, origin]);
@@ -49,7 +53,7 @@ async function capture(db: PoolClient, a: WorkJob, source: string, kind = "varia
   return (await db.query("SELECT app.mon1_capture_small_trip($1,$2,$3,$4) id", [a.tenantId, a.jobId, kind, source])).rows[0]!.id as string | null;
 }
 async function trip(f: WorkFixture, a: WorkJob, source: string) {
-  return workTenant(f.admin, a.tenantId, db => capture(db, a, source));
+  return boundTripFixture(f, a, db => capture(db, a, source));
 }
 async function observations(f: WorkFixture, a: WorkJob) {
   return (await f.admin.query(`SELECT id,trip_id,revision,previous_observation_id,net_pence::text,source_id,source_hash,to_char(effective_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') effective_at FROM app.job_small_trip_observation WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision`, [a.tenantId, a.jobId])).rows;
@@ -80,7 +84,7 @@ describe("MON1-T private trip foundation (source integration held MON1-I)", () =
 
   it("M1T-08 missing tenant-first lock is refused instead of acquiring a late lock", async () => {
     const a = await activated(f), p = await priced(f,a,300001,"2026-10-02T12:00:00Z");
-    await expect(workTenant(f.admin,a.tenantId,async db=> {
+    await expect(boundTripFixture(f, a, async db=> {
       await db.query("SET LOCAL ROLE jobguard_migration");
       return db.query("SELECT app.mon1_capture_small_trip($1,$2,'variation_approval',$3)",[a.tenantId,a.jobId,p.approval]);
     })).rejects.toThrow("SMALL_TRIP_LOCK_ORDER_REQUIRED");
@@ -116,11 +120,28 @@ describe("MON1-T private trip foundation (source integration held MON1-I)", () =
   it("M1T-04 draft, priced, rejected and withdrawn proposals supply no approval fact", async () => {
     const a = await activated(f);
     for (const state of ["draft","priced","rejected","withdrawn"]) {
-      const p = await priced(f,a,900000,"2026-10-02T12:00:00Z",false);
-      if (state === "withdrawn") await f.admin.query("INSERT INTO app.variation_withdrawal(tenant_id,job_id,id,variation_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,$5,'builder_withdrawn')",[a.tenantId,a.jobId,randomUUID(),p.variation,a.actorId]);
-      else await f.admin.query("UPDATE app.variation SET state=$1 WHERE tenant_id=$2 AND id=$3",[state,a.tenantId,p.variation]);
+      if (state === "draft") {
+        await withTenant(f.runtime,a.context,db=>insertVariationProposal(db,a.tenantId,{
+          version:"variation-proposal.v1",id:randomUUID(),jobId:a.jobId,scopeItemId:randomUUID(),
+          existingScopeItemId:null,lineageParentScopeItemId:null,captureKind:"text",
+          captureText:"Fictional unpriced extra",description:"Fictional unpriced extra",suggestion:null,
+        }));
+        continue;
+      }
+      const variations = new VariationRepository(f.runtime);
+      const proposal = {version:"variation-proposal.v1",id:randomUUID(),jobId:a.jobId,scopeItemId:randomUUID(),
+        existingScopeItemId:null,lineageParentScopeItemId:null,captureKind:"text",
+        captureText:"Fictional priced extra",description:"Fictional priced extra",suggestion:null};
+      await variations.logBuilderExtra(a.context,{version:"log-builder-extra.v1",proposal,actorMembershipId:a.actorId,
+        price:{quantity:"1",unit:"each",unitRatePence:900000,direction:"addition",confirmedByMembershipId:a.actorId,
+          rateProvenance:{kind:"human_entered",sourceRef:"fixture://mon1-t",sourceHash:CH4_HASH,rateVersion:"synthetic.v1"}},
+        deviceId:null,deviceCapturedAt:null});
+      const current=(await variations.read(a.context,a.jobId)).variations.find(v=>v.id===proposal.id)!;
+      const p={variation:current.id,revision:current.currentRevisionId!};
+      if (state === "withdrawn") await variations.recordWithdrawal(a.context,{version:"variation-withdrawal.v1",id:randomUUID(),jobId:a.jobId,variationId:p.variation,actorMembershipId:a.actorId,reasonCode:"builder_withdrawn"});
+      else if (state === "rejected") await variations.transact(a.context,db=>variations.reject(db,a.tenantId,{id:randomUUID(),variationId:p.variation,revisionId:p.revision,actorMembershipId:a.actorId}));
     }
-    expect(await workTenant(f.admin,a.tenantId,db=>capture(db,a,a.activation,"activation"))).toBeNull();
+    expect(await boundTripFixture(f, a, db=>capture(db,a,a.activation,"activation"))).toBeNull();
     expect(await observations(f,a)).toEqual([]);
   });
 
@@ -155,7 +176,7 @@ describe("MON1-T private trip foundation (source integration held MON1-I)", () =
   it("M1T-04 M1T-07 price, payment and catch source kinds cannot create a trip", async () => {
     const a = await activated(f), p = await priced(f,a,300001,"2026-10-02T12:00:00Z");
     for (const kind of ["variation_revision","payment","jobguard_catch"]) {
-      await expect(workTenant(f.admin,a.tenantId,db=>capture(db,a,p.approval,kind))).rejects.toThrow("INVALID_SMALL_TRIP_SOURCE");
+      await expect(boundTripFixture(f, a, db=>capture(db,a,p.approval,kind))).rejects.toThrow("INVALID_SMALL_TRIP_SOURCE");
     }
     expect(await observations(f,a)).toEqual([]);
   });
@@ -164,7 +185,7 @@ describe("MON1-T private trip foundation (source integration held MON1-I)", () =
     const a = await activated(f), b = await activated(f), p = await priced(f,b,300001,"2026-10-02T12:00:00Z");
     await expect(trip(f,a,p.approval)).rejects.toThrow();
     await expect(trip(f,a,randomUUID())).rejects.toThrow();
-    await expect(workTenant(f.admin,b.tenantId,db=>capture(db,a,p.approval))).rejects.toThrow();
+    await expect(boundTripFixture(f, b, db=>capture(db,a,p.approval))).rejects.toThrow();
     expect(await observations(f,a)).toEqual([]); expect(await observations(f,b)).toEqual([]);
   });
 

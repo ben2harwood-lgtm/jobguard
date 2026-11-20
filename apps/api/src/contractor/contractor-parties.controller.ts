@@ -14,7 +14,8 @@ export class ContractorPartiesController {
   @Post("clients/:clientId/customer-link") @ApiOperation({ summary: "Append an audited synthetic client to customer link; organisation.manage required" })
   @ApiParam({ name: "clientId", type: String, format: "uuid" })
   link(@Param("clientId") clientId: string, @Headers("cookie") cookie: string | undefined, @Headers("origin") origin: string | undefined, @Body() body: unknown) {
-    if (origin !== "http://localhost:3000") throw new HttpException({ version: "contractor-parties-error.v1", code: "NOT_FOUND", recoverable: false }, 404);
+    const allowed = (process.env.JOBGUARD_ALLOWED_ORIGINS ?? "http://localhost:3000").split(",").map(v => v.trim());
+    if (!origin || !allowed.includes(origin)) throw new HttpException({ version: "contractor-parties-error.v1", code: "NOT_FOUND", recoverable: false }, 404);
     return this.call(() => this.application.linkCustomer(principal(cookie), clientId, body));
   }
   @Get("jobs/:id/resident-contact") @Header("Cache-Control", "no-store") @ApiOperation({ summary: "Read resident contact only through persisted contractor job scope; unknown scope returns 404" })

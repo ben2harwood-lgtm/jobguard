@@ -5,7 +5,7 @@ import { GET, POST } from "./route";
 const params={params:Promise.resolve({id:"job",caseId:"case"})};
 it("POST and GET are no-store and delegate the exact path and request",async()=>{
  for(const method of [GET,POST]){
-  f.work.mockResolvedValue({productionEnabled:false});const request=new Request("http://example.invalid");
+  f.work.mockResolvedValue({productionEnabled:false});const request=new Request("http://example.invalid?action=review");
   const response=await method(request,params);
   expect(f.work).toHaveBeenLastCalledWith(request,"job","case");expect(response.headers.get("cache-control")).toBe("no-store");
  }

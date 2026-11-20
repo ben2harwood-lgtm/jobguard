@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "final-account-double-click": {
+      "branches": ["codex/sandbox/final-account-double-click"],
+      "allow": [
+        "apps/web/app/ui/job-final-account.tsx",
+        "apps/web/app/ui/job-final-account.test.tsx",
+        "apps/web/e2e/final-account-double-click.spec.ts"
+      ]
+    }
+  }
+}

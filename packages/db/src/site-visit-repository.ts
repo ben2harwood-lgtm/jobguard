@@ -4,8 +4,9 @@ import { z } from "zod";
 import { SiteVisitError, WorkOrderError, type CloseoutAnswer, type SiteVisitErrorCode } from "@jobguard/core";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { assertContractorGate, canonicalJson, derivedUuid } from "./work-order-repository.js";
-import { withTenant, InvalidTenantContextError, type VerifiedTenantContext, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
+import { bindIssuedCredential, withTenant, InvalidTenantContextError, type VerifiedTenantContext, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
 import { requireLiveJob, WatchdogError } from "./watchdog.js";
+import { RequestBindingRefusedError } from "./request-binding-error.js";
 // Each command-type string is written once, here, and reaches SQL only as a bound parameter.
 const startCommandType = "StartSiteVisit";
 const completeCommandType = "CompleteSiteVisit";
@@ -18,7 +19,7 @@ type Reason = "track_not_contractor" | "member_inactive" | "role_not_permitted" 
 type Refusal = { code: "TRACK_FORBIDDEN" | "VISIT_FORBIDDEN" | "NOT_FOUND"; reason: Reason };
 export type StartedVisit = { visitId: string; startedAt: string };
 export type CompletedVisit = { visitId: string; completedAt: string; closeoutAnswer: CloseoutAnswer };
-export type AssignedJob = { jobId: string; workOrderId: string; reference: string; priority: "routine" | "urgent" | "emergency"; issuedOn: string; dueOn: string | null; openVisitId: string | null };
+export type AssignedJob = { jobId: string; workOrderId: string; reference: string; priority: "routine" | "urgent" | "emergency"; issuedOn: string; dueOn: string | null; openVisitId: string | null; lastCompletedVisit?: Pick<CompletedVisit, "visitId" | "closeoutAnswer"> | null };
 export type AssignedJobs = { jobs: AssignedJob[]; truncated: boolean };
 export type OrderLines = { jobId: string; workOrderId: string; revision: number; lines: Array<{ position: number; scopeItemId: string; clientLineReference: string | null; sorCode: string; description: string; unit: string; quantity: string }> };
 const answerV1 = z.object({ decision: z.enum(["allowed", "forbidden", "not_found"]), reason_code: z.enum(["allowed", "member_inactive", "role_not_permitted", "job_out_of_scope"]) }).strict();
@@ -84,8 +85,31 @@ export class SiteVisitRepository {
   return answer.data.reason_code === "allowed" ? null : { code: "NOT_FOUND", reason: "job_out_of_scope" };
  }
  private async recordRefusal(context: VerifiedTenantContext, actor: AuthenticatedMembership, kind: Kind, input: Input, reason: Reason): Promise<void> {
+  // Router ruling (r9): the refusal audit is written first by the private refusal writer, in its own
+  // transaction, so a member who can no longer be bound (revoked/expired) still leaves the record.
+  // No guarded routine is called. Historical schemas without the writer keep the original path.
+  const tenant = context.tenantId.toLowerCase(), id = derivedUuid(`visit-refusal:${tenant}:${input.commandId.toLowerCase()}:${reason}`);
+  const commandType = kind === "start" ? startCommandType : completeCommandType;
+  const client = await this.pool.connect();
+  try {
+   await client.query("BEGIN");
+   const credentialWriter = (await client.query<{ installed: boolean }>("SELECT to_regprocedure('app.lp11_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,text)') IS NOT NULL installed")).rows[0]?.installed;
+   if (credentialWriter) {
+    await bindIssuedCredential.recordVisitRefusal(client, context, actor, { id, commandId: input.commandId, commandType, reason, jobId: input.jobId });
+    await client.query("COMMIT");
+    return;
+   }
+   await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+   const legacyWriter = (await client.query<{ installed: boolean }>("SELECT to_regprocedure('app.lp6d_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid)') IS NOT NULL installed")).rows[0]?.installed;
+   if (legacyWriter) {
+    await client.query("SELECT app.lp6d_record_visit_refusal($1,$2,$3,$4,$5,$6,$7,$8)", [tenant, id, input.commandId, actor.membershipId, actor.identityUserId, commandType, reason, input.jobId]);
+    await client.query("COMMIT");
+    return;
+   }
+   await client.query("ROLLBACK");
+  } catch { await client.query("ROLLBACK").catch(() => undefined); return; /* never changes the typed refusal */ }
+  finally { client.release(); }
   try { await withTenant(this.pool, context, async db => {
-   const tenant = context.tenantId.toLowerCase(), id = derivedUuid(`visit-refusal:${tenant}:${input.commandId.toLowerCase()}:${reason}`);
    // At most one per command id and reason; a concurrent duplicate fails on the audit table's unique id and is swallowed below.
    if ((await db.$client.query("SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND id=$2", [tenant, id])).rowCount) return;
    const member = await db.$client.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND identity_user_id=$3", [tenant, actor.membershipId, actor.identityUserId]);
@@ -163,7 +187,7 @@ export class SiteVisitRepository {
   }
  }
  private async executeVisit<T extends StartedVisit | CompletedVisit>(context: VerifiedTenantContext, actor: AuthenticatedMembership, kind: Kind, input: Input, schema: z.ZodType<T>): Promise<T> {
-  let refusal: Refusal | undefined;
+  let refusal: Refusal | undefined, unstamped = false;
   try {
    if (!context || typeof context.tenantId !== "string") throw new InvalidTenantContextError();
    if (!same(actor.tenantId, context.tenantId)) refusal = { code: "VISIT_FORBIDDEN", reason: "member_inactive" };
@@ -181,12 +205,15 @@ export class SiteVisitRepository {
     }
    }
   } catch (error) {
-   if (error instanceof InvalidTenantContextError) refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" };
+   // An unstamped context never connects; it gets the uniform refusal with no refusal record (as before LP-6d).
+   if (error instanceof InvalidTenantContextError) { unstamped = true; refusal = { code: "NOT_FOUND", reason: "job_out_of_scope" }; }
+   // LP-6d: a member whose request can no longer be bound (revoked or expired) is the inactive-member refusal.
+   else if (error instanceof RequestBindingRefusedError) refusal = { code: "VISIT_FORBIDDEN", reason: "member_inactive" };
    else if (error instanceof SiteVisitError) throw error;
    else throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
   }
   if (!refusal) throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
-  await this.recordRefusal(context, actor, kind, input, refusal.reason);
+  if (!unstamped) await this.recordRefusal(context, actor, kind, input, refusal.reason);
   throw new SiteVisitError(refusal.code);
  }
  async startVisit(context: VerifiedTenantContext, actor: AuthenticatedMembership, raw: unknown): Promise<StartedVisit> {
@@ -202,11 +229,11 @@ export class SiteVisitRepository {
   return this.executeVisit(context, actor, "complete", parsed.data, storedComplete);
  }
  /** The caller's assigned jobs: every work-order job for which the visit rule answers allowed, with the caller's own open visit. No money, no resident, no address. */
- async assignedJobs(context: VerifiedTenantContext, actor: AuthenticatedMembership): Promise<AssignedJobs> {
+ async assignedJobs(context: VerifiedTenantContext, actor: AuthenticatedMembership, options: { includeLastCompletedVisit?: boolean } = {}): Promise<AssignedJobs> {
   return this.read(context, actor, null, async db => {
-   const rows = (await db.$client.query<{ job_id: string; work_order_id: string; reference: string; priority: AssignedJob["priority"]; issued_on: string; due_on: string | null; open_visit: string | null }>(
+   const rows = (await db.$client.query<{ job_id: string; work_order_id: string; reference: string; priority: AssignedJob["priority"]; issued_on: string; due_on: string | null; open_visit: string | null; last_completed_visit: AssignedJob["lastCompletedVisit"] }>(
     assignedJobsByScopeQuery, [actor.tenantId, actor.membershipId])).rows;
-   return { jobs: rows.slice(0, 200).map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit })), truncated: rows.length > 200 };
+   return { jobs: rows.slice(0, 200).map(row => ({ jobId: row.job_id, workOrderId: row.work_order_id, reference: row.reference, priority: row.priority, issuedOn: row.issued_on, dueOn: row.due_on, openVisitId: row.open_visit, ...(options.includeLastCompletedVisit ? { lastCompletedVisit: row.last_completed_visit ?? null } : {}) })), truncated: rows.length > 200 };
   });
  }
  /** The lines of the order's CURRENT revision, by position, with the schedule-of-rates description. */
@@ -240,6 +267,10 @@ export class SiteVisitRepository {
   } catch (error) {
    if (error instanceof SiteVisitError) throw error;
    if (error instanceof InvalidTenantContextError) throw new SiteVisitError("NOT_FOUND");
+   // LP-6d (repair 14, flagged): a member whose request can no longer be bound (revoked or expired) gets the
+   // same inactive-member refusal as the visit commands above, never an unavailable error.
+   if (error instanceof RequestBindingRefusedError || ((error as { code?: string; message?: string }).code === "42501"
+    && (error as { message?: string }).message === "REQUEST_BINDING_REFUSED")) throw new SiteVisitError("VISIT_FORBIDDEN");
    throw new SiteVisitError("SITE_VISIT_UNAVAILABLE");
   }
  }
@@ -259,7 +290,12 @@ export const assignedJobsQuery = `WITH assigned_orders AS MATERIALIZED (
       )
      )
      SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
-      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
+      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit,
+      (SELECT json_build_object('visitId',v.id,'closeoutAnswer',a.answer)
+       FROM app.site_visit v JOIN app.closeout_answer a
+        ON (a.tenant_id,a.job_id,a.site_visit_id,a.membership_id)=(v.tenant_id,v.job_id,v.id,v.membership_id)
+       WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NOT NULL
+       ORDER BY v.completed_at DESC,v.id DESC LIMIT 1) last_completed_visit
      FROM assigned_orders w
      JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id)
      JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(w.tenant_id,w.id,w.revision_id)
@@ -292,7 +328,12 @@ export const assignedJobsByScopeQuery = `WITH assigned_orders AS MATERIALIZED (
       WHERE (SELECT a.decision FROM app.ent3b_visit_authority($2,s.job_id) a)='allowed'
      )
      SELECT w.job_id,w.id work_order_id,w.reference,r.priority,to_char(r.issued_on,'YYYY-MM-DD') issued_on,to_char(r.due_on,'YYYY-MM-DD') due_on,
-      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit
+      (SELECT v.id FROM app.site_visit v WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NULL ORDER BY v.started_at,v.id LIMIT 1) open_visit,
+      (SELECT json_build_object('visitId',v.id,'closeoutAnswer',a.answer)
+       FROM app.site_visit v JOIN app.closeout_answer a
+        ON (a.tenant_id,a.job_id,a.site_visit_id,a.membership_id)=(v.tenant_id,v.job_id,v.id,v.membership_id)
+       WHERE v.tenant_id=w.tenant_id AND v.job_id=w.job_id AND v.membership_id=$2 AND v.completed_at IS NOT NULL
+       ORDER BY v.completed_at DESC,v.id DESC LIMIT 1) last_completed_visit
      FROM assigned_orders w
      JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(w.tenant_id,w.id,w.revision_id)
      WHERE EXISTS (SELECT 1 FROM allowed_scopes s WHERE s.team_id=w.team_id)

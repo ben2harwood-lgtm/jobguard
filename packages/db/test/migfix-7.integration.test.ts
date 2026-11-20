@@ -1,3 +1,4 @@
+import { verifiedTenantContextForQueuedJob } from "../src/tenant-context.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -17,12 +18,20 @@ import { freePort, closeTestPools, installLegacySyntheticPartyFixtures } from ".
 const T = randomUUID(), O = randomUUID(), M = randomUUID(), U = randomUUID(), L = randomUUID();
 const at = "2026-10-01T00:00:00Z", credential = randomUUID();
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, shadow: Pool, emergency: Pool, directory: string, port: number;
-const pool = (user: string) => new Pool({ host: "127.0.0.1", port, database: "postgres", user, password: credential, max: 4 });
-const ctx = (tenant = T) => testTenantContext(tenant);
+const pool = (user: string, database = "jobguard_synthetic_demo") => new Pool({ host: "127.0.0.1", port, database, user, password: credential, max: 4 });
+const ctx = (tenant = T) => testTenantContext(tenant, { membershipId: M });
 async function tenantTx<R>(p: Pool, tenant: string, work: (db: PoolClient) => Promise<R>) {
   const db = await p.connect();
   try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]); const r = await work(db); await db.query("COMMIT"); return r; }
   catch (e) { await db.query("ROLLBACK"); throw e; } finally { db.release(); }
+}
+const bindShadowJob = (db: PoolClient, tenant: string, job: string) =>
+  db.query("SELECT app.lp11_bind_shadow_job($1,$2)", [tenant, job]);
+function shadowJob<R>(tenant: string, job: string, work: (db: PoolClient) => Promise<R>) {
+  return withTenant(shadow, verifiedTenantContextForQueuedJob(tenant), async ({ $client: db }) => {
+    await bindShadowJob(db, tenant, job);
+    return work(db);
+  });
 }
 const newJob = async (tenant = T) => {
   const job = randomUUID();
@@ -49,17 +58,17 @@ const batch = (job: string, observations: readonly Observation[]) => ({ version:
 async function group(job: string) {
   const ref = randomUUID(), obs = (["customer_request", "note_or_voice", "completion_photo"] as const).map(k => observation(job, ref, k));
   for (const o of obs) await evidence(o);
-  await new ShadowDetectionRepository(shadow).persist(ctx(), batch(job, obs));
+  await new ShadowDetectionRepository(shadow).persist(verifiedTenantContextForQueuedJob(T), batch(job, obs));
   const rows = (await admin.query("SELECT id,coalesced_into_signal_id FROM app.shadow_commercial_signal WHERE job_id=$1", [job])).rows;
   return { survivor: rows.find(r => r.coalesced_into_signal_id === null).id as string, dups: rows.filter(r => r.coalesced_into_signal_id !== null).map(r => r.id as string), ids: rows.map(r => r.id as string) };
 }
 const insertSignal = (job: string, mandatory = false, tenant = T) => {
   const id = randomUUID();
-  return withTenant(shadow, ctx(tenant), db => db.$client.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,must_surface_now)
+  return shadowJob(tenant, job, db => db.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,must_surface_now)
    VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:migfix7',$4,'outside tap','low',$5)`, [tenant, job, id, at, mandatory])).then(() => id);
 };
 const disclose = (signal: string, job: string, event = randomUUID(), p: Pool = emergency) =>
-  withTenant(p, ctx(), db => db.$client.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,'support_conversation') AS id", [T, job, signal, event])).then(r => ({ id: r.rows[0].id as string, event }));
+  withTenant(p, verifiedTenantContextForQueuedJob(T), db => db.$client.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,'support_conversation') AS id", [T, job, signal, event])).then(r => ({ id: r.rows[0].id as string, event }));
 const state = async (ids: string[]) => (await admin.query("SELECT id,state,disclosed_before_lock,first_builder_visible_at FROM app.shadow_commercial_signal WHERE id=ANY($1::uuid[]) ORDER BY id", [ids])).rows;
 const reasons = async (id: string) => (await admin.query("SELECT DISTINCT reason FROM app.shadow_signal_ineligibility WHERE signal_id=$1 ORDER BY reason", [id])).rows.map(r => r.reason as string);
 async function lockJob(job: string, tenant = T) {
@@ -76,7 +85,11 @@ describe("MIGFIX-7 real PostgreSQL group disclosure", () => {
   beforeAll(async () => {
     directory = await mkdtemp(join(tmpdir(), "migfix7-pg16-")); port = await freePort(58700, 200);
     postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
-    await postgres.initialise(); await postgres.start(); admin = pool("postgres"); await migrate(admin);
+    await postgres.initialise(); await postgres.start();
+    const bootstrap = pool("postgres", "postgres");
+    try { await bootstrap.query("CREATE DATABASE jobguard_synthetic_demo"); }
+    finally { await closeTestPools(bootstrap); }
+    admin = pool("postgres"); await migrate(admin);
     await installLegacySyntheticPartyFixtures(admin);
     for (const tenant of [T, O]) await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1) ON CONFLICT DO NOTHING", [tenant]);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [U]); const a = randomUUID();
@@ -115,6 +128,7 @@ describe("MIGFIX-7 real PostgreSQL group disclosure", () => {
     const job1 = await newJob(), a1 = await insertSignal(job1), b1 = await insertSignal(job1);
     const coalescer = await shadow.connect();
     await coalescer.query("BEGIN"); await coalescer.query("SELECT set_config('app.tenant_id',$1,true)", [T]);
+    await bindShadowJob(coalescer, T, job1);
     await coalescer.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`shadow-detection:${T}:${job1}`]);
     await coalescer.query("UPDATE app.shadow_commercial_signal SET state='reconciled',outcome='duplicate_signal',coalesced_into_signal_id=$3,revision=revision+1 WHERE tenant_id=$1 AND id=$2", [T, b1, a1]);
     const racing = disclose(b1, job1);
@@ -128,7 +142,7 @@ describe("MIGFIX-7 real PostgreSQL group disclosure", () => {
     const discloser = await emergency.connect();
     await discloser.query("BEGIN"); await discloser.query("SELECT set_config('app.tenant_id',$1,true)", [T]);
     await discloser.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,'support_conversation')", [T, job2, a2, randomUUID()]);
-    const coalescing = tenantTx(shadow, T, async db => {
+    const coalescing = shadowJob(T, job2, async db => {
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`shadow-detection:${T}:${job2}`]);
       await db.query("UPDATE app.shadow_commercial_signal SET state='reconciled',outcome='duplicate_signal',coalesced_into_signal_id=$3,revision=revision+1 WHERE tenant_id=$1 AND id=$2", [T, b2, a2]);
     });
@@ -146,9 +160,9 @@ describe("MIGFIX-7 real PostgreSQL group disclosure", () => {
     const job = await newJob(), g = await group(job), incoming = await insertSignal(job);
     await disclose(incoming, job);
     // Preserve the immutable surfaced_early state when this disclosed signal becomes a duplicate.
-    await withTenant(shadow, ctx(), async db => {
-      await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`shadow-detection:${T}:${job}`]);
-      await db.$client.query("UPDATE app.shadow_commercial_signal SET coalesced_into_signal_id=$3 WHERE tenant_id=$1 AND id=$2", [T, incoming, g.survivor]);
+    await shadowJob(T, job, async db => {
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`shadow-detection:${T}:${job}`]);
+      await db.query("UPDATE app.shadow_commercial_signal SET coalesced_into_signal_id=$3 WHERE tenant_id=$1 AND id=$2", [T, incoming, g.survivor]);
     });
     for (const id of [...g.ids, incoming]) expect(await reasons(id)).toEqual(["disclosed_before_lock", "surfaced_early"]);
     expect((await state([...g.ids, incoming])).every(r => r.disclosed_before_lock && r.first_builder_visible_at)).toBe(true);
@@ -157,7 +171,7 @@ describe("MIGFIX-7 real PostgreSQL group disclosure", () => {
   it("rolls back group disclosure and audit together, and refuses unauthorized and foreign subjects", async () => {
     const job = await newJob(), g = await group(job), event = randomUUID();
     const before = await state(g.ids);
-    await expect(withTenant(emergency, ctx(), async db => {
+    await expect(withTenant(emergency, verifiedTenantContextForQueuedJob(T), async db => {
       await db.$client.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,'support_conversation')", [T, job, g.survivor, event]);
       throw new Error("rollback group");
     })).rejects.toThrow("rollback group");
@@ -166,7 +180,15 @@ describe("MIGFIX-7 real PostgreSQL group disclosure", () => {
     expect((await admin.query("SELECT id FROM app.audit_event WHERE id=$1", [event])).rows).toEqual([]);
     await expect(disclose(g.survivor, job, event, runtime)).rejects.toMatchObject({ code: "42501" });
     await expect(disclose(g.survivor, job, event, shadow)).rejects.toMatchObject({ code: "42501" });
-    await expect(withTenant(emergency, ctx(O), db => db.$client.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,'support_conversation')", [T, job, g.survivor, event]))).rejects.toMatchObject({ code: "42501" });
+    const foreignSignal = await insertSignal(L, false, O), foreignBefore = await state([foreignSignal]);
+    let foreignScopeOpened = false;
+    await expect(withTenant(emergency, verifiedTenantContextForQueuedJob(O), async db => {
+      await db.$client.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,'support_conversation')", [O, L, foreignSignal, randomUUID()]);
+      foreignScopeOpened = true;
+      return db.$client.query("SELECT app.record_shadow_disclosure($1,$2,$3,$4,'support_conversation')", [T, job, g.survivor, event]);
+    })).rejects.toMatchObject({ code: "42501" });
+    expect(foreignScopeOpened).toBe(true);
+    expect(await state([foreignSignal])).toEqual(foreignBefore);
     await expect(disclose(g.survivor, await newJob(), event)).rejects.toMatchObject({ code: "23503" });
     expect(await state(g.ids)).toEqual(before);
   });
@@ -176,11 +198,11 @@ describe("MIGFIX-7 real PostgreSQL group disclosure", () => {
     const obs = [observation(job, ref, "completion_photo", true), observation(job, ref, "note_or_voice")];
     for (const o of obs) await evidence(o);
     const repo = new ShadowDetectionRepository(shadow), request = batch(job, obs);
-    await repo.persist(ctx(), request);
+    await repo.persist(verifiedTenantContextForQueuedJob(T), request);
     const signals = (await admin.query("SELECT id FROM app.shadow_commercial_signal WHERE job_id=$1", [job])).rows;
     expect(signals).toHaveLength(2);
     for (const { id } of signals) expect(await reasons(id)).toEqual(["disclosed_before_lock", "surfaced_early"]);
-    await repo.persist(ctx(), request);
+    await repo.persist(verifiedTenantContextForQueuedJob(T), request);
     expect((await admin.query("SELECT decision_id FROM app.shadow_must_surface_firing WHERE job_id=$1", [job])).rows).toHaveLength(1);
     expect((await admin.query("SELECT id FROM app.shadow_disclosure_event WHERE job_id=$1", [job])).rows).toHaveLength(1);
     const audit = (await admin.query(`SELECT id,version,tenant_id AS "tenantId",sequence::int,actor_ref AS "actorRef",event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",occurred_at AS "occurredAt",payload,payload_hash AS "payloadHash",previous_hash AS "previousHash",event_hash AS "eventHash" FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence`, [T])).rows as AuditEvent[];
@@ -193,10 +215,10 @@ describe("MIGFIX-7 real PostgreSQL group disclosure", () => {
     const o = observation(job, randomUUID(), "completion_photo", true);
     await evidence(o);
     const mandatory = await insertSignal(job, true);
-    await withTenant(shadow, ctx(), db => db.$client.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)",
+    await shadowJob(T, job, db => db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)",
       [T, job, mandatory, o.evidence.id, o.evidence.objectVersionId, o.evidence.sha256, o.evidence.serverReceivedAt]));
     await lockJob(job);
-    await expect(withTenant(shadow, ctx(), db => db.$client.query("SELECT app.surface_shadow_signal_early($1,$2,$3,$4,$5,$6,'safety','shadow_attribution_policy_v3',$7,$8,$9::jsonb)",
+    await expect(shadowJob(T, job, db => db.query("SELECT app.surface_shadow_signal_early($1,$2,$3,$4,$5,$6,'safety','shadow_attribution_policy_v3',$7,$8,$9::jsonb)",
       [T, job, mandatory, randomUUID(), randomUUID(), randomUUID(), o.evidence.id, o.evidence.objectVersionId, JSON.stringify(o.facts)]))).rejects.toThrow("early surface requires an unlocked job");
     expect((await admin.query("SELECT decision_id FROM app.shadow_must_surface_firing WHERE job_id=$1", [job])).rows).toEqual([]);
     const { event } = await disclose(g.dups[0]!, job);

@@ -1,10 +1,12 @@
+import { sourceFixtureUrl } from "./source-fixture-url.js";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import type { TaskList } from "graphile-worker";
+import type { ScheduledPlan } from "./readiness-scheduler.js";
 import { registerFinalCheckTask } from "./worker-task-extensions.js";
 import { executeFinalCheckTask } from "./final-check-task-executor.js";
 
-const { testTenantContext } = await import(new URL("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
+const { testTenantContext } = await import(sourceFixtureUrl("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
 const unavailablePorts = { read: vi.fn(async () => { throw new Error("FINAL_CHECK_FORBIDDEN"); }), execute: vi.fn(), publish: vi.fn() };
 const task = {
   version: "final-check-task.v1", tenantId: "10000000-0000-4000-8000-000000000001",
@@ -32,20 +34,36 @@ describe("SV5PRE final-check registration", () => {
 
   it("PRE-Q6-01 actual worker composition installs the strict task before the Graphile runner", async () => {
     const registered = vi.fn(async (..._args: unknown[]) => ({ stop: vi.fn() }));
-    const queries = vi.fn(async () => ({ rows: [{ safe: true }] }));
-    vi.doMock("pg", () => ({ Pool: class { query = queries; end = async () => undefined; } }));
+    const scope = { tenantId: task.tenantId, jobId: task.jobId, taskId: task.executionId };
+    const plan: ScheduledPlan = { version: "readiness-scheduled-plan.v1", synthetic: true, scope, factRevision: 1,
+      ruleRevision: "readiness-scheduled.v1", status: "confirmed", plannedDate: "2026-11-05", jurisdiction: "england-and-wales",
+      localTime: "09:00", timeZone: "Europe/London", predecessors: [], edges: [],
+      material: { requiredUnits: 1, landedUnits: 1 }, access: false, crew: true };
+    const candidate = { ...plan, scope: { ...scope, taskId: task.manifestId }, plannedDate: "2026-11-06", access: true };
+    const load = vi.fn(async (..._args: unknown[]) => plan);
+    const loadJobPlans = vi.fn(async (..._args: unknown[]) => [candidate]);
+    const recordProposal = vi.fn(async (..._args: unknown[]) => undefined);
+    vi.doMock("./readiness-store.js", () => ({ DurableReadinessStore: class { load = load; loadJobPlans = loadJobPlans; recordProposal = recordProposal; } }));
+    const queries = vi.fn(async (..._args: unknown[]) => ({ rows: [{ safe: true }] }));
+    const pinnedQuery = vi.fn(async (..._args: unknown[]) => ({ rows: [{ claimed: true }] }));
+    const release = vi.fn();
+    const begin = vi.fn(async (..._args: unknown[]) => { throw new Error("FINAL_CHECK_FORBIDDEN"); });
+    vi.doMock("pg", () => ({ Pool: class { query = queries; connect = async () => ({ query: pinnedQuery, release }); end = async () => undefined; } }));
     vi.doMock("graphile-worker", async () => ({ ...await vi.importActual<Record<string, unknown>>("graphile-worker"), run: registered }));
     vi.doMock("@jobguard/db", async () => ({
       ...await vi.importActual<Record<string, unknown>>("@jobguard/db"),
       ActionExecutor: class { execute = async () => undefined; },
       ShadowObservationReader: class { assertTermsRelation = async () => undefined; },
       ShadowDetectionRepository: class {}, FixtureObservationSources: class {},
-      FinalCheckRepository: class { manifest = unavailablePorts.read; },
+      FinalCheckRepository: class { manifest = unavailablePorts.read; begin = begin; },
     }));
     const listeners = vi.spyOn(process, "once").mockReturnValue(process);
     for (const name of ["GRAPHILE_DATABASE_URL", "RUNTIME_DATABASE_URL", "SHADOW_DATABASE_URL"]) vi.stubEnv(name, "postgresql://localhost/sv5pre");
+    vi.stubEnv("WORKER_DATABASE_URL", "postgresql://localhost/outbound-worker");
     vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
     try {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
       vi.resetModules(); await import("./worker.js");
       expect(registered).toHaveBeenCalledTimes(1);
       const options = registered.mock.calls[0]![0] as { taskList: TaskList };
@@ -53,21 +71,65 @@ describe("SV5PRE final-check registration", () => {
       const handler = options.taskList.final_check!, helpers = {} as Parameters<typeof handler>[1];
       await expect(handler({ ...task, completed: true }, helpers)).rejects.toMatchObject({ code: "INVALID_FINAL_CHECK_TASK" });
       await expect(handler(task, helpers)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+      const practice=options.taskList.final_check_practice_run!;
+      const original={version:"final-check-practice-run.v1",tenantId:task.tenantId,jobId:task.jobId,lockId:task.lockId};
+      await practice(original,helpers);
+      await practice({...original,manifestId:task.manifestId,attempt:2},helpers);
+      expect(begin).not.toHaveBeenCalled();
+      expect(pinnedQuery).not.toHaveBeenCalled();
+      expect(unavailablePorts.execute).not.toHaveBeenCalled();
+      expect(unavailablePorts.publish).not.toHaveBeenCalled();
+      await expect(practice({...original,attempt:2},helpers)).rejects.toThrow();
+      const cycleId=task.executionId;
+      await expect(practice({...original,manifestId:task.manifestId,attempt:2,cycleId},helpers)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+      expect(begin).toHaveBeenCalledTimes(1);
+      expect(begin.mock.calls[0]?.[0]).toMatchObject({tenantId:task.tenantId});
+      expect(begin.mock.calls[0]?.slice(1)).toEqual([task.jobId,"shadow-detection.v1",task.manifestId,2,task.lockId]);
+      expect(pinnedQuery.mock.calls.find(([sql])=>String(sql).includes("cycle_claim"))?.[1]).toEqual([task.tenantId,task.jobId,task.lockId,task.manifestId,2,cycleId]);
+      expect(pinnedQuery.mock.calls.find(([sql])=>String(sql).includes("cycle_finish"))?.[0]).toContain("false");
+      expect(release).toHaveBeenCalledTimes(1);
+      expect(unavailablePorts.execute).not.toHaveBeenCalled();
+      expect(unavailablePorts.publish).not.toHaveBeenCalled();
+      // Execute the real worker's schedule/evaluate composition, rather than a test binding.
+      const addJob = vi.fn(async (..._args: unknown[]) => ({}));
+      await options.taskList.readiness_schedule!({ version: "readiness-schedule-task.v1", scope },
+        { addJob } as unknown as Parameters<typeof handler>[1]);
+      expect(addJob).toHaveBeenCalledTimes(1);
+      await options.taskList.readiness_evaluate!(addJob.mock.calls[0]![1], helpers);
+      const queuedContext = load.mock.calls.at(-1)![0];
+      expect(queuedContext).toMatchObject({ tenantId: scope.tenantId });
+      expect(loadJobPlans).toHaveBeenCalledExactlyOnceWith(queuedContext, scope);
+      expect(recordProposal).toHaveBeenCalledExactlyOnceWith(queuedContext, expect.objectContaining({
+        ready: false, resequence: [{ taskId: candidate.scope.taskId, fromDate: candidate.plannedDate, toDate: plan.plannedDate }],
+        status: "proposal", programmeChanged: false, feeEligible: false, recoveryFeePence: 0,
+      }));
       const discovery=options.taskList.discover_final_check_requests!;
-      const request={lock_id:task.lockId,tenant_id:task.tenantId,job_id:task.jobId};
+      const request={lock_id:task.lockId,tenant_id:task.tenantId,job_id:task.jobId,manifest_id:task.manifestId,attempt:2,cycle_id:task.executionId,executions:0,enqueued_at:null};
       for(const fail of [false,true]){
         const statements:string[]=[];
-        const query=vi.fn(async(sql:string)=>{
+        const query=vi.fn(async(sql:string,_values?:unknown[])=>{
           statements.push(sql);
-          if(sql.startsWith("SELECT lock_id"))return {rows:[request]};
+          if(sql.includes("FROM infrastructure.final_check_request"))return {rows:[request]};
+          if(sql.includes("pg_try_advisory"))return {rows:[{locked:true}]};
           if(fail&&sql.includes("graphile_worker.add_job"))throw new Error("QUEUE_UNAVAILABLE");
           return {rows:[]};
         });
         const discoveryHelpers={withPgClient:async(fn:(client:unknown)=>Promise<unknown>)=>fn({query})} as unknown as Parameters<typeof discovery>[1];
         if(fail){await expect(discovery({},discoveryHelpers)).rejects.toThrow("QUEUE_UNAVAILABLE");expect(statements.at(-1)).toBe("ROLLBACK");expect(statements.some(sql=>sql.startsWith("UPDATE"))).toBe(false);}
-        else{await discovery({},discoveryHelpers);expect(statements[0]).toBe("BEGIN");expect(statements.at(-1)).toBe("COMMIT");expect(statements[2]).toContain("graphile_worker.add_job");expect(statements[3]).toContain("UPDATE infrastructure.final_check_request");}
+        else{
+          await discovery({},discoveryHelpers);
+          expect(statements[0]).toBe("BEGIN");expect(statements.at(-1)).toBe("COMMIT");
+          const add=query.mock.calls.find(([sql])=>sql.includes("graphile_worker.add_job"))!;
+          const ack=query.mock.calls.find(([sql])=>sql.startsWith("UPDATE infrastructure.final_check_request"))!;
+          expect(add[0]).toContain("max_attempts := 3");
+          expect(add[1]).toEqual([JSON.stringify({version:"final-check-practice-run.v1",tenantId:task.tenantId,jobId:task.jobId,lockId:task.lockId,manifestId:task.manifestId,attempt:2,cycleId:task.executionId}),`final-check-practice:${task.manifestId}:${task.executionId}`]);
+          expect(ack[0]).toContain("manifest_id=$2 AND cycle_id=$3 AND enqueued_at IS NULL");
+          expect(ack[1]).toEqual([task.lockId,task.manifestId,task.executionId]);
+          expect(statements.indexOf(add[0])).toBeLessThan(statements.indexOf(ack[0]));
+        }
       }
     } finally {
+      vi.useRealTimers(); vi.doUnmock("./readiness-store.js");
       listeners.mockRestore(); vi.unstubAllEnvs(); vi.doUnmock("pg"); vi.doUnmock("graphile-worker"); vi.doUnmock("@jobguard/db"); vi.resetModules();
     }
   });
@@ -79,7 +141,7 @@ describe("SV5PRE final-check registration", () => {
     // Inspect the new modules' import boundaries, without pinning any shared file's bytes or hashes.
     const ts = await import("typescript");
     for (const name of ["worker-task-extensions.ts", "final-check-task-executor.ts"]) {
-      const source = ts.createSourceFile(name, await readFile(new URL(name, import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
+      const source = ts.createSourceFile(name, await readFile(sourceFixtureUrl(name, import.meta.url), "utf8"), ts.ScriptTarget.Latest, true);
       for (const statement of source.statements) if (ts.isImportDeclaration(statement) && statement.importClause && !statement.importClause.isTypeOnly) {
         const bindings = statement.importClause.namedBindings;
         if (bindings && ts.isNamedImports(bindings)) for (const element of bindings.elements) {

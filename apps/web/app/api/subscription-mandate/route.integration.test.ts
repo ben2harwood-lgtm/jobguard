@@ -7,6 +7,9 @@ import { createWorkFixture, closeWorkFixture, type WorkFixture } from "../../../
 import { meterCompany } from "../../../../../packages/db/test/meter-persistence-fixtures.js";
 const state = vi.hoisted(() => ({ identity: undefined as unknown, pool: undefined as unknown, token: "", csrf: "" }));
 vi.mock("server-only", () => ({}));
+vi.mock("@jobguard/db", async importOriginal => ({
+  ...await importOriginal<typeof import("@jobguard/db")>(), closeOutboundWorkerPool: vi.fn(),
+}));
 vi.mock("../../lib/identity-server", () => ({ identityApplication: () => state.identity,
   identityCredentials: async (request: Request) => ({ sessionToken: state.token, csrfToken: state.csrf, origin: request.headers.get("origin") }) }));
 vi.mock("../../lib/synthetic-server", () => ({ syntheticPool: () => state.pool }));
@@ -28,7 +31,9 @@ async function prepare() {
   const digest = (value: string) => createHmac("sha256", "fictional-m413-test-secret").update(value).digest("hex");
   const sessionDigest = digest(`session:${state.token}`);
   await fixture.admin.query("UPDATE identity.session SET token_digest=$1,csrf_token=$2 WHERE id=$3", [sessionDigest, state.csrf, company.sessionId]);
-  const principal = { identityUserId: userId, sessionId: company.sessionId, csrfToken: state.csrf };
+  const principal = Object.defineProperty(
+    { identityUserId: userId, sessionId: company.sessionId, csrfToken: state.csrf },
+    "sessionCredential", { value: sessionDigest });
   const membership = { id: company.actorId, tenantId: company.tenantId, identityUserId: userId, role: "owner", name: "Fictional owner" };
   // Authentication is a seam here; SQL re-authenticates the real persisted session and owner.
   const provider = { digest, authenticate: async () => principal, findMembership: async () => membership };

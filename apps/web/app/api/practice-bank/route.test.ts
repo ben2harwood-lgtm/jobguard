@@ -6,7 +6,10 @@ vi.mock("@jobguard/api/workspace", async () => import("../../../../api/src/pract
 vi.mock("../../lib/identity-server", () => ({ identityCredentials: async () => s.credentials, identityApplication: () => ({ allowedOrigin: "https://company.invalid" }) }));
 vi.mock("../../lib/practice-bank-server", () => ({ practiceBankApplication: () => new PracticeBankApplication({
   allowedOrigin: "https://company.invalid", provider: { digest: () => "a".repeat(64),
-    authenticate: async (token: string) => token === "s".repeat(32) ? { csrfToken: "c".repeat(24) } : undefined,
+    authenticate: async (token: string) => token === "s".repeat(32) ? Object.defineProperty({
+      identityUserId: "00000000-0000-4000-8000-000000000001",
+      sessionId: "00000000-0000-4000-8000-000000000001", csrfToken: "c".repeat(24),
+    }, "sessionCredential", { value: "a".repeat(64) }) : undefined,
     findMembership: async (_p: unknown, id: string) => id === "00000000-0000-4000-8000-000000000001" ? { id, tenantId: id, identityUserId: id, role: "owner", email: "fictional@company.invalid" } : undefined },
 } as never, { movements: s.movements, start: s.start, stop: s.stop, pull: s.pull } as never,
 { pending: new Map(), adapter: new FakeTrueLayerAisAdapter(), vault: new SyntheticAisTokenVault(), pages: new Map() }) }));

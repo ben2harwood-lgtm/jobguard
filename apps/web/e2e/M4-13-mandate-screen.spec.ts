@@ -13,7 +13,7 @@ test("owner approves the exact displayed practice terms, then revokes and cancel
   const code = await page.getByTestId("fixture-code").textContent(); expect(code).toMatch(/^\d{8}$/u);
   await page.getByLabel("Eight-digit code").fill(code!);
   await page.getByRole("button", { name: "Verify code", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Signed in", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "You're signed in.", exact: true })).toBeVisible();
   await page.goto("/plans/mandate");
   const main = page.getByRole("main");
   await expect(main).toContainText("not approved"); await expect(main).toContainText("no authority");

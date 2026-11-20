@@ -13,7 +13,7 @@ vi.mock("../../../../../lib/northside-server", () => ({
   demoActor: h.actor, demoContext: async () => tenant,
   bodyOf: (r: Request) => r.json(),
   parseDemoBody: (schema: z.ZodType, raw: unknown) => { const p = schema.safeParse(raw); if (!p.success) throw { code: "INVALID_COMMAND", status: 422 }; return p.data; },
-  requireOrigin: (r: Request) => { if (!isTrustedBrowserOrigin(r, {})) throw { code: "ORIGIN_FORBIDDEN", status: 403 }; },
+  requireOrigin: (r: Request) => { if (!isTrustedBrowserOrigin(r, { NODE_ENV: "test" })) throw { code: "ORIGIN_FORBIDDEN", status: 403 }; },
   json: (body: unknown) => Response.json(body),
   failure: (e: { code: string; status?: number }) => Response.json({ code: e.code }, { status: e.status ?? 409 }),
 }));
@@ -133,4 +133,50 @@ it("rejects a stale displayed approval before checking a conflicting receipt", a
   expect(await response.json()).toEqual({ code: "STALE_REVISION" });
   expect(h.query).not.toHaveBeenCalled();
   expect(h.approve).not.toHaveBeenCalled();
+});
+
+
+it("refuses an ineligible rejection without an explicit command ID before receipt lookup", async () => {
+  h.queue.mockResolvedValue([]);
+  h.query.mockResolvedValue({ rows: [{ extra_id: extra.extraId, job_id: extra.jobId }] });
+  const response = await call("reject", { ...binding, commandId: undefined, reasonCode: "not_agreed" });
+  expect(response.status).toBe(403);
+  expect(await response.json()).toEqual({ code: "PERMISSION_DENIED" });
+  expect(h.query).not.toHaveBeenCalled();
+  expect(h.extras).not.toHaveBeenCalled();
+  expect(h.reject).not.toHaveBeenCalled();
+});
+it("refuses a stale displayed rejection before receipt lookup", async () => {
+  h.query.mockResolvedValue({ rows: [{ extra_id: extra.extraId, job_id: extra.jobId }] });
+  const response = await call("reject", { ...binding, revisionHash: "b".repeat(64), reasonCode: "not_agreed" });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ code: "STALE_REVISION" });
+  expect(h.query).not.toHaveBeenCalled();
+  expect(h.reject).not.toHaveBeenCalled();
+});
+it("replays a completed rejection with its original explicit command ID and result", async () => {
+  h.queue.mockResolvedValue([]);
+  h.query.mockResolvedValue({ rows: [{ extra_id: extra.extraId, job_id: extra.jobId }] });
+  const body = { ...binding, commandId: common.commandId, reasonCode: "not_agreed" };
+  const first = await call("reject", body);
+  expect(first.status).toBe(200);
+  const result = await first.json();
+  expect(result).toEqual({ version: "northside-rejected.v1", environment: "synthetic_demo", realExternalActions: 0, result: { state: "rejected" } });
+  const replay = await call("reject", body);
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toEqual(result);
+  expect(h.reject).toHaveBeenCalledTimes(2);
+  expect(h.reject).toHaveBeenLastCalledWith(tenant, member, { ...common, ...binding, version: "reject-extra.v1", reasonCode: "not_agreed" });
+  expect(h.query).toHaveBeenLastCalledWith(expect.stringContaining("r.actor_membership_id=$3 AND r.command_type='RejectExtra' AND r.status='succeeded'"), [tenant.tenantId, common.commandId, member.membershipId, binding.requestId, String(binding.stepIndex)]);
+});
+it.each([
+  { extra_id: id(90), job_id: extra.jobId },
+  { extra_id: extra.extraId, job_id: id(90) },
+])("refuses a completed rejection receipt for another extra or job: %j", async receipt => {
+  h.queue.mockResolvedValue([]);
+  h.query.mockResolvedValue({ rows: [receipt] });
+  const response = await call("reject", { ...binding, reasonCode: "not_agreed" });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ code: "COMMAND_CONFLICT" });
+  expect(h.reject).not.toHaveBeenCalled();
 });

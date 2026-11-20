@@ -23,6 +23,38 @@ beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await 
 afterAll(async () => { await closeFinalCheckFixture(f); vi.unstubAllEnvs(); });
 
 describe("0518 demo-only guide helpers", () => {
+ it("LATER-SAFETY-19 delivers the same demo link the page returned and redeems only its tenant-bound grant", async () => {
+  const a = await guide.locked();
+  const { ShadowDemoGuideApplication } = await import("../../../apps/api/src/shadow-demo-guide.application.js");
+  const { ActionExecutor } = await import("../src/outbox.js");
+  const issued = await new ShadowDemoGuideApplication(f.runtime, a.sessionId, "synthetic_demo").issueCustomerLink(a.jobId, { version: "shadow-guide-customer-link.v1", customerId: a.customer }, hash);
+  const stored = (await f.admin.query("SELECT row_to_json(g) AS g, row_to_json(o) AS outbox, row_to_json(auth) AS auth FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) JOIN app.action_authorization auth ON(auth.tenant_id,auth.id)=(o.tenant_id,o.authorization_id) WHERE g.tenant_id=$1 AND g.job_id=$2", [a.tenantId, a.jobId])).rows[0];
+  expect(stored.outbox.immutable_content).toMatch(new RegExp(`^customer-signin-reference\\.v1:${a.tenantId}/${a.jobId}/${a.customer}/[A-Za-z0-9_-]{43}$`));
+  expect(stored.outbox).toMatchObject({ content_hash: hash(stored.outbox.immutable_content), adapter: "fake_email", policy_version: "customer-signin.synthetic.v1" });
+  expect(stored.auth.content_hash).toBe(stored.outbox.content_hash);
+  const deliver = vi.fn(async (_action: unknown, path?: string) => {
+   expect(path).toBe(issued.path);
+   return { kind: "succeeded" as const, providerReference: "fictional-demo-email" };
+  });
+  const adapter = { name: "fake_email" as const, supportsProviderDeduplication: false, deliver, reconcile: async () => "unknown" as const };
+  await new ActionExecutor(f.runtime, new Map([[adapter.name, adapter]]), { emit: () => undefined }, hash).execute(a.context, stored.outbox.id);
+  expect(deliver).toHaveBeenCalledTimes(1);
+  const secret = deliver.mock.calls[0]![1]!.split("/").at(-1)!;
+  expect(stored.g.token_digest).toBe(hash(`customer-link:${secret}`));
+  expect(JSON.stringify(stored)).not.toContain("/customer/sign-in#");
+  expect(JSON.stringify(stored)).not.toContain(secret);
+  const redeem = async (tenantId: string) => {
+   const db = await f.admin.connect();
+   try {
+    await db.query("BEGIN"); await db.query("SET LOCAL ROLE jobguard_identity");
+    const result = await db.query("SELECT identity.customer_portal_use($1,$2,$3,$4,$5,'redeem') result", [tenantId, a.jobId, a.customer, hash(`customer-link:${secret}`), hash(`customer-session:${randomUUID()}`)]);
+    await db.query("COMMIT"); return result;
+   } catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
+  };
+  await expect(redeem(randomUUID())).rejects.toMatchObject({ code: "42501" });
+  await expect(redeem(a.tenantId)).resolves.toHaveProperty("rows");
+  await expect(redeem(a.tenantId)).rejects.toMatchObject({ code: "42501" });
+ }, 600000);
  it("0650 never stores the demo sign-in path or secret, including legacy path callers", async () => {
   const a = await guide.locked(), secret = Buffer.from(randomUUID() + randomUUID()).toString("base64url").slice(0, 43);
   const l = link(a, a.customer, secret);
@@ -53,6 +85,8 @@ describe("0518 demo-only guide helpers", () => {
   const a = await guide.locked(), l = link(a, a.customer);
   const predecessor = await readFile(new URL("../migrations/0518_shadow_demo_guide.sql", import.meta.url), "utf8");
   const migration = await readFile(new URL("../migrations/0650_demo_customer_link_reference.sql", import.meta.url), "utf8");
+  const applyRedaction = () => withTenant(f.admin, a.context, db =>
+   db.$client.query(migration.replace(/^BEGIN;\n/u, "").replace(/\nCOMMIT;\s*$/u, "")));
   const original = predecessor.slice(predecessor.indexOf("CREATE FUNCTION app.demo_issue_customer_link("), predecessor.indexOf("ALTER FUNCTION app.demo_issue_customer_link")).replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
   let grant: string;
   try {
@@ -62,7 +96,7 @@ describe("0518 demo-only guide helpers", () => {
    expect(issued).toHaveProperty("ok");
    grant = issued.ok!.result;
    expect((await f.admin.query("SELECT o.immutable_content FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [a.tenantId, grant])).rows[0].immutable_content).toBe(l.path);
-  } finally { await f.admin.query(migration); }
+  } finally { await applyRedaction(); }
   const content = `customer-signin-redacted.v1:${hash(l.path)}`;
   const stored = (await f.admin.query("SELECT o.*,g.revoked_at FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [a.tenantId, grant!])).rows[0];
   expect(stored).toMatchObject({ immutable_content: content, content_hash: hash(content), status: "cancelled", revoked_at: expect.any(Date) });
@@ -76,7 +110,7 @@ describe("0518 demo-only guide helpers", () => {
   } });
   expect(history[1].event_type).toBe("customer_portal.redacted");
   expect(JSON.stringify(history)).not.toContain(l.path);
-  await f.admin.query(migration);
+  await applyRedaction();
   expect(await events()).toEqual(history);
  }, 600000);
  it("the migration is applied once and listed", async () => {
@@ -98,7 +132,9 @@ describe("0518 demo-only guide helpers", () => {
   expect(await issue(a, a.customer, b.digest, l.digest, l.path)).toEqual(forbidden);
   expect(await grants(a)).toBe(0);
   const made = hash(randomUUID());
-  expect(await read("demo_source_hold_state", open, made)).toEqual(forbidden);
+  // Raw, class (a): a made-up session binds no request, so the binding check refuses first; nothing is written.
+  expect(await read("demo_source_hold_state", open, made)).toEqual({ refused: "REQUEST_BINDING_REFUSED" });
+  expect(await holds(open)).toBe(0);
  }, 600000);
  it("the link is refused before lock and before a found extra is confirmed", async () => {
   const early = await seedFinalCheckJob(f), customer = await guide.customerOf(early), e = link(early, customer);

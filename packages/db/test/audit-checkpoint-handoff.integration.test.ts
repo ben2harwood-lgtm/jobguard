@@ -8,11 +8,12 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { bootstrapSyntheticDemo, SYNTHETIC_DATABASE_NAME } from "../src/demo-bootstrap.js";
 import { runAuditCheckpointHandoff } from "../src/audit-checkpoint-handoff.js";
-import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, appendAuditBatch, verifyAuditChain, verifySignedAuditExport, verifiedTenantContextFromMembership, type AuthenticatedMembership, type AuditEvent, type AuditCheckpoint, type TenantTransaction } from "../src/index.js";
+import { AuditExportRepository, ContractorRepository, requireContractorRequestContext, exportAuditCheckpoints, appendAuditBatch, verifyAuditChain, verifySignedAuditExport, verifiedTenantContextFromMembership, type AuthenticatedMembership, type AuditEvent, type AuditCheckpoint, type TenantTransaction } from "../src/index.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, directory: string, admin: Pool, owner: Pool, runtime: Pool, ownerUrl: string, runtimeUrl: string, alternateUrl: string;
 let a: AuthenticatedMembership, b: AuthenticatedMembership, contractor: ContractorRepository, priorCatalog: unknown;
+let aSession: string;
 const operator = "test.operator-1";
 const run = (tenantId?: string) => runAuditCheckpointHandoff({ ownerUrl, operator, ...(tenantId ? { tenantId } : {}) });
 const tables = ["app.audit_event", "audit_control.audit_head", "audit_control.checkpoint", "app.audit_export_checkpoint", "app.audit_export"];
@@ -45,7 +46,8 @@ async function ordinary(p: AuthenticatedMembership) {
   await contractor.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: view.revision, kind: "member.invite", role: "supervisor", email: `${randomUUID()}@fictional.invalid`, scope: { kind: "tenant", id: p.tenantId }, clientId: null, contractId: null });
 }
 async function exportFor(p: AuthenticatedMembership) {
-  return new AuditExportRepository(runtime).create(verifiedTenantContextFromMembership(p), { membershipId: p.membershipId, identityUserId: p.identityUserId }, { version: "audit-export-request.v1", commandId: randomUUID() });
+  // LP-6d: the export is the practice owner's own bound request (its session principal's request context).
+  return new AuditExportRepository(runtime).create(requireContractorRequestContext(p), { membershipId: p.membershipId, identityUserId: p.identityUserId }, { version: "audit-export-request.v1", commandId: randomUUID() });
 }
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
@@ -71,7 +73,8 @@ beforeEach(async () => {
   try { await reset.query("BEGIN"); await reset.query("SET LOCAL session_replication_role=replica"); await reset.query(`TRUNCATE ${tables.join(",")} CASCADE`); await reset.query("COMMIT"); }
   catch (error) { await reset.query("ROLLBACK"); throw error; }
   finally { reset.release(); }
-  a = await contractor.startPractice(randomUUID()); b = await contractor.startPractice(randomUUID());
+  aSession = randomUUID();
+  a = await contractor.startPractice(aSession); b = await contractor.startPractice(randomUUID());
   await seedActiveContractorAgreement(admin,a.tenantId); await seedActiveContractorAgreement(admin,b.tenantId);
 });
 afterAll(async () => {
@@ -144,6 +147,7 @@ async function interveningAppend(equal: boolean, keepOther: boolean) {
     const writer = (await appender.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0]!;
     expect(writer.pid).not.toBe(waiter.pid);
     await appender.query("BEGIN");
+    await appender.query("SELECT app.bind_request('contractor_practice',$1,$2)", [aSession, a.tenantId]);
     await appender.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
     await appendAuditBatch({ $client: appender } as TenantTransaction, [{ id: randomUUID(), version: "audit.v1", actorRef: "test:runtime", eventType: "test.append", subjectType: "tenant", subjectRef: a.tenantId, payload: {} }]);
     await appender.query("COMMIT");
@@ -223,7 +227,8 @@ it("[A6] only A advances with the exact hand-off event, operator and stored serv
   for (const table of ["app.audit_event", "audit_control.checkpoint", "app.audit_export_checkpoint"]) expect((afterA[table] as unknown[]).length).toBe((beforeA[table] as unknown[]).length + 1);
   const { entries, rows } = await verify(a.tenantId); await verify(b.tenantId);
   const event = entries.at(-1)!;
-  expect(event).toMatchObject({ version: "audit.v2", actorRef: "operations:audit-checkpoint-handoff", eventType: "audit.checkpoint.handed_off", subjectType: "audit-checkpoint", subjectRef: a.tenantId, payload: { references: { auditTrust: "lower_trust", environment: "synthetic_demo", priorSequence: h.sequence, operator, sessionUser: "fixture_owner" }, hashes: { priorHead: h.event_hash }, classifications: { action: "security" } } });
+  // LP-6e 0758: new events are audit.v3; the operator job is sealed as system work, never a person.
+  expect(event).toMatchObject({ version: "audit.v3", actorRef: "operations:audit-checkpoint-handoff", eventType: "audit.checkpoint.handed_off", subjectType: "audit-checkpoint", subjectRef: a.tenantId, payload: { references: { auditTrust: "lower_trust", auditActorKind: "system", auditActorRef: "system:database:fixture_owner", environment: "synthetic_demo", priorSequence: h.sequence, operator, sessionUser: "fixture_owner" }, hashes: { priorHead: h.event_hash }, classifications: { action: "security" } } });
   expect(event.occurredAt).toBeInstanceOf(Date); expect(rows.at(-1)).toMatchObject({ sequence: event.sequence, eventHash: event.eventHash });
   expect(rows).toHaveLength(2); expect(await snapshot(b.tenantId)).toEqual(beforeB);
 });

@@ -1,3 +1,4 @@
+import { isRequestBindingRefusal } from "./request-binding-error.js";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
@@ -61,6 +62,10 @@ export class AccountingExportRepository {
    throw new StoredAccountingExportError("EXPORT_INVALID_INPUT");
   try {
    return await withTenant(this.pool, context, async db => {
+    // The fake executor and HTTP caller use the same exact company credential.
+    // Bind it before the guarded export routine, including status reads/retries.
+    if (operation === "preview" || operation === "read" || operation === "approve" || operation === "claim" || operation === "reconcile")
+     await db.$client.query("SELECT app.bind_request($1, $2, $3)", ["real", digest, context.tenantId]);
     const routeOperation = operation === "routeChangePreview" || operation === "routeChangeConfirm";
     const sql = operation === "routeChangeRead" ? "SELECT app.accounting_export_route_read($1,$2,$3) result" : routeOperation ? "SELECT app.accounting_export_route($1,$2,$3,$4,$5::jsonb) result"
      : "SELECT app.accounting_export($1,$2,$3,$4,$5::jsonb) result";
@@ -76,7 +81,7 @@ export class AccountingExportRepository {
    });
   } catch (error) {
    const message = error instanceof Error ? error.message : "";
-   throw new StoredAccountingExportError(message === "METER_FORBIDDEN" ? "EXPORT_FORBIDDEN" :
+   throw new StoredAccountingExportError((message === "METER_FORBIDDEN" || isRequestBindingRefusal(error)) ? "EXPORT_FORBIDDEN" :
     /^EXPORT_[A-Z_]+$/.test(message) ? message : "EXPORT_UNAVAILABLE");
   }
  }

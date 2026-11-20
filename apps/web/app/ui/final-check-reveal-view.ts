@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FINAL_CHECK_EMPTY_TEXT, FINAL_CHECK_RUNNING_TEXT } from "@jobguard/core";
+import { FINAL_CHECK_EMPTY_TEXT, FINAL_CHECK_RUNNING_TEXT, MAX_MONEY_PENCE } from "@jobguard/core";
 
 const uuid = z.string().uuid();
 const evidence = z.object({ id: uuid, receivedAt: z.string(), source: z.string().nullable().optional(), evidenceAfterLock: z.boolean().optional() }).passthrough();
@@ -7,6 +7,8 @@ const item = z.object({
  signalId: uuid, signalRevision: z.number().int().nonnegative(), description: z.string(), evidence: z.array(evidence).nullable(),
  comparisons: z.object({ lockedLineIds: z.array(uuid), baselineItemIds: z.array(uuid) }).passthrough(),
  disposition: z.string().nullable(), answer: z.string().nullable(),
+ variationId: uuid.nullable().optional(),
+ estimatedValuePence: z.number().int().safe().nonnegative().max(MAX_MONEY_PENCE).nullable().optional(),
 }).passthrough();
 const postLockItem = z.object({ signalId: uuid, description: z.string(), evidence: z.array(evidence).nullable() }).passthrough();
 const lockedLine = z.object({ id: uuid, kind: z.enum(["baseline", "variation"]), scopeItemId: uuid, description: z.string() }).strict();
@@ -34,7 +36,7 @@ export const dispositionLabels: Readonly<Record<string, string>> = {
 export function revealStatus(read: FinalCheckRead): string {
  if (read.state === "unlocked") return "JobGuard's final check runs after you complete the final account.";
  if (read.state === "pending") return FINAL_CHECK_RUNNING_TEXT;
- if (read.state === "failed") return "The final check could not finish. Nothing is shown until it does.";
+ if (read.state === "failed") return "The final check could not finish, so nothing is shown and this job's bill stays locked.";
  return read.items.length === 0 ? FINAL_CHECK_EMPTY_TEXT : `JobGuard's final check found ${read.items.length === 1 ? "1 thing" : `${read.items.length} things`} that may be missing from your bill.`;
 }
 
@@ -52,4 +54,17 @@ export function dispositionCommand(read: FinalCheckRead, revealed: RevealItem, a
 
 export function catchCommand(read: FinalCheckRead, revealed: RevealItem, commandId: string) {
  return { version: "final-check.catch.v1" as const, commandId, lockId: read.lockId!, runId: read.runId!, signalId: revealed.signalId, expectedSignalRevision: revealed.signalRevision };
+}
+
+/** Job-scoped invalidation only. Consumers reread their own authorised endpoints. */
+export const FINAL_CHECK_CHANGED_EVENT = "jobguard:final-check-changed";
+
+/** Only an authorised completed reveal may associate a proposal with a saved draft. */
+export function catchPriceProposals(read: FinalCheckRead): Map<string, number | null> {
+ const proposals = new Map<string, number | null>();
+ if (read.state !== "completed") return proposals;
+ for (const item of read.items) {
+  if (item.disposition === "confirmed_extra" && item.variationId) proposals.set(item.variationId, item.estimatedValuePence ?? null);
+ }
+ return proposals;
 }

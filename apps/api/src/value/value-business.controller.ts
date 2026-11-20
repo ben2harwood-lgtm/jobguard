@@ -23,7 +23,7 @@ export class BusinessValueController {
   try {
    if(request && this.identity && cookie?.split(";").some(v=>v.trim().startsWith("jobguard_session="))){
     const identity=this.identity();
-    result=await new CompanyValueApplication(subscriptionAuthority(identity),new ValueBusinessReader(this.pool)).readBusiness({sessionToken:cookieToken(request),tenantHeader:request.headers["x-tenant-id"],origin:request.headers.origin??identity.allowedOrigin},query);
+    result=await new CompanyValueApplication(subscriptionAuthority(identity),new ValueBusinessReader(this.pool)).readBusiness({sessionToken:cookieToken(request),tenantHeader:request.headers["x-tenant-id"],csrfToken:request.headers["x-csrf-token"],origin:request.headers.origin??identity.allowedOrigin},query);
    }else result = await new BusinessValueApplication(this.pool, practiceCookie(cookie)).readBusiness(query); }
   catch (error) { result = businessValueFailure(error); }
   response?.status(businessValueStatus(result));

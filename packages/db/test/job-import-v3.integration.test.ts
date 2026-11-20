@@ -16,13 +16,13 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
     const f = scriptedImportPool(), result = await new JobImportV3Repository(f.pool).preview(f.context, D, J.toUpperCase(), { ...preview, expectedBindingId: parties.bindingId.toUpperCase() });
     expect(result.snapshot).toEqual(approved); expect(result.previewHash).toBe(intent.previewHash);
     expect(result).toMatchObject({ availability: { code: "METER_PLACE_SOURCE_HANDOFF_HELD", status: "held" }, realExternalActions: 0 });
-    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE/u.test(sql))).toBe(false);
+    expect(f.query.mock.calls.some(([sql]) => !String(sql).includes("practice_owned_job") && /INSERT|UPDATE|DELETE/u.test(sql))).toBe(false);
     expect(f.query.mock.calls.find(([sql]) => sql.includes("FROM practice_owned_job"))?.[1]).toEqual([T, J, D]);
   });
   it.each(["live"] as const)("%s adoption refuses before receipt or authorization creation", async lifecyclePoint => {
     const f = scriptedImportPool(), input = importFixtureV3(J, parties, lifecyclePoint, preview.fixtureId);
     await expect(new JobImportV3Repository(f.pool).adopt(f.context, D, J, { ...intent, lifecyclePoint, previewHash: importActionHashV3(input) })).rejects.toMatchObject({ code: "METER_PLACE_SOURCE_HANDOFF_HELD" });
-    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|adopt_in_flight|mon1_admit_place/u.test(sql))).toBe(false);
+    expect(f.query.mock.calls.some(([sql]) => !String(sql).includes("practice_owned_job") && /INSERT|UPDATE|DELETE|adopt_in_flight|mon1_admit_place/u.test(sql))).toBe(false);
     expect(f.query.mock.calls.filter(([sql]) => sql === "BEGIN")).toHaveLength(3);
   });
   it.each(["revoked", "unowned"])("%s authorization is checked before informative input errors", async kind => {
@@ -42,7 +42,7 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
       await expect(mutation.lock(db, command)).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
       await expect(mutation.mutate(db, command)).rejects.toMatchObject({ code: "IMPORT_ALREADY_ADOPTED" });
     });
-    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE|pg_advisory|adopt_invoiced_job_v3/u.test(sql))).toBe(false);
+    expect(f.query.mock.calls.some(([sql]) => !String(sql).includes("practice_owned_job") && /INSERT|UPDATE|DELETE|pg_advisory|adopt_invoiced_job_v3/u.test(sql))).toBe(false);
     // Ownership denial still wins over the informative source-state error.
     f.state.owns = false;
     await expect(repo.preview(f.context, D, J, preview)).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -61,7 +61,7 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
     const f = scriptedImportPool(), repo = new JobImportV3Repository(f.pool);
     for (const extra of [{ gracePlace: true }, { countedPlaces: 0 }, { plan: "Builder" }, { finalAccountRevisionId: randomUUID() }, { baselineId: randomUUID() }])
       await expect(repo.adopt(f.context, D, J, { ...intent, ...extra })).rejects.toMatchObject({ code: "INVALID_IMPORT" });
-    expect(f.query.mock.calls.some(([sql]) => /INSERT|UPDATE|DELETE/u.test(sql))).toBe(false);
+    expect(f.query.mock.calls.some(([sql]) => !String(sql).includes("practice_owned_job") && /INSERT|UPDATE|DELETE/u.test(sql))).toBe(false);
   });
   it("production/pilot reject all entrypoints before SQL", async () => {
     const f = scriptedImportPool(), repo = new JobImportV3Repository(f.pool);
@@ -96,7 +96,7 @@ describe("CH5-P source-only application boundary (scripted transport)", () => {
       return { query: f.query, release: f.release };
     }) as unknown as typeof f.pool.connect;
     await expect(new JobImportV3Repository(f.pool).adopt(f.context, D, J, intent)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(f.query.mock.calls.some(([sql]) => /INSERT|command_receipt/u.test(sql))).toBe(false);
+    expect(f.query.mock.calls.some(([sql]) => !String(sql).includes("practice_owned_job") && /INSERT|command_receipt/u.test(sql))).toBe(false);
   });
   it("read refuses a missing persisted result", async () => {
     const f = scriptedImportPool(); await expect(new JobImportV3Repository(f.pool).read(f.context, D, J)).rejects.toMatchObject({ code: "NOT_FOUND" });

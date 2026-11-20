@@ -1,3 +1,7 @@
+import { withTenant } from "../src/tenant-context.js";
+import { createHash } from "node:crypto";
+import { jobDoorsActor } from "./lp-job-doors-fixtures.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { lp3CanonicalInput, lp3PayloadHash } from "../src/lp3-operation.js";
 import { lp3CatalogDatabase, lp3NewSignatures, lp3OldSignatures } from "./lp3-catalog-fixtures.js";
@@ -53,10 +57,14 @@ describe("LP-3 codec and actual-role catalogue enforcement", () => {
       has_schema_privilege(current_user,'app','CREATE') ddl,
       pg_has_role(current_user,'jobguard_migration','MEMBER') owner_member`)).rows[0];
     expect(privileges).toEqual({ readable: true, writable: false, ddl: false, owner_member: false });
+    const actor = await jobDoorsActor(database.owner, "11111111-1111-4111-8111-111111111111");
+    const credential = createHash("sha256").update(`lp6-test:${actor.tenant}:${actor.member}`).digest("hex");
+    await testBoundTenantContext(database.owner, actor.tenant, actor.member, credential);
     const client = await database.runtime.connect();
     try {
       await client.query("BEGIN");
       await client.query("SELECT set_config('app.tenant_id',$1,true)", ["11111111-1111-4111-8111-111111111111"]);
+      await client.query("SELECT app.bind_request('real',$1,$2)", [credential, actor.tenant]);
       expect((await client.query("SELECT * FROM app.activation_acceptance_operation_use")).rows).toEqual([]);
       for (const statement of [
         "INSERT INTO app.activation_acceptance_operation_use DEFAULT VALUES",
@@ -99,10 +107,14 @@ describe("LP-3 codec and actual-role catalogue enforcement", () => {
   });
 
   it("dark routes reject an ordinary database before reading supplied authority", async () => {
-    for (const signature of lp3NewSignatures) {
+    const actor = await jobDoorsActor(database.owner);
+    const context = await testBoundTenantContext(database.owner, actor.tenant, actor.member);
+    for (const [index, signature] of lp3NewSignatures.entries()) {
       const types=signature.slice(signature.indexOf("(")+1,-1).split(",");
-      const call=signature.slice(0,signature.indexOf("("))+"("+types.map(type=>`NULL::${type}`).join(",")+")";
-      await expect(database.runtime.query(`SELECT ${call}`)).rejects.toMatchObject({code:"42501",message:"LP3_SYNTHETIC_DATABASE_REQUIRED"});
+      const actorIndex=[14,6,9,7][index];
+      const call=signature.slice(0,signature.indexOf("("))+"("+types.map((type,position)=>
+        position===0?`$1::${type}`:position===actorIndex?`$2::${type}`:`NULL::${type}`).join(",")+")";
+      await expect(withTenant(database.runtime,context,db=>db.$client.query(`SELECT ${call}`,[actor.tenant,actor.member]))).rejects.toMatchObject({code:"42501",message:"LP3_SYNTHETIC_DATABASE_REQUIRED"});
     }
   });
 

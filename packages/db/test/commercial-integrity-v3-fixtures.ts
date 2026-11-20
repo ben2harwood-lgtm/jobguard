@@ -1,3 +1,4 @@
+import { historicalPracticeSeed } from "./historical-practice-fixture.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -5,7 +6,7 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { migrate, MIGRATION_URLS } from "../src/migrate.js";
-import { issuePracticeSession, authenticatePracticeSession } from "../src/practice-session.js";
+import { issuePracticeSession, authenticatePracticeSession, practiceMaterialPool } from "../src/practice-session.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { CommercialIntegrityV3Repository } from "../src/commercial-integrity-v3-repository.js";
 import { canonicalCommercialIntegritySnapshot } from "../../core/src/commercial-integrity-v3.js";
@@ -35,14 +36,15 @@ export async function createIntegrityFixture(throughCurrent=true, encoding: "UTF
  await admin.query(`ALTER ROLE ${login} SET log_statement='all'`);
  const runtime=new Pool({host:"127.0.0.1",port,user:login,password,database:"jobguard_synthetic_demo",max:2});
  const previous=process.env.JOBGUARD_ENV;process.env.JOBGUARD_ENV="synthetic_demo";
- const token=await issuePracticeSession(runtime),auth=await authenticatePracticeSession(runtime,token);
- const otherToken=await issuePracticeSession(runtime),other=await authenticatePracticeSession(runtime,otherToken);
+ const token=await issuePracticeSession(runtime),verifiedAuth=await authenticatePracticeSession(runtime,token),auth=throughCurrent?verifiedAuth:historicalPracticeSeed(verifiedAuth);
+ const otherToken=await issuePracticeSession(runtime),verifiedOther=await authenticatePracticeSession(runtime,otherToken),other=throughCurrent?verifiedOther:historicalPracticeSeed(verifiedOther);
  const repo=new CommercialIntegrityV3Repository(runtime);
  return {admin,runtime,repo,auth,other,logs,login,runtimeConfig:{host:"127.0.0.1",port,user:login,password,database:"jobguard_synthetic_demo"},async close(){if(previous===undefined)delete process.env.JOBGUARD_ENV;else process.env.JOBGUARD_ENV=previous;await closeTestPools(runtime,admin);await pg.stop();await rm(dir,{recursive:true,force:true});}};
 }
 export type IntegrityFixture=Awaited<ReturnType<typeof createIntegrityFixture>>;
-export async function transaction<T>(pool:Pool,work:(db:PoolClient)=>Promise<T>) {
- const db=await pool.connect();try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);const result=await work(db);await db.query("COMMIT");return result;}catch(error){await db.query("ROLLBACK");throw error;}finally{db.release();}
+/** `practiceDigest` binds this raw transaction to that practice session's own request (LP-6d). */
+export async function transaction<T>(pool:Pool,work:(db:PoolClient)=>Promise<T>,practiceDigest?:string) {
+ const db=await pool.connect();try{await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);if(practiceDigest)await db.query("SELECT app.bind_request('practice',$1,$2)",[practiceDigest,tenant]);const result=await work(db);await db.query("COMMIT");return result;}catch(error){await db.query("ROLLBACK");throw error;}finally{db.release();}
 }
 export async function seedIntegrityJob(f:IntegrityFixture,invoice=true) {
  const job=randomUUID(),quote=randomUUID(),draft=randomUUID(),revision=randomUUID();
@@ -98,7 +100,8 @@ export async function addIntegrityPayment(f:IntegrityFixture,job:string) {
 export async function addIntegrityLock(f:IntegrityFixture,x:Awaited<ReturnType<typeof seedIntegrityJob>>) {
  const {withTenant}=await import("../src/tenant-context.js"),{appendAuditBatch}=await import("../src/audit.js");
  const id=randomUUID(),command=randomUUID(),event=randomUUID();
- await withTenant(f.admin,f.auth.context,async db=>{
+ const scoped=(await f.admin.query("SELECT to_regprocedure('app.final_check_request_scope(uuid)') IS NOT NULL installed")).rows[0].installed;
+ await withTenant(scoped?practiceMaterialPool(f.admin,f.auth.digest):f.admin,f.auth.context,async db=>{
   await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
    VALUES($1,$2,'synthetic.ch6.lock-fixture',$1::uuid::text,repeat('a',64),'succeeded','{}',$3,clock_timestamp())`,[command,tenant,member]);
   await db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[tenant,member,randomUUID(),"synthetic_final_check_terms.v1"]);
@@ -107,4 +110,16 @@ export async function addIntegrityLock(f:IntegrityFixture,x:Awaited<ReturnType<t
   await appendAuditBatch(db,[{id:event,version:"audit.v1",actorRef:`membership:${member}`,eventType:"synthetic.ch6.lock_fixture",subjectType:"job",subjectRef:x.job,payload:{references:{jobId:x.job}}}]);
  });
  return id;
+}
+
+/** Real synthetic adoption through the product boundary; no owner-sealed audit event. */
+export async function importIntegrityJob(f: IntegrityFixture, sourceJobId: string) {
+ const { JobImportV3Repository } = await import("../src/job-import-v3-repository.js");
+ const { IMPORT_V3_FIXTURE_ID } = await import("../src/job-import-v3-fixtures.js");
+ const repo = new JobImportV3Repository(f.runtime);
+ const binding = (await f.admin.query("SELECT binding_id FROM app.job_party_current WHERE tenant_id=$1 AND job_id=$2", [tenant, sourceJobId])).rows[0].binding_id as string;
+ const request = { version: "job-import-preview.v3", expectedBindingId: binding, fixtureId: IMPORT_V3_FIXTURE_ID, lifecyclePoint: "invoiced" };
+ const preview = await repo.preview(f.auth.context, f.auth.digest, sourceJobId, request);
+ const result = await repo.adopt(f.auth.context, f.auth.digest, sourceJobId, { ...request, version: "job-parties-import.v3", commandId: randomUUID(), previewHash: preview.previewHash, attest: true });
+ return result.jobId as string;
 }

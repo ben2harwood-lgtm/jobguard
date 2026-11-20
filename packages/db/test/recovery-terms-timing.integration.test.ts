@@ -6,14 +6,15 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool, type PoolConfig } from "pg";
+import { setTimeout as delay } from "node:timers/promises";
+import { Pool, type PoolClient, type PoolConfig } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { recoveryCaseTermsHash, evaluateRecoveryEligibilityV3 } from "@jobguard/core";
 import { migrate, issuePracticeSession, authenticatePracticeSession, practiceMaterialPool, RecoveryCaseRepository, RecoveryCaseTermsRepository, RecoveryEligibilityV3Repository, PracticeFeedRepository, withTenant, appendAuditBatch } from "../src/index.js";
 import { DEMO_TENANT_ID as T, DEMO_ACCOUNT_ID as A, DEMO_MEMBERSHIP_ID as M, DEMO_IDENTITY_USER_ID as U } from "../src/demo-seed.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
-const ctx=testTenantContext(T),actor={membershipId:M,identityUserId:U};
+const ctx=testTenantContext(T,{membershipId:M}),actor={membershipId:M,identityUserId:U};
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,runtimeConfig:PoolConfig,adminConfig:PoolConfig;
 const previousEnvironment=process.env.JOBGUARD_ENV;
 async function start(){
@@ -54,6 +55,16 @@ const termsCommand=(caseId:string)=>({version:"recovery-case-terms-command.v1",a
 type Fixture=Awaited<ReturnType<typeof fixture>>;
 const approve=(f:Fixture)=>new RecoveryCaseTermsRepository(practiceMaterialPool(runtime,f.auth.digest)).approve(ctx,f.jobId,termsCommand(f.c.id),actor);
 const save=(f:Fixture,command=review(f.c,"F18"))=>f.repo.review(ctx,f.jobId,command,actor,f.auth.digest);
+async function reviewWaitsFor(held: PoolClient): Promise<boolean> {
+ const { pid } = (await held.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0]!;
+ for(let poll=0;poll<100;poll++) {
+  const { waiting } = (await admin.query<{ waiting: boolean }>(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity
+   WHERE wait_event='advisory' AND usename='dw3_login' AND $1=ANY(pg_blocking_pids(pid))) waiting`, [pid])).rows[0]!;
+  if(waiting) return true;
+  await delay(10);
+ }
+ return false;
+}
 async function interest(f:Fixture,step="settled"){
  const feed=new PracticeFeedRepository(runtime,"synthetic_demo"),view=await feed.factsView(ctx,actor,f.auth.digest,f.jobId);
  await feed.factsCommand(ctx,actor,f.auth.digest,f.jobId,{version:"practice-facts-command.v1",commandId:randomUUID(),expectedRevision:view.revision,action:"advance",movement:"receipt-interest-120",step});
@@ -141,8 +152,8 @@ it("TermsReviewConcurrency: shared case lock blocks review until rollback",async
  const held=await runtime.connect();let reviewing:Promise<unknown>|undefined;
  try{
   await held.query("BEGIN");await held.query("SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))",[T,f.c.id]);
-  reviewing=save(f);let waiting=false;
-  for(let i=0;i<100&&!waiting;i++)waiting=(await admin.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event='advisory' AND usename='dw3_login') waiting")).rows[0].waiting;
+  reviewing=save(f);
+  const waiting=await reviewWaitsFor(held);
   expect(waiting).toBe(true);await held.query("ROLLBACK");
   expect(await reviewing).toMatchObject({result:{qualifyingPrincipal:{pence:0},reason:note}});
  }finally{await held.query("ROLLBACK");held.release();await reviewing;}
@@ -203,17 +214,17 @@ it("TermsReviewConcurrency: settlement starts first and commits after approval w
 });
 it.each(["commit","rollback"] as const)("TermsReviewConcurrency: authorized approval %s serializes with review",async outcome=>{
  const f=await fixture();await f.advance("receipt-3000");
- let ready!:()=>void,rollback!:()=>void;
- const atCommit=new Promise<void>(resolve=>{ready=resolve;}),releaseCommit=new Promise<void>(resolve=>{rollback=resolve;});
+ let ready!:(client: PoolClient)=>void,rollback!:()=>void;
+ const atCommit=new Promise<PoolClient>(resolve=>{ready=resolve;}),releaseCommit=new Promise<void>(resolve=>{rollback=resolve;});
  const intercepted=beforeTermsCommitPool(runtime,async client=>{
-  ready();await releaseCommit;
+  ready(client);await releaseCommit;
   if(outcome==="rollback"){await client.query("ROLLBACK");throw new Error("DW3 injected rollback");}
  });
  const approval=new RecoveryCaseTermsRepository(practiceMaterialPool(intercepted,f.auth.digest)).approve(ctx,f.jobId,termsCommand(f.c.id),actor).then(()=>"committed",error=>(error as Error).message);
- await Promise.race([atCommit,approval.then(result=>{throw new Error(`Approval completed before barrier: ${result}`);})]);
+ const held=await Promise.race([atCommit,approval.then(result=>{throw new Error(`Approval completed before barrier: ${result}`);})]);
  const reviewing=save(f).then(value=>value.result.qualifyingPrincipal.pence,error=>(error as Error).message);
  try{
-  let waiting=false;for(let i=0;i<100&&!waiting;i++)waiting=(await admin.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event='advisory' AND usename='dw3_login') waiting")).rows[0].waiting;
+  const waiting=await reviewWaitsFor(held);
   expect(waiting).toBe(true);
  }finally{rollback();}
  expect(await approval).toBe(outcome==="rollback"?"DW3 injected rollback":"committed");expect(await reviewing).toBe(outcome==="rollback"?250000:0);
@@ -264,7 +275,7 @@ it("ForgedTermsTimingRefused: real foreign-tenant approval cannot authorize this
   await owner.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash)VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",[randomUUID(),tenant,job,caseId,randomUUID(),"a".repeat(64)]);
   await owner.query("COMMIT");
  }catch(error){await owner.query("ROLLBACK");throw error;}finally{owner.release();}
- const foreign=await new RecoveryCaseTermsRepository(runtime).approve(testTenantContext(tenant),job,termsCommand(caseId),{membershipId:member,identityUserId:user});
+ const foreign=await new RecoveryCaseTermsRepository(runtime).approve(testTenantContext(tenant,{membershipId:member}),job,termsCommand(caseId),{membershipId:member,identityUserId:user});
  const f=await fixture();await f.advance("receipt-3000");await approve(f);
  const before=await counts(f);await expect(raw(f,candidate(f),foreign.id)).rejects.toMatchObject({code:"23514",message:"ELIGIBILITY_AUDIT_REQUIRED"});expect(await counts(f)).toEqual(before);
 });

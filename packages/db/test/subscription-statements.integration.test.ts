@@ -3,11 +3,16 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { refreshMeter } from "./meter-persistence-fixtures.js";
 import { closeWorkFixture, createWorkFixture, type WorkFixture } from "./job-work-state-fixtures.js";
 import { approvedSimulation, calendarInput, command, correctionPeriod, count, historicalAgreement, issue, meterCompany, meterInput, preparedPeriod, rows, storeMeter } from "./subscription-persistence-fixtures.js";
+import { withTenant } from "../src/tenant-context.js";
 
 // Multi-period/correction scenarios below have bounded 120s budgets for real PostgreSQL CI.
 // Their full month inputs, deferred integrity checks and assertions remain enabled.
 describe("MON-2A-P hypothetical statements and simulated outcomes", () => {
- let f: WorkFixture; beforeAll(async () => { f = await createWorkFixture(); }, 60000); afterAll(async () => closeWorkFixture(f));
+ let f: WorkFixture; beforeAll(async () => { f = await createWorkFixture();
+  // Admin-only issuance clock: all fixture periods through December 2026 have ended.
+  // This isolated cluster exposes no runtime clock override or new grant.
+  const definition = (await f.admin.query("SELECT pg_get_functiondef('app.mon2_issue(uuid,text,date,integer)'::regprocedure) definition")).rows[0].definition as string;
+  await f.admin.query(definition.replaceAll("clock_timestamp()", "'2027-01-01T12:00:00Z'::timestamptz")); }, 60000); afterAll(async () => closeWorkFixture(f));
  it("correction-inclusive issue never exceeds maximum", async () => {
   for (const places of [7, 8, 11, 12, 17]) {
    const { a, issued } = await correctionPeriod(f, places);
@@ -31,6 +36,19 @@ describe("MON-2A-P hypothetical statements and simulated outcomes", () => {
   expect(statement).toMatchObject({ hypothetical: true, namespace: "subscription.synthetic.v1", currency: "GBP" });
   expect((await rows(f, a, "subscription_period_line")).every(line => ["plan", "extra", "correction"].includes(line.kind))).toBe(true);
   expect(JSON.stringify(lines)).not.toMatch(/recovery|success.fee|vat/iu);
+ });
+ it("rejects an appended place with no exact persisted day and job ancestry at commit", async () => {
+  const { a } = await preparedPeriod(f);
+  const before = await rows(f, a, "subscription_place_binding");
+  expect(before.length).toBeGreaterThan(0);
+  await expect(withTenant(f.admin, a.context, async db => {
+   const result = await db.$client.query(`INSERT INTO app.subscription_place_binding
+     (tenant_id,period_id,source_id,date,place_key,representative_job_id,source_revision,attribution,rule_version)
+     SELECT tenant_id,period_id,source_id,'2000-01-01'::date,place_key,representative_job_id,source_revision,attribution,rule_version
+     FROM app.subscription_place_binding WHERE tenant_id=$1 ORDER BY date,place_key LIMIT 1`, [a.tenantId]);
+   expect(result.rowCount).toBe(1);
+  })).rejects.toMatchObject({ code:"23514", message:"SUBSCRIPTION_INTEGRITY_FAILURE" });
+  expect(await rows(f, a, "subscription_place_binding")).toEqual(before);
  });
  it("redirect never settles", async () => {
   const { a, approved } = await approvedSimulation(f);

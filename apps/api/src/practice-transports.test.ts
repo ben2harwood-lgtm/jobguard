@@ -105,7 +105,7 @@ it.each(methods)("$name refuses missing, invented and stranger sessions on the a
  vi.stubEnv("JOBGUARD_ENV","synthetic_demo");
  for(const scenario of ["missing","invented",...(["CaptureController.capture","MaterialController.rate","SandboxController.create"].includes(entry.name)?[]:["stranger"])]){
   const cookie=scenario==="missing"?undefined:"jg_session=18000000-0000-4000-8000-000000000001";
-  const query=vi.fn(async(sql:string)=>({rows:scenario==="stranger"&&sql.includes("authenticate_practice_session")?[{tenant_id:tenant,membership_id:"d1500000-0000-4000-8000-000000000003",identity_user_id:"d1500000-0000-4000-8000-000000000001"}]:[]}));
+  const query=vi.fn(async(sql:string)=>({rows:sql==="SELECT app.current_actor() actor, app.current_tenant() tenant"?[{actor:"d1500000-0000-4000-8000-000000000003",tenant}]:scenario==="stranger"&&sql.includes("authenticate_practice_session")?[{tenant_id:tenant,membership_id:"d1500000-0000-4000-8000-000000000003",identity_user_id:"d1500000-0000-4000-8000-000000000001"}]:[]}));
   const connect=vi.fn(async()=>({query,release:vi.fn()}));
   const pool={query,connect} as unknown as Pool;
   let error:unknown;try{await entry.run(pool,cookie)}catch(e){error=e}
@@ -127,6 +127,8 @@ it("Next quote delivery GET maps missing, invented and stranger practice session
  const deliveryView=vi.fn();
  const json=(body:unknown,options?:ResponseInit)=>Response.json(body,options);
  const adapters:Record<string,unknown>={
+  // These transport fixtures are unlinked; pairing adds no identity requirement.
+  "./linked-practice-entry": { enforcePracticePair: async () => false },
   "server-only":{},"next/headers":{cookies:async()=>({get:()=>token?{value:token}:undefined})},
   "next/server":{NextResponse:{json}},"@jobguard/db":{PracticeAccessError},"@jobguard/api/workspace":{},"pg":{},
  };

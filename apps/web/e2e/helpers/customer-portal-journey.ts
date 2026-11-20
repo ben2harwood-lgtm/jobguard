@@ -1,7 +1,10 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { expect, type Page } from "@playwright/test";
+import type { VerifiedTenantContext } from "@jobguard/db";
+import { E2E_AUTH_CODE_SECRET, E2E_RUNTIME_URL } from "../global-setup";
 import { deliveredCustomerLink } from "./customer-signin-link";
+import { withSyntheticShadow } from "./final-account-lock-journey";
 export const portal = (page: Page, action: string, body: unknown, csrf?: string) => page.evaluate(async ({ action, body, csrf }) => {
  const response = await fetch(`/api/customer-portal/${action}`, { method: "POST", headers: { "Content-Type": "application/json", ...(csrf ? { "x-csrf-token": csrf } : {}) }, body: JSON.stringify(body) });
  return { status: response.status, body: await response.json() };
@@ -49,12 +52,15 @@ export async function linkIssuer(admin: Pool, page: Page) {
   await admin.query(`INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)
     SELECT $1,tenant_id,account_id,$2,'owner' FROM app.membership WHERE tenant_id=$3 AND id='d1500000-0000-4000-8000-000000000003'`, [member, session.principal.id, portalTenant]);
   await admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [session.principal.id, portalTenant, member]);
-  return { member, user: session.principal.id as string, csrf: session.csrfToken as string };
+  const token = (await page.context().cookies()).find(cookie => cookie.name === "jobguard_session")!.value;
+  const credential = createHmac("sha256", E2E_AUTH_CODE_SECRET).update(`session:${token}`).digest("hex");
+  return { member, user: session.principal.id as string, csrf: session.csrfToken as string, credential };
 }
 
 /** Priced historical inputs only. Catch provenance is explicit; customer approval
  * must still traverse the same session/command boundary as a builder-logged extra. */
-export async function seedExtras(admin: Pool, tenant: string, job: string, actor: string) {
+export async function seedExtras(admin: Pool, tenant: string, job: string, issuer: Awaited<ReturnType<typeof linkIssuer>>) {
+  const actor = issuer.member;
   const db = await admin.connect();
   const extras = ["builder_logged", "jobguard_catch"].map((origin, index) => ({
     origin, id: randomUUID(), scope: randomUUID(), revision: randomUUID(), signal: randomUUID(),
@@ -62,7 +68,8 @@ export async function seedExtras(admin: Pool, tenant: string, job: string, actor
   }));
   try {
     await db.query("BEGIN");
-    await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+    await db.query("SELECT app.bind_request('real',$1,$2)", [issuer.credential, tenant]);
+    await db.query("SELECT set_config('app.tenant_id',app.current_tenant()::text,true)");
     for (const x of extras) {
       if (x.origin === "jobguard_catch") {
         await db.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
@@ -115,15 +122,27 @@ export async function openCustomer(page: Page, path: string) {
 
 /** Run the existing deterministic detector/sink over stored originals, as the
  * shadow worker does. No model/provider call or customer-supplied rule flags. */
-export async function detectMessages(admin: Pool, job: string, member: string, user: string) {
+export async function detectMessagesAndReplay(context: VerifiedTenantContext, job: string) {
   const nativeImport = new Function("specifier","return import(specifier)") as (specifier:string)=>Promise<any>;
   const db = await nativeImport("@jobguard/db") as typeof import("@jobguard/db");
   const core = await nativeImport("@jobguard/core") as typeof import("@jobguard/core");
-  const context = db.verifiedTenantContextFromMembership({identityUserId:user,tenantId:portalTenant,membershipId:member} as Parameters<typeof db.verifiedTenantContextFromMembership>[0]);
-  await db.withTenant(admin,context, tx => tx.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[portalTenant,member,randomUUID(),"synthetic_final_check_terms.v1"]));
-  const reader = new db.ShadowObservationReader(admin,new db.FixtureObservationSources([]));
-  expect(await reader.hasAcceptedTerms(context)).toBe(true);
-  const observations = await reader.read(context,{version:"shadow-observation-read.v1",jobId:job});
-  await new db.ShadowDetectionRepository(admin).persist(context,{version:"shadow-detection-batch.v1",jobId:job,...observations,
-    proposals:core.detectShadowObservations(observations.observations,observations.captures,new Date().toISOString())});
+  const runtime = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
+  try {
+    await withSyntheticShadow(portalTenant, async shadow => {
+      // The job's practice firm accepted the terms through the app.
+      const reader = new db.ShadowObservationReader(runtime, new db.FixtureObservationSources([]), shadow);
+      const detector = new db.ShadowDetectionRepository(shadow);
+      const detect = async () => {
+        expect(await reader.hasAcceptedTerms(context, job)).toBe(true);
+        const observations = await reader.read(context, { version: "shadow-observation-read.v1", jobId: job });
+        await detector.persist(context, { version: "shadow-detection-batch.v1", jobId: job, ...observations,
+          proposals: core.detectShadowObservations(observations.observations, observations.captures, new Date().toISOString()) });
+      };
+      // The audit identity is part of replay. Retain one restricted login for both attempts.
+      await detect();
+      await detect();
+    });
+  } finally {
+    await runtime.end();
+  }
 }

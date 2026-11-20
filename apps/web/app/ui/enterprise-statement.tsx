@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import type { StatementView } from "../lib/enterprise-statement-types";
 import { exactPounds } from "./contractor-billing";
@@ -31,7 +31,15 @@ export function StatementDetails({ view }: { view: StatementView }) {
 }
 export function EnterpriseStatement() {
   const [view, setView] = useState<StatementView | null>(null), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
-  const read = async (statementId: string) => setView(await post<StatementView>("read", { version: "enterprise-fee-screen-read.v1", statementId }));
+  const read = async (statementId: string) => {
+    const stored = await post<StatementView>("read", { version: "enterprise-fee-screen-read.v1", statementId });
+    setView(stored);
+    window.history.replaceState(null, "", `?statement=${encodeURIComponent(stored.statement.id)}`);
+  };
+  useEffect(() => {
+    const saved = new URLSearchParams(window.location.search).get("statement");
+    if (saved) void run(() => read(saved));
+  }, []);
   async function run(work: () => Promise<void>) {
     setBusy(true); setMessage(""); setView(null);
     try { await work(); } catch (error) { setMessage(`Request refused (${error instanceof Error ? error.message : "OUTCOME_UNKNOWN"}). Reload the stored statement before retrying an unknown outcome.`); }
@@ -40,7 +48,7 @@ export function EnterpriseStatement() {
   function prepare(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget), period = String(data.get("period"));
     void run(async () => {
-      await post("derive", { version: "enterprise-fee-derive.v1", commandId: crypto.randomUUID(), agreementVersionId: data.get("agreement"), period });
+      await post("derive-northside", { version: "northside-fee-derive.v1", commandId: crypto.randomUUID(), period });
       const result = await post<{ statementId: string }>("prepare", { version: "enterprise-fee-prepare-statement.v1", commandId: crypto.randomUUID(), period });
       await read(result.statementId);
     });
@@ -49,9 +57,9 @@ export function EnterpriseStatement() {
   return <main className={styles.main}>
     <Link href="/northside">Practice roles</Link>{" · "}<Link href="/contractor/dashboard">Dashboard</Link>
     <h1>Monthly contractor statement</h1>
-    <p>Fictional practice only. Proposed 10% terms, no platform charge. No real money is collected. Agreement versions are provisioned by operations in the synthetic database; this screen cannot create or change terms.</p>
+    <p>Fictional practice only. Proposed 10% terms, no platform charge. No real money is collected. Northside practice supplies its fictional agreement automatically; this screen cannot change terms.</p>
     <p role="status">{busy ? "Loading…" : message}</p>
-    <form onSubmit={prepare}><label>Fictional agreement version ID <input name="agreement" required /></label><label>Statement month <input name="period" type="month" required /></label><button disabled={busy}>Derive and prepare statement</button></form>
+    <form onSubmit={prepare}><label>Statement month <input name="period" type="month" required /></label><button disabled={busy}>Derive and prepare statement</button></form>
     <form onSubmit={e => { e.preventDefault(); const id = String(new FormData(e.currentTarget).get("statement")); void run(() => read(id)); }}><label>Stored statement ID <input name="statement" required /></label><button disabled={busy}>Reload stored statement</button></form>
     {view && <StatementDetails view={view} />}
     {s && !s.superseded && !s.dispute && <div>

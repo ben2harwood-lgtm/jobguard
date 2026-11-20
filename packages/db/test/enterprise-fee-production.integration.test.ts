@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ContractorRepository, EnterpriseFeeRepository, ExtraApprovalRepository, migrate, withTenant } from "../src/index.js";
@@ -109,7 +110,7 @@ it("two paid 5p extras on different contracts share one cumulative agreement rou
   await command(c, w.w, { kind: "contract.revise", clientId: w.w.demo.clientId, contractId, document: { ...(document as object), reference: "Fictional M4-9 second contract" }, rules: demoRules });
   const secondWorld = { ...w.w, demo: { ...w.w.demo, contractId } };
   const second = await submitted(c, secondWorld, 5);
-  await new ExtraApprovalRepository(c.runtime).approveExtraStep(w.ctx, w.w.members.supervisor.member, approveInput(second, 0));
+  await new ExtraApprovalRepository(c.runtime).approveExtraStep(await testActorContext(c.admin, w.ctx, w.w.members.supervisor.member), w.w.members.supervisor.member, approveInput(second, 0));
   async function fund(jobId: string, extraId: string, clientContractId: string) {
     const { batchId } = await w.repo.finalise(w.ctx, w.session, jobId, { version: "billing-finalise.v1", commandId: randomUUID(), clientContractId });
     const line = (await w.repo.read(w.ctx, w.session, jobId)).exports.find(e => e.id === batchId)!.artifact.lines.find(l => l.extraId === extraId)!;

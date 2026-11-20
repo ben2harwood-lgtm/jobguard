@@ -9,29 +9,43 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/demo-seed.ts",
-    "line": 93,
-    "fingerprint": "6452587a177430d30e266983504305f1dae4ebbcea3f42215b7ba39bb46ebefb",
-    "reason": "Quote delivery execute receives context/job/document arguments; terminal execute is conservatively covered and unresolved."
+    "line": 108,
+    "fingerprint": "88a68d0e17be63addc2351d46796f8a72dfdc828dbb4595b832dd839de93aae5",
+    "reason": "The synthetic-demo tenant fixture calls QuoteDeliveryRepository.execute with a checked context, job and document for a simulated delivery. The repository uses the fake_quote_delivery adapter and the checked outbox, with no advisory data reads."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/outbox.ts",
+    "line": 44,
+    "fingerprint": "0807fb800a3f657160d684c53c952eebd78255cac565dfc707f430827016c09b",
+    "reason": "ActionExecutor checks the bound request or passes the expected queued tenant to the separate worker login. The worker verifies the committed outbox signal and claims the same action in that transaction. Adapter delivery occurs after claim and completes with the claim token. The path reads no advisory data."
+  },
+  {
+    "code": "UNRESOLVED_COVERED_EDGE",
+    "file": "packages/db/src/practice-session.ts",
+    "line": 72,
+    "fingerprint": "1ea4ea16ab6f51f8084908cce319d68c15b69108c6b084ded676a0a4c9b66937",
+    "reason": "v1 adoption receipt read inside the recursive ownership CTE; non-advisory, definer-written command receipt required by the ACCEPT-V1-RECEIPT ruling; Ben approved 7 Nov (re-pointed 15 Nov 2026 with Ben's yes: line reshaped, no behaviour change)"
   },
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/practice-session.ts",
     "line": 73,
-    "fingerprint": "ad3ac47cb73083599ccbd5fd355eb9f2f313b9af4ceca2115da91270658d50ca",
+    "fingerprint": "a52add41726877212b3d0441a7351647222c7aa760b4e2be0f07d3ea2fd00c04",
     "reason": "Generic local query helper receives runtime sql/values parameters; callers are not specialized by runtime data flow."
   },
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/quote-delivery-repository.ts",
-    "line": 43,
-    "fingerprint": "2cead0e0b611ce6d4d66d5b7b040ac089c10a4a4c0f52876a899599a0323d5e2",
+    "line": 86,
+    "fingerprint": "ae7aca791ee76f9558c531fff8705b2fd9cbc88abbcd1e4f2ab331af72a9ca36",
     "reason": "Business ActionExecutor.execute(context,id) is a terminal execute call; its first argument is not static SQL."
   },
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/quote-delivery-repository.ts",
-    "line": 44,
-    "fingerprint": "b45a28a9a69b397d36834ff45ccde77734ae8d992c8b2b32f69b69df07b5e046",
+    "line": 87,
+    "fingerprint": "3da1ca4d0927f19050352d9ff4d924cc3d34554e488633e46635d903f2e8f5b3",
     "reason": "Second business ActionExecutor.execute(context,id) call has the same unresolved syntactic boundary."
   },
   {
@@ -58,8 +72,8 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/extra-approval-chain-repository.ts",
-    "line": 94,
-    "fingerprint": "a2152ab0e4c54d80c5b08e6884e852d11613f2fdece5ab6140a8c790d0e9a5ff",
-    "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results."
+    "line": 97,
+    "fingerprint": "dbc56db77f7b999957958b367a7b55e6ba407567937ca11ab9f776bb23fa86df",
+    "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results. (LP-6d r11, 14 Nov 2026: escalateOverdue now calls app.lp6d_escalate_overdue_worker(); helper unchanged)"
   }
 ]

@@ -1,3 +1,4 @@
+import { testActorContext } from "./tenant-context-test-utils.js";
 import {afterAll,beforeAll,expect,it} from "vitest";
 import { cluster,world,type World } from "./contractor-billing-fixtures.js";
 let c:Awaited<ReturnType<typeof cluster>>,w:World;
@@ -31,7 +32,7 @@ it("E6-17 E6-28 checked persistence refuses tampered allocation fractions even f
 it("E6-15 complete mixed-job invoice keeps both extra lines and ordinary work in the denominator",async()=>{
  const own=await world(c),invoice=await own.invoice();
  const {submitted,approveInput}=await import("./extra-approval-chain-fixtures.js"),{ExtraApprovalRepository}=await import("../src/index.js");
- const s=await submitted(c,own.w,24000);await new ExtraApprovalRepository(c.runtime).approveExtraStep(own.ctx,own.w.members.supervisor.member,approveInput(s,0));
+ const s=await submitted(c,own.w,24000);await new ExtraApprovalRepository(c.runtime).approveExtraStep(await testActorContext(c.admin, own.ctx, own.w.members.supervisor.member),own.w.members.supervisor.member,approveInput(s,0));
  await own.repo.finalise(own.ctx,own.session,s.jobId,own.exportInput());
  const line=(await own.repo.read(own.ctx,own.session,s.jobId)).exports[0]!.artifact.lines[0]!;
  const comp=invoice.composition as unknown as {declared:Record<string,number>;lines:Record<string,unknown>[]};

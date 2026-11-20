@@ -17,7 +17,7 @@ let pg: EmbeddedPostgres, directory: string, admin: Pool, runtime: Pool, repo: S
 const tenant = randomUUID(), other = randomUUID(), job = randomUUID(), wrongJob = randomUUID(), otherJob = randomUUID();
 const actor = { membershipId: randomUUID(), identityUserId: randomUUID() };
 const otherActor = { membershipId: randomUUID(), identityUserId: randomUUID() };
-const ctx = testTenantContext(tenant), otherCtx = testTenantContext(other);
+const ctx = testTenantContext(tenant, { membershipId: actor.membershipId }), otherCtx = testTenantContext(other, { membershipId: otherActor.membershipId });
 beforeAll(async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   directory = await mkdtemp(join(tmpdir(), "jg-line-corrections-"));
@@ -132,7 +132,7 @@ describe("M2-4 durable audited reviewer corrections (PostgreSQL)", () => {
     await expect(repo.correct(ctx, otherActor, job, f.command)).rejects.toThrow("MATCH_FORBIDDEN");
     await expect(repo.read(ctx, { ...actor, identityUserId: randomUUID() }, f.read)).rejects.toThrow("MATCH_FORBIDDEN");
     await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [tenant, actor.membershipId]);
-    try { await expect(repo.create(ctx, actor, f.input)).rejects.toThrow("MATCH_FORBIDDEN"); }
+    try { await expect(repo.create(testTenantContext(tenant, { membershipId: actor.membershipId, bindRequest: false }), actor, f.input)).rejects.toThrow("MATCH_FORBIDDEN"); }
     finally { await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2", [tenant, actor.membershipId]); }
     vi.stubEnv("JOBGUARD_ENV", "pilot_no_charge");
     try { await expect(repo.read(ctx, actor, f.read)).rejects.toThrow("SYNTHETIC_MODE_REQUIRED"); }

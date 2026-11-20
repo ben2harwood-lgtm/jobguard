@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "lanes": {
+    "batch-51": {
+      "branches": [
+        "codex/sandbox/batch-51"
+      ],
+      "note": "Batch 51: later-safety-75, 76, 77, 78 and 82; LS-79 removed for separate repair. RED; synthetic only; NOPR.",
+      "allow": [
+        "packages/db/migrations/0703_invitation_issuer_recheck.sql",
+        "packages/db/migrations/0704_enterprise_fee_period_order.sql",
+        "packages/db/migrations/0705_catch_reprice_refusal.sql",
+        "packages/db/migrations/0706_duplicate_unlink_reopens_request.sql",
+        "packages/db/migrations/0707_recovery_terms_no_truncate.sql",
+        "packages/db/src/variation-repository.ts",
+        "packages/db/test/customer-variation-approval.integration.test.ts",
+        "packages/db/test/duplicate-unlink-command-binding.integration.test.ts",
+        "packages/db/test/duplicate-unlink-reopens-request.integration.test.ts",
+        "packages/db/test/enterprise-fee-posting.integration.test.ts",
+        "packages/db/test/extra-duplicate-candidates.integration.test.ts",
+        "packages/db/test/final-check-catch-confirm.integration.test.ts",
+        "packages/db/test/final-check-catch-journey.integration.test.ts",
+        "packages/db/test/identity.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0703_invitation_issuer_recheck.proof.json",
+        "packages/db/test/migration-proofs/0704_enterprise_fee_period_order.proof.json",
+        "packages/db/test/migration-proofs/0705_catch_reprice_refusal.proof.json",
+        "packages/db/test/migration-proofs/0706_duplicate_unlink_reopens_request.proof.json",
+        "packages/db/test/migration-proofs/0707_recovery_terms_no_truncate.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/recovery-case-terms.integration.test.ts"
+      ]
+    }
+  }
+}

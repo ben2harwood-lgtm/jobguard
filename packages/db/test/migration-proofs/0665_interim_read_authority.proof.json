@@ -1,0 +1,6 @@
+{
+  "migration": "0665_interim_read_authority.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

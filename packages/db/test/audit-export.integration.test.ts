@@ -1,3 +1,5 @@
+import { memberSessionPrincipal } from "./contractor-practice-session-fixtures.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixture.js";
 import { lp5ReadTables, lp5bReadTables } from "./lp5-command-catalog.js";
 import { randomUUID } from "node:crypto";
@@ -11,19 +13,21 @@ import EmbeddedPostgres from "embedded-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contractorRoles } from "@jobguard/core";
-import { AuditExportRepository, ContractorRepository, exportAuditCheckpoints, handoffAuditExportCheckpoint, verifyAuditChain, verifySignedAuditExport, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type AuditCheckpoint, type AuditEvent } from "../src/index.js";
+import { AuditExportRepository, ContractorRepository, requireContractorRequestContext, requireContractorRefusalContext, RequestBindingRefusedError, exportAuditCheckpoints, handoffAuditExportCheckpoint, verifyAuditChain, verifySignedAuditExport, migrate, MIGRATION_URLS, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership, type VerifiedTenantContext, type AuditCheckpoint, type AuditEvent } from "../src/index.js";
 import { AuditExportApplication, auditExportHttpFailure } from "../../../apps/api/src/audit-export/audit-export.application.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import * as upgradeProof from "./upgrade-proof-utils.js";
 import { compare, type Subject } from "./audit-export-privilege-comparator.js";
+import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string, contractor: ContractorRepository, repo: AuditExportRepository;
-const context = (p: AuthenticatedMembership) => verifiedTenantContextFromMembership(p);
+// LP-6d: guarded routines need a bound request, so each fixture principal carries its own persisted credential context.
+const context = (p: AuthenticatedMembership) => { try { return requireContractorRequestContext(p); } catch { return verifiedTenantContextFromMembership(p); } };
 const actor = (p: AuthenticatedMembership) => ({ membershipId: p.membershipId, identityUserId: p.identityUserId });
 let priorSecurityCatalog: unknown;
 let upgrade: {
   before: Subject[]; names: string[]; own: number; halfOid: string; ownRegistry: string[]; ownTables: boolean[];
   ownStepSecurityCatalog: SecurityCatalog; ownStepDifferences: string[]; controls: ControlResult[];
-  afterControlsCatalog: SecurityCatalog; afterControlsDifferences: string[]; scratchCount: string; afterAllDifferences: string[];
+  afterControlsCatalog: SecurityCatalog; afterControlsDifferences: string[]; scratchCount: string; preCutoverDifferences: string[];
 };
 type Queryable = Pick<Pool | PoolClient, "query">;
 async function securityCatalog(db: Queryable = admin) {
@@ -94,6 +98,19 @@ async function privilegeFacts(db: Queryable): Promise<Subject[]> {
 }
 async function privilegeDifferences(db: Queryable, before: Subject[]): Promise<string[]> {
   return compare(before, await privilegeFacts(db));
+}
+async function tenantCutoverCatalogue(db: Queryable) {
+  return {
+    rows: {},
+    relations: (await db.query(`SELECT n.nspname,c.relname,c.relowner,c.relacl,c.relrowsecurity,c.relforcerowsecurity
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname IN ('app','identity','control_plane','audit_control') ORDER BY 1,2`)).rows,
+    routines: (await db.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args,
+      p.proowner,p.proacl,p.prosecdef,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname IN ('app','identity','control_plane','audit_control','infrastructure','worm_control')
+        AND p.prokind='f' ORDER BY 1,2,3`)).rows,
+    policies: (await db.query("SELECT * FROM pg_policies ORDER BY schemaname,tablename,policyname")).rows,
+  };
 }
 const request = (commandId = randomUUID()) => ({ version: "audit-export-request.v1", commandId });
 beforeAll(async () => {
@@ -180,10 +197,22 @@ beforeAll(async () => {
     UNION ALL SELECT policyname::text FROM pg_policies
     UNION ALL SELECT rolname::text FROM pg_roles
   ) s WHERE name LIKE '%mo5%'`)).rows[0]!.count as string;
+  const cutover = "0765_lp11_bound_tenant_rls.sql";
+  const cutoverIndex = names.indexOf(cutover);
+  expect(cutoverIndex).toBeGreaterThan(own);
+  for (const url of MIGRATION_URLS.slice(own + 1, cutoverIndex)) {
+    await admin.query(await readFile(url, "utf8"));
+    await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [url.pathname.split("/").at(-1)]);
+  }
+  // [MO5-e] Keep the exact historical catalogue check up to the separately
+  // proved tenant cutover, before the test login joins jobguard_runtime.
+  const preCutoverDifferences = await privilegeDifferences(admin, before);
+  const priorCutover = await tenantCutoverCatalogue(admin);
   await migrate(admin); await migrate(admin);
-  // [MO5-e] The reading is taken here, before the test's own login below joins jobguard_runtime, and asserted in the test.
-  const afterAllDifferences = await privilegeDifferences(admin, before);
-  upgrade = { before, names, own, halfOid, ownRegistry, ownTables: [ownTables.exports, ownTables.checkpoints], ownStepSecurityCatalog, ownStepDifferences, controls, afterControlsCatalog, afterControlsDifferences, scratchCount, afterAllDifferences };
+  const cutoverProofs = loadMigrationProofs().proofs.filter(proof => proof.migration >= cutover);
+  const ownerOids = Object.fromEntries((await admin.query("SELECT rolname,oid FROM pg_roles")).rows.map(row => [row.rolname,row.oid]));
+  expect(await tenantCutoverCatalogue(admin)).toEqual(applyUpgradeProofs(priorCutover, cutoverProofs, ownerOids));
+  upgrade = { before, names, own, halfOid, ownRegistry, ownTables: [ownTables.exports, ownTables.checkpoints], ownStepSecurityCatalog, ownStepDifferences, controls, afterControlsCatalog, afterControlsDifferences, scratchCount, preCutoverDifferences };
   await admin.query("CREATE ROLE audit_export_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO audit_export_login");
   runtime = new Pool({ host: "127.0.0.1", port, user: "audit_export_login", password: "synthetic", database: "jobguard_synthetic_demo", max: 6 });
   contractor = new ContractorRepository(runtime); repo = new AuditExportRepository(runtime);
@@ -203,7 +232,7 @@ async function invite(p: AuthenticatedMembership, role: string, scopeKind = "ten
   const id = randomUUID(), view = await contractor.query(p, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" });
   await contractor.command(p, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id, expectedRevision: view.revision, kind: "member.invite", role, email: `${id}@fictional.invalid`, scope: { kind: scopeKind, id: scopeId }, clientId: role === "client_approver" ? scopeId : null, contractId: null });
   const row = (await admin.query<{ identity_user_id: string }>("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2", [p.tenantId, id])).rows[0]!;
-  return { ...p, membershipId: id, identityUserId: row.identity_user_id } as AuthenticatedMembership;
+  void row; return await memberSessionPrincipal(admin, runtime, p.tenantId, id);
 }
 describe("ENT-10b PostgreSQL audit exports", () => {
   it("leaves every existing table, policy, routine privilege and runtime role attribute unchanged on upgrade", async () => {
@@ -247,7 +276,7 @@ describe("ENT-10b PostgreSQL audit exports", () => {
     // They may not widen a grant, move an owner, switch row security off, change an older policy, add a permissive policy to an
     // older row-secured table, remove an older restrictive policy, give an older jobguard_ role an attribute or a membership, or
     // give any role (new or old) membership of an older jobguard_ role. The reading was taken in the set-up directly after the
-    // migrate() pair, before the test's own login joined jobguard_runtime, and is asserted here.
+    // 0761 migration, before the test's own login joined jobguard_runtime. The 0762 proof is checked separately in the setup.
     // Reviewed 0209 exceptions only: five source SELECT grants and their five
     // tenant-scoped policies. The comparator and every other refusal stay intact.
     const reviewedMeterSources=["app.job","app.job_activation","app.job_activation_terms","app.job_party_binding","app.membership"].flatMap(table=>[
@@ -270,8 +299,12 @@ describe("ENT-10b PostgreSQL audit exports", () => {
     const customerStageFacts = ["stage_completion","evidence_link","stage_review_event","evidence_invalidation"]
       .filter(table => oldTables.has(`app.${table}`))
       .map(table => `policy app.${table}.customer_stage_source: permissive policy added`);
-    expect(upgrade.afterAllDifferences, "[MO5-e] exact reviewed meter, LP-4, LP-5a and MON-5 source additions on predecessor objects")
-      .toEqual([...reviewedMeterSources, ...writerFacts, ...customerStageFacts,
+    // 0734 adds one flag-gated, tenant-scoped owner read for the proof guards.
+    if (oldTables.has("app.synthetic_evidence_original")) customerStageFacts.push("policy app.synthetic_evidence_original.job_proof_source_read: permissive policy added");
+    const workerRecoveryFacts = oldTables.has("app.sandbox_run_event")
+      ? ["policy app.sandbox_run_event.worker_recovery_archived_run: permissive policy added"] : [];
+    expect(upgrade.preCutoverDifferences, "[MO5-e] exact reviewed meter, LP-4, LP-5a and MON-5 source additions on predecessor objects")
+      .toEqual([...reviewedMeterSources, ...writerFacts, ...customerStageFacts, ...workerRecoveryFacts,
         ...["identity.session", "control_plane.practice_session", "control_plane.contractor_practice_session"]
           .filter(table => oldTables.has(table))
           .map(table => `table ${table}: + grant jobguard_binding_owner SELECT`)].sort());
@@ -373,6 +406,11 @@ describe("ENT-10b PostgreSQL audit exports", () => {
     const { p, session } = await setup(), other = await setup();
     const otherCount = (await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [other.p.tenantId])).rows[0]!.n;
     await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [p.tenantId, p.membershipId]);
+    expect(await contractor.refusedSessionPrincipal(other.session)).toBeUndefined();
+    const refusal = "SELECT app.lp11_record_audit_export_refusal($1,$2,$3,$4,$5)";
+    await expect(runtime.query(refusal, [session, other.p.tenantId, other.p.membershipId, other.p.identityUserId, action])).rejects.toMatchObject({code:"42501"});
+    await expect(runtime.query(refusal, [session, p.tenantId, other.p.membershipId, other.p.identityUserId, action])).rejects.toMatchObject({code:"42501"});
+    await expect(runtime.query("SELECT * FROM control_plane.lp11_export_refusal_scope")).rejects.toMatchObject({code:"42501"});
     const application = new AuditExportApplication(runtime);
     const response = await (action === "list" ? application.list(session) : application.create(session, request()))
       .then(() => undefined, error => auditExportHttpFailure(error));
@@ -381,6 +419,22 @@ describe("ENT-10b PostgreSQL audit exports", () => {
       .toEqual([{ tenant_id: p.tenantId, actor_ref: `membership:${p.membershipId}`, action }]);
     expect((await admin.query("SELECT id FROM app.audit_export WHERE tenant_id=$1", [p.tenantId])).rows).toEqual([]);
     expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1", [other.p.tenantId])).rows[0]!.n).toBe(otherCount);
+  });
+
+  it("keeps the revoked session's principal refusal-only: repository query and command refuse it", async () => {
+    const { p, session } = await setup();
+    await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [p.tenantId, p.membershipId]);
+    const contractors = new ContractorRepository(runtime), refused = (await contractors.refusedSessionPrincipal(session))!;
+    expect(refused).toMatchObject({ tenantId: p.tenantId, membershipId: p.membershipId });
+    // Only the refusal-audit boundary may read its context; every request path refuses it before any SQL.
+    expect(requireContractorRefusalContext(refused).tenantId).toBe(p.tenantId);
+    expect(() => requireContractorRequestContext(refused)).toThrow(RequestBindingRefusedError);
+    await expect(contractors.query(refused, { version: "contractor-query.v1", tenantId: p.tenantId, resource: "organisation" })).rejects.toBeInstanceOf(RequestBindingRefusedError);
+    await expect(contractors.command(refused, { version: "contractor-command.v1", environment: "synthetic_demo", commandId: randomUUID(), id: randomUUID(), expectedRevision: 0, kind: "member.invite", role: "read_only", email: "refused@fictional.invalid", scope: { kind: "tenant", id: p.tenantId }, clientId: null, contractId: null })).rejects.toThrow();
+    // A live principal never yields a refusal context.
+    const live = await setup();
+    const livePrincipal = await contractors.resolveSession(live.session);
+    expect(() => requireContractorRefusalContext(livePrincipal)).toThrow(RequestBindingRefusedError);
   });
 
   it("serializes distinct concurrent export commands on two connections into consistent verifiable snapshots", async () => {

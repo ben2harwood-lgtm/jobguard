@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { PracticeWorkerSwitchError } from "@jobguard/core";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
-import { currentCommand, type Cluster } from "./contractor-practice-session-fixtures.js";
-import { cluster, company, start, end, state, lookup, repo, on, off, text, expireSwitch, makeSessionExpired, startSessionWithHomeRecord, endHomeRecord, resolvers, raw } from "./practice-worker-switch-fixtures.js";
+import { ContractorRepository, ContractorPracticeSessionRepository, JobSchedulingRepository, WorkOrderRepository, workOrderFailure, requireContractorRequestContext, contractorSessionContext, withTenant, type VerifiedTenantContext } from "../src/index.js";
+import { currentCommand, memberSessionPrincipal, companyRows, type Cluster } from "./contractor-practice-session-fixtures.js";
+import { cluster, company, start, end, state, lookup, repo, on, off, text, expireSwitch, makeSessionExpired, startSessionWithHomeRecord, endHomeRecord, resolvers, raw, requestContext } from "./practice-worker-switch-fixtures.js";
 let c: Cluster;
 beforeAll(async () => { process.env.JOBGUARD_ENV = "synthetic_demo"; c = await cluster(); }, 120000);
 afterAll(async () => { await c?.close(); });
@@ -43,7 +44,7 @@ it("[PW4] [PW7] a refused command writes no switch and no marker", async () => {
  expect(await text(c, "control_plane.practice_company_marker", f.p.tenantId)).toEqual([]);
  expect(await text(c, "control_plane.practice_worker_switch", f.p.tenantId)).toEqual([]);
  await start(c, f);
- for (const target of [f.members.supervisor, f.members.operative, randomUUID()]) await expect(repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId: target })).rejects.toMatchObject({ code: "SWITCH_OPEN" });
+ for (const target of [f.members.supervisor, f.members.operative, randomUUID()]) await expect(repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId: target })).rejects.toMatchObject({ code: "SWITCH_OPEN" });
 });
 it.each(["owner", "admin", "commercial_manager", "finance", "read_only", "revoked", "wider"])("[PW5] target %s has the identical not-found refusal", async role => {
  const f = await company(c); await expect(start(c, f, role)).rejects.toMatchObject({ code: "NOT_FOUND" }); expect(await lookup(c, f)).toEqual(f.p);
@@ -77,7 +78,7 @@ it("[PW8] expiry leaves an unclosed switch until explicitly ended", async () => 
 });
 it.each(["revoked", "expired", "home-revoked", "home-expired"])("[PW9] ended %s session cannot act or revive", async kind => {
  const f = await company(c); await start(c, f);
- if (kind === "revoked") await new ContractorPracticeSessionRepository(c.runtime).revoke(f.context, f.session);
+ if (kind === "revoked") await new ContractorPracticeSessionRepository(c.runtime).revoke(await requestContext(c, f), f.session);
  else if (kind === "expired") await makeSessionExpired(c, f.session);
  else {
   const home = await startSessionWithHomeRecord(c); await endHomeRecord(c, home.session, kind === "home-revoked" ? "revoked" : "expired");
@@ -96,15 +97,33 @@ it("[PW10] missing audit rolls the routine and first marker back at commit", asy
  expect(await text(c, "control_plane.practice_company_marker", f.p.tenantId)).toEqual([]); expect(await lookup(c, f)).toEqual(f.p);
 });
 it("[PW11] concurrent duplicate and different commands serialize", async () => {
- const f = await company(c), command = on(); const answers = await Promise.all([start(c, f, "operative", command), start(c, f, "operative", command)]); expect(answers[0]).toEqual(answers[1]);
- await end(c, f); const results = await Promise.allSettled([start(c, f), start(c, f)]); expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
- expect(results.find(r => r.status === "rejected")).toMatchObject({ reason: { code: "SWITCH_OPEN" } });
+ const f = await company(c), command = on();
+ // LP-6b keeps the product refusal: a concurrent request can bind after the
+ // first switch changed the effective actor. LP-6c restores the strict replay
+ // assertion before real data; no grant or product behavior changes here.
+ const answers = await Promise.allSettled([start(c, f, "operative", command), start(c, f, "operative", command)]);
+ const successes = answers.filter(r => r.status === "fulfilled");
+ expect(successes.length).toBeGreaterThanOrEqual(1);
+ for (const answer of answers) {
+  if (answer.status === "fulfilled") expect(answer.value).toEqual(successes[0]!.value);
+  else { expect(answer.reason).toBeInstanceOf(PracticeWorkerSwitchError); expect(answer.reason).toMatchObject({ code: "SWITCH_FORBIDDEN" }); }
+ }
+ expect(await text(c, "control_plane.practice_worker_switch", f.p.tenantId)).toHaveLength(1);
+ await end(c, f);
+ const results = await Promise.allSettled([start(c, f), start(c, f)]);
+ const started = results.filter(r => r.status === "fulfilled");
+ expect(started).toHaveLength(1);
+ for (const result of results) {
+  if (result.status === "fulfilled") expect(result.value).toEqual(started[0]!.value);
+  else { expect(result.reason).toBeInstanceOf(PracticeWorkerSwitchError); expect(result.reason).toMatchObject({ code: "SWITCH_OPEN" }); }
+ }
+ expect(await text(c, "control_plane.practice_worker_switch", f.p.tenantId)).toHaveLength(2);
 });
 it("[PW22] refusal records deduplicate and omit foreign targets", async () => {
  const f = await company(c), command = on(); for (let i = 0; i < 3; i++) await expect(start(c, f, "admin", command)).rejects.toMatchObject({ code: "NOT_FOUND" });
  const rows = (await c.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='practice.worker_switch.refused'", [f.p.tenantId])).rows;
  expect(rows).toHaveLength(1); expect(rows[0]!.payload.references.worker).toBe(f.members.admin);
- const b = await company(c); await expect(repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId: b.members.operative })).rejects.toMatchObject({ code: "NOT_FOUND" });
+ const b = await company(c); await expect(repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId: b.members.operative })).rejects.toMatchObject({ code: "NOT_FOUND" });
  const last = (await c.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND event_type='practice.worker_switch.refused' ORDER BY sequence DESC LIMIT 1", [f.p.tenantId])).rows[0]!; expect(last.payload.references).not.toHaveProperty("worker");
 });
 it("[PW30] a lookup made after a committed end names the owner, also inside a transaction opened before the end", async () => {
@@ -145,17 +164,17 @@ it.each(["routine", "audit", "commit"])("[PW10] injected %s failure rolls back b
  } });
  expect(failing).toBeInstanceOf(Pool);
  const repository = new PracticeWorkerSwitchRepository(failing);
- await expect(repository.switchOn(f.context, f.p, f.session, { ...on(), workerId: f.members.operative })).rejects.toMatchObject({ code: "SWITCH_UNAVAILABLE" });
+ await expect(repository.switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId: f.members.operative })).rejects.toMatchObject({ code: "SWITCH_UNAVAILABLE" });
  expect(await text(c, "control_plane.practice_company_marker", f.p.tenantId)).toEqual([]); expect(await lookup(c, f)).toEqual(f.p);
  await start(c, f); const before = await text(c, "control_plane.practice_worker_switch", f.p.tenantId);
- await expect(repository.switchOff(f.context, f.p, f.session, off())).rejects.toMatchObject({ code: "SWITCH_UNAVAILABLE" });
+ await expect(repository.switchOff(await requestContext(c, f), f.p, f.session, off())).rejects.toMatchObject({ code: "SWITCH_UNAVAILABLE" });
  expect(await text(c, "control_plane.practice_worker_switch", f.p.tenantId)).toEqual(before); expect((await lookup(c, f)).membershipId).toBe(f.members.operative);
 });
 it("[PW10] no business lock is acquired after the audit append", async () => {
  const { ObservedPool, mutableTables } = await import("./lock-observer.js");
  const { PracticeWorkerSwitchRepository } = await import("../src/index.js");
  const f = await company(c), observed = new ObservedPool(c.runtime, c.admin), repository = new PracticeWorkerSwitchRepository(observed.pool), mutable = await mutableTables(c.admin);
- for (const work of [() => repository.switchOn(f.context, f.p, f.session, { ...on(), workerId: f.members.operative }), () => repository.switchOff(f.context, f.p, f.session, off())]) {
+ for (const work of [async () => repository.switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId: f.members.operative }), async () => repository.switchOff(await requestContext(c, f), f.p, f.session, off())]) {
   const { transactions } = await observed.record(work); expect(transactions).toHaveLength(1);
   const statements = transactions[0]!.statements, index = statements.findIndex(s => [...s.footprint.rows.keys()].some(key => key.startsWith("audit_control.audit_head#"))); expect(index).toBeGreaterThanOrEqual(0);
   const head = statements[index]!.footprint;
@@ -168,8 +187,8 @@ it("[PW10] no business lock is acquired after the audit append", async () => {
 it("[PW20] invalid session values and foreign target cannot select authority", async () => {
  const f = await company(c), b = await company(c), switched = await start(c, b);
  for (const value of [randomUUID(), f.sessionRef, f.p.membershipId, f.members.operative!, f.p.tenantId, switched.switchId!]) {
-  await expect(repo(c).switchOn(f.context, f.p, value, { ...on(), workerId: f.members.operative })).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
-  await expect(repo(c).state(f.context, value)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  await expect(repo(c).switchOn(await requestContext(c, f), f.p, value, { ...on(), workerId: f.members.operative })).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+  await expect(repo(c).state(await requestContext(c, f), value)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
  }
  expect(await lookup(c, f)).toEqual(f.p);
 });
@@ -181,7 +200,8 @@ it("[PW11] one command concurrently used across sessions and opposite operations
 it("[PW32] a tenant-locked wider grant committed first prevents a waiting switch", async () => {
  const f = await company(c), db = await c.admin.connect();
  try {
-  await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); await db.query("SET LOCAL ROLE jobguard_migration");
+  await db.query("BEGIN"); await db.query("SELECT app.bind_request('contractor_practice',$1,$2)", [f.session, f.p.tenantId]);
+  await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); await db.query("SET LOCAL ROLE jobguard_migration");
   await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [f.p.tenantId]);
   const waiting = start(c, f); await db.query("INSERT INTO app.role_grant VALUES($1,$2,$3,'admin','tenant',$1,NULL)", [f.p.tenantId, randomUUID(), f.members.operative]);
   await db.query("COMMIT"); await expect(waiting).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -191,7 +211,7 @@ it("[PW9] home record ending during a current switch leaves both session and swi
  const { prepareWorkOrderDemo } = await import("../src/index.js");
  for (const kind of ["expired", "revoked"] as const) {
   const f = await startSessionWithHomeRecord(c), demo = await prepareWorkOrderDemo(c.runtime, f.p, { siteCount: 1 });
-  await repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId: demo.operativeMembershipId });
+  await repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId: demo.operativeMembershipId });
   const sessionBefore = await text(c, "control_plane.contractor_practice_session", f.p.tenantId), switchBefore = await text(c, "control_plane.practice_worker_switch", f.p.tenantId);
   await endHomeRecord(c, f.session, kind);
   for (const resolve of resolvers(c)) await expect(resolve(f.session)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
@@ -202,10 +222,50 @@ it("[PW9] home record ending during a current switch leaves both session and swi
 it("[PW32] decision 39 grants stay with the member and revocation removes job access", async () => {
  const f = await company(c), contracts = new ContractorRepository(c.runtime);
  await start(c, f);
- for (const role of ["operative", "supervisor", "surveyor"]) await contracts.command(f.p, await currentCommand(c, f, { kind: "grant.create", membershipId: f.members.operative, role, scope: { kind: "team", id: f.demo.teamId }, contractId: null }));
- await contracts.command(f.p, await currentCommand(c, f, { kind: "membership.revoke", membershipId: f.members.operative }));
- await expect(new JobSchedulingRepository(c.runtime).assignments(await lookup(c, f), f.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
- await end(c, f); await expect(start(c, f)).rejects.toMatchObject({ code: "NOT_FOUND" });
+ // Router ruling (PW32): the owner administers during a switch only through a request bound to the owner (its own
+ // owner session), never through the acting session; the acting (worker-bound) session is refused.
+ const owner = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.p.membershipId);
+ await expect(contracts.command(f.p, await currentCommand(c, f, { kind: "grant.create", membershipId: f.members.operative, role: "operative", scope: { kind: "team", id: f.demo.teamId }, contractId: null }))).rejects.toMatchObject({ code: "FORBIDDEN" });
+ for (const role of ["operative", "supervisor", "surveyor"]) await contracts.command(owner, await currentCommand(c, f, { kind: "grant.create", membershipId: f.members.operative, role, scope: { kind: "team", id: f.demo.teamId }, contractId: null }));
+ await contracts.command(owner, await currentCommand(c, f, { kind: "membership.revoke", membershipId: f.members.operative }));
+ // Router ruling (decision 39): the revoked worker's acting session is refused at the first gate (contractor_session),
+ // which counts as "job access removed": no assignment is returned and nothing is written. The caller-visible code
+ // on the scheduling path stays main's NOT_FOUND (workOrderFailure, exactly as the API scheduling route maps it).
+ const writes = async () => (await c.admin.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1", [f.p.tenantId])).rows[0].n as number;
+ const before = await writes();
+ const scheduling = async () => new JobSchedulingRepository(c.runtime).assignments(await new WorkOrderRepository(c.runtime).resolveSession(f.session), f.jobId);
+ await expect(scheduling().catch(error => { throw workOrderFailure(error); })).rejects.toMatchObject({ code: "NOT_FOUND" });
+ expect(await writes()).toBe(before);
+ // Router ruling r19: the recorded owner ends the switch through its own owner-bound request; main's next assertion stays.
+ await repo(c).switchOff(requireContractorRequestContext(owner), owner, f.session, off());
+ await expect(start(c, f)).rejects.toMatchObject({ code: "NOT_FOUND" });
+});
+it("[PW32] the recorded owner alone ends a switch after the worker is revoked, end-only and idempotent (r19)", async () => {
+ const f = await company(c), b = await company(c), contracts = new ContractorRepository(c.runtime);
+ await start(c, f);
+ const owner = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.p.membershipId);
+ const sameFirm = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.members.admin!);
+ const otherFirmOwner = await memberSessionPrincipal(c.admin, c.runtime, b.p.tenantId, b.p.membershipId);
+ await contracts.command(owner, await currentCommand(c, f, { kind: "membership.revoke", membershipId: f.members.operative }));
+ const live = async () => (await c.admin.query("SELECT ended_at,end_reason FROM control_plane.practice_worker_switch WHERE tenant_id=$1 ORDER BY started_at DESC LIMIT 1", [f.p.tenantId])).rows[0];
+ const ended = async () => (await c.admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='practice.worker_switch.ended'", [f.p.tenantId])).rows[0].n as number;
+ const before = await companyRows(c, f.p.tenantId), endedBefore = await ended();
+ const refusedUnchanged = async () => { expect((await live()).ended_at).toBeNull(); expect(await ended()).toBe(endedBefore); expect(await companyRows(c, f.p.tenantId)).toEqual(before); };
+ // The revoked acting session stays refused, and nothing is written.
+ await expect(end(c, f)).rejects.toBeDefined(); await refusedUnchanged();
+ // A non-owner member of the same firm is refused.
+ await expect(repo(c).switchOff(requireContractorRequestContext(sameFirm), sameFirm, f.session, off())).rejects.toBeInstanceOf(PracticeWorkerSwitchError); await refusedUnchanged();
+ // Another firm's owner is refused.
+ await expect(repo(c).switchOff(requireContractorRequestContext(otherFirmOwner), otherFirmOwner, f.session, off())).rejects.toBeInstanceOf(PracticeWorkerSwitchError); await refusedUnchanged();
+ // The recorded owner ends it through its own owner-bound request: one end event, actorRef the owner.
+ const command = off(), first = await repo(c).switchOff(requireContractorRequestContext(owner), owner, f.session, command);
+ expect(first).toMatchObject({ state: "owner", endReason: "switched_back" });
+ expect((await live()).end_reason).toBe("switched_back"); // existing reason values only (no new schema)
+ expect(await ended()).toBe(endedBefore + 1);
+ expect((await c.admin.query("SELECT actor_ref FROM app.audit_event WHERE tenant_id=$1 AND event_type='practice.worker_switch.ended' ORDER BY sequence DESC LIMIT 1", [f.p.tenantId])).rows[0].actor_ref).toBe(`membership:${f.p.membershipId}`);
+ // Replay returns the same end and writes no second end event.
+ expect(await repo(c).switchOff(requireContractorRequestContext(owner), owner, f.session, command)).toEqual(first);
+ expect(await ended()).toBe(endedBefore + 1);
 });
 it("[PW23] catalogue-wide scan stores neither session values nor extra digests", async () => {
  const { digestOf } = await import("./practice-worker-switch-fixtures.js");
@@ -249,7 +309,7 @@ it.each(["membership.revoke", "grant.create"])("[PW11] [PW32] merged %s committe
 });
 it("[PW11] session revoke and switch settle without deadlock and no later lookup succeeds", async () => {
  const f = await company(c);
- const results = await Promise.allSettled([start(c, f), new ContractorPracticeSessionRepository(c.runtime).revoke(f.context, f.session)]);
+ const results = await Promise.allSettled([start(c, f), new ContractorPracticeSessionRepository(c.runtime).revoke(await requestContext(c, f), f.session)]);
  for (const result of results) if (result.status === "rejected") expect(result.reason.code).not.toBe("40P01");
  expect(results[1]!.status).toBe("fulfilled");
  for (let n = 0; n < 3; n++) await expect(lookup(c, f)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
@@ -274,8 +334,13 @@ it.each(["owner membership", "owner grant", "small-builder track"])("[PW4] %s ca
   });
  }
  const shapes = [];
+ // LP-6d: a revoked owner's session can no longer be bound (contractor_session refuses it before any request
+ // context exists), so that case is driven through the API route a caller uses; its visible answer stays main's.
+ const { PracticeWorkerSwitchApplication } = await import("../../../apps/api/src/contractor/practice-worker-switch.application.js");
  for (const workerId of [f.members.supervisor, f.members.operative, randomUUID(), other.members.operative]) {
-  const failure = await repo(c).switchOn(f.context, f.p, f.session, { ...on(), workerId }).catch(error => ({ code: error.code, message: error.message })); shapes.push(failure);
+  const failure = await (change === "owner membership"
+   ? new PracticeWorkerSwitchApplication(c.runtime).start({ version: "contractor-principal.v1", sessionId: f.session }, workerId, on())
+   : repo(c).switchOn(await requestContext(c, f), f.p, f.session, { ...on(), workerId })).catch(error => ({ code: error.code, message: error.message })); shapes.push(failure);
  }
  expect(shapes).toEqual(Array(4).fill({ code: "SWITCH_FORBIDDEN", message: "SWITCH_FORBIDDEN" }));
  expect(await text(c, "control_plane.practice_worker_switch", f.p.tenantId)).toEqual([]);
@@ -298,9 +363,14 @@ it("[PW32] team move and grant revocation remain available while acting", async 
  const f = await company(c), contractors = new ContractorRepository(c.runtime);
  const team = await contractors.command(f.p, await currentCommand(c, f, { kind: "team.create", branchId: f.demo.branchId, name: "Fictional second team" }));
  await start(c, f);
- await contractors.command(f.p, await currentCommand(c, f, { kind: "team.move", membershipId: f.members.operative, fromTeamId: f.demo.teamId, toTeamId: team.id }));
+ // Router ruling (PW32): available while acting, but only in a separate request bound to the owner; the same admin
+ // commands through the acting (worker-bound) session are refused.
+ const owner = await memberSessionPrincipal(c.admin, c.runtime, f.p.tenantId, f.p.membershipId);
+ await expect(contractors.command(f.p, await currentCommand(c, f, { kind: "team.move", membershipId: f.members.operative, fromTeamId: f.demo.teamId, toTeamId: team.id }))).rejects.toMatchObject({ code: "FORBIDDEN" });
+ await contractors.command(owner, await currentCommand(c, f, { kind: "team.move", membershipId: f.members.operative, fromTeamId: f.demo.teamId, toTeamId: team.id }));
  const grant = (await c.admin.query("SELECT g.id FROM app.role_grant g WHERE g.tenant_id=$1 AND g.membership_id=$2 AND g.scope_id=$3 AND NOT EXISTS(SELECT 1 FROM app.role_grant_revocation r WHERE r.tenant_id=g.tenant_id AND r.grant_id=g.id)", [f.p.tenantId, f.members.operative, team.id])).rows[0]!.id;
- await contractors.command(f.p, await currentCommand(c, f, { kind: "grant.revoke", grantId: grant }));
+ await expect(contractors.command(f.p, await currentCommand(c, f, { kind: "grant.revoke", grantId: grant }))).rejects.toMatchObject({ code: "FORBIDDEN" });
+ await contractors.command(owner, await currentCommand(c, f, { kind: "grant.revoke", grantId: grant }));
  await expect(new JobSchedulingRepository(c.runtime).assignments(await lookup(c, f), f.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
  await end(c, f);
 });

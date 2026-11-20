@@ -1,3 +1,4 @@
+import { mapRequestBindingRefusal } from "./request-binding-error.js";
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -27,12 +28,12 @@ export class CommercialIntegrityV3Repository {
  constructor(private readonly pool: Pool) {}
  async readFamily(context: VerifiedTenantContext, actor: CommercialIntegrityActor, digest: string, jobId: string): Promise<CommercialIntegrityFamilyV1> {
   const s=canonicalIntegrityScope(context.tenantId,actor,digest,jobId);
-  return withTenant(this.pool,context,async db=>{
+  return mapRequestBindingRefusal(withTenant(this.pool,context,async db=>{
    // Enforce the GET boundary in PostgreSQL, including nested authority readers.
    await db.$client.query("SET TRANSACTION READ ONLY");
    const family=await readIntegrityFamily(db,s); await authorizeIntegrityScope(db,s);
    return { version: "commercial-integrity-family.v1", environment: "synthetic_demo", jobId:s.jobId, family, realExternalActions:0 };
-  });
+  }, "commercial-integrity-read-family"), () => new PracticeAccessError("NOT_FOUND"));
  }
  private async view(db: Parameters<typeof authorizeIntegrityScope>[0], s: CommercialIntegrityScope): Promise<CommercialIntegrityV3StoredView> {
   const source=await readCommercialIntegrityV3Input(db,s);
@@ -46,14 +47,14 @@ export class CommercialIntegrityV3Repository {
  }
  async read(context: VerifiedTenantContext, actor: CommercialIntegrityActor, digest: string, jobId: string): Promise<CommercialIntegrityV3StoredView> {
   const s=canonicalIntegrityScope(context.tenantId,actor,digest,jobId);
-  return withTenant(this.pool,context,async db=>{
+  return mapRequestBindingRefusal(withTenant(this.pool,context,async db=>{
    await db.$client.query("SET TRANSACTION READ ONLY");
    await v3(db,s);const view=await this.view(db,s);await v3(db,s);return view;
-  });
+  }, "commercial-integrity-read"), () => new PracticeAccessError("NOT_FOUND"));
  }
  async review(context: VerifiedTenantContext, actor: CommercialIntegrityActor, digest: string, jobId: string, rawReview: unknown): Promise<CommercialIntegrityV3Feedback> {
   const s=canonicalIntegrityScope(context.tenantId,actor,digest,jobId);
-  return withTenant(this.pool,context,async db=>{
+  return mapRequestBindingRefusal(withTenant(this.pool,context,async db=>{
    await v3(db,s); // authority precedes input details and receipt lookup
    const parsed=commercialIntegrityReviewV3Schema.safeParse(rawReview);
    if(!parsed.success)throw new CommercialIntegrityPersistenceError("INVALID_INTEGRITY_REVIEW");
@@ -77,11 +78,13 @@ export class CommercialIntegrityV3Repository {
     return feedbackSchema.parse(row.result);
    } catch(error) {
     const code=(error as Error).message;
-    if(code === "NOT_FOUND")throw new PracticeAccessError("NOT_FOUND");
+    // LP-6d (repair 13, flagged): a binding that stops holding mid-command (membership revoked while
+    // waiting for its row) answers like any other lost authority, never with the binding's own code.
+    if(code === "NOT_FOUND"||(code === "REQUEST_BINDING_REFUSED"&&(error as {code?:string}).code==="42501"))throw new PracticeAccessError("NOT_FOUND");
     if(["40P01","40001"].includes((error as {code?:string}).code??""))throw new CommercialIntegrityPersistenceError("INTEGRITY_RETRY_REQUIRED");
     if(["INTEGRITY_FAMILY_UNAVAILABLE","INTEGRITY_SOURCE_CHANGED","INTEGRITY_SOURCE_UNAVAILABLE","IDEMPOTENCY_CONFLICT","INVALID_INTEGRITY_REVIEW"].includes(code))throw new CommercialIntegrityPersistenceError(code as ConstructorParameters<typeof CommercialIntegrityPersistenceError>[0]);
     throw error;
    }
-  });
+  }), () => new PracticeAccessError("NOT_FOUND"));
  }
 }
