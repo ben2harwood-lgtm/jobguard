@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "tommy-acceptance-recovery-20261119": {
+      "branches": ["codex/sandbox/tommy-acceptance-recovery-20261119"],
+      "note": "RED: quote acceptance response-loss UX only; retain exact command, hold contradictory acceptance actions, reconcile saved facts, and preserve current-job/lifetime guards. No API, DB, policy or unrelated handler refactor. Independent exact-head review required.",
+      "allow": [
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/quote-acceptance-read.ts",
+        "apps/web/app/ui/quote-acceptance-recovery.test.tsx",
+        "apps/web/e2e/TOMMY-acceptance-recovery.spec.ts",
+        "docs/receipts/tommy-acceptance-recovery-20261119.md"
+      ]
+    }
+  }
+}
