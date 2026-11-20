@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import { appendAuditBatch, ContractorRepository } from "../src/index.js";
+import { appendAuditBatch, ContractorRepository, contractorSessionContext, withTenant } from "../src/index.js";
 import { ContractorApplication } from "../../../apps/api/src/contractor/contractor.application.js";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
-import { ownerTx, type Cluster, type SessionFixture } from "./contractor-entitlement-fixtures.js";
+import type { Cluster, SessionFixture } from "./contractor-entitlement-fixtures.js";
 export { cluster,startSession,status,unchanged,snapshot,startBeforeMigration,applyMigration,ownerTx,makeSessionExpired } from "./contractor-entitlement-fixtures.js";
 export type { Cluster,SessionFixture };
 export const own="0200_contractor_retained_workspace.sql";
@@ -11,7 +11,10 @@ export const query=(f:SessionFixture,resource="contracts",id?:string)=>({version
 export const read=(c:Cluster,f:SessionFixture,resource="contracts",id?:string)=>new ContractorApplication(c.runtime).read({version:"contractor-principal.v1",sessionId:f.session},query(f,resource,id));
 export const resume=(c:Cluster,f:SessionFixture)=>new ContractorApplication(c.runtime).resume({version:"contractor-principal.v1",sessionId:f.session});
 export async function track(c:Cluster,f:SessionFixture) {
- await ownerTx(c,f.p.tenantId,async db=>{
+ const boundPolicies=(await c.admin.query("SELECT to_regprocedure('app.lp11_policy_tenant()') IS NOT NULL installed")).rows[0].installed;
+ const context=boundPolicies ? await contractorSessionContext(c.runtime,f.session) : f.context;
+ await withTenant(c.admin,context,async db=>{
+  await db.$client.query("SET LOCAL ROLE jobguard_migration");
   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))",[f.p.tenantId]);
   const id=randomUUID();const revision=(await db.$client.query("SELECT max(revision) revision FROM app.commercial_track_assignment")).rows[0].revision;
   await db.$client.query("SELECT app.assign_commercial_track($1,$2,'small_builder',$3,$4,'operations:retained-fixture')",[f.p.tenantId,id,`synthetic-agreement:${f.p.tenantId}`,revision]);

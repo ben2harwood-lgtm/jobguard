@@ -1,0 +1,682 @@
+{
+  "migration": "0767_lp8b_outbox_evidence.sql",
+  "lp0": [
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|rel|table|app.action_outbox|jobguard_runtime|INSERT|-",
+        "group": "x-outbox-writes"
+      },
+      "after": null
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.insert_authorized_action(uuid,uuid,uuid,uuid,text,text,text,text,text,text,integer,bigint,text,text,timestamp with time zone)|jobguard_runtime|EXECUTE|-",
+        "group": "x-outbox-writes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.lp8b_check_extra_command(uuid,uuid,uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "x-extra-writes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.verify_evidence_upload(uuid,uuid,text,text,bytea)|jobguard_runtime|EXECUTE|-",
+        "group": "x-evidence-writes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.insert_authorized_action(uuid,uuid,uuid,uuid,text,text,text,text,text,text,integer,bigint,text,text,timestamp with time zone)|jobguard_migration",
+        "group": "x-outbox-writes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.lp8b_check_extra_command(uuid,uuid,uuid,uuid)|jobguard_command_writer",
+        "group": "x-extra-writes"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.verify_evidence_upload(uuid,uuid,text,text,bytea)|jobguard_migration",
+        "group": "x-evidence-writes"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.ent3d_record_resident_confirmation(uuid,uuid,uuid,uuid,text,text,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "d8ac1ffb377d09842d9536a6d44aa449b4daed38212482ea7c748b8cab3a725a",
+        "staticWrites": [
+          "app.evidence_object",
+          "app.evidence_upload"
+        ],
+        "staticCalls": [
+          "app.ent3a_extra_authority",
+          "app.ent3d_confirmation_document",
+          "app.ent3d_site_extra_evidence"
+        ]
+      },
+      "after": {
+        "identity": "function:app.ent3d_record_resident_confirmation(uuid,uuid,uuid,uuid,text,text,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "0e2479864db923f70108bc924c4d61c62375f730c94498d1f36ceef60fd40064",
+        "staticWrites": [
+          "app.evidence_object",
+          "app.evidence_upload"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "app.ent3a_extra_authority",
+          "app.ent3d_confirmation_document",
+          "app.ent3d_site_extra_evidence"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.insert_authorized_action(uuid,uuid,uuid,uuid,text,text,text,text,text,text,integer,bigint,text,text,timestamp with time zone)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "3ef3973d8e896179f461078c0140c1a13250459a9b1afe96748bd7891d45aee9",
+        "staticWrites": [
+          "app.action_outbox"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_check_extra_command(uuid,uuid,uuid,uuid)",
+        "owner": "jobguard_command_writer",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "830895bcdd3ea8773d8a667f8c3bd9d416b07855328ef2834fae53ba540d979b",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "app.lp5b_contractor_permission"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_evidence_reference_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "170bbbe938a19a875f5aab5c4799284a092b69ac80ad35a54a65e18c30c9a48a",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_extra_fact_actor()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "f5c1e1c0f51dcc07277becad8b53521a92bec755a31d8b5b65b8cdb325f761bb",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp8b_check_extra_command"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_final_input_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "1d43b34e7b5268a1f8e49ca1dbc4c7d27e56947e0458debee3e78ab7e0303fc1",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_invalidation_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "7c4468a64f1401c238f4f3312ca774a66389a9e9a6681ca5facd53e787ff993a",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_outbox_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "bb3dfa9642d86be167649f3ae0e2ea2459d65829b4382f52dd9367a9aa485b76",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_prevention_actor()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "fab57e1886b1ccd580abe62517e629f9772b598041fd05925f177b91337b56c0",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_supplier_allocation_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "88e8639a5958039f879fa7755f7335eb9e84c5bdeb650b62316860d88d231b98",
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_synthetic_original_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "2aa02545e253ee63a066d035785b664779007f5277c87f3de35967c9a2675f7b",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.lp8b_upload_guard()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "bef30481392a82b58bd527c1043040f613c18bbf38b0455f3b9fd2c0f9d7a2ad",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.verify_evidence_upload(uuid,uuid,text,text,bytea)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "58fac5d978099c6ac719e901a8675d5cb67f3878e6640fc51629e6687b4a3916",
+        "staticWrites": [
+          "app.evidence_upload"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant"
+        ]
+      }
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.action_outbox|lp8b_authorized_content|app.lp8b_outbox_guard|BEFORE INSERT/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.counterparty_check|lp8b_prevention_actor|app.lp8b_prevention_actor|AFTER INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.evidence_invalidation|lp8b_owner_invalidation|app.lp8b_invalidation_guard|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.evidence_link|b_lp8b_reference|app.lp8b_evidence_reference_guard|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.evidence_object|b_lp8b_reference|app.lp8b_evidence_reference_guard|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.evidence_upload|a_lp8b_verified_upload|app.lp8b_upload_guard|BEFORE UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.evidence_upload|b_lp8b_upload|app.lp8b_upload_guard|BEFORE INSERT/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.extra_duplicate_link|a_lp8b_actor|app.lp8b_extra_fact_actor|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.extra_event|a_lp8b_actor|app.lp8b_extra_fact_actor|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.extra_order_line_link|a_lp8b_actor|app.lp8b_extra_fact_actor|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.final_account_draft|a_lp8b_initial_pointer|app.lp8b_final_input_guard|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.final_account_proof|a_lp8b_final_proof|app.lp8b_final_input_guard|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.property_constraint_fact|lp8b_prevention_actor|app.lp8b_prevention_actor|AFTER INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.supplier_match_allocation|b_lp8b_order_reference|app.lp8b_supplier_allocation_guard|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.synthetic_evidence_original|lp8b_original|app.lp8b_synthetic_original_guard|AFTER INSERT|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "relations",
+      "before": {
+        "nspname": "app",
+        "relname": "action_outbox",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration,jobguard_command_writer=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      },
+      "after": {
+        "nspname": "app",
+        "relname": "action_outbox",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration,jobguard_command_writer=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "lp8b_one_outbox_per_approval",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "ent3d_record_resident_confirmation",
+        "args": "p_actor uuid, p_job uuid, p_command uuid, p_confirmation uuid, p_description text, p_note text, p_photo uuid, p_shown_content_sha256 text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "ent3d_record_resident_confirmation",
+        "args": "p_actor uuid, p_job uuid, p_command uuid, p_confirmation uuid, p_description text, p_note text, p_photo uuid, p_shown_content_sha256 text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "insert_authorized_action",
+        "args": "p_actor uuid, p_tenant uuid, p_id uuid, p_authorization uuid, p_adapter text, p_effect text, p_action text, p_recipient text, p_hash text, p_content text, p_revision integer, p_amount bigint, p_currency text, p_policy text, p_expires timestamp with time zone",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_check_extra_command",
+        "args": "p_tenant uuid, p_actor uuid, p_job uuid, p_command uuid",
+        "proowner": "jobguard_command_writer",
+        "proacl": "{jobguard_command_writer=X/jobguard_command_writer,jobguard_runtime=X/jobguard_command_writer}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_evidence_reference_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_extra_fact_actor",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_final_input_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_invalidation_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_outbox_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_prevention_actor",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_supplier_allocation_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_synthetic_original_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "lp8b_upload_guard",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "verify_evidence_upload",
+        "args": "p_tenant uuid, p_upload uuid, p_version text, p_type text, p_bytes bytea",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    }
+  ],
+  "tenancy": []
+}

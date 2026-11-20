@@ -9,6 +9,7 @@ import { bootstrapSyntheticDemo, finalizeMeterLifecycleOwnership, SYNTHETIC_DATA
 import { DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, demoCheckpoints } from "../src/demo-seed.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { MIGRATION_URLS } from "../src/migrate.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 
 describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
   it.each(["jobguard_migration", "jobguard_meter_owner"])("finalizes %s routines and restores temporary permissions", async (routineOwner) => {
@@ -90,7 +91,7 @@ describe("bootstrap SQL trace (no PostgreSQL proof)", () => {
       if (sql.startsWith("SELECT app.complete_command(")) return { rowCount: 1, rows: [{ result: {} }] };
       if (sql.includes("FROM pg_roles WHERE rolname='jobguard_runtime'")) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: true }] };
       // Restricted shadow/meter roles: one posture row each; no holders in this trace.
-      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_worker", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
+      if (sql.includes("SELECT rolsuper,rolbypassrls") && sql.includes("FROM pg_roles WHERE rolname=$1") && ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_session_lookup", "jobguard_worker", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"].includes(values[0] as string)) return { rowCount: 1, rows: [{ rolsuper: false, rolbypassrls: false, rolcreatedb: false, rolcreaterole: false, rolinherit: false, rolcanlogin: false, rolreplication: false, member: false }] };
       if (sql.includes("SELECT pg_get_userbyid(proowner) AS owner")) return { rowCount: 1, rows: [{ owner: "jobguard_migration" }] };
       if (sql === "SELECT current_user") return { rowCount: 1, rows: [{ current_user: "synthetic_owner" }] };
       if (sql.includes("SELECT 1 FROM public.jobguard_schema_migration")) return { rowCount: 1, rows: [{}] };
@@ -232,6 +233,10 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     admin = new Pool({ connectionString: ownerUrl });
   }, 60_000);
   afterAll(async () => { await closeTestPools(runtime, admin); await postgres?.stop(); await rm(directory, { recursive: true, force: true }); });
+  const fixtureDigest = randomUUID().replaceAll("-", "") + randomUUID().replaceAll("-", "");
+  async function bindFixture(client: PoolClient) {
+    await client.query("SELECT app.bind_request('real',$1,$2)", [fixtureDigest, DEMO_TENANT_ID]);
+  }
   it("creates roles, applies every registered migration, reports the actual total, seeds once, and keeps pooled RLS local", async () => {
     process.env.JOBGUARD_ENV = "synthetic_demo";
     const prerequisite = await admin.connect();
@@ -244,12 +249,16 @@ describe("synthetic Vercel/Neon bootstrap", () => {
       }
     } finally { prerequisite.release(); }
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: MIGRATION_URLS.length, tenantId: DEMO_TENANT_ID });
+    const credentialOwner = new Pool({ host: "127.0.0.1", port, user: "postgres", password, database: SYNTHETIC_DATABASE_NAME });
+    try { await testBoundTenantContext(credentialOwner, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, fixtureDigest); }
+    finally { await credentialOwner.end(); }
     const firstSeedClient = await admin.connect();
     let firstSeed: unknown[];
     try {
       await firstSeedClient.query("BEGIN");
       await firstSeedClient.query("SET LOCAL ROLE jobguard_migration");
       await firstSeedClient.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+      await bindFixture(firstSeedClient);
       firstSeed = (await firstSeedClient.query("SELECT command_id,semantic_key,status,result,completed_at FROM app.command_receipt WHERE tenant_id=$1 ORDER BY semantic_key", [DEMO_TENANT_ID])).rows;
     } finally { await firstSeedClient.query("ROLLBACK"); firstSeedClient.release(); }
     await expect(bootstrapSyntheticDemo({ ownerUrl, runtimeUrl })).resolves.toMatchObject({ migrations: MIGRATION_URLS.length });
@@ -258,19 +267,19 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     expect((await admin.query("SELECT pg_has_role('neondb_owner','jobguard_outbound_operator','SET') AS set,pg_has_role('neondb_owner','jobguard_outbound_operator','USAGE') AS usage,pg_has_role('jobguard_runtime','jobguard_outbound_operator','MEMBER') AS runtime_member,pg_has_role('jobguard_migration','jobguard_outbound_operator','MEMBER') AS migration_member")).rows)
       .toEqual([{ set: false, usage: false, runtime_member: false, migration_member: false }]);
     const verifier = await admin.connect();
-
-    await verifier.query("SET ROLE jobguard_migration");
-    await verifier.query("SELECT set_config('app.tenant_id',$1,false)", [DEMO_TENANT_ID]);
-    const applied = (await verifier.query("SELECT migration_name FROM jobguard_schema_migration ORDER BY migration_name")).rows.map(({ migration_name }) => migration_name);
-    expect(applied).toHaveLength(MIGRATION_URLS.length);
-    expect(applied).toEqual(MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)!));
-    const seeded = (await verifier.query("SELECT semantic_key,status,result FROM app.command_receipt WHERE tenant_id=$1 ORDER BY semantic_key", [DEMO_TENANT_ID])).rows;
-    expect((await verifier.query("SELECT command_id,semantic_key,status,result,completed_at FROM app.command_receipt WHERE tenant_id=$1 ORDER BY semantic_key", [DEMO_TENANT_ID])).rows).toEqual(firstSeed);
-    expect(seeded).toHaveLength(demoCheckpoints.length);
-    expect(seeded.map(row => row.status)).toEqual(demoCheckpoints.map(() => "succeeded"));
-    expect(seeded.map(row => row.result)).toEqual([...demoCheckpoints].sort().map(checkpoint => ({ checkpoint })));
-
-    await verifier.query("RESET ROLE"); verifier.release();
+    try {
+      await verifier.query("BEGIN");
+      await verifier.query("SET LOCAL ROLE jobguard_migration");
+      await bindFixture(verifier);
+      const applied = (await verifier.query("SELECT migration_name FROM jobguard_schema_migration ORDER BY migration_name")).rows.map(({ migration_name }) => migration_name);
+      expect(applied).toHaveLength(MIGRATION_URLS.length);
+      expect(applied).toEqual(MIGRATION_URLS.map(url => url.pathname.split("/").at(-1)!));
+      const seeded = (await verifier.query("SELECT semantic_key,status,result FROM app.command_receipt WHERE tenant_id=$1 ORDER BY semantic_key", [DEMO_TENANT_ID])).rows;
+      expect((await verifier.query("SELECT command_id,semantic_key,status,result,completed_at FROM app.command_receipt WHERE tenant_id=$1 ORDER BY semantic_key", [DEMO_TENANT_ID])).rows).toEqual(firstSeed);
+      expect(seeded).toHaveLength(demoCheckpoints.length);
+      expect(seeded.map(row => row.status)).toEqual(demoCheckpoints.map(() => "succeeded"));
+      expect(seeded.map(row => row.result)).toEqual([...demoCheckpoints].sort().map(checkpoint => ({ checkpoint })));
+    } finally { await verifier.query("ROLLBACK"); verifier.release(); }
     expect((await admin.query("SELECT rolname,rolsuper,rolbypassrls,rolcanlogin,rolcreaterole,rolcreatedb,rolinherit FROM pg_roles WHERE rolname IN ('jobguard_shadow','jobguard_shadow_emergency_access') ORDER BY rolname")).rows).toEqual([
       { rolname: "jobguard_shadow", rolsuper: false, rolbypassrls: false, rolcanlogin: false, rolcreaterole: false, rolcreatedb: false, rolinherit: false },
       { rolname: "jobguard_shadow_emergency_access", rolsuper: false, rolbypassrls: false, rolcanlogin: false, rolcreaterole: false, rolcreatedb: false, rolinherit: false },
@@ -300,6 +309,11 @@ describe("synthetic Vercel/Neon bootstrap", () => {
       { schemaname: "app", tablename: "command_lifecycle_claim", tableowner: "jobguard_command_writer" },
       { schemaname: "app", tablename: "command_type_registry", tableowner: "jobguard_command_writer" },
       { schemaname: "app", tablename: "repository_operational_record", tableowner: "jobguard_command_writer" },
+      { schemaname: "control_plane", tablename: "lp11_customer_scope", tableowner: "jobguard_session_lookup" },
+      { schemaname: "control_plane", tablename: "lp11_identity_scope", tableowner: "jobguard_session_lookup" },
+      { schemaname: "control_plane", tablename: "lp11_observation_permit", tableowner: "jobguard_session_lookup" },
+      { schemaname: "control_plane", tablename: "lp11_observation_scope", tableowner: "jobguard_session_lookup" },
+      { schemaname: "control_plane", tablename: "lp11_shadow_scope", tableowner: "jobguard_session_lookup" },
       { schemaname: "control_plane", tablename: "request_binding", tableowner: "jobguard_binding_owner" },
     ]);
     expect((await admin.query(`SELECT count(*)::int AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND c.relkind IN ('r','p') AND c.relname <> 'command_type_registry' AND (NOT c.relrowsecurity OR NOT c.relforcerowsecurity)`)).rows).toEqual([{ count: 0 }]);
@@ -348,6 +362,7 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     runtime = new Pool({ connectionString: runtimeUrl, max: 1 });
     const client = await runtime.connect();
     await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await bindFixture(client);
     expect((await client.query("SELECT title,status,revision FROM app.job ORDER BY title")).rows).toEqual([
       { title: "Kitchen extension", status: "live", revision: 0 },
       { title: "Loft conversion", status: "quoting", revision: 0 },
@@ -358,6 +373,7 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     ]);
     await expect(client.query("UPDATE app.job SET title='forbidden'")).rejects.toMatchObject({ code: "42501" }); await client.query("ROLLBACK");
     await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await bindFixture(client);
     await expect(client.query("INSERT INTO app.job(id,tenant_id,title) VALUES(gen_random_uuid(),'22222222-2222-4222-8222-222222222222','foreign')")).rejects.toMatchObject({ code: "42501" });
     await client.query("ROLLBACK"); client.release();
     expect((await runtime.query("SELECT current_setting('app.tenant_id',true) tenant,count(*)::int count FROM app.job GROUP BY 1")).rows).toEqual([]);
@@ -396,11 +412,13 @@ describe("synthetic Vercel/Neon bootstrap", () => {
     const client = await runtime.connect(), scope = randomUUID(), variation = randomUUID();
     try {
       await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await bindFixture(client);
       expect((await client.query("SELECT current_user")).rows).toEqual([{ current_user: "jobguard_runtime" }]);
       await client.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','reserved')", [scope, DEMO_TENANT_ID]);
       await client.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description) VALUES($1,$2,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',$3,'text','Fictional extra','Fictional extra')", [variation, DEMO_TENANT_ID, scope]);
       await client.query("COMMIT");
       await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await bindFixture(client);
       expect((await client.query("SELECT job_track,kind,provenance,raising_role FROM app.extra_origin WHERE tenant_id=$1 AND variation_id=$2", [DEMO_TENANT_ID, variation])).rows).toEqual([{ job_track: "small_builder", kind: "builder_logged", provenance: "legacy_synthetic_capture", raising_role: "legacy_unrecorded" }]);
       await expect(client.query("UPDATE app.job_commercial_track SET job_track='contractor' WHERE tenant_id=$1", [DEMO_TENANT_ID])).rejects.toMatchObject({ code: "42501" });
     } finally { await client.query("ROLLBACK"); client.release(); }

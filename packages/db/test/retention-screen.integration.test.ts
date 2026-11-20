@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { workerFixturePool } from "./worker-login-fixture.js";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { IdentityRepository } from "../src/identity-repository.js";
@@ -36,7 +37,8 @@ it("session application reads timer review, resolves as session person, refuses 
   const append = (record: unknown, id = randomUUID()) => a.app.command(a.credentials, a.jobId, input(record, id));
   const read = () => a.app.read(a.credentials, a.jobId);
   const before = await financialSnapshot();
-  await append(profile, pid); await new RetentionRecordRepository(f.runtime).raiseTimerReviews(a.context);
+  const timer = new RetentionRecordRepository(await workerFixturePool(f.runtime));
+  await append(profile, pid); await timer.raiseTimerReviews(a.context);
   const review = (await read()).book.records[1]!;
   expect(review).toMatchObject({ version: "retention.review.v1", trigger: "timer" });
   expect((await read()).reconciliation).toMatchObject({ pendingReviewIds: [review.id], released: { netPence: 0, taxPence: 0 } });
@@ -53,7 +55,7 @@ it("session application reads timer review, resolves as session person, refuses 
   await append({ version: "retention.receipt.v1", releaseId, grossPence: 4800 }, receiptId);
   await append({ version: "retention.reversal.v1", receiptId, grossPence: 1200 });
   await append({ ...profile, revision: 2, previousProfileId: pid, conditions: profile.conditions.map(c => ({ ...c, dueDate: "2001-01-01" })) });
-  await new RetentionRecordRepository(f.runtime).raiseTimerReviews(a.context);
+  await timer.raiseTimerReviews(a.context);
   const nextReview = (await read()).book.records.at(-1)!;
   const finalResolution = randomUUID();
   await append({ ...resolution, reviewId: nextReview.id, amount: { netPence: 6000, taxPence: 1200 } }, finalResolution);
@@ -64,7 +66,7 @@ it("session application reads timer review, resolves as session person, refuses 
   const afterRevision = await read();
   await expect(append({ version: "retention.release.v1", resolutionId: finalResolution })).rejects.toMatchObject({ code: "STALE_PROFILE" });
   expect(await read()).toEqual(afterRevision);
-  await new RetentionRecordRepository(f.runtime).raiseTimerReviews(a.context);
+  await timer.raiseTimerReviews(a.context);
   const finalReview = (await read()).book.records.at(-1)!, finalId = randomUUID();
   await append({ ...resolution, reviewId: finalReview.id, amount: { netPence: 6000, taxPence: 1200 } }, finalId);
   await append({ version: "retention.release.v1", resolutionId: finalId });

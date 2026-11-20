@@ -2,6 +2,7 @@ import { seedActiveContractorAgreement } from "./contractor-agreement-test-fixtu
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { claimCommandIdentity,withTenant } from "../src/index.js";
+import { bindIssuedCredential } from "../src/tenant-context.js";
 import { Pool } from "pg";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import { closeWorkFixture,createWorkFixture,seedWorkJob,workTenant,boundaryLock,type WorkFixture } from "./job-work-state-fixtures.js";
@@ -259,7 +260,10 @@ describe("CH-4-C persisted owner commands (real PostgreSQL)",()=>{
   await seedActiveContractorAgreement(f.admin,p.auth.context.tenantId);
   for(const role of new Set(["admin","finance","operative","supervisor","surveyor","commercial_manager","read_only","client_approver","worker",...roles])){
    const db=await f.admin.connect();try{
-    await db.query("BEGIN");await db.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);await db.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3",[role,p.auth.context.tenantId,p.auth.membershipId]);
+    await db.query("BEGIN");
+    await bindIssuedCredential(db,p.auth.context);
+    await db.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);
+    await db.query("UPDATE app.membership SET role=$1 WHERE tenant_id=$2 AND id=$3",[role,p.auth.context.tenantId,p.auth.membershipId]);
     await db.query("SELECT set_config('app.tenant_id',$1,true)",[p.auth.context.tenantId]);await db.query("SET LOCAL ROLE jobguard_runtime");
     const {commandOn}=await import("./job-work-state-command-fixtures.js");await expect(commandOn(db,p,workCommand())).rejects.toThrow("WORK_STATE_FORBIDDEN");
    }finally{await db.query("ROLLBACK");db.release()}

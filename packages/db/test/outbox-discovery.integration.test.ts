@@ -56,19 +56,19 @@ beforeAll(async () => {
   for (const tenant of tenants) {
     const user = randomUUID(), account = randomUUID(), member = randomUUID();
     tenantOwners.set(tenant, member);
-    const decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
     const content = "Fictional approved document", hash = createHash("sha256").update(content).digest("hex");
     await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
     await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
     await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional')", [account, tenant]);
     await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [member, tenant, account, user]);
-    await admin.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'quote','fictional','send_quote')", [decision, tenant]);
-    await admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, member]);
-    await admin.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at)
-      VALUES($1,$2,$3,$4,$5,'send_quote','fictional@example.invalid',$6,1,'pilot-v1','2099-01-01')`, [authorization, tenant, decision, resolution, member, hash]);
     for (let i = 0; i < 105; i++) {
       const id = randomUUID();
-      await withTenant(runtime, testTenantContext(tenant), db => appendOutboundAction(db, tenant, {
+      const decision = randomUUID(), resolution = randomUUID(), authorization = randomUUID();
+      await admin.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'quote',$3,'send_quote')", [decision, tenant, id]);
+      await admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)", [resolution, tenant, decision, member]);
+      await admin.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at)
+        VALUES($1,$2,$3,$4,$5,'send_quote','fictional@example.invalid',$6,1,'pilot-v1','2099-01-01')`, [authorization, tenant, decision, resolution, member, hash]);
+      await withTenant(runtime, testTenantContext(tenant, { membershipId: member }), db => appendOutboundAction(db, tenant, {
         version: "outbound-action.v1", id, authorizationId: authorization, adapter: "fake_capture", providerEffectKey: `fictional:${id}`,
         actionType: "send_quote", recipient: "fictional@example.invalid", contentHash: hash, immutableContent: content,
         aggregateRevision: 1, amountPence: null, currency: null, policyVersion: "pilot-v1", authorizationExpiresAt: new Date("2099-01-01"),
@@ -155,13 +155,14 @@ it("rediscovery leaves persisted due time, max attempts and terminal delivery au
       return action.id === unknown.id ? { kind: "outcome_unknown", code: "SYNTHETIC_UNKNOWN" } : { kind: "retryable", code: "SYNTHETIC_RETRY" };
     }, async reconcile() { return "unknown"; } };
   const executor = new ActionExecutor(runtime, new Map([[adapter.name, adapter]]), { emit() {} });
-  const execute = (a: typeof retry) => executor.execute(testTenantContext(a.tenant), a.id);
+  const context = (tenant: string) => testTenantContext(tenant, { membershipId: tenantOwners.get(tenant)! });
+  const execute = (a: typeof retry) => executor.execute(context(a.tenant), a.id);
   const rediscover = async () => { for (let i = 0; i < 3; i++) await discover(); };
   // A worker without this adapter can refuse now without stranding the durable signal.
-  await new ActionExecutor(runtime, new Map(), { emit() {} }).execute(testTenantContext(retry.tenant), retry.id);
+  await new ActionExecutor(runtime, new Map(), { emit() {} }).execute(context(retry.tenant), retry.id);
   expect((await admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE action_id=$1", [retry.id])).rows[0].n).toBe(0);
   await rediscover();
-  await executor.execute(testTenantContext(tenants[0]!), retry.id); // Wrong tenant never delivers.
+  await executor.execute(context(tenants[0]!), retry.id); // Wrong tenant never delivers.
   expect(calls.size).toBe(0);
   await execute(retry); await execute(unknown);
   await operateOutbox(runtime, testTenantContext(cancelled.tenant, { membershipId: tenantOwners.get(cancelled.tenant)! }), cancelled.id, "cancel");

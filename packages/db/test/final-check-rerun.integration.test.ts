@@ -7,11 +7,11 @@ import {FinalAccountLockRepository} from '../src/final-account-lock-repository.j
 import {practiceMaterialPool} from '../src/practice-session.js';
 import {FinalCheckWorker} from '../../../apps/api/src/final-check.worker.js';
 import {executeFinalCheckTask} from '../../../apps/api/src/final-check-task-executor.js';
-import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,insertFinalCheckEvidence,finalCheckProposal,finalCheckTenant,FINAL_CHECK_ACTOR,type FinalCheckFixture,type FinalCheckJob} from './final-check-fixture.js';
+import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,insertFinalCheckEvidence,finalCheckProposal,finalCheckShadowJob,finalCheckTenant,FINAL_CHECK_ACTOR,type FinalCheckFixture,type FinalCheckJob} from './final-check-fixture.js';
 let f:FinalCheckFixture;
 beforeAll(async()=>{vi.stubEnv('JOBGUARD_ENV','synthetic_demo');f=await createFinalCheckFixture();},60000);
 afterAll(async()=>{await closeFinalCheckFixture(f);vi.unstubAllEnvs();});
-const tx=<T>(a:FinalCheckJob,work:Parameters<typeof finalCheckTenant<T>>[2])=>finalCheckTenant(f.admin,a.tenantId,work);
+const tx=<T>(a:FinalCheckJob,work:Parameters<typeof finalCheckTenant<T>>[2])=>finalCheckTenant(f.admin,a.tenantId,work,{practiceDigest:a.digest});
 function runner(redetect?:()=>Promise<unknown>){
  const repo=new FinalCheckRepository(f.shadow),completion=new FinalCheckCompletionRepository(f.shadow);
  const worker=new FinalCheckWorker({
@@ -25,7 +25,7 @@ function runner(redetect?:()=>Promise<unknown>){
 const request=(a:FinalCheckJob)=>new FinalCheckRepository(f.runtime).requestRun(a.context,a.jobId,a.digest) as Promise<{manifestId:string;attempt:number}>;
 const gate=(a:FinalCheckJob)=>tx(a,db=>db.query('SELECT * FROM app.require_authoritative_final_check($1,$2)',[a.tenantId,a.jobId]));
 const invoice=(a:FinalCheckJob,revision=a.revisionId,kind:'final'|'supplementary'='final',hash='a'.repeat(64))=>new FinalAccountLockRepository(practiceMaterialPool(f.runtime,a.digest)).issueInvoice(a.context,{jobId:a.jobId,actorMembershipId:FINAL_CHECK_ACTOR,commandId:randomUUID(),finalAccountRevisionId:revision,expectedSourceHash:hash,invoiceKind:kind,recipient:'fictional@example.invalid',issuedOn:'2026-11-08'});
-const withdraw=(a:FinalCheckJob,evidence:string)=>finalCheckTenant(f.runtime,a.tenantId,db=>db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),a.tenantId,evidence,FINAL_CHECK_ACTOR]));
+const withdraw=(a:FinalCheckJob,evidence:string)=>finalCheckTenant(f.runtime,a.tenantId,db=>db.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[randomUUID(),a.tenantId,evidence,FINAL_CHECK_ACTOR]),{practiceDigest:a.digest});
 async function history(a:FinalCheckJob,id:string){
  const result:Record<string,unknown>={};
  for(const table of ['final_check_manifest','final_check_manifest_source','final_check_processing_source','final_check_source_attempt','final_check_run_binding','shadow_final_check_source_attempt','shadow_final_check_run_binding','shadow_final_check_completion']){
@@ -94,7 +94,7 @@ it('stranger, other practice, closed job, wrong lock and wrong cutoff refuse wit
  const another=(await f.admin.query('SELECT id FROM app.final_account_lock WHERE job_id=$1',[other.jobId])).rows[0].id;
  await expect(r.repo.begin(a.workerContext,a.jobId,'shadow-detection.v1',q.manifestId,2,another)).rejects.toThrow('FINAL_CHECK_PENDING');expect(await counts()).toEqual(before);
  for(const [lock,cutoff] of [[another,m.cutoff],[m.lockId,'2000-01-01T00:00:00Z']]){
-  await expect(finalCheckTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_check_manifest(tenant_id,job_id,id,lock_id,evidence_cutoff_at,attempt,predecessor_manifest_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,2,$6,'shadow-detection.v1','final-check.reconciliation.v1')",[a.tenantId,a.jobId,q.manifestId,lock,cutoff,m.id]))).rejects.toThrow('FINAL_CHECK_LOCK_BINDING_INVALID');
+  await expect(finalCheckShadowJob(f.shadow,a.tenantId,a.jobId,db=>db.query("INSERT INTO app.final_check_manifest(tenant_id,job_id,id,lock_id,evidence_cutoff_at,attempt,predecessor_manifest_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,2,$6,'shadow-detection.v1','final-check.reconciliation.v1')",[a.tenantId,a.jobId,q.manifestId,lock,cutoff,m.id]))).rejects.toThrow('FINAL_CHECK_LOCK_BINDING_INVALID');
   expect(await counts()).toEqual(before);
  }
  await expect(r.repo.begin(a.workerContext,other.jobId,'shadow-detection.v1',q.manifestId)).rejects.toThrow('FINAL_CHECK_SOURCE_CHANGED');expect(await counts()).toEqual(before);
@@ -126,6 +126,7 @@ it('rolled-back mutations prove the no-longer-verifies predicate and predecessor
   const original=(await client.query("SELECT pg_get_functiondef('app.guard_final_check_manifest()'::regprocedure) body")).rows[0].body as string;
   const anchor='NEW.withdrawn_predecessor_source_ids:=removed;';expect(original.split(anchor)).toHaveLength(2);await client.query(original.replace(anchor,''));
   await client.query('SET LOCAL SESSION AUTHORIZATION '+f.shadow.options.user);
+  await client.query('SELECT app.lp11_bind_shadow_job($1,$2)',[a.tenantId,a.jobId]);
   await expect(client.query("SELECT app.begin_final_check($1,$2,'shadow-detection.v1','final-check.reconciliation.v1')",[a.tenantId,a.jobId])).rejects.toThrow('final_check_attempt_chain');
  }finally{await client.query('ROLLBACK');client.release();}
  expect(await history(a,m.id)).toEqual(before);const next=await runner().run(a,q.manifestId);await gate(a);expect(next.sources).toEqual([]);

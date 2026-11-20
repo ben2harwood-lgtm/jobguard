@@ -236,7 +236,7 @@ it("[PH22] catalogue proves columns, constraints, non-internal triggers and exac
  expect((await c.admin.query("SELECT tgname FROM pg_trigger WHERE tgrelid='control_plane.contractor_practice_session'::regclass AND NOT tgisinternal ORDER BY tgname")).rows.map(x => x.tgname)).toEqual(["contractor_practice_session_audit", "contractor_practice_session_guard", "contractor_practice_session_truncate_guard"]);
  for (const signature of ["contractor_practice_session_digest(uuid)", "contractor_practice_home_deadline(character,timestamp with time zone)", "contractor_practice_session_live(uuid)", "revoke_contractor_practice_session(uuid)", "contractor_practice_session_guard()", "contractor_practice_session_require_audit()"]) {
   const p = (await c.admin.query("SELECT prosecdef,provolatile,proconfig,pg_get_userbyid(proowner) owner,has_function_privilege('jobguard_runtime',oid,'EXECUTE') runtime,has_function_privilege('jobguard_infrastructure',oid,'EXECUTE') infra,EXISTS(SELECT 1 FROM aclexplode(coalesce(proacl,acldefault('f',proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') public FROM pg_proc WHERE oid=$1::regprocedure", [`app.${signature}`])).rows[0];
-  expect(p).toMatchObject({ prosecdef: signature.startsWith("revoke_"), proconfig: ["search_path=pg_catalog"], owner: "jobguard_migration", runtime: signature.startsWith("revoke_"), infra: false, public: false });
+  expect(p).toMatchObject({ prosecdef: signature.startsWith("revoke_") || signature === "contractor_practice_session_require_audit()", proconfig: ["search_path=pg_catalog"], owner: "jobguard_migration", runtime: signature.startsWith("revoke_"), infra: false, public: false });
   if (signature.startsWith("contractor_practice_session_live")) expect(p.provolatile).toBe("v");
  }
 });

@@ -24,7 +24,7 @@ describe("SV-7A fixture source isolation (intake Test O remains held)",()=>{
  it("SV7A-18 SV7A-19 independent fixture observations reach existing worker/sink; reads/query paths remain identical with held signals",async()=>{
   const {auth,jobId}=f.practice,sequences:string[][]=[],repo=new JobSourceRepository(observed(f.runtime,sequences));
   const before=await repo.read(auth.context,jobId,auth.digest,"diary"),messagesBefore=await repo.read(auth.context,jobId,auth.digest,"customer_message");const initial=sequences.splice(0);
-  const reader=new ShadowObservationReader(f.runtime,new FixtureObservationSources([])),sink=new ShadowDetectionRepository(shadow);
+  const reader=new ShadowObservationReader(f.runtime,new FixtureObservationSources([]),shadow),sink=new ShadowDetectionRepository(shadow);
   const worker=new ShadowDetectionWorker({assertTermsRelation:()=>reader.assertTermsRelation(),hasAcceptedTerms:(context,jobId)=>reader.hasAcceptedTerms(context,jobId),read:(context,request)=>reader.read(context,request),propose:async()=>({proposals:[]}),persist:(context,request)=>sink.persist(context,request)},"synthetic_demo",()=>"2026-10-13T12:00:00Z");
   const task={version:"shadow-detection-task.v1",tenantId:auth.context.tenantId,jobId};await worker.start();await expect(worker.execute(verifiedTenantContextForQueuedJob(auth.context.tenantId),task)).rejects.toMatchObject({code:"SHADOW_TERMS_NOT_ACCEPTED"});
   const {withTenant}=await import("../src/tenant-context.js");await withTenant(practiceMaterialPool(f.runtime,auth.digest),auth.practiceContext,db=>db.$client.query("SELECT app.accept_final_check_terms($1,$2,$3,$4)",[auth.context.tenantId,auth.membershipId,randomUUID(),"synthetic_final_check_terms.v1"]));

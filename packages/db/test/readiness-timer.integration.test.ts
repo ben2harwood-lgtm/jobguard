@@ -9,6 +9,7 @@ import { migrate } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { importWatchdogFixtureJob } from "./watchdog-fixtures.js";
+import { outboundWorkerPool } from "../src/worker-pool.js";
 import { DurableReadinessStore } from "../../../apps/api/src/readiness-store.js";
 import { type ScheduledPlan } from "../../../apps/api/src/readiness-scheduler.js";
 
@@ -57,6 +58,25 @@ beforeAll(async () => {
 }, 120_000);
 afterAll(async () => { await closeTestPools(infrastructure, runtime, admin); await pg?.stop(); });
 
+async function withHistoricalDiscovery(
+ name: "0684_readiness_discovery_guard.sql" | "0685_readiness_bad_timezone.sql",
+ check: (client: import("pg").PoolClient) => Promise<void>,
+) {
+ const client = await admin.connect();
+ try {
+  await client.query("BEGIN");
+  // The predecessor reads under its own FORCE RLS policy. Both historical
+  // replacements roll back with their old routine, leaving the live policy intact.
+  const predecessor = (await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8")).trim();
+  await client.query(predecessor.slice("BEGIN;".length, -"COMMIT;".length));
+  await client.query(`ALTER POLICY tenant_isolation ON app.scheduled_readiness_plan
+    USING (tenant_id=current_setting('app.tenant_id')::uuid)
+    WITH CHECK (tenant_id=current_setting('app.tenant_id')::uuid)`);
+  await client.query("SET LOCAL ROLE jobguard_infrastructure");
+  await check(client);
+ } finally { await client.query("ROLLBACK"); client.release(); }
+}
+
 it("discovers latest identifiers through FORCE RLS, restores caller context and grants only EXECUTE", async () => {
  // Discovery uses the database clock; scheduling below retains fixed DST dates.
  const today = (await admin.query("SELECT to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Europe/London','YYYY-MM-DD') today")).rows[0].today as string;
@@ -73,6 +93,31 @@ it("discovers latest identifiers through FORCE RLS, restores caller context and 
  } finally { client.release(); }
  await expect(infrastructure.query("SELECT * FROM app.scheduled_readiness_plan")).rejects.toMatchObject({ code: "42501" });
  await expect(runtime.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rejects.toMatchObject({ code: "42501" });
+});
+it("checks the exact queued scope and ignores a foreign tenant setting", async () => {
+ const sql = "SELECT app.lp11_readiness_worker($1,$2,$3,$4,$5::jsonb) AS result";
+ await expect(runtime.query(sql, [tenantId, scope.jobId, scope.taskId, "load", null]))
+  .rejects.toMatchObject({ code: "42501" });
+ const worker = await (await outboundWorkerPool(runtime)).connect();
+ try {
+  await worker.query("BEGIN");
+  await worker.query("SELECT set_config('app.tenant_id',$1,true)", [other]);
+  const correct = await worker.query(sql, [tenantId, scope.jobId, scope.taskId, "load", null]);
+  expect(correct.rows[0].result).toMatchObject({ scope });
+  expect((await worker.query(sql, [other, scope.jobId, scope.taskId, "load", null])).rows)
+   .toEqual([{ result: null }]);
+  const { plan_hash } = (await admin.query(`SELECT plan_hash FROM app.scheduled_readiness_plan
+   WHERE (tenant_id,job_id,task_id)=($1,$2,$3)`, [tenantId, scope.jobId, scope.taskId])).rows[0];
+  await expect(worker.query(sql, [tenantId, scope.jobId, scope.taskId, "record", {
+   scope: { ...scope, tenantId: other }, planHash: plan_hash, key: "a".repeat(64),
+  }])).rejects.toMatchObject({ code: "23514", message: "READINESS_STORE_CONFLICT" });
+ } finally {
+  await worker.query("ROLLBACK");
+  worker.release();
+ }
+ expect((await admin.query("SELECT count(*)::int AS count FROM control_plane.lp11_readiness_scope")).rows)
+  .toEqual([{ count: 0 }]);
+ expect(await store().proposals(context, scope)).toEqual([]);
 });
 it("the real task schedules the previous workday across DST; concurrent executions and crash replay persist one prevention proposal", async () => {
  const foreignScope = { tenantId: other, jobId: randomUUID(), taskId: randomUUID() };
@@ -156,7 +201,11 @@ it("rejects infrastructure discovery in a non-synthetic database", async () => {
   await nonSynthetic.query("CREATE SCHEMA infrastructure");
   await nonSynthetic.query("GRANT USAGE ON SCHEMA infrastructure TO jobguard_infrastructure");
   // The guard runs before table access in this second database.
-  await nonSynthetic.query(await readFile(new URL("../migrations/0684_readiness_discovery_guard.sql", import.meta.url), "utf8"));
+  const { definition } = (await admin.query("SELECT pg_get_functiondef('infrastructure.discover_readiness_plans()'::regprocedure) definition")).rows[0];
+  await nonSynthetic.query(definition);
+  await nonSynthetic.query(`ALTER FUNCTION infrastructure.discover_readiness_plans() OWNER TO jobguard_migration;
+    REVOKE ALL ON FUNCTION infrastructure.discover_readiness_plans() FROM PUBLIC;
+    GRANT EXECUTE ON FUNCTION infrastructure.discover_readiness_plans() TO jobguard_infrastructure`);
   await expect(worker.query("SELECT * FROM infrastructure.discover_readiness_plans()"))
    .rejects.toMatchObject({ code: "42501", message: "MODE_FORBIDDEN" });
  } finally { await closeTestPools(worker, nonSynthetic); }
@@ -218,13 +267,10 @@ it("skips unknown PostgreSQL time zones without blocking another tenant's due pl
   scope: goodScope, plannedDate: today, timeZone: "UTC" });
  // Failing-first proof on real PostgreSQL, then restore the new routine even if
  // the assertion fails. The six existing timer tests keep their assertions.
- try {
-  await admin.query(await readFile(new URL("../migrations/0684_readiness_discovery_guard.sql", import.meta.url), "utf8"));
-  await expect(infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()"))
+ await withHistoricalDiscovery("0684_readiness_discovery_guard.sql", async client => {
+  await expect(client.query("SELECT * FROM infrastructure.discover_readiness_plans()"))
    .rejects.toMatchObject({ code: "22023" });
- } finally {
-  await admin.query(await readFile(new URL("../migrations/0685_readiness_bad_timezone.sql", import.meta.url), "utf8"));
- }
+ });
  const rows = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rows;
  expect(rows).toContainEqual({ tenant_id: goodTenant, job_id: goodJob, task_id: goodScope.taskId });
  for (const badScope of badScopes) expect(rows).not.toContainEqual({
@@ -243,21 +289,16 @@ it.each(["europe/london", "EUROPE/LONDON", "utc"])("discovers a confirmed due pl
  await store().confirm(testTenantContext(caseTenant), await actorFor(caseTenant), { ...plan,
   scope: caseScope, plannedDate: today, timeZone });
  const expected = { tenant_id: caseTenant, job_id: caseJob, task_id: caseScope.taskId };
- // Prove the old routine silently excludes the confirmed plan, then restore
- // 1053 even if the failing-first assertion fails.
- try {
-  await admin.query(await readFile(new URL("../migrations/0685_readiness_bad_timezone.sql", import.meta.url), "utf8"));
-  const before = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rows;
+ // Prove that the predecessor excludes the confirmed plan, then test the live routine.
+ await withHistoricalDiscovery("0685_readiness_bad_timezone.sql", async client => {
+  const before = (await client.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rows;
   expect(before).not.toContainEqual(expected);
- } finally {
-  await admin.query(await readFile(new URL("../migrations/0718_readiness_timezone_case.sql", import.meta.url), "utf8"));
- }
+ });
  const after = (await infrastructure.query("SELECT * FROM infrastructure.discover_readiness_plans()")).rows;
  expect(after).toContainEqual(expected);
 });
 
 it("skips an unknown zone while discovering a valid due plan in the same tenant", async () => {
- await admin.query(await readFile(new URL("../migrations/0718_readiness_timezone_case.sql", import.meta.url), "utf8"));
  const mixedTenant = randomUUID(), mixedJob = randomUUID();
  await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [mixedTenant]);
  await importWatchdogFixtureJob(admin, mixedTenant, mixedJob);

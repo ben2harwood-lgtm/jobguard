@@ -14,8 +14,10 @@ describe("MON-1 part 2: immutable counted day ledger (real PostgreSQL, CI)", () 
     meter = new Pool({ ...f.admin.options, user: login, password, max: 2 });
   }, 60000);
   afterAll(async () => { await meter?.end(); await closeWorkFixture(f); });
-  const write = (a: Awaited<ReturnType<typeof seedWorkJob>>, sourceId: string) =>
-    withTenant(meter, verifiedTenantContextForQueuedJob(a.tenantId), tx => persistMeterDayLedger(tx, { version: "meter-day-ledger-write.v1", sourceId }));
+  const write = (a: Awaited<ReturnType<typeof seedWorkJob>>, sourceId: string) => {
+    const context = verifiedTenantContextForQueuedJob(a.tenantId);
+    return withTenant(meter, context, tx => persistMeterDayLedger(tx, context, { version: "meter-day-ledger-write.v1", sourceId }));
+  };
   async function source(a: Awaited<ReturnType<typeof seedWorkJob>>, revision = 1, previousScope?: string) {
     const scope = previousScope ?? randomUUID(), id = randomUUID();
     const job = {
@@ -42,8 +44,11 @@ describe("MON-1 part 2: immutable counted day ledger (real PostgreSQL, CI)", () 
     }, { membershipId: a.actorId });
     return { id, scope };
   }
-  const days = (a: Awaited<ReturnType<typeof seedWorkJob>>, id: string) => workTenant(meter, a.tenantId,
-    async db => (await db.query("SELECT date::text,result FROM app.meter_lifecycle_day_ledger WHERE computation_id=$1 ORDER BY date", [id])).rows, { membershipId: a.actorId, bindRequest: false });
+  const days = (a: Awaited<ReturnType<typeof seedWorkJob>>, sourceId: string, id: string) => workTenant(meter, a.tenantId,
+    async db => {
+      expect((await db.query("SELECT app.lp11_bind_meter_source($1,$2) AS bound", [a.tenantId, sourceId])).rows).toEqual([{ bound: true }]);
+      return (await db.query("SELECT date::text,result FROM app.meter_lifecycle_day_ledger WHERE computation_id=$1 ORDER BY date", [id])).rows;
+    }, { membershipId: a.actorId, bindRequest: false });
 
   it("concurrent identical writes return one computation, with London midnight exclusive stop and zero days", async () => {
     const a = await seedWorkJob(f), s = await source(a);
@@ -57,21 +62,21 @@ describe("MON-1 part 2: immutable counted day ledger (real PostgreSQL, CI)", () 
     const ids = await Promise.all([write(a, s.id), write(a, s.id)]);
     expect(ids[0]).toBe(ids[1]);
     expect(await write(a, s.id)).toBe(ids[0]);
-    const rows = await days(a, ids[0]!);
+    const rows = await days(a, s.id, ids[0]!);
     // UTC July 1 23:00 is London July 2; July 2 23:00 is July 3 midnight.
     expect(rows.map(row => [row.date, row.result.countedPlaces])).toEqual([
       ["2026-07-01", 0], ["2026-07-02", 1], ["2026-07-03", 0],
     ]);
     expect(rows[1]!.result).toMatchObject({ rawPlaces: 1, freeSmallPlaces: 0, places: [{ jobIds: [a.jobId] }] });
     expect((await f.admin.query("SELECT count(*)::int n FROM app.meter_lifecycle_computation WHERE tenant_id=$1", [a.tenantId])).rows[0].n).toBe(2);
-    expect(await days(a, heldId)).toEqual([{ date: "2026-07-01", result: null }]);
+    expect(await days(a, s.id, heldId)).toEqual([{ date: "2026-07-01", result: null }]);
   });
   it("new source revision appends history; retries refuse missing or changed cached results", async () => {
-    const a = await seedWorkJob(f), s = await source(a), id = await write(a, s.id), before = await days(a, id);
+    const a = await seedWorkJob(f), s = await source(a), id = await write(a, s.id), before = await days(a, s.id, id);
     const next = await source(a, 2, s.scope), nextId = await write(a, next.id);
     expect(nextId).not.toBe(id);
-    expect(await days(a, id)).toEqual(before);
-    expect((await days(a, nextId))[2]!.result.countedPlaces).toBe(1);
+    expect(await days(a, s.id, id)).toEqual(before);
+    expect((await days(a, next.id, nextId))[2]!.result.countedPlaces).toBe(1);
     await expect(workTenant(meter, a.tenantId, db => db.query("UPDATE app.meter_lifecycle_day_ledger SET status='held' WHERE computation_id=$1", [id]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow();
     // Privileged corruption probe: an internally consistent wrong value still refuses.
     await f.admin.query("ALTER TABLE app.meter_lifecycle_day_ledger DISABLE TRIGGER immutable");
@@ -80,18 +85,26 @@ describe("MON-1 part 2: immutable counted day ledger (real PostgreSQL, CI)", () 
         WHERE computation_id=$1 AND date='2026-07-02'`, [id]);
     } finally { await f.admin.query("ALTER TABLE app.meter_lifecycle_day_ledger ENABLE TRIGGER immutable"); }
     await expect(write(a, s.id)).rejects.toThrow("METER_PROJECTION_MISMATCH");
-    expect((await days(a, id))[1]!.result.countedPlaces).toBe(0);
+    expect((await days(a, s.id, id))[1]!.result.countedPlaces).toBe(0);
     await f.admin.query("ALTER TABLE app.meter_lifecycle_day_ledger DISABLE TRIGGER immutable");
     try { await f.admin.query("DELETE FROM app.meter_lifecycle_day_ledger WHERE computation_id=$1 AND date='2026-07-01'", [nextId]); }
     finally { await f.admin.query("ALTER TABLE app.meter_lifecycle_day_ledger ENABLE TRIGGER immutable"); }
     await expect(write(a, next.id)).rejects.toThrow("METER_PROJECTION_MISMATCH");
   });
   it("RLS prevents cross-tenant source/ledger reads and writes, absent context fails closed, runtime has no access", async () => {
-    const a = await seedWorkJob(f), b = await seedWorkJob(f), s = await source(a), id = await write(a, s.id);
-    expect(await days(b, id)).toEqual([]);
+    const a = await seedWorkJob(f), b = await seedWorkJob(f), s = await source(a), other = await source(b), id = await write(a, s.id);
+    expect(await days(b, other.id, id)).toEqual([]);
     await expect(write(b, s.id)).rejects.toThrow("METER_FORBIDDEN");
-    await expect(workTenant(meter, b.tenantId, db => db.query(`INSERT INTO app.meter_lifecycle_day_ledger(tenant_id,scope_id,computation_id,date,source_hash,status)
-      VALUES($1,$2,$3,'2026-07-05',$4,'held')`, [a.tenantId, s.scope, id, "a".repeat(64)]), { membershipId: b.actorId, bindRequest: false })).rejects.toThrow("row-level security");
+    const otherId = await write(b, other.id);
+    const foreignDay = (await days(a, s.id, id))[0]!;
+    const foreignHash = (await f.admin.query("SELECT source_hash FROM app.meter_lifecycle_source WHERE id=$1", [s.id])).rows[0].source_hash;
+    await expect(workTenant(meter, b.tenantId, async db => {
+      expect((await db.query("SELECT app.lp11_bind_meter_source($1,$2) AS bound", [b.tenantId, other.id])).rows).toEqual([{ bound: true }]);
+      await db.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
+      expect((await db.query("SELECT computation_id FROM app.meter_lifecycle_day_ledger WHERE date=$1", [foreignDay.date])).rows).toEqual([{ computation_id: otherId }]);
+      await db.query(`INSERT INTO app.meter_lifecycle_day_ledger(tenant_id,scope_id,computation_id,date,source_hash,status,result)
+        VALUES($1,$2,$3,'2026-07-05',$4,'counted',$5::jsonb)`, [a.tenantId, s.scope, id, foreignHash, { ...foreignDay.result, date: "2026-07-05" }]);
+    }, { membershipId: b.actorId, bindRequest: false })).rejects.toThrow("row-level security");
     expect((await meter.query("SELECT * FROM app.meter_lifecycle_day_ledger")).rows).toEqual([]);
     await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT * FROM app.meter_lifecycle_day_ledger"), { membershipId: a.actorId })).rejects.toThrow("permission denied");
     const posture = (await f.admin.query(`SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.meter_lifecycle_day_ledger'::regclass`)).rows[0];

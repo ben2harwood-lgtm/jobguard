@@ -33,6 +33,7 @@ it("keeps demo metadata for an unlinked nonblank session", async () => {
  f.pair.mockResolvedValue(false);
  expect((await syntheticWorkspace()).tenants).toEqual([{ id: "demo-firm", name: "Demo firm" }]);
  expect(f.demo).toHaveBeenCalledOnce();
+ expect(f.demo).toHaveBeenCalledWith(expect.anything(), "namespace-digest");
 });
 
 it.each([

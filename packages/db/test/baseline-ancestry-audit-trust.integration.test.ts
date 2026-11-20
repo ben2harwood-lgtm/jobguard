@@ -45,7 +45,7 @@ describe("trusted imported-baseline ancestry (real PostgreSQL)", () => {
   async function attest(root: string, child: string) {
     const event = { id: randomUUID(), version: "audit.v1", actorRef: `membership:${member}`, eventType: "job.imported_baseline_attested", subjectType: "job", subjectRef: child,
       payload: { references: { sourceJobId: root } } };
-    const result = await transaction(f.runtime, db => db.query("SELECT * FROM app.append_audit($1)", [JSON.stringify([event])]));
+    const result = await transaction(f.runtime, db => db.query("SELECT * FROM app.append_audit($1)", [JSON.stringify([event])]), f.auth.digest);
     expect(result.rows[0].payload.references.auditTrust).toBe("lower_trust");
   }
   async function adopted(root: string) {

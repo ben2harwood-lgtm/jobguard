@@ -4,7 +4,7 @@ import { z } from "zod";
 import { SiteVisitError, WorkOrderError, type CloseoutAnswer, type SiteVisitErrorCode } from "@jobguard/core";
 import { appendAuditBatch, type AuditEventInput } from "./audit.js";
 import { assertContractorGate, canonicalJson, derivedUuid } from "./work-order-repository.js";
-import { withTenant, InvalidTenantContextError, type VerifiedTenantContext, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
+import { bindIssuedCredential, withTenant, InvalidTenantContextError, type VerifiedTenantContext, type AuthenticatedMembership, type TenantTransaction } from "./tenant-context.js";
 import { requireLiveJob, WatchdogError } from "./watchdog.js";
 import { RequestBindingRefusedError } from "./request-binding-error.js";
 // Each command-type string is written once, here, and reaches SQL only as a bound parameter.
@@ -89,13 +89,20 @@ export class SiteVisitRepository {
   // transaction, so a member who can no longer be bound (revoked/expired) still leaves the record.
   // No guarded routine is called. Historical schemas without the writer keep the original path.
   const tenant = context.tenantId.toLowerCase(), id = derivedUuid(`visit-refusal:${tenant}:${input.commandId.toLowerCase()}:${reason}`);
+  const commandType = kind === "start" ? startCommandType : completeCommandType;
   const client = await this.pool.connect();
   try {
    await client.query("BEGIN");
+   const credentialWriter = (await client.query<{ installed: boolean }>("SELECT to_regprocedure('app.lp11_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,text)') IS NOT NULL installed")).rows[0]?.installed;
+   if (credentialWriter) {
+    await bindIssuedCredential.recordVisitRefusal(client, context, actor, { id, commandId: input.commandId, commandType, reason, jobId: input.jobId });
+    await client.query("COMMIT");
+    return;
+   }
    await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
-   const installed = (await client.query<{ installed: boolean }>("SELECT to_regprocedure('app.lp6d_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid)') IS NOT NULL installed")).rows[0]?.installed;
-   if (installed) {
-    await client.query("SELECT app.lp6d_record_visit_refusal($1,$2,$3,$4,$5,$6,$7,$8)", [tenant, id, input.commandId, actor.membershipId, actor.identityUserId, kind === "start" ? startCommandType : completeCommandType, reason, input.jobId]);
+   const legacyWriter = (await client.query<{ installed: boolean }>("SELECT to_regprocedure('app.lp6d_record_visit_refusal(uuid,uuid,uuid,uuid,uuid,text,text,uuid)') IS NOT NULL installed")).rows[0]?.installed;
+   if (legacyWriter) {
+    await client.query("SELECT app.lp6d_record_visit_refusal($1,$2,$3,$4,$5,$6,$7,$8)", [tenant, id, input.commandId, actor.membershipId, actor.identityUserId, commandType, reason, input.jobId]);
     await client.query("COMMIT");
     return;
    }

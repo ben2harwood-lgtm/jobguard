@@ -350,6 +350,7 @@ describe("M3-3 durable checkpoint SQL", () => {
     })).rejects.toThrow("synthetic rollback");
     expect(await scoped(b)).toBe(1);
     await withTenant(runtime, testTenantContext(b), async db => {
+      await bind(db.$client, b);
       const rows = await db.$client.query("SELECT tenant_id FROM app.sync_snapshot_checkpoint");
       expect(rows.rows).toEqual([{ tenant_id: b }]);
       expect((await db.$client.query("SELECT * FROM app.sync_snapshot_checkpoint WHERE tenant_id=$1", [a])).rows).toEqual([]);

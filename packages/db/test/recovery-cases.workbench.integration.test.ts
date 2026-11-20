@@ -1,7 +1,7 @@
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import{createHash,randomUUID}from"node:crypto";import{mkdtemp,rm,readFile}from"node:fs/promises";import{tmpdir}from"node:os";import{join}from"node:path";import EmbeddedPostgres from"embedded-postgres";import{Pool}from"pg";import{afterAll,beforeAll,describe,expect,it,vi}from"vitest";import{migrate,MIGRATION_URLS,RecoveryCaseRepository,withTenant,type VerifiedTenantContext}from"../src/index.js";import{closeTestPools,freePort}from"./pool-test-utils.js";import{recoveryCaseCommandV1,recoveryEligibilityCommandV1}from"@jobguard/core";
 const member=()=>({membershipId:randomUUID(),identityUserId:randomUUID()}),owner=member(),owner2=member(),owner3=member(),ref=(m:{membershipId:string})=>`membership:${m.membershipId}`;
-let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const tenant=randomUUID(),other=randomUUID(),job=randomUUID(),wrongJob=randomUUID(),ctx=testTenantContext(tenant);const command=(extra:Record<string,unknown>)=>({version:"recovery-case-command.v1",commandId:randomUUID(),reviewerRef:"reviewer:owner",...extra});
+let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string;const tenant=randomUUID(),other=randomUUID(),job=randomUUID(),wrongJob=randomUUID(),ctx=testTenantContext(tenant,owner);const command=(extra:Record<string,unknown>)=>({version:"recovery-case-command.v1",commandId:randomUUID(),reviewerRef:"reviewer:owner",...extra});
 beforeAll(async()=>{dir=await mkdtemp(join(tmpdir(),"jg-recovery-cases-"));const port=await freePort(60000,200);pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});await pg.initialise();await pg.start(); await pg.createDatabase("jobguard_synthetic_demo");admin=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"postgres",password:"synthetic"});// Install the preceding schema, seed its immutable history, then upgrade in place.
 await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
 for(const url of MIGRATION_URLS.slice(0,MIGRATION_URLS.findIndex(url=>url.pathname.endsWith("0097_recovery_case_current.sql")))){await admin.query(await readFile(url,"utf8"));await admin.query("INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)",[url.pathname.split("/").at(-1)]);}
@@ -31,7 +31,7 @@ describe("M4-1-S HOLD regressions", () => {
   expect(base.rows).toEqual([{state:"identified",claim_pence:"250000",revision:0}]);
   const landing = {version:"recovery.landing.approve.v1",policyVersion:"reference_fee_policy_v1",jobId:job,caseId:x.id,expectedCaseRevision:0};
   // LP-6d: an unbound request is refused before any lookup; the owner's bound request still reaches the stale-case refusal.
-  await expect(withTenant(runtime,ctx,db => db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[landing]))).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
+  await expect(withTenant(runtime,testTenantContext(tenant,{bound:false}),db => db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[landing]))).rejects.toMatchObject({code:"42501",message:"REQUEST_BINDING_REFUSED"});
   await expect(withTenant(runtime,testTenantContext(tenant,{membershipId:owner.membershipId}),db => db.$client.query("SELECT app.approve_synthetic_landing($1::jsonb)",[landing]))).rejects.toThrow("eligible current synthetic case required");
   expect((await withTenant(runtime,testTenantContext(other),db => db.$client.query("SELECT * FROM app.recovery_case_current WHERE id=$1",[x.id]))).rows).toEqual([]);
   // The projection is a read-only contract: it is not an auto-updatable view (PostgreSQL 55000) and
@@ -42,8 +42,8 @@ describe("M4-1-S HOLD regressions", () => {
  it("ignores forged reviewers in claim, event and audit records, including amendments and transitions", async () => {
   const repo = new RecoveryCaseRepository(runtime);
   let x = await repo.command(ctx,job,{...openCase(),reviewerRef:"forged"},owner);
-  x = await repo.command(ctx,job,command({action:"amend_claim",caseId:x.id,claimedNetPence:32000,expectedRevision:x.revision}),owner2);
-  x = await repo.command(ctx,job,command({action:"transition",caseId:x.id,eventType:"assemble_evidence",expectedRevision:x.revision}),owner3);
+  x = await repo.command(testTenantContext(tenant,owner2),job,command({action:"amend_claim",caseId:x.id,claimedNetPence:32000,expectedRevision:x.revision}),owner2);
+  x = await repo.command(testTenantContext(tenant,owner3),job,command({action:"transition",caseId:x.id,eventType:"assemble_evidence",expectedRevision:x.revision}),owner3);
   expect(x.reviewerRef).toBe(ref(owner3));
   expect((await admin.query("SELECT reviewer_ref FROM app.recovery_claim_revision WHERE case_id=$1 ORDER BY revision",[x.id])).rows.map(r=>r.reviewer_ref)).toEqual([ref(owner),ref(owner2)]);
   expect((await admin.query("SELECT reviewer_ref FROM app.recovery_case_event WHERE case_id=$1 ORDER BY sequence",[x.id])).rows.map(r=>r.reviewer_ref)).toEqual([ref(owner),ref(owner2),ref(owner3)]);
