@@ -18,8 +18,8 @@ import { click, fill, reviewAndPrice, screen, text, until } from "./screen-actio
 export const stages = [
   ["Record a quote", "Talk through a made-up job using on-device voice. Type it in, or press Show me to see a sample. No real names or addresses. Show me uses labelled sample text; it does not record your microphone."],
   ["Check the quote lines", "Check the source excerpts and fix a line. Accept the lines, answer the questions, confirm scope and save a priced draft. Show me changes one description before saving."],
-  ["Send the quote", "Continue on your own saved job. Save customer and site in the highlighted form first. After saving, go to Preview immutable quote, then Simulate sending this quote. If delivery is queued, choose Continue fake worker. Customer invitation is still to build. Delivery is simulated; nothing is sent."],
-  ["Customer says yes", "The existing control records builder-attested practice acceptance, not an authenticated customer response. Record it and start the practice job."],
+  ["Send the quote", "Continue on your own saved job. Save customer and site in the highlighted form first. After saving, go to Preview this quote, then Simulate sending this quote. If delivery is queued, choose Continue fake worker. Customer invitation is still to build. Delivery is simulated; nothing is sent."],
+  ["Customer says yes", "The existing control records practice acceptance recorded by you, not an authenticated customer response. Record it and start the practice job."],
   ["Add on-site evidence", "Attach the generated fictional photo, check file integrity and complete the stage. The customer asks for one more thing. You do it, but forget to add it to the bill. Save the fictional loft-hatch diary note as evidence, not a priced extra. Never upload a real site photo in this exercise."],
   ["Price extra work", "Add a £125 fictional extra and approve its exact revision. Here, the builder records approval of the exact practice revision; this practice job cannot receive approval from the customer."],
   ["Lock and run Final Check", "Build the final bill, mark the baseline work done, accept the terms and lock. JobGuard checks your records against the bill. Run Final Check and load its saved result; it may take a few minutes. Inspect the fitted loft hatch and the answers before continuing."],
@@ -80,7 +80,7 @@ export const evidenceDone = () => text("stage-status") === "Complete" &&
 export const partiesSaved = () => !!text("party-binding-id").trim() && !!text("party-customer").trim();
 export const partiesTarget = () => !partiesSaved()
   ? screen()?.querySelector<HTMLElement>('form[aria-label="Customer and site details"] button[type="submit"]') ?? null
-  : [...(screen()?.querySelectorAll<HTMLButtonElement>(".quote-editor button") ?? [])].find(button => button.textContent === "Preview immutable quote") ?? null;
+  : [...(screen()?.querySelectorAll<HTMLButtonElement>(".quote-editor button") ?? [])].find(button => button.textContent === "Preview this quote") ?? null;
 
 export const missedWorkDiary = "Fictional practice diary: fitted loft hatch. Estimated extra: £300 net.";
 export const missedWorkSaved = () => [...(screen()?.querySelectorAll('[data-testid="diary-entry"]') ?? [])].some(entry => entry.textContent?.includes(missedWorkDiary));
@@ -242,7 +242,14 @@ export function VoiceJourney() {
           // The tour owns spotlight scrolling; open pricing without a fragment scroll.
           history.replaceState(null, "", `${location.pathname}${location.search}`);
         }
-        return ownPriced.current;
+        // The saved revision starts an async workspace handoff. Keep Next and
+        // autoplay incomplete until that same job's saved quote is mounted.
+        const expectedJob = current.current.prepared || current.current.capture?.jobId;
+        const workspace = screen()?.querySelector<HTMLElement>("#captured-job-workspace");
+        const quote = workspace?.querySelector<HTMLElement>(".quote-editor");
+        return ownPriced.current && !!expectedJob && workspace?.getAttribute("data-job-id") === expectedJob &&
+          quote?.getAttribute("data-job-id") === expectedJob && quote.getAttribute("data-quote-ready") === "true" &&
+          Number(quote.querySelector('[data-testid="quote-revision"]')?.textContent) > 0;
       },
       () => text("quote-delivery") === "Simulated delivery — nothing sent",
       () => !!screen()?.querySelector('[data-testid="activation-policy"]'),
@@ -293,7 +300,7 @@ export function VoiceJourney() {
         }
         if (!partiesSaved()) await click("Save customer and site", signal);
         await until(partiesSaved, signal);
-        await click("Preview immutable quote", signal);
+        await click("Preview this quote", signal);
         await click("Simulate sending this quote", signal);
         await until(() => ["Queued — not sent", "Simulated delivery — nothing sent"].includes(text("quote-delivery")), signal);
         if (text("quote-delivery") === "Queued — not sent") await click("Continue fake worker", signal);

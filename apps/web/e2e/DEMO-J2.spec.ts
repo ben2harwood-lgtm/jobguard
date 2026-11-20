@@ -148,7 +148,7 @@ test("DEMO-J2 recovery-18800 reaches all five figures through the complete fresh
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 18,800.00");
   await click(page, "Save draft revision");
   await expect(page.getByTestId("quote-revision")).toHaveText("1");
-  for (const step of ["Preview immutable quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) await click(page, step);
+  for (const step of ["Preview this quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) await click(page, step);
   await expect(page.getByTestId("activation-policy")).toHaveText("reference_fee_policy_v3");
 
   await materialsChecks(page, testInfo.project.name);

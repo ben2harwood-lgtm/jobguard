@@ -23,6 +23,9 @@ it("enters through the identity pool and sets opaque credentials only in HttpOnl
   expect(await response.json()).toEqual({version:"linked-practice-company.v1",ok:true});
   const cookie=response.headers.get("set-cookie")!;
   expect(cookie).toContain("jg_session=");expect(cookie).toContain(`${pairingCookie}=v1.`);expect(cookie).toContain("HttpOnly");expect(cookie).toContain("Secure");expect(cookie).toContain("SameSite=strict");
+  for (const name of ["jg_session", pairingCookie]) {
+    expect(response.headers.getSetCookie().find(cookie => cookie.startsWith(`${name}=`))).toContain("Max-Age=604740");
+  }
 });
 it("reset supplies only the exact paired browser credential",async()=>{
   const token=randomUUID();f.jar.set("jg_session",token);f.jar.set(pairingCookie,practicePairReceipt(parent,token,secret));

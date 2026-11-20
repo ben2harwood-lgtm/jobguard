@@ -9,6 +9,7 @@ import { approvedSimulation, calendarInput, command, count, historicalAgreement,
 import { rolledBack, snapshotRows } from "./upgrade-proof-utils.js";
 
 import { lp11EmptyTables } from "./later-empty-tables.js";
+import { discardDraftRegistryRow } from "./lp5-command-catalog.js";
 
 const stem = "0746_subscription_internal_owner_guard";
 const signature = "app.mon2_command(uuid,text,uuid,jsonb)";
@@ -178,7 +179,7 @@ describe("0744 populated predecessor upgrade (real PostgreSQL)", () => {
   await migrate(f.admin); await migrate(f.admin);
   expect(await metadata()).toEqual(security);
   // Compare every populated row and the exact empty LP-6d, LP-10 and LP-11 records.
-  expect(await snapshotRows(f.admin)).toEqual({ ...before, ...lp11EmptyTables, "identity.lp6d_sso_grant_permit": [], "control_plane.worker_action_binding": [] });
+  expect(await snapshotRows(f.admin)).toEqual({ ...before, ...lp11EmptyTables, "identity.lp6d_sso_grant_permit": [], "control_plane.worker_action_binding": [], "app.command_type_registry": (await f.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify([...(before["app.command_type_registry"] as unknown[]), discardDraftRegistryRow])])).rows[0].data });
   for (const scenario of cases) {
    await refusesWithoutWrites(fixture, scenario.a, scenario.value, scenario.id);
    await role(f, scenario.a, "owner");

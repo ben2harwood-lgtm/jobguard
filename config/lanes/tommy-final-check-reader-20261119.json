@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "tommy-final-check-reader-20261119": {
+      "branches": ["codex/sandbox/tommy-final-check-reader-20261119"],
+      "note": "RED: bounded sequential final-check reader budgets; preserve pre-lock isolation, atomic authorised reveal and existing read/write guards. Independent review required before merge.",
+      "allow": [
+        "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/app/ui/final-check-reveal.test.tsx",
+        "docs/verdicts/TOMMY-FINAL-CHECK-READER-20261119/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}

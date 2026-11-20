@@ -14,14 +14,14 @@ test("M1-15 complete synthetic journey retains the job spine and accepted scope"
   expect(scopeLineage?.split(",")).toHaveLength(6);
   await page.getByLabel("Unit rate Replace shelves").fill("125.00");
   await click(page, "Save draft revision");
-  await click(page, "Preview immutable quote");
+  await click(page, "Preview this quote");
   await click(page, "Simulate sending this quote");
   await expect(page.getByTestId("quote-delivery")).toHaveText("Queued — not sent");
   await click(page, "Continue fake worker");
   await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
   await click(page, "Record practice acceptance");
   await click(page, "Start this practice job");
-  await expect(page.getByRole("heading", { name: "Live · baseline frozen" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Job started · agreed quote saved" })).toBeVisible();
 
   // Seed this job's deterministic findings so the (job-scoped) Decisions inbox
   // shows exactly this job's items, matching the UIWIRE-6 persisted-findings

@@ -64,16 +64,35 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   expect(metadata(replayRoutines)).toEqual(expected.routines.filter(row => row.nspname !== "infrastructure"));
   expect(relationMetadata(installedCatalog)).toEqual(expected.relations);
   expect(await policies()).toEqual(expected.policies);
-  // Exact predicates and ACLs are checked above. In the raw OID comparison,
-  // reverse only the 0765 changes and retain every other predecessor field.
+  const billingProof = successors.find(proof => proof.migration === "0766_lp8a_billing_revokes.sql")!;
+  const billingRelations = billingProof.upgrade.filter(change => change.section === "relations");
+  const outboxProof = successors.find(proof => proof.migration === "0767_lp8b_outbox_evidence.sql")!;
+  const outboxDelta = outboxProof.upgrade.find(change => change.section === "relations" && change.before?.nspname === "app" && change.before.relname === "action_outbox");
+  if (outboxDelta?.section !== "relations" || !outboxDelta.before || !outboxDelta.after) throw new Error("Missing LP-8b outbox ACL proof");
+  const residentDelta = outboxProof.upgrade.find(change => change.section === "routines" &&
+    change.before?.nspname === "app" && change.before.proname === "ent3d_record_resident_confirmation");
+  if (residentDelta?.section !== "routines" || !residentDelta.before || !residentDelta.after) throw new Error("Missing LP-8b resident confirmation proof");
+  const residentSql = await readFile(new URL(`../migrations/${outboxProof.migration}`, import.meta.url), "utf8");
+  const residentBody = residentSql.split("CREATE OR REPLACE FUNCTION app.ent3d_record_resident_confirmation(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+  const advanceDelta = billingProof.upgrade.find(change => change.section === "routines" && change.before?.nspname === "app" && change.before.proname === "advance_final_account_draft");
+  if (advanceDelta?.section !== "routines" || !advanceDelta.before || !advanceDelta.after) throw new Error("Missing LP-8a draft routine proof");
+  const advanceSql = await readFile(new URL(`../migrations/${billingProof.migration}`, import.meta.url), "utf8");
+  const advanceBody = advanceSql.split("CREATE OR REPLACE FUNCTION app.advance_final_account_draft(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+  // Exact successor metadata is checked above. Project the reviewed LP-12
+  // and LP-11 deltas back to compare the original raw catalogue fields.
   const lp11 = successors.find(proof => proof.migration === "0765_lp11_bound_tenant_rls.sql")!;
+  const lp12 = successors.find(proof => proof.migration === "0768_lp12_narrow_owners.sql")!;
   const lp11Policies = lp11.upgrade.filter(change => change.section === "policies");
   const lp11Relations = lp11.upgrade.filter(change => change.section === "relations");
+  const lp12Policies = lp12.upgrade.filter(change => change.section === "policies").filter(change => change.before === null);
+  const lp12Relations = lp12.upgrade.filter(change => change.section === "relations");
   const replayCatalog = installedCatalog.map(relation => {
     const predecessor = beforeCatalog.find(row => row.nspname === relation.nspname && row.relname === relation.relname);
     if (!predecessor) return relation;
     const policyChanges = lp11Policies.filter(change => change.after?.schemaname === relation.nspname && change.after.tablename === relation.relname);
     const policies = relation.policies?.flatMap((policy: { polname: string; polqual: string | null; polwithcheck: string | null }) => {
+      if (lp12Policies.some(entry => entry.after?.schemaname === relation.nspname &&
+        entry.after.tablename === relation.relname && entry.after.policyname === policy.polname)) return [];
       const change = policyChanges.find(entry => entry.after?.policyname === policy.polname);
       if (!change) return [policy];
       if (!change.before) return [];
@@ -82,14 +101,26 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
       return [{ ...policy, polqual: rawPrior.polqual, polwithcheck: rawPrior.polwithcheck }];
     }) ?? null;
     const aclChange = lp11Relations.find(change => change.before?.nspname === relation.nspname && change.before.relname === relation.relname);
+    const custody = lp12Relations.find(change => change.before?.nspname === relation.nspname && change.before.relname === relation.relname)?.before;
     return {
       ...relation,
-      relacl: aclChange?.before?.relacl ?? relation.relacl,
+      relowner: custody ? ownerOids[custody.relowner] : relation.relowner,
+      relacl: aclChange?.before ? aclChange.before.relacl : custody ? custody.relacl : relation.relacl,
       policies: policies?.length ? policies : null,
     };
   });
   // Preserve all raw predecessor catalogue fields, including policy identities.
   for (const row of beforeCatalog) {
+    if (row.nspname === outboxDelta.before.nspname && row.relname === outboxDelta.before.relname) {
+      expect(replayCatalog).toContainEqual({ ...row, relacl: outboxDelta.after.relacl });
+      continue;
+    }
+    const billingDelta = billingRelations.find(change => change.before?.nspname === row.nspname && change.before.relname === row.relname);
+    if (billingDelta?.after) {
+      // Before and after ACLs are pinned by the exact proof replay above.
+      expect(replayCatalog).toContainEqual({ ...row, relacl: billingDelta.after.relacl });
+      continue;
+    }
     if (row.nspname === "app" && ["customer_portal_session", "customer_portal_grant", "extra_client_session", "extra_client_link"].includes(row.relname)) {
       // 0724 adds exactly the private owner's SELECT and one tenant-scoped read policy.
       // Complete ACL/policy metadata is checked against its exact proof above;
@@ -200,7 +231,7 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.request_final_check_run(t uuid, j uuid, d text)", "0732_final_check_typed_recovery.sql"],
     ["app.request_practice_final_check_on_lock()", "0698_final_check_post_invoice_rerun.sql"],
     ["app.verify_final_check_run(p_tenant uuid, p_job uuid, p_run uuid, p_lock uuid, p_cutoff timestamp with time zone)", "0698_final_check_post_invoice_rerun.sql"],
-    ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0729_duplicate_disposition_command_lifecycle.sql"],
+    ["app.lp5_command_result(p_command_id uuid, p_outcome jsonb)", "0770_discard_draft_job.sql"],
     ["app.xa_approve(p_job uuid, p_request uuid, p_command uuid, p_actor uuid, p_step integer, p_hash text, p_net bigint, p_reject boolean, p_reason text)", "0728_extra_reject_null_step.sql"],
     ["app.xa_withdraw(p_job uuid, p_variation uuid, p_command uuid, p_actor uuid, p_reason text)", "0636_extra_withdraw_roles.sql"],
     ["app.lp5b_contractor_permission(p_type text, p_actor uuid, p_job uuid, p_input jsonb)", "0722_abandoned_visit_authority.sql"],
@@ -400,6 +431,19 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     if (prior) {
       let definition = prior.definition;
       const lp6dBody = lp6dBodies.get(lp6dKey(row));
+      if (row.nspname === advanceDelta.after.nspname && row.proname === advanceDelta.after.proname && row.args === advanceDelta.after.args) {
+        expect(row.definition.split("$function$")[1]).toBe(advanceBody);
+        continue;
+      }
+      if (row.nspname === residentDelta.after.nspname && row.proname === residentDelta.after.proname && row.args === residentDelta.after.args) {
+        const parts = definition.split("$function$");
+        expect(prior.prosecdef).toBe(residentDelta.before.prosecdef);
+        expect(row.prosecdef).toBe(residentDelta.after.prosecdef);
+        parts[0] = parts[0]!.replace(" LANGUAGE plpgsql\n", " LANGUAGE plpgsql\n SECURITY DEFINER\n");
+        parts[1] = residentBody;
+        expect(row.definition).toBe(parts.join("$function$"));
+        continue;
+      }
       if (lp6dBody !== undefined) {
         // 0740 owns this routine's latest definition (some change language, e.g. contractor_session sql -> plpgsql).
         expect(row.definition.split("$function$")[1], identity).toBe(lp6dBody);

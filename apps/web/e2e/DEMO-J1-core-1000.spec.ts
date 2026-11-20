@@ -64,7 +64,7 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   await click(page, "Save draft revision");
   await expect(page.getByTestId("quote-revision")).toHaveText("2");
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
-  for (const step of ["Preview immutable quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) await click(page, step);
+  for (const step of ["Preview this quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) await click(page, step);
   await expect(page.getByTestId("activation-policy")).toHaveText("reference_fee_policy_v3");
   const activation = await read(page, `${root}/quotes/activation`);
   expect(activation.activation.recoveryCapPence).toBeNull();
@@ -110,6 +110,7 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   const before = await read(page, `${root}/final-check`);
   expect(before).toMatchObject({ state: "unlocked", items: [] });
   expect(JSON.stringify(before)).not.toMatch(/signalCount|heldCount|shadowCount/);
+  await page.getByRole("checkbox", { name: 'Leave "Pending trim repair" off this bill on purpose' }).check();
   await click(page, "Complete final account");
   await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   const locked = await read(page, `${root}/final-account/lock`);

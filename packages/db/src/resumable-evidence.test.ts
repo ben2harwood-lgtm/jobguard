@@ -38,7 +38,7 @@ function fixture() {
     if (sql.startsWith("SELECT * FROM app.evidence_upload")) return {rows:[row]};
     if (sql.startsWith("SELECT * FROM app.evidence_object")) return {rows:original?[original]:[]};
     if (sql.includes("SET state='quarantined'")) { row.state="quarantined"; row.object_version_id=values[2] as string; }
-    if (sql.includes("SET state='verified'")) row.state="verified";
+    if (sql.startsWith("SELECT app.verify_evidence_upload")) row.state="verified";
     if (sql.includes("SET state='rejected'")) row.state="rejected";
     if (sql.startsWith("INSERT INTO app.evidence_object")) {
       original={id:input.uploadId,object_version_id:values[6],sha256:values[7],evidence_type:values[4]};

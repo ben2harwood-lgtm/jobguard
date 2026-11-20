@@ -59,6 +59,13 @@ const jobId = "00000000-0000-4000-8000-000000000001";
 const preparedId = "00000000-0000-4000-8000-000000000002";
 const capture = (id = jobId) => ({ version: 1, environment: "synthetic_demo", captureId: id, jobId: id, proposalId: id, reviewId: id, source: { text: "fictional", version: 1, kind: "text", acquisition: null, audioByteLength: 0 }, proposal: { title: "fictional", lines: [], questions: [] }, review: null, status: "quoting" });
 const quote = (id = jobId, revisions = true) => ({ version: 1, environment: "synthetic_demo", jobId: id, scope: [], draft: null, revisions: revisions ? [{ id, revision: 1, previousRevisionId: null, netPence: 0, taxPence: 0, totalPence: 0, issuable: true, blockers: [], lines: [] }] : [] });
+const savedQuoteWorkspace = () => ({
+  getAttribute: (name: string) => name === "data-job-id" ? jobId : null,
+  querySelector: (selector: string) => selector === ".quote-editor" ? {
+    getAttribute: (name: string) => name === "data-job-id" ? jobId : name === "data-quote-ready" ? "true" : null,
+    querySelector: (selector: string) => selector === '[data-testid="quote-revision"]' ? { textContent: "1" } : null,
+  } : null,
+});
 const saved = () => JSON.stringify({ jobId, prepared: preparedId, priced: true });
 const response = (body: unknown, ok = true) => ({ ok, json: async () => body });
 describe("WALK-TOUR-FIXES completion and reload", () => {
@@ -215,6 +222,95 @@ describe("step 5 saved evidence", () => {
   });
 });
 
+describe("step 2 saved workspace handoff", () => {
+  function handoff(initialRevision = 1) {
+    const view = { kind: "inline" as "inline" | "loading" | "workspace", workspaceId: jobId, quoteJobId: jobId, ready: false, revision: initialRevision };
+    const editor = {
+      getAttribute: (name: string) => name === "data-job-id" ? view.quoteJobId : name === "data-quote-ready" ? String(view.kind === "inline" || view.ready) : null,
+      querySelector: (selector: string) => selector === '[data-testid="quote-revision"]' ? { textContent: String(view.revision) } : null,
+    };
+    const workspace = {
+      getAttribute: (name: string) => name === "data-job-id" ? view.workspaceId : null,
+      querySelector: (selector: string) => selector === ".quote-editor" ? editor : null,
+    };
+    const root = { querySelector: (selector: string) => {
+      if (view.kind === "loading") return null;
+      if (selector === "#captured-job-workspace") return view.kind === "workspace" ? workspace : null;
+      if (selector === ".quote-editor") return editor;
+      if (selector === '[data-testid="quote-revision"]') return { textContent: String(view.revision) };
+      return null;
+    } };
+    vi.stubGlobal("document", { getElementById: () => root });
+    const saved = vi.fn();
+    vi.stubGlobal("sessionStorage", { setItem: saved });
+    vi.stubGlobal("location", new URL("https://example.test/practice-company/walkthrough?walkJob=" + jobId));
+    vi.stubGlobal("history", { replaceState: vi.fn() });
+    memo.states = [jobId, capture(), 0, 1, false, false, "", false, true, "", false, true, ""]; memo.cursor = 0;
+    renderToStaticMarkup(<VoiceJourney />);
+    memo.setState.mockClear();
+    return { view, saved, step: memo.steps[1]! };
+  }
+
+  it("keeps Next's completion gate false through the handoff until the same saved quote is ready", () => {
+    const { view, saved, step } = handoff();
+    // This is the trace-observed instant: the inline quote has revision 1,
+    // but setOwnWorkspace has not committed the replacement screen yet.
+    expect(step.isDone()).toBe(false);
+    expect(memo.setState).toHaveBeenCalledWith(true);
+    expect(step.isDone()).toBe(false);
+    view.kind = "loading";
+    expect(step.isDone()).toBe(false);
+    view.kind = "workspace"; view.ready = true; view.workspaceId = preparedId;
+    expect(step.isDone()).toBe(false);
+    view.workspaceId = jobId; view.quoteJobId = preparedId;
+    expect(step.isDone()).toBe(false);
+    view.quoteJobId = jobId; view.ready = false;
+    expect(step.isDone()).toBe(false);
+    view.ready = true; view.revision = 0;
+    expect(step.isDone()).toBe(false);
+    view.revision = 1;
+    expect(step.isDone()).toBe(true);
+    view.kind = "loading";
+    expect(step.isDone()).toBe(false);
+    expect(saved).toHaveBeenCalledOnce();
+    expect(JSON.parse(saved.mock.calls[0]![1])).toEqual({ jobId, prepared: "", priced: true });
+    expect(memo.setState).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([false, true])("automatic pricing waits for the saved workspace without repeating the save; cancelled: %s", async cancelled => {
+    vi.useFakeTimers();
+    const { view, step } = handoff(0), controller = new AbortController();
+    const click = vi.spyOn(screenActions, "click").mockImplementation(async name => {
+      expect(name).toBe("Save draft revision"); view.revision = 1;
+    });
+    let settled = false;
+    const result = Promise.resolve(step.autoAction({} as HTMLElement, controller.signal)).then(() => { settled = true; return null; }, reason => { settled = true; return reason; });
+    try {
+      await vi.advanceTimersByTimeAsync(100);
+      expect(click).toHaveBeenCalledOnce();
+      expect(settled).toBe(false);
+      expect(step.isDone()).toBe(false);
+      view.kind = "loading";
+      await vi.advanceTimersByTimeAsync(100);
+      expect(settled).toBe(false);
+      view.kind = "workspace";
+      await vi.advanceTimersByTimeAsync(100);
+      expect(settled).toBe(false);
+      if (cancelled) controller.abort(new Error("Stopped during saved quote loading"));
+      else view.ready = true;
+      await vi.advanceTimersByTimeAsync(100);
+      if (cancelled) expect(await result).toEqual(new Error("Stopped during saved quote loading"));
+      else { expect(await result).toBeNull(); expect(step.isDone()).toBe(true); }
+      expect(click).toHaveBeenCalledOnce();
+    } finally {
+      controller.abort(new Error("Test complete"));
+      await vi.advanceTimersByTimeAsync(100);
+      await result;
+      click.mockRestore(); vi.useRealTimers();
+    }
+  });
+});
+
 describe("step 3 prepared workspace loading", () => {
   it("keeps Show me alive when requested during manual example preparation", async () => {
     vi.useFakeTimers();
@@ -286,7 +382,7 @@ describe("step 3 prepared workspace loading", () => {
       mountedJob = preparedId;
       await vi.advanceTimersByTimeAsync(100); await action;
       expect(review).toHaveBeenCalledOnce();
-      expect(click.mock.calls.map(call => call[0])).toEqual(["Preview immutable quote", "Simulate sending this quote", "Continue fake worker"]);
+      expect(click.mock.calls.map(call => call[0])).toEqual(["Preview this quote", "Simulate sending this quote", "Continue fake worker"]);
       expect(memo.steps[2]!.isDone()).toBe(true);
     } finally { review.mockRestore(); click.mockRestore(); vi.useRealTimers(); }
   });
@@ -486,7 +582,7 @@ it.each([false, true])("fresh autoplay keeps one captured job; queued delivery %
   memo.states = [jobId, capture(), 0, 2, true, false, "", false, true, "", false, true]; memo.cursor = 0;
   let delivered = false;
   const root = {
-    querySelector: (selector: string) => selector === ".review-line" ? {} : {
+    querySelector: (selector: string) => selector === "#captured-job-workspace" ? savedQuoteWorkspace() : selector === ".review-line" ? {} : {
       getAttribute: () => selector === ".quote-editor" ? "true" : jobId,
       textContent: selector.includes("quote-revision") ? "1" : selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "Queued — not sent" : "Fictional customer",
     },
@@ -504,7 +600,7 @@ it.each([false, true])("fresh autoplay keeps one captured job; queued delivery %
     expect(memo.steps[1]!.isDone()).toBe(true);
     await memo.steps[2]!.autoAction({} as HTMLElement, new AbortController().signal);
     expect(price).toHaveBeenCalledTimes(1);
-    expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview immutable quote", "Simulate sending this quote", ...(queued ? ["Continue fake worker"] : [])]);
+    expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview this quote", "Simulate sending this quote", ...(queued ? ["Continue fake worker"] : [])]);
     expect(recoverCapture).not.toHaveBeenCalled();
     expect(memo.setState.mock.calls.filter(([value]) => value === preparedId)).toHaveLength(0);
     expect(memo.steps[2]!.isDone()).toBe(true);
@@ -537,14 +633,14 @@ it.each([0, 1])("step 3 waits for the own editor and saves only an unpriced draf
   const click = vi.spyOn(screenActions, "click").mockImplementation(async name => {
     expect(activeJob).toBe(jobId);
     if (name === "Save draft revision") { expect(ready).toBe(true); revision++; }
-    if (name === "Preview immutable quote") expect(revision).toBeGreaterThan(0);
+    if (name === "Preview this quote") expect(revision).toBeGreaterThan(0);
     if (name === "Continue fake worker") delivered = true;
   });
   const controller = new AbortController();
   let action: Promise<void> | undefined;
   try {
     renderToStaticMarkup(<VoiceJourney />);
-    expect(memo.steps[1]!.isDone()).toBe(true);
+    expect(memo.steps[1]!.isDone()).toBe(false);
     expect(location.hash).toBe("");
     revision = initialRevision;
     action = Promise.resolve(memo.steps[2]!.autoAction({} as HTMLElement, controller.signal));
@@ -558,7 +654,7 @@ it.each([0, 1])("step 3 waits for the own editor and saves only an unpriced draf
     expect(location.hash).toBe("");
     expect(click.mock.calls.map(([name]) => name)).toEqual([
       ...(initialRevision === 0 ? ["Save draft revision"] : []),
-      "Preview immutable quote", "Simulate sending this quote", "Continue fake worker",
+      "Preview this quote", "Simulate sending this quote", "Continue fake worker",
     ]);
     expect(revision).toBe(1);
     expect(memo.steps[2]!.isDone()).toBe(true);
@@ -574,6 +670,7 @@ it("hand step 3 saves customer and site before sending", async () => {
   memo.states = [jobId, capture(), 0, 2, true, false, "", false, true, "", false, true]; memo.cursor = 0;
   let savedParties = false, delivered = false;
   const root = { querySelector: (selector: string) => {
+    if (selector === "#captured-job-workspace") return savedQuoteWorkspace();
     if (selector === ".review-line") return null;
     if (selector === ".quote-editor") return { getAttribute: () => "true" };
     if (selector.includes("quote-revision")) return { textContent: "1" };
@@ -594,7 +691,7 @@ it("hand step 3 saves customer and site before sending", async () => {
   try {
     renderToStaticMarkup(<VoiceJourney />); memo.steps[1]!.isDone();
     await memo.steps[2]!.autoAction({} as HTMLElement, new AbortController().signal);
-    expect(click.mock.calls.map(([name]) => name)).toEqual(["Save customer and site", "Preview immutable quote", "Simulate sending this quote", "Continue fake worker"]);
+    expect(click.mock.calls.map(([name]) => name)).toEqual(["Save customer and site", "Preview this quote", "Simulate sending this quote", "Continue fake worker"]);
   } finally { click.mockRestore(); }
 });
 
@@ -621,7 +718,7 @@ it.each(["before", "after", "never"])("Show me presents words and saved draft; c
 
 it("own-job refusal waits for an explicit alternative", async () => {
   memo.states = [jobId, capture(), 0, 2, true, false, "", false, true, "", false, true]; memo.cursor = 0;
-  vi.stubGlobal("document", { getElementById: () => ({ querySelector: (selector: string) => selector === ".review-line" ? null : { getAttribute: () => selector.includes("workspace-job-id") ? jobId : "true", textContent: selector.includes("quote-delivery") ? "" : "1" } }) });
+  vi.stubGlobal("document", { getElementById: () => ({ querySelector: (selector: string) => selector === "#captured-job-workspace" ? savedQuoteWorkspace() : selector === ".review-line" ? null : { getAttribute: () => selector.includes("workspace-job-id") ? jobId : "true", textContent: selector.includes("quote-delivery") ? "" : "1" } }) });
   vi.stubGlobal("location", new URL("https://example.test/?walkJob=" + jobId));
   vi.stubGlobal("history", { replaceState: vi.fn() });
   const click = vi.spyOn(screenActions, "click").mockRejectedValue(new Error("Real control refused"));
@@ -696,7 +793,7 @@ it("guided microphone playback keeps its prepared example separate from the save
     expect(location.searchParams.get("walkJob")).toBe(jobId);
     expect(location.searchParams.get("walkExample")).toBe(preparedId);
     expect((memo.refs[0]!.current as { capture: { jobId: string } }).capture.jobId).toBe(jobId);
-    expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview immutable quote", "Simulate sending this quote", "Continue fake worker"]);
+    expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview this quote", "Simulate sending this quote", "Continue fake worker"]);
     // Repeating a completed step must reuse the verified example.
     await memo.steps[2]!.autoAction({} as HTMLElement, new AbortController().signal);
     expect(recoverCapture).toHaveBeenCalledTimes(1);

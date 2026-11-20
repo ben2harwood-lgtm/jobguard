@@ -32,7 +32,7 @@ it("registers the operational command, side-table proof and no commercial writer
  const withoutProceed = registry.after!.data.filter(row => (row as { command_type: string }).command_type !== "RecordExtraProceed");
  expect(withoutProceed).toEqual(expect.arrayContaining(registry.before!.data));
  expect(withoutProceed).toHaveLength(registry.before!.data.length);
- const historicalCommandRegistryRows = currentCommandRegistryRows.filter(row => row.command_type !== "CloseAbandonedSiteVisit"
+ const historicalCommandRegistryRows = currentCommandRegistryRows.filter(row => row.command_type !== "CloseAbandonedSiteVisit" && row.command_type !== "job.discard_draft"
   && !(row.command_type === duplicateDispositionLifecycleRegistryRow.command_type && row.version === duplicateDispositionLifecycleRegistryRow.version));
  expect(registry.after?.data).toHaveLength(historicalCommandRegistryRows.length);
  // 0634 predates 0722, 0729 and 0642: exclude the exact successors; client sends still require owner.

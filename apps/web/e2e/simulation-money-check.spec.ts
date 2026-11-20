@@ -15,7 +15,7 @@ test("money review keeps the three books and unresolved source rows visible; res
  });
  await openQuote(page);
  for(const input of await page.getByLabel(/Unit rate/u).all())if(await input.inputValue()==="")await input.fill("100.00");
- for(const action of ["Save draft revision","Preview immutable quote","Simulate sending this quote","Continue fake worker","Record practice acceptance"])await page.getByRole("button",{name:action,exact:true}).click();
+ for(const action of ["Save draft revision","Preview this quote","Simulate sending this quote","Continue fake worker","Record practice acceptance"])await page.getByRole("button",{name:action,exact:true}).click();
  await page.getByLabel("Practice activation scenario").selectOption("simulated_base_obligation");await page.getByRole("button",{name:"Start this practice job",exact:true}).click();
  const panel=page.getByRole("region",{name:"Simulation money check"});await panel.getByRole("button",{name:"Run money check",exact:true}).click();
  await expect(panel.getByTestId("money-check-state")).toHaveText("Review needed");

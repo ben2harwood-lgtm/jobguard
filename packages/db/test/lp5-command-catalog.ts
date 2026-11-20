@@ -615,8 +615,12 @@ export const abandonedSiteVisitRegistryRow = {
   command_type: "CloseAbandonedSiteVisit", version: "repository-command.v1", permission_rule: "contractor",
   lock_adapter: "route_before_begin", completion_adapter: "site_visit", audit_class: "operational", outbox_class: null,
 };
+export const discardDraftRegistryRow = {
+  command_type: "job.discard_draft", version: "command.v1", permission_rule: "owner",
+  lock_adapter: "route_before_begin", completion_adapter: "discard", audit_class: "commercial", outbox_class: null,
+};
 export const currentCommandRegistryRows = [...lp5RegistryRows.map(row => row.command_type === "IssueClientApproval"
-  ? { ...row, permission_rule: "contractor" } : row), lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow, duplicateDispositionRegistryRow,extraProceedRegistryRow,abandonedSiteVisitRegistryRow];
+  ? { ...row, permission_rule: "contractor" } : row), lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow, duplicateDispositionRegistryRow,extraProceedRegistryRow,abandonedSiteVisitRegistryRow,discardDraftRegistryRow];
 export const lp5bRoutines = [
   {
     "signature": "app.lp5b_bind_follow_up_cancel()",

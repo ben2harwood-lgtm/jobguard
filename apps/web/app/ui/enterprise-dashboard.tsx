@@ -1,7 +1,7 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { BASELINE_METHOD_V1, dashboardDimensions, type dashboardQueryV1 } from "@jobguard/core";
-import type { z } from "zod";
+import { z } from "zod";
 import type { EnterpriseDashboardApplication, EnterpriseBaselineApplication } from "@jobguard/api/workspace";
 import { exactPounds } from "./contractor-billing";
 import styles from "./work-orders.module.css";
@@ -65,8 +65,27 @@ export function BaselineView({ baseline }: { baseline: Baseline }) {
     <button type="button" onClick={() => download(baseline.content, `pilot-baseline.${baseline.format}`)}>Download baseline with method ({baseline.format})</button>
   </section>;
 }
+const practiceTeamsV1 = z.object({ seeded: z.literal(true), journey: z.object({
+  practiceTeams: z.array(z.object({ id: z.guid(), name: z.string() })).min(2),
+}) });
+type PracticeTeam = z.infer<typeof practiceTeamsV1>["journey"]["practiceTeams"][number];
+
+export function practiceTeamBindings(teams: readonly PracticeTeam[]) {
+  const [pilot, rest] = teams;
+  return pilot && rest ? `fictional-pilot=${pilot.id}\nfictional-rest=${rest.id}` : "";
+}
+
 export function EnterpriseDashboard() {
   const [baselineContent, setBaselineContent] = useState("");
+  const [bindings, setBindings] = useState(""), [practiceTeams, setPracticeTeams] = useState<PracticeTeam[]>([]);
+  const [pilot, rest] = practiceTeams;
+  useEffect(() => {
+    void fetch("/api/northside", { cache: "no-store" }).then(async response => {
+      if (!response.ok) return;
+      const result = practiceTeamsV1.safeParse(await response.json());
+      if (result.success) setPracticeTeams(result.data.journey.practiceTeams);
+    }).catch(() => {});
+  }, []);
   const [activity, setActivity] = useState<Activity | null>(null), [billing, setBilling] = useState<Billing | null>(null), [baseline, setBaseline] = useState<Baseline | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [batchId, setBatchId] = useState("");
   async function run(work: () => Promise<void>) {
@@ -111,8 +130,10 @@ export function EnterpriseDashboard() {
       <label>Format <select name="format"><option value="json">JSON</option><option value="csv">CSV</option></select></label>
       <label>Synthetic baseline-history.v1 (6–12 months) <textarea name="content" rows={6} required maxLength={8000000} value={baselineContent} onChange={e => setBaselineContent(e.target.value)}/></label>
       <button type="button" onClick={() => setBaselineContent(JSON.stringify(northsideSample.history, null, 2))}>Load fictional Northside baseline sample</button>
+      {pilot && rest && <><button type="button" onClick={() => setBindings(practiceTeamBindings(practiceTeams))}>Use two practice teams</button>
+        <p>Practice teams: fictional-pilot = {pilot.name}; fictional-rest = {rest.name}</p></>}
       <p>Reference example only. Bind fictional-pilot and fictional-rest to two different company teams below.</p>
-      <label>Historical team = current company team ID (one binding per line) <textarea name="bindings" rows={3} required/></label><button>Import history</button>
+      <label>Historical team = current company team ID (one binding per line) <textarea name="bindings" rows={3} required value={bindings} onChange={e => setBindings(e.target.value)}/></label><button>Import history</button>
     </form></fieldset>
     <fieldset disabled={busy}><legend>Compare pilot teams with the rest</legend><form onSubmit={compare}>
       <label>Stored batch ID <input value={batchId} onChange={e => setBatchId(e.target.value)} required/></label>

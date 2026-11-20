@@ -24,7 +24,7 @@ test("blank firm sends its exact practice quote without a worker click", async (
   const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
   await click("Save draft revision");
   await expect(page.getByTestId("quote-revision")).toHaveText("1");
-  await click("Preview immutable quote");
+  await click("Preview this quote");
   const acceptance = page.getByRole("button", { name: "Record practice acceptance", exact: true });
   await expect(acceptance).toHaveCount(0);
   const response = page.waitForResponse(r => r.url().endsWith(`/api/jobs/${jobId}/quotes/delivery`) && r.request().method() === "POST");
@@ -64,6 +64,6 @@ test("blank firm sends its exact practice quote without a worker click", async (
   expect((await read("acceptance")).activeAcceptance).not.toBeNull();
   expect((await read("activation")).activation).toBeNull();
   await click("Start this practice job");
-  await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Job started · agreed quote saved", exact: true })).toBeVisible();
   expect((await read("activation")).activation).not.toBeNull();
 });

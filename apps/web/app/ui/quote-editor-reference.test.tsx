@@ -61,12 +61,12 @@ beforeEach(()=>{
 });
 afterEach(()=>vi.unstubAllGlobals());
 it("quote heading uses the stored reference rather than document version",async()=>{
- render(); await settle(); await button(render(),"Preview immutable quote").props.onClick();
+ render(); await settle(); await button(render(),"Preview this quote").props.onClick();
  const tree=render(); expect(all(tree,n=>n.type==="h2").map(text)).toContain("Quote Q-0042");
  expect(text(tree)).toContain("Document version 3"); expect(text(tree)).not.toContain("Q-0003");
 });
 it("uses the saved simulated-delivery notice",async()=>{
- render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ render();await settle();await button(render(),"Preview this quote").props.onClick();
  await button(render(),"Simulate sending this quote").props.onClick();await settle();
  expect(all(render(),n=>n.props.role==="status").map(text).join(" ")).toContain("Simulated delivery — nothing real was sent");
 });
@@ -94,7 +94,7 @@ it("restores the stored reference and separately labelled version on reload",asy
 });
 it("indexes accepted references by the accepted document ID, preserving older and duplicate references",async()=>{
  accepted=acceptance();delivery.acceptedDocumentReferences={"old-document":{reference:"Q-0007",documentVersion:1},"new-document":{reference:"Q-0042",documentVersion:3}};
- render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ render();await settle();await button(render(),"Preview this quote").props.onClick();
  expect(text(all(render(),n=>n.props["data-testid"]==="accepted-revision")[0])).toContain("Quote Q-0007");
  delivery.acceptedDocumentReferences["old-document"].reference="Q-0042";
  (window as EventTarget).dispatchEvent(new Event("focus"));await settle();
@@ -106,7 +106,7 @@ it.each(["missing", "wrong-version", "wrong-id"])("does not borrow the newest re
 });
 it.each(["preview", "reload"])("never fabricates a reference for an older supplied %s view",async kind=>{
  delete delivery.reference;delete preview.document.reference;
- render();await settle();if(kind==="preview")await button(render(),"Preview immutable quote").props.onClick();
+ render();await settle();if(kind==="preview")await button(render(),"Preview this quote").props.onClick();
  expect(text(render())).toContain("Quote reference unavailable");expect(text(render())).not.toContain("Q-0001");
 });
 it("shows a failed read without inventing a saved reference",async()=>{
@@ -116,7 +116,7 @@ it("shows a failed read without inventing a saved reference",async()=>{
 it("clears the previous job and ignores a late preview response",async()=>{
  render();await settle();let finish!:(value:any)=>void;
  vi.mocked(fetch).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
- const pending=button(render(),"Preview immutable quote").props.onClick();
+ const pending=button(render(),"Preview this quote").props.onClick();
  const nextId="11111111-1111-4111-8111-111111111113";
  delivery=null;accepted=null;
  render(nextId);await settle();render(nextId);
@@ -133,7 +133,7 @@ it("ignores a late previous-job saved delivery read",async()=>{
  finish(response(delivery));await settle();expect(text(render(nextId))).not.toContain("Q-0042");
 });
 it.each(["outcome_unknown", "failed"])("keeps %s saved execution unresolved",async status=>{
- render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ render();await settle();await button(render(),"Preview this quote").props.onClick();
  vi.mocked(fetch).mockResolvedValueOnce(response({...delivery,status}) as Response);
  await button(render(),"Simulate sending this quote").props.onClick();await settle();
  expect(text(render())).not.toContain("Simulated delivery — nothing real was sent");expect(text(render())).toContain("check");
@@ -173,7 +173,7 @@ it("clears accepted terms, customer and Start state when changing jobs",async()=
  expect(all(tree,n=>n.props.id==="practice-start-job")).toHaveLength(0);
 });
 it("keeps a lost send response unresolved and exposes reconciliation",async()=>{
- render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ render();await settle();await button(render(),"Preview this quote").props.onClick();
  vi.mocked(fetch).mockRejectedValueOnce(new Error("Fictional connection lost"));
  await button(render(),"Simulate sending this quote").props.onClick();await settle();
  expect(text(render())).toContain("Delivery outcome unknown");expect(button(render(),"Reconcile fake receipt")).toBeDefined();
@@ -182,7 +182,7 @@ it("keeps a lost send response unresolved and exposes reconciliation",async()=>{
 
 it("shows Saved quote on section return while retaining unsaved recipient and job panels", async () => {
  // A different saved artifact must still replace the old transient preview.
- render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ render();await settle();await button(render(),"Preview this quote").props.onClick();
  let tree=render();
  expect(all(tree,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(1);
  all(tree,n=>n.props["aria-label"]==="Confirmed recipient")[0]!.props.onChange({target:{value:"unfinished@example.invalid"}});
@@ -206,7 +206,7 @@ it("retains visible audit history inside disabled closed-job quote controls", as
 });
 
 it("preserves the matching job/document preview when returning to Quote after focus", async () => {
- render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ render();await settle();await button(render(),"Preview this quote").props.onClick();
  render(jobId,{sectionNavigationKey:"#work-proof"});
  const before=render(jobId,{sectionNavigationKey:"#work-proof"});
  expect(all(before,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(1);
@@ -218,7 +218,7 @@ it("preserves the matching job/document preview when returning to Quote after fo
 });
 
 it("ignores a previous job's late section-navigation document read", async () => {
- render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ render();await settle();await button(render(),"Preview this quote").props.onClick();
  let finish!:(value:any)=>void;
  vi.mocked(fetch).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
  render(jobId,{sectionNavigationKey:"#quote"});
@@ -233,15 +233,48 @@ it("ignores a previous job's late section-navigation document read", async () =>
  expect(all(tree,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(0);
 });
 it("does not clear a newer preview when an older navigation read finishes", async () => {
- render();await settle();await button(render(),"Preview immutable quote").props.onClick();
+ render();await settle();await button(render(),"Preview this quote").props.onClick();
  let finish!:(value:any)=>void;
  vi.mocked(fetch).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
  render(jobId,{sectionNavigationKey:"#quote"});
  const old={...delivery};
  preview={view:{...delivery,documentId:"latest-preview",documentVersion:4,contentHash:"new-hash"},document:{reference:"Q-0044",documentVersion:4}};
- await button(render(jobId,{sectionNavigationKey:"#quote"}),"Preview immutable quote").props.onClick();
+ await button(render(jobId,{sectionNavigationKey:"#quote"}),"Preview this quote").props.onClick();
  finish(response(old));await settle();
  const tree=render(jobId,{sectionNavigationKey:"#quote"});
  expect(all(tree,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(1);
  expect(text(tree)).toContain("Quote Q-0044");
+});
+
+it("follows the saved customer email until the builder types a recipient", async () => {
+ const original = vi.mocked(fetch).getMockImplementation()!;
+ let email = "first-customer@example.invalid";
+ vi.mocked(fetch).mockImplementation(async (url, init) => String(url).endsWith("/parties")
+  ? response({ current: { customer: { name: "Fictional", email } }, currentIds: { bindingId: null } }) as Response
+  : original(url, init));
+ const recipient = () => all(render(), n => n.props["aria-label"] === "Confirmed recipient")[0]!;
+ render();
+ await settle();
+ expect(recipient().props.value).toBe(email);
+
+ email = "updated-customer@example.invalid";
+ window.dispatchEvent(new Event("job-parties-saved"));
+ await settle();
+ expect(recipient().props.value).toBe(email);
+
+ recipient().props.onChange({ target: { value: "typed-recipient@example.invalid" } });
+ email = "latest-customer@example.invalid";
+ window.dispatchEvent(new Event("job-parties-saved"));
+ await settle();
+ expect(recipient().props.value).toBe("typed-recipient@example.invalid");
+});
+
+it("disables the practice link and explains what to add when the saved email is missing", async () => {
+ vi.mocked(fetch).mockResolvedValueOnce(response({ current: { customer: { name: "Fictional" } }, currentIds: { bindingId: null } }) as Response);
+ render();
+ await settle();
+ await button(render(), "Preview this quote").props.onClick();
+ const tree = render();
+ expect(button(tree, "Get practice customer link").props.disabled).toBe(true);
+ expect(text(tree)).toContain("Add a fictional customer email in Customer and site to get a practice link.");
 });

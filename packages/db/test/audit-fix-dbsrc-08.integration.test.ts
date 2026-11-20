@@ -82,7 +82,7 @@ describe("AUDIT-FIX-DBSRC-08 real PostgreSQL regressions", () => {
       adapter: "fake_capture", providerEffectKey: `synthetic:${authorizationId}`, actionType: "send_quote",
       recipient: "customer@example.invalid", contentHash, immutableContent: content, aggregateRevision: 1,
       amountPence: null, currency: null, policyVersion: "synthetic.v1", authorizationExpiresAt: new Date("2099-01-01") };
-    await withTenant(runtime, context, db => appendOutboundAction(db, tenantId, action));
+    await withTenant(runtime, testTenantContext(tenantId, { membershipId: actorId }), db => appendOutboundAction(db, tenantId, action));
     await admin.query("UPDATE app.membership SET role='read_only' WHERE tenant_id=$1 AND id=$2", [tenantId, actorId]);
     const adapter: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false,
       deliver: vi.fn(async () => ({ kind: "succeeded" as const, providerReference: "synthetic:08" })), reconcile: async () => "unknown" };

@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ actor: vi.fn(), run: vi.fn(), targets: vi.fn(), end: vi.fn(), state: vi.fn() }));
+const h = vi.hoisted(() => ({ actor: vi.fn(), run: vi.fn(), targets: vi.fn(), journey: vi.fn(), end: vi.fn(), state: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@jobguard/db", () => ({
   PracticeWorkerSwitchRepository: class { state = h.state; },
   northsideRun: h.run, northsideSwitchTargets: h.targets, northsideTargets: {},
   northsideFacts: vi.fn(async () => ({ companyName: "Fictional Northside" })),
+  northsideJourneyTargets: h.journey,
   northsideOwnActions: vi.fn(async () => []),
 }));
 vi.mock("../../lib/northside-server", () => ({
@@ -86,5 +87,33 @@ describe("Northside switch target disclosure (handler doubles)", () => {
     h.run.mockResolvedValue(null);
     expect((await (await GET()).json()).targetsToSwitch).toEqual([]);
     expect(h.targets).not.toHaveBeenCalled();
+  });
+});
+
+describe("Northside presenter targets", () => {
+  const journey = {
+    journeyOrder: { workOrderId: tester, jobId: tester, reference: "NS-1-0001" },
+    practiceTeams: [{ id: tester, name: "Fictional team" }],
+  };
+
+  it.each(["owner", "finance"])("returns journey to %s on a run", async role => {
+    actor(tester, role);
+    h.journey.mockResolvedValue(journey);
+    const response = await GET();
+    expect(response.status).toBe(200);
+    expect((await response.json()).journey).toEqual(journey);
+    expect(h.journey).toHaveBeenCalledWith({}, { membershipId: tester }, {});
+  });
+
+  it.each(["operative", "surveyor", "supervisor", "client_approver"])("hides journey from %s", async role => {
+    actor(tester, role);
+    expect((await (await GET()).json()).journey).toBeNull();
+    expect(h.journey).not.toHaveBeenCalled();
+  });
+
+  it("does not read journey targets before a run exists", async () => {
+    h.run.mockResolvedValue(null);
+    expect((await (await GET()).json()).journey).toBeNull();
+    expect(h.journey).not.toHaveBeenCalled();
   });
 });

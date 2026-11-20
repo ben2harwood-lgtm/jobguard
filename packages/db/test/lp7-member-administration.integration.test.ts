@@ -166,15 +166,19 @@ it.each([undefined,"read_only"])("refuses pending invitations and queued owner s
   await db.owner.query("INSERT INTO identity.challenge(id,email,purpose,invitation_id,digest,requested_at,expires_at,consumed_at,verified) VALUES($1,$2,'invitation',$3,$4,clock_timestamp(),clock_timestamp()+interval '1 hour',clock_timestamp(),true)",[acceptedChallenge,acceptedRecipient,acceptedInvitation,'d'.repeat(64)]);
   const acceptedPerson=(await db.owner.query("SELECT identity.provision_verified_challenge($1) id",[acceptedChallenge])).rows[0].id;
   expect(acceptedPerson).toBeTruthy();
-  const decision=randomUUID(), resolution=randomUUID(), auth=randomUUID(), outbox=randomUUID();
+  const outbox=randomUUID();
   const content="Fictional approved quote", hash=createHash("sha256").update(content).digest("hex");
-  await db.owner.query("INSERT INTO app.decision(tenant_id,id,subject_type,subject_ref,action_type) VALUES($1,$2,'quote','fictional','send_quote')",[b.tenant,decision]);
-  await db.owner.query("INSERT INTO app.decision_resolution(tenant_id,id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[b.tenant,resolution,decision,b.member]);
-  await db.owner.query("INSERT INTO app.action_authorization(tenant_id,id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'send_quote',$6,1,'synthetic.v1','2099-01-01')",[b.tenant,auth,decision,resolution,b.member,hash]);
-  const enqueue = (id: string) => db.owner.query(
-    "INSERT INTO app.action_outbox(tenant_id,id,authorization_id,adapter,provider_effect_key,action_type,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at) VALUES($1,$2,$3,'fake_capture',($2::uuid)::text,'send_quote',$4,$5,1,'synthetic.v1','2099-01-01')",
-    [b.tenant,id,auth,hash,content],
-  );
+  const enqueue = async (id: string) => {
+    // Each scenario is a separate send approved by the same owner.
+    const decision=randomUUID(), resolution=randomUUID(), auth=randomUUID();
+    await db.owner.query("INSERT INTO app.decision(tenant_id,id,subject_type,subject_ref,action_type) VALUES($1,$2,'quote','fictional','send_quote')",[b.tenant,decision]);
+    await db.owner.query("INSERT INTO app.decision_resolution(tenant_id,id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[b.tenant,resolution,decision,b.member]);
+    await db.owner.query("INSERT INTO app.action_authorization(tenant_id,id,decision_id,resolution_id,actor_membership_id,action_type,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'send_quote',$6,1,'synthetic.v1','2099-01-01')",[b.tenant,auth,decision,resolution,b.member,hash]);
+    await db.owner.query(
+      "INSERT INTO app.action_outbox(tenant_id,id,authorization_id,adapter,provider_effect_key,action_type,content_hash,immutable_content,aggregate_revision,policy_version,authorization_expires_at) VALUES($1,$2,$3,'fake_capture',($2::uuid)::text,'send_quote',$4,$5,1,'synthetic.v1','2099-01-01')",
+      [b.tenant,id,auth,hash,content],
+    );
+  };
   await enqueue(outbox);
   const deliver=vi.fn(async()=>({kind:"succeeded" as const,providerReference:"fictional-provider-ref"}));
   const control=randomUUID();

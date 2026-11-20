@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import Link from "next/link";
-import { BILLING_SANDBOX_LABEL, exactPenceV1, parseExactPence, exactPence, sumExactPence, compareExactPence } from "@jobguard/core";
+import { BILLING_SANDBOX_LABEL, billingExportMatchV1, billingStatusV1, exactPenceV1, parseExactPence, exactPence, sumExactPence, compareExactPence } from "@jobguard/core";
 import styles from "./work-orders.module.css";
 
 type Exact = z.infer<typeof exactPenceV1>;
@@ -30,6 +30,37 @@ export const contractorBillingReadV1 = z.object({
   }),
 });
 export type ContractorBillingRead = z.infer<typeof contractorBillingReadV1>;
+
+const practiceLine = z.object({ ...billingExportMatchV1.shape, approvedNet: z.object({ pence: z.number().int().positive() }) });
+const practiceSteps = { invoice: "Fill practice invoice", part: "Fill practice part payment", balance: "Fill practice balance payment" } as const;
+type PracticeStep = keyof typeof practiceSteps;
+
+export function practiceBillingEvents(view: ContractorBillingRead, step: PracticeStep) {
+  const lines = view.exports.flatMap(batch => batch.lines);
+  if (lines.length !== 1) return null;
+  const line = practiceLine.safeParse(lines[0]);
+  if (!line.success) return null;
+  const { approvedNet, ...match } = line.data;
+  const originalNet = 100000, total = originalNet + approvedNet.pence;
+  // Both equal payments and both invoice lines must have whole-penny VAT.
+  if (total % 10 !== 0) return null;
+  const amount = (netPence: number) => ({ netPence, vatPence: netPence / 5, grossPence: netPence + netPence / 5 });
+  const invoice = step === "invoice";
+  const existedAt = "2026-10-01T00:00:00Z";
+  const event = billingStatusV1.safeParse({
+    version: "billing-status.v1", clientContractId: view.clientContractIds[0], source: "northside-fictional",
+    sourceEventId: `northside-${step}-${match.exportLineId}`, invoiceNumber: "NS-INVOICE-1",
+    factType: invoice ? "invoiced" : "paid", effectiveAt: `2026-10-0${{ invoice: 2, part: 3, balance: 4 }[step]}T12:00:00Z`,
+    remittanceReference: null, reconciliationId: invoice ? null : `northside-${step}`, originalEventId: null,
+    amount: amount(invoice ? total : total / 2),
+    composition: invoice ? { declared: amount(total), lines: [
+      { externalInvoiceLineId: "order", kind: "original_order", existedAt, ...amount(originalNet), match: null },
+      { externalInvoiceLineId: "extra", kind: "extra", existedAt, ...amount(approvedNet.pence), match },
+    ] } : null,
+    explicit: null, separateInvoice: false, lineAdjustments: [],
+  });
+  return event.success ? event.data : null;
+}
 
 /** Whole pence show as pounds; a fractional allocation keeps its exact fraction rather than a rounded figure. */
 export function exactPounds(value: Exact): string {
@@ -74,7 +105,7 @@ function Drill({ title, total, rows, testId }: { title: string; total: Exact; ro
   </details>;
 }
 
-export function BillingView({ jobId, view, send, busy = false }: { jobId: string; view: ContractorBillingRead; send?: (command: Command) => void; busy?: boolean }) {
+export function BillingView({ jobId, view, send, busy = false, practice = false }: { jobId: string; view: ContractorBillingRead; send?: (command: Command) => void; busy?: boolean; practice?: boolean }) {
   const r = view.reconciliation;
   const [contract, setContract] = useState(""), [format, setFormat] = useState<"csv" | "json">("csv"), [text, setText] = useState(""), [importError, setImportError] = useState("");
   const [routes, setRoutes] = useState<Record<string, { channel: string; destination: string }>>({});
@@ -121,6 +152,10 @@ export function BillingView({ jobId, view, send, busy = false }: { jobId: string
     <section aria-label="Invoices and payments">
       <h2>Invoices and payments</h2>
       {send && <fieldset data-testid="import-controls"><legend>Import invoice and payment status</legend>
+        {practice && (Object.keys(practiceSteps) as PracticeStep[]).map(step => {
+          const event = practiceBillingEvents(view, step);
+          return event && <button key={step} type="button" disabled={busy} onClick={() => { setFormat("json"); setText(JSON.stringify(event, null, 2)); }}>{practiceSteps[step]}</button>;
+        })}
         <label htmlFor="billing-status-format">Format</label> <select id="billing-status-format" value={format} onChange={e => setFormat(e.target.value as "csv" | "json")}><option value="csv">CSV file</option><option value="json">JSON (billing-status.v1)</option></select>
         <label htmlFor="billing-status-data">Status data</label> <textarea id="billing-status-data" rows={6} value={text} onChange={e => setText(e.target.value)}/>
         <label>Or choose a file <input type="file" accept=".csv,.json,text/csv,application/json" onChange={e => void e.target.files?.[0]?.text().then(setText)}/></label>
@@ -147,7 +182,12 @@ export function BillingView({ jobId, view, send, busy = false }: { jobId: string
 
 export function ContractorBilling({ jobId }: { jobId: string }) {
   const [view, setView] = useState<ContractorBillingRead | null>(null), [code, setCode] = useState(""), [status, setStatus] = useState("Loading billing…");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false), [practice, setPractice] = useState(false);
+  useEffect(() => {
+    void fetch("/api/northside", { cache: "no-store" }).then(async response => {
+      if (response.ok) setPractice((await response.json()).seeded === true);
+    }).catch(() => {});
+  }, []);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const load = useCallback(async () => {
     try {
@@ -176,6 +216,6 @@ export function ContractorBilling({ jobId }: { jobId: string }) {
     <p className={styles.muted}>{BILLING_SANDBOX_LABEL}</p>
     <p role="status">{status}</p>
     {code && <p role="alert" tabIndex={-1} ref={errorRef}>{code === "BILLING_NOT_FOUND" ? "This job's billing is not available to you." : code === "BILLING_FORBIDDEN" ? "Only finance users can see or change billing." : code === "UNAUTHENTICATED" ? "Start the generated contractor practice first." : code === "BILLING_DUPLICATES_UNRESOLVED" ? "Resolve the possible duplicate extras before exporting." : code === "JOB_NOT_LIVE" ? "This job is not live." : `Billing request refused (${code}).`}</p>}
-    {view ? <BillingView jobId={jobId} view={view} busy={busy} send={command => void send(command)}/> : <button type="button" onClick={() => void load()}>Reload billing</button>}
+    {view ? <BillingView jobId={jobId} view={view} busy={busy} practice={practice} send={command => void send(command)}/> : <button type="button" onClick={() => void load()}>Reload billing</button>}
   </main>;
 }

@@ -178,8 +178,8 @@ export function JobParties({ jobId }: { jobId: string }) {
     <p>Use the supplied fictional details only. Do not enter real names, addresses or contact details.</p>
     {view?.current ? <dl data-testid="job-party-details"><dt>Customer</dt><dd data-testid="party-customer">{view.current.customer.name}</dd><dt>Site</dt><dd data-testid="party-site">{[view.current.site.unit, ...view.current.site.addressLines, view.current.site.town, view.current.site.postcode].filter(Boolean).join(", ")}</dd><dt>Who pays?</dt><dd data-testid="party-payer">{view.current.payingParty.name}</dd></dl> : <p>{view ? "Details needed — add a customer and site before previewing a quote or switching live." : "Loading customer and site…"}</p>}
     {view?.current && <details><summary>Technical details</summary><dl><dt>Saved binding</dt><dd style={{ overflowWrap: "anywhere" }} data-testid="party-binding-id">{view.current.bindingId}</dd></dl></details>}
-    <p>The supplied fictional underway job can be imported with these saved parties. Its £1,000.00 baseline is builder-attested; it creates no historic billing.</p>
-    <button type="button" disabled={!view?.current||busy} onClick={()=>void adopt()}>Import the fictional underway job</button>
+    <p>You can bring in the practice job that's already under way, using these saved details. Its £1,000.00 starting value is the figure you gave; it creates no past bills.</p>
+    <button type="button" disabled={!view?.current||busy} onClick={()=>void adopt()}>Bring in the practice job already under way</button>
     {!view?.current&&<p>Customer and site are required before adopting an underway job.</p>}
     {error && <p ref={errorRef} tabIndex={-1} role="alert">{error}</p>}
     {!view ? <button onClick={() => void load().catch(e => setError(e.message))}>Try loading details again</button> : <form ref={formRef} noValidate onChange={() => { touched.current = true; }} onSubmit={e => { e.preventDefault(); void save(); }} aria-label="Customer and site details">

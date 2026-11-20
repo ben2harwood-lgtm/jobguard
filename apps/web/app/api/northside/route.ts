@@ -1,7 +1,7 @@
 import "server-only";
 import type { VerifiedTenantContext } from "@jobguard/db";
 import { z } from "zod";
-import { northsideFacts, northsideTargets, seedNorthsideDemo, northsideRun, northsideSwitchTargets, northsideOwnActions, PracticeWorkerSwitchRepository } from "@jobguard/db";
+import { northsideFacts, northsideTargets, seedNorthsideDemo, northsideRun, northsideSwitchTargets, northsideJourneyTargets, northsideOwnActions, PracticeWorkerSwitchRepository } from "@jobguard/db";
 import { DemoError, bodyOf, demoActor, demoContext, failure, json, requireOrigin, parseDemoBody } from "../../lib/northside-server";
 
 /** Only the session's own owner can start a worker switch (0548), so an acting session is the tester acting. Fails closed. */
@@ -16,6 +16,7 @@ export async function GET() {
     const run = await northsideRun(pool, member, context);
     const facts = role === "owner" ? await northsideFacts(pool, member, context) : null;
     return json({ ...run, membershipId: member.membershipId, targetsToSwitch: run && (run.testerMembershipId === member.membershipId || await actingSession(pool, context, sessionId)) ? await northsideSwitchTargets(pool, member, context) : [],
+      journey: run && (role === "owner" || role === "finance") ? await northsideJourneyTargets(pool, member, context) : null,
       recentActions: run ? await northsideOwnActions(pool, member, context) : [], version: "northside-summary.v1", environment: "synthetic_demo", realExternalActions: 0, role, seeded: !!run && (facts === null || facts.companyName !== null), targets: northsideTargets, facts });
   } catch (error) { return failure(error); }
 }

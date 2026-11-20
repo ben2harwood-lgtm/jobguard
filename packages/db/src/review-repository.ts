@@ -60,6 +60,12 @@ async function ensureScopeIdentity(db:TenantTransaction,tenantId:string,jobId:st
 
 export class ConfirmProposalReview implements CommandMutation<{jobId:string;reviewId:string;jobRevision:number;status:"quoting"}> {
   constructor(private readonly review:ProposalReview, private readonly failAfterScope=false){assertReviewConfirmable(review);}
+  // M4-1-S-FLAKE: take the job's recovery command key (RecoveryCaseRepository's open lock) before any row lock. Otherwise
+  // opening a case (key, then the tenant's recovery-message source lock, then the job row) and this command (job row
+  // FOR UPDATE, then that source lock through the job update trigger) wait on each other and PostgreSQL cancels one.
+  async lock(db:TenantTransaction){
+    await db.$client.query("SELECT pg_advisory_xact_lock(hashtext(current_setting('app.tenant_id')),hashtext($1))",[this.review.jobId.toLowerCase()]);
+  }
   async mutate(db:TenantTransaction,command:ConsequentialCommand){
     const tenantId=(await db.$client.query<{tenant:string}>(`SELECT current_setting('app.tenant_id') tenant`)).rows[0]!.tenant;
     const locked=(await db.$client.query<{revision:number;state:string}>(`SELECT revision,state FROM app.proposal_review WHERE tenant_id=$1 AND id=$2 AND job_id=$3 FOR UPDATE`,[tenantId,this.review.reviewId,this.review.jobId])).rows[0];
@@ -78,6 +84,18 @@ export class ConfirmProposalReview implements CommandMutation<{jobId:string;revi
     if(this.failAfterScope) throw new Error("SYNTHETIC_CONFIRMATION_FAILURE");
     const transitioned=(await db.$client.query<{revision:number}>(`SELECT revision FROM app.start_quote_from_review($1,$2,$3,$4,$5,$6,$7,$8)`,[tenantId,this.review.jobId,job.revision,command.actorMembershipId,command.commandId,command.authorizationId,this.review.reviewId,JSON.stringify(this.review)])).rows[0]!;
     return {jobId:this.review.jobId,reviewId:this.review.reviewId,jobRevision:transitioned.revision,status:"quoting" as const};
+  }
+}
+
+export class DiscardDraftJob implements CommandMutation<{ jobId: string; revision: number; status: "lost" }> {
+  constructor(private readonly tenantId: string) {}
+
+  async mutate(db: TenantTransaction, command: ConsequentialCommand) {
+    const result = await db.$client.query<{ jobId: string; revision: number; status: "lost" }>(
+      `SELECT id AS "jobId",revision,status FROM app.discard_draft_job($1,$2,$3,$4,$5,$6)`,
+      [this.tenantId, command.subjectRef, command.action.aggregateRevision, command.actorMembershipId, command.commandId, command.authorizationId],
+    );
+    return result.rows[0]!;
   }
 }
 

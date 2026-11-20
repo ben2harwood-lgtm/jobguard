@@ -38,7 +38,7 @@ async function createJob(page: Page, text: string, net: number, customer: string
   for (let i = 0; i < await rates.count(); i++) await rates.nth(i).fill(i === 0 ? String(net) : "0.00");
   await expect(page.getByTestId("quote-net")).toHaveText(`GBP ${net.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   await click(page, "Save draft revision"); await expect(page.getByTestId("quote-revision")).toHaveText("1");
-  await click(page, "Preview immutable quote");
+  await click(page, "Preview this quote");
   await expect(page.getByRole("region", { name: "Quote preview" })).toContainText(pounds(net * 120));
   await click(page, "Simulate sending this quote");
   await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
@@ -46,7 +46,7 @@ async function createJob(page: Page, text: string, net: number, customer: string
   await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
   await page.getByLabel("Stated customer", { exact: true }).fill(customer);
   await click(page, "Record practice acceptance"); await click(page, "Start this practice job");
-  await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Job started · agreed quote saved", exact: true })).toBeVisible();
   await page.goto(`/jobs/${jobId}#quote`);
   return jobId;
 }

@@ -104,6 +104,11 @@ test("amends a claim to what was received, closes it as recovered and reverses i
  for(const n of["Protect room","Prepare walls","Paint walls","Finish trim","Clean site"])await page.getByRole("button",{name:`Accept ${n}`,exact:true}).click();
  await page.getByRole("button",{name:"Dismiss Replace shelves",exact:true}).click();await page.getByLabel("Dismissal reason Replace shelves").fill("Not needed");await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes waste");
  await page.getByRole("button",{name:"Confirm scope",exact:true}).click();
+ // This is the sequential amendment journey. Wait for its prerequisite commit;
+ // TOMMY-demo-faults.spec.ts separately preserves concurrent confirm/open commands,
+ // including the actual 503/unknown contract and exact-command recovery.
+ await expect(page.getByTestId("job-status")).toHaveText("Quote being prepared");
+ await expect(page.getByTestId("confirmed-line-count")).toHaveText("5");
  const jobId=(await page.locator("#captured-job-workspace").getAttribute("data-job-id"))!;
  const alert=page.locator("#recovery-cases p[role=alert]"),received=page.getByLabel("Received (£)",{exact:true}),claim=page.getByLabel("New claimed amount (£)",{exact:true}),reversed=page.getByLabel("Reversed (£)",{exact:true});
  const refuse=async(text:string)=>{await expect(alert).toContainText(text);await expect(alert).toBeFocused()};

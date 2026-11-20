@@ -145,7 +145,12 @@ it("delegation is transaction/job/type/tenant scoped, refuses rebinding and hide
 async function assertOtherMoneyRefuses(c:PoolClient,w:Customer) {
   expect((await c.query("SELECT app.current_actor() actor")).rows[0].actor).toBeNull();
   await refuse(c,"SELECT app.issue_practice_customer_invoice($1,$2,$3,$4,$5,$6,$7::date)",[w.t,w.j,randomUUID(),w.sponsor,randomUUID(),'fictional@example.invalid','2026-11-08']);
-  await refuse(c,"SELECT app.post_plan_settlement($1,$2,$3,$4,$5,1,'GBP',$6,$7,$8,$9,$10)",[randomUUID(),randomUUID(),randomUUID(),randomUUID(),randomUUID(),'fixture','fixture','a'.repeat(64),randomUUID(),randomUUID()]);
+  const settlement = "SELECT app.post_plan_settlement($1,$2,$3,$4,$5,1,'GBP',$6,$7,$8,$9,$10)";
+  const settlementArgs = [randomUUID(),randomUUID(),randomUUID(),randomUUID(),randomUUID(),'fixture','fixture','a'.repeat(64),randomUUID(),randomUUID()];
+  await refuse(c,settlement,settlementArgs,{code:"42501",message:"permission denied for function post_plan_settlement"});
+  await c.query("SET LOCAL ROLE jobguard_runtime");
+  try { await refuse(c,settlement,settlementArgs); }
+  finally { await c.query("SET LOCAL ROLE jobguard_migration"); }
   await refuse(c,"SELECT app.write_recovery_allocation($1,$2,$3,$4::jsonb,$5::jsonb)",[w.t,w.j,hash(randomUUID()),{},{}]);
 }
 it("a delegated binding cannot reach invoice issue, settlement or recovery allocation",async()=>{

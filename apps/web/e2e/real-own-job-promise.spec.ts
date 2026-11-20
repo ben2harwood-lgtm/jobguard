@@ -35,7 +35,7 @@ test("own blank-firm job finds omitted hallway work and confirms only a draft ex
   const coverage = page.getByRole("region", { name: "Coverage diff" });
   await expect(coverage).toContainText("Unpriced captured scope: 0");
   await expect(coverage).toContainText("Blocking questions: 0");
-  await expect(page.getByRole("button", { name: "Preview immutable quote", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Preview this quote", exact: true })).toBeEnabled();
   await startWatchdogJob(page);
   const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
   // Reopen the saved job so the site-work and Final Check panels load current state (as REAL-OWN-JOB-TO-PAID does).

@@ -24,7 +24,7 @@ async function createQuote(page: Page, title: string) {
 }
 async function preview(page: Page): Promise<Preview> {
  const response = page.waitForResponse(r => r.url().endsWith("/quotes/preview") && r.request().method() === "POST");
- await click(page, "Preview immutable quote");
+ await click(page, "Preview this quote");
  const result = await response; expect(result.ok(), await result.text()).toBe(true);
  const data = await result.json() as Preview;
  expect(data.view.reference).toBe(data.document.reference);
@@ -40,7 +40,7 @@ test("two runtime previews use one firm sequence and a revised quote retains its
  const firstId = await createQuote(page, "Fictional first decorating job"), first = await preview(page);
  expect(first.document.reference).toBe("Q-0001");
  async function download(p: Preview, name: string) {
-  const waiting = page.waitForEvent("download"); await click(page, "Download runtime PDF");
+  const waiting = page.waitForEvent("download"); await click(page, "Download quote PDF");
   const file = await waiting, path = info.outputPath(name); await file.saveAs(path);
   const bytes = await readFile(path);
   expect(bytes.toString()).toContain(`Quote ${p.document.reference} | Document version ${p.view.documentVersion}`);
