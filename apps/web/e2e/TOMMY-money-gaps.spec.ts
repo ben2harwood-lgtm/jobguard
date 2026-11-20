@@ -6,6 +6,7 @@ import { expect, test, type Browser, type BrowserContext, type Page, type TestIn
 import type { CaptureWorkspaceResponse } from "../../api/src/capture/contracts";
 import type { QuoteWorkspaceResponse } from "../../api/src/quote/contracts";
 import type { FinalAccountResponse } from "../../api/src/final-account.contracts";
+import { bindPracticeRequest } from "./helpers/bind-practice-request";
 import { openCapture } from "./helpers/capture-journey";
 import { click, enterQuote, jsonResult } from "./helpers/customer-invoice-journey";
 import { allocationPanel, allocationPath, parseAllocationView, readAllocations, readyAllocations, splitRecoveryValueReceipt } from "./helpers/recovery-allocation-journey";
@@ -353,14 +354,14 @@ test("support-v02: matched fresh jobs exclude dismissed shelves and a pending £
 });
 
 
-/** Read-only observer: bind the exact HTTP command to immutable effects under runtime RLS. */
-async function allocationReceipt(jobId: string, commandId: string) {
+/** Bind the browser's practice session to observe the exact HTTP command's immutable effects under runtime RLS. */
+async function allocationReceipt(page: Page, jobId: string, commandId: string) {
   const pool = new Pool({ host: "127.0.0.1", port: 55432, database: "jobguard_synthetic_demo", user: "jobguard_runtime", password: ["sbox", "e2e", "runtime"].join("-"), max: 1 });
   try {
     const client = await pool.connect();
     try {
-      await client.query("BEGIN READ ONLY");
-      await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenant]);
+      await client.query("BEGIN");
+      await bindPracticeRequest(client, page, tenant);
       const params = [tenant, jobId, commandId];
       const commands = await client.query("SELECT command_id,case_id,payload,payload_hash,result FROM app.recovery_allocation_command WHERE tenant_id=$1 AND job_id=$2 AND command_id=$3", params);
       const allocations = await client.query("SELECT id,command_id,review_id,authorization_id,case_id,payment_id,invoice_id,movement_id,evidence_id,gross_pence,eligible_net_pence,tax_pence FROM app.recovery_case_allocation WHERE tenant_id=$1 AND job_id=$2 ORDER BY id", params.slice(0, 2));
@@ -524,7 +525,7 @@ test("support-v04: a lost committed £384 allocation reply reconciles before exa
       }
       expect(numerator).toBe(expected * denominator);
     }
-    const database = await phase("support-v04: bind the original command to saved database effects", () => allocationReceipt(job.jobId, command.commandId));
+    const database = await phase("support-v04: bind the original command to saved database effects", () => allocationReceipt(page, job.jobId, command.commandId));
     evidence.databaseBeforeReplay = database;
     expect(database.commands).toHaveLength(1);
     expect(database.commands[0]).toMatchObject({ command_id: command.commandId, case_id: job.caseId, payload: command });
@@ -551,7 +552,7 @@ test("support-v04: a lost committed £384 allocation reply reconciles before exa
     });
     const replayed = await parseAllocationView(await replayResponse.json());
     expect(replayed).toEqual(saved);
-    expect(await allocationReceipt(job.jobId, command.commandId)).toEqual(database);
+    expect(await allocationReceipt(page, job.jobId, command.commandId)).toEqual(database);
     // A new command cannot allocate again to the fully recovered £320 case.
     // The public claim guard runs before payment capacity; this does not independently
     // exercise the separate available-payment guard.
@@ -565,7 +566,7 @@ test("support-v04: a lost committed £384 allocation reply reconciles before exa
     await expect(panel.getByTestId("eligible-net")).toHaveText("£320.00");
     expect(await readAllocations(page, job.jobId)).toEqual(saved);
     expect((await read(page, job.receiptPath)).receipts).toHaveLength(1);
-    expect(await allocationReceipt(job.jobId, command.commandId)).toEqual(database);
+    expect(await allocationReceipt(page, job.jobId, command.commandId)).toEqual(database);
     expect(browserErrors).toEqual([]);
     expect(browserAllocationBodies).toEqual([lost.raw]);
 
@@ -590,7 +591,7 @@ test("support-v04: a lost committed £384 allocation reply reconciles before exa
     await expect(page.getByTestId("fee-review-cumulative")).toHaveText("£32.00");
     await expect(page.getByTestId("fee-review-delta")).toHaveText("£0.00");
     expect(await readAllocations(page, job.jobId)).toEqual(saved);
-    expect(await allocationReceipt(job.jobId, command.commandId)).toEqual(database);
+    expect(await allocationReceipt(page, job.jobId, command.commandId)).toEqual(database);
     evidence.fee = fee;
     evidence.browserErrors = browserErrors;
     evidence.browserAllocationBodies = browserAllocationBodies;
