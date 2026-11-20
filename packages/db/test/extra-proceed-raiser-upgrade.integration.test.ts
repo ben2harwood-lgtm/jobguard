@@ -7,6 +7,7 @@ import { chainWorld, submitted } from "./extra-approval-chain-fixtures.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { extraProceed, WorkOrderRepository, demoFile, demoRow, withTenant, migrate } from "../src/index.js";
 import { lp11EmptyTables } from "./later-empty-tables.js";
+import { discardDraftRegistryRow } from "./lp5-command-catalog.js";
 
 let c: Cluster | undefined;
 afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
@@ -67,7 +68,7 @@ it("populated upgrade retains a colleague's old statement byte-for-byte and its 
   [s.jobId, s.extraId, a.membershipId, JSON.stringify(ownBody)])).rows[0].result)).toEqual(own);
  const after = await snapshot(db.admin);
  await migrate(db.admin); await migrate(db.admin);
- expect(await snapshot(db.admin)).toEqual({ ...after, ...lp11EmptyTables, "control_plane.worker_action_binding": [] });
+ expect(await snapshot(db.admin)).toEqual({ ...after, ...lp11EmptyTables, "control_plane.worker_action_binding": [], "app.command_type_registry": (await db.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify([...(after["app.command_type_registry"] as unknown[]), discardDraftRegistryRow])])).rows[0].data });
  expect(await breaches()).toEqual([s.requestId]);
 }, 300_000);
 

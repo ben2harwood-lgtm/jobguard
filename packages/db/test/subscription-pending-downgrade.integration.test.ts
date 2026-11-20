@@ -11,6 +11,7 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { calendarInput, command, count, historicalAgreement, meterCompany, readSubscription, storeMeter, terms, type SubscriptionCompany } from "./subscription-persistence-fixtures.js";
 import { snapshotRows } from "./upgrade-proof-utils.js";
 import { lp11EmptyTables } from "./later-empty-tables.js";
+import { discardDraftRegistryRow } from "./lp5-command-catalog.js";
 
 const stem = "0755_subscription_pending_downgrade";
 const migration = readFileSync(new URL(`../migrations/${stem}.sql`, import.meta.url), "utf8");
@@ -119,7 +120,7 @@ describe("0753 populated upgrade (real PostgreSQL)", () => {
   const single = await command(fixture, c, cv, singleId);
   const security = await metadata(), before = await snapshotRows(f.admin);
   await migrate(f.admin); await migrate(f.admin);
-  expect(await snapshotRows(f.admin)).toEqual({ ...before, ...lp11EmptyTables, "control_plane.worker_action_binding": [] }); expect(await metadata()).toEqual(security);
+  expect(await snapshotRows(f.admin)).toEqual({ ...before, ...lp11EmptyTables, "control_plane.worker_action_binding": [], "app.command_type_registry": (await f.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify([...(before["app.command_type_registry"] as unknown[]), discardDraftRegistryRow])])).rows[0].data }); expect(await metadata()).toEqual(security);
   expect(await command(fixture, a, value, id)).toEqual(first);
   expect(await command(fixture, c, cv, singleId)).toEqual(single);
   expect(subscriptionPlanView(await readSubscription(fixture, c), "2026-11-15").pendingDowngrade).toMatchObject({ changeId: single.changeId, effectiveDate: single.effectiveDate });

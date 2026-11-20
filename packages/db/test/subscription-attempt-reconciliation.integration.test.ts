@@ -12,6 +12,7 @@ import { approvedSimulation, command, count, issue, meterCompany, meterInput, ro
 import { rolledBack, snapshotRows } from "./upgrade-proof-utils.js";
 
 import { lp11EmptyTables } from "./later-empty-tables.js";
+import { discardDraftRegistryRow } from "./lp5-command-catalog.js";
 
 const stem = "0756_subscription_attempt_reconciliation";
 const signature = "app.mon2_command(uuid,text,uuid,jsonb)";
@@ -311,7 +312,7 @@ describe("0756 populated predecessor upgrade (real PostgreSQL)", () => {
   const metadata = async () => (await f.admin.query("SELECT proowner,proacl::text,prosecdef,proconfig,proargtypes::text,prorettype FROM pg_proc WHERE oid=$1::regprocedure", [signature])).rows;
   const security = await metadata(), before = await snapshotRows(f.admin);
   await migrate(f.admin); await migrate(f.admin);
-  expect(await metadata()).toEqual(security); expect(await snapshotRows(f.admin)).toEqual({ ...before, ...lp11EmptyTables, "control_plane.worker_action_binding": [] });
+  expect(await metadata()).toEqual(security); expect(await snapshotRows(f.admin)).toEqual({ ...before, ...lp11EmptyTables, "control_plane.worker_action_binding": [], "app.command_type_registry": (await f.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify([...(before["app.command_type_registry"] as unknown[]), discardDraftRegistryRow])])).rows[0].data });
   const fake = reconciler(fixture);
   expect(await fake.executor.reconcile(a.context, a.digest, approved.workId, 2)).toMatchObject({ settled: true, amountPence: approved.amountPence, contentHash: approved.contentHash, revision: 2 });
   expect(fake.executes()).toBe(0); expect(await count(fixture, a, "subscription_simulated_attempt")).toBe(1);
