@@ -7,6 +7,7 @@ import { createEvidencePackV3Fixture, closeEvidencePackV3Fixture, type V3Fixture
 import { EvidencePackV3Repository, EvidencePackV3WorkerRepository } from "../src/evidence-pack-v3-repository.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { asFixtureTenant } from "./recovery-attribution-fixture.js";
+import { jobDoorsActor } from "./lp-job-doors-fixtures.js";
 let f: V3Fixture;
 beforeAll(async () => {
   vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createEvidencePackV3Fixture();
@@ -20,6 +21,11 @@ it("generation, replay and approval create one exact artifact and one approval",
   await repo.request(f.auth.context, f.caseId, f.auth.digest, command);
   await repo.request(f.auth.context, f.caseId, f.auth.digest, command);
   const prepared = await worker.prepare(verifiedTenantContextForQueuedJob(f.source.tenantId), commandId);
+  const { tenant: otherTenant } = await jobDoorsActor(f.admin);
+  expect(await asFixtureTenant(f.shadow, otherTenant, async db =>
+    (await db.query("SELECT app.prepare_evidence_pack_v3($1,$2) result", [f.source.tenantId, commandId])).rows[0].result,
+  )).toEqual(prepared);
+  await expect(worker.prepare(verifiedTenantContextForQueuedJob(otherTenant), commandId)).rejects.toThrow("NOT_FOUND");
   await expect(worker.finish(verifiedTenantContextForQueuedJob(f.source.tenantId), commandId, prepared.material)).rejects.toThrow("EVIDENCE_PACK_V3_DEPENDENCY_HELD");
   await worker.completeMustSurface(verifiedTenantContextForQueuedJob(f.source.tenantId), commandId, prepared.visibleRevision);
   const { assembleEvidencePackV3 } = await import("@jobguard/core");
@@ -29,6 +35,12 @@ it("generation, replay and approval create one exact artifact and one approval",
   }
   await worker.finish(verifiedTenantContextForQueuedJob(f.source.tenantId), commandId, prepared.material);
   await worker.finish(verifiedTenantContextForQueuedJob(f.source.tenantId), commandId, prepared.material);
+  const workerLogin = (await f.shadow.query("SELECT session_user login")).rows[0].login;
+  const audit = await f.admin.query(`SELECT actor_ref,payload->'references'->>'auditActorKind' kind,
+    payload->'references'->>'auditActorRef' sealed_actor FROM app.audit_event
+    WHERE tenant_id=$1 AND event_type='evidence_pack.v3_completed' AND payload->'references'->>'commandId'=$2::text`,
+  [f.source.tenantId, commandId]);
+  expect(audit.rows).toEqual([{ actor_ref: "system:evidence-pack", kind: "system", sealed_actor: `system:database:${workerLogin}` }]);
   const pack = (await repo.read(f.auth.context, f.caseId, f.auth.digest)).packs[0]!;
   expect(pack).toMatchObject({ id: commandId, contentMatches: true, attachmentApprovalRecorded: false });
   const approval = { version: "evidence-pack-attachment-approval.v3", commandId: randomUUID(), packId: pack.id, expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash };
@@ -41,6 +53,8 @@ it("generation, replay and approval create one exact artifact and one approval",
   await expect(repo.request(f.auth.context, f.caseId, f.auth.digest, { ...command, expectedVisibleSourceRevision: "a".repeat(64) })).rejects.toThrow("EVIDENCE_PACK_COMMAND_CONFLICT");
   for (const table of ["evidence_pack_v3", "evidence_pack_v3_approval", "shadow_commercial_signal"])
     await expect(f.runtime.query(`SELECT * FROM app.${table}`)).rejects.toThrow(/permission denied/u);
+  for (const table of ["app.evidence_pack_v3_request", "control_plane.lp11_pack_scope"])
+    await expect(f.shadow.query(`SELECT * FROM ${table}`)).rejects.toMatchObject({ code: "42501" });
 });
 it("another command family cannot reuse a queued pack command ID", async () => {
   const repo = new EvidencePackV3Repository(f.runtime), before = await repo.read(f.auth.context, f.caseId, f.auth.digest), commandId = randomUUID();

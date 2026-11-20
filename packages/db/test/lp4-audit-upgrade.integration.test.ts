@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "../src/migrate.js";
 import { appendAuditBatch, canonicalAuditHash, verifyAuditChain, type AuditEvent } from "../src/audit.js";
 import { withTenant } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { assertLp4SealedEvents } from "./lp4-writer-catchup-fixture.js";
 import { jobDoorsActor, jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 
@@ -25,7 +25,7 @@ describe("LP-4 compatible upgrade and database-independent sealing", () => {
   it("preserves historical bytes/checkpoint and appends v2 without granting runtime legacy writers", async () => {
     const db = await jobDoorsDatabase(true, "0520_lp4_database_audit.sql");
     try {
-      const { tenant } = await jobDoorsActor(db.owner);
+      const { tenant, member } = await jobDoorsActor(db.owner);
       const legacy = { id: randomUUID(), tenantId: tenant, sequence: 1, version: "audit.v1" as const,
         actorRef: "user:legacy", eventType: "fixture.created", subjectType: "job", subjectRef: randomUUID(),
         occurredAt: new Date("2026-10-01T00:00:00.000Z"), payload: {},
@@ -39,7 +39,8 @@ describe("LP-4 compatible upgrade and database-independent sealing", () => {
       const before = (await db.owner.query("SELECT row_to_json(a)::text bytes FROM app.audit_event a WHERE tenant_id=$1", [tenant])).rows;
       await migrate(db.owner);
       expect((await db.owner.query("SELECT row_to_json(a)::text bytes FROM app.audit_event a WHERE tenant_id=$1", [tenant])).rows).toEqual(before);
-      const [next] = await withTenant(db.runtime, testTenantContext(tenant), tx => appendAuditBatch(tx, [{
+      const context = await testBoundTenantContext(db.owner, tenant, member);
+      const [next] = await withTenant(db.runtime, context, tx => appendAuditBatch(tx, [{
         id: randomUUID(), version: "audit.v1", actorRef: "user:synthetic", eventType: "fixture.created", subjectType: "job", subjectRef: randomUUID(), payload: {},
       }]));
       expect(next!.previousHash).toBe(eventHash);
@@ -48,7 +49,7 @@ describe("LP-4 compatible upgrade and database-independent sealing", () => {
     } finally { await db.close(); }
   }, 300_000);
   it("seals runtime and owner-side events in an ordinary migrated database with the same refusals", async () => {
-    const db = await jobDoorsDatabase();
+    const db = await jobDoorsDatabase(false, "0765_lp11_bound_tenant_rls.sql");
     try {
       expect((await db.owner.query("SELECT current_database() name")).rows[0].name).toBe("postgres");
       const {tenant,member}=await jobDoorsActor(db.owner), id=randomUUID(), job=randomUUID();
@@ -67,6 +68,21 @@ describe("LP-4 compatible upgrade and database-independent sealing", () => {
       await expect(db.runtime.query("SELECT app.lp4_seal_audit('[]','checked_operation')"))
         .rejects.toMatchObject({code:"42501"});
       expect((await db.owner.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1",[tenant])).rows[0].n).toBe(2);
+
+      const history = async () => (await db.owner.query("SELECT row_to_json(a)::text bytes FROM app.audit_event a WHERE tenant_id=$1 ORDER BY sequence", [tenant])).rows;
+      const before = await history();
+      await migrate(db.owner);
+      expect(await history()).toEqual(before);
+      const nextInput = { ...input, id: randomUUID() };
+      await expect(withTenant(db.runtime, testTenantContext(tenant, { bindRequest: false }), tx => appendAuditBatch(tx, [nextInput])))
+        .rejects.toMatchObject({ code: "42501" });
+      expect(await history()).toEqual(before);
+
+      const context = await testBoundTenantContext(db.owner, tenant, member);
+      const [next] = await withTenant(db.runtime, context, tx => appendAuditBatch(tx, [nextInput]));
+      expect(next).toMatchObject({ id: nextInput.id, version: "audit.v3", tenantId: tenant, sequence: 3,
+        payload: { references: { auditTrust: "lower_trust", auditActorKind: "bound_member", auditActorRef: `membership:${member}` } } });
+      expect((await history()).slice(0,2)).toEqual(before);
     } finally {await db.close();}
   },300_000);
 });

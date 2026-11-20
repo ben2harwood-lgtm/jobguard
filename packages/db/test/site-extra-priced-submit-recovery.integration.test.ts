@@ -54,7 +54,7 @@ it("rechecks revocation after preflight before capture", async () => {
  const h = await setup(), before = await counts(h.actor.tenantId);
  const log = SiteExtraRepository.prototype.logSorSiteExtra;
  vi.spyOn(SiteExtraRepository.prototype, "logSorSiteExtra").mockImplementationOnce(async function(this: SiteExtraRepository, context, actor, raw) {
-  await status(c, { p: h.f.p } as Parameters<typeof status>[1], "suspended");
+  await status(c, { p: h.f.p, context: h.f.ctx }, "suspended");
   return log.call(this, context, actor, raw);
  });
  await expect(h.run()).rejects.toMatchObject({ code: "TRACK_FORBIDDEN" });

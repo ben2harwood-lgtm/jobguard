@@ -1,4 +1,4 @@
-import { bindOwnSession } from "./tenant-context-test-utils.js";
+import { bindOwnSession, bindTestClient } from "./tenant-context-test-utils.js";
 import {randomUUID} from "node:crypto";
 import {afterAll,beforeAll,describe,expect,it} from "vitest";
 import {withTenant} from "../src/tenant-context.js";
@@ -52,7 +52,7 @@ describe("SV-7A source storage/read authority",()=>{
   const names=["tenant_id","job_id","id","command_id","actor_membership_id","source_kind","entry_mode","on_site","evidence_id","object_version_id","sha256","source_received_at","notice_version","environment"];
   for(const [field,expression,code] of [["job_id",`'${other.jobId}'::uuid`,"23503"],["object_version_id","'substituted'","23503"],["tenant_id","gen_random_uuid()","42501"]]){
    const command=randomUUID();
-   await expect(workTenant(f.admin,context.tenantId,async db=>{
+   await expect(withTenant(f.admin,context,async ({$client:db})=>{
     // Cast every parameter use so receipt setup reaches the intended substitution constraint.
     await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1::uuid,$2::uuid,'sv7a.invalid_fixture',$2::text,$3::text,'succeeded',$4::uuid,'{}',clock_timestamp())",[context.tenantId,command,source.hash,f.practice.auth.membershipId]);
     const selected=names.map(name=>name===field?expression:name==="id"?"gen_random_uuid()":name==="command_id"?`'${command}'::uuid`:name).join(",");
@@ -63,7 +63,7 @@ describe("SV-7A source storage/read authority",()=>{
    // Include both referencing tables so PostgreSQL reaches the original's BEFORE TRUNCATE guard (0164).
    const truncate=table==="job_source_original"?"TRUNCATE app.job_source_original, app.job_diary_entry, app.customer_message_source":`TRUNCATE app.${table}`;
    for(const sql of [`UPDATE app.${table} SET tenant_id=tenant_id`,`DELETE FROM app.${table}`,truncate])await expect(rolledBack(f.admin,async db=>{
-    await db.query("SELECT set_config('app.tenant_id',$1,true)",[context.tenantId]);
+    await bindTestClient(f.admin,db,context.tenantId,f.practice.auth.membershipId);
     await db.query("SET LOCAL ROLE jobguard_migration");
     await db.query(sql);
    })).rejects.toMatchObject({code:"55000"});

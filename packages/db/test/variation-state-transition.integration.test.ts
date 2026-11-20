@@ -12,7 +12,7 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const T = randomUUID(), A = randomUUID(), U = randomUUID(), M = randomUUID(), J = randomUUID(), P = randomUUID();
-const context = testTenantContext(T);
+const context = testTenantContext(T, { membershipId: M });
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "variation-state-guard-pg-"));

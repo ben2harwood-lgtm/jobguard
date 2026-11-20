@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ActionExecutor, appendOutboundAction, migrate, operateOutbox, reconcileOutbox,
   withTenant, type OutboundAdapter } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 
 const tenant = randomUUID(), account = randomUUID(), user = randomUUID(), member = randomUUID();
 const context = testTenantContext(tenant, { membershipId: member });
@@ -198,7 +198,7 @@ describe("LATER-SAFETY-125 outbox status transitions", () => {
       await scratch.query("BEGIN");
       await scratch.query(`DROP TRIGGER ${trigger} ON app.action_outbox`);
       await scratch.query("SET LOCAL SESSION AUTHORIZATION outbox_forward_probe");
-      await scratch.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+      await bindTestClient(admin, scratch, tenant, member);
       await expect(refusesReset((sql, params) => scratch.query(sql, params), action.id))
         .rejects.toThrow(/promise resolved/u);
       expect((await scratch.query("SELECT status FROM app.action_outbox WHERE id=$1", [action.id])).rows[0].status).toBe("pending");

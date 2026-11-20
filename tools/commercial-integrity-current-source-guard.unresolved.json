@@ -16,9 +16,9 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/outbox.ts",
-    "line": 35,
-    "fingerprint": "61b190ba5ae9f0ef247899985aea9adbb07f3017ed64d28657359cb3b4691afa",
-    "reason": "ActionExecutor delegates a tenant-visible action ID to WorkerActionExecutor on a separate worker login. The worker calls app.claim_worker_action before invoking the registered adapter and uses the claim token with app.complete_worker_action. Neither path reads advisory data."
+    "line": 44,
+    "fingerprint": "0807fb800a3f657160d684c53c952eebd78255cac565dfc707f430827016c09b",
+    "reason": "ActionExecutor checks the bound request or passes the expected queued tenant to the separate worker login. The worker verifies the committed outbox signal and claims the same action in that transaction. Adapter delivery occurs after claim and completes with the claim token. The path reads no advisory data."
   },
   {
     "file": "packages/db/src/practice-session.ts",
@@ -72,8 +72,8 @@
   {
     "code": "UNRESOLVED_COVERED_EDGE",
     "file": "packages/db/src/extra-approval-chain-repository.ts",
-    "line": 96,
-    "fingerprint": "7bd6219701ae44bccf96bdaabb30e3cc04247ad805ca4076b878fb72010abe98",
+    "line": 97,
+    "fingerprint": "dbc56db77f7b999957958b367a7b55e6ba407567937ca11ab9f776bb23fa86df",
     "reason": "Generic local call helper receives runtime sql/args; all nine callers pass literal SELECT app.xa_* calls and none reads advisory results. (LP-6d r11, 14 Nov 2026: escalateOverdue now calls app.lp6d_escalate_overdue_worker(); helper unchanged)"
   }
 ]

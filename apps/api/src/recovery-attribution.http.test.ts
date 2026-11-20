@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import { Test } from "@nestjs/testing";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { afterEach,expect,it,vi } from "vitest";
 import { AppModule } from "./app.module.js";
 import { RecoveryAttributionApplication } from "./recovery-attribution.application.js";
@@ -56,7 +56,11 @@ it("SV6-26 PostgreSQL actual HTTP and fresh applications read the same stored hi
   await f.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner') ON CONFLICT DO NOTHING",[M,T,A,U]);
   const token=await db.issuePracticeSession(f.runtime),auth=await db.authenticatePracticeSession(f.runtime,token);
   const {p,document,command}=await helpers.storedAttributionFixture(f,T,auth.digest);
-  await helpers.asFixtureTenant(f.owner,T,(client:any)=>client.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[document,helpers.LOCK_OWNER,command]));
+  const { bindTestClient } = await import(new URL("../../../packages/db/test/tenant-context-test-utils.ts",import.meta.url).href);
+  await helpers.asFixtureTenant(f.owner,T,async (client:PoolClient)=>{
+   await bindTestClient(f.admin,client,T,helpers.LOCK_OWNER);
+   await client.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[document,helpers.LOCK_OWNER,command]);
+  });
   const module=await Test.createTestingModule({imports:[AppModule]}).overrideProvider(Pool).useValue(f.runtime).compile();
   app=module.createNestApplication();await app.init();
   const url=`/jobs/${p.jobId}/success-fee-attribution`;

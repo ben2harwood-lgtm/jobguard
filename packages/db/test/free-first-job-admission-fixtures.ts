@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
-import type { WorkFixture } from "./job-work-state-fixtures.js";
-import { workTenant } from "./job-work-state-fixtures.js";
+import { workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
+import { withTenant } from "../src/tenant-context.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
 export { createWorkFixture, closeWorkFixture, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 export { meterCompany };
 export type TrialCompany=Awaited<ReturnType<typeof meterCompany>>;
 export async function verifyBusiness(f:WorkFixture,a:TrialCompany,company:string|null=`fictional_${randomUUID()}`,phone:string|null=`demo_${randomUUID()}`){
  const id=randomUUID();
- await workTenant(f.admin,a.tenantId,async db=>{
+ await withTenant(f.admin,a.context,async tx=>{
+  const db=tx.$client;
   await db.query("SET LOCAL ROLE jobguard_migration");
   await db.query("INSERT INTO app.trial_business_verification(tenant_id,id,version,environment,source,company_number,normalized_phone) VALUES($1,$2,'trial-business-verification.v1','synthetic_demo','fictional_verified_fixture.v1',$3,$4)",[a.tenantId,id,company,phone]);
  });return id;

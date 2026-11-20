@@ -11,6 +11,12 @@ describe("SV5PRE authoritative completion", () => {
  let f: Awaited<ReturnType<typeof createLockFixture>>;
  beforeAll(async () => { f = await createLockFixture(); }, 60000);
  // LP-6d: raw runtime evidence writes are the lock owner's own bound request. 
+ const asShadow = <T>(a:{tenantId:string;jobId:string},work: Parameters<typeof asFixtureTenant<T>>[2]) => asFixtureTenant(f.shadow,a.tenantId,async db=>{
+  if((await db.query("SELECT to_regprocedure('app.lp11_bind_shadow_job(uuid,uuid)') installed")).rows[0].installed) {
+   await db.query("SELECT app.lp11_bind_shadow_job($1,$2)",[a.tenantId,a.jobId]);
+  }
+  return work(db);
+ });
  const asOwner = <T>(tenantId: string, work: Parameters<typeof asFixtureTenant<T>>[2]) => asFixtureTenant(f.runtime, tenantId, work, { owner: f.admin, membershipId: LOCK_OWNER });
  afterAll(async () => { if (f) await closeLockFixture(f); });
  // Canonical PostgreSQL JSON text preserves timestamps and bytes; every snapshot is tenant-scoped.
@@ -135,11 +141,11 @@ describe("SV5PRE authoritative completion", () => {
   }
  });
  it("PRE-Q5-01 a completed string without a run is refused", async () => {
-  const a=await locked(); await expect(asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,status) VALUES($1,$2,$3,'completed')",[a.tenantId,a.jobId,randomUUID()]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
+  const a=await locked(); await expect(asShadow(a,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,status) VALUES($1,$2,$3,'completed')",[a.tenantId,a.jobId,randomUUID()]))).rejects.toThrow('FINAL_CHECK_NOT_COMPLETE');
   expect((await f.admin.query("SELECT count(*)::int n FROM app.shadow_final_check_completion WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
  });
  it("PRE-Q5-02 the reconciliation default is not completion evidence", async () => {
-  const a=await locked(),run=randomUUID(); const cutoff=(await f.admin.query('SELECT locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows[0].cutoff;await asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic.v1',$4::timestamptz)",[a.tenantId,a.jobId,run,cutoff]));
+  const a=await locked(),run=randomUUID(); const cutoff=(await f.admin.query('SELECT locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows[0].cutoff;await asShadow(a,db=>db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic.v1',$4::timestamptz)",[a.tenantId,a.jobId,run,cutoff]));
   await expect(new FinalCheckCompletionRepository(f.shadow).publish(verifiedTenantContextForQueuedJob(a.tenantId),{version:"final-check-publication.v1",jobId:a.jobId,runId:run,checkId:randomUUID()})).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");
  });
  it("PRE-Q5-07 explicit zero results survive a fresh connection", async () => {
@@ -216,7 +222,7 @@ describe("SV5PRE authoritative completion", () => {
   return {a,uploadId,repo,manifest,executionId:randomUUID(),runId:randomUUID()};
  }
  async function runWithZero(x:Awaited<ReturnType<typeof sourceFixture>>){
-  await asFixtureTenant(f.shadow,x.a.tenantId,async db=>{
+  await asShadow(x.a,async db=>{
    await db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic.v1',$4)",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.cutoff]);
    await db.query("INSERT INTO app.shadow_final_check_reveal_proof(tenant_id,job_id,run_id,id,projection_version,result_descriptor) VALUES($1,$2,$3,$3,'final-check-result.v1',$4)",[x.a.tenantId,x.a.jobId,x.runId,{version:"final-check-result.v1",outcome:"zero_result"}]);
    await db.query("INSERT INTO app.shadow_final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic.v1','synthetic.v1')",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.id,x.manifest.lockId,x.manifest.cutoff,x.executionId]);
@@ -293,11 +299,11 @@ describe("SV5PRE authoritative completion", () => {
  });
  it("PRE-Q5-08 completion preserves qualified identity and microsecond cutoff",async()=>{
   const a=await locked(),lock=(await f.admin.query('SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2',[a.tenantId,a.jobId])).rows[0];
-  await expect(asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,run_id,status) VALUES($1,$2,$3,$4,$5::timestamptz+interval '1 microsecond',$6,'completed')",[a.tenantId,a.jobId,randomUUID(),lock.id,lock.cutoff,randomUUID()]))).rejects.toMatchObject({code:'23503'});
+  await expect(asShadow(a,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,run_id,status) VALUES($1,$2,$3,$4,$5::timestamptz+interval '1 microsecond',$6,'completed')",[a.tenantId,a.jobId,randomUUID(),lock.id,lock.cutoff,randomUUID()]))).rejects.toMatchObject({code:'23503'});
  });
  it("PRE-Q5-09 classification and persisted result availability precede completion",async()=>{
   const x=await sourceFixture(),evidence=await finalize(x);await attempt(x,evidence,'detection');await attempt(x,evidence,'reconciliation');
-  await asFixtureTenant(f.shadow,x.a.tenantId,async db=>{await db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic.v1',$4)",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.cutoff]);await db.query("INSERT INTO app.shadow_final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic.v1','synthetic.v1')",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.id,x.manifest.lockId,x.manifest.cutoff,x.executionId]);});
+  await asShadow(x.a,async db=>{await db.query("INSERT INTO app.shadow_reconciliation_run(tenant_id,job_id,id,policy_version,evidence_cutoff_at) VALUES($1,$2,$3,'synthetic.v1',$4)",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.cutoff]);await db.query("INSERT INTO app.shadow_final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5,$6,$7,'synthetic.v1','synthetic.v1')",[x.a.tenantId,x.a.jobId,x.runId,x.manifest.id,x.manifest.lockId,x.manifest.cutoff,x.executionId]);});
   await expect(x.repo.publish(verifiedTenantContextForQueuedJob(x.a.tenantId),{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()})).rejects.toThrow('FINAL_CHECK_RESULT_UNAVAILABLE');
  });
  it("r11 concurrent evidence writers keep compatible live locks and exclude final locking until both commit", async () => {
@@ -410,7 +416,7 @@ describe("SV5PRE authoritative completion", () => {
   await f.admin.query(`CREATE FUNCTION app.sv5pre_audit_${suffix}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id='${a.tenantId}'::uuid AND current_setting('app.sv5pre_refuse_audit',true)='yes' THEN RAISE EXCEPTION 'SV5PRE_AUDIT_REFUSED';END IF;RETURN NEW;END $$`);
   await f.admin.query(`CREATE TRIGGER sv5pre_audit_${suffix} BEFORE INSERT ON app.audit_event FOR EACH ROW EXECUTE FUNCTION app.sv5pre_audit_${suffix}()`);
   const commercialBefore = await commercialEffects(a.tenantId), auditBefore = await auditEffects(a.tenantId);
-  await expect(asFixtureTenant(f.shadow,a.tenantId,async db=>{await db.query("SELECT set_config('app.sv5pre_refuse_audit','yes',true)");await db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,run_id,status) VALUES($1,$2,$3,$4,'completed')",[a.tenantId,a.jobId,checkId,runId]);})).rejects.toThrow('SV5PRE_AUDIT_REFUSED');
+  await expect(asShadow(a,async db=>{await db.query("SELECT set_config('app.sv5pre_refuse_audit','yes',true)");await db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,run_id,status) VALUES($1,$2,$3,$4,'completed')",[a.tenantId,a.jobId,checkId,runId]);})).rejects.toThrow('SV5PRE_AUDIT_REFUSED');
   for(const table of ['shadow_final_check_completion','final_account_lock_check'])expect((await f.admin.query(`SELECT count(*)::int n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`,[a.tenantId,a.jobId])).rows[0].n).toBe(0);
   expect(await commercialEffects(a.tenantId)).toEqual(commercialBefore);
   expect(await auditEffects(a.tenantId)).toEqual(auditBefore);
@@ -512,7 +518,7 @@ describe("SV5PRE authoritative completion", () => {
 
  it("PRE-Q5-09 a pre-lock signal missing its classification prevents a zero result",async()=>{
   const x=await sourceFixture(),evidence=await finalize(x);await runWithZero(x);await attempt(x,evidence,'detection');await attempt(x,evidence,'reconciliation');
-  const signal=randomUUID();await asFixtureTenant(f.shadow,x.a.tenantId,async db=>{
+  const signal=randomUUID();await asShadow(x.a,async db=>{
    await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',$5,'Fictional test signal','low')",[x.a.tenantId,x.a.jobId,signal,randomUUID(),x.manifest.cutoff]);
    await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'immutable.v1',repeat('a',64),$5)",[x.a.tenantId,x.a.jobId,signal,evidence,(await x.repo.sources(verifiedTenantContextForQueuedJob(x.a.tenantId),x.a.jobId,x.manifest.id))[0]!.source_received_at]);
   });await expect(x.repo.publish(verifiedTenantContextForQueuedJob(x.a.tenantId),{version:'final-check-publication.v1',jobId:x.a.jobId,runId:x.runId,checkId:randomUUID()})).rejects.toThrow('FINAL_CHECK_RESULT_UNAVAILABLE');

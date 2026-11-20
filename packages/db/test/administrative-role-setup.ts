@@ -30,10 +30,10 @@ if (testPath?.endsWith(".integration.test.ts")) {
     return { ...actual,
       // Historical upgrade databases predate LP-6d's credential bridge (0740): their contractor session
       // bridge never bound, so the issued credential has nothing to bind against. Current schemas bind for real.
-      bindIssuedCredential: (async (client, context) => {
+      bindIssuedCredential: Object.assign(async (client: import("pg").PoolClient, context: import("../src/tenant-context.js").VerifiedTenantContext) => {
         const installed = (await client.query(`SELECT to_regprocedure('app.lp6d_contractor_session_identity(uuid)') IS NOT NULL installed`)).rows[0].installed;
         if (installed) await actual.bindIssuedCredential(client, context);
-      }) as typeof actual.bindIssuedCredential,
+      }, { recordVisitRefusal: actual.bindIssuedCredential.recordVisitRefusal }),
       bindAfterLocks: (async (db, context) => {
         const pair = deferredContexts.get(db);
         return actual.bindAfterLocks(db, pair?.original === context ? pair.bound : context);
@@ -154,7 +154,7 @@ if (testPath) {
     if (readFileSync(testPath, "utf8").includes("bootstrapSyntheticDemo")) return;
     const admin = new Pool({ host: "127.0.0.1", port, user, password, database: "postgres" });
     try {
-      for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_worker"]) {
+      for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_worker", "jobguard_session_lookup"]) {
         await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN
           CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
           END IF; END $$`);

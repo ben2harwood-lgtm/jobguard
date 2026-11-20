@@ -2,12 +2,20 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { withTenant, type VerifiedTenantContext } from "../src/index.js";
-import { approvalWorld, cluster, insertBinding, insertPack, ownerTx, bindingCount, type Cluster } from "./extra-approval-fixtures.js";
+import { approvalFixture, approvalWorld, cluster, insertBinding, insertPack, ownerTx, bindingCount, type Cluster } from "./extra-approval-fixtures.js";
+import { startBeforeMigration } from "./contractor-practice-session-fixtures.js";
 import { loadExtraApprovalBinding } from "../src/extra-approval-repository.js";
 import { proofBefore, proofDifferences } from "./upgrade-proof-utils.js";
-let c: Cluster, world: Awaited<ReturnType<typeof approvalWorld>>;
-beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); c = await cluster(); world = await approvalWorld(c); }, 180_000);
-afterAll(async () => { await c?.close(); vi.unstubAllEnvs(); });
+let c: Cluster, predecessor: Cluster, world: Awaited<ReturnType<typeof approvalWorld>>;
+beforeAll(async () => {
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+  c = await cluster(); world = await approvalWorld(c);
+  // The literal ENT-5 policy and malformed-setting assertions describe the
+  // predecessor contract. Keep both checks against its real populated schema.
+  predecessor = await startBeforeMigration("0765_lp11_bound_tenant_rls.sql");
+  await insertPack(predecessor, await approvalFixture(predecessor));
+}, 180_000);
+afterAll(async () => { await Promise.all([c?.close(), predecessor?.close()]); vi.unstubAllEnvs(); });
 it("E5-24 partial catalog RLS and absent business writer boundary", async () => {
   const tables = ["extra_approval_revision_binding", "extra_evidence_pack"];
   const catalog = (await c.admin.query(`SELECT c.relname,r.rolname,c.relrowsecurity,c.relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='app' AND c.relname=ANY($1) ORDER BY c.relname`, [tables])).rows;
@@ -15,7 +23,7 @@ it("E5-24 partial catalog RLS and absent business writer boundary", async () => 
   for (const table of tables) {
     const grants = (await c.admin.query("SELECT privilege_type FROM information_schema.role_table_grants WHERE grantee='jobguard_runtime' AND table_schema='app' AND table_name=$1 ORDER BY privilege_type", [table])).rows;
     expect(grants).toEqual([{ privilege_type: "SELECT" }]);
-    const policy = (await c.admin.query("SELECT policyname,roles::text[] roles,cmd,qual,with_check FROM pg_policies WHERE schemaname='app' AND tablename=$1 ORDER BY policyname", [table])).rows;
+    const policy = (await predecessor.admin.query("SELECT policyname,roles::text[] roles,cmd,qual,with_check FROM pg_policies WHERE schemaname='app' AND tablename=$1 ORDER BY policyname", [table])).rows;
     const tenantQual = "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)";
     const expectedPolicies: Array<{ policyname: string; roles: string[]; cmd: string; qual: string; with_check: string | null }> = [{ policyname: "tenant_isolation", roles: ["jobguard_migration", "jobguard_runtime"], cmd: "ALL", qual: tenantQual, with_check: tenantQual }];
     if (table === "extra_approval_revision_binding") expectedPolicies.unshift({ policyname: "lp5b_command_read", roles: ["jobguard_command_writer"], cmd: "SELECT", qual: tenantQual, with_check: null });
@@ -46,7 +54,7 @@ it("E5-09 partial source binding preserves the origin-bound SoR row and basis", 
   expect((await c.admin.query("SELECT row_to_json(t)::text bytes FROM app.extra_sor_revision t WHERE tenant_id=$1 AND variation_id=$2", [f.p.tenantId, f.priced.variationId])).rows).toEqual(before);
   const context: VerifiedTenantContext = await f.ctx;
   await withTenant(c.runtime, context, async db => { expect((await db.$client.query("SELECT id FROM app.extra_approval_revision_binding WHERE tenant_id=$1", [world.b.p.tenantId])).rows).toEqual([]); });
-  const client = await c.runtime.connect();
+  const client = await predecessor.runtime.connect();
   try {
     await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id','',true)");
     expect((await client.query("SELECT id FROM app.extra_approval_revision_binding")).rows).toEqual([]);

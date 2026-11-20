@@ -2,7 +2,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { attributionPredicates, recoveryAttributionRevisionV1 } from "@jobguard/core";
-import { createLockFixture, closeLockFixture, asFixtureTenant, storedAttributionFixture, LOCK_OWNER, type LockFixture } from "./recovery-attribution-fixture.js";
+import { createLockFixture, closeLockFixture, boundAttributionOwner, storedAttributionFixture, seedAccount, LOCK_OWNER, type LockFixture } from "./recovery-attribution-fixture.js";
+import { bindTestClient } from "./tenant-context-test-utils.js";
 let f: LockFixture;
 beforeAll(async()=>{f=await createLockFixture();},90000);
 afterAll(async()=>{if(f)await closeLockFixture(f);});
@@ -10,7 +11,7 @@ const tables = ["recovery_attribution_revision","recovery_attribution_command","
 
 it("private storage preserves every true and false conjunct and immutable first result",async()=>{
  const {p,document,command}=await storedAttributionFixture(f);
- const append=async(d:unknown,c:unknown,cause:string|null=null,source:string|null=null)=>asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,$4,$5) result",[d,LOCK_OWNER,c,cause,source]));
+ const append=async(d:unknown,c:unknown,cause:string|null=null,source:string|null=null)=>boundAttributionOwner(f,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,$4,$5) result",[d,LOCK_OWNER,c,cause,source]));
  const first=(await append(document,command)).rows[0].result;
  const changed=structuredClone(document) as any;
  changed.assessmentId=randomUUID();changed.revision=2;changed.previousAssessmentId=document.assessmentId;
@@ -20,7 +21,7 @@ it("private storage preserves every true and false conjunct and immutable first 
  recoveryAttributionRevisionV1.parse(changed);
  await append(changed,null,"evidence_invalidated","synthetic:invalidation");
  expect((await append(document,command)).rows[0].result).toEqual(first);
- const rows=await asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT document FROM app.recovery_attribution_revision WHERE tenant_id=$1 AND case_id=$2 ORDER BY revision",[p.tenantId,p.caseId]));
+ const rows=await boundAttributionOwner(f,p.tenantId,db=>db.query("SELECT document FROM app.recovery_attribution_revision WHERE tenant_id=$1 AND case_id=$2 ORDER BY revision",[p.tenantId,p.caseId]));
  expect(rows.rows.map(r=>r.document.facts.facts.evidence_received_before_lock.holds)).toEqual([true,false]);
  expect(rows.rows[0].document).toEqual(document);
  await expect(append(document,{...command,expectedCaseRevision:2})).rejects.toThrow("IDEMPOTENCY_CONFLICT");
@@ -42,9 +43,9 @@ it("SV6-21 runtime cannot bypass the checked attribution writer",async()=>{
 });
 it("storage mutation controls reject owner changes and detect removal of each immutability trigger",async()=>{
  const {p,document,command}=await storedAttributionFixture(f);
- await asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[document,LOCK_OWNER,command]));
+ await boundAttributionOwner(f,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[document,LOCK_OWNER,command]));
  for(const table of tables){
-  for(const sql of [`UPDATE app.${table} SET tenant_id=tenant_id`,`DELETE FROM app.${table}`,`TRUNCATE app.${table} CASCADE`]) await expect(asFixtureTenant(f.owner,p.tenantId,db=>db.query(sql))).rejects.toThrow("IMMUTABLE");
+  for(const sql of [`UPDATE app.${table} SET tenant_id=tenant_id`,`DELETE FROM app.${table}`,`TRUNCATE app.${table} CASCADE`]) await expect(boundAttributionOwner(f,p.tenantId,db=>db.query(sql))).rejects.toThrow("IMMUTABLE");
   const db=await f.admin.connect();
   try{await db.query("BEGIN");await db.query(`ALTER TABLE app.${table} DISABLE TRIGGER attribution_immutable`);await expect(db.query(`DELETE FROM app.${table} WHERE false`)).resolves.toBeDefined();}
   finally{await db.query("ROLLBACK");db.release();}
@@ -72,7 +73,7 @@ it("catalogue controls detect RLS and privilege mutations without weakening the 
 it("private storage refuses non synthetic envelopes, missing context and cross job subject links",async()=>{
  const {p,document,command}=await storedAttributionFixture(f);
  const other=await storedAttributionFixture(f,p.tenantId);
- const append=(d:unknown)=>asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[d,LOCK_OWNER,command]));
+ const append=(d:unknown)=>boundAttributionOwner(f,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[d,LOCK_OWNER,command]));
  for(const [key,value] of Object.entries({version:"forged.v1",environment:"production",productionEnabled:true,realExternalActions:1,attributionPolicyVersion:"forged",eligibilityPolicyVersion:"forged",tenantId:randomUUID()})){
   await expect(append({...document,[key]:value})).rejects.toThrow("FORBIDDEN");
  }
@@ -80,7 +81,7 @@ it("private storage refuses non synthetic envelopes, missing context and cross j
  for(const key of ["caseId","lineId","lockId"] as const){
   const forged={...document,[key]:other.document[key]};
   const forgedCommand={...command,[key]:other.document[key]};
-  await expect(asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[forged,LOCK_OWNER,forgedCommand]))).rejects.toThrow(/foreign key constraint/u);
+  await expect(boundAttributionOwner(f,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[forged,LOCK_OWNER,forgedCommand]))).rejects.toThrow(/foreign key constraint/u);
  }
 });
 
@@ -90,8 +91,8 @@ it.each(attributionPredicates)("private storage retains the false conjunct %s wi
  raw.facts.facts[predicate].holds=false;
  raw.assessmentOutcome="excluded";raw.reasonCodes=[predicate];
  const excluded=recoveryAttributionRevisionV1.parse(raw);
- await asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[excluded,LOCK_OWNER,command]));
- const row=(await asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT document FROM app.recovery_attribution_revision WHERE tenant_id=$1 AND id=$2",[p.tenantId,excluded.assessmentId]))).rows[0];
+ await boundAttributionOwner(f,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[excluded,LOCK_OWNER,command]));
+ const row=(await boundAttributionOwner(f,p.tenantId,db=>db.query("SELECT document FROM app.recovery_attribution_revision WHERE tenant_id=$1 AND id=$2",[p.tenantId,excluded.assessmentId]))).rows[0];
  expect(row.document).toEqual(excluded);
  expect(row.document.facts.facts[predicate].holds).toBe(false);
  expect(Object.keys(row.document.facts.facts)).toHaveLength(10);
@@ -101,7 +102,7 @@ it.each(attributionPredicates)("private storage retains the false conjunct %s wi
 // Setup uses the fixture owner; reads run as the actual non-owner runtime role.
 it.each(["cross-tenant", "no-session", "pre-lock"] as const)("runtime attribution reads fail closed: %s (including mutation Y control)",async scenario=>{
  const {p,document,command}=await storedAttributionFixture(f,"11111111-1111-4111-8111-111111111111");
- await asFixtureTenant(f.owner,p.tenantId,async db=>{
+ await boundAttributionOwner(f,p.tenantId,async db=>{
   await db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[document,LOCK_OWNER,command]);
   const assessmentId=randomUUID();
   const next=recoveryAttributionRevisionV1.parse({...document,assessmentId,revision:2,previousAssessmentId:document.assessmentId,
@@ -114,6 +115,7 @@ it.each(["cross-tenant", "no-session", "pre-lock"] as const)("runtime attributio
   SELECT 'd1500000-0000-4000-8000-000000000003',tenant_id,account_id,'d1500000-0000-4000-8000-000000000001','owner'
   FROM app.membership WHERE tenant_id=$1 AND id=$2 ON CONFLICT DO NOTHING`,[p.tenantId,LOCK_OWNER]);
  await f.admin.query("SELECT app.issue_practice_session($1)",[digest]);
+ const foreign=scenario==="cross-tenant" ? await seedAccount(f.admin) : undefined;
  const probe=async(mutationTable:string|null,positive=false)=>{
   const db=await f.admin.connect();
   try{
@@ -126,8 +128,10 @@ it.each(["cross-tenant", "no-session", "pre-lock"] as const)("runtime attributio
    await db.query("SET LOCAL session_replication_role='origin'");
    if(mutationTable)await db.query(`ALTER POLICY attribution_read ON app.${mutationTable} USING(true)`);
    await db.query("SET LOCAL ROLE jobguard_runtime");
+   if(!positive && foreign)await bindTestClient(f.admin,db,foreign.tenantId,LOCK_OWNER);
+   else if(positive || scenario!=="no-session")await db.query("SELECT app.bind_request('practice',$1,$2)",[digest,p.tenantId]);
    await db.query("SELECT set_config('app.tenant_id',$1,true),set_config('app.practice_material_digest',$2,true)",[
-    !positive && scenario==="cross-tenant" ? randomUUID() : p.tenantId,
+    !positive && foreign ? foreign.tenantId : p.tenantId,
     !positive && scenario==="no-session" ? "" : digest,
    ]);
    for(const table of tables){

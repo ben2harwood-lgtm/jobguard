@@ -25,14 +25,18 @@ describe("SV5PRE legacy final invoice gate", () => {
  it("[PRE-Q4-02] both invoice paths enforce pending failed and uncertified completion", async () => {
   const a=await seedAccount(f.admin),repo=await prepareLock(f,a); await repo.lock(a.context,a.input);
   const lock=(await f.admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0];
+  const recordStatus=(status:string)=>asFixtureTenant(f.shadow,a.tenantId,async db=>{
+   await db.query("SELECT app.lp11_bind_shadow_job($1,$2)",[a.tenantId,a.jobId]);
+   return db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,gen_random_uuid(),$4,$5::timestamptz,$3)",[a.tenantId,a.jobId,status,lock.id,lock.cutoff]);
+  });
   for(const status of [null,"pending","failed"] as const) {
-   if(status) await asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,gen_random_uuid(),$4,$5::timestamptz,$3)",[a.tenantId,a.jobId,status,lock.id,lock.cutoff]));
+   if(status) await recordStatus(status);
    const code=status==="failed"?"FINAL_CHECK_FAILED":"FINAL_CHECK_NOT_COMPLETE", c=input(a),before=await effects(a.tenantId);
    await expect(new GuardedPracticeInvoiceRepository(f.runtime).issue(a.context,c)).rejects.toMatchObject({code});
    for(const kind of ["final","supplementary"] as const) await expect(repo.issueInvoice(a.context,{...c,expectedSourceHash:LOCK_HASH,invoiceKind:kind})).rejects.toMatchObject({code});
    expect(await effects(a.tenantId)).toEqual(before);
   }
-  await expect(asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,gen_random_uuid(),$3,$4::timestamptz,'completed')",[a.tenantId,a.jobId,lock.id,lock.cutoff]))).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");
+  await expect(recordStatus("completed")).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");
  });
  it("[PRE-Q4-03] legacy final issue binds the authoritative empty-run completion", async () => {
   const a=await seedAccount(f.admin),repo=await prepareLock(f,a);await repo.lock(a.context,a.input); const check=await publishEmptyCompletion(f,a);

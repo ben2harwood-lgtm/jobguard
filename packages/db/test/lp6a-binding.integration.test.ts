@@ -109,7 +109,11 @@ it("keeps concurrent requests isolated and takes only a session SHARE row lock",
     const locks = (await c.query(`SELECT mode,relation::regclass::text rel FROM pg_locks l JOIN pg_class c ON c.oid=l.relation
       WHERE pid=pg_backend_pid() AND locktype='relation' AND c.relkind='r' AND mode IN ('RowShareLock','RowExclusiveLock')`)).rows;
     expect(locks.filter(r => r.mode === "RowShareLock").map(r => r.rel)).toEqual(["identity.session"]);
-    expect(locks.filter(r => r.mode === "RowExclusiveLock").map(r => r.rel)).toEqual(["control_plane.request_binding"]);
+    // Credential resolution writes and clears its private lookup scope in this
+    // transaction. PostgreSQL holds the relation lock even after that cleanup.
+    expect(locks.filter(r => r.mode === "RowExclusiveLock").map(r => r.rel).sort()).toEqual([
+      "control_plane.lp11_identity_scope", "control_plane.request_binding",
+    ]);
   })));
 });
 

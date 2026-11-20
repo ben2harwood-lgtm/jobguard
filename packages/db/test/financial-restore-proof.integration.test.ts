@@ -49,10 +49,7 @@ it("cold-restores the command-built fee chain through reversal/refund, reconcile
     shadow: phase.pool("restore_money_shadow", databaseName),
   });
   try {
-    const receipt = await runSyntheticRestoreRehearsal({ environment: "synthetic_demo" }, { ...database,
-      verifiedTenantContextFromMembership: (membership: Parameters<typeof database.verifiedTenantContextFromMembership>[0]) =>
-        testTenantContext(membership.tenantId,{membershipId:membership.membershipId}),
-    }, {
+    const receipt = await runSyntheticRestoreRehearsal({ environment: "synthetic_demo" }, database, {
       async beforeBackup(phase: RestorePhase) {
         await phase.admin.query(`CREATE DATABASE ${databaseName}`);
         const createLogin = (await phase.admin.query("SELECT format('CREATE ROLE restore_money_shadow LOGIN PASSWORD %L', $1::text) sql", [phase.admin.options.password])).rows[0].sql;

@@ -11,7 +11,7 @@ import { IdentityRepository } from "../src/identity-repository.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
 import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
 import { ActionExecutor, reconcileOutbox } from "../src/outbox.js";
-import { verifiedTenantContextForQueuedJob, withTenant } from "../src/tenant-context.js";
+import { verifiedTenantContextForQueuedJob, verifiedTenantContextFromMembership, withTenant, type AuthenticatedMembership } from "../src/tenant-context.js";
 
 let fixture: Awaited<ReturnType<typeof startLp0Database>>;
 let db: { owner: Pool; runtime: Pool; identity: Pool };
@@ -53,7 +53,8 @@ async function administration(a: Member, target: Member, role?: string) {
 const fixtureAuditIds = new Map<string, string>();
 async function assignContractorTrack(a: Member) {
   const id = randomUUID(), actorRef = "operations:lp7-fixture";
-  await withTenant(db.owner, verifiedTenantContextForQueuedJob(a.tenant), async tx => {
+  const context = verifiedTenantContextFromMembership({ tenantId:a.tenant, membershipId:a.member, identityUserId:a.person } as AuthenticatedMembership, { kind:"real",credential:a.digest });
+  await withTenant(db.owner, context, async tx => {
     await tx.$client.query("SET LOCAL ROLE jobguard_migration");
     await tx.$client.query("SELECT app.assign_commercial_track($1,$2,'contractor',$3,0,$4)", [a.tenant,id,`synthetic-agreement:${a.tenant}`,actorRef]);
     await appendAuditBatch(tx, [{id,version:"audit.v1",actorRef,eventType:"commercial_track.assigned",
@@ -186,7 +187,10 @@ it.each([undefined,"read_only"])("refuses pending invitations and queued owner s
   await enqueue(claimed);
   const operativeInvitation=randomUUID(), operativeChallenge=randomUUID();
   const operativeRecipient=`${randomUUID()}@fictional.invalid`;
-  await transaction(db.owner,b.tenant,c=>c.query("INSERT INTO identity.invitation(id,email,tenant_id,account_id,role,expires_at,issuer_user_id) VALUES($1,$2,$3,$4,'operative',clock_timestamp()+interval '1 hour',$5)",[operativeInvitation,operativeRecipient,b.tenant,b.account,b.person]));
+  await transaction(db.owner,b.tenant,async c=>{
+    await c.query("SELECT app.bind_request('real',$1,$2)",[b.digest,b.tenant]);
+    return c.query("INSERT INTO identity.invitation(id,email,tenant_id,account_id,role,expires_at,issuer_user_id) VALUES($1,$2,$3,$4,'operative',clock_timestamp()+interval '1 hour',$5)",[operativeInvitation,operativeRecipient,b.tenant,b.account,b.person]);
+  });
   let reached!:()=>void, finish!:(value:{kind:"outcome_unknown";code:string})=>void;
   const reachedAdapter=new Promise<void>(resolve=>{reached=resolve;});
   const outcome=new Promise<{kind:"outcome_unknown";code:string}>(resolve=>{finish=resolve;});
