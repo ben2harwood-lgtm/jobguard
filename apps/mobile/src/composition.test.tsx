@@ -24,12 +24,15 @@ import App from "../App";
 import { NativeComposition, type NativeCompositionInputs } from "./composition";
 import { CoreLoopScreen } from "./CoreLoopScreen";
 import { WorkspaceScreens } from "./WorkspaceScreens";
+import { ReconciliationScreen } from "./ReconciliationScreen";
 import { localData, type MobileSession, type Partition } from "./lifecycle-contracts";
 import { evaluateSyncDownloadV1, pageSyncDownloadV1, planSyncReconcileV1 } from "@jobguard/core";
 import type { NativeCoreSource } from "./core-loop-screens";
+import type { QueueReviewSource, QueueReviewTarget } from "./reconciliation-controller";
+import type { SavedQueueIntent } from "./durable-queue";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 let fixture = 0;
-function setup(hook?: (p: Partition) => Promise<void>, connect?: (p: Partition) => NonNullable<NativeCompositionInputs["downloadConnection"]>) {
+function setup(hook?: (p: Partition) => Promise<void>, connect?: (p: Partition) => NonNullable<NativeCompositionInputs["downloadConnection"]>, queue?: NativeCompositionInputs["queue"]) {
  const p = { userId: id(1), tenantId: id(2), membershipId: id(3), mobileSessionId: id(4), deviceInstanceId: `fictional-${++fixture}` };
  let bytes: string | null = null, n = 20;
  const keys = new Set<string>(), secure = new Map<string, string>();
@@ -48,7 +51,7 @@ function setup(hook?: (p: Partition) => Promise<void>, connect?: (p: Partition) 
   connectionId: id(7), refreshedConnectionId: id(7), current: snapshot, review: { action: "acceptQuote" as const, connectionId: id(7), snapshot } };
  const source: NativeCoreSource = { assertCurrent: vi.fn(async () => {}), load: vi.fn(async () => ({ partition: p, context,
   request: { screen: "acceptance_intent" as const, input: context } })) };
- const inputs: NativeCompositionInputs = { partition: p, store, source, ...(connect ? { downloadConnection: connect(p) } : {}), uuid: () => id(++n), online: false, authEpoch: 0,
+ const inputs: NativeCompositionInputs = { partition: p, store, source, ...(connect ? { downloadConnection: connect(p) } : {}), uuid: () => id(++n), online: false, authEpoch: 0, ...(queue ? { queue } : {}),
   lifecycle: { provider, vault, resources, options: { enabled: true, environment: "synthetic_demo", policy, uuid: () => id(++n), deviceInstanceId: p.deviceInstanceId,
    clock: () => ({ status: "trusted_fixture", nowMs: 1000 }), partitionKey: async () => p.deviceInstanceId, ...(hook ? { beforePartitionCleanup: hook } : {}) } } };
  const owner = new NativeComposition(inputs);
@@ -190,5 +193,77 @@ it("the shell's assigned-jobs control reads and refreshes the owning workspace t
   const offline = f.owner.updateAuthority({ online: false, authEpoch: 0 });
   expect(refresh(offline).props.disabled).toBe(true);
   await expect(binding.assignedJobs!.refresh()).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+ } finally { hooks.state = null; }
+});
+
+it.each([
+ ["send_quote", "STALE_REVISION", "Quote delivery"],
+ ["issue_invoice", "STALE_PRICE", "Customer invoice"],
+ ["place_order", "APPROVAL_EXPIRED", "Purchase order"],
+] as const)("loads the owning %s review from the saved command after %s", async (actionType, code, title) => {
+ const jobId = id(40), commandId = id(41);
+ const transport = { upload: vi.fn(async () => ({ version: "offline-upload-result.v1", commandId, state: "conflict", code, realExternalActions: 0 })) };
+ const reply = (partition: Partition, target: QueueReviewTarget) => ({ partition, target, context: {
+  version: "core-loop-action-context.v1", environment: "synthetic_demo", online: true, authorized: true,
+  connectionId: id(43), refreshedConnectionId: id(43),
+  current: { tenantId: partition.tenantId, jobId, subjectId: id(44), revision: 7, contentHash: "b".repeat(64) },
+  review: null,
+ } });
+ const load = vi.fn(async (partition: Partition, target: QueueReviewTarget, _original: SavedQueueIntent) => reply(partition, target));
+ const review = { load, open: vi.fn() } satisfies QueueReviewSource;
+ const sha256 = async (value: string) => Array.from(
+  new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))),
+  byte => byte.toString(16).padStart(2, "0"),
+ ).join("");
+ const f = setup(undefined, undefined, { hash: { sha256 }, transport, review });
+ await f.owner.client.exchange(f.p.tenantId);
+ const body = { version: "offline-commercial-intent.v1", commandId, expectedRevision: 2, acceptedQuoteVersionId: null,
+  authorizationId: id(45), actionType, recipient: "fictional@example.invalid", contentHash: "a".repeat(64),
+  amountPence: 100, currency: "GBP", policyVersion: "fictional.v1" };
+ const offline = f.owner.binding;
+ await offline.queue!.enqueue(jobId, body);
+ await expect(offline.queue!.views()).rejects.toThrow("MOBILE_DENIED");
+ const online = f.owner.updateAuthority({ online: true, authEpoch: 0 });
+ await expect(offline.queue!.enqueue(jobId, body)).rejects.toThrow("MOBILE_DENIED");
+
+ const render = () => {
+  hooks.index = 0;
+  const tree = nodes(WorkspaceScreens({ binding: online }));
+  const reconciliation = tree.find(row => row.type === ReconciliationScreen)!;
+  return [...tree, ...nodes(ReconciliationScreen(reconciliation.props as unknown as Parameters<typeof ReconciliationScreen>[0]))];
+ };
+ const press = async (title: string) => {
+  const button = render().find(row => row.props.title === title)!;
+  expect(button.props.disabled).toBe(false);
+  await (button.props.onPress as () => Promise<void>)();
+ };
+ hooks.state = [];
+ try {
+  await press("Retry one queued intent");
+  expect(render().some(row => row.props.children === code)).toBe(true);
+  expect(render().some(row => row.props.children === "stale")).toBe(true);
+  const saved = JSON.parse(f.bytes()!).queue;
+  await press("inspect saved intent");
+  expect(render().some(row => row.props.accessibilityLabel === "Original saved intent")).toBe(true);
+  expect(load).not.toHaveBeenCalled();
+  await press("review current snapshot");
+  expect(render().some(row => row.props.children === title)).toBe(true);
+  expect(load).toHaveBeenCalledExactlyOnceWith(f.p, { jobId, commandId, flow: actionType, purpose: "review_current_snapshot" }, { upload: saved[0].upload });
+  expect(review.open).toHaveBeenCalledExactlyOnceWith({
+   target: { jobId, commandId, flow: actionType, purpose: "review_current_snapshot" },
+   original: { upload: saved[0].upload },
+   current: reply(f.p, load.mock.calls[0]![1]).context.current,
+  });
+  expect(transport.upload).toHaveBeenCalledOnce();
+  expect(JSON.parse(f.bytes()!).queue).toEqual(saved);
+
+  load.mockImplementationOnce(async (partition, target) => ({
+   ...reply(partition, target), target: { ...target, jobId: id(99) },
+  }));
+  await press("review current snapshot");
+  expect(render().some(row => row.props.accessibilityLabel === "Current online review")).toBe(false);
+  expect(review.open).toHaveBeenCalledOnce();
+  expect(transport.upload).toHaveBeenCalledOnce();
+  expect(JSON.parse(f.bytes()!).queue).toEqual(saved);
  } finally { hooks.state = null; }
 });

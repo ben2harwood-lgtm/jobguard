@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { offlineUploadV1, offlineUploadBodyV1, offlineReconciliationV1, offlineReconciliationViewV1,
+import { offlineUploadV1, offlineUploadBodyV1, offlineReconciliationViewV1,
  reconcileOfflineResultV1, addOfflineQueueItemV1, chooseOfflineQueueItemV1, restoreOfflineQueueV1, parseOfflineIntentV1 } from "@jobguard/core";
 import { WorkspaceDocument, type NativeAuthority } from "./workspace-document";
 import { MobileClientError, nativeQueueEntryV1 } from "./lifecycle-contracts";
@@ -7,11 +7,18 @@ import type { HashPort } from "./sync";
 const entry = nativeQueueEntryV1;
 type Entry = z.infer<typeof entry>;
 export type NativeReconciliationRow = ReturnType<typeof offlineReconciliationViewV1> & { commandId: string | null; jobId: string | null };
+export type SavedQueueIntent = Pick<Entry, "upload" | "offlineIntent">;
+export type QueueChoice = NativeReconciliationRow["choices"][number];
 export interface NativeQueueTransport { upload(raw: unknown): Promise<unknown> }
-/** Full original envelopes stay encrypted; reconciliation exposes metadata only. One owner per document. */
+function choices(value: Entry): readonly QueueChoice[] {
+ const offered = offlineReconciliationViewV1(value.reconciliation).choices;
+ return offered.length && !offered.includes("inspect_saved_intent") ? [...offered, "inspect_saved_intent"] : offered;
+}
+/** One owner per document. Original envelopes are only disclosed on explicit, authorized inspection. */
 export class DurableNativeQueue {
  constructor(private readonly document: WorkspaceDocument, private readonly authority: NativeAuthority,
-  private readonly transport: NativeQueueTransport, private readonly hash: HashPort) {}
+  private readonly transport: NativeQueueTransport, private readonly hash: HashPort,
+  private readonly assertOwner: () => void = () => {}) {}
  private async authorize() { try { await this.authority.assertCurrent(this.document.partition); } catch { throw new MobileClientError("MOBILE_DENIED"); } }
  private async checked(raw: unknown): Promise<Entry | null> {
   const parsed = entry.safeParse(raw); if (!parsed.success) return null;
@@ -43,6 +50,7 @@ export class DurableNativeQueue {
  }
  enqueueNote(raw: unknown): Promise<void> { const intent = parseOfflineIntentV1(raw); return this.enqueue(intent.jobId, intent.body, intent); }
  async enqueue(jobId: string, body: unknown, offlineIntent?: ReturnType<typeof parseOfflineIntentV1>): Promise<void> {
+  this.assertOwner();
   const boundary = offlineUploadBodyV1.safeParse(body); if (!boundary.success) throw new MobileClientError("MOBILE_DENIED");
   const parsed = boundary.data;
   const upload = offlineUploadV1.parse({ version: "offline-upload.v1", jobId, body: parsed, commandId: parsed.commandId,
@@ -57,34 +65,67 @@ export class DurableNativeQueue {
    const previous = valid.find(v => v.upload.commandId === upload.commandId);
    if (previous && JSON.stringify(previous.offlineIntent ?? null) !== JSON.stringify(offlineIntent ?? null)) throw new Error("original metadata conflict");
    const exists = previous !== undefined;
+   this.assertOwner();
    return { data: { ...data, unsyncedWork: "present" as const, queue: exists ? data.queue : [...data.queue, { upload, ...(offlineIntent ? { offlineIntent } : {}), reconciliation: { version: "offline-reconciliation.v1", item, reason: null } }] }, result: undefined };
   });
  }
- restore() { return this.document.transaction(async data => ({ data: { ...data, queue: await this.restoreEntries(data.queue) }, result: undefined })); }
+ restore() {
+  this.assertOwner();
+  return this.document.transaction(async data => {
+   const queue = await this.restoreEntries(data.queue);
+   this.assertOwner();
+   return { data: { ...data, queue }, result: undefined };
+  });
+ }
  async flushOne(nowMs: number) {
   await this.authorize();
   return this.document.transaction(async (data, checkpoint) => {
    const restoredQueue = await this.restoreEntries(data.queue);
    const valid = (await Promise.all(restoredQueue.map(v => this.checked(v)))).filter((v): v is Entry => v !== null);
    const claim = chooseOfflineQueueItemV1(valid.map(v => v.reconciliation.item), nowMs);
+   this.assertOwner();
    if (!claim.next) return { data: { ...data, queue: restoredQueue }, result: null };
    const selected = valid.find(v => v.upload.commandId === claim.next!.commandId)!;
    const queue = restoredQueue.map(v => { const parsed = entry.safeParse(v); return parsed.success && parsed.data.upload.commandId === selected.upload.commandId
     ? { ...parsed.data, reconciliation: { ...parsed.data.reconciliation, item: claim.next! } } : v; });
+   await this.authorize();
    await checkpoint({ ...data, queue });
    let response: unknown;
    try { response = await this.transport.upload(selected.upload); }
-   catch { response = { version: "offline-upload-result.v1", commandId: selected.upload.commandId, state: "retryable", code: "UNAVAILABLE", realExternalActions: 0 }; }
+   catch (error) {
+    if (error instanceof MobileClientError) throw error;
+    response = { version: "offline-upload-result.v1", commandId: selected.upload.commandId, state: "retryable", code: "UNAVAILABLE", realExternalActions: 0 };
+   }
    const reconciliation = reconcileOfflineResultV1({ ...selected.reconciliation, item: claim.next }, response, nowMs);
    const next = queue.map(v => { const parsed = entry.safeParse(v); return parsed.success && parsed.data.upload.commandId === selected.upload.commandId ? { ...parsed.data, reconciliation } : v; });
    return { data: { ...data, queue: next }, result: offlineReconciliationViewV1(reconciliation) };
   });
  }
+ async savedIntent(commandId: string | null, choice: QueueChoice): Promise<SavedQueueIntent | null> {
+  return this.document.transaction(async data => {
+   const matches = data.queue.filter(value => {
+    if (!value || typeof value !== "object" || !("upload" in value)) return false;
+    const upload = value.upload;
+    return upload && typeof upload === "object" && "commandId" in upload && upload.commandId === commandId;
+   });
+   const value = matches.length === 1 ? await this.checked(matches[0]) : null;
+   await this.authorize();
+   if (!value) {
+    if (choice !== "inspect_saved_intent") throw new MobileClientError("MOBILE_DENIED");
+    return { data, result: null };
+   }
+   if (!choices(value).includes(choice)) throw new MobileClientError("MOBILE_DENIED");
+   return { data, result: { upload: value.upload, ...(value.offlineIntent ? { offlineIntent: value.offlineIntent } : {}) } };
+  });
+ }
  async views(): Promise<NativeReconciliationRow[]> {
-  await this.authorize();
-  return this.document.transaction(async data => ({ data, result: await Promise.all(data.queue.map(async raw => {
-   const value = await this.checked(raw); return value ? { ...offlineReconciliationViewV1(value.reconciliation), commandId: value.upload.commandId, jobId: value.upload.jobId }
-    : { commandId: null, jobId: null, state: "needs_review" as const, reason: "INVALID_INTENT" as const, choices: ["inspect_saved_intent"] as const, requiresOnlineValidation: true, automaticCommercialActions: false };
-  })) }));
+  return this.document.transaction(async data => {
+   const result = await Promise.all(data.queue.map(async raw => {
+    const value = await this.checked(raw); return value ? { ...offlineReconciliationViewV1(value.reconciliation), choices: choices(value), commandId: value.upload.commandId, jobId: value.upload.jobId }
+     : { commandId: null, jobId: null, state: "needs_review" as const, reason: "INVALID_INTENT" as const, choices: ["inspect_saved_intent"] as const, requiresOnlineValidation: true, automaticCommercialActions: false as const };
+   }));
+   await this.authorize();
+   return { data, result };
+  });
  }
 }

@@ -129,3 +129,9 @@ The workspace owner can inject the synthetic channel and supply the existing mob
 The client checkpoints pending exchanges, keeps the scoped token in memory, and completes all pages before showing the refreshed list. On restart it resumes an interrupted cursor only under the same server generation and schema. A stale subscription applies the existing cleanup obligations before resubscription. A tenant switch or cleanup advances the owning workspace authority and invalidates the old document. Offline assigned-job reads remain closed.
 
 The connected journey uses fictional tenants and real PostgreSQL. Its storage seam simulates native storage, so device encryption, persistence and erasure remain to be verified. PowerSync provider and region acceptance, D08, G3, production native authentication, physical-device proof, release and independent RED review remain held.
+
+### M3-4 native queue connection
+
+Branch `codex/sandbox/m3-4-native-queue-connection`, based on `8f663eec18ac6eb463d6f4f7b4f5391fb4758a41`. The synthetic workspace binds the durable queue to its one partition document, authority generation and injected authenticated transport. The contractor note route remains separate from the small-builder upload route. Reconciliation inspects the original verified envelope and requests the exact owning online review after a fresh scoped read. Navigation carries the original identity and creates no approval or commercial effect.
+
+The loopback regression uses the existing issued practice session with the non-owner runtime pool and real PostgreSQL. Its store is a double. Native SQLCipher durability, physical kill/restart, reinstall, independent RED review and integration in M3-3 → M3-4 → M3-5 order remain outstanding. D08, G3, production authentication, real providers, device acceptance and release remain closed.

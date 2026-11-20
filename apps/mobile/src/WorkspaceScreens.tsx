@@ -2,7 +2,8 @@ import React, { useRef, useState } from "react";
 import { View, Text, TextInput, Button, ScrollView } from "react-native";
 import type { Partition } from "./lifecycle-contracts";
 import { nativeCoreScreens, type NativeCoreLoopScreens, type LoadedCoreScreen, type nativeReviewChoice } from "./core-loop-screens";
-import type { DurableNativeQueue } from "./durable-queue";
+import type { DurableNativeQueue, QueueChoice } from "./durable-queue";
+import type { QueueSelection } from "./reconciliation-controller";
 import type { NativeDownloads } from "./download";
 import type { NativeCaptures } from "./capture";
 import { CoreLoopScreen } from "./CoreLoopScreen";
@@ -16,20 +17,21 @@ export interface NativeWorkspaceBindings {
  assignedJobs?: Pick<NativeDownloads, "refresh">;
  core?: NativeCoreLoopScreens; queue?: DurableNativeQueue; captures?: NativeCaptures;
  onReview?(choice: ReturnType<typeof nativeReviewChoice>): void;
- onReconcileChoice?(commandId: string | null, choice: string): void;
+ onReconcileChoice?(commandId: string | null, choice: QueueChoice): Promise<QueueSelection>;
 }
 /** Remount this owner-scoped component on user/tenant/session/generation change. No default provider. */
 export function WorkspaceScreens({ binding }: { binding: NativeWorkspaceBindings }) {
  const [screen, setScreen] = useState<LoadedCoreScreen | null>(null);
  const [assigned, setAssigned] = useState<Awaited<ReturnType<NativeDownloads["refresh"]>> | null>(null);
  const [queue, setQueue] = useState<Awaited<ReturnType<DurableNativeQueue["views"]>>>([]);
+ const [selection, setSelection] = useState<QueueSelection | null>(null);
  const [captures, setCaptures] = useState<Awaited<ReturnType<NativeCaptures["views"]>>>([]);
  const [draft, setDraft] = useState("Fictional "); const [job, setJob] = useState("");
  const [status, setStatus] = useState("Synthetic native adapters only"); const [busy, setBusy] = useState(false); const lock = useRef(false);
  async function run(work: () => Promise<void>) {
   if (lock.current) return; lock.current = true; setBusy(true);
   try { await work(); }
-  catch { setScreen(null); setQueue([]); setCaptures([]); setStatus("Held: current authority, encrypted storage or review is required."); }
+  catch { setScreen(null); setQueue([]); setSelection(null); setCaptures([]); setStatus("Held: current authority, encrypted storage or review is required."); }
   finally { lock.current = false; setBusy(false); }
  }
  return <ScrollView accessibilityLabel="Native shared workflows"><Text accessibilityRole="header">Synthetic field workflows</Text>
@@ -39,10 +41,23 @@ export function WorkspaceScreens({ binding }: { binding: NativeWorkspaceBindings
   {screen && binding.online ? <CoreLoopScreen screen={screen} online={binding.online} onReview={choice => {
    if (binding.onReview) binding.onReview(choice); else setStatus("The owning online review workflow is not connected.");
   }} /> : null}
-  <Button title="Review queued commands" disabled={busy || !binding.online || !binding.queue} onPress={() => binding.queue && void run(async () => { setQueue(await binding.queue!.views()); })} />
-  <Button title="Retry one queued intent" disabled={busy || !binding.online || !binding.queue} onPress={() => binding.queue && void run(async () => { await binding.queue!.flushOne(Date.now()); setQueue(await binding.queue!.views()); })} />
-  <ReconciliationScreen rows={queue} online={binding.online} onChoice={(commandId, choice) => {
-   if (binding.onReconcileChoice) binding.onReconcileChoice(commandId, choice); else setStatus("Keep the original intent pending; the owning online review is not connected.");
+  <Button title="Review queued commands" disabled={busy || !binding.online || !binding.queue} onPress={() => binding.queue && run(async () => {
+   setSelection(null); await binding.queue!.restore(); setQueue(await binding.queue!.views());
+  })} />
+  <Button title="Retry one queued intent" disabled={busy || !binding.online || !binding.queue} onPress={() => binding.queue && run(async () => {
+   setSelection(null);
+   const result = await binding.queue!.flushOne(Date.now());
+   try { setQueue(await binding.queue!.views()); }
+   catch (error) {
+    if (result?.reason !== "PERMISSION_REVOKED") throw error;
+    setScreen(null); setQueue([]); setCaptures([]);
+    setStatus("Permission was revoked. The original intent stays pending.");
+   }
+  })} />
+  <ReconciliationScreen rows={queue} online={binding.online} selection={selection} busy={busy} onChoice={(commandId, choice) => {
+   const reconcile = binding.onReconcileChoice;
+   if (reconcile) return run(async () => { setSelection(null); setSelection(await reconcile(commandId, choice)); });
+   setStatus("The owning online review is unavailable. The original intent stays pending.");
   }} />
   <TextInput accessibilityLabel="Fictional capture job UUID" value={job} onChangeText={setJob} autoCapitalize="none" autoCorrect={false} />
   <CaptureScreen online={binding.online} draft={draft} onDraft={setDraft} rows={captures}
