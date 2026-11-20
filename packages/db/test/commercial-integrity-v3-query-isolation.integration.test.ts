@@ -115,8 +115,18 @@ it("concurrent family/source reads hold no writer locks while jobs and sessions 
   expect((await writer.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$2,'Fictional concurrent capture',$3,'capture') RETURNING id",[randomUUID(),tenant,f.auth.digest])).rowCount).toBe(1);
   const waits=await f.admin.query("SELECT pid,wait_event FROM pg_stat_activity WHERE pid=ANY($1::int[]) AND wait_event_type='Lock'",[pids]);
   expect(waits.rows).toEqual([]);
-  const locks=await f.admin.query("SELECT locktype,mode,granted FROM pg_locks WHERE pid=ANY($1::int[]) AND (NOT granted OR locktype IN ('tuple','transactionid') OR (relation IS NOT NULL AND mode<>'AccessShareLock'))",[pids]);
-  expect(locks.rows).toEqual([]);
+  const locks=await f.admin.query(`SELECT pid,rel.oid::regclass::text relation,locktype,mode,granted
+   FROM pg_locks l LEFT JOIN pg_class rel ON rel.oid=l.relation
+   WHERE pid=ANY($1::int[]) AND (NOT granted OR locktype IN ('tuple','transactionid') OR (l.relation IS NOT NULL AND mode<>'AccessShareLock'))
+   ORDER BY pid,relation NULLS LAST,locktype,mode`,[pids]);
+  // Binding writes only the private credential lookup and transaction stores
+  // before sealing READ ONLY. Keep the exact list so any business or credential
+  // row lock, stronger relation lock, or waiting transaction still fails.
+  expect(locks.rows).toEqual([...pids].sort((a,b)=>a-b).flatMap(pid=>[
+   ...["control_plane.lp11_identity_scope","control_plane.lp11_identity_scope_pkey","control_plane.request_binding"]
+    .map(relation=>({pid,relation,locktype:"relation",mode:"RowExclusiveLock",granted:true})),
+   {pid,relation:null,locktype:"transactionid",mode:"ExclusiveLock",granted:true},
+  ]));
   release();await reads;
  }finally{
   if(timer)clearTimeout(timer);release();await writer.query("ROLLBACK");

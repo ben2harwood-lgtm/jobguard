@@ -110,6 +110,11 @@ it("fresh installation retains forced RLS and narrow acceptance privileges",asyn
  try {
   expect((await fresh.admin.query("SELECT has_table_privilege('jobguard_runtime','app.final_check_terms_acceptance','SELECT') read, has_table_privilege('jobguard_runtime','app.final_check_terms_acceptance','INSERT') write, has_table_privilege('jobguard_runtime','control_plane.request_binding','SELECT') binding")).rows).toEqual([{read:true,write:false,binding:false}]);
   expect((await fresh.admin.query("SELECT has_function_privilege('jobguard_runtime','app.final_check_runtime_job_terms(uuid,text)','EXECUTE') runtime, EXISTS(SELECT 1 FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE p.oid='app.final_check_runtime_job_terms(uuid,text)'::regprocedure AND acl.grantee=0 AND acl.privilege_type='EXECUTE') public, has_function_privilege('jobguard_runtime','app.final_check_job_terms(uuid,uuid,text,timestamp with time zone)','EXECUTE') private_terms, has_function_privilege('jobguard_runtime','app.final_check_job_scope(uuid,uuid)','EXECUTE') private_scope")).rows).toEqual([{runtime:true,public:false,private_terms:false,private_scope:false}]);
-  expect((await fresh.admin.query("SELECT policyname,permissive FROM pg_policies WHERE schemaname='app' AND tablename='final_check_terms_acceptance' ORDER BY policyname")).rows).toEqual([{policyname:"firm_read",permissive:"RESTRICTIVE"},{policyname:"tenant_isolation",permissive:"PERMISSIVE"}]);
+  expect((await fresh.admin.query("SELECT policyname,permissive,roles::text[] FROM pg_policies WHERE schemaname='app' AND tablename='final_check_terms_acceptance' ORDER BY policyname")).rows).toEqual([
+   {policyname:"firm_read",permissive:"RESTRICTIVE",roles:["jobguard_runtime"]},
+   {policyname:"lp11_observation_reader",permissive:"PERMISSIVE",roles:["jobguard_migration","jobguard_runtime"]},
+   {policyname:"lp11_shadow_terms_lookup",permissive:"PERMISSIVE",roles:["jobguard_migration"]},
+   {policyname:"tenant_isolation",permissive:"PERMISSIVE",roles:["jobguard_migration","jobguard_runtime"]},
+  ]);
  } finally { await fresh.close(); }
 },240_000);

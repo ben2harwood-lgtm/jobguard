@@ -4,7 +4,7 @@ import { beforeAll,afterAll,it,expect } from "vitest";
 import { canonicalCommercialIntegritySnapshot } from "@jobguard/core";
 import { CommercialIntegrityV3Repository } from "../src/commercial-integrity-v3-repository.js";
 import { FinalCheckRepository } from "../src/final-check-repository.js";
-import { createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,insertFinalCheckEvidence,finalCheckProposal,finalCheckTenant,FINAL_CHECK_ACTOR,FINAL_CHECK_USER,type FinalCheckFixture,type FinalCheckJob } from "./final-check-fixture.js";
+import { createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,insertFinalCheckEvidence,finalCheckProposal,finalCheckShadowJob,finalCheckTenant,FINAL_CHECK_ACTOR,FINAL_CHECK_USER,type FinalCheckFixture,type FinalCheckJob } from "./final-check-fixture.js";
 let f:FinalCheckFixture;
 beforeAll(async()=>{f=await createFinalCheckFixture();process.env.JOBGUARD_ENV="synthetic_demo";},120000);
 const previous=process.env.JOBGUARD_ENV;
@@ -116,7 +116,7 @@ async function invoicedCatch(x:Awaited<ReturnType<typeof published>>){
  // The shadow worker cannot read ordinary lock rows. Supply the exact immutable
  // cutoff read by the fixture admin; the worker trigger independently verifies it.
  const lock=(await f.admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0];
- await finalCheckTenant(f.shadow,a.tenantId,db=>db.query(`INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status,run_id)
+ await finalCheckShadowJob(f.shadow,a.tenantId,a.jobId,db=>db.query(`INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status,run_id)
   VALUES($1,$2,$3,$4,$5::timestamptz,'completed',$6)`,[a.tenantId,a.jobId,randomUUID(),lock.id,lock.cutoff,x.runId]));
  const main=await invoices.issueInvoice(a.context,input);
  const confirmed=await new FinalCheckRepository(f.runtime).confirmCatch(a.context,a.jobId,a.digest,{version:"final-check.catch.v1",commandId:randomUUID(),lockId:x.lockId,runId:x.runId,signalId:x.signal,expectedSignalRevision:1}) as {variationId:string};

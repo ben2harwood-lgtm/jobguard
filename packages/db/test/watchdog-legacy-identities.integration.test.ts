@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appendAuditBatch, claimCommandIdentity, withTenant, type TenantTransaction, type WatchdogCommandType } from "../src/index.js";
 import { createWatchdogHarness } from "./watchdog-command-harness.js";
+import { bindTestClient } from "./tenant-context-test-utils.js";
 
 // CH-2 upgrade rule for command ids: an id that the previous schema persisted belongs to the command that persisted it, so no OTHER
 // kind of watchdog command may claim it, before or after that command's own first replay. The previous schema is reproduced exactly:
@@ -122,6 +123,7 @@ describe("previous-schema writers and claimed ids", () => {
     const client = await h.admin.connect();
     try {
       await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+      await bindTestClient(h.admin, client, h.tenant, h.member);
       await claimCommandIdentity({ $client: client } as unknown as TenantTransaction, { tenantId: h.tenant, commandId, jobId: job, kind, requestHash: hash });
       return client;
     } catch (error) { await client.query("ROLLBACK"); client.release(); throw error; }
@@ -151,6 +153,7 @@ describe("previous-schema writers and claimed ids", () => {
       const client = await h.admin.connect();
       try {
         await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+        await bindTestClient(h.admin, client, h.tenant, h.member);
         await pretend(client);
         await expect(legacySeed(client, completed, laterJob)).rejects.toMatchObject({ code: "23505" });
       } finally { await client.query("ROLLBACK"); client.release(); }
@@ -174,17 +177,25 @@ describe("previous-schema writers and claimed ids", () => {
     // The claim holds the id: the previous-schema write must conflict immediately, without waiting for commit.
     const first = randomUUID(), holder = await claimOpen(first, job, "readiness.record"), legacy = { done: false };
     const write = settle(legacySeed(h.admin, first, job)).finally(() => { legacy.done = true; });
-    expect(await stillWaiting(legacy)).toBe(false);
-    await holder.query("COMMIT"); holder.release();
+    try {
+      expect(await stillWaiting(legacy)).toBe(false);
+      await holder.query("COMMIT");
+    } finally { await holder.query("ROLLBACK"); holder.release(); }
     expect(await write).toBe("conflict");
     // The previous-schema write holds the id: the claim waits for it, then finds the id owned and conflicts.
     const second = randomUUID(), writer = await h.admin.connect(), claimed = { done: false };
-    await writer.query("BEGIN"); await legacySeed(writer, second, job);
-    const claiming = settle(claim(second, job, "readiness.record")).finally(() => { claimed.done = true; });
-    expect(await stillWaiting(claimed)).toBe(true);
-    await writer.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [h.tenant, second]);
-    await writer.query("COMMIT"); writer.release();
-    expect(await claiming).toBe("conflict");
+    let claiming: ReturnType<typeof settle> | undefined;
+    try {
+      await writer.query("BEGIN");
+      await bindTestClient(h.admin, writer, h.tenant, h.member);
+      await writer.query("SELECT set_config('app.tenant_id',$1,true)", [h.tenant]);
+      await legacySeed(writer, second, job);
+      claiming = settle(claim(second, job, "readiness.record")).finally(() => { claimed.done = true; });
+      expect(await stillWaiting(claimed)).toBe(true);
+      await writer.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2", [h.tenant, second]);
+      await writer.query("COMMIT");
+      expect(await claiming).toBe("conflict");
+    } finally { await writer.query("ROLLBACK"); writer.release(); await claiming; }
   });
 
   // Replay the preceding ReadinessRepository.record statement order, as the real runtime role:

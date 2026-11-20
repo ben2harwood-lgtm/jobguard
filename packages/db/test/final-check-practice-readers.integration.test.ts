@@ -51,7 +51,7 @@ it("processes the merchant recovery inventory before allowing an invoice and pre
   for (const [expectedRevision,fixtureId] of (["materials-B-delivery","materials-320-invoice","materials-B-credit"] as const).entries())
     await supplier.intake(a.context,a.jobId,{version:"supplier-document-intake.v1",commandId:randomUUID(),fixtureId,channel:"picker",expectedRevision});
   await a.lock();
-  await expect(finalCheckTenant(f.admin,a.tenantId,db=>db.query("SELECT * FROM app.require_authoritative_final_check($1,$2)",[a.tenantId,a.jobId]))).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");
+  await expect(finalCheckTenant(f.admin,a.tenantId,db=>db.query("SELECT * FROM app.require_authoritative_final_check($1,$2)",[a.tenantId,a.jobId]),{practiceDigest:a.digest})).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");
   const repo = new FinalCheckRepository(f.shadow), manifest = await repo.begin(a.workerContext,a.jobId);
   expect(manifest.sources.filter(s=>s.sourceKind==="unlinked_supplier_version")).toHaveLength(3);
   expect(manifest.sources.filter(s=>s.sourceKind==="unlinked_purchase_order")).toHaveLength(1);
@@ -60,7 +60,7 @@ it("processes the merchant recovery inventory before allowing an invoice and pre
   const checkId = randomUUID(), completion = new FinalCheckCompletionRepository(f.shadow);
   for (let replay=0;replay<2;replay++)
     await completion.publish(a.workerContext,{version:"final-check-publication.v1",jobId:a.jobId,runId:result.runId,checkId});
-  expect((await finalCheckTenant(f.admin,a.tenantId,db=>db.query("SELECT * FROM app.require_authoritative_final_check($1,$2)",[a.tenantId,a.jobId]))).rows)
+  expect((await finalCheckTenant(f.admin,a.tenantId,db=>db.query("SELECT * FROM app.require_authoritative_final_check($1,$2)",[a.tenantId,a.jobId]),{practiceDigest:a.digest})).rows)
     .toEqual([{complete:true,check_id:checkId,run_id:result.runId,lock_id:manifest.lockId}]);
   expect(await worker().execute(a.workerContext,{version:"final-check.task.v1",jobId:a.jobId,manifestId:manifest.id})).toMatchObject({runId:result.runId});
 });

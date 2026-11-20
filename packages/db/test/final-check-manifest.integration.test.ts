@@ -64,7 +64,7 @@ it.each(['rejected','expired'] as const)("C204 %s pre-lock upload is audited, ex
  expect(await worker.reconcile(a.workerContext,a.jobId,m.id,[])).toEqual(result);
  await new FinalCheckCompletionRepository(f.shadow).publish(a.workerContext,{version:'final-check-publication.v1',jobId:a.jobId,runId:result.runId,checkId:randomUUID()});
  expect((await builder.read(a.context,a.jobId,a.digest)).state).toBe('completed');
- expect((await finalCheckTenant(f.admin,a.tenantId,db=>db.query('SELECT * FROM app.require_authoritative_final_check($1,$2)',[a.tenantId,a.jobId]))).rows[0].complete).toBe(true);
+ expect((await finalCheckTenant(f.admin,a.tenantId,db=>db.query('SELECT * FROM app.require_authoritative_final_check($1,$2)',[a.tenantId,a.jobId]),{practiceDigest:a.digest})).rows[0].complete).toBe(true);
  const events=(await f.admin.query("SELECT payload FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='final_check.sources_excluded'",[a.tenantId,a.jobId])).rows;
  await assertLp4SealedEvents(f.admin, a.tenantId, "final_check.sources_excluded");
  await assertLp4SealedEvents(f.admin, a.tenantId, "final_check.completed");
@@ -100,9 +100,16 @@ it('C241b expiry between freezes and later upload state changes follow exactly t
  await finalCheckTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET expires_at=clock_timestamp()+interval '1 day' WHERE tenant_id=$1 AND id=$2",[a.tenantId,upload]));
  // Deterministically cross expiry immediately before 0204's inventory trigger.
  // No sleeps: this runs after old 0205 begin's independent SELECT would have run.
- await f.admin.query(`CREATE FUNCTION app.c241_test_expiry() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
-  IF NEW.job_id='${a.jobId}'::uuid THEN UPDATE app.evidence_upload SET expires_at=clock_timestamp()-interval '1 hour' WHERE tenant_id=NEW.tenant_id AND id='${upload}'::uuid; END IF;
+ await f.admin.query(`CREATE FUNCTION app.c241_test_expiry() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+ DECLARE prior text:=current_setting('session_replication_role');
+ BEGIN
+  IF (NEW.tenant_id,NEW.job_id)=('${a.tenantId}'::uuid,'${a.jobId}'::uuid) THEN
+   PERFORM set_config('session_replication_role','replica',true);
+   UPDATE app.evidence_upload SET expires_at=clock_timestamp()-interval '1 hour' WHERE tenant_id=NEW.tenant_id AND id='${upload}'::uuid;
+   PERFORM set_config('session_replication_role',prior,true);
+  END IF;
   RETURN NEW; END $$;
+  REVOKE ALL ON FUNCTION app.c241_test_expiry() FROM PUBLIC;
   CREATE TRIGGER a_c241_test_expiry BEFORE INSERT ON app.final_check_manifest FOR EACH ROW EXECUTE FUNCTION app.c241_test_expiry()`);
  try {
   const worker=new FinalCheckRepository(f.shadow),m=await worker.begin(a.workerContext,a.jobId);

@@ -21,7 +21,7 @@ import {PracticeFeedRepository} from "../src/practice-feed-repository.js";
 import {PracticeInvoiceRepository} from "../src/practice-invoice-repository.js";
 import {withTenant} from "../src/tenant-context.js";
 import {testTenantContext, testBoundTenantContext} from "./tenant-context-test-utils.js";
-import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,type FinalCheckFixture} from "./final-check-fixture.js";
+import {createFinalCheckFixture,closeFinalCheckFixture,finalCheckTenant,finalCheckShadowJob,type FinalCheckFixture} from "./final-check-fixture.js";
 import {pngBytes} from "./site-extra-evidence-fixtures.js";
 // LP-6d: guarded practice reads run inside the practice session's own bound request.
 const bindPractice=(db:{query:(sql:string,values?:unknown[])=>Promise<unknown>},digest:string,tenant:string)=>db.query("SELECT app.bind_request('practice',$1,$2)",[digest,tenant]);
@@ -79,7 +79,7 @@ async function combinedReceiptFixture(f:FinalCheckFixture,lateCatch=false){
  const readBeforeLock=()=>finalCheckTenant(f.runtime,DEMO_TENANT_ID,async db=>{await bindPractice(db,auth.digest,DEMO_TENANT_ID);return (await db.query("SELECT app.read_value_job($1,$2) result",[jobId,auth.digest])).rows[0].result;});
  expect(await readBeforeLock()).toBeNull();
  const signals=[randomUUID(),randomUUID()];
- for(const [index,signalId] of signals.entries())await finalCheckTenant(f.shadow,DEMO_TENANT_ID,async db=>{
+ for(const [index,signalId] of signals.entries())await finalCheckShadowJob(f.shadow,DEMO_TENANT_ID,jobId,async db=>{
   await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),$5,'low','held_for_final_check')",[DEMO_TENANT_ID,jobId,signalId,workIds[index],"Fictional catch"]);
   const e=(await f.admin.query("SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",[DEMO_TENANT_ID,evidence])).rows[0];
   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[DEMO_TENANT_ID,jobId,signalId,evidence,e.object_version_id,e.sha256,e.received]);

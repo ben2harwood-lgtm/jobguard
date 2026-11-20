@@ -5,8 +5,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
-import { ContractorRepository, WorkOrderRepository, prepareWorkOrderDemo, demoRow, demoFile, MIGRATION_URLS, migrate, withTenant, appendAuditBatch, derivedUuid, sha256Hex, type TenantTransaction, type AuthenticatedMembership, type WorkOrderDemo } from "../src/index.js";
+import { Pool, type PoolConfig } from "pg";
+import { ContractorRepository, WorkOrderRepository, prepareWorkOrderDemo, demoRow, demoFile, MIGRATION_URLS, migrate, withTenant, appendAuditBatch, derivedUuid, sha256Hex, type TenantTransaction, type AuthenticatedMembership, type VerifiedTenantContext, type WorkOrderDemo } from "../src/index.js";
 import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { freePort, closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 export const newTables = ["extra_event", "extra_duplicate_link", "extra_order_line_link"];
@@ -15,11 +15,17 @@ export const noteCanary = "Fictional note ENT4B-canary";
 export const descriptionCanary = "Fictional description ENT4B-canary";
 export async function cluster(beforeOwn = false, database = "jobguard_synthetic_demo") {
  const dir = await mkdtemp(join(tmpdir(), "jg-ent4b-")), port = await freePort(58800, 400);
+ const disconnected: Promise<void>[] = [];
+ const trackedPool = (options: PoolConfig) => {
+  const pool = new Pool(options);
+  pool.on("connect", client => disconnected.push(new Promise(resolve => client.once("end", resolve))));
+  return pool;
+ };
  const postgres = new EmbeddedPostgres({ databaseDir: dir, port, user: "postgres", password: "synthetic", persistent: false, createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
  await postgres.initialise(); await postgres.start();
  const config = { host: "127.0.0.1", port, user: "postgres", password: "synthetic" };
- const control = new Pool(config); await control.query(`CREATE DATABASE "${database.replaceAll('"', '""')}"`); await control.end();
- const admin = new Pool({ ...config, database });
+ const control = trackedPool(config); await control.query(`CREATE DATABASE "${database.replaceAll('"', '""')}"`); await control.end();
+ const admin = trackedPool({ ...config, database });
  await installAuditCommandWriterRoles(admin);
  if (beforeOwn) {
   await admin.query("CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT clock_timestamp())");
@@ -39,10 +45,22 @@ export async function cluster(beforeOwn = false, database = "jobguard_synthetic_
  } else await migrate(admin);
  await installLegacySyntheticPartyFixtures(admin);
  await admin.query("CREATE ROLE ent4b_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS; GRANT jobguard_runtime TO ent4b_login");
- const runtime = new Pool({ ...config, database, user: "ent4b_login", max: 8 });
- return { admin, runtime, config, async close() { await closeTestPools(runtime, admin); await postgres.stop(); await rm(dir, { recursive: true, force: true }); } };
+ const runtime = trackedPool({ ...config, database, user: "ent4b_login", max: 8 });
+ return { admin, runtime, config, async close() {
+  await closeTestPools(runtime, admin);
+  await Promise.all(disconnected);
+  await postgres.stop();
+  await rm(dir, { recursive: true, force: true });
+ } };
 }
 export type Cluster = Awaited<ReturnType<typeof cluster>>;
+type OwnerContext = () => ReturnType<typeof testTenantContext> | Promise<ReturnType<typeof testTenantContext>>;
+const ownerContexts = new WeakMap<Cluster, Map<string, OwnerContext>>();
+export function fixtureOwnerContext(c: Cluster, tenantId: string, resolve: OwnerContext) {
+ const contexts = ownerContexts.get(c) ?? new Map<string, OwnerContext>();
+ contexts.set(tenantId, resolve);
+ ownerContexts.set(c, contexts);
+}
 export async function fixture(c: Cluster, n = 1) {
  const p = await new ContractorRepository(c.runtime).startPractice(randomUUID());
  await seedActiveContractorAgreement(c.admin, p.tenantId);
@@ -52,15 +70,17 @@ export async function fixture(c: Cluster, n = 1) {
  const grant = (await c.admin.query("SELECT id FROM app.role_grant WHERE tenant_id=$1 AND membership_id=$2 AND scope_kind='tenant'", [p.tenantId, p.membershipId])).rows[0];
  const ctx = (await c.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') installed")).rows[0].installed
   ? await testBoundTenantContext(c.admin,p.tenantId,p.membershipId) : testTenantContext(p.tenantId, { membershipId: p.membershipId });
+ fixtureOwnerContext(c, p.tenantId, () => ctx);
  return { p, demo, ctx, jobId: row.job_id as string, orderId: row.order_id as string, revisionId: row.revision_id as string, grantId: grant.id as string };
 }
 export type Fixture = Awaited<ReturnType<typeof fixture>>;
 export const raise = <T extends Record<string, unknown> = Record<string, never>>(f: Fixture, fields: T = {} as T) => ({ version: "raise-extra.v1", commandId: randomUUID(), commandType: "LogSiteExtra", jobId: f.jobId, actorMembershipId: f.p.membershipId, grantId: f.grantId, note: noteCanary, description: descriptionCanary, ...fields });
-export async function ownerTx<T>(c: Cluster, tenantId: string, work: (db: TenantTransaction) => Promise<T>) {
- // Owner-only setup must not create sign-in rows: practice marker tests
- // deliberately attach those rows themselves, and assert their absence first.
- const context = testTenantContext(tenantId, { bindRequest: false });
- return withTenant(c.admin, context, async db => { await db.$client.query("SET LOCAL ROLE jobguard_migration"); return work(db); });
+export async function ownerTx<T>(c: Cluster, tenantId: string, work: (db: TenantTransaction) => Promise<T>, context?: VerifiedTenantContext) {
+ // Reuse the exact actor already provisioned by the shared fixture. Historical and
+ // marker setups that do not use that fixture still control their own credentials.
+ const resolve = ownerContexts.get(c)?.get(tenantId);
+ const request = context ?? (resolve ? await resolve() : testTenantContext(tenantId, { bindRequest: false }));
+ return withTenant(c.admin, request, async db => { await db.$client.query("SET LOCAL ROLE jobguard_migration"); return work(db); });
 }
 export async function receipt(db: TenantTransaction, tenantId: string, jobId: string, variationId: string, actor: string, type = "LogSiteExtra", commandId = randomUUID(), fields: { status?: string; semanticKey?: string } = {}) {
  await db.$client.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2,$3,$4,$5,$6::text,$7,CASE WHEN $6::text='succeeded' THEN '{}'::jsonb ELSE NULL END,CASE WHEN $6::text='succeeded' THEN clock_timestamp() ELSE NULL END)", [tenantId, commandId, type, fields.semanticKey ?? `extra-origin:${jobId}:${variationId}`, "a".repeat(64), fields.status ?? "processing", actor]); return commandId;

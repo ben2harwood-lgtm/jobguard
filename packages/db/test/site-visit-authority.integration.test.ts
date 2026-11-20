@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fixture } from "./extra-fixtures.js";
+import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { cluster, visitFixture, authority, command, smallJob, cancelOrder, forbiddenRoles, expectedRefusal, invite, type Cluster, type VisitFixture } from "./site-visit-fixtures.js";
 let c: Cluster, f: VisitFixture;
 beforeAll(async () => { c = await cluster(); f = await visitFixture(c); }, 120_000);
@@ -103,8 +104,13 @@ describe("ENT-3b catalogue", () => {
  it("[B19] closeout_answer: owner, forced row security, the merged policy form, SELECT only for the runtime role", async () => {
   const table = (await c.admin.query("SELECT pg_get_userbyid(relowner) owner, relrowsecurity rls, relforcerowsecurity forced FROM pg_class WHERE oid='app.closeout_answer'::regclass")).rows[0];
   expect(table).toEqual({ owner: "jobguard_migration", rls: true, forced: true });
-  const policy = async (name: string) => (await c.admin.query("SELECT policyname,roles::text,cmd,qual,with_check FROM pg_policies WHERE schemaname='app' AND tablename=$1", [name])).rows;
-  expect(await policy("closeout_answer")).toEqual(await policy("site_visit"));
+  // Check the exact merged policy shape before the cutover adds the scoped
+  // customer timing read to site_visit. Grants below still use current tables.
+  const predecessor = await jobDoorsDatabase(true, "0765_lp11_bound_tenant_rls.sql");
+  try {
+   const policy = async (name: string) => (await predecessor.owner.query("SELECT policyname,roles::text,cmd,qual,with_check FROM pg_policies WHERE schemaname='app' AND tablename=$1 ORDER BY policyname", [name])).rows;
+   expect(await policy("closeout_answer")).toEqual(await policy("site_visit"));
+  } finally { await predecessor.close(); }
   const privileges = async (relation: string, role: string) => (await c.admin.query(`SELECT p.privilege, has_table_privilege($2,$1::regclass,p.privilege) AS held, CASE WHEN p.privilege IN('SELECT','INSERT','UPDATE','REFERENCES') THEN has_any_column_privilege($2,$1::regclass,p.privilege) ELSE false END AS any_column FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p(privilege)`, [relation, role])).rows;
   for (const relation of ["app.closeout_answer", "app.site_visit"]) {
    const held = (await privileges(relation, "jobguard_runtime")).filter(r => r.held || (r.any_column && r.privilege !== "SELECT")).map(r => r.privilege);

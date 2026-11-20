@@ -16,16 +16,17 @@ import { RecoveryAllocationRepository } from "../src/recovery-allocation-reposit
 import { RecoveryAllocationController } from "../../../apps/api/src/recovery-allocation.controller.js";
 import { issuePracticeSession, authenticatePracticeSession, practiceMaterialPool } from "../src/practice-session.js";
 import { migrate } from "../src/migrate.js";
-import { withTenant } from "../src/tenant-context.js";
+import { bindIssuedCredential, withTenant, type VerifiedTenantContext } from "../src/tenant-context.js";
 import { DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 
 const actor = { membershipId: DEMO_MEMBERSHIP_ID, identityUserId: DEMO_IDENTITY_USER_ID };
 const priorEnvironment = process.env.JOBGUARD_ENV;
 const passphrase = randomUUID();
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
+let fractionActor: VerifiedTenantContext;
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const repo = (environment = "synthetic_demo", pool = runtime) => new RecoveryAllocationRepository(pool, environment);
 const version = "recovery-allocation-command.v1";
@@ -61,6 +62,7 @@ beforeAll(async () => {
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [DEMO_IDENTITY_USER_ID]);
   await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Allocation fictional builder')", [DEMO_ACCOUNT_ID, DEMO_TENANT_ID]);
   await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID]);
+  fractionActor = await testBoundTenantContext(admin, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID);
   await admin.query(`CREATE ROLE allocation_integration_login LOGIN PASSWORD '${passphrase}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; GRANT jobguard_runtime TO allocation_integration_login`);
   runtime = new Pool({ ...options, user: "allocation_integration_login", max: 10 });
 }, 90_000);
@@ -507,7 +509,7 @@ it("C5: an expired matching review cannot authorize an allocation", async () => 
 // optional minus sign plus 1..260213 digits, a denominator is 1..260213 digits whose first digit is not zero. PostgreSQL
 // regex repeat counts stop at 255, so the table checks are a shape test plus a length test; the original repeat-count
 // patterns are kept below only as an oracle, because JavaScript has no such limit. Rows are inserted straight into the table
-// as its owner (jobguard_migration, tenant set, foreign-key triggers skipped for the probe only, so every CHECK still fires)
+// as its owner (jobguard_migration, bound to the fixture tenant, foreign-key triggers skipped for the probe only)
 // and every probe is rolled back. A refusal counts only when it is the column's own CHECK (23514), never the old
 // "invalid regular expression" error, which also made every real row fail.
 const fractionColumns = ["gross_numerator", "gross_denominator", "net_numerator", "net_denominator"] as const;
@@ -518,7 +520,7 @@ async function probeFractionRow(column: FractionColumn, value: string) {
     await client.query("BEGIN");
     await client.query("SET LOCAL session_replication_role = replica");
     await client.query("SET LOCAL ROLE jobguard_migration");
-    await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+    await bindIssuedCredential(client, fractionActor);
     const values: Record<FractionColumn, string> = { gross_numerator: "1", gross_denominator: "1", net_numerator: "1", net_denominator: "1" };
     values[column] = value;
     try {

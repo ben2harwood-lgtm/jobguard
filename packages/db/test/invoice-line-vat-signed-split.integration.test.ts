@@ -84,7 +84,8 @@ describe("LATER-SAFETY-90 real PostgreSQL signed invoice VAT", () => {
       ["1000", "200", "1200"], ["-500", "-100", "-600"],
     ]);
     const sources = await asFixtureTenant(f.runtime, a.tenantId, db => db.query(
-      "SELECT id,net_pence,gross_pence FROM app.recovery_allocation_invoice_lines($1,$2,$3)", [a.tenantId, a.jobId, invoice.invoice_id]));
+      "SELECT id,net_pence,gross_pence FROM app.recovery_allocation_invoice_lines($1,$2,$3)", [a.tenantId, a.jobId, invoice.invoice_id]),
+      { owner: f.admin, membershipId: LOCK_OWNER });
     // Recovery allocates positive lines only; the omission's signed gross is
     // retained in the invoice binding, rather than turning into eligible cash.
     expect(sources.rows).toEqual([{ id: lines[0]!.id, net_pence: "1000", gross_pence: "1200" }]);

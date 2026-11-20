@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { FinalCheckRepository } from "../src/final-check-repository.js";
 import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, finalCheckTenant, FINAL_CHECK_ACTOR, type FinalCheckFixture, type FinalCheckJob } from "./final-check-fixture.js";
@@ -8,21 +8,27 @@ let f: FinalCheckFixture;
 beforeAll(async () => { f = await createFinalCheckFixture(); }, 60000);
 afterAll(async () => { await closeFinalCheckFixture(f); });
 // LP-6d: the raw runtime upload writes are the fixture owner's own bound request.
+const bytes = Buffer.from("Fictional post-lock upload");
+const sha256 = createHash("sha256").update(bytes).digest("hex");
 const asOwner = () => ({ owner: f.admin, membershipId: FINAL_CHECK_ACTOR });
 async function upload(a: FinalCheckJob, expired = true) {
  const id = randomUUID();
  await finalCheckTenant(f.runtime, a.tenantId, db => db.query(`INSERT INTO app.evidence_upload
   (id,tenant_id,job_id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at)
-  VALUES($1,$2,$3,$4,$5,repeat('a',64),'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day')`,
- [id,a.tenantId,a.jobId,a.scopeItemId,`sv5-guard/${id}`]), asOwner());
+  VALUES($1,$2,$3,$4,$5,$6,'application/pdf',100,'standard_evidence',clock_timestamp()+interval '1 day')`,
+ [id,a.tenantId,a.jobId,a.scopeItemId,`tenants/${a.tenantId}/uploads/${id}/original`,sha256]), asOwner());
  if (expired) await finalCheckTenant(f.admin, a.tenantId, db => db.query("UPDATE app.evidence_upload SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2", [a.tenantId,id]));
  return id;
 }
 async function transition(a: FinalCheckJob, id: string, state: string) {
  return finalCheckTenant(f.runtime, a.tenantId, db => db.query(`UPDATE app.evidence_upload SET state=$3::varchar,
   server_verified_at=CASE WHEN $3::varchar='verified' THEN clock_timestamp() ELSE NULL END,
-  object_version_id=CASE WHEN $3::varchar='verified' THEN 'post-lock.v1' ELSE NULL END,
+  object_version_id=CASE WHEN $3::varchar IN ('quarantined','verified') THEN 'post-lock.v1' ELSE NULL END,
   rejection_code=CASE WHEN $3::varchar='rejected' THEN 'SYNTHETIC_EXPIRED' ELSE NULL END WHERE tenant_id=$1 AND id=$2`, [a.tenantId,id,state]), asOwner());
+}
+function verifyUpload(a: FinalCheckJob, id: string) {
+ return finalCheckTenant(f.runtime, a.tenantId,
+  db => db.query("SELECT app.verify_evidence_upload($1,$2,'post-lock.v1','application/pdf',$3)", [a.tenantId,id,bytes]), asOwner());
 }
 it.each(['quarantined','verified'])("C248 runtime refuses expired pre-lock pending -> %s in the lock-to-freeze window", async state => {
  const a=await seedFinalCheckJob(f),id=await upload(a);
@@ -57,7 +63,7 @@ it("C248 rejection cannot be reactivated; other jobs and post-lock uploads retai
  expect((await transition(b,other,'quarantined')).rowCount).toBe(1);
  const later=await upload(a,false);
  expect((await transition(a,later,'quarantined')).rowCount).toBe(1);
- expect((await transition(a,later,'verified')).rowCount).toBe(1);
+ expect((await verifyUpload(a,later)).rowCount).toBe(1);
  // A different tenant cannot discover or mutate the locked upload through runtime RLS.
  expect((await finalCheckTenant(f.runtime,randomUUID(),db=>db.query("UPDATE app.evidence_upload SET state='quarantined' WHERE id=$1",[id]))).rowCount).toBe(0);
 });
@@ -68,10 +74,20 @@ it("C248 negative control: removing only 0245's trigger restores the reviewer's 
   await db.query('BEGIN');
   await db.query('DROP TRIGGER b_final_check_upload_transition ON app.evidence_upload');
   await db.query(`SET LOCAL ROLE ${f.runtime.options.user}`);
-  await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
+  await bindTestClient(f.admin,db,a.tenantId,FINAL_CHECK_ACTOR);
   for(const state of ['quarantined','verified']) {
-   const result=await db.query("UPDATE app.evidence_upload SET state=$3::varchar,server_verified_at=CASE WHEN $3::varchar='verified' THEN clock_timestamp() ELSE NULL END,object_version_id='post-lock.v1' WHERE tenant_id=$1 AND id=$2",[a.tenantId,id,state]);
-   expect(result.rowCount).toBe(1);
+   const sql = "UPDATE app.evidence_upload SET state=$3::varchar,server_verified_at=CASE WHEN $3::varchar='verified' THEN clock_timestamp() ELSE NULL END,object_version_id='post-lock.v1' WHERE tenant_id=$1 AND id=$2";
+   if (state === 'verified') {
+    // LP-8b adds an independent raw verification refusal. Prove it before
+    // isolating the older lock trigger's negative control.
+    await db.query("SAVEPOINT verify_guard");
+    await expect(db.query(sql,[a.tenantId,id,state])).rejects.toMatchObject({code:'42501',message:'EVIDENCE_NOT_AUTHORIZED'});
+    await db.query("ROLLBACK TO SAVEPOINT verify_guard");
+    await db.query("RESET ROLE");
+    await db.query("DROP TRIGGER b_lp8b_upload ON app.evidence_upload");
+    await db.query(`SET LOCAL ROLE ${f.runtime.options.user}`);
+   }
+   expect((await db.query(sql,[a.tenantId,id,state])).rowCount).toBe(1);
   }
  } finally {await db.query('ROLLBACK');db.release();}
  await expect(transition(a,id,'quarantined')).rejects.toMatchObject({message:'FINAL_CHECK_UPLOAD_TRANSITION_LOCKED'});
@@ -84,8 +100,11 @@ it.each([
  ['REPEATABLE READ','verified','rejected','FINAL_CHECK_VERIFIED_SOURCE_LOCKED'],
  ['SERIALIZABLE','verified','rejected','FINAL_CHECK_VERIFIED_SOURCE_LOCKED'],
 ])("C249 %s refuses pre-lock %s -> %s after lock commits",async(isolation,initial,target,message)=>{
- const a=await seedFinalCheckJob(f),id=await upload(a);
- if(initial==='verified') await transition(a,id,initial);
+ const a=await seedFinalCheckJob(f),id=await upload(a,initial!=='verified');
+ if(initial==='verified') {
+  await transition(a,id,'quarantined');
+  await verifyUpload(a,id);
+ }
  const db=await f.runtime.connect();
  try {
   await db.query(`BEGIN ISOLATION LEVEL ${isolation}`);

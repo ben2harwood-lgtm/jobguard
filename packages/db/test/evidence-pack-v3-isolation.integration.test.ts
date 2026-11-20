@@ -69,7 +69,7 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
     return { bytes: pack.artifactText, revision: before.visibleSourceRevision, sql: statements.map(s => s.sql) };
   };
   const zero = await run();
-  await asFixtureTenant(f.shadow, f.source.tenantId, async db => {
+  await asFixtureTenant(f.admin, f.source.tenantId, async db => {
     for (let n = 0; n < 100; n++) await db.query(`INSERT INTO app.shadow_commercial_signal
       (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
       VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SB02',clock_timestamp(),'Hidden fixture','low','held_for_final_check')`, [f.source.tenantId, jobId, randomUUID()]);
@@ -78,8 +78,10 @@ it("SB-02 activation: completed pre-lock artifacts, source revision and runtime 
   // At activation, an ordinary read/material fetch must not wait on hidden-table
   // locks. The negative control proves the lock is effective; this is not a
   // claim of identical HTTP latency. Must-surface detection is intentionally separate.
-  const ordinaryMaterial = await asFixtureTenant(f.admin, f.source.tenantId, async db =>
-    (await db.query("SELECT app.evidence_pack_v3_material($1,$2,true) material", [f.source.tenantId, caseId])).rows[0].material);
+  const ordinaryMaterial = await asFixtureTenant(f.admin, f.source.tenantId, async db => {
+    await bindOwnSession(db, f.auth.digest);
+    return (await db.query("SELECT app.evidence_pack_v3_material($1,$2,true) material", [f.source.tenantId, caseId])).rows[0].material;
+  });
   const blocker = await f.admin.connect();
   try {
     await blocker.query("BEGIN");
@@ -134,7 +136,7 @@ it("ordinary-source bytes and held-request SQL are identical before/after ordina
   };
   const beforeHidden = (await f.admin.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE job_id=$1", [f.source.jobId])).rows[0].n;
   const zeroSources = JSON.stringify(await readOrdinary(f)), zero = await held();
-  await asFixtureTenant(f.shadow, f.source.tenantId, async db => {
+  await asFixtureTenant(f.admin, f.source.tenantId, async db => {
     for (let n = 0; n < 25; n++) await db.query(`INSERT INTO app.shadow_commercial_signal
       (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
       VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:CH8-V',clock_timestamp(),'Fictional held extra','low','held_for_final_check')`,

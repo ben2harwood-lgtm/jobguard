@@ -4,8 +4,8 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ContractorRepository, canonicalJson, sha256Hex, type AuthenticatedMembership } from "../src/index.js";
-import { cluster, startSession, currentCommand, ownerTx, counts, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
+import { ContractorRepository, canonicalJson, sha256Hex, withTenant, type AuthenticatedMembership } from "../src/index.js";
+import { cluster, startSession, currentCommand, counts, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
 import { rolledBack } from "./upgrade-proof-utils.js";
 
 const signature = "app.contractor_admin_command(uuid,jsonb,text)";
@@ -77,7 +77,7 @@ describe("contractor admin owner and grant boundaries (real PostgreSQL)", () => 
  it("also protects a non-owner membership holding an unrevoked owner grant, including its other grants", async () => {
   const holder = await invite("admin");
   const ordinary = await grant(holder, "admin"); await repo.command(f.p, ordinary);
-  await ownerTx(c, f.p.tenantId, db => db.$client.query("INSERT INTO app.role_grant VALUES($1,$2,$3,'owner','tenant',$1,NULL)", [f.p.tenantId, randomUUID(), holder.membershipId]));
+  await withTenant(c.admin, f.context, db => db.$client.query("INSERT INTO app.role_grant VALUES($1,$2,$3,'owner','tenant',$1,NULL)", [f.p.tenantId, randomUUID(), holder.membershipId]));
   await refused(admin, await command({ kind: "membership.revoke", membershipId: holder.membershipId }));
   await refused(admin, await command({ kind: "grant.revoke", grantId: ordinary.id }));
  });

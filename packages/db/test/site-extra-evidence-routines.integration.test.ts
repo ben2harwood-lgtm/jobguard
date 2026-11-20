@@ -1,3 +1,4 @@
+import { loadMigrationProofs } from "./migration-proof-loader.js";
 import { testActorContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createHash as lp6dHash } from "node:crypto";
 // ENT-3d routines: parity, totality, the writer's own refusals, the guard, the catalogue and the upgrade proof (rule 9).
@@ -19,15 +20,16 @@ const UNSET = Symbol("unset");
 async function call(sql: string, args: unknown[], setting: string | null | typeof UNSET = f.p.tenantId, readOnly = false, actor?: unknown) {
  // LP-6d: a named actor that is an active member of the stamped company calls as its own bound request. Anyone
  // else (no or a malformed setting, a foreign company, a null or revoked actor) binds nothing.
- const member = typeof actor === "string" && typeof setting === "string" && /^[0-9a-f-]{36}$/u.test(setting)
-  ? (await c.admin.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())", [setting, actor])).rows[0] : undefined;
- const credential = member ? lp6dHash("sha256").update(`lp6-test:${setting as string}:${actor as string}`).digest("hex") : undefined;
- if (credential) await testBoundTenantContext(c.admin, setting as string, actor as string, credential);
+ const tenant = typeof setting === "string" && /^[0-9a-f-]{36}$/iu.test(setting) ? setting.toLowerCase() : undefined;
+ const member = typeof actor === "string" && tenant
+  ? (await c.admin.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())", [tenant, actor])).rows[0] : undefined;
+ const credential = member ? lp6dHash("sha256").update(`lp6-test:${tenant}:${actor as string}`).digest("hex") : undefined;
+ if (tenant && credential) await testBoundTenantContext(c.admin, tenant, actor as string, credential);
  const client = await c.runtime.connect();
  try {
   await client.query("BEGIN");
   if (setting !== UNSET) await client.query("SELECT set_config('app.tenant_id',$1,true)", [setting]);
-  if (credential) await client.query("SELECT app.bind_request('real',$1,$2)", [credential, setting]);
+  if (credential) await client.query("SELECT app.bind_request('real',$1,$2)", [credential, tenant]);
   if (readOnly) await client.query("SET TRANSACTION READ ONLY");
   const rows = (await client.query(sql, args)).rows; await client.query("COMMIT"); return rows;
  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
@@ -60,11 +62,11 @@ describe("ENT-3d routines", () => {
   expect(await call(sql, [null, null, null, null, null, null], f.p.tenantId, true)).toEqual([{ decision: "photo_refused", reason_code: "photo_not_accepted", photo_sha256: null, content_sha256: null }]);
   for (const setting of [null, "", "not-a-uuid", UNSET]) for (const photoId of [p.id, null]) expect(await call(sql, [f.jobId, description, note, photoId, null, null], setting, true), String(setting)).toEqual([{ decision: "photo_refused", reason_code: "photo_not_accepted", photo_sha256: null, content_sha256: null }]);
   expect(await call(sql, [f.jobId, description, note, p.id, null, null], other.p.tenantId, true)).toEqual([{ decision: "photo_refused", reason_code: "photo_not_accepted", photo_sha256: null, content_sha256: null }]);
-  expect(await call(sql, [f.jobId, description, note, p.id, null, null], f.p.tenantId.toUpperCase(), true)).toEqual([{ decision: "accepted", reason_code: "accepted", photo_sha256: p.sha256, content_sha256: shownFor(f, p.sha256) }]);
-  for (const nullArg of [0, 1, 2]) { const args = [f.jobId, description, note, null, null, null]; args[nullArg] = null; expect((await call(sql, args, f.p.tenantId, true))[0]!.decision).toBe("photo_refused"); }
+  expect(await call(sql, [f.jobId, description, note, p.id, null, null], f.p.tenantId.toUpperCase(), true, f.p.membershipId)).toEqual([{ decision: "accepted", reason_code: "accepted", photo_sha256: p.sha256, content_sha256: shownFor(f, p.sha256) }]);
+  for (const nullArg of [0, 1, 2]) { const args = [f.jobId, description, note, null, null, null]; args[nullArg] = null; expect((await call(sql, args, f.p.tenantId, true, f.p.membershipId))[0]!.decision).toBe("photo_refused"); }
   // An unknown confirmation is refused; the photo cannot be the confirmation.
-  expect(await call(sql, [f.jobId, description, note, null, randomUUID(), null], f.p.tenantId, true)).toEqual([{ decision: "confirmation_refused", reason_code: "confirmation_not_bound", photo_sha256: null, content_sha256: null }]);
-  expect((await call(sql, [f.jobId, description, note, p.id, p.id, null], f.p.tenantId, true))[0]!.decision).toBe("confirmation_refused");
+  expect(await call(sql, [f.jobId, description, note, null, randomUUID(), null], f.p.tenantId, true, f.p.membershipId)).toEqual([{ decision: "confirmation_refused", reason_code: "confirmation_not_bound", photo_sha256: null, content_sha256: null }]);
+  expect((await call(sql, [f.jobId, description, note, p.id, p.id, null], f.p.tenantId, true, f.p.membershipId))[0]!.decision).toBe("confirmation_refused");
   expect(await evidenceCounts(c, f)).toEqual(before);
  });
  it("[E22] routine 4 refuses by its own authority check, each writing nothing; the same content again is existing, a different one conflicts", async () => {
@@ -78,8 +80,14 @@ describe("ENT-3d routines", () => {
   // Raw, class (a): a request naming a company its actor is not bound to binds nothing, so the binding check
   // refuses first; unchanged() below proves no writes.
   await expect(record(x, {}, foreign.p.tenantId)).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
-  for (const setting of [null, "", "not-a-uuid", UNSET]) expect(await record(x, {}, setting), String(setting)).toEqual(refusedWith("not_permitted"));
-  for (const key of ["actor", "job", "command", "confirmation", "description", "note", "shown"] as const) expect(await record(x, { [key]: null }), key).toEqual(refusedWith("not_permitted"));
+  for (const setting of [null, "", "not-a-uuid", UNSET]) {
+   await expect(record(x, {}, setting), String(setting)).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+  }
+  await expect(record(x, { actor: null })).rejects.toMatchObject({ code: "42501", message: "REQUEST_BINDING_REFUSED" });
+  for (const key of ["job", "command", "confirmation", "description", "note", "shown"] as const) expect(await record(x, { [key]: null }), key).toEqual(refusedWith("not_permitted"));
+  expect(await call("SELECT * FROM app.ent3d_record_resident_confirmation($1,$2,$3,$4,$5,$6,$7,$8)",
+   [x.members.supervisor.member.membershipId, x.jobId, randomUUID(), randomUUID(), description, note, null, shownFor(x, null)],
+   x.p.tenantId, false, x.members.owner.member.membershipId)).toEqual(refusedWith("not_permitted"));
   expect(await record(x, { photo: randomUUID(), shown: shownFor(x, sha("x")) })).toEqual(refusedWith("photo_not_accepted"));
   expect(await record(x, { shown: shownFor(x, null, { note: "Fictional other note" }) })).toEqual(refusedWith("confirmation_mismatch"));
   expect(await record(x, { shown: "A".repeat(64) })).toEqual(refusedWith("confirmation_mismatch"));
@@ -116,10 +124,10 @@ describe("ENT-3d routines", () => {
   const x = await siteFixture(c), made = await new SiteExtraRepository(c.runtime).logSiteExtra(await testActorContext(c.admin, x.ctx, x.members.supervisor.member), x.members.supervisor.member, v3(x));
   const sql = "SELECT app.ent3d_require_site_extra_evidence($1,$2)";
   for (const setting of [null, "", "not-a-uuid", UNSET]) await expect(call(sql, [x.jobId, made.variationId], setting), String(setting)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
-  await expect(call(sql, [x.jobId, randomUUID()])).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
-  await expect(call(sql, [randomUUID(), made.variationId], x.p.tenantId)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
-  await expect(call(sql, [x.jobId, made.variationId], f.p.tenantId)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
-  await expect(call(sql, [x.jobId, made.variationId], x.p.tenantId)).resolves.toEqual([{ ent3d_require_site_extra_evidence: "" }]);
+  await expect(call(sql, [x.jobId, randomUUID()], x.p.tenantId, false, x.p.membershipId)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
+  await expect(call(sql, [randomUUID(), made.variationId], x.p.tenantId, false, x.p.membershipId)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
+  await expect(call(sql, [x.jobId, made.variationId], f.p.tenantId, false, f.p.membershipId)).rejects.toMatchObject({ code: "23514", message: "INVALID_ORIGIN" });
+  await expect(call(sql, [x.jobId, made.variationId], x.p.tenantId, false, x.p.membershipId)).resolves.toEqual([{ ent3d_require_site_extra_evidence: "" }]);
  });
  it("[E24] the catalogue shows exactly the five routines with the stated signatures, volatility, ownership and grants", async () => {
   const rows = (await c.admin.query(`SELECT p.proname,pg_get_function_identity_arguments(p.oid) args,pg_get_function_result(p.oid) result,p.provolatile,p.prosecdef,p.proconfig,pg_get_userbyid(p.proowner) owner,
@@ -134,7 +142,11 @@ describe("ENT-3d routines", () => {
    ["ent3d_require_site_extra_evidence", "p_job uuid, p_variation uuid", "void", "v"],
    ["ent3d_site_extra_evidence", "p_job uuid, p_description text, p_note text, p_photo uuid, p_confirmation uuid, p_variation uuid", "TABLE(decision text, reason_code text, photo_sha256 text, content_sha256 text)", "s"],
   ]);
-  for (const r of rows) expect(r).toMatchObject({ prosecdef: false, proconfig: ["search_path=pg_catalog"], owner: "jobguard_migration", runtime: true, infrastructure: false, public: false, grantees: ["jobguard_migration", "jobguard_runtime"] });
+  const lp8b = loadMigrationProofs().proofs.find(p => p.migration === "0767_lp8b_outbox_evidence.sql")!;
+  const resident = lp8b.upgrade.find(change => change.section === "routines" && change.after?.nspname === "app" &&
+    change.after.proname === "ent3d_record_resident_confirmation");
+  if (resident?.section !== "routines" || !resident.after) throw new Error("Missing LP-8b resident confirmation proof");
+  for (const r of rows) expect(r).toMatchObject({ prosecdef: r.proname === resident.after.proname ? resident.after.prosecdef : false, proconfig: ["search_path=pg_catalog"], owner: "jobguard_migration", runtime: true, infrastructure: false, public: false, grantees: ["jobguard_migration", "jobguard_runtime"] });
   expect((await c.admin.query("SELECT count(*)::int n FROM pg_proc p WHERE p.proname ILIKE '%ent4b%' AND p.proname LIKE 'ent3d%'")).rows[0]!.n).toBe(0);
   // Exactly these five hold the prefix: nothing else in any schema carries the ENT-3d name.
   expect((await c.admin.query("SELECT count(*)::int n FROM pg_proc p WHERE p.proname LIKE 'ent3d\\_%'")).rows[0]!.n).toBe(5);

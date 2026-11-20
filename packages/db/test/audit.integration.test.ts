@@ -1,4 +1,5 @@
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { randomUUID } from "node:crypto";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, syntheticOwnerPool } from "./pool-test-utils.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,7 +12,8 @@ import {
   type AuditEvent, type AuditEventInput, withTenant} from "../src/index.js";
 
 const TENANT = "30000000-0000-4000-8000-000000000003";
-const context = testTenantContext(TENANT);
+const fixtureAccount = randomUUID();
+let context: Awaited<ReturnType<typeof testBoundTenantContext>>;
 const event = (n: number): AuditEventInput => ({
   id: `40000000-0000-4000-8000-${n.toString().padStart(12, "0")}`,
   version: "audit.v1", actorRef: "user:synthetic", eventType: "account.changed",
@@ -48,6 +50,12 @@ beforeAll(async () => {
   admin.on("error", () => undefined);
   await migrate(admin);
   await admin.query("INSERT INTO control_plane.tenant (id) VALUES ($1)", [TENANT]);
+  const user = randomUUID(), member = randomUUID();
+  await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
+  await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional audit fixture')", [fixtureAccount, TENANT]);
+  await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",
+    [member, TENANT, fixtureAccount, user]);
+  context = await testBoundTenantContext(admin, TENANT, member);
   await admin.query(`CREATE ROLE jobguard_audit_login LOGIN PASSWORD 'synthetic-runtime-only'
     NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS`);
   await admin.query("GRANT jobguard_runtime TO jobguard_audit_login");
@@ -78,7 +86,7 @@ describe("serialized append-only audit", () => {
     })).rejects.toThrow("permission denied for table account");
     expect((await readChain())).toHaveLength(10);
     await withTenant(runtime, context, async (database) => {
-      expect((await database.$client.query("SELECT id FROM app.account")).rows).toEqual([]);
+      expect((await database.$client.query("SELECT id FROM app.account")).rows).toEqual([{ id: fixtureAccount }]);
     });
   });
 

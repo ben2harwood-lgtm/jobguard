@@ -8,6 +8,8 @@ import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { approvedSimulation, calendarInput, command, count, historicalAgreement, meterCompany, meterInput, readSubscription, storeMeter, terms, type SubscriptionCompany } from "./subscription-persistence-fixtures.js";
 import { rolledBack, snapshotRows } from "./upgrade-proof-utils.js";
 
+import { lp11EmptyTables } from "./later-empty-tables.js";
+
 const stem = "0746_subscription_internal_owner_guard";
 const signature = "app.mon2_command(uuid,text,uuid,jsonb)";
 const migration = readFileSync(new URL(`../migrations/${stem}.sql`, import.meta.url), "utf8");
@@ -175,8 +177,8 @@ describe("0744 populated predecessor upgrade (real PostgreSQL)", () => {
   const security = await metadata(), before = await snapshotRows(f.admin);
   await migrate(f.admin); await migrate(f.admin);
   expect(await metadata()).toEqual(security);
-  // LP-6d and LP-10 add two empty private bookkeeping tables.
-  expect(await snapshotRows(f.admin)).toEqual({ ...before, "identity.lp6d_sso_grant_permit": [], "control_plane.worker_action_binding": [] });
+  // Compare every populated row and the exact empty LP-6d, LP-10 and LP-11 records.
+  expect(await snapshotRows(f.admin)).toEqual({ ...before, ...lp11EmptyTables, "identity.lp6d_sso_grant_permit": [], "control_plane.worker_action_binding": [] });
   for (const scenario of cases) {
    await refusesWithoutWrites(fixture, scenario.a, scenario.value, scenario.id);
    await role(f, scenario.a, "owner");

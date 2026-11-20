@@ -84,10 +84,11 @@ async function reopenFromJobs(page: Page, jobId: string) {
 
 test("a NEW stranger session cannot snapshot or connect a captured job before its creator touches the feed", async ({ page, context, browser }, testInfo) => {
   // Capture creates the binding, but reviewing proposals does not read/register the feed.
-  const captureResponse = page.waitForResponse(response => response.url().endsWith("/api/jobs/capture") && response.request().method() === "POST");
-  await openReview(page);
-  const captured = await captureResponse; expect(captured.status()).toBe(201);
-  const { jobId } = await captured.json(); expect(jobId).toBeTruthy();
+  const captureResponse = page.waitForResponse(response => response.url().endsWith("/api/jobs/capture") && response.request().method() === "POST")
+    .then(async response => ({ status: response.status(), body: await response.json() }));
+  const [captured] = await Promise.all([captureResponse, openReview(page)]);
+  expect(captured.status).toBe(201);
+  const { jobId } = captured.body; expect(jobId).toBeTruthy();
   const stranger = await browser.newContext(contextOptions(testInfo));
   try {
     expect((await stranger.request.post("/api/session")).status()).toBe(200);

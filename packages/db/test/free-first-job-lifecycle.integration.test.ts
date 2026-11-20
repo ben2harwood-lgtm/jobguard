@@ -9,6 +9,7 @@ import { exactTarget, firstTrialFixture as first } from "./free-first-job-lifecy
 import { historicalAgreement } from "./subscription-persistence-fixtures.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { JobWorkStateRepository } from "../src/job-work-state-repository.js";
+import { withTenant } from "../src/tenant-context.js";
 describe("MON-3 END source persistence, company isolation and races",()=>{
  let f:WorkFixture;beforeAll(async()=>{f=await createWorkFixture();},60000);afterAll(async()=>closeWorkFixture(f));
  it("starts from the immutable activation and retains sources without changing keys or Final Check",async()=>{
@@ -17,7 +18,7 @@ describe("MON-3 END source persistence, company isolation and races",()=>{
    const before=await repo.read(a.context,a.digest,a.jobId);expect(before.timeline?.active).toBe(true);
    const row=(await f.admin.query("SELECT to_char(activated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') at FROM app.job_activation WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0];
    expect(before.start?.startedAt).toBe(row.at);
-   const id=randomUUID();await workTenant(f.admin,a.tenantId,async db=>{await db.query("SET LOCAL ROLE jobguard_migration");await db.query("INSERT INTO app.trial_end_source(tenant_id,trial_id,source_id,job_id,kind,effective_at,recorded_at) VALUES($1,$2,$3,$4,'close',clock_timestamp(),clock_timestamp())",[a.tenantId,a.trialId,id,a.jobId]);}, { membershipId: a.actorId, bindRequest: false });
+   const id=randomUUID();await withTenant(f.admin,a.context,async ({$client:db})=>{await db.query("SET LOCAL ROLE jobguard_migration");await db.query("INSERT INTO app.trial_end_source(tenant_id,trial_id,source_id,job_id,kind,effective_at,recorded_at) VALUES($1,$2,$3,$4,'close',clock_timestamp(),clock_timestamp())",[a.tenantId,a.trialId,id,a.jobId]);});
    expect((await repo.read(a.context,a.digest,a.jobId)).timeline?.sourceIds).toEqual([id]);
    expect(Number((await f.admin.query("SELECT count(*) n FROM app.trial_identity_key_claim WHERE tenant_id=$1",[a.tenantId])).rows[0].n)).toBe(2);
    await expect(workTenant(f.runtime,a.tenantId,db=>db.query("DELETE FROM app.trial_start WHERE tenant_id=$1",[a.tenantId]), { membershipId: a.actorId, bindRequest: false })).rejects.toThrow();
@@ -79,10 +80,10 @@ describe("MON-3 END source persistence, company isolation and races",()=>{
   const a=await meterCompany(f),verification=await verifyBusiness(f,a);
   const parents=await Promise.all([keyParent(f,a.tenantId),keyParent(f,a.tenantId)]),snaps=parents.map(p=>snapshot(p));
   for(const s of snaps)await store(f,s);
-  const results=await Promise.allSettled(snaps.map(s=>workTenant(f.admin,a.tenantId,async db=>{
+  const results=await Promise.allSettled(snaps.map(s=>withTenant(f.admin,a.context,async ({$client:db})=>{
    const command=randomUUID();await db.query("INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1,$2::uuid,'ch4.fixture',($2::uuid)::text,$3,'succeeded',$4,'{}',clock_timestamp())",[a.tenantId,command,'a'.repeat(64),a.actorId]);await db.query("SET LOCAL ROLE jobguard_migration");
    await db.query("INSERT INTO app.trial_admission(tenant_id,job_id,activation_id,snapshot_id,verification_id,command_id,admission_kind) VALUES($1,$2,$3,$4,$5,$6,'first')",[a.tenantId,s.jobId,s.activationId,s.id,verification,command]);
-  }, { membershipId: a.actorId, bindRequest: false })));
+  })));
   expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);expect(Number((await f.admin.query("SELECT count(*) n FROM app.trial_start WHERE tenant_id=$1",[a.tenantId])).rows[0].n)).toBe(1);
  });
  it("skip then concurrent second-job attempts refuse before any activation or end; card replay is company-bound",async()=>{
@@ -182,7 +183,11 @@ const outcomes=await Promise.allSettled([run(0),run(1)]);
    await db.query("SET LOCAL ROLE jobguard_migration");
    await db.query(`ALTER TABLE app.trial_card_attempt DROP CONSTRAINT trial_card_attempt_${column}_check`);
    await db.query("ALTER TABLE app.trial_card_attempt DISABLE TRIGGER immutable");
+   // Prepare the malformed historical row before the runtime subject binds
+   // itself to its own session inside the activation function.
+   await db.query("RESET ROLE");
    await db.query(`UPDATE app.trial_card_attempt SET ${column}=$3 WHERE tenant_id=$1 AND id=$2`,[a.tenantId,card.attemptId,value]);
+   await db.query("SET LOCAL ROLE jobguard_migration");
    await db.query("ALTER TABLE app.trial_card_attempt ENABLE TRIGGER immutable");
    const definition=(await db.query("SELECT pg_get_functiondef('app.mon3_activate(uuid,text,uuid,jsonb)'::regprocedure) body")).rows[0].body as string;
    const input={version:'trial-admission.v1',activationId:randomUUID(),termsId:randomUUID(),jobId:second.jobId,acceptedDocumentId:randomUUID(),acceptedDocumentVersion:1,acceptedDocumentHash:'a'.repeat(64),expectedJobRevision:1,authorizationId:randomUUID()};

@@ -2,13 +2,17 @@ import { fakeOutboxAuditProbe } from "./audit-protocol-test-fixture.js";
 import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 import { ActionExecutor, type OutboundAdapter } from "./outbox.js";
-import { verifiedTenantContextForQueuedJob } from "./tenant-context.js";
+import { verifiedTenantContextForQueuedJob, verifiedTenantContextFromMembership, type AuthenticatedMembership } from "./tenant-context.js";
 import { outboundWorkerPool } from "./worker-pool.js";
 
 vi.mock("./worker-pool.js", () => ({ outboundWorkerPool: vi.fn() }));
 
 const actionId = "98000000-0000-4000-8000-000000000001";
 const context = verifiedTenantContextForQueuedJob("91000000-0000-4000-8000-000000000001");
+const membershipId = "91000000-0000-4000-8000-000000000002";
+const request = verifiedTenantContextFromMembership({ tenantId: context.tenantId, membershipId,
+  identityUserId: "91000000-0000-4000-8000-000000000003" } as AuthenticatedMembership,
+{ kind: "real", credential: "b".repeat(64) });
 const claimSql = "SELECT app.claim_worker_action($1::uuid,$2::text[]) AS claim";
 
 function harness(options: { cancelled?: boolean; visible?: boolean; databaseFailure?: boolean; auditFailure?: boolean } = {}) {
@@ -43,7 +47,8 @@ function harness(options: { cancelled?: boolean; visible?: boolean; databaseFail
     if (sql === "SELECT id FROM app.action_outbox WHERE tenant_id=$1 AND id=$2") {
       return { rows: [], rowCount: options.visible === false ? 0 : 1 };
     }
-    if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql) || sql.startsWith("SELECT set_config")) return { rows: [] };
+    if (sql.startsWith("SELECT app.current_actor")) return { rows: [{ actor: membershipId, tenant: request.tenantId }] };
+    if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql) || sql.startsWith("SELECT set_config") || sql.startsWith("SELECT app.bind_request")) return { rows: [] };
     throw new Error(`Unexpected web database operation: ${sql}`);
   });
   const webRelease = vi.fn();
@@ -53,7 +58,7 @@ function harness(options: { cancelled?: boolean; visible?: boolean; databaseFail
     deliver: vi.fn<OutboundAdapter["deliver"]>(async () => ({ kind: "succeeded", providerReference: "synthetic:unexpected" })),
     reconcile: vi.fn<OutboundAdapter["reconcile"]>(async () => "unknown"),
   };
-  const execute = () => new ActionExecutor(pool, new Map([[adapter.name, adapter]]), { emit: vi.fn() }).execute(context, actionId);
+  const execute = (tenant = context) => new ActionExecutor(pool, new Map([[adapter.name, adapter]]), { emit: vi.fn() }).execute(tenant, actionId);
   return { query, statements, release, webQuery, webRelease, sealAudit, adapter, execute };
 }
 
@@ -92,7 +97,7 @@ describe("SERIOUS-B10 refusal orchestration (mocked database; PostgreSQL proof i
     expectNoDelivery(h);
 
     const invisible = harness({ visible: false });
-    await expect(invisible.execute()).resolves.toBeUndefined();
+    await expect(invisible.execute(request)).resolves.toBeUndefined();
     expect(invisible.webQuery).toHaveBeenCalledWith(
       "SELECT id FROM app.action_outbox WHERE tenant_id=$1 AND id=$2", [context.tenantId, actionId],
     );

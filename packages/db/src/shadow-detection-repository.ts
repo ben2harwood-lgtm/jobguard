@@ -7,12 +7,19 @@ import { decodePracticePhoto } from "./practice-photo-observation.js";
 import { decodeFinalCheckSourceFixture } from "./job-source-fixtures.js";
 import { readFinalCheckTypedText } from "./final-check-typed-text.js";
 import { readPracticeStructuredSource } from "./final-check-practice-readers.js";
+import { ShadowObservationReadError, withObservationRead } from "./shadow-observation-reader.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { finalCheckPersistenceErrorCodes, FinalCheckPersistenceError, type FinalCheckPersistenceErrorCode, type FinalCheckManifestView } from "./final-check-completion-repository.js";
 const batchV1 = z.object({ version: z.literal("shadow-detection-batch.v1"), jobId: z.guid({ error: "Invalid uuid" }),
   proposals: z.array(z.unknown()).max(1000), observations: z.array(z.unknown()).max(500), captures: z.array(z.unknown()).max(1000) }).strict();
 export class ShadowDetectionError extends Error {
   constructor(readonly code: "INVALID_DETECTION_BATCH" | "DETECTION_BINDING_MISMATCH" | "DETECTION_REPLAY_CONFLICT") { super(code); }
+}
+function withShadowJob<T>(pool: Pool, context: VerifiedTenantContext, jobId: string, work: (db: TenantTransaction) => Promise<T>) {
+  return withTenant(pool, context, async db => {
+    await db.$client.query("SELECT app.lp11_bind_shadow_job($1,$2)", [context.tenantId, jobId]);
+    return work(db);
+  });
 }
 /** Server-only; this pool's login holds jobguard_shadow only. No business-table reads. */
 export class ShadowDetectionRepository {
@@ -23,6 +30,7 @@ export class ShadowDetectionRepository {
     if ([...b.proposals, ...b.observations, ...b.captures].some(o => o.tenantId !== context.tenantId || o.jobId !== b.jobId)) throw new ShadowDetectionError("DETECTION_BINDING_MISMATCH");
     const groups = groupShadowProposals(b.proposals, b.observations, b.captures);
     await withTenant(this.pool, context, async db => {
+      await db.$client.query("SELECT app.lp11_bind_shadow_job($1,$2)", [context.tenantId, b.jobId]);
       // Serializes detection snapshots for this tenant/job, without any business-table privilege.
       await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`shadow-detection:${context.tenantId}:${b.jobId}`]);
       for (const g of groups) {
@@ -100,7 +108,7 @@ export class FinalCheckCompletionRepository {
  constructor(private readonly pool:Pool){}
  async freeze(context:VerifiedTenantContext,raw:z.infer<typeof freezeInput>):Promise<FinalCheckManifestView>{
   const c=parse(freezeInput,raw);
-  try{return await withTenant(this.pool,context,async db=>{
+  try{return await withShadowJob(this.pool,context,c.jobId,async db=>{
    const prior=(await db.$client.query("SELECT * FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[context.tenantId,c.jobId,c.manifestId])).rows[0];
    if(prior&&(prior.detector_version!==c.detectorVersion||prior.reconciliation_version!==c.reconciliationVersion))throw new FinalCheckPersistenceError("IDEMPOTENCY_PAYLOAD_CONFLICT");
    if(!prior)await db.$client.query(`INSERT INTO app.final_check_manifest(tenant_id,job_id,id,detector_version,reconciliation_version) VALUES($1,$2,$3,$4,$5)`,[context.tenantId,c.jobId,c.manifestId,c.detectorVersion,c.reconciliationVersion]);
@@ -111,16 +119,16 @@ export class FinalCheckCompletionRepository {
  }
  async sources(context:VerifiedTenantContext,jobId:string,manifestId:string){
   parse(uuid,jobId);parse(uuid,manifestId);
-  return withTenant(this.pool,context,async db=>(await db.$client.query(`SELECT id,upload_id,evidence_id,object_version_id,sha256,frozen_input_hash,adapter_version,to_char(source_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') source_received_at FROM app.final_check_manifest_source WHERE tenant_id=$1 AND job_id=$2 AND manifest_id=$3 ORDER BY id`,[context.tenantId,jobId,manifestId])).rows);
+  return withShadowJob(this.pool,context,jobId,async db=>(await db.$client.query(`SELECT id,upload_id,evidence_id,object_version_id,sha256,frozen_input_hash,adapter_version,to_char(source_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') source_received_at FROM app.final_check_manifest_source WHERE tenant_id=$1 AND job_id=$2 AND manifest_id=$3 ORDER BY id`,[context.tenantId,jobId,manifestId])).rows);
  }
  async recordAttempt(context:VerifiedTenantContext,raw:z.infer<typeof attemptInput>){
   const c=parse(attemptInput,raw);
-  try{await withTenant(this.pool,context,async db=>{await db.$client.query(`INSERT INTO app.shadow_final_check_source_attempt(tenant_id,job_id,manifest_id,source_id,id,execution_id,stage,version,input_hash,outcome,failure_code,result_hash,result_signal_ids,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::timestamptz)`,[context.tenantId,c.jobId,c.manifestId,c.sourceId,c.attemptId,c.executionId,c.stage,c.processingVersion,c.inputHash,c.outcome,c.failureCode,c.resultHash,c.resultSignalIds,c.evidenceId,c.objectVersionId,c.sha256,c.sourceReceivedAt]);});}catch(error){return typed(error);}
+  try{await withShadowJob(this.pool,context,c.jobId,async db=>{await db.$client.query(`INSERT INTO app.shadow_final_check_source_attempt(tenant_id,job_id,manifest_id,source_id,id,execution_id,stage,version,input_hash,outcome,failure_code,result_hash,result_signal_ids,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::timestamptz)`,[context.tenantId,c.jobId,c.manifestId,c.sourceId,c.attemptId,c.executionId,c.stage,c.processingVersion,c.inputHash,c.outcome,c.failureCode,c.resultHash,c.resultSignalIds,c.evidenceId,c.objectVersionId,c.sha256,c.sourceReceivedAt]);});}catch(error){return typed(error);}
  }
  /** Explicit zero descriptor is allowed only for an independently server-inventoried empty manifest. */
  async bindEmptyRun(context:VerifiedTenantContext,raw:z.infer<typeof emptyInput>){
   const c=parse(emptyInput,raw);
-  try{await withTenant(this.pool,context,async db=>{
+  try{await withShadowJob(this.pool,context,c.jobId,async db=>{
    const m=(await db.$client.query("SELECT * FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3",[context.tenantId,c.jobId,c.manifestId])).rows[0];
    // C204: uploads excluded as rejected, quarantined or expired are recorded in the manifest but are not evidence; only the rest must be empty.
    const evidenceSources=m?Number((await db.$client.query("SELECT count(*)::int n FROM app.final_check_manifest_source WHERE tenant_id=$1 AND job_id=$2 AND manifest_id=$3 AND excluded_state IS NULL",[context.tenantId,c.jobId,c.manifestId])).rows[0].n):-1;
@@ -135,16 +143,16 @@ export class FinalCheckCompletionRepository {
  /** Final-check orchestration supplies classifications first; this records only reconstructible result proof. */
  async recordResult(context:VerifiedTenantContext,raw:z.infer<typeof resultInput>){
   const c=parse(resultInput,raw);
-  try{await withTenant(this.pool,context,async db=>{await db.$client.query("INSERT INTO app.shadow_final_check_reveal_proof(tenant_id,job_id,run_id,id,signal_id,classification_id,projection_version,result_descriptor) VALUES($1,$2,$3,$4,$5,$6,'final-check-result.v1',$7::jsonb)",[context.tenantId,c.jobId,c.runId,c.resultId,c.signalId,c.classificationId,JSON.stringify(c.descriptor)]);});}catch(error){return typed(error);}
+  try{await withShadowJob(this.pool,context,c.jobId,async db=>{await db.$client.query("INSERT INTO app.shadow_final_check_reveal_proof(tenant_id,job_id,run_id,id,signal_id,classification_id,projection_version,result_descriptor) VALUES($1,$2,$3,$4,$5,$6,'final-check-result.v1',$7::jsonb)",[context.tenantId,c.jobId,c.runId,c.resultId,c.signalId,c.classificationId,JSON.stringify(c.descriptor)]);});}catch(error){return typed(error);}
  }
  /** Bind an existing reconciliation run after source processing and result-proof persistence. */
  async bindRun(context:VerifiedTenantContext,raw:z.infer<typeof bindingInput>){
   const c=parse(bindingInput,raw);
-  try{await withTenant(this.pool,context,async db=>{await db.$client.query(`INSERT INTO app.shadow_final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) SELECT tenant_id,job_id,$4,id,lock_id,evidence_cutoff_at,$5,detector_version,reconciliation_version FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[context.tenantId,c.jobId,c.manifestId,c.runId,c.executionId]);});}catch(error){return typed(error);}
+  try{await withShadowJob(this.pool,context,c.jobId,async db=>{await db.$client.query(`INSERT INTO app.shadow_final_check_run_binding(tenant_id,job_id,run_id,manifest_id,lock_id,evidence_cutoff_at,execution_id,detector_version,reconciliation_version) SELECT tenant_id,job_id,$4,id,lock_id,evidence_cutoff_at,$5,detector_version,reconciliation_version FROM app.final_check_manifest WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[context.tenantId,c.jobId,c.manifestId,c.runId,c.executionId]);});}catch(error){return typed(error);}
  }
  async publish(context:VerifiedTenantContext,raw:z.infer<typeof publicationInput>){
   const c=parse(publicationInput,raw);
-  try{return await withTenant(this.pool,context,async db=>{
+  try{return await withShadowJob(this.pool,context,c.jobId,async db=>{
    // The certificate trigger rechecks qualified identity, stages, inventory and available results under locks.
    await db.$client.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,run_id,status) VALUES($1,$2,$4,$3,'completed')",[context.tenantId,c.jobId,c.runId,c.checkId]);
    return {checkId:c.checkId,runId:c.runId};
@@ -161,7 +169,7 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
   const baselineCaptures = (context: VerifiedTenantContext, m: FinalCheckManifest) => m.comparisons.baseline.map(line => shadowCaptureV1.parse({ version: "shadow-capture.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId, id: line.scope_item_id, scopeItemId: line.scope_item_id,
     revisionId: line.commercial_revision_id, serverRecordedAt: m.comparisons.baselineRecordedAt, valuePence: null, kind: "baseline", state: null, scopeArea: "job", description: line.description, recordedPhase: "pre_lock", aiStructured: false, sourceRef: String(line.id) }));
   async function sourceResult(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]): Promise<FinalCheckSourceResult> {
-    const signalIds = await withTenant(shadowPool, context, async db => (await db.$client.query<{ signal_id: string }>(`
+    const signalIds = await withShadowJob(shadowPool, context, m.comparisons.jobId, async db => (await db.$client.query<{ signal_id: string }>(`
       SELECT signal_id FROM app.shadow_signal_evidence
       WHERE tenant_id=$1 AND job_id=$2 AND evidence_id=$3 AND object_version_id=$4
         AND sha256=$5 AND source_received_at=$6::timestamptz
@@ -183,9 +191,17 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
   return {
     read: (context: VerifiedTenantContext, task: { jobId: string; manifestId: string }) => repo.manifest(context, task.jobId, task.manifestId),
     async process(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]): Promise<FinalCheckSourceResult> {
+      const readSource = async <T>(read: (db: TenantTransaction) => Promise<T>): Promise<T | undefined> => {
+        try {
+          return await withObservationRead(runtimePool, context, m.comparisons.jobId, read, shadowPool);
+        } catch (error) {
+          if (error instanceof ShadowObservationReadError && error.code === "OBSERVATION_JOB_UNAVAILABLE") return undefined;
+          throw error;
+        }
+      };
       const structured = s.evidenceId === null && s.processable &&
         ["unlinked_supplier_version", "unlinked_supplier_document", "unlinked_purchase_order"].includes(s.sourceKind);
-      const decoded = structured ? await readPracticeStructuredSource(runtimePool, context, m, s) : null;
+      const decoded = structured ? await readPracticeStructuredSource(context, m, s, readSource) : null;
       // Preserve the structured reader's typed refusal (including a changed
       // commercial track). A successful read still requires every frozen check
       // below; no authorization or other exception is caught or converted.
@@ -213,7 +229,7 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
       // the same runtime/RLS source read and frozen binding apply to both paths.
       let includedCertificate;
       if (["completion_photo", "electrical_certificate"].includes(s.sourceKind)) {
-        const verified = s.processable ? await withTenant(runtimePool, context, async db => (await db.$client.query<{ legacy_photo: boolean }>(`
+        const verified = s.processable ? await readSource(async db => (await db.$client.query<{ legacy_photo: boolean }>(`
           SELECT CASE WHEN j.practice_session_digest IS NOT NULL
             THEN NOT app.is_blank_practice_company(j.practice_session_digest::text)
             ELSE false END AS legacy_photo
@@ -253,7 +269,7 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
       }
       let observation;
       if (s.sourceKind === "job_diary_text" || s.sourceKind === "customer_message_text") {
-        const read = await readFinalCheckTypedText(runtimePool, context, m, s);
+        const read = await readFinalCheckTypedText(context, m, s, readSource);
         if (read.status !== "proposal") return { version: "final-check.source-result.v1", inputHash: s.inputHash,
           status: read.status === "readable" ? "zero_result" : "unsupported", failureCode: read.status === "readable" ? null : "SOURCE_INVALID", signalIds: [] };
         observation = observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
@@ -271,7 +287,7 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
         // notes in the reader; here one work identity reconciles source estimates.
         for (const source of [...m.sources].sort((a,b) => a.id.localeCompare(b.id))) {
           if (!["job_diary_text", "customer_message_text"].includes(source.sourceKind)) continue;
-          const read = await readFinalCheckTypedText(runtimePool, context, m, source);
+          const read = await readFinalCheckTypedText(context, m, source, readSource);
           if (read.status !== "proposal" || read.proposal.facts.workReference !== observation.facts.workReference) continue;
           const candidate = observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId,
             kind: source.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request", ...read.proposal,
@@ -287,7 +303,7 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
         const estimate = !ambiguousPrice && values.size === 1 ? [...values][0]! : null;
         // Immutable existing provenance wins on retry/upgrade. Only new rows get
         // the reconciled estimate; no retrofitting historical signal amounts.
-        const prior = await withTenant(shadowPool, context, async db => (await db.$client.query<{id:string;estimated_value_pence:string|null}>(
+        const prior = await withShadowJob(shadowPool, context, m.comparisons.jobId, async db => (await db.$client.query<{id:string;estimated_value_pence:string|null}>(
           "SELECT id,estimated_value_pence FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND id=ANY($3::uuid[])",
           [context.tenantId,m.comparisons.jobId,proposals.map(p=>p.signalId)])).rows);
         proposals = proposals.map(p => {

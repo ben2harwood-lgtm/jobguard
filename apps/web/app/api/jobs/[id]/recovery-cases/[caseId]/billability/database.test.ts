@@ -3,14 +3,16 @@ import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createFinalCheckFixture, closeFinalCheckFixture, finalCheckTenant, seedFinalCheckJob, type FinalCheckFixture } from "../../../../../../../../../packages/db/test/final-check-fixture.js";
 import { realReceiptFixture } from "../../../../../../../../../packages/db/test/stored-receipt-case-fixture.js";
-import { testTenantContext } from "../../../../../../../../../packages/db/test/tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "../../../../../../../../../packages/db/test/tenant-context-test-utils.js";
 import { StoredReceiptCaseAllocationRepository } from "../../../../../../../../../packages/db/src/stored-receipt-case-allocation-repository.js";
 import { RecoveryBillabilityRepository } from "../../../../../../../../../packages/db/src/recovery-billability-repository.js";
 const state=vi.hoisted(()=>({pool:undefined as unknown,practice:"",identity:"",tenant:"",member:"",digest:""}));
 vi.mock("server-only",()=>({}));
 vi.mock("@jobguard/api/identity",()=>({resolveVerifiedTenantContext:async (_provider:unknown, credentials:{csrfToken?:string})=>{
  if(credentials.csrfToken!=="synthetic-csrf") throw new Error("ORIGIN_FORBIDDEN");
- return testTenantContext(state.tenant);
+ const active=await f.admin.query("SELECT 1 FROM app.membership WHERE tenant_id=$1 AND id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())",[state.tenant,state.member]);
+ if(!active.rowCount) throw new Error("TENANT_FORBIDDEN");
+ return testBoundTenantContext(f.admin,state.tenant,state.member,state.digest);
 }}));
 vi.mock("next/headers",()=>({cookies:async()=>({get:(key:string)=>({value:key==="jg_session"?state.practice:state.identity})})}));
 vi.mock("../../../../../../lib/synthetic-server",()=>({syntheticPool:()=>state.pool}));

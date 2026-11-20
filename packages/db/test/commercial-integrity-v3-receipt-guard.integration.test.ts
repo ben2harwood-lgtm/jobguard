@@ -28,7 +28,8 @@ it("CI-P08 private helpers inaccessible, exact definer posture and only checked 
 it("guard removal control demonstrates the INSERT denial is enforced by this trigger, rolled back",async()=>{
  const db=await f.admin.connect();try{
   await db.query("BEGIN");await db.query("DROP TRIGGER ch6_integrity_review_receipt_guard ON app.command_receipt");
-  await db.query("SET LOCAL ROLE jobguard_migration");await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenant]);
+  await db.query("SET LOCAL ROLE jobguard_migration");
+  await db.query("SELECT app.bind_request('practice',$1,$2)",[f.auth.digest,tenant]);
   await expect(db.query(insert,[randomUUID(),tenant,"commercial_integrity.review.v3",member])).resolves.toBeDefined();
  }finally{await db.query("ROLLBACK");db.release();}
  await expect(transaction(f.admin,db=>db.query(insert,[randomUUID(),tenant,"commercial_integrity.review.v3",member]))).rejects.toThrow("INTEGRITY_RECEIPT_CONTROLLED");

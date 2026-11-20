@@ -8,6 +8,7 @@ import { FinalAccountLockRepository } from "../src/final-account-lock-repository
 import { seedEvidencePackFixture } from "./evidence-pack-fixture.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { createWorkFixture,closeWorkFixture,seedWorkJob,prepareWorkAccount,insertPhoto,workTenant,CH4_HASH,type WorkFixture } from "./job-work-state-fixtures.js";
+import { applyUpgradeProofs, loadMigrationProofs } from "./migration-proof-loader.js";
 
 /* An upgrade proof proves ITS OWN migration only: install everything before N, snapshot, apply N alone, compare; then apply everything after N and require success twice. Compare existing rows by named pre-existing columns after all migrations. Never assert that later migrations add no column or replace no function; the fingerprinted-table guard owns 'may never gain a column'. */
 const own="0144_job_work_state.sql";
@@ -56,9 +57,9 @@ describe("CH-4 own-migration upgrade",()=>{
   const policyNames=new Set(originalPolicies.map(r=>r.name));
   expect((await policies(f.admin)).filter(r=>policyNames.has(r.name))).toEqual(originalPolicies);
   const oldPolicyTables=new Set(originalPolicies.map(r=>r.name.split('.').slice(0,2).join('.')));
-  const compareOldPolicies=async(db:Pick<PoolClient,"query">,additions:typeof originalPolicies=[])=>{
+  const compareOldPolicies=async(db:Pick<PoolClient,"query">,expected=originalPolicies)=>{
    const byName=(a:typeof originalPolicies[number],b:typeof originalPolicies[number])=>a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
-   expect((await policies(db)).filter(r=>oldPolicyTables.has(r.name.split('.').slice(0,2).join('.'))).sort(byName)).toEqual([...originalPolicies,...additions].sort(byName));
+   expect((await policies(db)).filter(r=>oldPolicyTables.has(r.name.split('.').slice(0,2).join('.'))).sort(byName)).toEqual([...expected].sort(byName));
   };
   await compareOldPolicies(f.admin);
   const reader=await f.admin.connect();try{
@@ -99,10 +100,23 @@ describe("CH-4 own-migration upgrade",()=>{
    name:"app.sandbox_run_event.worker_recovery_archived_run",permissive:"PERMISSIVE",roles:["jobguard_migration"],cmd:"SELECT",
    qual:"(((kind)::text = 'archived'::text) AND (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (current_setting('app.job_proof_source_read'::text, true) = 'on'::text) AND pg_has_role(SESSION_USER, 'jobguard_worker'::name, 'USAGE'::text))",with_check:null,
   }]:[];
-  await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);await compareOldPolicies(f.admin,[...meterSourcePolicies,...customerStagePolicies,...perFirmPolicies,...workerPolicies,...lp5Policies().filter(policy=>oldPolicyTables.has(policy.name.split(".").slice(0,2).join("."))),{
+  const predecessorPolicies=[...originalPolicies,...meterSourcePolicies,...customerStagePolicies,...perFirmPolicies,...workerPolicies,...lp5Policies().filter(policy=>oldPolicyTables.has(policy.name.split(".").slice(0,2).join("."))),{
    ...originalPolicies.find(policy=>policy.name==="app.audit_event.tenant_isolation")!,
    name:"app.audit_event.lp4_audit_writer",roles:["jobguard_audit_writer"],
-  }]);
+  }];
+  const cutover=loadMigrationProofs().proofs.find(proof=>proof.migration==="0765_lp11_bound_tenant_rls.sql")!;
+  const cutoverChanges=cutover.upgrade.filter(change=>change.section==="policies"
+   && oldPolicyTables.has(`${(change.after??change.before)!.schemaname}.${(change.after??change.before)!.tablename}`));
+  const records=predecessorPolicies.map(({name,roles,...row})=>{
+   const [schemaname,tablename,policyname]=name.split(".");
+   return {schemaname,tablename,policyname,roles:`{${roles.join(",")}}`,...row};
+  });
+  const projected=applyUpgradeProofs({rows:{},routines:[],relations:[],policies:records},
+   [{...cutover,upgrade:cutoverChanges}],{}).policies;
+  const expectedPolicies=projected.map(({schemaname,tablename,policyname,roles,...row})=>({
+   name:`${schemaname}.${tablename}.${policyname}`,roles:roles.slice(1,-1).split(","),...row,
+  }));
+  await migrate(f.admin);await migrate(f.admin);await compare(f.admin,before);await compareOldPolicies(f.admin,expectedPolicies);
   for(const mutation of ["UPDATE app.evidence_object SET server_received_at=server_received_at+interval '1 microsecond'","ALTER TABLE app.job ALTER COLUMN title TYPE text"]){
    const db=await f.admin.connect();try{await db.query("BEGIN");await db.query("SET LOCAL session_replication_role='replica'");await db.query(mutation);await expect(compare(db,before)).rejects.toThrow()}finally{await db.query("ROLLBACK");db.release()}
   }

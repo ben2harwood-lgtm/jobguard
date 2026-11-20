@@ -2,7 +2,7 @@ import { testActorContext, testBoundTenantContext } from "./tenant-context-test-
 import { readFileSync } from "node:fs";
 import { digestOf } from "./contractor-practice-session-fixtures.js";
 import { resolveExtraDuplicateCandidates } from "../src/extra-duplicate-candidates.js";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ContractorRepository, requireContractorRequestContext, ExtraApprovalRepository, ExtraRepository, readExtraDuplicateCandidates, withTenant } from "../src/index.js";
 import { cluster, world, code, type World } from "./contractor-billing-fixtures.js";
@@ -191,13 +191,12 @@ it("ENT-3 relink refuses a forged actor, uncovered grant, wrong role and foreign
  // Prove the database itself binds p_actor to the receipt, even if the repository is bypassed.
  // LP-6d: the call is bound to the forged p_actor's own credential, so the receipt check (not the binding) refuses it.
  const forged = w.w.supervisor2.member.membershipId;
- await testBoundTenantContext(c.admin, w.w.p.tenantId, forged);
+ const forgedContext = await testBoundTenantContext(c.admin, w.w.p.tenantId, forged);
  await expect(ownerTx(c,w.w.p.tenantId,async db => {
-  await db.$client.query("SELECT app.bind_request('real',$1,$2)", [createHash("sha256").update(`lp6-test:${w.w.p.tenantId}:${forged}`).digest("hex"), w.w.p.tenantId]);
   const commandId = await receipt(db,w.w.p.tenantId,w.s.jobId,a,w.w.members.supervisor.member.membershipId,"MarkDuplicate");
   await db.$client.query("SELECT app.xa_mark_duplicate($1,$2,$3,$4,$5,$6)",
    [w.s.jobId,a,b,commandId,w.w.supervisor2.member.membershipId,randomUUID()]);
- })).rejects.toMatchObject({message:"INVALID_COMMAND"});
+ },forgedContext)).rejects.toMatchObject({message:"INVALID_COMMAND"});
  expect(await relinkSnapshot(w)).toEqual(before); expect(await relinkSnapshot(foreign)).toEqual(otherBefore);
 },120000);
 

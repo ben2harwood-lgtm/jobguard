@@ -95,9 +95,10 @@ it("refuses one invalid book and continues to the next job, but retries outages"
  await expect(outage.repo.raiseTimerReviews(testTenantContext(tenantId))).rejects.toThrow("RETENTION_UNAVAILABLE");
 });
 
-it("wires retention raises to the business pool without an infrastructure business reader", async () => {
+it("wires retention raises to the isolated worker pool without a separate infrastructure connection", async () => {
  const { readFileSync } = await import("node:fs");
  const source = readFileSync(new URL("./worker.ts", import.meta.url), "utf8");
- expect(source).toContain("new RetentionRecordRepository(runtimePool)");
+ expect(source).toContain("new RetentionRecordRepository(workerPool)");
+ expect(source).not.toContain("new RetentionRecordRepository(runtimePool)");
  expect(source).not.toContain("retentionPool");
 });

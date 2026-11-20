@@ -121,8 +121,9 @@ describe("SERIOUS-B7 PostgreSQL authority and sources", () => {
     let pending: Promise<unknown> | undefined;
     try {
       await holder.query("BEGIN");
-      await holder.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenantId]);
+      await holder.query("SELECT set_config('app.tenant_id','33333333-3333-4333-8333-333333333333',true)");
       await holder.query("SELECT set_config('app.evidence_pack_approval_fence','on',true)");
+      expect((await holder.query("SELECT * FROM app.authenticate_practice_session($1,$2)", ["0".repeat(64), fixture.tenantId])).rowCount).toBe(0);
       expect((await holder.query("SELECT * FROM app.authenticate_practice_session($1,$2)", [fixture.sessionDigest, fixture.tenantId])).rowCount).toBe(1);
       pending = revoker.query(table.startsWith("control_plane") ? "UPDATE control_plane.practice_session SET revoked_at=clock_timestamp() WHERE token_digest=$1" : "UPDATE app.membership SET revoked_at=clock_timestamp() WHERE id=$1", [table.startsWith("control_plane") ? fixture.sessionDigest : fixture.memberId]);
       await waitForWaiter(holder);

@@ -7,9 +7,9 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { migrate } from "../src/migrate.js";
 import { RecurringExtrasRepository } from "../src/recurring-extras-repository.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { freePort, closeTestPools } from "./pool-test-utils.js";
-const tenant = randomUUID(), member = randomUUID(), other = randomUUID();
+const tenant = randomUUID(), member = randomUUID(), other = randomUUID(), otherMember = randomUUID();
 const jobs = [randomUUID(),randomUUID(),randomUUID()];
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, directory: string;
 beforeAll(async () => {
@@ -22,21 +22,23 @@ beforeAll(async () => {
   admin = new Pool({ host: "127.0.0.1", port, user: "postgres", password: "synthetic" });
   await migrate(admin);
   await seed(admin, tenant, member, jobs);
-  await seed(admin, other, randomUUID(), [randomUUID(), randomUUID(), randomUUID()]);
+  await seed(admin, other, otherMember, [randomUUID(), randomUUID(), randomUUID()]);
   await admin.query("CREATE ROLE recurring_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS; GRANT jobguard_runtime TO recurring_login");
   runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "recurring_login", password: "synthetic", max: 2 });
 }, 120000);
 afterAll(async () => { vi.unstubAllEnvs(); await closeTestPools(runtime,admin); if(pg) await pg.stop(); if(directory) await rm(directory,{recursive:true,force:true}); });
 it("reads exactly this tenant's three current approved sources without writes", async () => {
   const before = await counts(admin,tenant);
-  const result = await new RecurringExtrasRepository(runtime).read(testTenantContext(tenant), member, jobs[0]);
+  const context = await testBoundTenantContext(admin, tenant, member);
+  const result = await new RecurringExtrasRepository(runtime).read(context, member, jobs[0]);
   expect(result.suggestions).toHaveLength(1);
   expect(result.suggestions[0]?.jobCount).toBe(3);
   expect(result.suggestions[0]?.sources.map(source => source.jobId).sort()).toEqual([...jobs].sort());
   expect(await counts(admin,tenant)).toEqual(before);
   expect((await runtime.query("SELECT * FROM app.variation_rate_observation")).rows).toEqual([]);
-  await expect(new RecurringExtrasRepository(runtime).read(testTenantContext(other),member,jobs[0])).rejects.toThrow("FORBIDDEN");
-  await expect(new RecurringExtrasRepository(runtime).read(testTenantContext(tenant),member,randomUUID())).rejects.toThrow("NOT_FOUND");
+  const foreign = await testBoundTenantContext(admin, other, otherMember);
+  await expect(new RecurringExtrasRepository(runtime).read(foreign,member,jobs[0])).rejects.toThrow("FORBIDDEN");
+  await expect(new RecurringExtrasRepository(runtime).read(context,member,randomUUID())).rejects.toThrow("NOT_FOUND");
 });
 it("withdrawal permanently removes a current approved source from the group", async () => {
   const variation = (await admin.query("SELECT id FROM app.variation WHERE tenant_id=$1 AND job_id=$2",[tenant,jobs[2]])).rows[0].id;
@@ -46,7 +48,8 @@ it("withdrawal permanently removes a current approved source from the group", as
     await c.query("INSERT INTO app.variation_withdrawal(tenant_id,job_id,id,variation_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,$5,'builder_withdrawn')",[tenant,jobs[2],randomUUID(),variation,member]);
     await c.query("COMMIT");
   } finally { await c.query("ROLLBACK"); c.release(); }
-  expect((await new RecurringExtrasRepository(runtime).read(testTenantContext(tenant),member,jobs[0])).suggestions).toEqual([]);
+  const context = await testBoundTenantContext(admin, tenant, member);
+  expect((await new RecurringExtrasRepository(runtime).read(context,member,jobs[0])).suggestions).toEqual([]);
 });
 it("refuses even a valid context outside the synthetic environment", async () => {
   vi.stubEnv("JOBGUARD_ENV","production");
