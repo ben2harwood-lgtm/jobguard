@@ -5,7 +5,7 @@ import { NorthsidePractice } from "./northside-practice";
 import { pounds } from "../lib/pounds";
 import styles from "./northside.module.css";
 
-type Summary = { role: string; seeded: boolean; targets: { clients: number; operatives: number; ordersPerMonth: number; month: string }; facts: { companyName: string | null; clients: number; operatives: number; ordersThisMonth: number; orderValuePence: number; extras: number } };
+type Summary = { role: string; seeded: boolean; journey?: { journeyOrder: { workOrderId: string; reference: string } | null } | null; targets: { clients: number; operatives: number; ordersPerMonth: number; month: string }; facts: { companyName: string | null; clients: number; operatives: number; ordersThisMonth: number; orderValuePence: number; extras: number } };
 async function post(url: string, body: unknown) { const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); return { ok: r.ok, status: r.status, body: await r.json().catch(() => ({})) }; }
 
 /** The practice hub: start the generated contractor, see counted facts, reset to a new run. */
@@ -46,7 +46,7 @@ export function NorthsideHub() {
       await load();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
-  const f = summary?.facts;
+  const f = summary?.facts, journeyOrder = summary?.journey?.journeyOrder;
   return <main className={styles.page}>
     <Link href="/classic">Back to Jobs</Link>
     <h1>{f?.companyName ?? "Northside Property Services"} <span className={styles.pill}>generated, fictional</span></h1>
@@ -69,7 +69,9 @@ export function NorthsideHub() {
         </ul></section>}
       <section className={styles.card}><h2>Walk the journey</h2>
         <ul>
-          <li><Link href="/contractor/work-orders">Finance: find the work order and open billing</Link></li>
+          <li>{journeyOrder
+            ? <Link href={`/contractor/work-orders/${journeyOrder.workOrderId}`}>Finance: open work order {journeyOrder.reference} and its billing</Link>
+            : <Link href="/contractor/work-orders">Finance: find the work order and open billing</Link>}</li>
           <li><Link href="/contractor/statements">Finance: monthly statement</Link></li>
           <li><Link href="/contractor/dashboard">Contractor dashboard and sample baseline import</Link></li>
           <li><Link href="/site/extra">Operative: log an extra (phone)</Link></li>

@@ -1,3 +1,4 @@
+import { practiceSessionMaxAgeSeconds } from "../../lib/linked-practice-entry";
 import { isTrustedBrowserOrigin } from "../contractor/origin";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
     if (jar.get("jobguard_session") || jar.get("jg_practice_pair")) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401, headers });
     const token = await startBlankPracticeCompany(syntheticPool(), parsed.data, (await cookies()).get("jg_session")?.value);
     const response = NextResponse.json({ version: "blank-practice-company.v1", ok: true }, { headers });
-    response.cookies.set("jg_session", token, { httpOnly: true, sameSite: "lax", secure: new URL(request.url).protocol === "https:", path: "/" });
+    response.cookies.set("jg_session", token, { httpOnly: true, sameSite: "lax", secure: new URL(request.url).protocol === "https:", path: "/", maxAge: practiceSessionMaxAgeSeconds });
     return response;
   } catch (error) {
     return practiceFailure(error) ?? NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503, headers });

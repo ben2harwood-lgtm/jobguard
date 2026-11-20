@@ -24,7 +24,7 @@ it.each([undefined, "", "v1."+"a".repeat(64), "v1."+"A".repeat(64), "x".repeat(1
 it("bounds credential parsing and uses server cookie flags", () => {
   expect(()=>practicePairReceipt("x".repeat(257),randomUUID(),secret)).toThrow("UNAUTHENTICATED");
   expect(()=>practicePairReceipt("identity","not-uuid",secret)).toThrow("UNAUTHENTICATED");
-  expect(practiceCookieOptions(true)).toEqual({httpOnly:true,secure:true,sameSite:"strict",path:"/"});
+  expect(practiceCookieOptions(true)).toEqual({httpOnly:true,secure:true,sameSite:"strict",path:"/",maxAge:604740});
 });
 
 beforeEach(() => { f.jar.clear(); vi.clearAllMocks(); f.query.mockResolvedValue({rows:[{linked:false}]}); vi.stubEnv("AUTH_CODE_SECRET", secret); });

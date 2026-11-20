@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-front-door-keeps-firm": {
+      "branches": ["codex/sandbox/real-front-door-keeps-firm"],
+      "note": "RED: browser lifetime for practice session and pairing cookies.",
+      "allow": [
+        "apps/web/app/api/auth/practice/route.test.ts",
+        "apps/web/app/api/auth/signout/route.test.ts",
+        "apps/web/app/api/practice-company/route.test.ts",
+        "apps/web/app/api/practice-company/route.ts",
+        "apps/web/app/api/session/route.test.ts",
+        "apps/web/app/api/session/route.ts",
+        "apps/web/app/lib/linked-practice-entry.test.ts",
+        "apps/web/app/lib/linked-practice-entry.ts",
+        "apps/web/e2e/real-front-door-keeps-firm.spec.ts"
+      ]
+    }
+  }
+}

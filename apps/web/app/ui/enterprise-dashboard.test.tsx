@@ -2,7 +2,7 @@ import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { deriveBaseline, enterpriseSignals, projectEnterpriseDashboard, projectStoredDashboardBilling } from "@jobguard/core";
-import { BaselineView, DashboardView, EnterpriseDashboard } from "./enterprise-dashboard";
+import { BaselineView, DashboardView, EnterpriseDashboard, practiceTeamBindings } from "./enterprise-dashboard";
 vi.stubGlobal("React", React);
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const query = { version: "enterprise-dashboard-query.v1", from: "2026-01-01T00:00:00Z", until: "2027-01-01T00:00:00Z", dimension: "team", filters: {}, offset: 0, limit: 20 };
@@ -45,4 +45,11 @@ it("displays the possible unmatched-variation advisory with fact/run citations a
   for (const text of ["Possible billed variation without a JobGuard extra", "Advisory only", id(30), id(31), "They do not prove a variation or fee entitlement."]) expect(html).toContain(text);
   expect(html).not.toMatch(/<button[^>]*>(Approve|Charge|Price)/u);
   expect(JSON.stringify([report, billing])).toBe(before);
+});
+
+it("binds the first two practice teams in the given order", () => {
+  const teams = [{ id: id(8), name: "First team" }, { id: id(3), name: "Second team" }, { id: id(4), name: "Third team" }];
+  expect(practiceTeamBindings(teams)).toBe(`fictional-pilot=${id(8)}\nfictional-rest=${id(3)}`);
+  expect(practiceTeamBindings(teams.slice(0, 1))).toBe("");
+  expect(renderToStaticMarkup(<EnterpriseDashboard/>)).not.toContain("Use two practice teams");
 });
