@@ -10,15 +10,30 @@ export type Partition = z.infer<typeof mobilePartitionV1>;
 export const activeRecord = z.object({ version: z.literal("mobile-active.v1"), partition: mobilePartitionV1,
  state: z.enum(["active", "cleanup_required"]) }).strict();
 export const nativeQueueEntryV1 = z.object({ upload: offlineUploadV1, reconciliation: offlineReconciliationV1, offlineIntent: offlineIntentV1.optional() }).strict();
+export const inlineAttachmentV1 = z.object({ id: z.guid(),
+ base64: z.string().regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u).max(131072),
+}).strict();
+const capture = z.union([
+ z.object({ item: offlineCaptureItemV1, text: z.string().startsWith("Fictional ").max(5000), upload: z.never().optional() }).strict()
+  .refine(c => c.item.kind === "text" && c.item.status === "local_only"),
+ z.object({ item: offlineCaptureItemV1, upload: z.object({ finalizeCommandId: z.guid(),
+  requestedExpiresAtMs: time, serverExpiresAtMs: time.nullable(), nextOffset: z.number().int().nonnegative(),
+ }).strict() }).strict().refine(({ item, upload }) => item.kind !== "text" && upload.nextOffset <= item.byteLength &&
+  (upload.serverExpiresAtMs !== null || upload.nextOffset === 0) &&
+  (upload.serverExpiresAtMs === null || upload.serverExpiresAtMs <= upload.requestedExpiresAtMs) &&
+  (item.status !== "verified" || upload.nextOffset === item.byteLength)),
+]);
 export const localData = z.object({ version: z.literal("mobile-cache.v1"), metadata: mobileLocalMetadataV1,
  sync: syncDeviceCacheV1.nullable().prefault(null),
  queue: z.array(z.unknown()).max(1000).prefault([]),
- captures: z.array(z.object({ item: offlineCaptureItemV1, text: z.string().startsWith("Fictional ").max(5000) }).strict()).max(100).prefault([]),
+ captures: z.array(capture).max(100).prefault([]),
  notes: z.array(z.object({ id: z.guid(), text: z.string().startsWith("Fictional ").max(500) }).strict()).max(100),
  // Small synthetic attachments are stored INSIDE SQLCipher, never in a plaintext media directory.
- files: z.array(z.object({ id: z.guid(), base64: z.string().regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u).max(131072) }).strict()).max(8),
+ files: z.array(inlineAttachmentV1).max(8),
  unsyncedWork: z.enum(["none", "present", "unknown"]),
-}).strict().refine(data => data.unsyncedWork !== "none" || (data.captures.every(c => c.item.status === "verified") && data.queue.every(raw => {
+}).strict().refine(data => data.captures.every(({ item, upload }) => !upload ||
+ data.files.filter(f => f.id === item.uploadId).length === 1), "Capture attachment missing or ambiguous")
+.refine(data => data.unsyncedWork !== "none" || (data.captures.length === 0 && data.queue.every(raw => {
  const parsed = nativeQueueEntryV1.safeParse(raw); return parsed.success && parsed.data.reconciliation.item.status === "recorded"
   && parsed.data.reconciliation.item.commandId === parsed.data.upload.commandId
   && parsed.data.reconciliation.item.payloadHash === parsed.data.upload.payloadHash;

@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "lanes": {
+    "native-m3-integrate": {
+      "branches": [
+        "codex/sandbox/native-m3-integrate"
+      ],
+      "allow": [
+        "apps/api/src/native-capture-upload.application.ts",
+        "apps/api/src/native-download.compat.test.ts",
+        "apps/api/src/offline-client-queue.compat.test.ts",
+        "apps/api/src/sync/download.application.ts",
+        "apps/api/src/sync/native-download.connection.ts",
+        "apps/mobile/src/CaptureScreen.tsx",
+        "apps/mobile/src/ReconciliationScreen.tsx",
+        "apps/mobile/src/WorkspaceScreens.tsx",
+        "apps/mobile/src/capture-upload.test.tsx",
+        "apps/mobile/src/capture-upload.ts",
+        "apps/mobile/src/capture.ts",
+        "apps/mobile/src/composition.test.tsx",
+        "apps/mobile/src/composition.ts",
+        "apps/mobile/src/download-transport.ts",
+        "apps/mobile/src/download.ts",
+        "apps/mobile/src/durable-queue.ts",
+        "apps/mobile/src/lifecycle-contracts.ts",
+        "apps/mobile/src/local-api.ts",
+        "apps/mobile/src/reconciliation-controller.ts",
+        "docs/contracts/native-plan-slices.md",
+        "packages/db/test/evidence.integration.test.ts",
+        "packages/db/test/sync-snapshot.integration.test.ts"
+      ],
+      "note": "RED synthetic integration of the native download, queue and resumable upload connections."
+    }
+  }
+}

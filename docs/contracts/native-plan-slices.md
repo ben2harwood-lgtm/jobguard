@@ -33,13 +33,21 @@ Pending/malformed queue content cannot be labelled `unsyncedWork: none` to autho
 
 Lacks: native SQLCipher durability/reinstall extraction proof, approved recovery/disposal policy, mounted production authenticated upload transport, full application composition/device reconciliation interaction and physical kill/restart/disk-failure evidence. The screen's choices navigate to review; they do not themselves execute commercial commands. Unknown outcomes preserve identity and pending data. Final tests include existing API compatibility and durable queue adversarial cases; all encryption here is an explicitly labelled double, not a plaintext runtime fallback.
 
-## M3-5 — capture and encrypted media boundary
+## M3-5 — original capture partial and encrypted media boundary
 
 Has: durable bounded fictional text capture inside the same SQLCipher document, stable upload/job/scope identities, client SHA-256, UTF-8 byte length, labelled advisory capture time, restart restoration, pending cleanup holds, shared upload-plan/status semantics and a native text/permission-recovery screen. Local text is `local_only`, never verified proof. Same ID with changed text/metadata is refused. Voice/photo requests return explicit holds even with permission granted; no camera, microphone, plaintext temporary media, provider or gateway is opened.
 
 Lacks (held): general encrypted media files, camera/microphone capture execution, resumable byte-transfer/finalization, audio gateway/extraction, physical restart/low-storage/disk-interruption proof and approved deletion/recovery policy. Generic text evidence also has no owning upload transport: the existing core planner returns `text_transport_unavailable`. The router must choose that authoritative text-evidence command/contract; it is not silently downgraded to LogSiteExtra or relabelled verified. No fake success or unencrypted fallback fills these gaps. The bounded M3-2 inline-attachment vault remains separate from a general media pipeline.
 
 M3-5 verification: mobile tests passed 34 (7 files), including stable restored capture identity, Unicode byte length, no fabricated server verification, changed-content conflict, pending-deletion hold and denied/unavailable/granted media requests all held. Mobile typecheck passed. SQLCipher and platform calls remain doubles or source-only, as before.
+
+### M3-5 native resumable upload continuation (RED)
+
+The native workspace retains bounded fictional photo and PCM WAV attachments in its existing inline attachment slots. One saved intent fixes upload, job, scope, client hash and time, requested expiry and finalize command ID. The driver starts from the authenticated server offset and checkpoints acknowledged bytes and the first server expiry. If finalization commits before its reply arrives, the driver replays the original finalize command to recover the server hash and immutable version. The capture screen displays persisted local-only, uploading, server-verified, rejected and conflict states. Text stays local and voice processing stays queued. All attachments and intents remain under the existing cleanup hold.
+
+The injected, unmounted synthetic adapter resolves current identity, tenant and role from the existing server request bridge. The resumable service handles begin, status, append and finalize under its existing authorization and storage rules. Pending/rejected uploads and voice attachments cannot meet the server's photo requirement. The application-object recreation tests use an in-memory store interface double and real PostgreSQL for transfer and proof.
+
+D08, the general encrypted-media and cleanup policy, real capture and providers, production authentication, physical restart and low-storage tests, independent RED acceptance, G3 and release remain held. Integration order is M3-3, M3-4, then this continuation.
 
 ## M3-6 — shared core-loop native presentation
 

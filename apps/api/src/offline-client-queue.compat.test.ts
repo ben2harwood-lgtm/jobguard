@@ -9,6 +9,13 @@ import { OfflineUploadController } from "./offline-upload.controller.js";
 import { PracticeAccess } from "./practice-access.js";
 import { JobWorkStateApplication } from "./job-work-state.application.js";
 
+// The composed capture binding imports Expo, which the Node queue test cannot load.
+vi.mock("../../mobile/node_modules/expo-crypto", () => ({
+ CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+ digest: (_: string, bytes: Uint8Array<ArrayBuffer>) => crypto.subtle.digest("SHA-256", bytes),
+ digestStringAsync: async (_: string, text: string) => createHash("sha256").update(text).digest("hex"),
+}));
+
 it("M3-4 client rules explicitly know every API result code and handle every state", () => {
  expect([...offlineQueueResultCodesV1].sort()).toEqual([...offlineUploadResultV1.shape.code.options].sort());
  const item = offlineQueueItemV1.parse({ version: "offline-queue-item.v1", environment: "synthetic_demo",
