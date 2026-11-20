@@ -1,4 +1,4 @@
-import { testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -138,6 +138,7 @@ async function transaction(f: Fixture) {
   await db.query("BEGIN");
   await db.query("SET LOCAL statement_timeout='8s'");
   await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenantId]);
+  await bindTestClient(admin, db, f.tenantId, f.memberId);
   return db;
 }
 async function insertSchedule(db: PoolClient, f: Fixture, createdTick = 2) {

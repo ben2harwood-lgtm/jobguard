@@ -180,10 +180,13 @@ describe("LP-0 authority paths", () => {
       `acl|col|app.scope_identity.state|${APPLICATION_ROLE}|UPDATE|-`, `acl|col|app.evidence_upload.state|${APPLICATION_ROLE}|UPDATE|-`,
     ]) { const g = group(key); expect(g.cards.length, key).toBeGreaterThan(0); expect(g.downstream.length, key).toBeGreaterThan(30); }
     // The named LP-13 items are explicit authority paths.
-    for (const id of ["ap-lp13-invoice-number-burning", "ap-lp13-legacy-unknown-raiser", "ap-lp13-scope-progress-actor", "ap-lp13-sso-audit-connection", "ap-lp13-0095-replay-branch"]) {
+    for (const id of ["ap-lp13-legacy-unknown-raiser", "ap-lp13-scope-progress-actor", "ap-lp13-sso-audit-connection", "ap-lp13-0095-replay-branch"]) {
       expect(paths.get(id), id).toBeDefined();
       expect(paths.get(id)!.cards).toContain("LP-13");
     }
+    // LP-8a withdraws the number-burning path, including its runtime helper.
+    expect(paths.has("ap-lp13-invoice-number-burning")).toBe(false);
+    expect(paths.has("ap-lp8a-billing-adapters")).toBe(true);
     // A path or card removed from the reviewed file fails inventory completeness.
     expect(() => parseInventory({ ...rawInventory, authorityPaths: rawInventory.authorityPaths.slice(1) })).toThrow(/no known authority path/);
     const firstAuthority = rawInventory.groups.findIndex((g: { kind: string }) => AUTHORITY_KINDS.has(g.kind));

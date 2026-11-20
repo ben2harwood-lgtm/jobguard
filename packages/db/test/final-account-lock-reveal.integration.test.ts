@@ -10,7 +10,7 @@ describe("SV-4 DW6 / SB-26: SV-2 deferred locked-job reveal half",()=>{
   for(const job of [a,b,other]){const repo=await prepareLock(f,job);await repo.lock(job.context,job.input);}
   const ids=new Map<string,string[]>();
   for(const account of [a,b,unlocked,other])for(const state of ['revealed','held_for_final_check','candidate','reconciled']){
-   const id=randomUUID();await asFixtureTenant(f.shadow,account.tenantId,db=>db.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
+   const id=randomUUID();await asFixtureTenant(f.admin,account.tenantId,db=>db.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
     VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic-sv4.v1',clock_timestamp(),'Fictional reveal proof','low',$5)`,[account.tenantId,account.jobId,id,randomUUID(),state]));
    if(state==='revealed')ids.set(account.jobId,[id]);
   }

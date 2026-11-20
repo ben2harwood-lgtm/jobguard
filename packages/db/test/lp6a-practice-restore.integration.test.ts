@@ -85,21 +85,23 @@ it("upgrades dark, round-trips a logical binding-table dump into a fresh cluster
     await seedHomeSession(db.owner,digest);
     await source.query("BEGIN");await source.query("SELECT app.bind_request('practice',$1,$2)",[digest,DEMO_TENANT_ID]);
     await source.query("COMMIT");
-    // A real logical dump must carry stale UNLOGGED rows without carrying
-    // authority into the destination postmaster/database. No credentials in argv.
+    // Restore stale UNLOGGED bindings and their practice credential as data.
+    // A restore must not invoke the saved-sample trigger to issue new authority.
+    // The disposable destination's administrative loader re-enables the triggers.
     const dumpFile=join(db.directory,"binding.sql");
     const connectionArgs=(database:JobDoorsDatabase)=>[
       "--host=127.0.0.1",`--port=${database.owner.options.port}`,
       "--username=postgres",`--dbname=${database.owner.options.database}`,
     ];
-    await execute("pg_dump",[...connectionArgs(db),"--data-only","--inserts",
-      "--no-owner","--no-privileges","--table=control_plane.request_binding",`--file=${dumpFile}`],
+    await execute("pg_dump",[...connectionArgs(db),"--data-only","--inserts","--disable-triggers",
+      "--no-owner","--no-privileges","--table=control_plane.request_binding",
+      "--table=control_plane.practice_session",`--file=${dumpFile}`],
       {env:{...process.env,PGPASSWORD:String(db.owner.options.password)},timeout:30_000});
     // Embedded PostgreSQL 16 ships no pg_dump. CI's newer client adds this
     // PostgreSQL 17+ setting, which 16 rejects; remove only that SET line.
     const dumpSql=await readFile(dumpFile,"utf8");
     await writeFile(dumpFile,dumpSql.replace(/^SET transaction_timeout = 0;\r?\n/gm,""));
-    await execute("psql",[...connectionArgs(other),"-X","--set=ON_ERROR_STOP=on",`--file=${dumpFile}`],
+    await execute("psql",[...connectionArgs(other),"-X","--single-transaction","--set=ON_ERROR_STOP=on",`--file=${dumpFile}`],
       {env:{...process.env,PGPASSWORD:String(other.owner.options.password)},timeout:30_000});
     const dump=(await db.owner.query("SELECT coalesce(json_agg(row_to_json(b)),'[]'::json) payload FROM control_plane.request_binding b")).rows[0].payload;
     expect(dump.length).toBeGreaterThan(0);
@@ -117,11 +119,16 @@ it("upgrades dark, round-trips a logical binding-table dump into a fresh cluster
       const xid=(await target.query("SELECT pg_current_xact_id()::text xid")).rows[0].xid;
       await other.owner.query(`INSERT INTO control_plane.request_binding SELECT environment_id,$1::xid8,credential_kind,session_ref,tenant_id,actor_id,expires_at
         FROM control_plane.request_binding LIMIT 1 ON CONFLICT DO NOTHING`,[xid]);
+      expect((await other.owner.query("SELECT 1 FROM control_plane.request_binding WHERE transaction_id=$1::xid8",[xid])).rowCount).toBeGreaterThan(0);
       await expect(target.query("SELECT app.current_actor()")).rejects.toMatchObject(refused);
       await target.query("ROLLBACK");
       // Practice records copied into another database name still confer nothing.
       await seedHomePrincipal(other.owner);
-      await seedHomeSession(other.owner,digest);
+      const practiceRow = (owner: Pool) => owner.query(`SELECT * FROM control_plane.practice_session
+        WHERE token_digest=$1 AND revoked_at IS NULL AND expires_at>clock_timestamp()`, [digest]);
+      const liveSource = await practiceRow(db.owner);
+      expect(liveSource.rowCount).toBe(1);
+      expect((await practiceRow(other.owner)).rows).toEqual(liveSource.rows);
       await expect(target.query("SELECT app.bind_request('practice',$1,$2)",[digest,DEMO_TENANT_ID])).rejects.toMatchObject(refused);
       await expect(target.query("SELECT app.bind_request('contractor_practice',$1,$2)",[randomUUID(),randomUUID()])).rejects.toMatchObject(refused);
     }finally{await target.query("ROLLBACK");target.release();}

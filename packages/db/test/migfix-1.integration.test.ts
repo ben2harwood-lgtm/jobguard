@@ -79,7 +79,8 @@ describe("MIGFIX-1 actual PostgreSQL identity boundary", () => {
 
   it("[MIGFIX-1-1b] retained UPDATE permits row locks, no-ops and authority restriction", async () => {
     const f = await fixture();
-    await withTenant(c.admin,verifiedTenantContextFromMembership(f.p),async db=>{
+    const context = verifiedTenantContextFromMembership(f.p, { kind: "real", credential: provider().digest(`session:${f.sessionToken}`) });
+    await withTenant(c.admin,context,async db=>{
       await db.$client.query("SET LOCAL ROLE lp1_tenancy_fixture");
       expect((await db.$client.query("SELECT id FROM app.membership WHERE tenant_id=$1 AND id=$2 FOR SHARE",[f.p.tenantId,f.p.membershipId])).rows).toEqual([{id:f.p.membershipId}]);
       await db.$client.query("UPDATE app.membership SET role=role,revoked_at=revoked_at,expires_at=expires_at WHERE tenant_id=$1 AND id=$2",[f.p.tenantId,f.p.membershipId]);

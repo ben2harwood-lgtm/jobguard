@@ -23,7 +23,7 @@ async function freshInvoice():Promise<Fixture> {
  await admin.query(`INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status)VALUES($1,$2,$3,1,$4,110000,'accepted')`,[quoteId,T,jobId,"b".repeat(64)]);
  await admin.query(`INSERT INTO app.final_account_draft(id,tenant_id,job_id)VALUES($1,$2,$3)`,[draftId,T,jobId]);
  await admin.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',110000,22000,132000,false,'[]')`,[revisionId,T,jobId,draftId,"b".repeat(64),quoteId]);
- await admin.query(`UPDATE app.final_account_draft SET revision=1,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2`,[T,draftId,revisionId]);
+ await withTenant(admin,context,db=>db.$client.query(`UPDATE app.final_account_draft SET revision=1,current_revision_id=$3 WHERE tenant_id=$1 AND id=$2`,[T,draftId,revisionId]));
  // Schema-0029 historical fixtures keep their original issue path; only head establishes lock prerequisites.
  if((await admin.query("SELECT to_regclass('app.shadow_final_check_completion') installed")).rows[0].installed){
   const scopeId=randomUUID();
@@ -44,8 +44,8 @@ beforeAll(async()=>{
  dir=await mkdtemp(join(tmpdir(),"uiwire12-pg-"));
  const port=await freePort(59000,400);
  pg=new EmbeddedPostgres({databaseDir:dir,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
- await pg.initialise();await pg.start();
- admin=new Pool({host:"127.0.0.1",port,user:"postgres",password:"synthetic"});
+ await pg.initialise();await pg.start();await pg.createDatabase("jobguard_synthetic_demo");
+ admin=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"postgres",password:"synthetic"});
  // Establish a real 0029 database, issue/record/reverse there, then upgrade it.
  // This is intentionally separate from the full fresh-install bootstrap test.
  await admin.query(`CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())`);
@@ -56,7 +56,7 @@ beforeAll(async()=>{
   await admin.query(`INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)`,[name]);
  }
  await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('${U}');INSERT INTO app.account(id,tenant_id,name)VALUES('${A}','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','${A}','${U}','owner');CREATE ROLE uiwire12_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO uiwire12_login;`);
- runtime=new Pool({host:"127.0.0.1",port,database:"postgres",user:"uiwire12_login",password:"synthetic",max:8});repo=new PracticeInvoiceRepository(runtime);
+ runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"uiwire12_login",password:"synthetic",max:8});repo=new PracticeInvoiceRepository(runtime);
  legacy=await freshInvoice();legacyInput=command(legacy);legacyPayment=await repo.recordReceipt(context,legacyInput);legacyReverseCommand=randomUUID();
  legacyReversal=(await withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6)`,[T,legacy.jobId,legacyPayment.paymentId,M,legacyReverseCommand,"Practice receipt correction"]))).rows[0].reversal_id;
  legacyHashes=(await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows;

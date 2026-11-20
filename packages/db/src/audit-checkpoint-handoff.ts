@@ -1,10 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { z } from "zod";
-import { appendAuditBatch } from "./audit.js";
 import { handoffAuditExportCheckpoint } from "./audit-export-repository.js";
 import { SYNTHETIC_DATABASE_NAME } from "./demo-bootstrap.js";
-import type { TenantTransaction } from "./tenant-context.js";
 
 export type AuditCheckpointHandoffCode =
   | "AUDIT_CHECKPOINT_MODE_HELD" | "AUDIT_CHECKPOINT_TARGET_FORBIDDEN"
@@ -28,7 +26,7 @@ function failureCode(error: unknown): AuditCheckpointHandoffCode {
 }
 type Head = { sequence: string; event_hash: string };
 type Control = Head & { event_sequence: string | null; actual_hash: string | null };
-async function handleTenant(client: PoolClient, tenantId: string, operator: string, sessionUser: string): Promise<AuditCheckpointHandoffResult["outcomes"][number]> {
+async function handleTenant(client: PoolClient, tenantId: string, operator: string): Promise<AuditCheckpointHandoffResult["outcomes"][number]> {
   try {
     await client.query("BEGIN");
     await client.query("SET LOCAL lock_timeout = '5s'");
@@ -53,19 +51,16 @@ async function handleTenant(client: PoolClient, tenantId: string, operator: stri
       await client.query("ROLLBACK");
       return { tenantId, outcome: "unchanged", sequence: Number(head.sequence) };
     }
-    await client.query("SET LOCAL ROLE jobguard_runtime");
-    const [event] = await appendAuditBatch({ $client: client } as TenantTransaction, [{
-      id: randomUUID(), version: "audit.v1", actorRef: "operations:audit-checkpoint-handoff",
-      eventType: "audit.checkpoint.handed_off", subjectType: "audit-checkpoint", subjectRef: tenantId,
-      payload: { references: { environment: "synthetic_demo", priorSequence: head.sequence, operator, sessionUser },
-        hashes: { priorHead: head.event_hash }, classifications: { action: "security" } },
-    }]);
-    await client.query("SET LOCAL ROLE jobguard_migration");
+    const event = (await client.query<{ sequence: string; eventHash: string }>(`
+      SELECT sequence::text sequence, event_hash AS "eventHash"
+      FROM app.lp11_append_audit_handoff($1,$2,$3,$4,$5)`,
+    [tenantId, head.sequence, head.event_hash, operator, randomUUID()])).rows[0]!;
+    const sequence = Number(event.sequence);
     const checkpoint = (await client.query<{ recorded_at: Date }>(`INSERT INTO audit_control.checkpoint (tenant_id, sequence, event_hash)
-      VALUES ($1, $2, $3) RETURNING recorded_at`, [tenantId, event!.sequence, event!.eventHash])).rows[0]!;
-    await handoffAuditExportCheckpoint(client, { tenantId, sequence: event!.sequence, eventHash: event!.eventHash, recordedAt: checkpoint.recorded_at });
+      VALUES ($1, $2, $3) RETURNING recorded_at`, [tenantId, event.sequence, event.eventHash])).rows[0]!;
+    await handoffAuditExportCheckpoint(client, { tenantId, sequence, eventHash: event.eventHash, recordedAt: checkpoint.recorded_at });
     await client.query("COMMIT");
-    return { tenantId, outcome: "handed_off", sequence: event!.sequence };
+    return { tenantId, outcome: "handed_off", sequence };
   } catch (error) {
     await client.query("ROLLBACK");
     return { tenantId, outcome: "failed", sequence: null, code: failureCode(error) };
@@ -105,7 +100,7 @@ export async function runAuditCheckpointHandoff(options: { ownerUrl: string; ten
       tenants = [tenantId];
     }
     const outcomes: AuditCheckpointHandoffResult["outcomes"] = [];
-    for (const tenantId of tenants) outcomes.push(await handleTenant(client, tenantId, options.operator, identity.sessionUser));
+    for (const tenantId of tenants) outcomes.push(await handleTenant(client, tenantId, parsed.data.operator));
     return { database: identity.database, outcomes };
   } catch (error) {
     if (error instanceof AuditCheckpointHandoffError) throw error;

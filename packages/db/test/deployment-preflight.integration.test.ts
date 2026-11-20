@@ -1,7 +1,9 @@
+import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { Pool } from "pg";
 import { startLp0Database, type Lp0Database } from "./lp-0-catalog.js";
 import { checkPreflightDatabase } from "./deployment-preflight-checks.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 // @ts-expect-error Local Node tool is intentionally JavaScript; Vitest resolves its imports.
 import { requireLocalDatabase } from "../../../tools/deployment-preflight.mjs";
 
@@ -10,6 +12,7 @@ const B = "20000000-0000-4000-8000-000000000002";
 let disposable: Lp0Database | undefined;
 let pool: Pool;
 let tenantA = A, tenantB = B;
+let credentials: { a: string; b: string };
 beforeAll(async () => {
   const supplied = process.env.PREFLIGHT_DATABASE_URL;
   if (supplied) {
@@ -17,11 +20,20 @@ beforeAll(async () => {
     const url = requireLocalDatabase(supplied);
     tenantA = process.env.PREFLIGHT_TENANT_A ?? "";
     tenantB = process.env.PREFLIGHT_TENANT_B ?? "";
+    credentials = { a: process.env.PREFLIGHT_A_TOKEN ?? "", b: process.env.PREFLIGHT_B_TOKEN ?? "" };
     pool = new Pool({ connectionString: url, max: 1 });
   } else {
     disposable = await startLp0Database(59300);
     await disposable.admin.query(`INSERT INTO control_plane.tenant(id) VALUES($1),($2)`, [A, B]);
     await disposable.admin.query(`INSERT INTO app.account(id,tenant_id,name) VALUES($1,$1,'Fictional A'),($2,$2,'Fictional B')`, [A, B]);
+    const seedMember = async (tenant: string) => {
+      const user = randomUUID(), member = randomUUID(), credential = randomBytes(32).toString("hex");
+      await disposable!.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
+      await disposable!.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$2,$3,'owner')", [member, tenant, user]);
+      await testBoundTenantContext(disposable!.admin, tenant, member, credential);
+      return credential;
+    };
+    credentials = { a: await seedMember(A), b: await seedMember(B) };
     await disposable.bootstrapRuntimeLogin();
     pool = new Pool({ host: "127.0.0.1", port: disposable.port, database: disposable.databaseName,
       user: "jobguard_runtime", password: "synthetic-lp0-runtime-only", max: 1 });
@@ -30,7 +42,7 @@ beforeAll(async () => {
 afterAll(async () => { await pool?.end(); await disposable?.stop(); });
 it("passes supplied local database catalog and isolation checks only as the runtime role", async () => {
   const client = await pool.connect();
-  try { await checkPreflightDatabase(client, tenantA, tenantB); }
+  try { await checkPreflightDatabase(client, tenantA, tenantB, credentials); }
   finally { client.release(); }
 });
 if (!process.env.PREFLIGHT_DATABASE_URL) it("refuses an owner before catalog/isolation checks", async () => {
@@ -42,6 +54,6 @@ if (!process.env.PREFLIGHT_DATABASE_URL) it("refuses an owner before catalog/iso
 });
 it("refuses an empty fixture tenant rather than passing vacuously", async () => {
   const client = await pool.connect();
-  try { await expect(checkPreflightDatabase(client, tenantA, "30000000-0000-4000-8000-000000000003")).rejects.toThrow("PREFLIGHT_FIXTURE_ACCOUNT_REQUIRED"); }
+  try { await expect(checkPreflightDatabase(client, tenantA, "30000000-0000-4000-8000-000000000003", credentials)).rejects.toThrow("PREFLIGHT_FIXTURE_ACCOUNT_REQUIRED"); }
   finally { client.release(); }
 });

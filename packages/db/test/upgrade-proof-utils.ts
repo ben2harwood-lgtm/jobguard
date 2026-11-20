@@ -1,6 +1,42 @@
+import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
+import { MIGRATION_URLS } from "../src/migrate.js";
+import { applyUpgradeProofs, loadMigrationProofs, type MigrationProofSnapshot } from "./migration-proof-loader.js";
 
 type Queryable = Pick<Pool | PoolClient, "query">;
+
+/** Advance a populated historical fixture to the immediate cutover predecessor. */
+export async function advanceToTenantCutover(db: Queryable) {
+  const cutover = MIGRATION_URLS.findIndex(url => url.pathname.endsWith("/0765_lp11_bound_tenant_rls.sql"));
+  if (cutover < 0) throw new Error("Tenant cutover migration is missing");
+  const applied = new Set((await db.query("SELECT migration_name FROM public.jobguard_schema_migration")).rows.map(row => row.migration_name));
+  for (const url of MIGRATION_URLS.slice(0, cutover)) {
+    const name = url.pathname.split("/").at(-1)!;
+    if (applied.has(name)) continue;
+    await db.query(await readFile(url, "utf8"));
+    await db.query("INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)", [name]);
+  }
+}
+
+export async function tenantCutoverCatalogue(db: Queryable): Promise<MigrationProofSnapshot> {
+  return {
+    rows: {},
+    relations: (await db.query(`SELECT n.nspname,c.relname,c.relowner,c.relacl,c.relrowsecurity,c.relforcerowsecurity
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname IN ('app','identity','control_plane','audit_control') ORDER BY 1,2`)).rows,
+    routines: (await db.query(`SELECT n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args,
+      p.proowner,p.proacl,p.prosecdef,p.proconfig FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname IN ('app','identity','control_plane','audit_control','infrastructure','worm_control')
+        AND p.prokind='f' ORDER BY 1,2,3`)).rows,
+    policies: (await db.query("SELECT * FROM pg_policies ORDER BY schemaname,tablename,policyname")).rows,
+  };
+}
+
+export async function expectedTenantCutover(db: Queryable, before: MigrationProofSnapshot) {
+  const proofs = loadMigrationProofs().proofs.filter(proof => proof.migration >= "0765_lp11_bound_tenant_rls.sql");
+  const ownerOids = Object.fromEntries((await db.query("SELECT rolname,oid FROM pg_roles")).rows.map(row => [row.rolname,row.oid]));
+  return applyUpgradeProofs(before, proofs, ownerOids);
+}
 type ProofTable = { names: string[]; typed: Record<string, string>; key: string[]; rows: Record<string, string> };
 const ident = (name: string) => `"${name.replaceAll('"', '""')}"`;
 const tableIdent = (table: string) => {

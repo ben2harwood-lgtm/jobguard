@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { evaluateContractorEntitlement } from "@jobguard/core";
-import { appendAuditBatch } from "../src/index.js";
-import { cluster, startSession, status, read, raw, unchanged, snapshot, ownerTx, type Cluster } from "./contractor-entitlement-fixtures.js";
+import { appendAuditBatch, withTenant } from "../src/index.js";
+import { cluster, startSession, status, read, raw, unchanged, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
 let c: Cluster;
 beforeAll(async () => { process.env.JOBGUARD_ENV="synthetic_demo"; c=await cluster(); },120000);
 afterAll(async () => { await c?.close(); });
@@ -31,7 +31,8 @@ it("a fresh connection reads the latest bound revision", async () => {
 it("superseded assignment cannot authorize new work", async () => {
  const f=await startSession(c); await status(c,f,"active");
  const assignment = randomUUID(), actorRef = `membership:${f.p.membershipId}`;
- await ownerTx(c,f.p.tenantId, async db => {
+ await withTenant(c.admin,f.context,async db => {
+  await db.$client.query("SET LOCAL ROLE jobguard_migration");
   await db.$client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [f.p.tenantId]);
   await db.$client.query(`INSERT INTO app.commercial_track_assignment(tenant_id,id,revision,commercial_track,agreement_reference,environment,actor_ref) SELECT tenant_id,$2,max(revision)+1,'contractor',$3,'synthetic_demo',$4 FROM app.commercial_track_assignment WHERE tenant_id=$1 GROUP BY tenant_id`,[f.p.tenantId,assignment,`synthetic-agreement:${randomUUID()}`,actorRef]);
   await appendAuditBatch(db, [{ id: assignment, version: "audit.v1", actorRef, eventType: "commercial_track.assigned", subjectType: "tenant", subjectRef: f.p.tenantId, payload: { references: { assignment, environment: "synthetic_demo" } } }]);

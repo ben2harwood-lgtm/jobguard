@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { commercialOutboundClaimsEnabled } from "./commercial-outbound-pause.js";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
 import { customerSigninLink, outboundActionV1Schema, type OutboundAdapter, type SafeTelemetry } from "./outbox.js";
 
@@ -17,11 +17,17 @@ const resultV1 = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("outcome_unknown"), code: z.string().min(1).max(100) }).strict(),
 ]);
 
+async function workerActionMatches(client: PoolClient, actionId: string, expectedTenant: string) {
+  return (await client.query<{ matches: boolean }>(
+    "SELECT app.lp11_worker_action_matches($1::uuid,$2::uuid) AS matches", [actionId, expectedTenant],
+  )).rows[0]?.matches === true;
+}
+
 /** Worker credentials only. Queue payload supplies an identifier, never authority. */
 export class WorkerActionExecutor {
   constructor(private pool: Pool, private adapters: Map<string, OutboundAdapter>, private telemetry: SafeTelemetry, private customerSigninDigest?: (value: string) => string) {}
 
-  async execute(id: string, beforeClaim?: (actionType: string) => void) {
+  async execute(id: string, beforeClaim?: (actionType: string) => void, expectedTenant?: string) {
     z.guid().parse(id);
     // Each checked routine commits before/after the adapter call. No business
     // network call occurs in a transaction, and the claim token fences replay.
@@ -32,6 +38,9 @@ export class WorkerActionExecutor {
     try {
       await client.query("BEGIN");
       if (!(await commercialOutboundClaimsEnabled({ $client: client }))) {
+        await client.query("ROLLBACK"); return;
+      }
+      if (expectedTenant !== undefined && !await workerActionMatches(client, id, expectedTenant)) {
         await client.query("ROLLBACK"); return;
       }
       const raw = (await client.query<{ claim: unknown }>(
@@ -92,14 +101,31 @@ export class WorkerActionExecutor {
 }
 
 const reconciliationV1 = z.object({ adapter: z.string(), provider_effect_key: z.string(), revision: z.string() }).strict();
-export async function reconcileWorkerAction(pool: Pool, id: string, adapter: OutboundAdapter) {
+async function inReconciliationScope<T>(pool: Pool, actionId: string, expectedTenant: string | undefined, work: (db: Pool | PoolClient) => Promise<T>) {
+  if (expectedTenant === undefined) return work(pool);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    if (!await workerActionMatches(client, actionId, expectedTenant)) throw new Error("NOT_RECONCILABLE");
+    const result = await work(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally { client.release(); }
+}
+
+export async function reconcileWorkerAction(pool: Pool, id: string, adapter: OutboundAdapter, expectedTenant?: string) {
   z.guid().parse(id);
-  const raw = (await pool.query<{ effect: unknown }>("SELECT app.worker_reconciliation($1::uuid) AS effect", [id])).rows[0]?.effect;
+  const raw = await inReconciliationScope(pool, id, expectedTenant, async db =>
+    (await db.query<{ effect: unknown }>("SELECT app.worker_reconciliation($1::uuid) AS effect", [id])).rows[0]?.effect);
   if (raw == null) throw new Error("NOT_RECONCILABLE");
   const effect = reconciliationV1.parse(raw);
   if (effect.adapter !== adapter.name) throw new Error("NOT_RECONCILABLE");
   const result = z.enum(["succeeded", "not_found", "unknown"]).parse(await adapter.reconcile(effect.provider_effect_key));
-  if (result !== "unknown") await pool.query("SELECT app.reconcile_worker_action($1::uuid,$2::text,$3::text,$4::text,$5::text)",
-    [id, effect.revision, effect.adapter, effect.provider_effect_key, result]);
+  if (result !== "unknown") await inReconciliationScope(pool, id, expectedTenant, db =>
+    db.query("SELECT app.reconcile_worker_action($1::uuid,$2::text,$3::text,$4::text,$5::text)",
+      [id, effect.revision, effect.adapter, effect.provider_effect_key, result]));
   return result;
 }

@@ -6,7 +6,10 @@ test("CH-5 previews, attests and reloads an invoiced v3 import without a count o
   await openQuotingWatchdogJob(page);
   const main = page.getByRole("main");
   const sourceId = (await main.locator(".quote-editor").getAttribute("data-job-id"))!;
+  const partiesSaved = page.waitForResponse(response => new URL(response.url()).pathname === `/api/jobs/${sourceId}/parties` &&
+    response.request().method() === "POST");
   await main.getByRole("button", { name: "Save customer and site", exact: true }).click();
+  expect((await partiesSaved).ok()).toBe(true);
   await main.getByText("Technical details", { exact: true }).click();
   await expect(main.getByTestId("party-binding-id")).toBeVisible();
   await main.getByRole("link", { name: "Bring in a job that's already under way", exact: true }).click();

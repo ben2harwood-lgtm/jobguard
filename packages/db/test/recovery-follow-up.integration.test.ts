@@ -1,4 +1,4 @@
-import { testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -1157,6 +1157,7 @@ describe("M4-6-S-R1 atomic due audit and reopened continuation", () => {
       expect((await owner.query("UPDATE audit_control.audit_head SET sequence=0,event_hash=NULL WHERE tenant_id=$1", [DEMO_TENANT_ID])).rowCount).toBe(1);
       await owner.query("SET LOCAL session_replication_role = origin");
       await owner.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
+      await bindTestClient(admin, owner, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID);
       expect(Number((await owner.query("SELECT app.evaluate_recovery_follow_ups($1,$2) AS n", [DEMO_TENANT_ID, base.runId])).rows[0].n)).toBe(0);
       const rows = (await owner.query(`SELECT id,tenant_id AS "tenantId",sequence::int,version,actor_ref AS "actorRef",
         event_type AS "eventType",subject_type AS "subjectType",subject_ref AS "subjectRef",occurred_at AS "occurredAt",payload,

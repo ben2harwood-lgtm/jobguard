@@ -2,13 +2,14 @@ import { test, expect } from "@playwright/test";
 import { Pool } from "pg";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { E2E_ADMIN_DATABASE_URL, E2E_RUNTIME_URL, E2E_AUTH_CODE_SECRET } from "./global-setup";
+import { E2E_ADMIN_DATABASE_URL, E2E_RUNTIME_URL, E2E_AUTH_CODE_SECRET, E2E_WORKER_URL } from "./global-setup";
 const nativeImport = <T>(path: string) => (new Function("specifier", "return import(specifier)") as (s: string) => Promise<T>)(pathToFileURL(join(process.cwd(), path)).href);
 // No static import of core/db (including helpers that pull those packages in).
 // Everything is fictional and seeded through repositories, never a seed route.
 test("M4-20 timer review, session resolution, uncertain retry and reconciled final retention", async ({ page, context }) => {
   const db = await nativeImport<typeof import("@jobguard/db")>("../../packages/db/dist/index.js");
   const auth = await nativeImport<typeof import("@jobguard/api/identity")>("../api/dist/auth/index.js");
+  const timer = new Pool({ connectionString: E2E_WORKER_URL, max: 1 });
   const runtime = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
   const identityPool = new Pool({ connectionString: "postgresql://jobguard_identity:sbox-e2e-identity@127.0.0.1:55432/jobguard_synthetic_demo", max: 1 });
   const admin = new Pool({ connectionString: E2E_ADMIN_DATABASE_URL, max: 1 });
@@ -36,7 +37,7 @@ test("M4-20 timer review, session resolution, uncertain retry and reconciled fin
     try {
       await fixture.query("BEGIN");
       await fixture.query("SET LOCAL session_replication_role=replica");
-      await fixture.query("SELECT set_config('app.tenant_id',$1,true)", [membership.tenantId]);
+      await fixture.query("SELECT app.bind_request('real',$1,$2)", [actor.sessionDigest, membership.tenantId]);
       const lifecycle = (await fixture.query("SELECT revision FROM app.job WHERE tenant_id=$1 AND id=$2", [membership.tenantId,jobId])).rows[0] as { revision: number };
       const move = (expected: number, to: string, reason: string, live = false) => fixture.query(
         "SELECT app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)",
@@ -55,7 +56,7 @@ test("M4-20 timer review, session resolution, uncertain retry and reconciled fin
         { id: crypto.randomUUID(), milestone: "completion", description: "Fictional completion", source, dateSource: source, dueDate: "2000-01-01", cumulativeLimit: { netPence: 5000, taxPence: 1000 } },
         { id: crypto.randomUUID(), milestone: "defects", description: "Fictional defects", source, dateSource: source, dueDate: "2001-01-01", cumulativeLimit: { netPence: 10000, taxPence: 2000 } },
       ] };
-    await append(profile, pid); await new db.RetentionRecordRepository(runtime).raiseTimerReviews(timerContext);
+    await append(profile, pid); await new db.RetentionRecordRepository(timer).raiseTimerReviews(timerContext);
     const firstReview = (await read()).book.records.find(r => r.version === "retention.review.v1")!;
     await context.addCookies([{ name: "jobguard_session", value: session.sessionToken, url: identity.allowedOrigin }]);
     const path = `/api/jobs/${jobId}/retention-records`;
@@ -95,7 +96,7 @@ test("M4-20 timer review, session resolution, uncertain retry and reconciled fin
     await append({ version: "retention.reversal.v1", receiptId, grossPence: 1200 });
     const changedId = crypto.randomUUID();
     await append({ ...profile, revision: 2, previousProfileId: pid, conditions: profile.conditions.map(c => ({ ...c, dueDate: "2002-01-01" })) }, changedId);
-    await new db.RetentionRecordRepository(runtime).raiseTimerReviews(timerContext);
+    await new db.RetentionRecordRepository(timer).raiseTimerReviews(timerContext);
     await main.getByRole("button", { name: "Refresh stored records" }).click();
     await expect(main.getByText("Received after reversals: £36.00", { exact: true })).toBeVisible();
     // The old approval now fails as stale and appends nothing.
@@ -118,5 +119,5 @@ test("M4-20 timer review, session resolution, uncertain retry and reconciled fin
     for (const element of await main.locator("button,input,select").all()) {
       const box = await element.boundingBox(); if (box) { expect(box.height).toBeGreaterThanOrEqual(44); expect(box.width).toBeGreaterThanOrEqual(44); }
     }
-  } finally { await runtime.end(); await identityPool.end(); await admin.end(); }
+  } finally { await timer.end(); await runtime.end(); await identityPool.end(); await admin.end(); }
 });

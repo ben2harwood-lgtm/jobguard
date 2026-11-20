@@ -49,6 +49,36 @@ it("concurrent runs emit once", async () => {
  const results = await Promise.all([emitter(), emitter()].map(e => e.emit(context, { tenantId, jobId }, batch([o]))));
  expect(results.flat()).toHaveLength(1);
 });
+it("one batch can span jobs in its own tenant and its receipt scope ends with the transaction", async () => {
+ const secondJobId = randomUUID();
+ await c.admin.query("INSERT INTO app.job(tenant_id,id,title,status) VALUES($1,$2,'Fictional second accounting job','live')", [tenantId, secondJobId]);
+ const rows = [observation(), { ...observation(), jobId: secondJobId }];
+ const receipts = new AccountingObservationReceiptRepository(shadow);
+ expect(await receipts.claim(context, rows)).toEqual(rows);
+ expect(await receipts.claim(context, rows)).toEqual([]);
+
+ const client = await shadow.connect();
+ const insert = "SELECT evidence_id FROM app.lp11_insert_accounting_receipt($1,$2,$3,$4,$5)";
+ const select = "SELECT evidence_id FROM app.accounting_observation_receipt";
+ const version = "fictional-scope", hash = "a".repeat(64), first = randomUUID();
+ try {
+  await client.query("BEGIN");
+  expect((await client.query(insert, [tenantId, first, version, jobId, hash])).rows).toEqual([{ evidence_id: first }]);
+  expect((await client.query(select)).rows).toEqual([{ evidence_id: first }]);
+  await client.query("COMMIT");
+  expect((await client.query(select)).rows).toEqual([]);
+
+  await client.query("BEGIN");
+  await client.query(insert, [tenantId, randomUUID(), version, jobId, hash]);
+  await client.query("SELECT set_config('app.tenant_id',$1,true)", [otherTenant]);
+  await expect(client.query(insert, [otherTenant, randomUUID(), version, jobId, hash])).rejects.toMatchObject({ code: "42501", message: "ACCOUNTING_BINDING_MISMATCH" });
+  await client.query("ROLLBACK");
+  expect((await client.query(select)).rows).toEqual([]);
+ } finally {
+  await client.query("ROLLBACK");
+  client.release();
+ }
+});
 it("conflicting replay rolls back every new receipt in its batch", async () => {
  const o = observation(), next = observation(), scope = { tenantId, jobId };
  await emitter().emit(context, scope, batch([o]));

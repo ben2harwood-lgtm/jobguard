@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { type NeutralReceiptFactResult } from "../src/receipt-line-allocation-repository.js";
+import { bindIssuedCredential } from "../src/tenant-context.js";
 import { closeFinalCheckFixture, createFinalCheckFixture, type FinalCheckFixture } from "./final-check-fixture.js";
 import { realReceiptFixture } from "./stored-receipt-case-fixture.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
@@ -115,7 +116,9 @@ it("refuses a replacement at review after a fully allocated line is refunded, be
   const db = await f.admin.connect();
   try {
     await db.query("BEGIN");
+    await bindIssuedCredential(db,x.context);
     await db.query("SELECT set_config('app.tenant_id',$1,true)", [x.context.tenantId]);
+    await db.query("SELECT set_config('app.practice_material_digest',$1,true)", [x.auth.digest]);
     await db.query(body.slice(0, checkStart) + body.slice(checkEnd));
     const probe = () => expect(db.query("SELECT app.receipt_fact_proposal($1,$2,$3::jsonb)",
       [x.context.tenantId, x.jobId, request])).rejects.toMatchObject({ code: "23514", message: "RECEIPT_LINE_CAPACITY_EXCEEDED" });

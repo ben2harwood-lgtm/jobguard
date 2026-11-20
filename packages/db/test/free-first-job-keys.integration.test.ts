@@ -10,7 +10,7 @@ describe("MON3P private key storage", () => {
   const s = snapshot(await keyParent(f)); s.company += '\\"'; await store(f,s);
   const expected = freeFirstJobKeys({version:"free-first-job-identity.v1",environment:"synthetic_demo",companyNumber:s.company,normalizedPhone:s.phone,cardFingerprint:s.fingerprint});
   expect(await claimRows(f,s)).toEqual(expected);
-  await workTenant(f.admin,s.tenantId,async db => { await db.query("SET LOCAL ROLE jobguard_migration"); await db.query("SELECT app.claim_trial_identity_keys($1,$2)",[s.tenantId,s.id]); });
+  await workTenant(f.admin,s.tenantId,async db => { await db.query("SET LOCAL ROLE jobguard_migration"); await db.query("SELECT app.claim_trial_identity_keys($1,$2)",[s.tenantId,s.id]); },{membershipId:s.actorId});
   expect(await claimRows(f,s)).toEqual(expected);
   await expect(f.admin.query("UPDATE app.trial_identity_snapshot SET company_number='changed' WHERE id=$1",[s.id])).rejects.toMatchObject({code:"55000"});
  });
@@ -51,6 +51,6 @@ describe("MON3P private key storage", () => {
    await expect(store(f,{...a,...bad} as typeof a)).rejects.toThrow();
   await store(f,a);
   await expect(workTenant(f.admin,a.tenantId,db=>db.query(`INSERT INTO app.trial_identity_key_claim(identity_key,tenant_id,job_id,activation_id,snapshot_id) VALUES('forged',$1,$2,$3,$4)`,[a.tenantId,b.jobId,a.activationId,a.id]))).rejects.toThrow();
-  await expect(workTenant(f.admin,a.tenantId,db=>db.query("SELECT app.claim_trial_identity_keys($1,$2)",[a.tenantId,randomUUID()]))).rejects.toThrow("TRIAL_IDENTITY_REQUIRED");
+  await expect(workTenant(f.admin,a.tenantId,db=>db.query("SELECT app.claim_trial_identity_keys($1,$2)",[a.tenantId,randomUUID()]),{membershipId:a.actorId})).rejects.toThrow("TRIAL_IDENTITY_REQUIRED");
  });
 });

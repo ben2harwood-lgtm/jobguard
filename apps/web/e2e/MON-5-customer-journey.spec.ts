@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { expect, test } from "@playwright/test";
 import { openQuotingWatchdogJob } from "./helpers/capture-journey";
 import { signInForChooser, releaseChooserSignIns } from "./helpers/chooser-sign-in";
-import { detectMessages, issueLink, linkIssuer, openCustomer, portal, portalTenant, seedExtras, seedJob, seedStage } from "./helpers/customer-portal-journey";
+import { detectMessagesAndReplay, issueLink, linkIssuer, openCustomer, portal, portalTenant, seedExtras, seedJob, seedStage } from "./helpers/customer-portal-journey";
 
 // Real PostgreSQL + headless browser in CI, on both configured viewport projects.
 // Only fictional setup inputs are seeded; links and approvals use their real writers.
@@ -82,7 +82,7 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
       await lifecycle.query("COMMIT");
     } catch (error) { await lifecycle.query("ROLLBACK"); throw error; } finally { lifecycle.release(); }
     const stage = await seedStage(admin,portalTenant,job);
-    const extras = await seedExtras(admin,portalTenant,job,issuer.member);
+    const extras = await seedExtras(admin,portalTenant,job,issuer);
     await tab.goto(routes.extras);
     const approvedCommands: unknown[] = [];
     for (const x of extras) {
@@ -162,8 +162,10 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
     await home.getByLabel("Message",{exact:true}).fill(safetyText);
     await home.getByRole("button",{name:"Save message",exact:true}).click();
     await expect(home.getByLabel("Message",{exact:true})).toHaveValue("");
-    await detectMessages(admin,job,issuer.member,issuer.user,issuer.credential);
-    await detectMessages(admin,job,issuer.member,issuer.user,issuer.credential);
+    const nativeImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<typeof import("@jobguard/db")>;
+    const { verifiedTenantContextForQueuedJob } = await nativeImport("@jobguard/db");
+    const worker = verifiedTenantContextForQueuedJob(portalTenant);
+    await detectMessagesAndReplay(worker, job);
     const firings = (await admin.query(`SELECT f.rule,s.state,s.disclosed_before_lock FROM app.shadow_must_surface_firing f
       JOIN app.shadow_commercial_signal s ON(s.tenant_id,s.id)=(f.tenant_id,f.signal_id) WHERE f.tenant_id=$1 AND f.job_id=$2`,[portalTenant,job])).rows;
     expect(firings).toEqual([{rule:"safety",state:"surfaced_early",disclosed_before_lock:true}]);

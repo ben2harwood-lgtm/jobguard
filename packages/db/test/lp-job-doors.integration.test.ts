@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { insertJob, jobDoorCounts, jobDoorsActor, jobDoorsDatabase, transaction, type InitialShape, type JobDoorsDatabase } from "./lp-job-doors-fixtures.js";
+import { bindTestClient } from "./tenant-context-test-utils.js";
 
 let db: JobDoorsDatabase;
 beforeAll(async () => { db = await jobDoorsDatabase(); }, 300_000);
@@ -39,7 +40,10 @@ describe("LP-2 ordinary insertion boundary", () => {
 
   it("[LP2-A02] ordinary safe draft insertion succeeds and persists through a fresh connection", async () => {
     const actor = await jobDoorsActor(db.owner), id = randomUUID();
-    await transaction(db.runtime, actor.tenant, client => insertJob(client, actor.tenant, id));
+    await transaction(db.runtime, actor.tenant, async client => {
+      await bindTestClient(db.owner, client, actor.tenant, actor.member);
+      await insertJob(client, actor.tenant, id);
+    });
     const client = await db.owner.connect();
     try {
       expect((await client.query(`SELECT status,revision,provenance,accepted_quote_version_id,baseline_quote_version_id,

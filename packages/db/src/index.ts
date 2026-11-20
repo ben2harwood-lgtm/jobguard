@@ -55,6 +55,7 @@ export * from "./supplier-document-repository.js";
 export * from "./supplier-match-repository.js";
 export * from "./discrepancy-repository.js";
 export * from "./readiness-repository.js";
+export { runScheduledReadinessWork } from "./scheduled-readiness-worker.js";
 export * from "./inbox-relevance-repository.js";
 export * from "./evidence-pack-repository.js";
 export * from "./contractor-repository.js";
@@ -193,7 +194,7 @@ export { AccountingExportRepository, StoredAccountingExportError, storedAccounti
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
 
 export * from "./shadow-pilot-financial-reader.js";
-export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";
+export { importLateSource, readLateSources } from "./late-source-import.js";
 
 export * from "./financial-reconciliation-queue-repository.js";
 export * from "./money-trail-repository.js";
@@ -232,4 +233,4 @@ export * from "./firm-profile-repository.js";
 export * from "./job-proof-statement.js";
 
 export * from "./worker-action-executor.js";
-export { closeOutboundWorkerPool } from "./worker-pool.js";
+export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
