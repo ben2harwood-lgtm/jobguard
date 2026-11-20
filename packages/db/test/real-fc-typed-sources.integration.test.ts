@@ -64,6 +64,30 @@ it.each([
   expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0].n).toBe(1);
 });
 
+it.each([
+  ["Mrs Sample asked us to box in the boiler pipes under the sink while we were there. Said 95 quid.",
+    "Thanks both, the boxing in round the pipes looks great, £95 is fine, just add it on.", 9500],
+  ["fitted extra rad on back wall, 220 quid", null, 22000],
+  ["Fitted the towel rail, added a shelf for her", null, null],
+] as const)("completes and issues once for everyday wording: %s", async (note, message, estimate) => {
+  const a = await setup(note, message), { runId } = await a.execute() as { runId: string };
+  const completed = await a.repo.manifest(a.shadow, a.jobId, a.m.id);
+  expect(completed.sources.map(s => s.status)).toEqual(Array(message === null ? 1 : 2).fill(estimate === null ? "zero_result" : "detected"));
+  const completion = new FinalCheckCompletionRepository(f.shadow);
+  await completion.publish(a.shadow, { version: "final-check-publication.v1", jobId: a.jobId, runId, checkId: randomUUID() });
+  const view = await new FinalCheckRepository(f.runtime).read(a.context, a.jobId, a.digest);
+  expect(view.state).toBe("completed");
+  expect(view.items).toHaveLength(estimate === null ? 0 : 1);
+  if (estimate !== null) {
+    expect(view.items[0]).toMatchObject({ description: "Unmatched wording spotted", estimatedValuePence: estimate });
+    expect((view.items[0]!.evidence as { id: string }[]).map(e => e.id).sort()).toEqual(completed.sources.map(s => s.evidenceId).sort());
+  }
+  const issueId = randomUUID();
+  const issue = () => withTenant(practiceMaterialPool(f.runtime, a.digest), a.context, db => db.$client.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,'final','fictional@example.invalid','2026-11-09'::date,$6)", [a.tenantId, a.jobId, a.revisionId, FINAL_CHECK_ACTOR, issueId, "a".repeat(64)]));
+  await issue(); await issue();
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0].n).toBe(1);
+});
+
 it("preserves the reviewed must-surface fixture refusal in the actual worker", async () => {
   const a = await setup(null, "Fictional practice customer request: please build a garden room for £8,000 net; written agreement is required before work starts.");
   expect(await a.ports.process(a.shadow, a.m, a.m.sources[0]!)).toMatchObject({ status: "unsupported", failureCode: "UNSUPPORTED_SOURCE" });
