@@ -116,13 +116,15 @@ test("LATER-SAFETY-140 email sign-in and core-1000 show found recovery with both
   const before = await read(page, `${root}/final-check`);
   expect(before).toMatchObject({ state: "unlocked", items: [] });
   expect(JSON.stringify(before)).not.toMatch(/signalCount|heldCount|shadowCount/);
+  await page.getByRole("checkbox", { name: 'Leave "Pending trim repair" off this bill on purpose' }).check();
   await click(page, "Complete final account");
   await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   const locked = await read(page, `${root}/final-account/lock`);
   const issue = { version: "practice-customer-invoice.issue.v1", commandId: crypto.randomUUID(), finalAccountRevisionId: account.id, expectedSourceHash: account.sourceHash, recipient: "practice-customer@example.invalid", issuedOn: "2026-10-29" };
   expect((await request(page, `${root}/customer-invoices`, issue)).ok()).toBe(false);
   await page.reload();
-  await click(page, "Run the final check (practice)");
+  // Locking already queues the real worker. Its saved completion may precede
+  // this reload, when the pending-only Run control is correctly absent.
   await expect.poll(async () => (await read(page, `${root}/final-check`)).state, { timeout: 180_000, intervals: [5_000] }).toBe("completed");
   await click(page, "Load the saved final check");
   await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");

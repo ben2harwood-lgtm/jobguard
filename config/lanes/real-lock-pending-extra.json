@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-lock-pending-extra": {
+      "branches": ["codex/sandbox/real-lock-pending-extra"],
+      "allow": [
+        "apps/web/app/ui/final-account-lock.tsx",
+        "apps/web/app/ui/final-account-lock.test.tsx",
+        "apps/web/app/ui/job-final-account.tsx",
+        "apps/web/app/ui/job-final-account.test.tsx",
+        "apps/web/e2e/DEMO-J1-core-1000.spec.ts",
+        "apps/web/e2e/later-safety-140.spec.ts",
+        "apps/web/e2e/real-lock-pending-extra.spec.ts",
+        "apps/web/e2e/real-stale-after-approve.spec.ts"
+      ],
+      "note": "RED. Waiting extras at completion and explicit rebuild after a stale lock refusal."
+    }
+  }
+}

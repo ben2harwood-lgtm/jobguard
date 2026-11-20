@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "tommy-draft-retry-fix-20261119": {
+      "branches": ["codex/sandbox/tommy-draft-retry-fix-20261119"],
+      "note": "Repair edited-source capture retries in the existing WalkIt workflow. Existing browser acceptance: apps/web/e2e/capture.spec.ts. No policy or migration changes.",
+      "allow": [
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/local-dictation.tsx",
+        "apps/web/app/ui/walk-it-retry.test.tsx",
+        "apps/web/app/api/jobs/capture/route.ts",
+        "apps/web/app/api/jobs/capture/route.test.ts",
+        "apps/web/e2e/capture.spec.ts",
+        "docs/receipts/tommy-draft-retry-fix-20261119.md"
+      ]
+    }
+  }
+}

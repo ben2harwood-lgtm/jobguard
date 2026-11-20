@@ -18,3 +18,10 @@ it("keeps the page dark outside synthetic demo", () => {
   vi.stubEnv("JOBGUARD_ENV", "production");
   try { expect(Page).toThrow("NOT_FOUND"); } finally { vi.unstubAllEnvs(); }
 });
+it("states once before the payment options that the amount due includes VAT", () => {
+  const amount = { pence: 184800, currency: "GBP" as const };
+  const view = { invoiceNumber: "TEST-1", amountDue: amount, options: [{ rail: "card" as const, customerTotal: amount }] };
+  const html = renderToStaticMarkup(<PracticePayNowView view={view} />);
+  expect(html.match(/This includes VAT at 20%/gu)).toHaveLength(1);
+  expect(html).toContain("<p>Amount due £1,848.00</p><p>This includes VAT at 20%, as shown on your quote and extras.</p><ul");
+});

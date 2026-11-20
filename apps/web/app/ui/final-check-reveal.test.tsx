@@ -53,6 +53,8 @@ function nodes(node:React.ReactNode):Element[]{
  return [node,...nodes(node.props.children as React.ReactNode)];
 }
 const tick=()=>new Promise<void>(resolve=>setImmediate(resolve));
+const delayedResponse = (milliseconds: number, body: unknown, ok = true, status = 200) =>
+ new Promise<ReturnType<typeof response>>(resolve => setTimeout(() => resolve(response(body, ok, status)), milliseconds));
 const button=(tree:React.ReactNode,name:string)=>nodes(tree).find(n=>n.type==="button"&&n.props.children===name)!;
 const text=(tree:React.ReactNode)=>JSON.stringify(tree);
 const click=(tree:React.ReactNode,name:string)=>(button(tree,name).props.onClick as ()=>void)();
@@ -126,6 +128,28 @@ it("a stalled saved read is cancelled and shown as unavailable, never a failed c
  fetch.mockImplementation((_input:string,init?:RequestInit)=>new Promise((_resolve,reject)=>{init?.signal?.addEventListener("abort",()=>reject(new Error("aborted")));}));
  render();await vi.advanceTimersByTimeAsync(10000);await tick();const tree=render();
  expect(text(tree)).toContain("unavailable");expect(text(tree)).not.toContain("could not finish");expect(button(tree,"Load the saved final check").props.disabled).toBe(false);
+});
+it("accepts two sequential seven-second reads without losing the saved pending check", async () => {
+ vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+ const fetch = server();
+ fetch.mockImplementation(input => delayedResponse(7000, input.endsWith("/disputes") ? [] : saved("pending")));
+ render();
+ await vi.advanceTimersByTimeAsync(6999);
+ expect(fetch).toHaveBeenCalledTimes(1);
+ await vi.advanceTimersByTimeAsync(1); await tick();
+ expect(fetch).toHaveBeenCalledTimes(2);
+ expect(fetch.mock.calls[1]![0]).toBe(`/api/jobs/${jobId}/final-check/disputes`);
+ await vi.advanceTimersByTimeAsync(3000); await tick();
+ const waiting = render();
+ expect(waiting.props["aria-busy"]).toBe(true);
+ expect(text(waiting)).not.toContain("unavailable");
+ expect(text(waiting)).not.toContain("Running JobGuard");
+ await vi.advanceTimersByTimeAsync(4000); await tick();
+ const loaded = render();
+ expect(text(loaded)).toContain("Running JobGuard");
+ expect(button(loaded, "Run the final check (practice)").props.disabled).toBe(false);
+ expect(loaded.props["aria-busy"]).toBe(false);
+ expect(fetch.mock.calls.every(call => !call[1]?.method)).toBe(true);
 });
 it("navigation while a restart is in flight rejects its late reply",async()=>{
  const fetch=server();status="failed";render();await tick();let finish!:(value:ReturnType<typeof response>)=>void;
@@ -318,4 +342,100 @@ it("hides the old job immediately and discards its late priced reply after navig
  expect(screen(nextJob)).not.toContain("Estimated extra"); await tick();
  finish(response(reveal(99999))); await tick();
  expect(screen(nextJob)).not.toContain("heated towel rail"); expect(screen(nextJob)).not.toContain("Estimated extra");
+});
+
+it("a slow authorised unlocked read never starts the disputes phase", async () => {
+ vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+ const fetch = server(); fetch.mockImplementation(() => delayedResponse(7000, saved("unlocked")));
+ render(); await vi.advanceTimersByTimeAsync(7000); await tick();
+ expect(text(render())).toContain("runs after you complete");
+ expect(fetch).toHaveBeenCalledTimes(1);
+ expect(button(render(), "Load the saved final check").props.disabled).toBe(false);
+ await vi.advanceTimersByTimeAsync(20000);
+ expect(fetch).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
+});
+
+it("a first-phase deadline discards a late locked reply without reading disputes", async () => {
+ vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+ const fetch = server(); let finish!: (value: ReturnType<typeof response>) => void;
+ fetch.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+ render(); await vi.advanceTimersByTimeAsync(9999);
+ expect(render().props["aria-busy"]).toBe(true);
+ await vi.advanceTimersByTimeAsync(1); await tick();
+ expect(text(render())).toContain("unavailable");
+ expect(button(render(), "Load the saved final check").props.disabled).toBe(false);
+ finish(response(reveal())); await tick();
+ expect(fetch).toHaveBeenCalledTimes(1);
+ expect(screen()).not.toContain("heated towel rail");
+ expect(vi.getTimerCount()).toBe(0);
+});
+
+it("bounds a stalled disputes body independently and discards it after a newer saved read", async () => {
+ vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+ const fetch = server(); let finishBody!: (value: unknown) => void;
+ fetch.mockImplementation(input => input.endsWith("/disputes")
+  ? Promise.resolve({ ...response([]), json: () => new Promise(resolve => { finishBody = resolve; }) })
+  : delayedResponse(9000, reveal()));
+ render(); await vi.advanceTimersByTimeAsync(9000); await tick();
+ expect(fetch).toHaveBeenCalledTimes(2);
+ expect(screen()).not.toContain("heated towel rail");
+ await vi.advanceTimersByTimeAsync(9999); await tick();
+ expect(render().props["aria-busy"]).toBe(true);
+ expect(screen()).not.toContain("heated towel rail");
+ await vi.advanceTimersByTimeAsync(1); await tick();
+ expect(text(render())).toContain("unavailable");
+ expect(button(render(), "Load the saved final check").props.disabled).toBe(false);
+ fetch.mockResolvedValue(response(saved("unlocked")));
+ click(render(), "Load the saved final check"); await tick();
+ expect(text(render())).toContain("runs after you complete");
+ finishBody([{}]); await tick();
+ expect(screen()).not.toContain("heated towel rail");
+ expect(screen()).not.toContain("final-check-disputes");
+ expect(text(render())).toContain("runs after you complete");
+ expect(fetch.mock.calls.every(call => !call[1]?.signal?.aborted)).toBe(true);
+ expect(vi.getTimerCount()).toBe(0);
+});
+
+it.each([401, 403])("a delayed disputes refusal %s still removes a previously authorised finding", async code => {
+ vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+ const fetch = serveReveal(reveal()); render(); await tick();
+ expect(screen()).toContain("Estimated extra: £180.00");
+ fetch.mockImplementation(input => input.endsWith("/disputes")
+  ? delayedResponse(7000, {}, false, code)
+  : delayedResponse(7000, reveal()));
+ click(render(), "Load the saved final check");
+ await vi.advanceTimersByTimeAsync(10000); await tick();
+ expect(render().props["aria-busy"]).toBe(true);
+ await vi.advanceTimersByTimeAsync(4000); await tick();
+ const view = screen();
+ expect(view).toContain("unavailable"); expect(view).not.toContain("heated towel rail");
+ expect(view).not.toContain("Estimated extra");
+ expect(button(render(), "Load the saved final check").props.disabled).toBe(false);
+ expect(vi.getTimerCount()).toBe(0);
+});
+
+it.each(["job change", "unmount"])("%s discards a late disputes reply and cleans its phase timer without aborting", async departure => {
+ vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+ const fetch = server(); let finish!: (value: ReturnType<typeof response>) => void;
+ fetch.mockImplementation(input => input.endsWith("/disputes")
+  ? new Promise(resolve => { finish = resolve; })
+  : delayedResponse(7000, reveal()));
+ render(); await vi.advanceTimersByTimeAsync(7000); await tick();
+ expect(fetch).toHaveBeenCalledTimes(2);
+ const signals = fetch.mock.calls.map(call => call[1]!.signal!);
+ expect(screen()).not.toContain("heated towel rail");
+ const nextJob = "18000000-0000-4000-8000-000000000099";
+ fetch.mockResolvedValue(response(saved("unlocked")));
+ if (departure === "unmount") hooks.reset(); else render(nextJob);
+ await tick();
+ const calls = fetch.mock.calls.length;
+ finish(response([{}])); await tick(); await vi.advanceTimersByTimeAsync(20000);
+ if (departure === "job change") {
+  expect(screen(nextJob)).toContain("runs after you complete");
+  expect(screen(nextJob)).not.toContain("heated towel rail");
+  expect(screen(nextJob)).not.toContain("final-check-disputes");
+ }
+ expect(fetch).toHaveBeenCalledTimes(calls);
+ expect(signals.every(signal => !signal.aborted)).toBe(true);
+ expect(vi.getTimerCount()).toBe(0);
 });

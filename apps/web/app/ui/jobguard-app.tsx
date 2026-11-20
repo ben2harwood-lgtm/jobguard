@@ -88,4 +88,76 @@ function Logo(){return <span className="logo" aria-hidden="true">JG</span>} func
 
 const referenceWalk=`Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves`;
 type CaptureResult=ReviewCaptureResult;
-export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id:string)=>`/jobs/${id}`,onCaptured}:{tenantId:string;close:()=>void;initialText?:string;mode?:"own"|"example";reviewHref?:(id:string)=>string;onCaptured?:(result:ReviewCaptureResult)=>void}){const[reviewing,setReviewing]=useState(false),[textValue,setTextValue]=useState(initialText ?? (mode==="own"?"":referenceWalk)),[dictation,setDictation]=useState<{raw:string}|null>(null),[result,setResult]=useState<CaptureResult|null>(null),[message,setMessage]=useState(""),[captureId]=useState(()=>crypto.randomUUID());if(reviewing&&result)return <ReviewProposal result={result} back={()=>setReviewing(false)}/>;async function submit(){setMessage("Making your draft…");try{const response=await fetch("/api/jobs/capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({contractVersion:"job_capture_v1",requested_tenant_id:tenantId,captureId,source:dictation?{kind:"browser_local_transcript",text:textValue,acquisition:{contractVersion:"browser_local_dictation_v1",language:"en-GB",processLocally:true,audioUploaded:false,audioStored:false,rawFinalText:dictation.raw,humanEdited:textValue!==dictation.raw}}:{kind:"text",text:textValue},fixtureId:"deterministic-local-v1"})});if(!response.ok)throw new Error(((await response.json())as{code?:string}).code);const captured=await response.json() as CaptureResult;setResult(captured);onCaptured?.(captured);setMessage("Your draft is ready. Check it below — nothing has been sent.");}catch(error){setMessage(`We could not make the draft (${(error as Error).message}). Your original text is still here; change it or try again.`);}}return <section className="walk"><button type="button" className="back" onClick={close}>← Back to jobs</button><p className="eyebrow">New job · safe demo</p><h1>Walk the job</h1><p className="screen-intro">Say or type the job the way you'd tell the customer. JobGuard splits it into lines for you to check. You can edit anything before it goes further.</p><LocalDictation onUse={(text,raw)=>{setTextValue(text);setDictation({raw})}}/><div className="walk-grid"><div className="walk-input"><label htmlFor="walk-source"><strong>Work details</strong><span>{mode==="own"?"Describe your own job. The example is a hint only.":"Example — replace this with your own words"}</span></label><textarea id="walk-source" aria-describedby="walk-help" placeholder={mode==="own"?referenceWalk:undefined} value={textValue} onChange={e=>setTextValue(e.target.value)} rows={15}/><p id="walk-help" className="helper">Include the job name, each piece of work and a price if you know it. Missing prices can be added later.</p><button className="primary wide" type="button" onClick={()=>void submit()}>Make my draft</button><p className="helper">This only makes a draft for you to check. It does not send anything.</p><p className="result-message">{message}</p></div><div className="proposal" aria-label="Cited proposal"><h2>{result?"Here is the draft JobGuard made":"Your draft will appear here"}</h2>{!result?<p>Nothing has happened yet. Check the example, change it if you want, then tap Make my draft.</p>:<><p className="pilot-badge">Draft only · check it first · nothing sent</p><p>Proposal lines: <strong data-testid="proposal-line-count">{result.proposal.lines.length}</strong></p><p>Check every line. You can change, remove or add work on the next screen.</p><ol>{result.proposal.lines.map((line,index)=><li key={index}><strong>{line.description.value}</strong><span>{line.unitPricePence.value===null?"Price needed":`£${(line.unitPricePence.value/100).toFixed(2)}`}</span></li>)}</ol><h3>One thing to check</h3>{result.proposal.questions.map(({question})=><p key={question.value}>? {question.value}</p>)}<details><summary>See the original words saved with this draft</summary><pre>{result.source.text}</pre></details><button className="primary wide" type="button" onClick={()=>location.assign(reviewHref(result.jobId))}>Check and edit my draft</button><p className="helper">Next, approve each line and answer anything JobGuard was unsure about.</p></>}</div></div></section>}
+export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id:string)=>`/jobs/${id}`,onCaptured}:{tenantId:string;close:()=>void;initialText?:string;mode?:"own"|"example";reviewHref?:(id:string)=>string;onCaptured?:(result:ReviewCaptureResult)=>void}) {
+  const [reviewing,setReviewing]=useState(false),
+    [textValue,setTextValue]=useState(initialText ?? (mode==="own"?"":referenceWalk)),
+    [dictation,setDictation]=useState<{raw:string}|null>(null),
+    [result,setResult]=useState<CaptureResult|null>(null),
+    [message,setMessage]=useState(""),
+    [busy,setBusy]=useState(false);
+  // A capture ID belongs to exact source bytes and provenance, not this mounted form.
+  // Retain earlier attempts too: returning to their input must retry the same save.
+  const captureIds=useRef(new Map<string,string>()), submitting=useRef(false);
+  if(reviewing&&result)return <ReviewProposal result={result} back={()=>setReviewing(false)}/>;
+
+  function sourceChanged() {
+    setResult(null);
+    setMessage(result ? "Make your draft again to use these work details. Previously saved drafts stay in Jobs." : "");
+  }
+  async function submit() {
+    if(submitting.current)return;
+    const input={
+      contractVersion:"job_capture_v1",
+      requested_tenant_id:tenantId,
+      source:dictation?{
+        kind:"browser_local_transcript",text:textValue,
+        acquisition:{contractVersion:"browser_local_dictation_v1",language:"en-GB",processLocally:true,audioUploaded:false,audioStored:false,rawFinalText:dictation.raw,humanEdited:textValue!==dictation.raw}
+      }:{kind:"text",text:textValue},
+      fixtureId:"deterministic-local-v1"
+    };
+    const snapshot=JSON.stringify(input);
+    let captureId=captureIds.current.get(snapshot);
+    if(!captureId){captureId=crypto.randomUUID();captureIds.current.set(snapshot,captureId);}
+    // The ref closes the same-tick double-click window before React renders disabled controls.
+    submitting.current=true;setBusy(true);setMessage("Making your draft…");
+    try {
+      const response=await fetch("/api/jobs/capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...input,captureId})});
+      if(!response.ok)throw new Error(((await response.json())as{code?:string}).code);
+      const captured=await response.json() as CaptureResult;
+      setResult(captured);onCaptured?.(captured);
+      setMessage("Your draft is ready. Check it below — nothing has been sent.");
+    } catch(error) {
+      setMessage((error as Error).message==="CAPTURE_ID_REUSED"
+        ? "These work details conflict with an earlier draft (CAPTURE_ID_REUSED). Your text is still here and the earlier draft is unchanged. Copy your text before returning to Jobs to start a new draft."
+        : `We could not make the draft (${(error as Error).message}). Your original text is still here; change it or try again.`);
+    } finally {
+      submitting.current=false;setBusy(false);
+    }
+  }
+  return <section className="walk">
+    <button type="button" className="back" onClick={close}>← Back to jobs</button>
+    <p className="eyebrow">New job · safe demo</p><h1>Walk the job</h1>
+    <p className="screen-intro">Say or type the job the way you'd tell the customer. JobGuard splits it into lines for you to check. You can edit anything before it goes further.</p>
+    <LocalDictation applyDisabled={busy} onUse={(text,raw)=>{if(submitting.current)return;setTextValue(text);setDictation({raw});sourceChanged();}}/>
+    <div className="walk-grid"><div className="walk-input">
+      <label htmlFor="walk-source"><strong>Work details</strong><span>{mode==="own"?"Describe your own job. The example is a hint only.":"Example — replace this with your own words"}</span></label>
+      <textarea id="walk-source" aria-describedby="walk-help" placeholder={mode==="own"?referenceWalk:undefined} value={textValue} disabled={busy} onChange={e=>{if(submitting.current)return;setTextValue(e.target.value);sourceChanged();}} rows={15}/>
+      <p id="walk-help" className="helper">Include the job name, each piece of work and a price if you know it. Missing prices can be added later.</p>
+      <button className="primary wide" type="button" disabled={busy} onClick={()=>void submit()}>Make my draft</button>
+      <p className="helper">This only makes a draft for you to check. It does not send anything.</p>
+      <p className="result-message">{message}</p>
+    </div><div className="proposal" aria-label="Cited proposal">
+      <h2>{result?"Here is the draft JobGuard made":"Your draft will appear here"}</h2>
+      {!result?<p>{captureIds.current.size?"Make a draft from these work details. Any previously saved drafts stay in Jobs.":"Nothing has happened yet. Check the example, change it if you want, then tap Make my draft."}</p>:<>
+        <p className="pilot-badge">Draft only · check it first · nothing sent</p>
+        <p>Proposal lines: <strong data-testid="proposal-line-count">{result.proposal.lines.length}</strong></p>
+        <p>Check every line. You can change, remove or add work on the next screen.</p>
+        <ol>{result.proposal.lines.map((line,index)=><li key={index}><strong>{line.description.value}</strong><span>{line.unitPricePence.value===null?"Price needed":`£${(line.unitPricePence.value/100).toFixed(2)}`}</span></li>)}</ol>
+        <h3>One thing to check</h3>{result.proposal.questions.map(({question})=><p key={question.value}>? {question.value}</p>)}
+        <details><summary>See the original words saved with this draft</summary><pre>{result.source.text}</pre></details>
+        <button className="primary wide" type="button" onClick={()=>location.assign(reviewHref(result.jobId))}>Check and edit my draft</button>
+        <p className="helper">Next, approve each line and answer anything JobGuard was unsure about.</p>
+      </>}
+    </div></div>
+  </section>;
+}
