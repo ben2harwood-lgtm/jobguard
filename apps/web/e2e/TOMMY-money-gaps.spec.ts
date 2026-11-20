@@ -193,7 +193,7 @@ async function addVariation(page: Page, description: string, price: string, dire
 }
 
 /** Real proof and worker-owned Final Check, followed by the actual invoice command. No SQL setup. */
-async function finishAndInvoice(page: Page, jobId: string, netPence: number, grossPence: number) {
+async function finishAndInvoice(page: Page, jobId: string, netPence: number, grossPence: number, leavePendingTrimRepairOffBill = false) {
   const evidenceId = await phase("Verify the source job's completion proof", async () => {
     const proofPath = root(jobId) + "/proof";
     const before = await read(page, proofPath);
@@ -222,6 +222,9 @@ async function finishAndInvoice(page: Page, jobId: string, netPence: number, gro
     const terms = await read(page, root(jobId) + "/final-account/lock");
     if (!terms.termsAccepted) await click(page, "Accept final check terms");
     await expect(button(page, "Accept final check terms")).toBeDisabled();
+    if (leavePendingTrimRepairOffBill) {
+      await page.getByRole("checkbox", { name: 'Leave "Pending trim repair" off this bill on purpose' }).check();
+    }
     await click(page, "Complete final account");
     await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
     return account;
@@ -303,7 +306,7 @@ test("support-v02: matched fresh jobs exclude dismissed shelves and a pending £
           await expect(page.getByTestId("approved-additions")).toHaveText("£125.00");
           await button(page, "Approve exact revision").nth(0).click();
           await expect(page.getByTestId("approved-omissions")).toHaveText("−£25.00");
-          const finished = await finishAndInvoice(page, job.jobId, 110000, 132000);
+          const finished = await finishAndInvoice(page, job.jobId, 110000, 132000, includePending);
           const { account } = finished;
           expect(account.lines.filter(line => line.kind === "baseline").map(line => line.scopeItemId).sort()).toEqual([...job.originalIds].sort());
           expect(account.lines.some(line => line.scopeItemId === job.shelfId)).toBe(false);
