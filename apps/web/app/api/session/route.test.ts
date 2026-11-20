@@ -41,6 +41,7 @@ it.each(["http", "https"])("issues a new session, expires the old job cookie and
   expect(response.status).toBe(200);
   expect(stub.issue).toHaveBeenCalledExactlyOnceWith(stub.pool);
   expect(response.cookies.get("jg_session")).toMatchObject({ value: newSession, httpOnly: true, sameSite: "lax", path: "/", secure: protocol === "https" });
+  expect(response.headers.getSetCookie().find(cookie => cookie.startsWith("jg_session="))).toContain("Max-Age=604740");
   expect(response.cookies.get("jg_decision_job")).toMatchObject({ value: "", path: "/", expires: new Date(0) });
   for (const cookie of response.cookies.getAll()) {
     if (cookie.expires instanceof Date && cookie.expires.getTime() === 0) stub.jar.delete(cookie.name);

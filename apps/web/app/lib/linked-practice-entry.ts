@@ -8,10 +8,11 @@ import type { Pool } from "pg";
 import { identityApplication } from "./identity-server";
 
 export const pairingCookie = "jg_practice_pair";
+export const practiceSessionMaxAgeSeconds = 7 * 24 * 60 * 60 - 60;
 // Same secret validated by identity composition. No fallback key or credential store.
 export function linkedPracticeSecret() { return z.string().min(32).parse(process.env.AUTH_CODE_SECRET); }
 export function practiceCookieOptions(secure: boolean) {
-  return { httpOnly: true, path: "/", sameSite: "strict" as const, secure };
+  return { httpOnly: true, path: "/", sameSite: "strict" as const, secure, maxAge: practiceSessionMaxAgeSeconds };
 }
 function boundedTokens(identity: string, practice: string) {
   return identity.length > 0 && identity.length <= 256 && z.string().uuid().safeParse(practice).success;

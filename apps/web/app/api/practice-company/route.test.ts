@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { practiceFirmName } from "../../lib/contracts";
 const stub = vi.hoisted(() => ({ start: vi.fn(), pool: vi.fn(() => ({})), identity: "" }));
+vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (key: string) => key === "jg_session" ? { value: "browser-session" } : key === "jobguard_session" && stub.identity ? {value:stub.identity} : undefined }) }));
 vi.mock("../../lib/synthetic-server", () => ({ syntheticPool: stub.pool, practiceFailure: () => null }));
 vi.mock("@jobguard/db", async importOriginal => ({ ...await importOriginal<typeof import("@jobguard/db")>(), startBlankPracticeCompany: stub.start }));
@@ -20,6 +21,13 @@ it.each(["start", "reset"])("accepts loopback Origin under next start for %s", a
   expect(stub.start).toHaveBeenCalledWith({}, body, "browser-session");
   expect(response.headers.get("set-cookie")).toContain("jg_session=replacement-session");
   expect(response.headers.get("cache-control")).toBe("no-store");
+});
+it("practice-company sets a jg_session that lasts no longer than the server session", async () => {
+  const response = await POST(request());
+  const cookie = response.headers.get("set-cookie");
+  expect(cookie).toContain("Max-Age=604740");
+  expect(cookie).toContain("HttpOnly");
+  expect(cookie).toContain("SameSite=lax");
 });
 it("accepts a configured public origin even when request.url is internal", async () => {
   vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://practice.example.org");
