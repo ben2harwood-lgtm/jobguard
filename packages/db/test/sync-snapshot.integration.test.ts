@@ -193,3 +193,196 @@ describe("M3-3 durable checkpoint SQL", () => {
     expect(await scoped(b)).toBe(Number.MAX_SAFE_INTEGER);
   });
 });
+
+describe("connected synthetic native downloads", () => {
+  it("pages real assignments, resumes a lost page, and purges on reassignment, switching and revocation", async () => {
+    const { randomUUID } = await import("node:crypto");
+    const { PostgresSyntheticMobileAuthStore, WorkOrderRepository, demoFile, demoRow } = await import("../src/index.js");
+    const { MemoryAuthProvider } = await import("../../../apps/api/src/auth/auth-provider.js");
+    const { SyntheticMobileAuthApplication } = await import("../../../apps/api/src/auth/mobile-auth.application.js");
+    const { SyntheticNativeDownloadConnection } = await import("../../../apps/api/src/sync/native-download.connection.js");
+    const { cluster, command, reviseOrder, visitFixture } = await import("./site-visit-fixtures.js");
+    const { NativeDownloadConnection } = await import(new URL("../../../apps/mobile/src/download-transport.ts", import.meta.url).href);
+    const { NativeDownloads } = await import(new URL("../../../apps/mobile/src/download.ts", import.meta.url).href);
+    const { WorkspaceDocument } = await import(new URL("../../../apps/mobile/src/workspace-document.ts", import.meta.url).href);
+    const { MobileClient } = await import(new URL("../../../apps/mobile/src/lifecycle.ts", import.meta.url).href);
+    const c = await cluster();
+    let identity: Pool | undefined;
+    try {
+      const north = await visitFixture(c), south = await visitFixture(c);
+      const orders = new WorkOrderRepository(c.runtime);
+      const added = await orders.importCsv(north.p, {
+        commandId: randomUUID(), name: "fictional-download-pages.csv", kind: "csv",
+        csv: demoFile(Array.from({ length: 204 }, (_, i) => demoRow(north.demo, i + 3))),
+      });
+      expect(added.rows).toHaveLength(204);
+      expect(added.rows.every(row => row.outcome === "created")).toBe(true);
+
+      type Member = import("../../../apps/api/src/auth/auth-provider.js").ActiveMembership;
+      class FictionalAuth extends MemoryAuthProvider {
+        readonly roster: Member[] = [];
+        override fixtureMemberships() { return this.roster; }
+        override async findMembership(principal: import("../../../apps/api/src/auth/auth-provider.js").AuthPrincipal, tenantId: string) {
+          return this.roster.find(m => m.identityUserId === principal.identityUserId && m.tenantId === tenantId);
+        }
+      }
+      const origin = "https://fictional-jobguard.example.test";
+      const source = new FictionalAuth("fictional-download-session-secret", () => {}, () => 1000, () => "12345678");
+      async function enroll(label: string, members: { member: import("../src/index.js").AuthenticatedMembership; role: Member["role"] }[]) {
+        const email = `${label}@example.invalid`;
+        await source.requestCode({ email, purpose: "signup", ip: "192.0.2.1" });
+        const credentials = await source.verifyCode(email, "signup", "12345678");
+        const principal = (await source.authenticate(credentials.sessionToken))!;
+        await c.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [principal.identityUserId]);
+        for (const { member, role } of members) {
+          await c.admin.query("UPDATE app.membership SET identity_user_id=$3 WHERE tenant_id=$1 AND id=$2",
+            [member.tenantId, member.membershipId, principal.identityUserId]);
+          source.roster.push({ id: member.membershipId, tenantId: member.tenantId, identityUserId: principal.identityUserId, role, email });
+        }
+        return (tenantId: string) => ({ ...credentials, origin, requestedTenantId: tenantId });
+      }
+      const operative = await enroll("fictional-operative", [north.members.operative, south.members.operative].map(({ member }) => ({ member, role: "operative" })));
+      const supervisor = await enroll("fictional-supervisor", [{ member: north.named.member, role: "foreman" }]);
+      const finance = await enroll("fictional-finance", [{ member: north.members.finance.member, role: "finance" }]);
+      const policy = { version: "mobile-auth-policy-specimen.v1", environment: "synthetic_demo", policyVersion: "fictional_mobile_auth_policy_v1",
+        accessDurationMs: 100, refreshDurationMs: 500, sessionDurationMs: 1000, readLeaseDurationMs: 200 };
+      await c.admin.query("ALTER ROLE jobguard_identity LOGIN PASSWORD 'fictional-native-identity'");
+      identity = new Pool({ ...c.config, database: "jobguard_synthetic_demo",
+        user: "jobguard_identity", password: "fictional-native-identity" });
+      const auth = new SyntheticMobileAuthApplication(source, policy, {
+        enabled: true, environment: "synthetic_demo", allowedOrigin: origin, now: () => 1000,
+        store: new PostgresSyntheticMobileAuthStore(identity),
+      });
+      const server = new SyntheticNativeDownloadConnection(source, auth, c.runtime, {
+        enabled: true, environment: "synthetic_demo", allowedOrigin: origin,
+        // Replication fixture deliberately crosses RLS and includes a same-tenant unassigned row.
+        replica: rows => [
+          ...rows.map(row => ({ ...row, bankHistory: "FICTIONAL-BANK", secret: "FICTIONAL-SECRET", amountPence: 999 })),
+          { ...rows[0], tenantId: north.p.tenantId, jobId: north.otherJob, reference: "UNASSIGNED-ROW" },
+          ...(rows[0]?.tenantId === north.p.tenantId ? [{ ...rows[0], tenantId: south.p.tenantId,
+            jobId: rows[0].jobId, reference: "CROSS-TENANT-ROW" }] : []),
+        ],
+      });
+      const cred = (p: { tenantId: string }) => operative(p.tenantId);
+      const vaultData = new Map<string, string>(), bytes = new Map<string, string>();
+      const vault = {
+        get: async (k: string) => vaultData.get(k) ?? null,
+        set: async (k: string, v: string) => { vaultData.set(k, v); },
+        remove: async (k: string) => { vaultData.delete(k); },
+      };
+      const resources = {
+        open: async (p: { mobileSessionId: string }) => ({
+          encryption: "sqlcipher", read: async () => bytes.get(p.mobileSessionId) ?? null,
+          write: async (v: string) => { bytes.set(p.mobileSessionId, v); }, close: async () => {},
+        }),
+        destroy: async (p: { mobileSessionId: string }) => { bytes.delete(p.mobileSessionId); },
+      };
+      const makeLifecycle = (deviceInstanceId: string) => new MobileClient({
+        exchange: (input: { requestedTenantId: string }) => auth.exchange(input, cred({ tenantId: input.requestedTenantId })),
+        rotate: (input: unknown, p: { tenantId: string }) => auth.rotate(input, cred(p)),
+        reconnect: (input: unknown, p: { tenantId: string }) => auth.reconnect(input, cred(p)),
+        deviceCommand: (input: unknown, p: { tenantId: string }) => auth.deviceCommand(input, cred(p)),
+      }, vault, resources, {
+        enabled: true, environment: "synthetic_demo", policy, uuid: randomUUID, deviceInstanceId,
+        clock: () => ({ status: "trusted_fixture", nowMs: 1000 }), partitionKey: async (p: { mobileSessionId: string }) => p.mobileSessionId,
+      });
+      const active = () => JSON.parse(vaultData.get("jobguard.synthetic.active.v1")!).partition;
+      const local = (p = active()) => JSON.parse(bytes.get(p.mobileSessionId)!);
+      const checkpoint = async (tenant: string, userId: string) => Number((await c.admin.query(
+        "SELECT generation FROM app.sync_snapshot_checkpoint WHERE tenant_id=$1 AND user_id=$2", [tenant, userId],
+      )).rows[0]?.generation);
+
+      const lifecycle = makeLifecycle("fictional-download-device");
+      await lifecycle.exchange(north.p.tenantId);
+      const first = active();
+      let dropPage = 2, pageCalls = 0;
+      const cursors: (string | null)[] = [];
+      const requests: unknown[] = [];
+      const send = async (message: unknown) => {
+        const wire = JSON.parse(JSON.stringify(message)) as {
+          operation: { kind: string; request: { afterJobId: string | null } };
+        };
+        const result = await server.call(wire, cred(first));
+        if (wire.operation.kind === "page") {
+          requests.push(wire.operation.request);
+          cursors.push(wire.operation.request.afterJobId);
+          if (++pageCalls === dropPage) throw Error("fictional dropped reply");
+        }
+        return JSON.parse(JSON.stringify(result));
+      };
+      const downloads = async (p = active(), channel: (message: unknown) => Promise<unknown> = message => server.call(message, cred(p))) => {
+        const store = await resources.open(p);
+        return new NativeDownloads(new WorkspaceDocument(store, p),
+          new NativeDownloadConnection(p, async () => JSON.parse(vaultData.get(`m32.session.${p.mobileSessionId}`)!).access, channel));
+      };
+      const initial = await downloads(first, send);
+      await expect(initial.refresh()).rejects.toMatchObject({ code: "MOBILE_RECOVERY_REQUIRED" });
+      expect(local().sync.rows).toHaveLength(100);
+      expect(local().sync.pending.afterJobId).toBe(cursors[1]);
+      const restarted = await downloads(first, send);
+      const all = await restarted.refresh();
+      expect(all.jobs).toHaveLength(205);
+      expect(cursors).toEqual([null, expect.any(String), cursors[1], expect.any(String)]);
+      expect(cursors[3]).not.toBe(cursors[1]);
+      expect(JSON.stringify(local())).not.toMatch(/FICTIONAL-BANK|FICTIONAL-SECRET|amountPence|UNASSIGNED-ROW|CROSS-TENANT-ROW|token|credential/u);
+      const generation = await checkpoint(first.tenantId, first.userId);
+
+      const request = { version: "sync-subscription-request.v1", requestedTenantId: first.tenantId, profile: "contractor_assigned_jobs.v1" };
+      const storedAccess = JSON.parse(vaultData.get(`m32.session.${first.mobileSessionId}`)!).access;
+      const call = (operation: unknown, access = storedAccess, deviceInstanceId = first.deviceInstanceId) =>
+        ({ version: "native-download-call.v1", deviceInstanceId, access, operation });
+      await expect(server.call(call({ kind: "subscribe", request: { ...request, requestedTenantId: south.p.tenantId } }), cred(first)))
+        .resolves.toMatchObject({ outcome: "denied" });
+      await expect(server.call(call({ kind: "subscribe", request }, { ...storedAccess, credential: "z".repeat(43) }), cred(first)))
+        .resolves.toMatchObject({ outcome: "denied" });
+      await expect(server.call(call({ kind: "subscribe", request: { ...request, membershipId: north.named.member.membershipId } }), cred(first)))
+        .rejects.toMatchObject({ code: "SYNC_INVALID_INPUT" });
+
+      dropPage = pageCalls + 2;
+      await expect(restarted.refresh()).rejects.toMatchObject({ code: "MOBILE_RECOVERY_REQUIRED" });
+      expect(local().sync.pending.afterJobId).not.toBeNull();
+      await reviseOrder(c, north, 2, [north.named.member.membershipId]);
+      const replay = await server.call(call({ kind: "page", request: requests[0] }), cred(first));
+      expect(replay).toMatchObject({ outcome: "ok", value: { resync: "required", page: { rows: [] } } });
+      const recovered = await downloads(first, send);
+      const remaining = await recovered.refresh();
+      expect(cursors.at(-3)).toBeNull(); // New generation starts at the beginning.
+      expect(remaining.jobs).toHaveLength(204);
+      expect(remaining.jobs.some((row: { jobId: string }) => row.jobId === north.jobId)).toBe(false);
+      expect(await checkpoint(first.tenantId, first.userId)).toBeGreaterThan(generation);
+
+      for (const [sessionCredentials, expected] of [[supervisor, [north.jobId]], [finance, null]] as const) {
+        const credentials = sessionCredentials(north.p.tenantId);
+        const session = await auth.exchange({ version: "mobile-exchange.v1", commandId: randomUUID(),
+          deviceInstanceId: "fictional-role-device", requestedTenantId: north.p.tenantId }, credentials);
+        const p = session.partition;
+        const link = new NativeDownloadConnection(p, async () => session.access, (message: unknown) => server.call(message, credentials));
+        const doc = await resources.open(p);
+        await doc.write(JSON.stringify({ version: "mobile-cache.v1", metadata: {
+          version: "mobile-local-metadata.v1", partition: p, localSchemaVersion: 1,
+        }, notes: [], files: [], unsyncedWork: "none" }));
+        const client = new NativeDownloads(new WorkspaceDocument(doc, p), link);
+        if (expected) expect((await client.refresh()).jobs.map((row: { jobId: string }) => row.jobId)).toEqual(expected);
+        else await expect(client.refresh()).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+      }
+
+      const beforeSwitch = await checkpoint(first.tenantId, first.userId);
+      await lifecycle.switchTenant(south.p.tenantId);
+      expect(bytes.has(first.mobileSessionId)).toBe(false);
+      await expect(server.call(call({ kind: "page", request: requests[0] }), cred(first))).resolves.toMatchObject({ outcome: "denied" });
+      const southern = await downloads();
+      expect((await southern.refresh()).jobs.map((row: { jobId: string }) => row.jobId)).toEqual([south.jobId]);
+      await lifecycle.logout();
+      // The existing synthetic switch tombstones the old device/tenant family.
+      const reEnrolled = makeLifecycle("fictional-download-reenrolment");
+      await reEnrolled.exchange(north.p.tenantId);
+      await reEnrolled.reconnect();
+      const returned = await downloads();
+      expect((await returned.refresh()).jobs).toEqual(remaining.jobs);
+      expect(await checkpoint(first.tenantId, first.userId)).toBeGreaterThan(beforeSwitch);
+      await command(c, north, { kind: "membership.revoke", membershipId: north.members.operative.member.membershipId });
+      await expect(returned.refresh()).rejects.toMatchObject({ code: "MOBILE_DENIED" });
+      expect(local().sync).toBeNull();
+    } finally { await closeTestPools(identity); await c.close(); }
+  }, 120_000);
+});

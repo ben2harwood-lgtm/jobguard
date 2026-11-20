@@ -3,6 +3,7 @@ import { View, Text, TextInput, Button, ScrollView } from "react-native";
 import type { Partition } from "./lifecycle-contracts";
 import { nativeCoreScreens, type NativeCoreLoopScreens, type LoadedCoreScreen, type nativeReviewChoice } from "./core-loop-screens";
 import type { DurableNativeQueue } from "./durable-queue";
+import type { NativeDownloads } from "./download";
 import type { NativeCaptures } from "./capture";
 import { CoreLoopScreen } from "./CoreLoopScreen";
 import { ReconciliationScreen } from "./ReconciliationScreen";
@@ -12,6 +13,7 @@ import { CaptureScreen } from "./CaptureScreen";
 export interface NativeWorkspaceBindings {
  partition: Partition; online: boolean; authorityGeneration: number; uuid(): string;
  operative?: NativeOperativeScreens; makeOperativeIntent?(jobId: string, text: string, description: string): unknown; onOperativeReview?(plan: unknown): void;
+ assignedJobs?: Pick<NativeDownloads, "refresh">;
  core?: NativeCoreLoopScreens; queue?: DurableNativeQueue; captures?: NativeCaptures;
  onReview?(choice: ReturnType<typeof nativeReviewChoice>): void;
  onReconcileChoice?(commandId: string | null, choice: string): void;
@@ -19,6 +21,7 @@ export interface NativeWorkspaceBindings {
 /** Remount this owner-scoped component on user/tenant/session/generation change. No default provider. */
 export function WorkspaceScreens({ binding }: { binding: NativeWorkspaceBindings }) {
  const [screen, setScreen] = useState<LoadedCoreScreen | null>(null);
+ const [assigned, setAssigned] = useState<Awaited<ReturnType<NativeDownloads["refresh"]>> | null>(null);
  const [queue, setQueue] = useState<Awaited<ReturnType<DurableNativeQueue["views"]>>>([]);
  const [captures, setCaptures] = useState<Awaited<ReturnType<NativeCaptures["views"]>>>([]);
  const [draft, setDraft] = useState("Fictional "); const [job, setJob] = useState("");
@@ -48,7 +51,19 @@ export function WorkspaceScreens({ binding }: { binding: NativeWorkspaceBindings
     setStatus("Local text intent retained. No server proof was created.");
     if (binding.online) setCaptures(await binding.captures!.views());
    })} onMedia={kind => { binding.captures?.media(kind, "unavailable"); setStatus("Voice/photo capture and general encrypted media remain held under D08."); }} />
-  {binding.operative ? <OperativeWorkflow source={binding.operative} online={binding.online} busy={busy} uuid={binding.uuid} run={run} {...(binding.makeOperativeIntent ? { makeIntent: binding.makeOperativeIntent } : {})} {...(binding.onOperativeReview ? { onReview: binding.onOperativeReview } : {})} /> : <Text>Operative source is not connected.</Text>}
+  {binding.assignedJobs && !binding.operative ? <View>
+   <Button title="Refresh assigned jobs" disabled={busy || !binding.online} onPress={() => {
+    const source = binding.assignedJobs;
+    if (source && binding.online) void run(async () => {
+     setAssigned(null);
+     setAssigned(await source.refresh());
+    });
+   }} />
+   {binding.online && assigned ? (assigned.jobs.length
+    ? assigned.jobs.map(row => <Text key={row.jobId}>{row.reference} · {row.priority}{row.dueOn ? ` · due ${row.dueOn}` : ""}</Text>)
+    : <Text>No assigned jobs</Text>) : null}
+  </View> : null}
+  {binding.operative ? <OperativeWorkflow source={binding.operative} online={binding.online} busy={busy} uuid={binding.uuid} run={run} {...(binding.makeOperativeIntent ? { makeIntent: binding.makeOperativeIntent } : {})} {...(binding.onOperativeReview ? { onReview: binding.onOperativeReview } : {})} /> : binding.assignedJobs ? null : <Text>Operative source is not connected.</Text>}
   <View><Text accessibilityLiveRegion="polite">{status}</Text></View>
  </ScrollView>;
 }
