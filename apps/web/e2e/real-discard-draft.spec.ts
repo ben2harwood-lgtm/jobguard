@@ -60,7 +60,9 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 900 
       const loaded = page.waitForResponse(r => new URL(r.url()).pathname === "/api/jobs" && r.ok());
       await page.goto(path);
       await loaded;
-      await expect(page.getByText(quoteTitle, { exact: true })).toBeVisible();
+      const listedQuote = path === "/today" ? page.getByRole("button", { name: quoteTitle, exact: true })
+        : page.getByTestId("designed-jobs-list").getByText(quoteTitle, { exact: true });
+      await expect(listedQuote).toBeVisible();
       await expect(page.getByText(draftTitle, { exact: true })).toHaveCount(0);
     }
   });
