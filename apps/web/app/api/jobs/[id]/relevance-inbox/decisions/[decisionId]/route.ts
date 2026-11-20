@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { routeErrorCode } from "../../../../../../lib/route-error-code";
 import { practiceFailure, hasSyntheticSession, syntheticPool } from "../../../../../../lib/synthetic-server";
 import { workspaceApplication } from "../../../../../../lib/workspace-server";
+import { recordInboxDismissal } from "../../../../../../lib/inbox-metrics-server";
 import { z } from "zod";
 import { inboxMetricEventV1 } from "@jobguard/core";
 
@@ -30,7 +31,6 @@ export async function POST(r: Request, { params }: { params: Promise<{ id: strin
     let metricFailure = false;
     if (reason && process.env.JOBGUARD_ENV === "synthetic_demo") {
       try {
-        const { recordInboxDismissal } = await import("../../../../../../lib/inbox-metrics-server.js");
         await recordInboxDismissal(syntheticPool(), sessionId, id, decisionId, reason);
       }
       catch {
