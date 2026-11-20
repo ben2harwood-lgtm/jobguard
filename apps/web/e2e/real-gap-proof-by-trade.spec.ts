@@ -142,7 +142,7 @@ ITEM: Replace shelves`);
     }
     const check = await (await page.request.get(`/api/jobs/${jobId}/final-check`)).json();
     expect(check.state, "Final Check must process every source; inspect source-diagnostics attachment on failure").toBe("completed");
-    await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+    await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
     const changed = await page.request.post(`/api/jobs/${jobId}/final-account/review-extras`, { data: {
       version: "final-review-extra.v1", commandId: crypto.randomUUID(), scopeItemId: crypto.randomUUID(), description: "Too late", captureText: "Too late", price: null,
     } });

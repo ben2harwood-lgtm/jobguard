@@ -100,9 +100,9 @@ test("DT-02 prepared first job locks, ends trial and completes saved zero check 
  await click(page, "Run the final check (practice)");
  await expect(async () => {
   await click(page, "Load saved final account and check");
-  await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+  await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
  }).toPass({ timeout: 90_000, intervals: [1000, 3000] });
- await page.reload(); await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+ await page.reload(); await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
  await accessibleLayout(page);
  await page.getByRole("link", { name: "Back to guided trial" }).click();
  await expect(page.getByTestId("trial-outcome")).toContainText("Trial ended by lock");

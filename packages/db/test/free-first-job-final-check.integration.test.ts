@@ -96,7 +96,7 @@ describe.each(["F7", "F5"] as const)("MON-3 trial Final Check %s", kind => {
    expect(trialValue).toMatchObject({ recovered: normalValue.recovered, fee: normalValue.fee, yoursBeforeVatAndTax: normalValue.yoursBeforeVatAndTax, productionEnabled: false, realExternalActions: 0 });
   } else {
    expect(result.items).toEqual([]);
-   expect(result.message).toBe("JobGuard's final check found nothing missing from your bill.");
+   expect(result.message).toBe("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
    expect(result.message).toBe(control.message);
   }
   expect(await read(trial)).toEqual(result);

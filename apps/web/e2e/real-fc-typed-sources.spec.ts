@@ -98,7 +98,7 @@ for (const scenario of scenarios) test(scenario.name, async ({ page }) => {
   // Reload the saved job after persisted completion to refresh the existing invoice guard.
   await page.goto(`/jobs/${jobId}#quote`);
   await click(page, "Load the saved final check");
-  await expect(page.getByTestId("final-check-status")).toContainText(scenario.found ? "found 1 thing" : "found nothing missing");
+  await expect(page.getByTestId("final-check-status")).toContainText(scenario.found ? "found 1 thing" : "didn't spot anything missing");
   const items = page.getByTestId("final-check-item");
   await expect(items).toHaveCount(scenario.found ? 1 : 0);
   if (scenario.look) {

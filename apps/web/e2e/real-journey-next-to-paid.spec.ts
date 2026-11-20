@@ -124,7 +124,7 @@ for (const scenario of [ordinary, fiveItems]) test(scenario === ordinary ? "walk
  const initialCheck = await saved(page, jobId, "final-check");
  expect(initialCheck.state).not.toBe("failed");
  if (initialCheck.state === "pending") await click(page, "Run the final check (practice)");
- await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.", { timeout: 180_000 });
+ await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.", { timeout: 180_000 });
  await expect(onward).toHaveText("Issue the customer invoice"); await onward.click();
  await click(page, "Issue and simulate this invoice"); await expect(page.getByTestId("invoice-gross")).toHaveText("GBP 1,080.00");
  await expect(onward).toHaveText("Record the next customer payment"); await onward.click();
@@ -141,7 +141,7 @@ for (const scenario of [ordinary, fiveItems]) test(scenario === ordinary ? "walk
  await expect(page.locator("#captured-job-workspace > header .status")).toHaveText("Complete — customer paid");
  await page.getByRole("navigation", { name: "Saved job sections" }).getByRole("link", { name: "Final account and invoices", exact: true }).click();
  await expect(page.getByTestId("uiwire12-receipt-history")).toContainText(date);
- await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+ await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
  await expect(page.getByRole("button", { name: "Issue and simulate this invoice", exact: true })).toHaveCount(0);
  const foreign = await browser.newContext({ baseURL: new URL(page.url()).origin });
  try {

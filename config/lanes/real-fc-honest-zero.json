@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "lanes": {
+    "real-fc-honest-zero": {
+      "branches": [
+        "codex/sandbox/real-fc-honest-zero"
+      ],
+      "note": "RED: practice Final Check empty result and bounded typed-text proposals.",
+      "allow": [
+        "BUILD_PLAN.md",
+        "apps/api/src/final-check.application.test.ts",
+        "apps/api/src/final-check.controller.test.ts",
+        "apps/web/app/practice-company/walkthrough/voice-journey.test.tsx",
+        "apps/web/app/practice-company/walkthrough/voice-journey.tsx",
+        "apps/web/app/ui/final-check-reveal.test.tsx",
+        "apps/web/e2e/DEMO-J1-core-1000.spec.ts",
+        "apps/web/e2e/DEMO-J5-trial-final-check.spec.mts",
+        "apps/web/e2e/SV-5.spec.ts",
+        "apps/web/e2e/later-safety-140.spec.ts",
+        "apps/web/e2e/real-fc-ordinary-words.spec.ts",
+        "apps/web/e2e/real-fc-typed-sources.spec.ts",
+        "apps/web/e2e/real-gap-proof-by-trade.spec.ts",
+        "apps/web/e2e/real-journey-next-state.spec.ts",
+        "apps/web/e2e/real-journey-next-to-paid.spec.ts",
+        "apps/web/e2e/real-journey-receipt-balance-now.spec.ts",
+        "apps/web/e2e/real-own-job-to-paid.spec.ts",
+        "apps/web/e2e/real-practice-firm-name-invoice.spec.ts",
+        "docs/contracts/final-check-v1.md",
+        "packages/core/src/final-check.test.ts",
+        "packages/core/src/final-check.ts",
+        "packages/db/src/final-check-typed-text.test.ts",
+        "packages/db/src/final-check-typed-text.ts",
+        "packages/db/test/free-first-job-final-check.integration.test.ts",
+        "packages/db/test/real-fc-typed-sources.integration.test.ts"
+      ]
+    }
+  }
+}
