@@ -51,3 +51,18 @@ Each control/fault run now creates its own browser context with the current proj
 The follow-up source check also confirmed the labelled **Accepted terms** section and **Price the work** controls in QuoteEditor, the capture/recovery routes and request versions used by the real UI, the `recoveryCaseViewV1` money/state field names, and the operation/receipt table columns and `quote.acceptance.attest` operation value. These are source checks, not a runtime pass. The earlier CI head with shared-context setup must not be counted as completed support-v01 coverage.
 
 After this correction, web typecheck and discovery of all 20 executions in the two affected files passed again. Browser/DB execution remains delegated to CI; no such execution was performed in this worktree.
+
+## PR #848 repair 1
+
+Recorded successor session. The repair order records that the original builder session could not be found on the Gmail Cloud route. The existing PR branch merged `origin/main` at `228aa98740f64d201b90a61574581b686b73fa2e`, keeping both sides.
+
+The concurrent test still releases two real commands together and requires at least one initial HTTP 200. If confirmation loses, it checks the exact 503 response and visible alert, zero receipts for the losing command ID, and the same scope revision count as before release. One fresh click must return 200. The existing succeeded-receipt assertion then uses that click's command ID. The opening recovery checks and both final cardinality checks are unchanged.
+
+Failing-first evidence is main run `44197103086`, which recorded confirm 503 and opening 200 for this command pair. No response was faked to force the race.
+
+Local verification used the repository's synthetic PostgreSQL setup and production Next.js build. The pinned browser download returned HTTP 403, so Playwright used the installed Chromium 154.0.8037.57. The initial development-server run was stopped after the demo stayed on its loading screen before the first test action. The production-build run was started with `CI=1`.
+
+- `pnpm turbo run build --filter=@jobguard/web^...` and `pnpm --filter @jobguard/web build` passed.
+- `PLAYWRIGHT_SKIP_BROWSER_GC=1 timeout 1500 pnpm --filter @jobguard/web test:e2e TOMMY-demo-faults.spec.ts --workers=1 --reporter=list,json` passed all four executions. Both concurrent runs recorded confirm 200 and opening 200.
+- `PLAYWRIGHT_SKIP_BROWSER_GC=1 timeout 1500 pnpm --filter @jobguard/web test:e2e TOMMY-demo-faults.spec.ts -g "concurrent confirm-scope" --project=desktop --repeat-each=10 --workers=1 --reporter=list,json` passed 10/10. The ten `scope-recovery-concurrency` attachments each recorded confirm 200 and opening 200. Tally of the losing side was confirm 0, opening 0, neither 10. The confirm-loss branch never ran locally.
+- `./node_modules/.bin/tsc -p apps/web/tsconfig.json --noEmit`, `pnpm lint:lanes`, and `git diff --check` passed. The scoped diff against `3d7f45ec380d0554b60cbd62d423a200e432a222` shows only the test 2 edit and this receipt append. The main-relative diff retains the four existing PR files.
