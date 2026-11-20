@@ -7,11 +7,11 @@ export type JobProvenance = (typeof jobProvenances)[number];
 
 export type JobTransitionReason =
   | "work_order_import" | "start_quote" | "accept_quote" | "switch_live" | "issue_invoice" | "balance_settled"
-  | "quote_lost" | "cancel_acceptance" | "reopen_quote" | "payment_reversal" | "additional_amount_due";
+  | "draft_discarded" | "quote_lost" | "cancel_acceptance" | "reopen_quote" | "payment_reversal" | "additional_amount_due";
 
 const legalJobTransitions: Readonly<Record<JobStatus, Readonly<Partial<Record<JobStatus, readonly JobTransitionReason[]>>>>> = {
   // ENT-2: only the work-order import routine (provenance work_order, CH-3b parties bound) enters live without a quote.
-  draft: { quoting: ["start_quote"], live: ["work_order_import"] },
+  draft: { quoting: ["start_quote"], live: ["work_order_import"], lost: ["draft_discarded"] },
   quoting: { accepted: ["accept_quote"], lost: ["quote_lost"] },
   accepted: { live: ["switch_live"], quoting: ["cancel_acceptance"] },
   live: { invoiced: ["issue_invoice"] },

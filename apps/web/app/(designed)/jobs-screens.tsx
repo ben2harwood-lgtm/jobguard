@@ -145,7 +145,36 @@ function MoneyBlocks({ value, wide = false }: { value: JobValue | null; wide?: b
 export function Overview({ detail, site }: { detail: Detail; site: string }) {
   const router = useRouter();
   const { job, summary, value, checks, photo } = detail;
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [discardError, setDiscardError] = useState("");
   const open = (tab: JobTab) => router.push(`/jobs/${job.id}/${tab}`);
+  async function discardDraft() {
+    setDiscarding(true);
+    setDiscardError("");
+    try {
+      const response = await fetch(`/api/jobs/${job.id}/discard`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contractVersion: "draft_discard_v1",
+          commandId: crypto.randomUUID(),
+          expectedRevision: job.revision,
+        }),
+      });
+      if (!response.ok) {
+        setDiscardError(response.status === 409
+          ? "This draft changed. Refresh the page before trying again."
+          : "We couldn’t discard this draft. Refresh the page and try again.");
+        return;
+      }
+      router.push("/jobs");
+    } catch {
+      setDiscardError("We couldn’t check whether the draft was discarded. Refresh the page and try again.");
+    } finally {
+      setDiscarding(false);
+    }
+  }
   const catchAction = detail.facts?.value?.catchAttention[0];
   const action = catchAction ? { title: "Review the saved extra", body: catchLabel(catchAction), label: "Open the extra", tab: "work" as const } : detail.facts?.blocker ? { title: "This bill stays locked", body: detail.facts.blocker, label: "Open Work / Final Check", tab: "work" as const } : nextAction(job, summary, detail.facts);
   return <>
@@ -154,7 +183,16 @@ export function Overview({ detail, site }: { detail: Detail; site: string }) {
     {!detail.attentionComplete && !detail.attentionFailed && <p role="status">Loading job checks…</p>}
     <div className="job-spot">
       <Card title="The job at a glance"><div className="photo-card"><img src={photo} alt="Illustrative photograph of a property"/><div className="photo-copy"><p className="photo-disclosure">Illustrative photograph of a property</p><div className="kicker">AGREED WORK</div><h3>{job.title}</h3><p style={{ fontSize: 12, lineHeight: 1.8 }}>{job.scopeIdentityIds.length ? `${job.scopeIdentityIds.length} confirmed ${job.scopeIdentityIds.length === 1 ? "item" : "items"} of work.` : "The agreed work has not been confirmed yet."}</p><div className="job-caption"><Tag tone="blue">{quoteLine(summary ?? { status: job.status, document: { kind: "unknown", reference: null, delivery: "unknown" } })}</Tag></div><button type="button" className="btn small" onClick={() => open("work")}>Open the work plan →</button></div></div></Card>
-      <Card title="Next action"><div className="card-body"><div className="kicker">JOBGUARD SUGGESTS</div><h3 style={{ fontSize: 17, margin: "8px 0" }}>{action.title}</h3><p>{action.body}</p><div style={{ marginTop: 20 }}><button type="button" className="btn primary wide" onClick={() => catchAction ? router.push(`/jobs/${job.id}/work#variation-${catchAction.id}`) : detail.facts?.blocker ? router.push(`/jobs/${job.id}/work#final-account-title`) : open(action.tab)}>{action.label} →</button></div></div></Card>
+      <Card title="Next action"><div className="card-body"><div className="kicker">JOBGUARD SUGGESTS</div><h3 style={{ fontSize: 17, margin: "8px 0" }}>{action.title}</h3><p>{action.body}</p><div style={{ marginTop: 20 }}><button type="button" className="btn primary wide" onClick={() => catchAction ? router.push(`/jobs/${job.id}/work#variation-${catchAction.id}`) : detail.facts?.blocker ? router.push(`/jobs/${job.id}/work#final-account-title`) : open(action.tab)}>{action.label} →</button></div>
+        {job.status === "draft" && <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+          {confirmDiscard ? <>
+            <p>Discarding hides this draft. Nothing was sent to a customer.</p>
+            <button type="button" className="btn wide" style={{ minHeight: 44 }} disabled={discarding} onClick={() => void discardDraft()}>{discarding ? "Discarding…" : "Yes, discard it"}</button>
+            <button type="button" className="btn wide" style={{ minHeight: 44 }} disabled={discarding} onClick={() => { setConfirmDiscard(false); setDiscardError(""); }}>Keep it</button>
+            {discardError && <p role="alert">{discardError}</p>}
+          </> : <button type="button" className="btn wide" style={{ minHeight: 44 }} onClick={() => setConfirmDiscard(true)}>Discard this draft</button>}
+        </div>}
+      </div></Card>
     </div>
     <div className="two-col">
       <div><Card title="What JobGuard is watching" sub="The checks come from this job’s practice records." action={<button type="button" className="btn ghost small" onClick={() => open("work")}>See all →</button>}>

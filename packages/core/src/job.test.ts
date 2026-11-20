@@ -3,6 +3,7 @@ import { canTransitionJob, canTransitionProgress, projectPaymentStatus } from ".
 
 describe("job lifecycle", () => {
   const legal = [
+    ["draft","lost","draft_discarded"],
     ["draft","quoting","start_quote"], ["quoting","accepted","accept_quote"], ["quoting","lost","quote_lost"],
     ["accepted","live","switch_live"], ["accepted","quoting","cancel_acceptance"], ["live","invoiced","issue_invoice"],
     ["invoiced","paid","balance_settled"], ["paid","invoiced","payment_reversal"],
