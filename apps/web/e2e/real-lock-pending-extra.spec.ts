@@ -65,7 +65,7 @@ test("after approval and rebuilding only the unpriced extra still waits", async 
   await link.click();
   const card = page.getByTestId(`variation-${capture.id}`);
   await card.getByRole("button", { name: "Approve exact revision" }).click();
-  await expect(card.getByText("Approved immutable commercial fact", { exact: true })).toBeVisible();
+  await expect(card.getByText("Approved and saved", { exact: true })).toBeVisible();
   await page.goto(`/jobs/${jobId}#final-account-title`);
   await page.getByRole("button", { name: "Rebuild from approved sources", exact: true }).click();
   await expect.poll(async () => (await readLock()).account.totals.net.pence).toBe(account.totals.net.pence + 22000);

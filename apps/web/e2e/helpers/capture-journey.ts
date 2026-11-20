@@ -50,7 +50,7 @@ export async function startWatchdogJob(page: Page) {
   const price = page.getByRole("button", { name: "Price the work", exact: true });
   if (await price.isVisible()) await price.click();
   await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
-  for (const name of ["Save draft revision", "Preview immutable quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) {
+  for (const name of ["Save draft revision", "Preview this quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) {
     if (name === "Continue fake worker") {
       await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
       if (await page.getByTestId("quote-delivery").textContent() !== "Queued — not sent") continue;
@@ -59,7 +59,7 @@ export async function startWatchdogJob(page: Page) {
     await expect(action).toBeEnabled(); await action.click();
     if (name === "Save draft revision") await expect(page.getByTestId("quote-revision")).toHaveText("1");
   }
-  await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Job started · agreed quote saved", exact: true })).toBeVisible();
   await expect(page.locator('[data-testid="watchdog-panel"]').first()).toHaveAttribute("data-watchdog-active", "true");
 }
 

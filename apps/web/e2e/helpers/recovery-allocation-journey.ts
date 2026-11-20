@@ -45,12 +45,12 @@ export async function recovery18800(page: Page, matchingCustomer = false, feeTer
   const otherLines = parsePoundsToPence((await page.getByTestId("quote-net").innerText()).replace("GBP ", "").replaceAll(",", ""));
   await clean.fill(pounds(1880000 - otherLines).slice(1).replaceAll(",", ""));
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 18,800.00");
-  for (const name of ["Save draft revision", "Preview immutable quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) {
+  for (const name of ["Save draft revision", "Preview this quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) {
     if (matchingCustomer && name === "Record practice acceptance") await page.getByLabel("Stated customer", { exact: true }).fill("Fictional customer");
     await page.getByRole("button", { name, exact: true }).click();
     if (name === "Save draft revision") await expect(page.getByTestId("quote-revision")).toHaveText("1");
   }
-  await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Job started · agreed quote saved", exact: true })).toBeVisible();
   const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
   const proofPath = `/api/jobs/${jobId}/proof`;
   const source = await jsonResult(page.request.get(proofPath), "Read source scope");

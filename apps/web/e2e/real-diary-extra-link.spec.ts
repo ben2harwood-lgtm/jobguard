@@ -28,10 +28,10 @@ ITEM: Replace shelves`);
  await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
  await expect(page.getByTestId("quote-net")).toHaveText("GBP 900.00");
  await click("Save draft revision"); await expect(page.getByTestId("quote-revision")).toHaveText("1");
- await click("Preview immutable quote"); await click("Simulate sending this quote");
+ await click("Preview this quote"); await click("Simulate sending this quote");
  await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
  await click("Record practice acceptance"); await click("Start this practice job");
- await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
+ await expect(page.getByRole("heading", { name: "Job started · agreed quote saved", exact: true })).toBeVisible();
 
  for (const [path, href] of [
   [`/jobs/${jobId}#quote`, "#variations-title"],

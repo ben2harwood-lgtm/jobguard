@@ -65,7 +65,7 @@ test("opens a saved quote directly and preserves source identity after reload an
 
 test("reopens accepted and active work without rewriting lifecycle or scope", async ({ page }) => {
   const { jobId, scopeIds } = await confirmed(page);
-  await click(page, "Preview immutable quote");
+  await click(page, "Preview this quote");
   await click(page, "Simulate sending this quote");
   await click(page, "Continue fake worker");
   await Promise.all([

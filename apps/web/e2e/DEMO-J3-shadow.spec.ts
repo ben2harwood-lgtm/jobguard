@@ -49,7 +49,7 @@ async function completeJ3(page: Page, browser: Browser, testInfo: TestInfo) {
  const approveOnJob = async (id: string) => {
   const row = page.getByTestId(`variation-${id}`);
   await row.getByRole("button", { name: "Approve exact revision", exact: true }).click();
-  await expect(row.getByText("Approved immutable commercial fact", { exact: true })).toBeVisible();
+  await expect(row.getByText("Approved and saved", { exact: true })).toBeVisible();
  };
  await addExtra("Fictional builder logged extras", "3200.00");
  const proposalId = (await variationNamed("Fictional builder logged extras")).id;

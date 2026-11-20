@@ -161,14 +161,14 @@ async function freshLiveJob(page: Page, target: "core" | "recovery") {
     return saved;
   });
   const activation = await phase(`${target}: send, accept and activate the exact quote`, async () => {
-    await click(page, "Preview immutable quote");
+    await click(page, "Preview this quote");
     await click(page, "Simulate sending this quote");
     await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
     if (await page.getByTestId("quote-delivery").textContent() === "Queued — not sent") await click(page, "Continue fake worker");
     await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
     await click(page, "Record practice acceptance");
     await click(page, "Start this practice job");
-    await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Job started · agreed quote saved", exact: true })).toBeVisible();
     const saved = await read(page, root(jobId) + "/quotes/activation");
     expect(saved.activation).toMatchObject({ acceptedNetPence: target === "core" ? 100000 : 1880000, policyVersion: "reference_fee_policy_v3", recoveryCapPence: null });
     expect(saved.effects).toMatchObject({ activations: 1, capSnapshots: 0, simulatedObligations: 0, settlements: 0, platformJournals: 0, realExternalActions: 0 });

@@ -24,7 +24,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 900 
   await click("Save draft revision");
   await expect(page.getByTestId("quote-revision")).toHaveText("1");
   const previewResponse = page.waitForResponse(r => r.url().endsWith("/quotes/preview") && r.request().method() === "POST");
-  await click("Preview immutable quote");
+  await click("Preview this quote");
   const stored = (await (await previewResponse).json()).document;
   // Baseline regression: this control is absent before the implementation.
   await click("Get practice customer link");
@@ -50,7 +50,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 900 
    await expect(page.getByTestId("customer-acceptance-time")).toBeVisible();
    await expect(page.getByLabel("Unit rate Paint walls", { exact: true })).toHaveValue("201.00");
    await click("Start this practice job");
-   await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
+   await expect(page.getByRole("heading", { name: "Job started · agreed quote saved", exact: true })).toBeVisible();
   } finally { await customer.close(); }
  });
 }

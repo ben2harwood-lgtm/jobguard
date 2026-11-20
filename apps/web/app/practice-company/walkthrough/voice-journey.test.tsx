@@ -382,7 +382,7 @@ describe("step 3 prepared workspace loading", () => {
       mountedJob = preparedId;
       await vi.advanceTimersByTimeAsync(100); await action;
       expect(review).toHaveBeenCalledOnce();
-      expect(click.mock.calls.map(call => call[0])).toEqual(["Preview immutable quote", "Simulate sending this quote", "Continue fake worker"]);
+      expect(click.mock.calls.map(call => call[0])).toEqual(["Preview this quote", "Simulate sending this quote", "Continue fake worker"]);
       expect(memo.steps[2]!.isDone()).toBe(true);
     } finally { review.mockRestore(); click.mockRestore(); vi.useRealTimers(); }
   });
@@ -600,7 +600,7 @@ it.each([false, true])("fresh autoplay keeps one captured job; queued delivery %
     expect(memo.steps[1]!.isDone()).toBe(true);
     await memo.steps[2]!.autoAction({} as HTMLElement, new AbortController().signal);
     expect(price).toHaveBeenCalledTimes(1);
-    expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview immutable quote", "Simulate sending this quote", ...(queued ? ["Continue fake worker"] : [])]);
+    expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview this quote", "Simulate sending this quote", ...(queued ? ["Continue fake worker"] : [])]);
     expect(recoverCapture).not.toHaveBeenCalled();
     expect(memo.setState.mock.calls.filter(([value]) => value === preparedId)).toHaveLength(0);
     expect(memo.steps[2]!.isDone()).toBe(true);
@@ -633,7 +633,7 @@ it.each([0, 1])("step 3 waits for the own editor and saves only an unpriced draf
   const click = vi.spyOn(screenActions, "click").mockImplementation(async name => {
     expect(activeJob).toBe(jobId);
     if (name === "Save draft revision") { expect(ready).toBe(true); revision++; }
-    if (name === "Preview immutable quote") expect(revision).toBeGreaterThan(0);
+    if (name === "Preview this quote") expect(revision).toBeGreaterThan(0);
     if (name === "Continue fake worker") delivered = true;
   });
   const controller = new AbortController();
@@ -654,7 +654,7 @@ it.each([0, 1])("step 3 waits for the own editor and saves only an unpriced draf
     expect(location.hash).toBe("");
     expect(click.mock.calls.map(([name]) => name)).toEqual([
       ...(initialRevision === 0 ? ["Save draft revision"] : []),
-      "Preview immutable quote", "Simulate sending this quote", "Continue fake worker",
+      "Preview this quote", "Simulate sending this quote", "Continue fake worker",
     ]);
     expect(revision).toBe(1);
     expect(memo.steps[2]!.isDone()).toBe(true);
@@ -691,7 +691,7 @@ it("hand step 3 saves customer and site before sending", async () => {
   try {
     renderToStaticMarkup(<VoiceJourney />); memo.steps[1]!.isDone();
     await memo.steps[2]!.autoAction({} as HTMLElement, new AbortController().signal);
-    expect(click.mock.calls.map(([name]) => name)).toEqual(["Save customer and site", "Preview immutable quote", "Simulate sending this quote", "Continue fake worker"]);
+    expect(click.mock.calls.map(([name]) => name)).toEqual(["Save customer and site", "Preview this quote", "Simulate sending this quote", "Continue fake worker"]);
   } finally { click.mockRestore(); }
 });
 
@@ -793,7 +793,7 @@ it("guided microphone playback keeps its prepared example separate from the save
     expect(location.searchParams.get("walkJob")).toBe(jobId);
     expect(location.searchParams.get("walkExample")).toBe(preparedId);
     expect((memo.refs[0]!.current as { capture: { jobId: string } }).capture.jobId).toBe(jobId);
-    expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview immutable quote", "Simulate sending this quote", "Continue fake worker"]);
+    expect(click.mock.calls.map(([name]) => name)).toEqual(["Preview this quote", "Simulate sending this quote", "Continue fake worker"]);
     // Repeating a completed step must reuse the verified example.
     await memo.steps[2]!.autoAction({} as HTMLElement, new AbortController().signal);
     expect(recoverCapture).toHaveBeenCalledTimes(1);

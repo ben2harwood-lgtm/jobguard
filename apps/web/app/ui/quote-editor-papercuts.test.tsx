@@ -111,7 +111,7 @@ it("preserves an edit while the initial parties request is pending", async () =>
 it("groups all four queued controls after the real send controls", async () => {
   hooks.delivery = "not_issued";
   render(); await settle();
-  const preview = elements(render()).find(element => element.type === "button" && text(element) === "Preview immutable quote")!;
+  const preview = elements(render()).find(element => element.type === "button" && text(element) === "Preview this quote")!;
   expect(preview.props.disabled).toBe(false);
   await preview.props.onClick();
   const send = elements(render()).find(element => element.type === "button" && text(element) === "Simulate sending this quote")!;
@@ -151,7 +151,7 @@ it.each([
   vi.setSystemTime(now);
   render(); await settle();
   input(render(), "Customer approval date").props.onChange({ target: { value: date } });
-  const preview = elements(render()).find(element => element.type === "button" && text(element) === "Preview immutable quote")!;
+  const preview = elements(render()).find(element => element.type === "button" && text(element) === "Preview this quote")!;
   vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ view: { documentVersion: 1, documentId: "fictional-document", contentHash: "fictional-hash", status: "simulated_delivery" } }) } as Response);
   await preview.props.onClick();
   const accept = elements(render()).find(element => element.type === "button" && text(element) === "Record practice acceptance")!;

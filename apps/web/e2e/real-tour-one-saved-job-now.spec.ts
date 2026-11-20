@@ -112,7 +112,7 @@ test("hand step 3 saves customer and site before sending", async ({ page }, info
   await expect(page.getByTestId("quote-revision")).toHaveText("1");
   await control(page, "Next").click();
   await expect(tour(page)).toContainText("Step 3 of 9");
-  await expect(tour(page)).toContainText(/Save customer and site.*Preview immutable quote/);
+  await expect(tour(page)).toContainText(/Save customer and site.*Preview this quote/);
   await control(page, "Go to customer/site or quote preview").click();
   const form = page.getByRole("form", { name: "Customer and site details" });
   await expect(form).toBeVisible();
@@ -133,7 +133,7 @@ test("hand step 3 saves customer and site before sending", async ({ page }, info
   expect(await form.locator("input").evaluateAll(inputs => inputs.map(input => (input as HTMLInputElement).value))).toEqual(values);
   await control(page, "Go to customer/site or quote preview").click();
   await spotlight(page);
-  await page.getByRole("button", { name: "Preview immutable quote", exact: true }).click();
+  await page.getByRole("button", { name: "Preview this quote", exact: true }).click();
   await page.getByRole("button", { name: "Simulate sending this quote", exact: true }).click();
   await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
   if (await page.getByTestId("quote-delivery").textContent() === "Queued — not sent") await page.getByRole("button", { name: "Continue fake worker", exact: true }).click();

@@ -25,8 +25,8 @@ const result: ReviewCaptureResult = {
 // Hashes of the full static markup captured from HEAD before adding optional slots.
 // Unlike a partial heading assertion, this detects any change to the no-slot DOM.
 it.each([
- ["QuoteEditor", () => <QuoteEditor jobId={jobId} source={[]} questions={[]} back={() => undefined}/>, "a4c9b9d6cbee69e9673aba370689c54fd09b961232918c32cbc2c0607a43c8b7"],
- ["ReviewProposal", () => <ReviewProposal result={result} initialPricing back={() => undefined}/>, "a4c9b9d6cbee69e9673aba370689c54fd09b961232918c32cbc2c0607a43c8b7"],
+ ["QuoteEditor", () => <QuoteEditor jobId={jobId} source={[]} questions={[]} back={() => undefined}/>, "9a26b3340df7c8f3d667a064a2fd2ea12d478d598da1c7363b9d0443304b1ad5"],
+ ["ReviewProposal", () => <ReviewProposal result={result} initialPricing back={() => undefined}/>, "9a26b3340df7c8f3d667a064a2fd2ea12d478d598da1c7363b9d0443304b1ad5"],
  ["JobFinalAccount", () => { hooks.values = [{ account: null }, false]; return <JobFinalAccount jobId={jobId}/>; }, "d751378662b97ac188ccce71023aacb7337eaf78d90a678ac155393c7216509e"],
 ] as const)("keeps %s markup identical when no slot is passed", (_name, component, expected) => {
  vi.stubGlobal("React", React);
@@ -64,5 +64,5 @@ it("keeps loaded live markup identical when no slot is passed", () => {
  // Verified against origin/main cf67be77 with this same fixture (including proof statement).
  // Main intentionally groups the practice delivery controls in a labelled fieldset.
  expect(html).toContain("<legend>Practice only: pretend sending problems</legend>");
- expect(createHash("sha256").update(html).digest("hex")).toBe("100cf6d47735482b85d71a124887802654ffc982d0ef80f7472bbb4864cc31cc");
+ expect(createHash("sha256").update(html).digest("hex")).toBe("49138d26d998a840883c6c93512749617b1898162f09d49c103d3acc1716d363");
 });

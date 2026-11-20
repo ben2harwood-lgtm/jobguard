@@ -308,7 +308,7 @@ for (const refusal of ["refused", "disabled"] as const) {
       });
     } else {
       await page.getByLabel(/^Unit rate /u).first().fill("");
-      await expect(page.getByRole("button", { name: "Preview immutable quote", exact: true })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Preview this quote", exact: true })).toBeDisabled();
     }
     await tour.getByRole("button", { name: "Show me", exact: true }).click();
     await expect(page.getByRole("alert").filter({ hasText: /^Your own job could not continue\./ })).toBeVisible({ timeout: 40_000 });

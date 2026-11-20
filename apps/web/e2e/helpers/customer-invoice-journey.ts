@@ -44,7 +44,7 @@ export async function issueInvoice(page:Page){
  await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
  await click(page,"Save draft revision");await expect(page.getByTestId("quote-revision")).toHaveText("2");
  await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
- await click(page,"Preview immutable quote");await click(page,"Simulate sending this quote");
+ await click(page,"Preview this quote");await click(page,"Simulate sending this quote");
  await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
  if (await page.getByTestId("quote-delivery").textContent() === "Queued — not sent") await click(page,"Continue fake worker");
  await click(page,"Record practice acceptance");await click(page,"Start this practice job");

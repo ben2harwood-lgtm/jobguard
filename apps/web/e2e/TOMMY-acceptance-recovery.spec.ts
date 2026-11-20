@@ -50,7 +50,7 @@ async function prepareAcceptance(page: Page, phase: (value: string) => void) {
   await button(page, "Save draft revision").click();
   await expect(page.getByTestId("quote-revision")).toHaveText("2");
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
-  await button(page, "Preview immutable quote").click();
+  await button(page, "Preview this quote").click();
   await expect(page.getByRole("region", { name: "Quote preview", exact: true })).toBeVisible();
   await button(page, "Simulate sending this quote").click();
   await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);

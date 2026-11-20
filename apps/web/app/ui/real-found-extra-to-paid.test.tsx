@@ -127,7 +127,7 @@ it("requires a separately saved price and then approval of that exact saved revi
  const commands=fetch.mock.calls.filter(call=>call[1]?.method==="POST").map(call=>JSON.parse(call[1].body));
  expect(commands.map(c=>c.action)).toEqual(["revise","approve"]);
  expect(commands[1]).toMatchObject({variationId,revisionId:revision.id,attestation:"Builder-recorded practice acceptance — not an authenticated customer signature"});
- expect(JSON.stringify(render())).toContain("Approved immutable commercial fact");
+ expect(JSON.stringify(render())).toContain("Approved and saved");
 });
 
 it("automatic opening keeps Change price visible and repeated clicks preserve unsaved input",async()=>{

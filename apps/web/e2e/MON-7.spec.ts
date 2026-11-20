@@ -73,13 +73,13 @@ test("MON-7a leaves VALUE-1 and saved fee illustration figures unchanged",async(
   await page.getByLabel(/Answer Confirm disposal/u).fill("Fictional builder removes waste");await B(page,"Confirm scope").click();await B(page,"Price the work").click();
   await B(page,"Save draft revision").click();await expect(page.getByTestId("quote-revision")).toHaveText("1");
   await page.getByLabel("Unit rate Clean site").fill("200.00");await B(page,"Save draft revision").click();await expect(page.getByTestId("quote-revision")).toHaveText("2");
-  await B(page,"Preview immutable quote").click();await B(page,"Simulate sending this quote").click();await B(page,"Continue fake worker").click();
+  await B(page,"Preview this quote").click();await B(page,"Simulate sending this quote").click();await B(page,"Continue fake worker").click();
   await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");await B(page,"Record practice acceptance").click();
   // The saved v1 sample defaults to pilot_no_charge; work-state reads require
   // a synthetic_demo track, supplied by this existing simulated scenario.
   await page.getByLabel("Practice activation scenario").selectOption("simulated_base_obligation");
   await B(page,"Start this practice job").click();
-  await expect(page.getByRole("heading",{name:"Live · baseline frozen",exact:true})).toBeVisible();
+  await expect(page.getByRole("heading",{name:"Job started · agreed quote saved",exact:true})).toBeVisible();
   const id=(await page.locator(".quote-editor").getAttribute("data-job-id"))!;
   // Establish a nonzero VALUE-1 figure through the existing explicit variation path.
   const proposalId=crypto.randomUUID();

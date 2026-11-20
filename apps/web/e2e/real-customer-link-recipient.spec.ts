@@ -74,7 +74,7 @@ async function draftQuote(page: Page, enterEmail: boolean) {
 async function previewQuote(page: Page) {
   const previewed = page.waitForResponse(response =>
     response.url().endsWith("/quotes/preview") && response.request().method() === "POST");
-  await button(page, "Preview immutable quote").click();
+  await button(page, "Preview this quote").click();
   expect((await previewed).ok()).toBe(true);
   await expect(practiceLink(page)).toBeVisible();
   await expectNoSidewaysScroll(page);

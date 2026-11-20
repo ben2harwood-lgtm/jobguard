@@ -76,7 +76,7 @@ const mutations = () => vi.mocked(fetch).mock.calls.filter(([, init]) => init?.m
 const accepted = (tree: React.ReactNode) => elements(tree).some(({ node }) => node.props["aria-label"] === "Accepted terms");
 async function prepare(id = jobId) {
   render(id); await settle();
-  click(render(id), "Preview immutable quote"); await settle();
+  click(render(id), "Preview this quote"); await settle();
   expect(button(render(id), "Record practice acceptance").disabled).toBe(false);
 }
 beforeEach(() => {

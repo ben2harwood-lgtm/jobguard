@@ -7,7 +7,7 @@ test("preview binds exact recipient and version before free fake delivery", asyn
     if (await input.inputValue() === "") await input.fill("100.00");
   }
   await page.getByRole("button", { name: "Save draft revision", exact: true }).click();
-  await page.getByRole("button", { name: "Preview immutable quote", exact: true }).click();
+  await page.getByRole("button", { name: "Preview this quote", exact: true }).click();
   await expect(page.getByLabel("Quote preview")).toContainText("Document version 1");
   await page.getByLabel("Confirmed recipient").fill("changed@example.invalid");
   await page.getByRole("button", { name: "Simulate sending this quote", exact: true }).click();
@@ -21,7 +21,7 @@ test("preview binds exact recipient and version before free fake delivery", asyn
   await page.route(previewRoute, async route => { await previewGate; await route.continue(); });
   try {
     const started = page.waitForRequest(request => request.url().endsWith("/quotes/preview") && request.method() === "POST");
-    await page.getByRole("button", { name: "Preview immutable quote", exact: true }).click();
+    await page.getByRole("button", { name: "Preview this quote", exact: true }).click();
     await started;
     await expect(page.getByRole("button", { name: "Simulate sending this quote", exact: true })).toBeDisabled();
     await expect(page.getByLabel("Confirmed recipient")).toBeDisabled();

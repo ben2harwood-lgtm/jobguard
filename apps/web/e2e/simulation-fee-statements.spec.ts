@@ -29,7 +29,7 @@ test("immutable statement download and linked reversal correction retain exact h
  await page.route("**/api/jobs/*/success-fees/statements/*",async route=>{const r=record(route.request().url().endsWith(allocation));await route.fulfill({body:canonicalSimulationFeeStatementJson(r.document),headers:{"content-type":"application/json","content-disposition":`attachment; filename="${r.document.number}.v1.json"`,"x-content-sha256":r.documentHash}});});
  await openQuote(page);
  for(const input of await page.getByLabel(/Unit rate/u).all())if(await input.inputValue()==="")await input.fill("100.00");
- for(const action of ["Save draft revision","Preview immutable quote","Simulate sending this quote","Continue fake worker","Record practice acceptance"])await page.getByRole("button",{name:action,exact:true}).click();
+ for(const action of ["Save draft revision","Preview this quote","Simulate sending this quote","Continue fake worker","Record practice acceptance"])await page.getByRole("button",{name:action,exact:true}).click();
  await page.getByLabel("Practice activation scenario").selectOption("simulated_base_obligation");await page.getByRole("button",{name:"Start this practice job",exact:true}).click();
  const panel=page.getByRole("region",{name:"Simulation fee statements"});
  await expect(panel.getByTestId("fee-statement-number")).toHaveText("DEMO-FEE-000001");await expect(panel.getByTestId("statement-success-fee-principal")).toHaveText("£282.00");
