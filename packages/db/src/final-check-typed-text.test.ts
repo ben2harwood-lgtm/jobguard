@@ -144,7 +144,7 @@ describe("generated certificate result binding (unit doubles, not PostgreSQL pro
     let linked = existing ? [id(12)] : [];
     const runtimeQuery = vi.fn(async (sql: string) => ({ rows: sql.includes("FROM app.evidence_object") ? [{ legacy_photo: firm === "legacy" }] : [], rowCount: sql.includes("FROM app.evidence_object") ? 1 : 0 }));
     const shadowQuery = vi.fn(async (sql: string, _values?: unknown[]) => ({ rows: sql.includes("FROM app.shadow_signal_evidence") ? linked.map(signal_id => ({ signal_id })) : [] }));
-    const pool = (query: unknown) => ({ connect: async () => ({ query, release: vi.fn() }) }) as unknown as Pool;
+    const pool = (query: unknown) => ({ query: vi.fn(), connect: async () => ({ query, release: vi.fn() }) }) as unknown as Pool;
     const read = vi.spyOn(FinalCheckRepository.prototype, "manifest").mockResolvedValue(manifest);
     const persist = vi.spyOn(ShadowDetectionRepository.prototype, "persist").mockImplementation(async () => { linked = [id(12)]; return []; });
     const ports = practiceFinalCheckPorts(pool(shadowQuery), pool(runtimeQuery), sha);

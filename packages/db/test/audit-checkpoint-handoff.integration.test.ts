@@ -13,6 +13,7 @@ import { freePort, closeTestPools } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres, directory: string, admin: Pool, owner: Pool, runtime: Pool, ownerUrl: string, runtimeUrl: string, alternateUrl: string;
 let a: AuthenticatedMembership, b: AuthenticatedMembership, contractor: ContractorRepository, priorCatalog: unknown;
+let aSession: string;
 const operator = "test.operator-1";
 const run = (tenantId?: string) => runAuditCheckpointHandoff({ ownerUrl, operator, ...(tenantId ? { tenantId } : {}) });
 const tables = ["app.audit_event", "audit_control.audit_head", "audit_control.checkpoint", "app.audit_export_checkpoint", "app.audit_export"];
@@ -72,7 +73,8 @@ beforeEach(async () => {
   try { await reset.query("BEGIN"); await reset.query("SET LOCAL session_replication_role=replica"); await reset.query(`TRUNCATE ${tables.join(",")} CASCADE`); await reset.query("COMMIT"); }
   catch (error) { await reset.query("ROLLBACK"); throw error; }
   finally { reset.release(); }
-  a = await contractor.startPractice(randomUUID()); b = await contractor.startPractice(randomUUID());
+  aSession = randomUUID();
+  a = await contractor.startPractice(aSession); b = await contractor.startPractice(randomUUID());
   await seedActiveContractorAgreement(admin,a.tenantId); await seedActiveContractorAgreement(admin,b.tenantId);
 });
 afterAll(async () => {
@@ -145,6 +147,7 @@ async function interveningAppend(equal: boolean, keepOther: boolean) {
     const writer = (await appender.query<{ pid: number }>("SELECT pg_backend_pid() pid")).rows[0]!;
     expect(writer.pid).not.toBe(waiter.pid);
     await appender.query("BEGIN");
+    await appender.query("SELECT app.bind_request('contractor_practice',$1,$2)", [aSession, a.tenantId]);
     await appender.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
     await appendAuditBatch({ $client: appender } as TenantTransaction, [{ id: randomUUID(), version: "audit.v1", actorRef: "test:runtime", eventType: "test.append", subjectType: "tenant", subjectRef: a.tenantId, payload: {} }]);
     await appender.query("COMMIT");

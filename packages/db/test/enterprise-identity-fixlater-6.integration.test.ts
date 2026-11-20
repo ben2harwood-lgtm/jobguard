@@ -6,7 +6,7 @@ import { resolveVerifiedTenantContext } from "../../../apps/api/src/auth/princip
 import type { TestResponseOptions } from "../../../apps/api/src/auth/sso/test-identity-provider.js";
 import { auditRows, canonicalRows, createScimHarness, fixture, origin, sha256,
   type ScimFixture, type ScimHarness } from "./scim-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 
 let h: ScimHarness;
 beforeAll(async () => { h = await createScimHarness("jg-fixlater-6-"); });
@@ -247,7 +247,7 @@ describe("FIXLATER-6 exact existing refusals", () => {
       has_table_privilege('jobguard_runtime','app.job_commercial_track','DELETE') AS del,
       has_table_privilege('jobguard_runtime','app.job_commercial_track','TRUNCATE') AS trunc`)).rows;
     expect(privileges).toEqual([{ readable: true, ins: false, upd: false, del: false, trunc: false }]);
-    const context = testTenantContext(f.principal.tenantId, { membershipId: f.principal.membershipId, bindRequest: false });
+    const context = await testBoundTenantContext(h.admin, f.principal.tenantId, f.principal.membershipId);
     const tracks = await withTenant(h.runtime, context, db => db.$client.query("SELECT tenant_id FROM app.job_commercial_track"));
     expect(tracks.rows.length).toBeGreaterThan(0);
     expect(tracks.rows.every(row => row.tenant_id === f.principal.tenantId)).toBe(true);

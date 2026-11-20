@@ -82,9 +82,9 @@ export class InvalidTenantContextError extends Error {
 export type TenantTransaction = NodePgDatabase<typeof schema> & { $client: PoolClient };
 
 /** Exact retained compatibility boundaries; no caller-controlled mode is accepted. */
-type DeferredBinding = "identity-sso" | "identity-oidc" | "identity-sso-required" | "shadow-persist" | "audit-export-refusal"
+type DeferredBinding = "identity-sso" | "identity-oidc" | "identity-sso-required" | "shadow-persist"
   | "practice-switch-off" | "contractor-session-revoke" | "commercial-integrity-read" | "commercial-integrity-read-family"
-  | "evidence-pack-approval";
+  | "evidence-pack-approval" | "audit-export-refusal";
 type LateBinding = { complete: boolean };
 // Routing hint only: SQL still validates the binding, including expiry and tenant.
 const requestTransactions = new WeakSet<TenantTransaction>();
@@ -93,11 +93,13 @@ export function isRequestTransaction(database: TenantTransaction): boolean {
 }
 const lateBindings = new WeakMap<TenantTransaction, WeakMap<VerifiedTenantContext, LateBinding>>();
 
-async function bindRequest(client: PoolClient, context: VerifiedTenantContext): Promise<void> {
+async function bindRequest(client: PoolClient, context: VerifiedTenantContext, practiceRead = false): Promise<void> {
   const session = sessionReferences.get(context);
   if (!session) return;
   try {
-    await client.query("SELECT app.bind_request($1, $2, $3)", [session.kind, session.credential, context.tenantId]);
+    await client.query("SELECT app.bind_request($1, $2, $3)",
+      [practiceRead && session.kind === "practice" ? "practice_read" : session.kind, session.credential, context.tenantId]);
+    if (practiceRead) await client.query("SET TRANSACTION READ ONLY");
     const bound = (await client.query<{ actor: string; tenant: string }>(
       "SELECT app.current_actor() actor, app.current_tenant() tenant",
     )).rows[0];
@@ -118,6 +120,30 @@ export async function bindIssuedCredential(client: PoolClient, context: Verified
   await bindRequest(client, context);
 }
 
+export namespace bindIssuedCredential {
+  /** The exact SQL writer rechecks the original credential for this one audit event. */
+  export async function recordVisitRefusal(client: PoolClient, context: VerifiedTenantContext,
+    actor: AuthenticatedMembership, event: { id: string; commandId: string; commandType: string; reason: string; jobId: string },
+  ): Promise<void> {
+    const session = sessionReferences.get(context);
+    if (!session || session.membershipId !== actor.membershipId) return;
+    await client.query("SELECT app.lp11_record_visit_refusal($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+      [context.tenantId, event.id, event.commandId, actor.membershipId, actor.identityUserId,
+        event.commandType, event.reason, event.jobId, session.kind, session.credential]);
+  }
+}
+
+/** Only the exact audit-refusal routine may consume a contractor credential without binding it. */
+type RecordAuditExportRefusal = (actor: { membershipId: string; identityUserId: string }, action: "create" | "list") => Promise<void>;
+async function recordAuditExportRefusal(client: PoolClient, context: VerifiedTenantContext,
+  ...[actor, action]: Parameters<RecordAuditExportRefusal>): Promise<void> {
+  const session = sessionReferences.get(context);
+  if (session?.kind !== "contractor_practice" || session.membershipId !== actor.membershipId)
+    throw new RequestBindingRefusedError("contractor_practice");
+  await client.query("SELECT app.lp11_record_audit_export_refusal($1,$2,$3,$4,$5)",
+    [session.credential, context.tenantId, actor.membershipId, actor.identityUserId, action]);
+}
+
 /** Only an active approval transaction may bind after its established locks. */
 export async function bindAfterLocks(database: TenantTransaction, context: VerifiedTenantContext): Promise<void> {
   const binding = lateBindings.get(database)?.get(context);
@@ -133,21 +159,24 @@ export async function bindAfterLocks(database: TenantTransaction, context: Verif
 export async function withTenant<T>(
   pool: Pool,
   context: VerifiedTenantContext,
-  work: (database: TenantTransaction) => Promise<T>,
+  work: (database: TenantTransaction, recordRefusal?: RecordAuditExportRefusal) => Promise<T>,
   deferredBinding?: DeferredBinding,
 ): Promise<T> {
   if (!genuineTenantContexts.has(context) || typeof context.tenantId !== "string" || !UUID.test(context.tenantId)) {
     throw new InvalidTenantContextError();
   }
 
-  if (deferredBinding !== undefined && !["identity-sso", "identity-oidc", "identity-sso-required", "shadow-persist", "audit-export-refusal",
+  if (deferredBinding !== undefined && !["identity-sso", "identity-oidc", "identity-sso-required", "shadow-persist",
     "practice-switch-off", "contractor-session-revoke", "commercial-integrity-read", "commercial-integrity-read-family",
-    "evidence-pack-approval"].includes(deferredBinding)) throw new InvalidTenantContextError();
+    "evidence-pack-approval", "audit-export-refusal"].includes(deferredBinding)) throw new InvalidTenantContextError();
   const client = await pool.connect();
   let database: TenantTransaction | undefined;
   try {
     await client.query("BEGIN");
     if (deferredBinding === undefined) await bindRequest(client, context);
+    if (deferredBinding === "commercial-integrity-read" || deferredBinding === "commercial-integrity-read-family") {
+      await bindRequest(client, context, true);
+    }
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [context.tenantId]);
     database = drizzle(client, { schema }) as TenantTransaction;
     if (sessionReferences.has(context)) requestTransactions.add(database);
@@ -157,7 +186,9 @@ export async function withTenant<T>(
       contexts.set(context, late);
       lateBindings.set(database, contexts);
     }
-    const result = await work(database);
+    const result = deferredBinding === "audit-export-refusal"
+      ? await work(database, (actor, action) => recordAuditExportRefusal(client, context, actor, action))
+      : await work(database);
     if (late && !late.complete) throw new RequestBindingRefusedError(sessionReferences.get(context)?.kind ?? "real");
     await client.query("COMMIT");
     return result;

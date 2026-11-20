@@ -149,7 +149,9 @@ it("preserves existing persisted provenance instead of retrofitting an old unpri
   const { ShadowDetectionRepository } = await import("../src/shadow-detection-repository.js");
   const a = await setup("Fitted the heated towel rail as an extra.", request);
   const s = a.m.sources.find(source=>source.sourceKind === "job_diary_text")!;
-  const read = await readFinalCheckTypedText(f.runtime,a.shadow,a.m,s);
+  const { withObservationRead } = await import("../src/shadow-observation-reader.js");
+  const read = await readFinalCheckTypedText(a.shadow,a.m,s,
+    work => withObservationRead(f.runtime,a.shadow,a.jobId,work,f.shadow));
   expect(read.status).toBe("proposal"); if(read.status!=="proposal") throw new Error("Expected bounded proposal");
   const observation = observationV1.parse({version:"observation.v1",tenantId:a.tenantId,jobId:a.jobId,kind:"note_or_voice",...read.proposal,
     evidence:{id:s.evidenceId,objectVersionId:s.objectVersionId,sha256:s.sha256,serverReceivedAt:s.receivedAt}});
@@ -228,7 +230,7 @@ it.each(["baseline", "draft", "rejected", "withdrawn"] as const)("existing %s wo
         await db.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,capture_kind,capture_text,description,state) VALUES($1,$2,$3,$4,'text','heated towel rail','heated towel rail',$5)",[variation,job.tenantId,job.jobId,scope,kind === "withdrawn" ? "draft" : kind]);
         if(kind === "withdrawn") await db.query("INSERT INTO app.variation_withdrawal(tenant_id,job_id,id,variation_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,$5,'builder_withdrawn')",[job.tenantId,job.jobId,randomUUID(),variation,FINAL_CHECK_ACTOR]);
       }
-    });
+    }, {practiceDigest:job.digest});
   });
   const result=await a.execute() as {runId:string};
   await new FinalCheckCompletionRepository(f.shadow).publish(a.shadow,{version:"final-check-publication.v1",jobId:a.jobId,runId:result.runId,checkId:randomUUID()});

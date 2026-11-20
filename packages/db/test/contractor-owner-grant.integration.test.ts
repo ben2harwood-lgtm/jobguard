@@ -4,6 +4,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { contractorRoles, type ContractorScope, type ContractorRole } from "@jobguard/core";
 import { ContractorRepository, canonicalJson, sha256Hex, withTenant, verifiedTenantContextFromMembership, type AuthenticatedMembership } from "../src/index.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
+import { bindIssuedCredential } from "../src/tenant-context.js";
 import * as proof from "./upgrade-proof-utils.js";
 import { cluster, startSession, counts, errorShape, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
 let c: Cluster, f: SessionFixture, repo: ContractorRepository;
@@ -75,7 +76,11 @@ it.each(contractorRoles.filter(role => role !== "owner"))("[PH21] invitation and
 });
 it("[PH21] generator, direct owner insert, team move and revocations retain their behavior", async () => {
  const fresh = await startSession(c); expect((await c.admin.query("SELECT role,scope_kind,scope_id FROM app.role_grant WHERE tenant_id=$1 AND role='owner'", [fresh.p.tenantId])).rows).toEqual([{ role: "owner", scope_kind: "tenant", scope_id: fresh.p.tenantId }]);
- await proof.rolledBack(c.admin, async client => { await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); await client.query("SET LOCAL ROLE jobguard_migration"); await client.query("INSERT INTO app.role_grant VALUES($1,$2,$3,'owner','tenant',$1,NULL)", [f.p.tenantId, randomUUID(), o.membershipId]); });
+ await proof.rolledBack(c.admin, async client => {
+  await client.query("SET LOCAL ROLE jobguard_migration");
+  await bindIssuedCredential(client, f.context);
+  await client.query("INSERT INTO app.role_grant VALUES($1,$2,$3,'owner','tenant',$1,NULL)", [f.p.tenantId, randomUUID(), o.membershipId]);
+ });
  const newTeam = await command(f.p, { kind: "team.create", branchId: branch, name: "Fictional new team" }); await repo.command(f.p, newTeam);
  await expect(repo.command(f.p, await command(f.p, { kind: "team.move", membershipId: o.membershipId, fromTeamId: team, toTeamId: newTeam.id }))).resolves.toMatchObject({ kind: "team.move" });
  const raw = await grant(f.p, o, scope("team", newTeam.id), "read_only"); await repo.command(f.p, raw);

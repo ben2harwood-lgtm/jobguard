@@ -139,7 +139,7 @@ describe("M4-22 real PostgreSQL fixture statements", () => {
    const raw={commandId:randomUUID(),requestHash:"a".repeat(64),rateNumerator:30,fixed,
     statement:statements[0],payments,verifications};
    await expect(workTenant(c.runtime,a.tenantId,db=>db.query("SELECT app.cis_fixture_records($1,$2,$3::jsonb,$4::jsonb)",
-    [a.tenantId,a.jobId,JSON.stringify(principal),JSON.stringify(raw)]))).rejects.toThrow("CIS_FIXTURE_CONFLICT");
+    [a.tenantId,a.jobId,JSON.stringify(principal),JSON.stringify(raw)]),{membershipId:a.actorId})).rejects.toThrow("CIS_FIXTURE_CONFLICT");
    expect((await c.admin.query("SELECT count(*)::int n FROM app.cis_fixture_record WHERE tenant_id=$1",[a.tenantId])).rows[0].n).toBe(0);
   }
  });
@@ -169,7 +169,13 @@ describe("M4-22 real PostgreSQL fixture statements", () => {
    await db.query("SET LOCAL ROLE jobguard_migration");
    expect((await db.query("SELECT count(*)::int n FROM app.cis_fixture_record")).rows[0].n).toBe(1);
    await db.query("SELECT set_config('app.tenant_id',$1,true)",[randomUUID()]);
+   expect((await db.query("SELECT count(*)::int n FROM app.cis_fixture_record")).rows[0].n).toBe(1);
+  },{membershipId:a.actorId});
+  const foreign=await seedWorkJob(c as unknown as WorkFixture);
+  await workTenant(c.admin,foreign.tenantId,async db=>{
+   await db.query("SET LOCAL ROLE jobguard_migration");
+   await db.query("SELECT set_config('app.tenant_id',$1,true)",[a.tenantId]);
    expect((await db.query("SELECT count(*)::int n FROM app.cis_fixture_record")).rows[0].n).toBe(0);
-  });
+  },{membershipId:foreign.actorId});
  });
 });

@@ -44,7 +44,7 @@ async function capture(db: PoolClient, a: WorkJob, source: string, kind = "varia
   return (await db.query("SELECT app.mon1_capture_small_trip($1,$2,$3,$4) id", [a.tenantId, a.jobId, kind, source])).rows[0]!.id as string | null;
 }
 async function trip(f: WorkFixture, a: WorkJob, source: string) {
-  return workTenant(f.admin, a.tenantId, db => capture(db, a, source));
+  return workTenant(f.admin, a.tenantId, db => capture(db, a, source), { membershipId: a.actorId });
 }
 async function observations(f: WorkFixture, a: WorkJob) {
   return (await f.admin.query(`SELECT id,trip_id,revision,previous_observation_id,net_pence::text,source_id,source_hash,to_char(effective_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') effective_at FROM app.job_small_trip_observation WHERE tenant_id=$1 AND job_id=$2 ORDER BY revision`, [a.tenantId, a.jobId])).rows;

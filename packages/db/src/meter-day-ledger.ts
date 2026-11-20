@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { countMeterDays } from "@jobguard/core";
 import { z } from "zod";
-import type { TenantTransaction } from "./tenant-context.js";
+import type { TenantTransaction, VerifiedTenantContext } from "./tenant-context.js";
 import { meterLifecycleSourceV1, MeterLifecyclePersistenceError } from "./meter-lifecycle-source.js";
 
 const requestV1 = z.object({ version: z.literal("meter-day-ledger-write.v1"), sourceId: z.string().uuid() }).strict();
@@ -13,12 +13,13 @@ const recipe = "london-midnight-stops.v1";
  * The recipe applies the approved clock to the immutable foundation source.
  * Changed inputs require a new source revision; same-source mismatches refuse.
  */
-export async function persistMeterDayLedger(transaction: TenantTransaction, raw: unknown): Promise<string> {
+export async function persistMeterDayLedger(transaction: TenantTransaction, context: VerifiedTenantContext, raw: unknown): Promise<string> {
   const input = requestV1.safeParse(raw);
   if (!input.success) throw new MeterLifecyclePersistenceError("INVALID_METER_LIFECYCLE_INPUT");
   const db = transaction.$client;
-  const tenantId = (await db.query("SELECT nullif(current_setting('app.tenant_id',true),'') tenant_id")).rows[0]?.tenant_id;
-  if (!tenantId) throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
+  const tenantId = context.tenantId;
+  const bound = await db.query("SELECT app.lp11_bind_meter_source($1,$2) AS bound", [tenantId, input.data.sourceId]);
+  if (bound.rows[0]?.bound !== true) throw new MeterLifecyclePersistenceError("METER_FORBIDDEN");
   await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,184))", [tenantId]);
   const stored = (await db.query(`SELECT scope_id,source,source_hash,revision,
     source_hash=encode(sha256(convert_to(source::text,'UTF8')),'hex') AS valid

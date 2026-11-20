@@ -171,7 +171,8 @@ describe("ENT-3d verified photo and resident confirmation", () => {
  });
  it("[E13] the guard alone, binding: a document written for content X cannot serve content Y, serves X once, and not a second extra", async () => {
   const f = await siteFixture(c), a = f.members.supervisor, extras = new ExtraRepository(c.runtime), confirmation = randomUUID();
-  const record = (fields: Record<string, unknown>) => runtimeCall(c, f, async q => (await q("SELECT outcome,reason_code FROM app.ent3d_record_resident_confirmation($1,$2,$3,$4,$5,$6,$7,$8)", [a.member.membershipId, f.jobId, randomUUID(), confirmation, fields.description, fields.note, null, fields.shown])).rows[0]);
+  const context = await testActorContext(c.admin, f.ctx, a.member);
+  const record = (fields: Record<string, unknown>) => withTenant(c.runtime, context, async db => (await db.$client.query("SELECT outcome,reason_code FROM app.ent3d_record_resident_confirmation($1,$2,$3,$4,$5,$6,$7,$8)", [a.member.membershipId, f.jobId, randomUUID(), confirmation, fields.description, fields.note, null, fields.shown])).rows[0]);
   expect(await record({ description, note, shown: shownFor(f, null) })).toEqual({ outcome: "recorded", reason_code: "recorded" });
   const before = await evidenceCounts(c, f), head = await chain(c, f);
   await expect(extras.raiseExtra(await testActorContext(c.admin, f.ctx, a.member), direct(f, a, { residentConfirmationEvidenceId: confirmation, note: "Fictional content Y" }), siteExtraAuthoritySeam)).rejects.toMatchObject({ code: "INVALID_ORIGIN" });
@@ -187,9 +188,13 @@ describe("ENT-3d verified photo and resident confirmation", () => {
   await expect(extras.raiseExtra(await testActorContext(c.admin, f.ctx, a.member), direct(f, a, { residentConfirmationEvidenceId: image.id }), siteExtraAuthoritySeam)).rejects.toMatchObject({ code: "INVALID_ORIGIN" });
   // (b) a raw runtime-role row typed resident_confirmation whose hash is not the server's document for this content
   const raw = randomUUID(), key = `tenants/${f.p.tenantId}/resident-confirmations/${raw}/document`, wrong = sha("not the server's document");
-  await runtimeCall(c, f, async q => {
-   await q("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,10,'standard_evidence','verified',$7,clock_timestamp(),clock_timestamp())", [raw, f.p.tenantId, f.jobId, key, wrong, residentConfirmationContentType, residentConfirmationObjectVersion]);
-   await q("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$1,$3,'original','resident_confirmation',$4,$5,$6,10,$7,'standard_evidence',clock_timestamp(),clock_timestamp())", [raw, f.p.tenantId, f.jobId, key, residentConfirmationObjectVersion, wrong, residentConfirmationContentType]);
+  const uploadSql = "INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,state,object_version_id,server_verified_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,10,'standard_evidence','verified',$7,clock_timestamp(),clock_timestamp())";
+  const uploadArgs = [raw, f.p.tenantId, f.jobId, key, wrong, residentConfirmationContentType, residentConfirmationObjectVersion];
+  await expect(runtimeCall(c, f, q => q(uploadSql, uploadArgs))).rejects.toMatchObject({ code: "42501", message: "EVIDENCE_NOT_AUTHORIZED" });
+  // A bad historical row is still rejected by the downstream document guard.
+  await ownerTx(c, f.p.tenantId, async db => {
+   await db.$client.query(uploadSql, uploadArgs);
+   await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$1,$3,'original','resident_confirmation',$4,$5,$6,10,$7,'standard_evidence',clock_timestamp(),clock_timestamp())", [raw, f.p.tenantId, f.jobId, key, residentConfirmationObjectVersion, wrong, residentConfirmationContentType]);
   });
   const before = await evidenceCounts(c, f);
   await expect(extras.raiseExtra(await testActorContext(c.admin, f.ctx, a.member), direct(f, a, { residentConfirmationEvidenceId: raw }), siteExtraAuthoritySeam)).rejects.toMatchObject({ code: "INVALID_ORIGIN" });

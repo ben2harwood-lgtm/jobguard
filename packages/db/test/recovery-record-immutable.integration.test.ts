@@ -12,7 +12,7 @@ import {
   bootstrapSyntheticDemo, issuePracticeSession,
   type RecoveryFollowUpState, type RecoveryMessageActor, type RecoveryMessageState, type VerifiedTenantContext,
 } from "../src/index.js";
-import { testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext, testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 
@@ -240,6 +240,7 @@ async function asOwner(run: (client: PoolClient) => Promise<void>) {
   const client = await admin.connect();
   try {
     await client.query("BEGIN");
+    await bindTestClient(admin, client, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID);
     await client.query("SET LOCAL ROLE jobguard_migration");
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
     expect((await client.query("SELECT current_user AS role")).rows).toEqual([{ role: "jobguard_migration" }]);
@@ -266,6 +267,7 @@ describe("LATER-SAFETY-104 owner-proof append-only recovery records", () => {
       expect((await client.query("SELECT current_setting('is_superuser') AS value")).rows).toEqual([{ value: "on" }]);
       const result = await client.query("UPDATE app.recovery_message_event SET created_at=created_at-interval '10 minutes' WHERE ctid=(SELECT ctid FROM app.recovery_message_event ORDER BY ctid LIMIT 1)");
       expect(result.rowCount).toBe(1);
+      await bindTestClient(admin, client, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID);
       await client.query("SET LOCAL ROLE jobguard_migration");
       await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]);
       expect((await client.query("SELECT current_setting('is_superuser') AS value")).rows).toEqual([{ value: "off" }]);

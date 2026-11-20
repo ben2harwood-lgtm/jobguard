@@ -92,12 +92,12 @@ describe("ordinary variation prices and approvals stop at the immutable final-ac
   // Raw SQL callers cannot bypass either trigger or hide behind ON CONFLICT.
   await expect(asFixtureTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.variation_revision
    SELECT (jsonb_populate_record(NULL::app.variation_revision,to_jsonb(r)||jsonb_build_object('id',$3::text,'revision',3,'previous_revision_id',r.id))).*
-   FROM app.variation_revision r WHERE r.tenant_id=$1 AND r.id=$2`, [a.tenantId, revised.id, randomUUID()])))
+   FROM app.variation_revision r WHERE r.tenant_id=$1 AND r.id=$2`, [a.tenantId, revised.id, randomUUID()]), { owner: f.admin, membershipId: LOCK_OWNER }))
    .rejects.toMatchObject({ code: "42501", message: lockedCode });
   await expect(asFixtureTenant(f.admin, a.tenantId, db => db.query(`INSERT INTO app.variation_approval
    SELECT (jsonb_populate_record(NULL::app.variation_approval,to_jsonb(x)||jsonb_build_object('id',$3::text))).*
    FROM app.variation_approval x WHERE x.tenant_id=$1 AND x.revision_id=$2
-   ON CONFLICT(tenant_id,revision_id) DO NOTHING`, [a.tenantId, revised.id, randomUUID()])))
+   ON CONFLICT(tenant_id,revision_id) DO NOTHING`, [a.tenantId, revised.id, randomUUID()]), { owner: f.admin, membershipId: LOCK_OWNER }))
    .rejects.toMatchObject({ code: "42501", message: lockedCode });
   expect(await facts()).toEqual(before);
   // An exact committed replay returns history, with no new insert or commercial effect.

@@ -27,12 +27,12 @@ it("CH-5 persists historical provenance once, returns GBP 0 and refuses scope, r
   expect(await imports.assessCatch(auth.context, auth.digest, jobId, catchCommand)).toEqual(result);
   // Even a shadow caller that omits the historical label cannot create a fee source.
   // BEFORE trigger fires before the forged signal's FK, isolating this refusal.
-  await expect(workTenant(f.admin, t, db => db.query(`INSERT INTO app.shadow_signal_evidence
+  await expect(withTenant(f.admin, auth.context, db => db.$client.query(`INSERT INTO app.shadow_signal_evidence
     (tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at)
     SELECT tenant_id,job_id,$3,id,object_version_id,sha256,server_received_at FROM app.evidence_object WHERE tenant_id=$1 AND id=$2`,
     [t, evidenceId, randomUUID()]))).rejects.toThrow("PRE_ADOPTION_SOURCE_EXCLUDED");
   const relabelled = await insertPhoto(f, { tenantId: t, jobId, scopeId } as Parameters<typeof insertPhoto>[1], "2099-02-01T00:00:00Z", "site_photo", "2099-01-01T00:00:00Z", true);
-  await expect(workTenant(f.admin, t, db => db.query(`INSERT INTO app.shadow_signal_evidence
+  await expect(withTenant(f.admin, auth.context, db => db.$client.query(`INSERT INTO app.shadow_signal_evidence
     (tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at)
     SELECT tenant_id,job_id,$3,id,object_version_id,sha256,server_received_at FROM app.evidence_object WHERE tenant_id=$1 AND id=$2`,
     [t, relabelled, randomUUID()]))).rejects.toThrow("PRE_ADOPTION_SOURCE_EXCLUDED");

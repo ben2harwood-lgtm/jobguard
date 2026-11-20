@@ -1,6 +1,7 @@
 import {createHash,randomUUID} from "node:crypto";
 import { createWorkFixture,closeWorkFixture,seedWorkPractice,workTenant } from "./job-work-state-fixtures.js";
 import {JobSourceRepository} from "../src/job-source-repository.js";
+import {withTenant} from "../src/tenant-context.js";
 export {createWorkFixture,closeWorkFixture,workTenant};
 export async function sourcesFixture(){const f=await createWorkFixture(true,"jobguard_synthetic_demo"),practice=await seedWorkPractice(f);return {...f,practice,repository:new JobSourceRepository(f.runtime)}}
 export type SourceFixture=Awaited<ReturnType<typeof sourcesFixture>>;
@@ -8,7 +9,7 @@ export type SourceFixture=Awaited<ReturnType<typeof sourcesFixture>>;
 export async function seedSource(f:SourceFixture,kind:"diary"|"customer_message"="diary",text="Fitted outside tap.",fixtureRef:string|null="job-source:outside-tap.v1",entryMode:"typed"|"dictated_text"="typed"){
  const id=randomUUID(),evidenceId=randomUUID(),commandId=randomUUID(),version=randomUUID(),bytes=Buffer.from(text,"utf8"),hash=createHash("sha256").update(bytes).digest("hex"),at="2026-10-13T10:00:00.000001Z",key=`synthetic/job-sources/${id}`;
  const {context,membershipId}=f.practice.auth,jobId=f.practice.jobId;
- await workTenant(f.admin,context.tenantId,async db=>{
+ await withTenant(f.admin,context,async ({$client:db})=>{
   await db.query(`INSERT INTO app.command_receipt(tenant_id,command_id,command_type,semantic_key,request_hash,status,actor_membership_id,result,completed_at) VALUES($1::uuid,$2::uuid,'sv7a.labelled_fixture',$2::text,$3::text,'succeeded',$4::uuid,'{}',clock_timestamp())`,[context.tenantId,commandId,hash,membershipId]);
   await db.query(`INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at,state,object_version_id,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,'text/plain; charset=utf-8',32000,'standard_evidence',clock_timestamp()+interval '1 day','verified',$6,$7,clock_timestamp())`,[evidenceId,context.tenantId,jobId,key,hash,version,at]);
   await db.query(`INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$1,$3,'original',$4,$5,$6,$7,$8,'text/plain; charset=utf-8','standard_evidence',$9,clock_timestamp())`,[evidenceId,context.tenantId,jobId,kind==="diary"?"job_diary_text":"customer_message_text",key,version,hash,bytes.length,at]);

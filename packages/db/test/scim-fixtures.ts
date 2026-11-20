@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolConfig } from "pg";
 import { ContractorRepository, EnterpriseIdentityRepository, IdentityRepository, ScimRepository, SsoRequiredRepository, MIGRATION_URLS, migrate, verifyAuditChain, type AuditEvent } from "../src/index.js";
 import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
 import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
@@ -21,12 +21,18 @@ export const sha256=(value:string)=>createHash("sha256").update(value).digest("h
 export async function createScimHarness(prefix:string,throughBefore?:string) {
  const directory=await mkdtemp(join(tmpdir(),prefix)),port=await freePort(57000,1800);
  const credential=randomBytes(24).toString("base64url");
+ const disconnected: Promise<void>[] = [];
+ const trackedPool = (options: PoolConfig) => {
+  const pool = new Pool(options);
+  pool.on("connect", client => disconnected.push(new Promise(resolve => client.once("end", resolve))));
+  return pool;
+ };
  const postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:credential,persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
  await postgres.initialise();await postgres.start();
  const base={host:"127.0.0.1",port,database:"jobguard_synthetic_demo"};
- const control=new Pool({...base,database:"postgres",user:"postgres",password:credential});
+ const control=trackedPool({...base,database:"postgres",user:"postgres",password:credential});
  await control.query("CREATE DATABASE jobguard_synthetic_demo");await control.end();
- const admin=new Pool({...base,user:"postgres",password:credential});
+ const admin=trackedPool({...base,user:"postgres",password:credential});
  if(throughBefore) {
   const index=MIGRATION_URLS.findIndex(url=>url.pathname.endsWith(`/${throughBefore}`));
   if(index<0)throw new Error("SCIM migration not registered");
@@ -38,14 +44,20 @@ export async function createScimHarness(prefix:string,throughBefore?:string) {
  } else {await migrate(admin);await migrate(admin);}
  await admin.query("CREATE ROLE scim_fixture_identity LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS INHERIT; GRANT jobguard_identity TO scim_fixture_identity; CREATE ROLE scim_fixture_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS INHERIT; GRANT jobguard_runtime TO scim_fixture_runtime");
  await admin.query(`ALTER ROLE scim_fixture_identity PASSWORD '${credential}'; ALTER ROLE scim_fixture_runtime PASSWORD '${credential}'`);
- const identity=new Pool({...base,user:"scim_fixture_identity",password:credential,max:8}),runtime=new Pool({...base,user:"scim_fixture_runtime",password:credential,max:8});
+ const identity=trackedPool({...base,user:"scim_fixture_identity",password:credential,max:8}),runtime=trackedPool({...base,user:"scim_fixture_runtime",password:credential,max:8});
  const seed=randomBytes(32).toString("base64url");
  const provider=new PersistedAuthProvider(new IdentityRepository(identity),randomBytes(32).toString("base64url"));
  const sso=new SsoApplication(provider,new EnterpriseIdentityRepository(identity),origin,"synthetic_demo");
  const required=new SsoRequiredApplication(provider,new SsoRequiredRepository(identity),origin,"synthetic_demo");
  const repository=new ScimRepository(identity),scim=new ScimApplication(repository,"synthetic_demo",seed),identityApp=new IdentityApplication(provider,origin);
  return {admin,runtime,identity,postgres,directory,seed,provider,sso,required,repository,scim,identityApp,
-  close:async()=>{await closeTestPools(identity,runtime,admin);await postgres.stop();await rm(directory,{recursive:true,force:true});}};
+  close:async()=>{
+   await closeTestPools(identity,runtime,admin);
+   // Pool.end can finish before the final connection-close event.
+   await Promise.all(disconnected);
+   await postgres.stop();
+   await rm(directory,{recursive:true,force:true});
+  }};
 }
 export type ScimHarness=Awaited<ReturnType<typeof createScimHarness>>;
 export type Credentials={sessionToken:string;csrfToken:string;origin:string};

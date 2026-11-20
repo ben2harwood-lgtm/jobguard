@@ -58,7 +58,10 @@ describe("recovery timeline import authority (real PostgreSQL)", () => {
     const event = { id: randomUUID(), version: "audit.v1", actorRef: `membership:${member}`,
       eventType: "job.imported_baseline_attested", subjectType: "job", subjectRef: child,
       payload: { references: { sourceJobId: a.job } } };
-    const appended = await transaction(f.runtime, db => db.query("SELECT * FROM app.append_audit($1)", [JSON.stringify([event])]));
+    const appended = await transaction(f.runtime, async db => {
+      await bindOwnSession(db, f.auth.digest);
+      return db.query("SELECT * FROM app.append_audit($1)", [JSON.stringify([event])]);
+    });
     expect(appended.rows[0].payload.references.auditTrust).toBe("lower_trust");
     return signal;
   }

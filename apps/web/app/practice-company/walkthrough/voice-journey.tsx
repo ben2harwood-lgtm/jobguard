@@ -93,8 +93,10 @@ export async function saveMissedWork(signal: AbortSignal) {
 }
 
 export async function priceFoundExtra(_: HTMLElement, signal: AbortSignal) {
-  // Confirm via Final Check, then reload the product's saved variation list.
-  const finding = screen()?.querySelector('[data-testid="final-check-item"]');
+  // A resumed walkthrough can render before the saved Final Check read settles.
+  const findingSelector = '[data-testid="final-check-item"]';
+  await until(() => !!screen()?.querySelector(`${findingSelector}, [data-testid="final-check-status"], #final-check [role="alert"]`), signal);
+  const finding = screen()?.querySelector(findingSelector);
   if (!finding?.textContent?.includes("fitted loft hatch")) throw new Error("Inspect the saved loft-hatch finding before continuing.");
   if (!finding.querySelector('[data-testid="final-check-disposition"]')) {
     await click("Yes — this was extra work", signal);

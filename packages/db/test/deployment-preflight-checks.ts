@@ -4,7 +4,10 @@ import { compareInventory, deriveFacts, loadReviewedInventory, readCatalogue } f
 
 /** Assurance-only, never imported by business runtime. Reads the supplied database;
  * no migration, credential escalation, approval or real-deployment mode. */
-export async function checkPreflightDatabase(client: PoolClient, tenantA: string, tenantB: string) {
+export async function checkPreflightDatabase(
+  client: PoolClient, tenantA: string, tenantB: string,
+  credentials?: { a: string; b: string },
+) {
   assert.match(tenantA, /^[a-f0-9-]{36}$/u);
   assert.match(tenantB, /^[a-f0-9-]{36}$/u);
   assert.notEqual(tenantA, tenantB);
@@ -33,15 +36,28 @@ export async function checkPreflightDatabase(client: PoolClient, tenantA: string
   // the supplied database. Two populated fictional tenants prevent vacuous passes.
   await client.query("BEGIN READ ONLY");
   try {
-    await client.query("SELECT set_config('app.tenant_id', '', true)");
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenantA]);
     assert.equal((await client.query("SELECT id FROM app.account")).rows.length, 0, "PREFLIGHT_MISSING_CONTEXT_LEAK");
-    for (const [own, other] of [[tenantA, tenantB], [tenantB, tenantA]]) {
-      await client.query("SELECT set_config('app.tenant_id',$1,true)", [own]);
+  } finally { await client.query("ROLLBACK"); }
+  for (const [own, other, credential] of [
+    [tenantA, tenantB, credentials?.a], [tenantB, tenantA, credentials?.b],
+  ] as const) {
+    assert.ok(credential && /^[a-f0-9]{64}$/u.test(credential), "PREFLIGHT_FIXTURE_ACCOUNT_REQUIRED");
+    await client.query("BEGIN");
+    try {
+      try { await client.query("SELECT app.bind_request('real',$1,$2)", [credential, own]); }
+      catch (error) {
+        if ((error as { code?: string; message?: string }).code === "42501" &&
+            (error as Error).message === "REQUEST_BINDING_REFUSED") throw new Error("PREFLIGHT_FIXTURE_ACCOUNT_REQUIRED");
+        throw error;
+      }
+      await client.query("SET TRANSACTION READ ONLY");
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [other]);
       const rows = (await client.query("SELECT id,tenant_id FROM app.account")).rows;
       assert.ok(rows.length > 0, "PREFLIGHT_FIXTURE_ACCOUNT_REQUIRED");
       assert.ok(rows.every(row => row.tenant_id === own), "PREFLIGHT_TENANT_LEAK");
       assert.equal((await client.query("SELECT id FROM app.account WHERE tenant_id=$1", [other])).rows.length, 0, "PREFLIGHT_CROSS_TENANT_LEAK");
-    }
-  } finally { await client.query("ROLLBACK"); }
-  assert.equal((await client.query("SELECT id FROM app.account")).rows.length, 0, "PREFLIGHT_POOLED_CONTEXT_LEAK");
+    } finally { await client.query("ROLLBACK"); }
+    assert.equal((await client.query("SELECT id FROM app.account")).rows.length, 0, "PREFLIGHT_POOLED_CONTEXT_LEAK");
+  }
 }

@@ -26,12 +26,13 @@ async function owner(context: BrowserContext) {
       await db.$client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional SAML contractor')", [accountId, tenantId]);
       await db.$client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [membershipId, tenantId, accountId, userId]);
       await db.$client.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [userId, tenantId, membershipId]);
+      const digest = createHmac("sha256", "sbox-only-identity-hmac-secret-32-bytes").update(`session:${token}`).digest("hex");
+      await db.$client.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 day')", [randomUUID(), userId, digest, csrfToken]);
+      await db.$client.query("SELECT app.bind_request('real',$1,$2)", [digest, tenantId]);
       await db.$client.query("SELECT app.assign_commercial_track($1,$2,'contractor',$3,0,'ENT-10a:e2e-fixture')", [tenantId, assignmentId, `synthetic-agreement:${randomUUID()}`]);
       await db.$client.query("INSERT INTO app.org_unit(tenant_id,id,kind,name) VALUES($1,$1,'tenant','Fictional SAML contractor')", [tenantId]);
       await db.$client.query("INSERT INTO app.contractor_member(tenant_id,membership_id,email) VALUES($1,$2,$3)", [tenantId, membershipId, email]);
       await db.$client.query("INSERT INTO app.role_grant(tenant_id,id,membership_id,role,scope_kind,scope_id) VALUES($1,$2,$3,'owner','tenant',$1)", [tenantId, randomUUID(), membershipId]);
-      const digest = createHmac("sha256", "sbox-only-identity-hmac-secret-32-bytes").update(`session:${token}`).digest("hex");
-      await db.$client.query("INSERT INTO identity.session(id,user_id,environment,token_digest,csrf_token,expires_at) VALUES($1,$2,'synthetic_demo',$3,$4,clock_timestamp()+interval '1 day')", [randomUUID(), userId, digest, csrfToken]);
       await appendAuditBatch(db,[{id:assignmentId,version:"audit.v1",actorRef:"ENT-10a:e2e-fixture",eventType:"commercial_track.assigned",subjectType:"tenant",subjectRef:tenantId,payload:{references:{assignment:assignmentId,environment:"synthetic_demo"},classifications:{action:"security"}}}]);
     });
     await seedActiveContractorAgreement(pool, tenantId);

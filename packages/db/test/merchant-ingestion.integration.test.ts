@@ -38,7 +38,7 @@ beforeAll(async () => {
   await withTenant(runtime, context, db => db.$client.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status) VALUES($1,$2,$3,'fictional-merchant','invoice','OLD-SYNTHETIC',$4,'ready')", [randomUUID(), tenant, job, "a".repeat(64)]));
   await withTenant(admin, context, db => db.$client.query("INSERT INTO app.supplier_document_intake(id,tenant_id,job_id,document_id,fixture_id,channel,result) SELECT $1,tenant_id,job_id,id,'materials-B-invoice','picker','ready' FROM app.supplier_document WHERE document_number='OLD-SYNTHETIC'", [randomUUID()]));
   packFixture = await seedEvidencePackFixture(admin, { withVariation: false });
-  const packs = new EvidencePackRepository(runtime), packContext = testTenantContext(packFixture.tenantId);
+  const packs = new EvidencePackRepository(runtime), packContext = testTenantContext(packFixture.tenantId, { membershipId: packFixture.memberId });
   const pack = await packs.generate(packContext, packFixture.caseId, { commandId: randomUUID() }, "fixture-owner");
   await packs.approveAttachment(packContext, packFixture.caseId, pack.id, { commandId: randomUUID(), expectedManifestHash: pack.manifestHash, expectedContentHash: pack.contentHash }, "fixture-owner");
   approvedPack = await packs.list(packContext, packFixture.caseId);
@@ -59,7 +59,7 @@ async function intake(fixtureId: SupplierDocumentIntake["fixtureId"], channel: S
 }
 it("upgrades existing documents without changing prior rows, money, orders or delivery history", async () => {
   expect((await admin.query("SELECT jsonb_agg(to_jsonb(d) ORDER BY id) AS data FROM app.supplier_document d")).rows).toEqual(documentBytes);
-  expect(await new EvidencePackRepository(runtime).list(testTenantContext(packFixture.tenantId), packFixture.caseId)).toEqual(approvedPack);
+  expect(await new EvidencePackRepository(runtime).list(testTenantContext(packFixture.tenantId, { membershipId: packFixture.memberId }), packFixture.caseId)).toEqual(approvedPack);
   expect(await proofDifferences(admin, preserved)).toEqual({ rows: [], types: [] });
   expect((await admin.query("SELECT canonical_document_id,source_schema_version FROM app.supplier_document_intake WHERE tenant_id=$1 AND fixture_id='materials-B-invoice'", [tenant])).rows).toEqual([{ canonical_document_id: null, source_schema_version: null }]);
   expect((await admin.query("SELECT to_jsonb(d) ? 'canonical_document_id' AS linked FROM app.supplier_document d WHERE document_number='OLD-SYNTHETIC'")).rows).toEqual([{ linked: false }]);

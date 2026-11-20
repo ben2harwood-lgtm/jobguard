@@ -12,6 +12,7 @@ import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, fin
 import { jobDoorsDatabase } from "./lp-job-doors-fixtures.js";
 import { installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
+import { withTenant } from "../src/tenant-context.js";
 
 const migration = "0737_real_fc_revealed_estimate.sql";
 const diary = "Customer asked for an extra heated towel rail while we were on site. Agreed 180 pounds. Fitted it today.";
@@ -225,8 +226,47 @@ it("populated immediate-predecessor upgrade changes only the reveal body, refuse
     await db.owner.query(ddl.rows[0].ddl);
     // pg-pool keeps the password non-enumerable, so pass it explicitly as other suites do.
     shadow = new Pool({ ...db.owner.options, password: db.owner.options.password, user: "saved_estimate_shadow" });
-    const fixture = { ...f, admin: db.owner, runtime: db.runtime, shadow };
-    const a = await setup(diary, message, fixture); await a.complete();
+    // This database intentionally predates the LP-11 ports. Exercise the
+    // existing worker rule by proving its real manifest under the old policy
+    // on each scope hand-off. No predecessor catalogue objects are replaced.
+    let job: Awaited<ReturnType<typeof setup>>;
+    const permits = new Set<string>();
+    const manifest = (client: {query: Pool["query"]}) => client.query(
+      "SELECT app.read_final_check_manifest($1,$2,$3)",
+      [job.tenantId,job.jobId,job.m.id],
+    );
+    const predecessorPool = (pool: Pool) => {
+      const adapt = <T extends Pick<Pool,"query">>(connection:T) => new Proxy(connection,{
+        get(target,key) {
+          if(key==="query") return async (sql:string,values?:unknown[])=>{
+            if(sql.startsWith("SELECT app.lp11_")) {
+              if (values?.[0]!==job.tenantId || values[1]!==job.jobId) throw new Error("Unexpected predecessor scope");
+              if(sql.startsWith("SELECT app.lp11_bind_shadow_job(")) return manifest(target);
+              if(typeof values[2]!=="string") throw new Error("Missing observation permit");
+              if(sql.startsWith("SELECT app.lp11_issue_observation_permit(")) {
+                const result=await withTenant(pool,job.workerContext,tx=>manifest(tx.$client));
+                permits.add(values[2]);
+                return result;
+              }
+              if(sql.startsWith("SELECT app.lp11_bind_observation_read(") && permits.delete(values[2])) {
+                const selected=await target.query("SELECT id FROM app.job WHERE tenant_id=$1 AND id=$2",values.slice(0,2));
+                if(selected.rowCount!==1) throw new Error("Predecessor job was not visible to the runtime login");
+                return selected;
+              }
+              throw new Error("Unexpected predecessor scope call");
+            }
+            return target.query(sql,values);
+          };
+          if(key==="connect" && target===pool) return async()=>adapt(await pool.connect());
+          const value=Reflect.get(target,key);
+          return typeof value==="function"?value.bind(target):value;
+        },
+      });
+      return adapt(pool);
+    };
+    const fixture = { ...f, admin: db.owner, runtime: predecessorPool(db.runtime), shadow: predecessorPool(shadow) };
+    const a = job = await setup(diary, message, fixture);
+    await a.complete();
     const tables = ["shadow_commercial_signal", "final_check_manifest", "final_check_source_attempt", "final_check_run_binding", "shadow_final_check_completion"];
     const rows = async () => Promise.all(tables.map(async table => (await db.owner.query(`SELECT to_jsonb(r) data FROM app.${table} r ORDER BY to_jsonb(r)::text`)).rows));
     const history = await rows();

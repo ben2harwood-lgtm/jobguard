@@ -51,7 +51,8 @@ it("an unknown source stays unsupported on retry, cannot certify a zero or unblo
  const fresh=await repo.manifest(a.workerContext,a.jobId,m.id);
  expect(fresh.sources[0]).toMatchObject({status:"unsupported"});expect(fresh.result).toBeNull();
  expect((await f.admin.query("SELECT 1 FROM app.final_account_lock_check WHERE job_id=$1",[a.jobId])).rowCount).toBe(0);
- await expect(finalCheckTenant(f.admin,a.tenantId,db=>db.query("SELECT * FROM app.require_authoritative_final_check($1,$2)",[a.tenantId,a.jobId]))).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");
+ await expect(finalCheckTenant(f.admin,a.tenantId,db=>db.query("SELECT * FROM app.require_authoritative_final_check($1,$2)",[a.tenantId,a.jobId]),
+  {owner:f.admin,membershipId:FINAL_CHECK_ACTOR})).rejects.toThrow("FINAL_CHECK_NOT_COMPLETE");
 });
 it("a job without a practice session does not auto-request work",async()=>{
  const a=await seedFinalCheckJob(f);

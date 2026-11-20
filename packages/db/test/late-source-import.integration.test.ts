@@ -6,7 +6,8 @@ import {beforeAll,afterAll,expect,it} from "vitest";
 import {MIGRATION_URLS,migrate} from "../src/migrate.js";
 import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,finalCheckTenant,type FinalCheckFixture,type FinalCheckJob} from "./final-check-fixture.js";
 import {installLegacySyntheticPartyFixtures} from "./pool-test-utils.js";
-import {importLateSource,readLateSourceObservations} from "../src/late-source-import.js";
+import {importLateSource} from "../src/late-source-import.js";
+import {readLateSourceObservations} from "../src/shadow-observation-reader.js";
 import {ShadowDetectionRepository} from "../src/shadow-detection-repository.js";
 import {detectShadowObservations} from "@jobguard/core";
 import {testTenantContext} from "./tenant-context-test-utils.js";
@@ -49,9 +50,14 @@ it("0613 upgrades without changing a locked job, work events or meter; replay is
  expect((await f.admin.query("SELECT count(*)::int n FROM infrastructure.demo_source_hold_request WHERE id=$1",[p.commandId])).rows).toEqual([{n:1}]);
  const observations=await readLateSourceObservations(f.runtime,a.context,a.jobId);
  expect(observations).toHaveLength(1);expect(observations[0]!.evidence).toEqual(saved.record.evidence);
+ const queued=verifiedTenantContextForQueuedJob(a.tenantId);
+ await expect(readLateSourceObservations(f.runtime,queued,a.jobId,f.shadow)).resolves.toEqual(observations);
+ await expect(readLateSourceObservations(f.runtime,verifiedTenantContextForQueuedJob(randomUUID()),a.jobId,f.shadow))
+  .rejects.toThrow("OBSERVATION_JOB_UNAVAILABLE");
  const sink=new ShadowDetectionRepository(f.shadow),batch={version:"shadow-detection-batch.v1",jobId:a.jobId,observations,captures:[],proposals:detectShadowObservations(observations,[],new Date().toISOString())};
  await sink.persist(verifiedTenantContextForQueuedJob(a.tenantId),batch);await sink.persist(verifiedTenantContextForQueuedJob(a.tenantId),batch);
  await finalCheckTenant(f.shadow,a.tenantId,async db=>{
+  await db.query("SELECT app.lp11_bind_shadow_job($1,$2)",[a.tenantId,a.jobId]);
   expect((await db.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND coalesced_into_signal_id IS NULL",[a.tenantId,a.jobId])).rows).toEqual([{n:1}]);
   expect((await db.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows).toContainEqual({reason:"evidence_after_lock"});
  });

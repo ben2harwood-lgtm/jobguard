@@ -1,3 +1,4 @@
+import { bindPracticeRequest } from "./helpers/bind-practice-request";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 // The synthetic demo tenant (packages/db/src/demo-seed.ts), inlined as the other specs do: @jobguard/db is ESM-only and cannot load in a Playwright spec.
@@ -70,7 +71,7 @@ test("passing practice time only makes the reminder ready to review; only approv
   const database = new Pool({ connectionString: E2E_RUNTIME_URL, max: 1 });
   const rows = async (sql: string, args: unknown[] = []) => {
     const client = await database.connect();
-    try { await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [DEMO_TENANT_ID]); return (await client.query(sql, args)).rows; }
+    try { await client.query("BEGIN"); await bindPracticeRequest(client, page, DEMO_TENANT_ID); return (await client.query(sql, args)).rows; }
     finally { await client.query("ROLLBACK"); client.release(); }
   };
   const evidence = async () => (await rows(

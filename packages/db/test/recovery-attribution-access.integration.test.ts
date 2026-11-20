@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,expect,it } from "vitest";
 import { RecoveryAttributionRepository } from "../src/recovery-attribution-repository.js";
-import { createLockFixture,closeLockFixture,asFixtureTenant,storedAttributionFixture,LOCK_OWNER,type LockFixture } from "./recovery-attribution-fixture.js";
+import { createLockFixture,closeLockFixture,asFixtureTenant, boundAttributionOwner,storedAttributionFixture,LOCK_OWNER,type LockFixture } from "./recovery-attribution-fixture.js";
 let f:LockFixture;
 beforeAll(async()=>{f=await createLockFixture();},90000);
 afterAll(async()=>{if(f)await closeLockFixture(f);});
@@ -18,18 +18,18 @@ it("SV6-20 tenant context and composite bindings fail closed (private storage)",
 it("SV6-20 malformed session digests cannot reach the checked writer; digest shape alone grants no authority",async()=>{
  const {p,command}=await storedAttributionFixture(f);
  const attempt=(digest:string|null)=>asFixtureTenant(f.runtime,p.tenantId,db=>db.query("SELECT app.assess_recovery_attribution($1,$2,$3)",[p.jobId,digest,command]));
- const receipts=async()=>(await asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1",[p.tenantId]))).rows[0].n;
+ const receipts=async()=>(await boundAttributionOwner(f,p.tenantId,db=>db.query("SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1",[p.tenantId]))).rows[0].n;
  const before=await receipts();
  for(const digest of [null,"","forged","a".repeat(63),"a".repeat(65),"g".repeat(64),"A".repeat(64)])await expect(attempt(digest)).rejects.toThrow("DEPENDENCY_BOUND");
  // Router ruling (a), LP-6d: a well-formed but forged session binds no request, so the binding check refuses
  // first (same 42501 shape, no existence disclosed) and nothing is written.
  await expect(attempt("a".repeat(64))).rejects.toThrow("REQUEST_BINDING_REFUSED");
- expect((await asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT document FROM app.recovery_attribution_revision WHERE job_id=$1",[p.jobId]))).rows).toEqual([]);
+ expect((await boundAttributionOwner(f,p.tenantId,db=>db.query("SELECT document FROM app.recovery_attribution_revision WHERE job_id=$1",[p.jobId]))).rows).toEqual([]);
  expect(await receipts()).toBe(before);
 });
 it("SV6-19 runtime history refuses unowned fixture jobs without disclosing stored sources",async()=>{
  const {p,document,command}=await storedAttributionFixture(f);
- await asFixtureTenant(f.owner,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[document,LOCK_OWNER,command]));
+ await boundAttributionOwner(f,p.tenantId,db=>db.query("SELECT app.append_recovery_attribution($1,$2,$3,null,null)",[document,LOCK_OWNER,command]));
  const repo=new RecoveryAttributionRepository(f.runtime);
  for(const job of [p.jobId,randomUUID()])await expect(repo.history(p.context,job,"a".repeat(64))).rejects.toThrow("NOT_FOUND");
 });
@@ -83,7 +83,9 @@ it("SV6-22 pre lock attribution reveals no shadow existence with zero and many s
    const value=Reflect.get(target,key);return typeof value==="function"?value.bind(target):value;
   }}) as Pool;
   const repo=new RecoveryAttributionRepository(pool),zero=await repo.history(auth.context,job,auth.digest),before=[...statements];
-  await asFixtureTenant(f.shadow,T,async client=>{for(let n=0;n<25;n++)await client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SV6',clock_timestamp(),'Fictional held extra','low','held_for_final_check')",[T,job,randomUUID()]);});
+  // This draft job is below the shadow worker's admission gate. The admin
+  // seed installs the hidden-row control before the runtime history check.
+  await asFixtureTenant(f.admin,T,async client=>{for(let n=0;n<25;n++)await client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SV6',clock_timestamp(),'Fictional held extra','low','held_for_final_check')",[T,job,randomUUID()]);});
   expect((await f.admin.query("SELECT count(*)::int n FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2",[T,job])).rows[0].n).toBe(25);
   statements.length=0;
   expect(await repo.history(auth.context,job,auth.digest)).toEqual(zero);expect(statements).toEqual(before);

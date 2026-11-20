@@ -29,6 +29,7 @@ async function signIn(page: Page) {
   const code = await page.getByTestId("fixture-code").textContent();
   await page.getByLabel("Eight-digit code").fill(code!);
   await page.getByRole("button", { name: "Verify code" }).click();
+  await page.waitForURL("**/practice-company");
   await expect(page.getByRole("heading", { name: "You're signed in.", exact: true })).toBeVisible();
 }
 async function api(page: Page, operation: string, command?: unknown, runId?: string) {
