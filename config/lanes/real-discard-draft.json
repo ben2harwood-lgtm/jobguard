@@ -19,9 +19,11 @@
         "packages/db/src/job-parties-repository.ts",
         "packages/db/src/review-repository.ts",
         "packages/db/test/discard-draft-job.integration.test.ts",
+        "packages/db/test/extra-proceed-upgrade.integration.test.ts",
         "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/lp6d-runtime-classification.json",
-        "packages/db/test/migration-proofs/0770_discard_draft_job.proof.json"
+        "packages/db/test/migration-proofs/0770_discard_draft_job.proof.json",
+        "packages/db/test/restore-reconciliation-upgrade.integration.test.ts"
       ]
     }
   }
