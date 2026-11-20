@@ -15,7 +15,7 @@ beforeAll(async () => { h = await createScimHarness("jg-later-b28-"); }, 120_000
 afterAll(async () => { if (h) await h.close(); });
 afterEach(() => vi.restoreAllMocks());
 
-async function approvedAction(f: ScimFixture) {
+async function approvedAction(f: ScimFixture, enqueue = true) {
   const tenantId = f.principal.tenantId, memberId = f.principal.membershipId;
   const decisionId = randomUUID(), resolutionId = randomUUID(), authorizationId = randomUUID();
   const content = "Fictional owner-approved document", contentHash = sha256(content);
@@ -26,7 +26,7 @@ async function approvedAction(f: ScimFixture) {
   await h.admin.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'send_quote','customer@fixture.invalid',$6,1,'synthetic.v1',$7)", [authorizationId, tenantId, decisionId, resolutionId, memberId, contentHash, expiresAt]);
   const action: OutboundAction = { version: "outbound-action.v1", id: randomUUID(), authorizationId, adapter: "fake_capture", providerEffectKey: randomUUID(), actionType: "send_quote", recipient: "customer@fixture.invalid", contentHash, immutableContent: content, aggregateRevision: 1, amountPence: null, currency: null, policyVersion: "synthetic.v1", authorizationExpiresAt: expiresAt };
   const context = testTenantContext(tenantId, { membershipId: memberId });
-  await withTenant(h.runtime, context, db => appendOutboundAction(db, tenantId, action));
+  if (enqueue) await withTenant(h.runtime, context, db => appendOutboundAction(db, tenantId, action));
   const deliver = vi.fn(async () => ({ kind: "succeeded" as const, providerReference: `synthetic:${randomUUID()}` }));
   const adapter: OutboundAdapter = { name: "fake_capture", supportsProviderDeduplication: false, deliver, reconcile: async () => "unknown" };
   const execute = () => new ActionExecutor(h.runtime, new Map([[adapter.name, adapter]]), { emit: () => undefined }).execute(verifiedTenantContextForQueuedJob(context.tenantId), action.id);
@@ -106,8 +106,17 @@ describe("LATER-B28 actual PostgreSQL boundaries", () => {
       { actionType: "send_order" },
     ];
     for (const patch of patches) {
-      const action = { ...queued.action, ...patch, id: randomUUID(), providerEffectKey: randomUUID() };
-      await withTenant(h.runtime, context, db => appendOutboundAction(db, f.principal.tenantId, action));
+      const { action: approval } = await approvedAction(f, false);
+      const action = { ...approval, ...patch };
+      await expect(withTenant(h.runtime, context, db => appendOutboundAction(db, f.principal.tenantId, action)))
+        .rejects.toMatchObject({ code: "42501", message: "OUTBOX_AUTHORIZATION_INVALID" });
+      // Model a malformed historical row separately to retain the worker check.
+      await h.admin.query(`INSERT INTO app.action_outbox
+        (id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,recipient,content_hash,immutable_content,
+         aggregate_revision,amount_pence,currency,policy_version,authorization_expires_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, [action.id, f.principal.tenantId,
+        action.authorizationId, action.adapter, action.providerEffectKey, action.actionType, action.recipient, action.contentHash,
+        action.immutableContent, action.aggregateRevision, action.amountPence, action.currency, action.policyVersion, action.authorizationExpiresAt]);
       await executor.execute(verifiedTenantContextForQueuedJob(context.tenantId), action.id);
       expect(deliver).not.toHaveBeenCalled();
       expect((await h.admin.query("SELECT count(*)::int n FROM app.action_attempt WHERE tenant_id=$1 AND action_id=$2", [f.principal.tenantId, action.id])).rows[0].n).toBe(0);

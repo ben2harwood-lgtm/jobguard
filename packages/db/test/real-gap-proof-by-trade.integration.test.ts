@@ -269,9 +269,16 @@ it("No requires verified completion photo; absent statement preserves legacy has
    return rows;
   };
   const before=await snapshot(),beforeRead=await assembly.read(a.context,a.jobId);
+  const originals=before.evidence_object!.map(bytes=>JSON.parse(bytes)).filter(row=>row.kind==="original");
+  const expected={...before,evidence_upload:before.evidence_upload!.map(bytes=>{
+   const upload=JSON.parse(bytes);
+   const original=originals.find(row=>row.tenant_id===upload.tenant_id&&row.upload_id===upload.id);
+   const length=upload.state==="verified"&&original?.byte_length>0 ? original.byte_length : null;
+   return bytes.slice(0,-1)+`,"verified_byte_length":${length}}`;
+  })};
   // The migration and its ledger record are installed atomically by the real loader.
   await migrate(c.admin);await migrate(c.admin);
-  expect(await snapshot()).toEqual(before);
+  expect(await snapshot()).toEqual(expected);
   expect(await assembly.read(a.context,a.jobId)).toEqual(beforeRead);
   expect(await assemble(a)).toMatchObject({id:invalidated.id,sourceHash:invalidated.sourceHash,reused:true});
   expect(await proof.complete(a.context,completion)).toEqual(replay);

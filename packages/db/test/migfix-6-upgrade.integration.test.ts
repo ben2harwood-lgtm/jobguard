@@ -47,7 +47,12 @@ it("upgrades populated v1 history without changing rows, RLS, grants or unrelate
   expect(bound).toEqual([{ convalidated: true, definition: 'CHECK ((eligible_net_pence <= gross_pence))' }]);
   await migrate(c.admin); await migrate(c.admin);
   const registry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify(currentCommandRegistryRows)])).rows[0].data;
-  expect(await snapshot(c.admin)).toEqual({ ...laterEmptyTables, ...before, "app.command_type_registry": registry });
+  expect(await snapshot(c.admin)).toEqual({
+    ...laterEmptyTables,
+    ...before,
+    "app.command_type_registry": registry,
+    "app.evidence_upload": before["app.evidence_upload"]!.map(row => ({ ...row, verified_byte_length: 1 })),
+  });
   await legacy.reverse(p.allocationId, 40000);
   expect((await legacy.derivations(w.job)).at(-1)).toMatchObject({ landed: 60000, credit: 0, liability: 6000, delta: -4000 });
   expect(legacy.net(await legacy.journal(w.job))).toBe(6000);

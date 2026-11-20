@@ -96,17 +96,22 @@ describe("SV5PRE authoritative completion", () => {
  });
  it("C238 a mid-scan photo blocks the lock even after expiry, then its verified original is retained",async()=>{
   const a=await seedAccount(f.admin),repo=await prepareLock(f,a),uploadId=randomUUID(),evidenceId=randomUUID();
+  const bytes=Buffer.from("Fictional photo bytes"),hash=createHash("sha256").update(bytes).digest("hex");
   await asOwner(a.tenantId,async db=>{
-   await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,repeat('a',64),'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`mid-scan/${uploadId}`]);
-   await db.query("UPDATE app.evidence_upload SET state='quarantined' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]);
+   await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,scope_item_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,$6,'image/png',100,'standard_evidence',clock_timestamp()+interval '1 day')",[a.tenantId,a.jobId,uploadId,a.scopeItemId,`tenants/${a.tenantId}/uploads/${uploadId}/original`,hash]);
+   await db.query("UPDATE app.evidence_upload SET state='quarantined',object_version_id='scan.v1' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]);
   });
   await expect(repo.lock(a.context,a.input)).rejects.toMatchObject({code:"FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"});
   await asFixtureTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET expires_at=clock_timestamp()-interval '1 second' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]));
   await expect(repo.lock(a.context,a.input)).rejects.toMatchObject({code:"FINAL_ACCOUNT_UPLOADS_IN_PROGRESS"});
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0].n).toBe(0);
+  const verify = (db: import("pg").PoolClient) =>
+   db.query("SELECT app.verify_evidence_upload($1,$2,'scan.v1','image/png',$3)",[a.tenantId,uploadId,bytes]);
+  await expect(asOwner(a.tenantId,verify)).rejects.toMatchObject({code:"42501",message:"EVIDENCE_NOT_AUTHORIZED"});
+  await asFixtureTenant(f.admin,a.tenantId,db=>db.query("UPDATE app.evidence_upload SET expires_at=clock_timestamp()+interval '1 day' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]));
   await asOwner(a.tenantId,async db=>{
-   await db.query("UPDATE app.evidence_upload SET state='verified',server_verified_at=clock_timestamp(),object_version_id='scan.v1' WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId]);
-   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) SELECT tenant_id,job_id,$3,id,scope_item_id,'original','site_photo',object_key,object_version_id,expected_sha256,1,expected_content_type,retention_class,server_received_at,server_verified_at FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId,evidenceId]);
+   await verify(db);
+   await db.query("INSERT INTO app.evidence_object(tenant_id,job_id,id,upload_id,scope_item_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) SELECT tenant_id,job_id,$3,id,scope_item_id,'original','site_photo',object_key,object_version_id,expected_sha256,verified_byte_length,expected_content_type,retention_class,server_received_at,server_verified_at FROM app.evidence_upload WHERE tenant_id=$1 AND id=$2",[a.tenantId,uploadId,evidenceId]);
   });
   await repo.lock(a.context,a.input);
   // Test the database boundary as runtime, before the manifest could silently lose this original.
@@ -322,7 +327,7 @@ describe("SV5PRE authoritative completion", () => {
    // The merged recovery_message_source_write trigger (0107) also takes ONE tenant-wide exclusive advisory
    // lock per evidence_upload write, held to commit, so two writers in one tenant serialise: the second INSERT
    // waits for the first COMMIT. Start both, prove the second is still waiting, then commit in order.
-   const insert=(db:typeof writers[number])=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3::uuid,$3::text,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')",[a.tenantId,a.jobId,randomUUID()]);
+   const insert=(db:typeof writers[number])=>db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3::uuid,format('tenants/%s/uploads/%s/original',$1::uuid,$3::uuid),repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')",[a.tenantId,a.jobId,randomUUID()]);
    await insert(writers[0]!);
    const second=insert(writers[1]!);
    let secondDone=false;second.then(()=>{secondDone=true;},()=>{secondDone=true;});
@@ -356,7 +361,7 @@ describe("SV5PRE authoritative completion", () => {
   // LP-6d: the upload is the locking owner's own bound request.
   await bindTestClient(f.admin, db, a.tenantId, LOCK_OWNER);
   const id = randomUUID();
-  try { await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3::uuid,$3::text,repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')", [a.tenantId, a.jobId, id]); }
+  try { await db.query("INSERT INTO app.evidence_upload(tenant_id,job_id,id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3::uuid,format('tenants/%s/uploads/%s/original',$1::uuid,$3::uuid),repeat('a',64),'image/png',100,'standard_evidence','2099-01-01')", [a.tenantId, a.jobId, id]); }
   catch (error) { await db.query("ROLLBACK"); db.release(); throw error; }
   return { db, id };
  }

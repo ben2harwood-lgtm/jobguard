@@ -82,7 +82,7 @@ function fixture(claimsEnabled = true) {
     if (sql.startsWith("SELECT 1 FROM app.purchase_order_manual_attestation")) return result(state.attestations);
     if (sql.startsWith("INSERT INTO app.purchase_order_placement")) { state.placements.push({ id: values[0], revision_id: values[4], authorization_id: values[5], outbox_action_id: values[6] }); return result(); }
     if (sql.startsWith("INSERT INTO app.purchase_order_manual_attestation")) { state.attestations.push(values); return result(); }
-    if (sql.startsWith("INSERT INTO app.action_outbox")) {
+    if (sql.startsWith("SELECT app.insert_authorized_action(")) {
       state.effects.push({ id: values[0], tenant_id: values[1], authorization_id: values[2], adapter: values[3],
         provider_effect_key: values[4], action_type: values[5], recipient: values[6], content_hash: values[7], immutable_content: values[8],
         aggregate_revision: values[9], amount_pence: values[10], currency: values[11], policy_version: values[12],

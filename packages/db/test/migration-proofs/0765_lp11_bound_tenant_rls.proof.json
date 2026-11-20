@@ -8738,6 +8738,11 @@
     {
       "section": "policies",
       "before": null,
+      "after": "app.late_source_import|lp11_observation_reader|PERMISSIVE|SELECT|jobguard_migration,jobguard_runtime|2701830775fef780"
+    },
+    {
+      "section": "policies",
+      "before": null,
       "after": "app.late_source_import|tenant_isolation|PERMISSIVE|ALL|jobguard_command_writer,jobguard_migration,jobguard_runtime|1dee645b6478adf6"
     },
     {
@@ -23794,6 +23799,20 @@
         "cmd": "ALL",
         "qual": "(tenant_id = (NULLIF((COALESCE(( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant),\nCASE\n    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_recovery_worker_tenant(job_id, NULL::uuid, NULL::uuid, allocation_id, 'allocation'::text)\n    ELSE NULL::uuid\nEND))::text, ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "late_source_import",
+        "policyname": "lp11_observation_reader",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_observation_tenant(job_id, NULL::text))",
+        "with_check": null
       }
     },
     {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { finishDispositionsAndTerms, prepareLockJob, preparePendingCheckJob, seedManySignals, withSyntheticShadow } from "./helpers/final-account-lock-journey";
+import { finishDispositionsAndTerms, prepareLockJob, preparePendingCheckJob, seedManySignals, shadowJobQuery, withSyntheticShadow } from "./helpers/final-account-lock-journey";
 
 test("DW2/DW4/DW9: persisted completion survives reload, Jobs and a second browser", async ({ page, browser }) => {
   const fixture = await preparePendingCheckJob(page);
@@ -76,8 +76,9 @@ test("DW7: pending and failed reconciliation refuse both invoice kinds in comman
   await page.getByRole("button", { name: "Complete final account", exact: true }).click();
   await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   const appendCheck = (status: "pending" | "failed") => withSyntheticShadow(fixture.tenantId, async (shadow, admin) => {
+    const query = shadowJobQuery(shadow, fixture.tenantId, fixture.jobId);
     const lock = (await admin.query("SELECT id,locked_at::text AS cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [fixture.tenantId, fixture.jobId])).rows[0];
-    await shadow.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,run_id,status) VALUES($1,$2,$3,$4,$5,$6,$7)", [fixture.tenantId, fixture.jobId, randomUUID(), lock.id, lock.cutoff, randomUUID(), status]);
+    await query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,run_id,status) VALUES($1,$2,$3,$4,$5,$6,$7)", [fixture.tenantId, fixture.jobId, randomUUID(), lock.id, lock.cutoff, randomUUID(), status]);
   });
   const assertBlocked = async (code: "FINAL_CHECK_NOT_COMPLETE" | "FINAL_CHECK_FAILED") => {
     await page.reload();
@@ -115,10 +116,11 @@ test("DW7: another lock or cutoff cannot complete this job's check in commands o
   {timeout:180_000,intervals:[5_000]}).toBe('completed');
  await foreignContext.close();
  await withSyntheticShadow(fixture.tenantId,async(shadow,admin)=>{
+  const query = shadowJobQuery(shadow, fixture.tenantId, fixture.jobId);
   const locks=(await admin.query("SELECT job_id,id,locked_at::text cutoff,(locked_at+interval '1 microsecond')::text wrong_cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=ANY($2::uuid[])",[fixture.tenantId,[fixture.jobId,other.jobId]])).rows;
   const own=locks.find(row=>row.job_id===fixture.jobId)!,foreign=locks.find(row=>row.job_id===other.jobId)!;
   for(const [lockId,cutoff] of [[foreign.id,foreign.cutoff],[own.id,own.wrong_cutoff]])
-   await expect(shadow.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5,'completed')",[fixture.tenantId,fixture.jobId,randomUUID(),lockId,cutoff])).rejects.toMatchObject({code:'23503'});
+   await expect(query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5,'completed')",[fixture.tenantId,fixture.jobId,randomUUID(),lockId,cutoff])).rejects.toMatchObject({code:'23503'});
  });
  await page.goto(`/jobs/${fixture.jobId}#final-account-title`);
  const panel=page.getByTestId('lock-bound-invoices');await expect(panel.getByRole('alert')).toHaveText("JobGuard's final check is still running");await expect(panel.getByRole('alert')).toHaveAttribute('data-error-code','FINAL_CHECK_NOT_COMPLETE');

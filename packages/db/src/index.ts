@@ -194,7 +194,7 @@ export { AccountingExportRepository, StoredAccountingExportError, storedAccounti
 export { ShadowDemoGuideRepository } from "./shadow-demo-guide-repository.js";
 
 export * from "./shadow-pilot-financial-reader.js";
-export { importLateSource, readLateSourceObservations, readLateSources } from "./late-source-import.js";
+export { importLateSource, readLateSources } from "./late-source-import.js";
 
 export * from "./financial-reconciliation-queue-repository.js";
 export * from "./money-trail-repository.js";

@@ -47,7 +47,11 @@ export class SwitchJobLiveV3Mutation implements CommandMutation<Record<string,un
  }
  async mutate(db:TenantTransaction,command:ConsequentialCommand){
   const input=switchLiveV3.parse(this.raw);
-  if(this.scenario!=="no_charge")throw new Error("V3_NO_CHARGE_SCENARIO_REQUIRED");
+  if(this.scenario!=="no_charge"){
+   // A semantic replay can use a new command ID. The saved terms still rule out changing its scenario.
+   const started=await db.$client.query("SELECT 1 FROM app.job_activation_terms WHERE tenant_id=$1 AND job_id=$2",[this.tenantId,input.jobId]);
+   throw new Error(started.rowCount ? "COMMAND_CONFLICT" : "V3_NO_CHARGE_SCENARIO_REQUIRED");
+  }
   if(command.action.actionType!=="job.switch_live"||command.subjectType!=="job"||command.subjectRef!==input.jobId||command.action.contentHash!==input.acceptedDocumentHash||command.action.aggregateRevision!==input.acceptedDocumentVersion||command.action.amountPence!==null||command.action.currency!==null||command.action.recipient!==null||command.action.policyVersion!=="synthetic_demo_activation.v3")throw new Error("EXACT_ACTIVATION_AUTHORIZATION_MISMATCH");
   const row=(await db.$client.query(`SELECT * FROM app.switch_job_live_v3($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[this.tenantId,input.activationId,input.termsId,input.jobId,input.acceptedDocumentId,input.acceptedDocumentVersion,input.acceptedDocumentHash,input.expectedJobRevision,command.actorMembershipId,command.commandId,command.authorizationId])).rows[0];
   return {jobId:input.jobId,activationId:row.activation_id,termsId:row.id,state:"live"};

@@ -3,9 +3,8 @@ import { openQuotingWatchdogJob, openReview, startWatchdogJob } from "./helpers/
 
 test.setTimeout(180_000);
 test("human confirmation and reproducible corrections retain group flags and session isolation", async ({ page, context, browser }) => {
-  const capture = page.waitForResponse(r => r.url().endsWith("/api/jobs/capture") && r.request().method() === "POST");
-  await openQuotingWatchdogJob(page);
-  const { jobId } = await (await capture).json();
+  const capture = page.waitForResponse(r => r.url().endsWith("/api/jobs/capture") && r.request().method() === "POST").then(response => response.json());
+  const [{ jobId }] = await Promise.all([capture, openQuotingWatchdogJob(page)]);
   const endpoint = `/api/jobs/${jobId}/supplier-lines`;
   const refused = await context.request.post(endpoint, { data: {} });
   expect(refused.status()).toBe(409);
