@@ -3155,7 +3155,7 @@ DO $observation$ DECLARE relation text; BEGIN
   'job_commercial_track','final_account_lock','evidence_object','evidence_upload','job_record_proposal',
   'supplier_document','supplier_document_version','supplier_fact_proposal','purchase_order_revision','purchase_order_draft',
   'material_requirement','job_source_original',
-  'job_diary_entry','customer_message_source','quote_document_version','quote_line','variation','variation_withdrawal'
+  'job_diary_entry','customer_message_source','late_source_import','quote_document_version','quote_line','variation','variation_withdrawal'
  ] LOOP
   EXECUTE format('CREATE POLICY lp11_observation_reader ON app.%I FOR SELECT TO jobguard_runtime,jobguard_migration
    USING (tenant_id=app.lp11_observation_tenant(job_id,NULL))',relation);

@@ -173,7 +173,7 @@ describe("proof application records", () => {
     expect(JSON.stringify(saved?.response)).toBe(firstBytes);
     // Change the authoritative proof projection after success; the saved answer
     // stays unchanged and a true replay must not run a new completion callback.
-    await h.repos.proof.invalidate(h.ctx, { version: "proof.invalidate.v1", commandId: randomUUID(), actorMembershipId: actor, evidenceId: upload.id, reasonCode: "verification_invalid" });
+    await h.repos.proof.invalidate(testTenantContext(h.tenant,{membershipId:actor}), { version: "proof.invalidate.v1", commandId: randomUUID(), actorMembershipId: actor, evidenceId: upload.id, reasonCode: "verification_invalid" });
     const replayed = vi.fn(async () => { throw new Error("a true replay cannot build a new response"); });
     await h.repos.evidence.finalize(h.ctx, command, replayed);
     expect(replayed).not.toHaveBeenCalled();

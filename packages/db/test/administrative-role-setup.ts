@@ -137,6 +137,77 @@ if (testPath?.endsWith(".integration.test.ts")) {
       return {...actual,CustomerBillingCommandService:LegacyBillingFixture};
     });
   }
+  if (["extra-approval-authority.integration.test.ts", "extra-approval-upgrade.integration.test.ts", "real-gap-proof-by-trade.integration.test.ts"]
+    .some(name => testPath.endsWith(`/${name}`))) {
+    vi.doMock("../src/evidence.js", async () => {
+      const actual = await vi.importActual<typeof import("../src/evidence.js")>("../src/evidence.js");
+      class HistoricalEvidenceFixture extends actual.EvidenceService {
+        constructor(pool: Pool, storage: ConstructorParameters<typeof actual.EvidenceService>[1], syntheticAudio?: boolean) {
+          const fixturePool = Object.create(pool) as Pool;
+          // The fixture's direct catalogue probe uses pg's callback-based pool query.
+          fixturePool.query = pool.query.bind(pool);
+          fixturePool.connect = (async () => {
+            const client = await pool.connect();
+            return {
+              release: client.release.bind(client),
+              query: async (sql: string, params?: unknown[]) => {
+                if (sql.startsWith("SELECT app.verify_evidence_upload(")) {
+                  const installed = await client.query("SELECT to_regprocedure('app.verify_evidence_upload(uuid,uuid,text,text,bytea)') IS NOT NULL installed");
+                  if (!installed.rows[0].installed) {
+                    // Seed through the historical PostgreSQL rules before the
+                    // cutover. The current schema always calls its verifier.
+                    return client.query(`UPDATE app.evidence_upload SET state='verified',server_verified_at=clock_timestamp(),rejection_code=NULL
+                      WHERE (tenant_id,id)=($1,$2)`, params?.slice(0, 2));
+                  }
+                }
+                return client.query(sql, params);
+              },
+            };
+          }) as Pool["connect"];
+          super(fixturePool, storage, syntheticAudio);
+        }
+      }
+      return { ...actual, EvidenceService: HistoricalEvidenceFixture };
+    });
+  }
+  const historicalOutboxSpecs = [
+    "builder-acceptance-sent-head.integration.test.ts",
+    "lp6d-worker-presence.integration.test.ts",
+    "practice-firm-name.integration.test.ts",
+    "quote-reacceptance-upgrade.integration.test.ts",
+    "lp8a-billing-revokes.integration.test.ts",
+    "migfix-4-upgrade.integration.test.ts",
+    "migfix-8-upgrade.integration.test.ts",
+    "practice-supplier-credit-upgrade.integration.test.ts",
+    "recovery-case-terms-upgrade.integration.test.ts",
+    "recovery-follow-up-upgrade.integration.test.ts",
+    "recovery-message-upgrade.integration.test.ts",
+    "recovery-pursuit-terms-upgrade.integration.test.ts",
+  ];
+  if (historicalOutboxSpecs.some(name => testPath.endsWith(`/${name}`))) {
+    vi.doMock("../src/outbox.js", async () => {
+      const actual = await vi.importActual<typeof import("../src/outbox.js")>("../src/outbox.js");
+      const { createHash } = await import("node:crypto");
+      const append: typeof actual.appendOutboundAction = async (db, tenant, raw) => {
+        // The upgrade fixtures populate genuine old databases using their original
+        // transport. Once 0767 exists, they exercise the checked transport.
+        const installed = await db.$client.query("SELECT to_regprocedure('app.lp8b_outbox_guard()') IS NOT NULL installed");
+        if (installed.rows[0].installed) return actual.appendOutboundAction(db, tenant, raw);
+        const action = actual.outboundActionV1Schema.parse(raw);
+        if (createHash("sha256").update(action.immutableContent).digest("hex") !== action.contentHash) {
+          throw new Error("CONTENT_HASH_MISMATCH");
+        }
+        await db.$client.query(`INSERT INTO app.action_outbox
+          (id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,recipient,content_hash,
+           immutable_content,aggregate_revision,amount_pence,currency,policy_version,authorization_expires_at)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [action.id,tenant,action.authorizationId,action.adapter,action.providerEffectKey,action.actionType,
+         action.recipient,action.contentHash,action.immutableContent,action.aggregateRevision,action.amountPence,
+         action.currency,action.policyVersion,action.authorizationExpiresAt]);
+      };
+      return { ...actual, appendOutboundAction: append };
+    });
+  }
   vi.doMock("../src/repository-command.js", async () => {
     const actual=await vi.importActual<typeof import("../src/repository-command.js")>("../src/repository-command.js");
     const {legacyRepositoryCommandModule}=await import("./legacy-repository-command-fixture.js");

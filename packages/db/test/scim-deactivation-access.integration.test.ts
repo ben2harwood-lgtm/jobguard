@@ -25,7 +25,7 @@ async function approvedAction(f:ScimFixture,p:ScimPerson) {
  await h.admin.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",[resolutionId,tenant,decisionId,p.membershipId]);
  await h.admin.query("INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,recipient,content_hash,aggregate_revision,policy_version,expires_at) VALUES($1,$2,$3,$4,$5,'send_quote','customer@synthetic.invalid',$6,1,'synthetic.v1',$7)",[authorizationId,tenant,decisionId,resolutionId,p.membershipId,contentHash,expiresAt]);
  const action:OutboundAction={version:"outbound-action.v1",id:randomUUID(),authorizationId,adapter:"fake_capture",providerEffectKey:randomUUID(),actionType:"send_quote",recipient:"customer@synthetic.invalid",contentHash,immutableContent:content,aggregateRevision:1,amountPence:null,currency:null,policyVersion:"synthetic.v1",authorizationExpiresAt:expiresAt};
- await withTenant(h.runtime,testTenantContext(tenant,{membershipId:f.principal.membershipId}),db=>appendOutboundAction(db,tenant,action));return action;
+ await withTenant(h.runtime,testTenantContext(tenant,{membershipId:p.membershipId}),db=>appendOutboundAction(db,tenant,action));return action;
 }
 async function executeAction(action: OutboundAction, adapter: OutboundAdapter) {
  const worker = new WorkerActionExecutor(await outboundWorkerPool(h.runtime),new Map([[adapter.name,adapter]]),{emit:()=>undefined});

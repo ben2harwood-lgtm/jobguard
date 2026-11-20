@@ -86,7 +86,7 @@ function fixture() {
     }
     if (sql.startsWith("INSERT INTO app.decision")) return result();
     if (sql.startsWith("INSERT INTO app.action_authorization")) { state.authorizations.push(values); return result(); }
-    if (sql.startsWith("INSERT INTO app.action_outbox")) { state.effects.push(values); return result(); }
+    if (sql.startsWith("SELECT app.insert_authorized_action(")) { state.effects.push(values); return result(); }
     if (sql.includes("current_setting('app.tenant_id'")) return result([{ tenant_id: tenant }]);
     if (sql.includes("FROM app.append_audit(")) { state.audits.push(...JSON.parse(values[0] as string)); return result(fakeAuditAppend(values[0] as string, tenant)); }
     if (sql.includes("lock_audit_head")) return result();
