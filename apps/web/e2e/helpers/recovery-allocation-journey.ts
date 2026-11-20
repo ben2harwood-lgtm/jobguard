@@ -1,3 +1,4 @@
+import { bindPracticeRequest } from "./bind-practice-request";
 import { prepareInvoiceFinalCheck } from "./customer-invoice-journey";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -114,18 +115,17 @@ export async function refused(request: Promise<APIResponse>, status: number, cod
 }
 
 /** Independent read through the actual application login and RLS, for persisted browser provenance/original-fact assertions. */
-export async function allocationDatabase(jobId: string) {
+export async function allocationDatabase(page: Page, jobId: string) {
   const { Pool } = await import("pg");
   const { DEMO_TENANT_ID } = await import("@jobguard/db");
   const passphrase = ["sbox", "e2e", "runtime"].join("-");
   const pool = new Pool({ host: "127.0.0.1", port: 55432, database: "jobguard_synthetic_demo", user: "jobguard_runtime", password: passphrase, max: 1 });
   try {
-    // One pooled client in one transaction with the tenant set transaction-locally (what the package's own tenant wrapper does), written out
-    // here so no TypeScript source of the db package is loaded through Playwright's loaders (CI run 38328750351).
+    // Bind the browser credential independently on the actual application login.
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query("SELECT set_config('app.tenant_id', $1, true)", [DEMO_TENANT_ID]);
+      await bindPracticeRequest(client, page, DEMO_TENANT_ID);
       const params = [DEMO_TENANT_ID, jobId];
       const allocated = await client.query("SELECT id,case_id,payment_id,invoice_id,movement_id,evidence_id,evidence_hash,object_version_id,policy_version,reviewer_ref,authorization_id,gross_pence,eligible_net_pence,tax_pence FROM app.recovery_case_allocation WHERE tenant_id=$1 AND job_id=$2 ORDER BY id", params);
       const originals: Record<string, unknown> = {};

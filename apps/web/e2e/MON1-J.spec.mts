@@ -26,10 +26,10 @@ test("MON1-J: Builder's five distinct started jobs show the next job included af
  const runtime=new Pool({connectionString:E2E_RUNTIME_URL,max:1});
  const f={admin,runtime} as WorkFixture;
  try {
-  const a=await meterCompany(f), token=randomUUID();
+  const token = randomUUID();
   const digest=createHmac("sha256","sbox-only-identity-hmac-secret-32-bytes").update(`session:${token}`).digest("hex");
-  await admin.query("UPDATE identity.session SET token_digest=$1 WHERE id=$2",[digest,a.sessionId]);
-  await historicalAgreement(f,{...a,digest},"Builder");
+  const a = await meterCompany(f, undefined, digest);
+  await historicalAgreement(f,a,"Builder");
   await activateMeterJob(f,a);
   await context.addCookies([{name:"jobguard_session",value:token,url:"http://127.0.0.1:3000"}]);
   await expectMeter(page,"0 of 7 jobs on the go","Next job included");
@@ -66,10 +66,10 @@ test("MON1-J: real starts, finish tail, London stop, restart, Solo grace and cap
  const runtime=new Pool({connectionString:E2E_RUNTIME_URL,max:1});
  const f={admin,runtime} as WorkFixture;
  try {
-  const a=await meterCompany(f), token=randomUUID();
+  const token = randomUUID();
   const digest=createHmac("sha256","sbox-only-identity-hmac-secret-32-bytes").update(`session:${token}`).digest("hex");
-  await admin.query("UPDATE identity.session SET token_digest=$1 WHERE id=$2",[digest,a.sessionId]);
-  await historicalAgreement(f,{...a,digest},"Solo"); await activateMeterJob(f,a);
+  const a = await meterCompany(f, undefined, digest);
+  await historicalAgreement(f,a,"Solo"); await activateMeterJob(f,a);
   await context.addCookies([{name:"jobguard_session",value:token,url:"http://127.0.0.1:3000"}]);
   const count=(n:number)=>expectMeter(page,`${n} of 4 jobs on the go`,
    n===6 ? "Further places need a move to Builder." : undefined,

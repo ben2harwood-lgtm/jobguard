@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 const endpoint = "/api/contractor/audit-exports";
 const assurance = () => new Pool({ host: "127.0.0.1", port: 55432, user: "neondb_owner", password: "sbox-e2e-owner", database: "jobguard_synthetic_demo", options: "-c role=jobguard_migration" });
 test("signed one-tenant exports persist, download, survive two browsers and refuse untrusted input and downgraded authority", async ({ page, browser }) => {
@@ -12,11 +12,29 @@ test("signed one-tenant exports persist, download, survive two browsers and refu
   await expect(page.getByRole("main").getByRole("alert")).toContainText("AUDIT_EXPORT_CHECKPOINT_REQUIRED"); await expect(page.getByRole("main").getByRole("alert")).toBeFocused();
   // Test-only restricted assurance credentials produce and hand off ONE tenant's checkpoint.
   // There is no browser/runtime endpoint that produces or imports trusted checkpoints.
+  const token = (await page.context().cookies()).find(cookie => cookie.name === "jg_session")!.value;
   const admin = assurance();
+  async function asMember<T>(run: (client: PoolClient) => Promise<T>): Promise<T> {
+    const client = await admin.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT app.bind_request('contractor_practice',$1,$2)", [token, member.tenantId]);
+      const result = await run(client);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   try {
-    await admin.query(`INSERT INTO audit_control.checkpoint(tenant_id,sequence,event_hash)
-      SELECT tenant_id,sequence,event_hash FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence DESC LIMIT 1`, [member.tenantId]);
-    await admin.query(`INSERT INTO app.audit_export_checkpoint SELECT tenant_id,sequence,event_hash,recorded_at FROM audit_control.checkpoint WHERE tenant_id=$1`, [member.tenantId]);
+    await asMember(async db => {
+      await db.query(`INSERT INTO audit_control.checkpoint(tenant_id,sequence,event_hash)
+        SELECT tenant_id,sequence,event_hash FROM app.audit_event WHERE tenant_id=$1 ORDER BY sequence DESC LIMIT 1`, [member.tenantId]);
+      await db.query(`INSERT INTO app.audit_export_checkpoint SELECT tenant_id,sequence,event_hash,recorded_at FROM audit_control.checkpoint WHERE tenant_id=$1`, [member.tenantId]);
+    });
     await page.getByRole("button", { name: "Create signed audit export", exact: true }).click();
     await expect(page.getByTestId("audit-export-row")).toHaveCount(1);
     const persisted = await (await page.request.get(endpoint)).json(), first = persisted.exports[0];
@@ -45,16 +63,12 @@ test("signed one-tenant exports persist, download, survive two browsers and refu
     expect(await button.evaluate(el => getComputedStyle(el).outlineStyle)).not.toBe("none"); const box = await button.boundingBox(); expect(box!.width).toBeGreaterThanOrEqual(44); expect(box!.height).toBeGreaterThanOrEqual(44);
     await page.getByRole("link", { name: "Back to Jobs", exact: true }).click(); await page.goto("/admin/contractor/audit-exports"); await expect(page.getByText(`Export ${first.id}`, { exact: true })).toBeVisible();
     // Append a revocation, never rewrite the grant or audit history. A formerly authorized session cannot list or create.
-    const revocation = await admin.connect();
-    try {
-      await revocation.query("BEGIN"); await revocation.query("SELECT set_config('app.tenant_id',$1,true)", [member.tenantId]);
-      await revocation.query(`INSERT INTO app.role_grant_revocation(tenant_id,id,grant_id) SELECT tenant_id,gen_random_uuid(),id FROM app.role_grant WHERE tenant_id=$1 AND membership_id=$2 AND role='owner'`, [member.tenantId, member.membershipId]);
-      await revocation.query("COMMIT");
-    } catch (error) { await revocation.query("ROLLBACK"); throw error; }
-    finally { revocation.release(); }
+    await asMember(async db => {
+      await db.query(`INSERT INTO app.role_grant_revocation(tenant_id,id,grant_id) SELECT tenant_id,gen_random_uuid(),id FROM app.role_grant WHERE tenant_id=$1 AND membership_id=$2 AND role='owner'`, [member.tenantId, member.membershipId]);
+    });
     await page.reload(); await expect(page.getByRole("main").getByRole("alert")).toHaveText("AUDIT_EXPORT_FORBIDDEN"); await expect(page.getByRole("main").getByRole("alert")).toBeFocused(); await expect(button).toBeDisabled();
     expect((await page.request.post(endpoint, { headers: { origin: "http://127.0.0.1:3000" }, data: { version: "audit-export-request.v1", commandId: crypto.randomUUID() } })).status()).toBe(403);
-    const refusals = (await admin.query("SELECT payload->'references'->>'action' action FROM app.audit_event WHERE tenant_id=$1 AND event_type='audit.export.refused'", [member.tenantId])).rows;
+    const refusals = (await asMember(db => db.query("SELECT payload->'references'->>'action' action FROM app.audit_event WHERE tenant_id=$1 AND event_type='audit.export.refused'", [member.tenantId]))).rows;
     expect(refusals.some(r => r.action === "list")).toBe(true); expect(refusals.some(r => r.action === "create")).toBe(true);
     await page.screenshot({ path: `test-results/ENT-10b-${test.info().project.name}.png`, fullPage: true });
   } finally { await admin.end(); }

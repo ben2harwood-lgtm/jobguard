@@ -92,7 +92,7 @@ tasks.discover_demo_source_holds=async(_payload,helpers)=>{
 tasks.hold_demo_sources=async(payload,helpers)=>{
  if(finalCheckEnvironment!=="synthetic_demo")throw new FinalCheckError("FINAL_CHECK_FORBIDDEN");
  const task=demoHoldTaskV1.parse(payload),context=queueContext({tenantId:task.tenantId});
- const late=await readLateSourceObservations(runtimePool,context,task.jobId);
+ const late=await readLateSourceObservations(runtimePool,context,task.jobId,shadowPool);
  if(late.length){
   if(!await practiceHoldReader.hasAcceptedTerms(context,task.jobId))throw new Error("SHADOW_TERMS_NOT_ACCEPTED");
   await detectionRepository.persist(context,{version:"shadow-detection-batch.v1",jobId:task.jobId,observations:late,captures:[],
