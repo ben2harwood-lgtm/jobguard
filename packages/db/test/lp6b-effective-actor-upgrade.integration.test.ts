@@ -44,8 +44,14 @@ it("0584 fixes the effective actor alone, preserves data/privileges and rejects 
   await expect(withTenant(c.runtime, switched, callback)).rejects.toMatchObject({ code: "FORBIDDEN" });
   expect(callback).not.toHaveBeenCalled();
   await migrate(c.admin);
+  const cutover = {
+    ...before,
+    owner: "jobguard_session_lookup",
+    acl: "{jobguard_session_lookup=X/jobguard_session_lookup,jobguard_binding_owner=X/jobguard_session_lookup,jobguard_migration=X/jobguard_session_lookup}",
+  };
+  expect(await attributes()).toEqual(cutover);
   await migrate(c.admin);
-  expect(await attributes()).toEqual(before);
+  expect(await attributes()).toEqual(cutover);
   const grants = (await c.admin.query(`SELECT has_schema_privilege('jobguard_identity','app','USAGE') usage,
     has_function_privilege('jobguard_identity','app.bind_request(text,text,uuid)','EXECUTE') bind`)).rows[0];
   expect(grants).toEqual({ usage: false, bind: false });

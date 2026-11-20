@@ -200,7 +200,8 @@ it("[PW11] one command concurrently used across sessions and opposite operations
 it("[PW32] a tenant-locked wider grant committed first prevents a waiting switch", async () => {
  const f = await company(c), db = await c.admin.connect();
  try {
-  await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); await db.query("SET LOCAL ROLE jobguard_migration");
+  await db.query("BEGIN"); await db.query("SELECT app.bind_request('contractor_practice',$1,$2)", [f.session, f.p.tenantId]);
+  await db.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]); await db.query("SET LOCAL ROLE jobguard_migration");
   await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,54))", [f.p.tenantId]);
   const waiting = start(c, f); await db.query("INSERT INTO app.role_grant VALUES($1,$2,$3,'admin','tenant',$1,NULL)", [f.p.tenantId, randomUUID(), f.members.operative]);
   await db.query("COMMIT"); await expect(waiting).rejects.toMatchObject({ code: "NOT_FOUND" });

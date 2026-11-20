@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { openLiveWatchdogJob } from "./capture-journey";
 import { jsonResult } from "./customer-invoice-journey";
 
@@ -57,7 +57,7 @@ export async function withSyntheticShadow<T>(tenantId: string, run: (pool: Pool,
   let shadow: Pool | undefined;
   try {
     await admin.query(`CREATE ROLE "${login}" LOGIN PASSWORD '${generated}' IN ROLE jobguard_shadow NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);
-    // pg discards a connection after a failed pool.query, so the tenant context travels with every new connection (startup option), not with one session.
+    // Retain the legacy argument check. RLS uses the job binding in each transaction.
     shadow = new Pool({ host: "127.0.0.1", port: 55432, database: "jobguard_synthetic_demo", user: login, password: generated, max: 1, options: `-c app.tenant_id=${tenantId}` });
     return await run(shadow, admin);
   } finally {
@@ -67,17 +67,45 @@ export async function withSyntheticShadow<T>(tenantId: string, run: (pool: Pool,
   }
 }
 
+/** Use the persisted job scope under the same restricted login as the worker. */
+export async function withBoundShadowJob<T>(pool: Pool, tenantId: string, jobId: string, run: (client: PoolClient) => Promise<T>) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT app.lp11_bind_shadow_job($1,$2)", [tenantId, jobId]);
+    // Older trigger and routine argument checks still expect this setting.
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
+    const result = await run(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/** Bind each raw shadow statement to the checked job under the restricted login.
+ * Independent transactions preserve the fixture's autocommit and refusal semantics. */
+export function shadowJobQuery(pool: Pool, tenantId: string, jobId: string) {
+  return (sql: string, values: unknown[]) =>
+    withBoundShadowJob(pool, tenantId, jobId, client => client.query(sql, values));
+}
+
 export async function seedManySignals(tenantId: string, jobId: string, evidenceId: string) {
   await withSyntheticShadow(tenantId, async (shadow, admin) => {
-    for (let index = 0; index < 25; index++) {
-      const signalId = randomUUID();
-      await shadow.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
-        VALUES($1,$2,$3,$4,'unrecorded_extra','deterministic','synthetic_web.v1',clock_timestamp(),'Synthetic held extra','low','held_for_final_check')`, [tenantId, jobId, signalId, randomUUID()]);
-      // SELECT by the administrator supplies the version-specific evidence fact;
-      // INSERT itself is executed through the restricted shadow login.
-      const row = (await admin.query("SELECT object_version_id,sha256,server_received_at::text AS received FROM app.evidence_object WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenantId, jobId, evidenceId])).rows[0];
-      expect(row).toBeDefined();
-      await shadow.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)", [tenantId, jobId, signalId, evidenceId, row.object_version_id, row.sha256, row.received]);
-    }
+    // The administrator supplies the immutable evidence fact. All writes use one
+    // exact-job transaction under the restricted shadow login.
+    const row = (await admin.query("SELECT object_version_id,sha256,server_received_at::text AS received FROM app.evidence_object WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenantId, jobId, evidenceId])).rows[0];
+    expect(row).toBeDefined();
+    await withBoundShadowJob(shadow, tenantId, jobId, async client => {
+      for (let index = 0; index < 25; index++) {
+        const signalId = randomUUID();
+        await client.query(`INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
+          VALUES($1,$2,$3,$4,'unrecorded_extra','deterministic','synthetic_web.v1',clock_timestamp(),'Synthetic held extra','low','held_for_final_check')`, [tenantId, jobId, signalId, randomUUID()]);
+        await client.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7)", [tenantId, jobId, signalId, evidenceId, row.object_version_id, row.sha256, row.received]);
+      }
+    });
   });
 }

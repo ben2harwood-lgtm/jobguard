@@ -1,3 +1,4 @@
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
@@ -10,7 +11,7 @@ import { ctx, fixture, id } from "../../../apps/api/src/fee-collection/test-fixt
 import type { CollectionBook, SignedProviderResult } from "../../../apps/api/src/fee-collection/contracts.js";
 import { withTenant } from "../src/tenant-context.js";
 import { migrate } from "../src/migrate.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { feeFixtureContext, seedFeeFixtureTenant } from "./fee-reservation-membership-fixture.js";
 import { closeWorkFixture, createWorkFixture, type WorkFixture } from "./job-work-state-fixtures.js";
 import { proofSchema } from "./migration-proof-loader.js";
 
@@ -29,7 +30,7 @@ describe("LATER-SAFETY-148 exact synthetic webhook receipts (real PostgreSQL)", 
 
   async function setup(railName: "stripe_card" | "direct_debit") {
     const f = fixture(), tenantId = randomUUID(), context = { ...ctx, tenantId };
-    await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenantId]);
+    await seedFeeFixtureTenant(db.admin, tenantId);
     f.source.tenantId = f.source.agreement.tenantId = tenantId;
     f.source.agreement.record!.selection.tenantId = tenantId;
     const terms = subscriptionAgreementHash(f.source.agreement.record!.selection);
@@ -48,7 +49,7 @@ describe("LATER-SAFETY-148 exact synthetic webhook receipts (real PostgreSQL)", 
         account: "fake_jobguard_dd", tenantId, mandateId: id(81), eventId: id(83), state: "active" }] });
       dd.ingestMandates(body, dd.sign(body));
     }
-    const store = (pool = db.runtime) => new PostgresReservationStore(pool, testTenantContext(tenantId),
+    const store = (pool = db.runtime) => new PostgresReservationStore(pool, feeFixtureContext(tenantId),
       () => ({ collection: async () => f.source, credit: async () => ({ ...f.credit, tenantId }) }));
     const executor = (pool = db.runtime) => new DarkFeeCollectionExecutor(store(pool), [rail],
       () => new Date("2026-10-29T00:00:00Z"), { ...f.sessions, findMembership: async () => ({ ...f.membership, tenantId }) });
@@ -88,21 +89,21 @@ describe("LATER-SAFETY-148 exact synthetic webhook receipts (real PostgreSQL)", 
       [{ ...next, events: { [`${railName === "stripe_card" ? "direct_debit" : "stripe_card"}:${id(91)}`]: binding.hash } }, signed],
     ];
     for (const [book, result] of attacks) {
-      await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(replace, values(f.tenantId, book, result))))
+      await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(replace, values(f.tenantId, book, result))))
         .rejects.toMatchObject({ code: "23514" });
       expect(await f.snapshot()).toEqual(unchanged);
     }
     // Even a correctly bound event must roll back with its surrounding transaction.
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), async tx => {
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), async tx => {
       await tx.$client.query(replace, values(f.tenantId, next, signed));
       throw new Error("receipt-rollback");
     })).rejects.toThrow("receipt-rollback");
     expect(await f.snapshot()).toEqual(unchanged);
-    await withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(replace, values(f.tenantId, next, signed)));
+    await withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(replace, values(f.tenantId, next, signed)));
     const recorded = await f.snapshot();
     const later = await f.read();
     later.events[`${railName}:${id(92)}`] = binding.hash;
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(replace, values(f.tenantId, later, signed))))
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(replace, values(f.tenantId, later, signed))))
       .rejects.toMatchObject({ code: "23514" });
     expect(await f.snapshot()).toEqual(recorded);
   });
@@ -137,7 +138,7 @@ describe("LATER-SAFETY-148 exact synthetic webhook receipts (real PostgreSQL)", 
     await db.admin.query(predecessor);
     const prior = await f.read();
     const legacy = { ...prior, events: { ...prior.events, [`${railName}:${id(89)}`]: "c".repeat(64) } };
-    await withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(replace,
+    await withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(replace,
       values(f.tenantId, legacy, f.rail.signStoreResult(f.tenantId, prior.attempts[0]!))));
     const book = await f.read(), unchanged = await f.snapshot();
     const next = { ...book, events: { ...book.events, [`${railName}:${id(91)}`]: "a".repeat(64) } };
@@ -148,6 +149,7 @@ describe("LATER-SAFETY-148 exact synthetic webhook receipts (real PostgreSQL)", 
       await client.query(bodyOnly(predecessor));
       await client.query("SET LOCAL ROLE jobguard_runtime");
       await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenantId]);
+      await bindTestClient(db.admin, client, f.tenantId, id(2));
       // Failing-first witness: 0708 accepts a captured v1 receipt for an unrelated key.
       await client.query(replace, values(f.tenantId, next, captured));
     } finally { await client.query("ROLLBACK"); client.release(); }
@@ -170,19 +172,19 @@ describe("LATER-SAFETY-148 exact synthetic webhook receipts (real PostgreSQL)", 
         FROM pg_class c WHERE oid=$1::regclass`, [`app.${change.relname}`])).rows[0];
       expect(posture).toEqual(change.after);
     }
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(replace, values(f.tenantId, next, captured))))
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(replace, values(f.tenantId, next, captured))))
       .rejects.toMatchObject({ code: "23514" });
-    await expect(withTenant(db.runtime, testTenantContext(id(99)), tx => tx.$client.query(replace, values(f.tenantId, next, captured))))
+    await expect(withTenant(db.runtime, feeFixtureContext(id(99)), tx => tx.$client.query(replace, values(f.tenantId, next, captured))))
       .rejects.toMatchObject({ code: "42501" });
     await expect(db.runtime.query(replace, values(f.tenantId, next, captured))).rejects.toMatchObject({ code: "42501" });
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query("SELECT * FROM app.fee_provider_fixture_key")))
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query("SELECT * FROM app.fee_provider_fixture_key")))
       .rejects.toMatchObject({ code: "42501" });
     expect((await db.admin.query(`SELECT
       has_function_privilege('jobguard_runtime','app.replace_fee_reservation_book(uuid,jsonb,jsonb)','EXECUTE') runtime,
       has_function_privilege('jobguard_infrastructure','app.replace_fee_reservation_book(uuid,jsonb,jsonb)','EXECUTE') infrastructure,
       has_table_privilege('jobguard_runtime','app.fee_reservation_archive','INSERT') archive_insert`)).rows[0])
       .toEqual({ runtime: true, infrastructure: false, archive_insert: false });
-    await withTenant(db.runtime, testTenantContext(id(99)), async tx => {
+    await withTenant(db.runtime, feeFixtureContext(id(99)), async tx => {
       expect((await tx.$client.query("SELECT * FROM app.fee_reservation_book WHERE tenant_id=$1", [f.tenantId])).rows).toEqual([]);
       expect((await tx.$client.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1", [f.tenantId])).rows).toEqual([]);
     });
@@ -204,12 +206,13 @@ describe("LATER-SAFETY-148 exact synthetic webhook receipts (real PostgreSQL)", 
       await client.query(mutant);
       await client.query("SET LOCAL ROLE jobguard_runtime");
       await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.tenantId]);
+      await bindTestClient(db.admin, client, f.tenantId, id(2));
       // This exact regression assertion fails against the mutant (the forged write succeeds).
       await expect(expect(client.query(replace, values(f.tenantId, forged, signed))).rejects.toMatchObject({ code: "23514" }))
         .rejects.toThrow();
     } finally { await client.query("ROLLBACK"); client.release(); }
     expect(await f.snapshot()).toEqual(unchanged);
-    await expect(withTenant(db.runtime, testTenantContext(f.tenantId), tx => tx.$client.query(replace, values(f.tenantId, forged, signed))))
+    await expect(withTenant(db.runtime, feeFixtureContext(f.tenantId), tx => tx.$client.query(replace, values(f.tenantId, forged, signed))))
       .rejects.toMatchObject({ code: "23514" });
   });
 });

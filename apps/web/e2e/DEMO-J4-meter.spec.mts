@@ -18,11 +18,11 @@ test.beforeAll(() => { f = { admin: new Pool({ connectionString: E2E_ADMIN_DATAB
 test.afterAll(() => closeTestPools(f.runtime, f.admin));
 
 async function company(context: BrowserContext, baseURL: string) {
-  const a = await meterCompany(f), token = randomUUID();
+  const token = randomUUID();
   const digest = createHmac("sha256", E2E_AUTH_CODE_SECRET).update(`session:${token}`).digest("hex");
-  await f.admin.query("UPDATE identity.session SET token_digest=$1 WHERE id=$2", [digest, a.sessionId]);
+  const a = await meterCompany(f, undefined, digest);
   await context.addCookies([{ name: "jobguard_session", value: token, url: baseURL }]);
-  return { ...a, digest };
+  return a;
 }
 async function meter(page: Page, count: string) {
   await page.goto("/meter");

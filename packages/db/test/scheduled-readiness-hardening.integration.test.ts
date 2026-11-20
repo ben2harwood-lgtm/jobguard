@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, type FinalCheckFixture } from "./final-check-fixture.js";
 import { rolledBack } from "./upgrade-proof-utils.js";
-import { withTenant } from "../src/tenant-context.js";
+import { bindIssuedCredential, withTenant } from "../src/tenant-context.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const tables = ["scheduled_readiness_plan", "scheduled_readiness_proposal"] as const;
@@ -61,6 +61,7 @@ describe("scheduled readiness immutable history on PostgreSQL", () => {
     for (const table of tables) for (const role of ["jobguard_migration", null]) {
       for (const sql of [`UPDATE app.${table} SET payload=payload`, `DELETE FROM app.${table}`, `TRUNCATE app.${table} CASCADE`]) {
         await expect(rolledBack(f.admin, async db => {
+          await bindIssuedCredential(db, job.context);
           if (role) await db.query(`SET LOCAL ROLE ${role}`);
           await db.query("SELECT set_config('app.tenant_id',$1,true)", [job.tenantId]);
           await db.query(sql);

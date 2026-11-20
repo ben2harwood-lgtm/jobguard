@@ -71,7 +71,7 @@ describe("LATER-SAFETY-119 imported job paid shape — PostgreSQL", () => {
       const paid = (await db.query("SELECT * FROM app.transition_job($1,$2,$3,'paid','balance_settled')",
         [a.tenantId, jobId, invoiced.revision])).rows[0];
       expect(paid).toMatchObject({ status: "paid", revision: invoiced.revision + 1, recovery_cap_pence: null });
-    });
+    }, { membershipId: a.actorId });
     // Owner-level UPDATE isolates the CHECK from the transition routine's own edge rejection.
     await expect(workTenant(f.admin, a.tenantId, db => db.query("UPDATE app.job SET status='quoting' WHERE tenant_id=$1 AND id=$2",
       [a.tenantId, jobId]))).rejects.toMatchObject({ code: "23514", constraint: "job_baseline_shape" });

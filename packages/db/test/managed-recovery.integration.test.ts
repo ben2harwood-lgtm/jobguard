@@ -81,6 +81,7 @@ it("pursuit before opt-in is permanently refused, including races; a replay rema
  const id = await newCase(c,f), db = await c.runtime.connect();
  try {
   await db.query('BEGIN'); await db.query("SELECT set_config('app.tenant_id',$1,true)",[f.tenant]);
+  await db.query("SELECT app.bind_request('real',$1,$2)",[f.sessionDigest,f.tenant]);
   await start(c,f,id,db);
   expect((await db.query('SELECT count(*)::int n FROM app.managed_recovery_pursuit WHERE tenant_id=$1 AND case_id=$2',[f.tenant,id])).rows).toEqual([{n:1}]);
   const pending = repo().elect(f.context,f.job,command(id),f.actor);

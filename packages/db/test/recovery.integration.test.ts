@@ -1,4 +1,4 @@
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -189,6 +189,7 @@ describe("structural recovery fee guard",()=>{
    const predecessor = "CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing" + historical.split("CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing")[1]!.split("END$$;")[0]! + "END$$;";
    const fixed = (await readFile(new URL("../migrations/0654_synthetic_reversal_money_rules.sql",import.meta.url),"utf8")).split("CREATE OR REPLACE FUNCTION app.reverse_synthetic_landing")[1]!.split("END$$;")[0]!;
    await rolledBack(admin, async db => {
+    await bindTestClient(admin, db, w.tenant, w.reviewer.membershipId);
     await db.query("SELECT set_config('app.tenant_id',$1,true)",[w.tenant]);
     const rows = await db.query("SELECT * FROM app.recovery_fee_derivation WHERE tenant_id=$1 AND job_id=$2 ORDER BY id",[w.tenant,w.job]);
     const metadata = async () => (await db.query("SELECT proowner,proacl,prosecdef,proconfig FROM pg_proc WHERE oid=$1::regprocedure",[signature])).rows;
@@ -482,5 +483,8 @@ describe("structural recovery fee guard",()=>{
    }
   });
  });
- it("rejects incomplete proof, pending cash, prevented cases, and stale approval in PostgreSQL",async()=>{for(const statement of [`UPDATE app.synthetic_recovery_receipt SET status='pending',settled_at=NULL WHERE id='${R}'`,`UPDATE app.recovery_case SET state='prevented' WHERE id='${C2}'`,`UPDATE app.recovery_approval SET expires_at=now()-interval '1 second' WHERE id='${EA2}'`]){await admin.query(`SET session_replication_role=replica;${statement};SET session_replication_role=origin`);await expect(withTenant(runtime,context,db=>db.$client.query(`SELECT app.approve_synthetic_landing($1::jsonb)`,[payload(C2,EA2,LA2)]))).rejects.toBeTruthy();}await admin.query(`SELECT set_config('app.tenant_id','${T}',false);SET session_replication_role=replica;INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code)VALUES(gen_random_uuid(),'${T}','${E}',gen_random_uuid(),'verification_invalid');SET session_replication_role=origin`);expect((await admin.query(`SELECT reason FROM app.recovery_review WHERE tenant_id=$1`,[T])).rows).toEqual([{reason:"evidence_invalidated"}]);});
+ it("rejects incomplete proof, pending cash, prevented cases, and stale approval in PostgreSQL",async()=>{for(const statement of [`UPDATE app.synthetic_recovery_receipt SET status='pending',settled_at=NULL WHERE id='${R}'`,`UPDATE app.recovery_case SET state='prevented' WHERE id='${C2}'`,`UPDATE app.recovery_approval SET expires_at=now()-interval '1 second' WHERE id='${EA2}'`]){await admin.query(`SET session_replication_role=replica;${statement};SET session_replication_role=origin`);await expect(withTenant(runtime,context,db=>db.$client.query(`SELECT app.approve_synthetic_landing($1::jsonb)`,[payload(C2,EA2,LA2)]))).rejects.toBeTruthy();}await withTenant(admin,context,async db=>{
+  await db.$client.query("SET LOCAL session_replication_role=replica");
+  await db.$client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES(gen_random_uuid(),$1,$2,gen_random_uuid(),'verification_invalid')",[T,E]);
+ });expect((await admin.query(`SELECT reason FROM app.recovery_review WHERE tenant_id=$1`,[T])).rows).toEqual([{reason:"evidence_invalidated"}]);});
 });

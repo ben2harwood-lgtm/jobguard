@@ -10,6 +10,7 @@ import { withTenant } from "../src/tenant-context.js";
 import { DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID } from "../src/demo-seed.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { finalCheckShadowJob } from "./final-check-fixture.js";
 import { permitPracticeHomeJob } from "./lp-practice-home-job-fixture.js";
 const credential=randomUUID(),session=randomUUID(),J=randomUUID(),logs:string[]=[];
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,shadow:Pool,dir:string;
@@ -51,9 +52,9 @@ describe("SV-3 structural timing and runtime query logging",()=>{
    await db.$client.query("INSERT INTO app.evidence_upload(id,tenant_id,job_id,object_key,expected_sha256,expected_content_type,maximum_bytes,retention_class,expires_at) VALUES($1,$2,$3,$4,repeat('a',64),'image/png',100,'standard_evidence','2099-10-01')",[upload,DEMO_TENANT_ID,J,upload]);
    await db.$client.query("INSERT INTO app.evidence_object(id,tenant_id,upload_id,job_id,kind,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,'original','completion_photo','synthetic:Q','Q:v1',repeat('a',64),0,'image/png','standard_evidence','2026-10-01','2026-10-01')",[evidence,DEMO_TENANT_ID,upload,J]);
   });
-  const zero=await replay();await withTenant(shadow,testTenantContext(DEMO_TENANT_ID),async db=>{for(let n=0;n<25;n++){
-   const signal=randomUUID();await db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q',clock_timestamp(),'Fictional held extra','low','held_for_final_check')",[DEMO_TENANT_ID,J,signal]);
-   await db.$client.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'Q:v1',repeat('a',64),'2026-10-01')",[DEMO_TENANT_ID,J,signal,evidence]);
+  const zero=await replay();await finalCheckShadowJob(shadow,DEMO_TENANT_ID,J,async db=>{for(let n=0;n<25;n++){
+   const signal=randomUUID();await db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:Q',clock_timestamp(),'Fictional held extra','low','held_for_final_check')",[DEMO_TENANT_ID,J,signal]);
+   await db.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,'Q:v1',repeat('a',64),'2026-10-01')",[DEMO_TENANT_ID,J,signal,evidence]);
   }});
   expect((await admin.query("SELECT count(*)::int n FROM app.shadow_signal_evidence WHERE job_id=$1",[J])).rows).toEqual([{n:25}]);
   const many=await replay();expect(many.out).toEqual(zero.out);expect(many.statements).toEqual(zero.statements);
@@ -89,7 +90,7 @@ it('SB-02: A builder view, count, error, cache key, export or timing varies with
   return {bytes:JSON.stringify(values),statements};
  };
  const before=await replay(), signalId=randomUUID();
- await withTenant(shadow,testTenantContext(DEMO_TENANT_ID),db=>db.$client.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SB02',clock_timestamp(),'Fictional extra','low','held_for_final_check')",[DEMO_TENANT_ID,J,signalId]));
+ await finalCheckShadowJob(shadow,DEMO_TENANT_ID,J,db=>db.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$3,'possible_extra','deterministic','synthetic:SB02',clock_timestamp(),'Fictional extra','low','held_for_final_check')",[DEMO_TENANT_ID,J,signalId]));
  expect((await admin.query('SELECT id FROM app.shadow_commercial_signal WHERE id=$1',[signalId])).rows).toEqual([{id:signalId}]);
  expect(await replay()).toEqual(before);
  // Positive control: authorized ordinary job data is actually visible through the same application.

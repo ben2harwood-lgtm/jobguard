@@ -177,16 +177,21 @@ it("NullPolicyWithheldPursuitRefused: the issued C requirement supersedes the ol
  await expect(preview(id)).rejects.toMatchObject({code:"RECOVERY_TERMS_NOT_APPROVED"});expect(await counts()).toEqual(before);
 });
 it("[T7] tenant B cannot read or approve A, and A approval cannot satisfy B's same-UUID case guard",async()=>{
- const id=await newCase(),repo=new RecoveryCaseTermsRepository(runtime);await repo.approve(context,job,command(id),actor);const b=randomUUID(),bj=randomUUID(),bm=randomUUID(),bu=randomUUID(),account=randomUUID();await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[b]);await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[bu]);let ctx=testTenantContext(b);
+ const id=await newCase(),repo=new RecoveryCaseTermsRepository(runtime);await repo.approve(context,job,command(id),actor);
+ const b=randomUUID(),bj=randomUUID(),bm=randomUUID(),bu=randomUUID(),account=randomUUID();
+ await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[b]);
+ await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[bu]);
+ await admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Tenant B fixture')",[account,b]);
+ await admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[bm,b,account,bu]);
+ const ctx=await testBoundTenantContext(admin,b,bm);
  await withTenant(admin,ctx,async db=>{
- await db.$client.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Tenant B fixture')",[account,b]);await db.$client.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[bm,b,account,bu]);
  // Adversarial SQL fixture, not a product activation: B reuses A's case UUID, with its own job/policy and no approval.
  await permitImportedJob(db.$client,{tenantId:b,jobId:bj,actorMembershipId:bm,title:"Tenant B guard fixture",feePolicyVersion:"reference_fee_policy_v3",netPence:100000,capPence:1500});
  await db.$client.query("INSERT INTO app.job(id,tenant_id,title,provenance,accepted_net_value_pence,fee_policy_version,recovery_cap_pence) VALUES($1,$2,'Tenant B guard fixture','imported',100000,'reference_fee_policy_v3',1500)",[bj,b]);
  await db.$client.query("INSERT INTO app.recovery_case(id,tenant_id,job_id,claim_pence,currency,state,revision,synthetic,case_type,counterparty,book,source_type,source_refs) VALUES($1,$2,$3,32000,'GBP','identified',0,true,'withheld_customer_payment','Fictional party','builder_customer','customer_invoice','[]')",[id,b,bj]);
  await db.$client.query("INSERT INTO app.recovery_claim_revision(id,tenant_id,job_id,case_id,revision,claimed_net_pence,currency,reviewer_ref,subject_hash) VALUES($1,$2,$3,$4,1,32000,'GBP','fixture-owner',$5)",[randomUUID(),b,bj,id,hash(id)]);
  await db.$client.query("INSERT INTO app.recovery_case_event(id,tenant_id,job_id,case_id,sequence,event_type,from_state,to_state,reviewer_ref,command_id,payload_hash) VALUES($1,$2,$3,$4,1,'opened',NULL,'identified','fixture-owner',$5,$6)",[randomUUID(),b,bj,id,randomUUID(),hash(id)]);
- });ctx=await testBoundTenantContext(admin,b,bm);const fresh=await newCase();const before=await counts();
+ });const fresh=await newCase();const before=await counts();
  expect(await repo.read(ctx,job,id)).toBeNull();expect((await withTenant(runtime,ctx,db=>db.$client.query("SELECT * FROM app.recovery_case_terms_approval"))).rows).toEqual([]);
  expect((await withTenant(runtime,ctx,db=>db.$client.query("SELECT app.recovery_case_terms_approved($1,$2,$3) ok",[b,bj,id]))).rows[0].ok).toBe(false);
  await expect(repo.approve(ctx,job,command(id),{membershipId:bm,identityUserId:bu})).rejects.toMatchObject({code:"RECOVERY_TERMS_CASE_NOT_FOUND"});
@@ -241,7 +246,7 @@ it("[T9] actual catalog financial counts stay unchanged and terms authorization 
 });
 it("[T10] pinned time, immutable rows and narrow table grants",async()=>{
  const id=await newCase(),view=await new RecoveryCaseTermsRepository(runtime).approve(context,job,command(id),actor);
- for(const role of ["jobguard_runtime","jobguard_migration"]){const db=await admin.connect();try{for(const sql of ["UPDATE app.recovery_case_terms_approval SET approved_at='2000-01-01' WHERE tenant_id=$1 AND id=$2","DELETE FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND id=$2"]){await db.query("BEGIN");await db.query(`SET LOCAL ROLE ${role}`);await db.query("SELECT set_config('app.tenant_id',$1,true)",[T]);await expect(db.query(sql,[T,view.id])).rejects.toMatchObject({code:role==="jobguard_runtime"?"42501":"55000"});await db.query("ROLLBACK");}}finally{db.release();}}
+ for(const role of ["jobguard_runtime","jobguard_migration"]){const db=await admin.connect();try{for(const sql of ["UPDATE app.recovery_case_terms_approval SET approved_at='2000-01-01' WHERE tenant_id=$1 AND id=$2","DELETE FROM app.recovery_case_terms_approval WHERE tenant_id=$1 AND id=$2"]){await db.query("BEGIN");await bindTestClient(admin,db,T,M);await db.query(`SET LOCAL ROLE ${role}`);await db.query("SELECT set_config('app.tenant_id',$1,true)",[T]);await expect(db.query(sql,[T,view.id])).rejects.toMatchObject({code:role==="jobguard_runtime"?"42501":"55000"});await db.query("ROLLBACK");}}finally{db.release();}}
  for(const role of ["jobguard_infrastructure","jobguard_identity"])for(const privilege of ["SELECT","INSERT","UPDATE","DELETE"])expect((await admin.query("SELECT has_table_privilege($1,'app.recovery_case_terms_approval',$2) ok",[role,privilege])).rows[0].ok).toBe(false);
  expect(await new RecoveryCaseTermsRepository(runtime).read(context,job,id)).toEqual(view);
  for(const supplied of ["2000-01-01T00:00:00Z","2099-01-01T00:00:00Z"]){const c=await newCase();await withTenant(admin,context,async db=>{const ids=await handMade(db.$client,c,M);await db.$client.query("SET LOCAL ROLE jobguard_migration");const result=await db.$client.query(`INSERT INTO app.recovery_case_terms_approval(id,tenant_id,job_id,case_id,terms_version,fee_policy_version,eligibility_policy_version,policy_status,environment,terms_hash,actor_membership_id,command_id,authorization_id,approved_at) VALUES($1,$2,$3,$4,'synthetic_recovery_fee_terms.v1','reference_fee_policy_v3','reference_recovery_eligibility_policy_v3','proposed','synthetic_demo',$5,$6,$7,$8,$9) RETURNING approved_at=transaction_timestamp() pinned`,[randomUUID(),T,job,c,recoveryCaseTermsHash(c),M,ids.c,ids.a,supplied]);expect(result.rows[0].pinned).toBe(true);await db.$client.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[T,ids.c]);});}

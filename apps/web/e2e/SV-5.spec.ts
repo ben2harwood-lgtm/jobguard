@@ -4,7 +4,7 @@ import { sourceFixture } from "./helpers/final-check-source-fixtures";
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { openLiveWatchdogJob } from "./helpers/capture-journey";
-import { finishDispositionsAndTerms, prepareLockJob, preparePendingCheckJob, withSyntheticShadow } from "./helpers/final-account-lock-journey";
+import { finishDispositionsAndTerms, prepareLockJob, preparePendingCheckJob, shadowJobQuery, withSyntheticShadow } from "./helpers/final-account-lock-journey";
 import { jsonResult } from "./helpers/customer-invoice-journey";
 
 test("before lock nothing is revealed; after lock the check shows as running and survives reload", async ({ page }) => {
@@ -52,9 +52,10 @@ async function revealedJob(page: Page) {
   const evidenceId = await saveBaselineWorkNote(page, jobId);
   const signalId = randomUUID();
   await withSyntheticShadow(tenantId, async (shadow, admin) => {
+    const query = shadowJobQuery(shadow, tenantId, jobId);
     const row = (await admin.query("SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenantId, jobId, evidenceId])).rows[0];
-    await shadow.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic_web.v1',clock_timestamp(),'Fitted an outside tap','low','held_for_final_check')", [tenantId, jobId, signalId, randomUUID()]);
-    await shadow.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)", [tenantId, jobId, signalId, evidenceId, row.object_version_id, row.sha256, row.received]);
+    await query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic_web.v1',clock_timestamp(),'Fitted an outside tap','low','held_for_final_check')", [tenantId, jobId, signalId, randomUUID()]);
+    await query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)", [tenantId, jobId, signalId, evidenceId, row.object_version_id, row.sha256, row.received]);
     // Lock only (terms, dispositions, lock); no invoice-gate fixture completion.
     const trackDb = await admin.connect();
     try { await trackDb.query("BEGIN"); await trackDb.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
@@ -128,10 +129,11 @@ async function lockedPracticeJob(page: Page, capturedExtra = false, beforeLock?:
     const evidenceId = entries.entries[0].evidence.id;
     // Existing held proposal; all source processing/reconciliation below is performed by the real worker.
     await withSyntheticShadow(tenantId, async (shadow, admin) => {
+      const query = shadowJobQuery(shadow, tenantId, jobId);
       const row = (await admin.query("SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenantId, jobId, evidenceId])).rows[0];
       const signalId = randomUUID();
-      await shadow.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic_web.v1',clock_timestamp(),'outside tap','low','held_for_final_check')", [tenantId, jobId, signalId, randomUUID()]);
-      await shadow.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)", [tenantId, jobId, signalId, evidenceId, row.object_version_id, row.sha256, row.received]);
+      await query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic_web.v1',clock_timestamp(),'outside tap','low','held_for_final_check')", [tenantId, jobId, signalId, randomUUID()]);
+      await query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)", [tenantId, jobId, signalId, evidenceId, row.object_version_id, row.sha256, row.received]);
     });
     await jsonResult(page.request.post(`/api/jobs/${jobId}/final-account/review-extras`, { data: {
       version: "final-review-extra.v1", commandId: randomUUID(), scopeItemId: randomUUID(), description: "outside tap", captureText: "outside tap",
@@ -297,13 +299,14 @@ test("I (practice journey): a £8,000 request fires D13 before lock and stays pe
   await examineSources();
   await openInbox();
   await withSyntheticShadow(tenantId, async (shadow, admin) => {
-    expect((await shadow.query("SELECT state,disclosed_before_lock,must_surface_now,confidence_band,estimated_value_pence FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenantId, jobId, signalId])).rows).toEqual([
+    const query = shadowJobQuery(shadow, tenantId, jobId);
+    expect((await query("SELECT state,disclosed_before_lock,must_surface_now,confidence_band,estimated_value_pence FROM app.shadow_commercial_signal WHERE tenant_id=$1 AND job_id=$2 AND id=$3", [tenantId, jobId, signalId])).rows).toEqual([
       { state: "surfaced_early", disclosed_before_lock: true, must_surface_now: true, confidence_band: "low", estimated_value_pence: "800000" },
     ]);
-    expect((await shadow.query("SELECT rule,rule_version,source_ref,object_version_id,decision_id FROM app.shadow_must_surface_firing WHERE tenant_id=$1 AND job_id=$2", [tenantId, jobId])).rows).toEqual([
+    expect((await query("SELECT rule,rule_version,source_ref,object_version_id,decision_id FROM app.shadow_must_surface_firing WHERE tenant_id=$1 AND job_id=$2", [tenantId, jobId])).rows).toEqual([
       { rule: "prior_written_agreement", rule_version: "shadow_attribution_policy_v3", source_ref: evidence.id, object_version_id: evidence.objectVersionId, decision_id: decision.id },
     ]);
-    const reasons = (await shadow.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND signal_id=$2 ORDER BY reason", [tenantId, signalId])).rows.map(r => r.reason);
+    const reasons = (await query("SELECT reason FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND signal_id=$2 ORDER BY reason", [tenantId, signalId])).rows.map(r => r.reason);
     expect(reasons).toEqual(["disclosed_before_lock", "surfaced_early"]);
     expect((await admin.query("SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='shadow.must_surface_fired'", [tenantId, jobId])).rows[0].n).toBe(1);
     expect((await admin.query("SELECT count(*)::int n FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2", [tenantId, jobId])).rows[0].n).toBe(0);
@@ -311,8 +314,8 @@ test("I (practice journey): a £8,000 request fires D13 before lock and stays pe
       expect(Number((await admin.query(`SELECT count(*) n FROM app.${table} WHERE tenant_id=$1 AND job_id=$2`, [tenantId, jobId])).rows[0].n)).toBe(0);
     }
     // The restricted worker cannot erase the permanent exclusion or disclosure.
-    await expect(shadow.query("DELETE FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND signal_id=$2", [tenantId, signalId])).rejects.toThrow();
-    await expect(shadow.query("UPDATE app.shadow_commercial_signal SET disclosed_before_lock=false WHERE tenant_id=$1 AND id=$2", [tenantId, signalId])).rejects.toThrow();
+    await expect(query("DELETE FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND signal_id=$2", [tenantId, signalId])).rejects.toThrow();
+    await expect(query("UPDATE app.shadow_commercial_signal SET disclosed_before_lock=false WHERE tenant_id=$1 AND id=$2", [tenantId, signalId])).rejects.toThrow();
   });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
@@ -320,10 +323,11 @@ test("I (practice journey): a £8,000 request fires D13 before lock and stays pe
 test("L source leg: an old message received after lock is shown at once and never fee eligible", async ({page}) => {
  const {jobId,tenantId} = await lockedPracticeJob(page);
  await withSyntheticShadow(tenantId, async (shadow,admin) => {
+  const query = shadowJobQuery(shadow, tenantId, jobId);
   const observation=await sourceFixture(admin,tenantId,jobId,"message"),signalId=randomUUID();
-  await shadow.query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic_web.v1',clock_timestamp(),'Old fictional outside tap message','low','held_for_final_check')",[tenantId,jobId,signalId,randomUUID()]);
+  await query("INSERT INTO app.shadow_commercial_signal(tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state) VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic_web.v1',clock_timestamp(),'Old fictional outside tap message','low','held_for_final_check')",[tenantId,jobId,signalId,randomUUID()]);
   const e=observation.evidence;
-  await shadow.query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[tenantId,jobId,signalId,e.id,e.objectVersionId,e.sha256,e.serverReceivedAt]);
+  await query("INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at) VALUES($1,$2,$3,$4,$5,$6,$7::timestamptz)",[tenantId,jobId,signalId,e.id,e.objectVersionId,e.sha256,e.serverReceivedAt]);
   for(let pass=0;pass<2;pass++) {
    await page.goto(`/jobs/${jobId}#final-check`);
    const panel=page.getByTestId("final-check-reveal");
@@ -333,7 +337,7 @@ test("L source leg: an old message received after lock is shown at once and neve
    await expect(panel.getByTestId("final-check-item")).toHaveCount(0);
    await page.reload();
   }
-  expect((await shadow.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND job_id=$2 AND signal_id=$3",[tenantId,jobId,signalId])).rows).toContainEqual({reason:"evidence_after_lock"});
+  expect((await query("SELECT reason FROM app.shadow_signal_ineligibility WHERE tenant_id=$1 AND job_id=$2 AND signal_id=$3",[tenantId,jobId,signalId])).rows).toContainEqual({reason:"evidence_after_lock"});
   expect((await admin.query("SELECT device_captured_at < l.locked_at old, e.server_received_at > l.locked_at late FROM app.evidence_object e JOIN app.final_account_lock l USING(tenant_id,job_id) WHERE e.tenant_id=$1 AND e.id=$2",[tenantId,e.id])).rows).toEqual([{old:true,late:true}]);
  });
 });
@@ -362,9 +366,10 @@ test("L: import old evidence through the locked-job control; worker replay prese
   await expect(page.getByTestId("final-check-reveal")).toContainText("it never earns JobGuard a fee");
  }
  await withSyntheticShadow(tenantId,async(shadow,admin)=>{
+  const query = shadowJobQuery(shadow, tenantId, jobId);
   const evidence=saved.record.evidence;
   expect((await admin.query("SELECT device_captured_at<l.locked_at old,e.server_received_at>l.locked_at late FROM app.evidence_object e JOIN app.final_account_lock l USING(tenant_id,job_id) WHERE e.tenant_id=$1 AND e.id=$2",[tenantId,evidence.id])).rows).toEqual([{old:true,late:true}]);
-  const reasons=await shadow.query("SELECT i.reason FROM app.shadow_signal_ineligibility i JOIN app.shadow_signal_evidence e ON(e.tenant_id,e.job_id,e.signal_id)=(i.tenant_id,i.job_id,i.signal_id) WHERE e.tenant_id=$1 AND e.evidence_id=$2",[tenantId,evidence.id]);
+  const reasons=await query("SELECT i.reason FROM app.shadow_signal_ineligibility i JOIN app.shadow_signal_evidence e ON(e.tenant_id,e.job_id,e.signal_id)=(i.tenant_id,i.job_id,i.signal_id) WHERE e.tenant_id=$1 AND e.evidence_id=$2",[tenantId,evidence.id]);
   expect(reasons.rows).toContainEqual({reason:"evidence_after_lock"});
   const request=(await admin.query("SELECT id FROM infrastructure.demo_source_hold_request WHERE id=$1",[saved.record.commandId])).rows[0];
   await expect.poll(async()=> (await admin.query("SELECT finished_at IS NOT NULL done FROM infrastructure.demo_source_hold_request WHERE id=$1",[request.id])).rows[0]?.done,{timeout:30_000}).toBe(true);

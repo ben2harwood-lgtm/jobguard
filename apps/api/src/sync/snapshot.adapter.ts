@@ -61,10 +61,12 @@ export class SyntheticSyncSnapshotAdapter implements SyntheticSyncStore {
         const result = await transaction.query<{ generation: string }>(
           "SELECT app.sync_snapshot_generation($1::uuid,$2::bigint,$3::bigint,$4::text,$5::text) AS generation",
           [snapshot.userId, snapshot.authorityRevision, schemaVersion.data, scopeHash, "synthetic_demo"]).catch((error: unknown) => {
-            // All routine arguments and tenant context were validated above. At this call,
-            // INVALID means membership was lost; stale checkpoints have their own STALE code.
-            if (error instanceof Error && "code" in error && error.code === "P0001"
-              && error.message === "SYNC_CHECKPOINT_INVALID") throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
+            // The routine rechecks membership and the request binding before writing.
+            // Stale checkpoints retain their separate STALE code.
+            if (error instanceof Error && "code" in error
+              && ((error.code === "P0001" && error.message === "SYNC_CHECKPOINT_INVALID")
+                || (error.code === "42501" && error.message === "REQUEST_BINDING_REFUSED")))
+              throw new SyncServerError("SYNC_AUTHORITY_REQUIRED");
             throw error;
           });
         const generation = revision.safeParse(Number(result.rows[0]?.generation));

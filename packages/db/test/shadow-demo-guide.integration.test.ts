@@ -85,6 +85,8 @@ describe("0518 demo-only guide helpers", () => {
   const a = await guide.locked(), l = link(a, a.customer);
   const predecessor = await readFile(new URL("../migrations/0518_shadow_demo_guide.sql", import.meta.url), "utf8");
   const migration = await readFile(new URL("../migrations/0650_demo_customer_link_reference.sql", import.meta.url), "utf8");
+  const applyRedaction = () => withTenant(f.admin, a.context, db =>
+   db.$client.query(migration.replace(/^BEGIN;\n/u, "").replace(/\nCOMMIT;\s*$/u, "")));
   const original = predecessor.slice(predecessor.indexOf("CREATE FUNCTION app.demo_issue_customer_link("), predecessor.indexOf("ALTER FUNCTION app.demo_issue_customer_link")).replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
   let grant: string;
   try {
@@ -94,7 +96,7 @@ describe("0518 demo-only guide helpers", () => {
    expect(issued).toHaveProperty("ok");
    grant = issued.ok!.result;
    expect((await f.admin.query("SELECT o.immutable_content FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [a.tenantId, grant])).rows[0].immutable_content).toBe(l.path);
-  } finally { await f.admin.query(migration); }
+  } finally { await applyRedaction(); }
   const content = `customer-signin-redacted.v1:${hash(l.path)}`;
   const stored = (await f.admin.query("SELECT o.*,g.revoked_at FROM app.customer_portal_grant g JOIN app.action_outbox o ON(o.tenant_id,o.id)=(g.tenant_id,g.outbox_id) WHERE g.tenant_id=$1 AND g.id=$2", [a.tenantId, grant!])).rows[0];
   expect(stored).toMatchObject({ immutable_content: content, content_hash: hash(content), status: "cancelled", revoked_at: expect.any(Date) });
@@ -108,7 +110,7 @@ describe("0518 demo-only guide helpers", () => {
   } });
   expect(history[1].event_type).toBe("customer_portal.redacted");
   expect(JSON.stringify(history)).not.toContain(l.path);
-  await f.admin.query(migration);
+  await applyRedaction();
   expect(await events()).toEqual(history);
  }, 600000);
  it("the migration is applied once and listed", async () => {

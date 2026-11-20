@@ -93,11 +93,16 @@ it("[T11] fresh catalog has only the new forced-RLS table, controlled functions 
  const table=(await admin.query("SELECT pg_get_userbyid(relowner) owner,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.recovery_case_terms_approval'::regclass")).rows[0];expect(table).toEqual({owner:"jobguard_migration",relrowsecurity:true,relforcerowsecurity:true});
  const cols=await columns(admin,"app.recovery_case_terms_approval");expect(cols).toEqual([...["id","tenant_id","job_id","case_id"].map(name=>({name,type:"uuid"})),...["terms_version","fee_policy_version","eligibility_policy_version","policy_status","environment"].map(name=>({name,type:"text"})),{name:"terms_hash",type:"character(64)"},...["actor_membership_id","command_id","authorization_id"].map(name=>({name,type:"uuid"})),{name:"approved_at",type:"timestamp with time zone"}]);
  const policy=(await admin.query("SELECT polname,polcmd,pg_get_expr(polqual,polrelid) qual,pg_get_expr(polwithcheck,polrelid) check_expr,ARRAY(SELECT r::regrole::text FROM unnest(polroles) r ORDER BY r::regrole::text) roles FROM pg_policy WHERE polrelid='app.recovery_case_terms_approval'::regclass ORDER BY polname")).rows;
- const tenantQual="(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)";
+ const tenantQual="(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)";
+ const workerQual=`(tenant_id = (NULLIF((COALESCE(( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant),
+CASE
+    WHEN (CURRENT_USER = 'jobguard_migration'::name) THEN app.lp11_recovery_worker_tenant(job_id, case_id, NULL::uuid, NULL::uuid, 'row'::text)
+    ELSE NULL::uuid
+END))::text, ''::text))::uuid)`;
  // The lifecycle owner must inspect the terms effect; its SELECT-only policy is additive.
  expect(policy).toEqual([
   {polname:"lp5_command_read",polcmd:"r",qual:tenantQual,check_expr:null,roles:["jobguard_command_writer"]},
-  {polname:"tenant_isolation",polcmd:"*",qual:tenantQual,check_expr:tenantQual,roles:["jobguard_migration","jobguard_runtime"]},
+  {polname:"tenant_isolation",polcmd:"*",qual:workerQual,check_expr:tenantQual,roles:["jobguard_migration","jobguard_runtime"]},
  ]);
  const grants=(await admin.query("SELECT pg_get_userbyid(a.grantee) role,a.privilege_type FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.oid='app.recovery_case_terms_approval'::regclass AND a.grantee<>'jobguard_migration'::regrole ORDER BY 1,2")).rows;expect(grants).toEqual([{role:"jobguard_command_writer",privilege_type:"SELECT"},{role:"jobguard_runtime",privilege_type:"SELECT"}]);
  const constraints=(await admin.query("SELECT contype,pg_get_constraintdef(oid) def FROM pg_constraint WHERE conrelid='app.recovery_case_terms_approval'::regclass")).rows;expect(constraints.filter(c=>c.contype==='f')).toHaveLength(4);expect(constraints.filter(c=>c.contype==='u')).toHaveLength(3);expect(constraints.some(c=>c.def.includes("sha256"))).toBe(true);

@@ -4,6 +4,7 @@ import type { PoolClient } from "pg";
 import { expect } from "vitest";
 import { ContractorRepository, PracticeWorkerSwitchRepository, WorkOrderRepository, prepareWorkOrderDemo, demoFile, demoRow, withTenant, contractorSessionContext } from "../src/index.js";
 import { startSession, seedHomeOwner, currentCommand, type Cluster, type SessionFixture } from "./contractor-practice-session-fixtures.js";
+import { testTenantContext } from "./tenant-context-test-utils.js";
 export { cluster, ownerTx, startBeforeMigration, applyMigration, startSession, makeSessionExpired, endHomeRecord, digestOf, resolvers, companyRows } from "./contractor-practice-session-fixtures.js";
 export async function startSessionWithHomeRecord(c: Cluster) {
  // The full-migration cluster has no shared HOME owner. Seed through the
@@ -67,14 +68,15 @@ export async function savepoint(db: PoolClient, work: () => Promise<unknown>, co
 export async function handBuilt(c: Cluster, signIn = false) {
  const tenant = randomUUID(), account = randomUUID(), user = randomUUID(), member = randomUUID(), region = randomUUID(), branch = randomUUID(), team = randomUUID(), session = randomUUID(), sessionRef = randomUUID(), assignment = randomUUID();
  const { digestOf } = await import("./contractor-practice-session-fixtures.js");
- const { ownerTx } = await import("./extra-fixtures.js");
  const { appendAuditBatch, contractorSessionContext } = await import("../src/index.js");
  await c.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
- await ownerTx(c, tenant, async db => {
+ await withTenant(c.admin, testTenantContext(tenant, { bindRequest: false }), async db => {
   await db.$client.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
   await db.$client.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional hand-built company')", [tenant, account]);
   await db.$client.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [tenant, member, account, user]);
   await db.$client.query("INSERT INTO control_plane.contractor_practice_session(session_id,tenant_id,membership_id,identity_user_id,session_digest,created_at,expires_at) SELECT $1,$2,$3,$4,$5,r.t,r.t+interval '7 days' FROM (SELECT clock_timestamp() t) r", [sessionRef, tenant, member, user, digestOf(session)]);
+  await db.$client.query("SELECT app.bind_request('contractor_practice',$1,$2)", [session, tenant]);
+  await db.$client.query("SET LOCAL ROLE jobguard_migration");
   await db.$client.query("SELECT app.assign_commercial_track($1,$2,'contractor',$3,0,'operations:pws-fixture')", [tenant, assignment, `synthetic-agreement:${tenant}`]);
   await db.$client.query("INSERT INTO app.contractor_member VALUES($1,$2,NULL,'owner@fictional.invalid')", [tenant, member]);
   await db.$client.query("INSERT INTO app.org_unit VALUES($1,$1,'tenant',NULL,NULL,'Fictional'),($1,$2,'region',$1,'tenant','Fictional region'),($1,$3,'branch',$2,'region','Fictional branch')", [tenant, region, branch]);

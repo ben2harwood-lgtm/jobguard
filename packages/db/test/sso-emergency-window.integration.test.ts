@@ -90,13 +90,18 @@ async function emergency(f:Fixture,commandId=randomUUID()) {
  const code=await requestSigninCode(f.provider,f.email);
  return f.service.emergency({version:"sso-emergency.v2",requested_tenant_id:f.principal.tenantId,commandId,reason,email:f.email,code:code.fixtureCode},origin);
 }
+async function bindFixtureOwner(client:PoolClient,f:Fixture) {
+ const digest=f.provider.digest(`session:${f.bound!.sessionToken}`);
+ await client.query("SELECT app.bind_request('real',$1,$2)",[digest,f.principal.tenantId]);
+}
 async function state(f:Fixture) {
- const c=await admin.connect();try{await c.query("BEGIN");await c.query("SELECT set_config('app.tenant_id',$1,true)",[f.principal.tenantId]);return (await c.query("SELECT * FROM identity.sso_required_state($1)",[f.principal.tenantId])).rows[0];}finally{await c.query("ROLLBACK");c.release();}
+ const c=await admin.connect();try{await c.query("BEGIN");await bindFixtureOwner(c,f);return (await c.query("SELECT * FROM identity.sso_required_state($1)",[f.principal.tenantId])).rows[0];}finally{await c.query("ROLLBACK");c.release();}
 }
 async function completeWindow(f:Fixture,shape:"past"|"transition"|"missing"="past",commandId=randomUUID()) {
  const client=await admin.connect(),approval=randomUUID();
  try {
   await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true)",[f.principal.tenantId]);
+  await bindFixtureOwner(client,f);
   const rule=(await client.query("SELECT id FROM identity.sso_emergency_approver_rule")).rows[0].id;
   await client.query("INSERT INTO identity.sso_emergency_approval(tenant_id,id,membership_id,rule_id,approver_ref,reason_hash,approved_at,expires_at) SELECT $1,$2,$3,$4,$5,$6,ts,ts+interval '1 minute' FROM (SELECT clock_timestamp()-interval '15 minutes'+(CASE WHEN $7 THEN interval '300 milliseconds' ELSE interval '-1 minute' END) ts) n",[f.principal.tenantId,approval,f.principal.membershipId,rule,`membership:${f.principal.membershipId}`,createHash("sha256").update(reason).digest("hex"),shape==="transition"]);
   const revision=(await client.query("SELECT max(revision)::int n FROM identity.sso_required_event WHERE tenant_id=$1",[f.principal.tenantId])).rows[0].n;
@@ -204,8 +209,8 @@ describe("ENT-10e emergency window",()=>{
   for(const statement of [
    "INSERT INTO identity.sso_emergency_window SELECT tenant_id,approval_id,event_id,gen_random_uuid(),owner_membership_id,241,opened_at,opened_at+interval '241 minutes' FROM identity.sso_emergency_window WHERE tenant_id=$1",
    "INSERT INTO identity.sso_emergency_window SELECT tenant_id,approval_id,event_id,gen_random_uuid(),owner_membership_id,60,opened_at,opened_at+interval '61 minutes' FROM identity.sso_emergency_window WHERE tenant_id=$1",
-  ])await rolledBack(async c=>{await c.query("SET LOCAL ROLE jobguard_migration");await c.query("SELECT set_config('app.tenant_id',$1,true)",[f.principal.tenantId]);await expect(c.query(statement,[f.principal.tenantId])).rejects.toMatchObject({code:"23514"});});
-  for(const statement of ["UPDATE identity.sso_emergency_window SET closes_at=closes_at+interval '1 minute' WHERE tenant_id=$1","DELETE FROM identity.sso_emergency_window WHERE tenant_id=$1"])await rolledBack(async c=>{await c.query("SET LOCAL ROLE jobguard_migration");await c.query("SELECT set_config('app.tenant_id',$1,true)",[f.principal.tenantId]);await expect(c.query(statement,[f.principal.tenantId])).rejects.toThrow();});
+  ])await rolledBack(async c=>{await bindFixtureOwner(c,f);await c.query("SET LOCAL ROLE jobguard_migration");await expect(c.query(statement,[f.principal.tenantId])).rejects.toMatchObject({code:"23514"});});
+  for(const statement of ["UPDATE identity.sso_emergency_window SET closes_at=closes_at+interval '1 minute' WHERE tenant_id=$1","DELETE FROM identity.sso_emergency_window WHERE tenant_id=$1"])await rolledBack(async c=>{await bindFixtureOwner(c,f);await c.query("SET LOCAL ROLE jobguard_migration");await expect(c.query(statement,[f.principal.tenantId])).rejects.toThrow();});
  });
  it("[T3] open window allows emailed-code sign-in, listing, contexts and both invitation gates",async()=>{
   const f=await fixture(),pending=await invite(f);await f.enable();await emergency(f);
@@ -304,7 +309,11 @@ describe("ENT-10e emergency window",()=>{
    expect((await admin.query("SELECT has_function_privilege($1,'identity.sso_required_detail(character,uuid)','EXECUTE') allowed",[role])).rows[0].allowed).toBe(role==="jobguard_identity");
   }
   const functions=(await admin.query("SELECT proname,prosecdef,proconfig,pg_get_userbyid(proowner) owner FROM pg_proc WHERE oid IN('identity.sso_required_state(uuid)'::regprocedure,'identity.sso_required_detail(character,uuid)'::regprocedure) ORDER BY proname")).rows;
-  expect(functions).toEqual(["sso_required_detail","sso_required_state"].map(proname=>({proname,prosecdef:true,proconfig:["search_path=pg_catalog"],owner:"jobguard_migration"})));
+  // The projection reads before binding through the private lookup owner. The checked detail routine keeps its migration owner.
+  expect(functions).toEqual([
+   {proname:"sso_required_detail",prosecdef:true,proconfig:["search_path=pg_catalog"],owner:"jobguard_migration"},
+   {proname:"sso_required_state",prosecdef:true,proconfig:["search_path=pg_catalog"],owner:"jobguard_session_lookup"},
+  ]);
   expect((await admin.query("SELECT p.oid::regprocedure::text name FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE (n.nspname='identity' AND p.prosecdef OR p.proname LIKE 'sso_%') AND (has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE'))")).rows).toEqual([]);
   const f=await fixture();await f.enable();await emergency(f);
   for(const setting of ["","invalid",randomUUID()]){

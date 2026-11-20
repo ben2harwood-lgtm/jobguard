@@ -5,15 +5,20 @@ import { assertRetentionIssueAllowed, RETENTION_BALANCES_ENABLED } from "@jobgua
 import { RetentionRecordRepository } from "../src/retention-record-repository.js";
 import { createWorkFixture, closeWorkFixture, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
+import { workerFixturePool } from "./worker-login-fixture.js";
 
 describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
- let f: WorkFixture, infrastructure: Pool;
+ let f: WorkFixture, infrastructure: Pool, worker: Pool;
  beforeAll(async () => {
   f = await createWorkFixture();
-  infrastructure = new Pool({ ...f.admin.options, password: f.admin.options.password, options: "-c role=jobguard_infrastructure", max: 2 });
+  const password = randomUUID();
+  await f.admin.query(`CREATE ROLE retention_fixture_infra LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${password}';
+    GRANT jobguard_infrastructure TO retention_fixture_infra`);
+  infrastructure = new Pool({ ...f.admin.options, user: "retention_fixture_infra", password, max: 2 });
+  worker = await workerFixturePool(f.runtime);
  }, 240000);
  afterAll(async () => { await infrastructure?.end(); await closeWorkFixture(f); });
- const timer = () => new RetentionRecordRepository(f.runtime);
+ const timer = () => new RetentionRecordRepository(worker);
  const human = () => new RetentionRecordRepository(f.runtime);
  const company = () => meterCompany(f);
  type Company = Awaited<ReturnType<typeof company>>;
@@ -45,7 +50,7 @@ describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
   expect(await discovery()).not.toContain(future.tenantId);
   // Crash after writes but before commit: the same real transaction must roll back records and audit together.
   const crashPool = { connect: async () => {
-   const client = await f.runtime.connect();
+   const client = await worker.connect();
    return { release: () => client.release(), query: async (sql: string, values?: unknown[]) => {
     if (sql === "COMMIT") throw new Error("synthetic crash before commit");
     return client.query(sql, values);
@@ -85,9 +90,13 @@ describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
  });
  it("bounds infrastructure writes, rejects foreign jobs, stale hashes/profiles, extra authority and restores context", async () => {
   const a = await company(), b = await company(), p = profile(), pid = randomUUID(); await append(a, p, pid);
-  await workTenant(f.runtime, a.tenantId, async db => {
+  await workTenant(worker, a.tenantId, async db => {
    const invoke = (j: string, v: unknown, hash: string | null) => db.query("SELECT app.retention_timer($1,$2,$3::jsonb,$4) result", [a.tenantId, j, v === null ? null : JSON.stringify(v), hash]);
+   await db.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
    const stored = (await invoke(a.jobId, null, null)).rows[0].result;
+   expect(stored.records).toEqual([{ ...p, id: pid, tenantId: a.tenantId, jobId: a.jobId }]);
+   expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows).toEqual([{ t: b.tenantId }]);
+   await db.query("SELECT set_config('app.tenant_id',$1,true)", [a.tenantId]);
    const valid = { version: "retention.review.v1", id: randomUUID(), tenantId: a.tenantId, jobId: a.jobId, profileId: pid,
     conditionId: p.conditions[0]!.id, owner: "retention-release-review-v1", trigger: "timer", raisedOn: stored.today };
    for (const [job, record, hash] of [
@@ -103,12 +112,13 @@ describe("M4-20 infrastructure timer (real PostgreSQL)", () => {
    }
    // Discovery retains the infrastructure login; the runtime cannot discover tenants.
    expect((await db.query("SELECT current_setting('app.tenant_id') t")).rows[0].t).toBe(a.tenantId);
-  });
+  }, { bindRequest: false });
   for (const sql of ["SELECT * FROM app.retention_record", "UPDATE app.retention_record SET record='{}'", "DELETE FROM app.retention_record", "TRUNCATE app.retention_record"]) {
    await expect(infrastructure.query(sql)).rejects.toMatchObject({ code: "42501" });
   }
   await expect(workTenant(infrastructure, a.tenantId, db => db.query("SELECT app.retention_timer($1,NULL,NULL,NULL)", [a.tenantId]))).rejects.toMatchObject({ code: "42501" });
   await expect(workTenant(infrastructure, a.tenantId, db => db.query("SELECT infrastructure.retention_timer($1,NULL,NULL,NULL)", [a.tenantId]))).rejects.toMatchObject({ code: "42501" });
+  await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.retention_timer($1,NULL,NULL,NULL)", [a.tenantId]))).rejects.toMatchObject({ code: "42501" });
   await expect(workTenant(f.runtime, a.tenantId, db => db.query("SELECT app.retention_timer_book($1,$2)", [a.tenantId,a.jobId]))).rejects.toMatchObject({ code: "42501" });
   expect((await read(a)).book.records).toHaveLength(1);
  });

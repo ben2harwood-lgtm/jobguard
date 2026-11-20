@@ -1,18 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { applyMigration, startBeforeMigration, type Cluster } from "./contractor-practice-session-fixtures.js";
-import { ownerTx } from "./extra-fixtures.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
-import { migrate, withTenant } from "../src/index.js";
+import { migrate, withTenant, type TenantTransaction } from "../src/index.js";
 
 const migration = "0528_customer_evidence_approval_guard.sql", hash = "a".repeat(64);
 let c: Cluster, tenant: string, job: string, otherJob: string, actor: string;
 let historical: unknown, historicalId: string, privileges: unknown;
 const catalogue = () => c.admin.query("SELECT relacl,relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.variation_approval'::regclass");
 
+function ownerTx<T>(work: (db: TenantTransaction) => Promise<T>) {
+ return withTenant(c.admin, testTenantContext(tenant, { membershipId: actor }), async db => {
+  await db.$client.query("SET LOCAL ROLE jobguard_migration");
+  return work(db);
+ });
+}
+
 async function revision() {
  const id = randomUUID(), scope = randomUUID(), revisionId = randomUUID();
- await ownerTx(c, tenant, async db => {
+ await ownerTx(async db => {
   await db.$client.query("INSERT INTO app.scope_identity(tenant_id,job_id,id) VALUES($1,$2,$3)", [tenant, job, scope]);
   await db.$client.query("INSERT INTO app.variation(tenant_id,id,job_id,scope_item_id,capture_kind,capture_text,description) VALUES($1,$2,$3,$4,'text','Fictional extra','Fictional extra')", [tenant, id, job, scope]);
   await db.$client.query("INSERT INTO app.variation_revision(id,tenant_id,job_id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version) VALUES($1,$2,$3,$4,$5,1,'Fictional extra','1','item',5000,5000,$6,$7,'human_entered','synthetic://fixture',$6,'fixture-v1')", [revisionId, tenant, job, id, scope, hash, actor]);
@@ -21,14 +27,14 @@ async function revision() {
 }
 async function insertApproval(evidenceId: string | null, method = "customer_evidence") {
  const v = await revision(), id = randomUUID();
- await withTenant(c.runtime, testTenantContext(tenant), db => db.$client.query(
+ await withTenant(c.runtime, testTenantContext(tenant, { membershipId: actor }), db => db.$client.query(
   "INSERT INTO app.variation_approval(id,tenant_id,job_id,variation_id,revision_id,revision,content_hash,signed_delta_pence,method,actor_membership_id,evidence_id,approved_at) VALUES($1,$2,$3,$4,$5,1,$6,5000,$7,$8,$9,clock_timestamp())",
   [id, tenant, job, v.id, v.revisionId, hash, method, actor, evidenceId]));
  return id;
 }
 async function evidence(targetJob = job, kind = "original", original: string | null = null) {
  const id = randomUUID(), upload = randomUUID();
- await ownerTx(c, tenant, async db => {
+ await ownerTx(async db => {
   if (kind === "original") await db.$client.query("INSERT INTO app.evidence_upload(tenant_id,id,job_id,object_key,expected_sha256,maximum_bytes,expected_content_type,state,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,100,'image/png','pending','standard_evidence','2099-01-01')", [tenant, upload, targetJob, `fictional/${id}`, hash]);
   await db.$client.query("INSERT INTO app.evidence_object(tenant_id,id,upload_id,job_id,kind,original_evidence_id,evidence_type,object_key,object_version_id,sha256,byte_length,content_type,retention_class,server_received_at,server_verified_at) VALUES($1,$2,$3,$4,$5,$6,'site_photo',$7,'fictional-v1',$8,1,'image/png','standard_evidence',clock_timestamp(),clock_timestamp())", [tenant, id, kind === "original" ? upload : null, targetJob, kind, original, `fictional/${id}`, hash]);
  });
@@ -60,11 +66,11 @@ it.each(["cross-job", "preview", "invalidated", "unverified", "missing", "null"]
  if (kind === "preview") id = await evidence(job, "preview", await evidence());
  if (kind === "invalidated") {
   id = await evidence();
-  await ownerTx(c, tenant, db => db.$client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), tenant, id, actor]));
+  await ownerTx(db => db.$client.query("INSERT INTO app.evidence_invalidation(id,tenant_id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')", [randomUUID(), tenant, id, actor]));
  }
  if (kind === "unverified") {
   // Unverified bytes exist only as an upload: evidence_object.server_verified_at is NOT NULL.
-  await ownerTx(c, tenant, db => db.$client.query("INSERT INTO app.evidence_upload(tenant_id,id,job_id,object_key,expected_sha256,maximum_bytes,expected_content_type,state,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,100,'image/png','pending','standard_evidence','2099-01-01')", [tenant, id, job, `fictional/${id}`, hash]));
+  await ownerTx(db => db.$client.query("INSERT INTO app.evidence_upload(tenant_id,id,job_id,object_key,expected_sha256,maximum_bytes,expected_content_type,state,retention_class,expires_at) VALUES($1,$2,$3,$4,$5,100,'image/png','pending','standard_evidence','2099-01-01')", [tenant, id, job, `fictional/${id}`, hash]));
  }
  if (kind === "null") id = null;
  const before = (await c.admin.query("SELECT count(*)::int n FROM app.variation_approval")).rows;

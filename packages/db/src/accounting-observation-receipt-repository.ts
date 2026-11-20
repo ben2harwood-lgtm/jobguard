@@ -25,9 +25,7 @@ export class AccountingObservationReceiptRepository {
       for (const observation of observations) {
         const hash = createHash("sha256").update(JSON.stringify(observation)).digest("hex");
         const key = [context.tenantId, observation.evidence.id, observation.evidence.objectVersionId];
-        const inserted = await db.$client.query(`INSERT INTO app.accounting_observation_receipt
-          (tenant_id,evidence_id,object_version_id,job_id,observation_hash) VALUES($1,$2,$3,$4,$5)
-          ON CONFLICT(tenant_id,evidence_id,object_version_id) DO NOTHING RETURNING evidence_id`,
+        const inserted = await db.$client.query("SELECT evidence_id FROM app.lp11_insert_accounting_receipt($1,$2,$3,$4,$5)",
           [...key, observation.jobId, hash]);
         if (inserted.rowCount) emitted.push(observation);
         else {
