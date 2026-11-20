@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-13-low-value-batch-lp11": {
+      "branches": [
+        "codex/sandbox/lp-13-low-value-batch-lp11"
+      ],
+      "allow": [
+        "docs/contracts/lp13-downstream-effects-v1.md",
+        "packages/db/migrations/0769_lp13_low_value_batch.sql",
+        "packages/db/test/lp13-low-value-batch.integration.test.ts",
+        "packages/db/test/lp13-low-value-batch.test.ts",
+        "packages/db/test/lp13-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0769_lp13_low_value_batch.proof.json"
+      ]
+    }
+  }
+}
