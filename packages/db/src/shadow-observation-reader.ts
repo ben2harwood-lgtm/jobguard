@@ -1,4 +1,5 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { decodeJobSourceFixture } from "./job-source-fixtures.js";
 import { readJobSourceObservations } from "./job-source-observation-reader.js";
 import { z } from "zod";
 import type { Pool } from "pg";
@@ -26,6 +27,39 @@ export async function withObservationRead<T>(pool: Pool, context: VerifiedTenant
     return read(db);
   });
 }
+/** Worker-facing SV-7A observations, revalidated against the immutable original. No shadow access. */
+export async function readLateSourceObservations(pool: Pool, context: VerifiedTenantContext, jobId: string, shadowAuthority?: Pool): Promise<Observation[]> {
+ return withObservationRead(pool, context, jobId, async db => {
+  if (shadowAuthority) await db.$client.query("SET TRANSACTION READ ONLY");
+  const rows = (await db.$client.query(`SELECT s.*,to_char(s.source_received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') received
+   FROM app.late_source_import s JOIN app.evidence_object e
+    ON(e.tenant_id,e.job_id,e.id,e.object_version_id,e.sha256,e.server_received_at)=
+      (s.tenant_id,s.job_id,s.evidence_id,s.object_version_id,s.sha256,s.source_received_at)
+   JOIN app.evidence_upload u ON(u.tenant_id,u.job_id,u.id)=(e.tenant_id,e.job_id,e.upload_id)
+   JOIN app.final_account_lock l ON(l.tenant_id,l.job_id)=(s.tenant_id,s.job_id)
+   JOIN app.job_commercial_track tr ON(tr.tenant_id,tr.job_id)=(s.tenant_id,s.job_id)
+   WHERE s.tenant_id=$1 AND s.job_id=$2 AND tr.job_track='small_builder' AND tr.environment='synthetic_demo'
+    AND s.source_received_at>l.locked_at AND s.stated_sent_at<l.locked_at
+    AND e.kind='original' AND e.server_verified_at IS NOT NULL AND e.evidence_type='customer_message_text'
+    AND e.content_type='text/plain; charset=utf-8' AND e.byte_length=octet_length(s.bytes)
+    AND e.device_captured_at=s.stated_sent_at AND u.state='verified' AND u.server_verified_at IS NOT NULL
+    AND u.object_version_id=e.object_version_id AND u.expected_sha256=e.sha256 AND u.object_key=e.object_key
+    AND u.server_received_at=e.server_received_at AND u.expected_content_type=e.content_type
+    AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE i.tenant_id=e.tenant_id AND i.evidence_id=e.id)
+   ORDER BY s.evidence_id`, [context.tenantId, jobId])).rows;
+  return rows.flatMap(row => {
+   if (!Buffer.isBuffer(row.bytes) || createHash("sha256").update(row.bytes).digest("hex") !== row.sha256) return [];
+   const text = row.bytes.toString("utf8");
+   if (!Buffer.from(text, "utf8").equals(row.bytes)) return [];
+   // One reviewed fictional original; arbitrary historical messages remain stored evidence, never invented facts.
+   const source = decodeJobSourceFixture("job-source:outside-tap.v1", text, "note_or_voice");
+   if (!source) return [];
+   return [observationV1.parse({ version: "observation.v1", tenantId: context.tenantId, jobId, kind: "note_or_voice",
+    evidence: { id: row.evidence_id, objectVersionId: row.object_version_id, sha256: row.sha256, serverReceivedAt: row.received }, ...source })];
+  });
+ }, shadowAuthority);
+}
+
 /** Synthetic structured captions/facts only. Never read the separate evaluation labels. */
 export interface ObservationSourcePort {
   decode(source: Readonly<{ tenantId:string;jobId:string;kind: Observation["kind"]; evidenceId: string; objectVersionId: string; sha256: string; text: string | null }>): Promise<Readonly<{ text: string; facts: Observation["facts"]; citations: Observation["citations"] }> | null>;
