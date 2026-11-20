@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-9-final-gate": {
+      "branches": ["codex/sandbox/lp-9-final-gate"],
+      "allow": [
+        "packages/db/test/lp9-final-gate.integration.test.ts",
+        "packages/db/test/lp9-final-gate-fixtures.ts",
+        "packages/db/test/lp9-restore.integration.test.ts",
+        "docs/verdicts/LP-9/BUILDER_RECEIPT.md"
+      ]
+    }
+  }
+}
