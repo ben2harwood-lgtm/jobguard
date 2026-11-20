@@ -21,7 +21,7 @@ test("updates the stale bill explicitly and keeps saved dispositions", async ({ 
   await page.reload();
   const card = page.getByTestId(`variation-${capture.id}`);
   await card.getByRole("button", { name: "Approve exact revision" }).click();
-  await expect(card.getByText("Approved immutable commercial fact", { exact: true })).toBeVisible();
+  await expect(card.getByText("Approved and saved", { exact: true })).toBeVisible();
   await page.goto(`/jobs/${jobId}#final-account-title`);
   await finishDispositionsAndTerms(page);
   const complete = panel.getByRole("button", { name: "Complete final account", exact: true });
