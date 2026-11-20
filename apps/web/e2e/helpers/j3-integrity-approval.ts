@@ -85,7 +85,11 @@ export async function approveJ3Catches(page: Page, browser: Browser, jobId: stri
    const revision = item.revisions.find(row => row.id === item.currentRevisionId)!;
    await expect(section).toContainText(revision.contentHash);
    const request = customer.waitForRequest(request => request.method() === "POST" && new URL(request.url()).pathname === "/api/customer-portal/variation-approvals");
-   await section.getByRole("button", { name: `Approve revision ${revision.revision} for +£${(revision.signedDeltaPence / 100).toFixed(2)}`, exact: true }).click();
+   const net = revision.signedDeltaPence;
+   const total = net + Math.sign(net) * Math.round(Math.abs(net) / 5);
+   const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
+   const totalWords = `${total < 0 ? "−" : ""}${gbp.format(Math.abs(total) / 100)}`;
+   await section.getByRole("button", { name: `Approve revision ${revision.revision} for ${totalWords} including VAT`, exact: true }).click();
    const approvedCommand = (await request).postDataJSON();
    await expect(section.getByText("Approved · authenticated customer", { exact: true })).toBeVisible();
    // A fresh command for the same exact revision is a duplicate approval,
