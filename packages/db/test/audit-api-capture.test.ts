@@ -77,6 +77,7 @@ class RecordedSql {
     if (sql.includes("AS tenant_id")) return rows([{ tenant_id: tenantId }]);
     if (sql.includes("current_setting('app.tenant_id') tenant")) return rows([{ tenant: tenantId }]);
     if (sql.includes("lock_audit_head")) return rows([]);
+    if (sql.startsWith("SELECT pg_advisory_xact_lock(")) return rows([]); // M4-1-S-FLAKE: confirm's per-job key.
     if (sql.includes("clock_timestamp() AS occurred_at")) return rows([{ occurred_at: new Date() }]);
     if (/^(BEGIN|COMMIT|ROLLBACK|SELECT set_config|INSERT INTO|UPDATE app\.|DELETE FROM|SELECT app.advance_audit_head)/u.test(sql)) return rows([]);
     throw new Error(`Unexpected SQL: ${sql}`);
