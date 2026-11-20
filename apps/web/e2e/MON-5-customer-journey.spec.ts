@@ -99,7 +99,7 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
       const section = tab.locator("section").filter({has:tab.getByRole("heading",{name:x.description,exact:true})});
       await expect(section).toContainText(x.hash);
       const request = tab.waitForRequest(r => r.url().endsWith("/api/customer-portal/variation-approvals") && r.method() === "POST");
-      await section.getByRole("button",{name:"Approve revision 1 for +£50.00",exact:true}).click();
+      await section.getByRole("button",{name:"Approve revision 1 for £60.00 including VAT",exact:true}).click();
       const approval = (await request).postDataJSON();
       approvedCommands.push(approval);
       await expect(section.getByText("Approved · authenticated customer",{exact:true})).toBeVisible();

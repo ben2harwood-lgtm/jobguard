@@ -155,3 +155,97 @@ it("ignores a superseded successful lock snapshot that arrives after the latest 
  expect(signal.aborted).toBe(false);
  expect(renderToStaticMarkup(render())).toContain("Final check terms accepted.");
 });
+
+type Capture = {
+ id: string;
+ description: string;
+ state: "draft" | "priced" | "approved" | "rejected" | "withdrawn";
+ origin: "final_review";
+ netPence: number | null;
+};
+const draft: Capture = { id: jobId, description: "Ceiling repair", state: "draft", origin: "final_review", netPence: null };
+const priced: Capture = { id: scopeItemId, description: "Moved radiator", state: "priced", origin: "final_review", netPence: 22000 };
+
+async function setupReady(captures: Capture[] = [], onRebuild = vi.fn(async () => {})) {
+ vi.stubGlobal("React", React);
+ const readyAccount = { ...account, issueBlocked: false };
+ const snapshot = { version: "final-account-lock.view.v1", jobId, account: readyAccount, lock: null, captures,
+  dispositions: [{ scopeItemId, disposition: "done" }], termsAccepted: true, checkStatus: null, invoiceGuard: "FINAL_ACCOUNT_LOCK_REQUIRED" };
+ const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => snapshot });
+ vi.stubGlobal("fetch", fetch);
+ const props = { jobId, account: readyAccount, onChanged: vi.fn(async () => {}), onRebuild };
+ const render = () => { hooks.render(); const tree = FinalAccountLock(props); hooks.effects(); return tree; };
+ render(); await tick();
+ return { render, fetch, onRebuild, snapshot };
+}
+
+function leaveOffCheckbox(node: React.ReactNode, description: string): React.ReactElement<Record<string, unknown>> | undefined {
+ if (Array.isArray(node)) return node.map(child => leaveOffCheckbox(child, description)).find(Boolean);
+ if (!React.isValidElement<Record<string, unknown>>(node)) return undefined;
+ const children = node.props.children;
+ if (node.type === "label" && Array.isArray(children) && children.includes(`Leave "${description}" off this bill on purpose`)) {
+  return children.find(child => React.isValidElement(child) && child.type === "input");
+ }
+ return leaveOffCheckbox(children as React.ReactNode, description);
+}
+
+it.each([[draft, "Needs a price"], [priced, "£220.00 — not approved yet"]] as const)("blocks completion for a $state extra and names its next step", async (capture, status) => {
+ const { render } = await setupReady([capture]);
+ const tree = render();
+ expect(find(tree, "Complete final account")!.props.disabled).toBe(true);
+ expect(renderToStaticMarkup(tree)).toContain(status);
+ expect(leaveOffCheckbox(tree, capture.description)).toBeDefined();
+});
+
+it("requires every waiting extra to be ticked and drops ticks for extras that stop waiting", async () => {
+ const { render, fetch, snapshot } = await setupReady([draft, priced]);
+ const tickOff = (description: string) => {
+  (leaveOffCheckbox(render(), description)!.props.onChange as (event: unknown) => void)({ target: { checked: true } });
+ };
+ tickOff(draft.description);
+ expect(find(render(), "Complete final account")!.props.disabled).toBe(true);
+ tickOff(priced.description);
+ expect(find(render(), "Complete final account")!.props.disabled).toBe(false);
+
+ fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ...snapshot, captures: [draft] }) });
+ window.dispatchEvent(new Event("focus")); await tick(); render();
+ window.dispatchEvent(new Event("focus")); await tick();
+ expect(leaveOffCheckbox(render(), priced.description)!.props.checked).toBe(false);
+ expect(leaveOffCheckbox(render(), draft.description)!.props.checked).toBe(true);
+ expect(find(render(), "Complete final account")!.props.disabled).toBe(true);
+});
+
+it("does not block completion for approved, rejected or withdrawn captures", async () => {
+ const captures: Capture[] = [
+  { ...priced, state: "approved" },
+  { ...draft, state: "rejected" },
+  { ...priced, id: account.id, state: "withdrawn" },
+ ];
+ const { render } = await setupReady(captures);
+ const tree = render();
+ expect(renderToStaticMarkup(tree)).not.toContain("Extras not on this bill yet");
+ expect(find(tree, "Complete final account")!.props.disabled).toBe(false);
+});
+
+it.each([[409, "STALE_REVISION"], [400, "INVALID_FINAL_ACCOUNT_LOCK_INPUT"]])("handles %s %s from the lock", async (status, code) => {
+ const { render, fetch, onRebuild } = await setupReady();
+ fetch.mockResolvedValueOnce({ ok: false, status, json: async () => ({ code }) });
+ (find(render(), "Complete final account")!.props.onClick as () => void)();
+ await tick();
+ const tree = render();
+ const markup = renderToStaticMarkup(tree);
+ expect(markup).toContain(`data-error-code="${code}"`);
+ const rebuild = find(tree, "Update the bill with approved extras");
+ if (code === "STALE_REVISION") {
+  expect(markup).toContain("You approved a change after this bill was built. Update the bill, check the new total, then press Complete final account again.");
+  expect(markup).not.toContain(">STALE_REVISION<");
+  expect(onRebuild).not.toHaveBeenCalled();
+  (rebuild!.props.onClick as () => void)();
+  await tick();
+  expect(onRebuild).toHaveBeenCalledTimes(1);
+  expect(fetch.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+ } else {
+  expect(markup).toContain(`>${code}<`);
+  expect(rebuild).toBeUndefined();
+ }
+});

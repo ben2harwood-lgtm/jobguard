@@ -6,7 +6,15 @@ it("records the dark binding as an explicit authority path without broadening bu
   const {inventory}=await loadReviewedInventory();
   expect(pathCompleteness(inventory,repoFileExists).filter(p=>p.includes("lp6a"))).toEqual([]);
   const entries=inventory.entries.filter(e=>e.group==="a-lp6a-request-binding");
-  expect(entries).toHaveLength(20);
+  expect(entries).toHaveLength(16);
+  for (const key of [
+    "acl|rel|table|identity.session|jobguard_binding_owner|SELECT|-",
+    "acl|rel|table|control_plane.practice_session|jobguard_binding_owner|SELECT|-",
+    "acl|rel|table|control_plane.contractor_practice_session|jobguard_binding_owner|SELECT|-",
+    "acl|routine|function:identity.sso_session_memberships(uuid,uuid)|jobguard_binding_owner|EXECUTE|-",
+  ]) {
+    expect(inventory.entries.some(e => e.key === key), key).toBe(false);
+  }
   const runtime=entries.filter(e=>e.key.includes("|jobguard_runtime|"));
   expect(runtime.map(e=>e.key).sort()).toEqual([
     "acl|routine|function:app.bind_request(text,text,uuid)|jobguard_runtime|EXECUTE|-",

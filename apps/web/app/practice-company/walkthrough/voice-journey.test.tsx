@@ -59,6 +59,13 @@ const jobId = "00000000-0000-4000-8000-000000000001";
 const preparedId = "00000000-0000-4000-8000-000000000002";
 const capture = (id = jobId) => ({ version: 1, environment: "synthetic_demo", captureId: id, jobId: id, proposalId: id, reviewId: id, source: { text: "fictional", version: 1, kind: "text", acquisition: null, audioByteLength: 0 }, proposal: { title: "fictional", lines: [], questions: [] }, review: null, status: "quoting" });
 const quote = (id = jobId, revisions = true) => ({ version: 1, environment: "synthetic_demo", jobId: id, scope: [], draft: null, revisions: revisions ? [{ id, revision: 1, previousRevisionId: null, netPence: 0, taxPence: 0, totalPence: 0, issuable: true, blockers: [], lines: [] }] : [] });
+const savedQuoteWorkspace = () => ({
+  getAttribute: (name: string) => name === "data-job-id" ? jobId : null,
+  querySelector: (selector: string) => selector === ".quote-editor" ? {
+    getAttribute: (name: string) => name === "data-job-id" ? jobId : name === "data-quote-ready" ? "true" : null,
+    querySelector: (selector: string) => selector === '[data-testid="quote-revision"]' ? { textContent: "1" } : null,
+  } : null,
+});
 const saved = () => JSON.stringify({ jobId, prepared: preparedId, priced: true });
 const response = (body: unknown, ok = true) => ({ ok, json: async () => body });
 describe("WALK-TOUR-FIXES completion and reload", () => {
@@ -212,6 +219,95 @@ describe("step 5 saved evidence", () => {
   it("does not accept completed history whose proof needs review", () => {
     vi.stubGlobal("document", { getElementById: () => ({ querySelector: (selector: string) => ({ textContent: selector.includes('stage-status') ? "Complete" : selector.includes('stage-review') ? "Proof needs review" : "File integrity checked · synthetic example" }) }) });
     expect(evidenceDone()).toBe(false);
+  });
+});
+
+describe("step 2 saved workspace handoff", () => {
+  function handoff(initialRevision = 1) {
+    const view = { kind: "inline" as "inline" | "loading" | "workspace", workspaceId: jobId, quoteJobId: jobId, ready: false, revision: initialRevision };
+    const editor = {
+      getAttribute: (name: string) => name === "data-job-id" ? view.quoteJobId : name === "data-quote-ready" ? String(view.kind === "inline" || view.ready) : null,
+      querySelector: (selector: string) => selector === '[data-testid="quote-revision"]' ? { textContent: String(view.revision) } : null,
+    };
+    const workspace = {
+      getAttribute: (name: string) => name === "data-job-id" ? view.workspaceId : null,
+      querySelector: (selector: string) => selector === ".quote-editor" ? editor : null,
+    };
+    const root = { querySelector: (selector: string) => {
+      if (view.kind === "loading") return null;
+      if (selector === "#captured-job-workspace") return view.kind === "workspace" ? workspace : null;
+      if (selector === ".quote-editor") return editor;
+      if (selector === '[data-testid="quote-revision"]') return { textContent: String(view.revision) };
+      return null;
+    } };
+    vi.stubGlobal("document", { getElementById: () => root });
+    const saved = vi.fn();
+    vi.stubGlobal("sessionStorage", { setItem: saved });
+    vi.stubGlobal("location", new URL("https://example.test/practice-company/walkthrough?walkJob=" + jobId));
+    vi.stubGlobal("history", { replaceState: vi.fn() });
+    memo.states = [jobId, capture(), 0, 1, false, false, "", false, true, "", false, true, ""]; memo.cursor = 0;
+    renderToStaticMarkup(<VoiceJourney />);
+    memo.setState.mockClear();
+    return { view, saved, step: memo.steps[1]! };
+  }
+
+  it("keeps Next's completion gate false through the handoff until the same saved quote is ready", () => {
+    const { view, saved, step } = handoff();
+    // This is the trace-observed instant: the inline quote has revision 1,
+    // but setOwnWorkspace has not committed the replacement screen yet.
+    expect(step.isDone()).toBe(false);
+    expect(memo.setState).toHaveBeenCalledWith(true);
+    expect(step.isDone()).toBe(false);
+    view.kind = "loading";
+    expect(step.isDone()).toBe(false);
+    view.kind = "workspace"; view.ready = true; view.workspaceId = preparedId;
+    expect(step.isDone()).toBe(false);
+    view.workspaceId = jobId; view.quoteJobId = preparedId;
+    expect(step.isDone()).toBe(false);
+    view.quoteJobId = jobId; view.ready = false;
+    expect(step.isDone()).toBe(false);
+    view.ready = true; view.revision = 0;
+    expect(step.isDone()).toBe(false);
+    view.revision = 1;
+    expect(step.isDone()).toBe(true);
+    view.kind = "loading";
+    expect(step.isDone()).toBe(false);
+    expect(saved).toHaveBeenCalledOnce();
+    expect(JSON.parse(saved.mock.calls[0]![1])).toEqual({ jobId, prepared: "", priced: true });
+    expect(memo.setState).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([false, true])("automatic pricing waits for the saved workspace without repeating the save; cancelled: %s", async cancelled => {
+    vi.useFakeTimers();
+    const { view, step } = handoff(0), controller = new AbortController();
+    const click = vi.spyOn(screenActions, "click").mockImplementation(async name => {
+      expect(name).toBe("Save draft revision"); view.revision = 1;
+    });
+    let settled = false;
+    const result = Promise.resolve(step.autoAction({} as HTMLElement, controller.signal)).then(() => { settled = true; return null; }, reason => { settled = true; return reason; });
+    try {
+      await vi.advanceTimersByTimeAsync(100);
+      expect(click).toHaveBeenCalledOnce();
+      expect(settled).toBe(false);
+      expect(step.isDone()).toBe(false);
+      view.kind = "loading";
+      await vi.advanceTimersByTimeAsync(100);
+      expect(settled).toBe(false);
+      view.kind = "workspace";
+      await vi.advanceTimersByTimeAsync(100);
+      expect(settled).toBe(false);
+      if (cancelled) controller.abort(new Error("Stopped during saved quote loading"));
+      else view.ready = true;
+      await vi.advanceTimersByTimeAsync(100);
+      if (cancelled) expect(await result).toEqual(new Error("Stopped during saved quote loading"));
+      else { expect(await result).toBeNull(); expect(step.isDone()).toBe(true); }
+      expect(click).toHaveBeenCalledOnce();
+    } finally {
+      controller.abort(new Error("Test complete"));
+      await vi.advanceTimersByTimeAsync(100);
+      await result;
+      click.mockRestore(); vi.useRealTimers();
+    }
   });
 });
 
@@ -486,7 +582,7 @@ it.each([false, true])("fresh autoplay keeps one captured job; queued delivery %
   memo.states = [jobId, capture(), 0, 2, true, false, "", false, true, "", false, true]; memo.cursor = 0;
   let delivered = false;
   const root = {
-    querySelector: (selector: string) => selector === ".review-line" ? {} : {
+    querySelector: (selector: string) => selector === "#captured-job-workspace" ? savedQuoteWorkspace() : selector === ".review-line" ? {} : {
       getAttribute: () => selector === ".quote-editor" ? "true" : jobId,
       textContent: selector.includes("quote-revision") ? "1" : selector.includes("quote-delivery") ? delivered ? "Simulated delivery — nothing sent" : "Queued — not sent" : "Fictional customer",
     },
@@ -544,7 +640,7 @@ it.each([0, 1])("step 3 waits for the own editor and saves only an unpriced draf
   let action: Promise<void> | undefined;
   try {
     renderToStaticMarkup(<VoiceJourney />);
-    expect(memo.steps[1]!.isDone()).toBe(true);
+    expect(memo.steps[1]!.isDone()).toBe(false);
     expect(location.hash).toBe("");
     revision = initialRevision;
     action = Promise.resolve(memo.steps[2]!.autoAction({} as HTMLElement, controller.signal));
@@ -574,6 +670,7 @@ it("hand step 3 saves customer and site before sending", async () => {
   memo.states = [jobId, capture(), 0, 2, true, false, "", false, true, "", false, true]; memo.cursor = 0;
   let savedParties = false, delivered = false;
   const root = { querySelector: (selector: string) => {
+    if (selector === "#captured-job-workspace") return savedQuoteWorkspace();
     if (selector === ".review-line") return null;
     if (selector === ".quote-editor") return { getAttribute: () => "true" };
     if (selector.includes("quote-revision")) return { textContent: "1" };
@@ -621,7 +718,7 @@ it.each(["before", "after", "never"])("Show me presents words and saved draft; c
 
 it("own-job refusal waits for an explicit alternative", async () => {
   memo.states = [jobId, capture(), 0, 2, true, false, "", false, true, "", false, true]; memo.cursor = 0;
-  vi.stubGlobal("document", { getElementById: () => ({ querySelector: (selector: string) => selector === ".review-line" ? null : { getAttribute: () => selector.includes("workspace-job-id") ? jobId : "true", textContent: selector.includes("quote-delivery") ? "" : "1" } }) });
+  vi.stubGlobal("document", { getElementById: () => ({ querySelector: (selector: string) => selector === "#captured-job-workspace" ? savedQuoteWorkspace() : selector === ".review-line" ? null : { getAttribute: () => selector.includes("workspace-job-id") ? jobId : "true", textContent: selector.includes("quote-delivery") ? "" : "1" } }) });
   vi.stubGlobal("location", new URL("https://example.test/?walkJob=" + jobId));
   vi.stubGlobal("history", { replaceState: vi.fn() });
   const click = vi.spyOn(screenActions, "click").mockRejectedValue(new Error("Real control refused"));

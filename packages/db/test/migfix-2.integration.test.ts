@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appendAuditBatch, DisabledQualifyingLandingPostingPort, LedgerRepository, migrate, withTenant } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
+import { loadMigrationProofs } from "./migration-proof-loader.js";
 
 let postgres: EmbeddedPostgres, admin: Pool, runtime: Pool;
 const hash = "a".repeat(64);
@@ -214,7 +215,14 @@ describe("MIGFIX-2 controlled ledger corrections", () => {
     }
     const routines = (await admin.query("SELECT p.proname,p.prosecdef,p.proconfig,pg_get_userbyid(p.proowner) owner,has_function_privilege('jobguard_runtime',p.oid,'EXECUTE') executable,EXISTS(SELECT 1 FROM aclexplode(p.proacl) WHERE grantee=0 AND privilege_type='EXECUTE') public_execute FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='app' AND p.proname=ANY($1::text[])", [["post_plan_obligation", "post_plan_settlement", "reverse_journal"]])).rows;
     expect(routines).toHaveLength(3);
-    for (const routine of routines) expect(routine).toMatchObject({ prosecdef: true, proconfig: ["search_path=pg_catalog, app"], owner: "jobguard_migration", executable: true, public_execute: false });
+    const lp12 = loadMigrationProofs().proofs.find(proof => proof.migration === "0768_lp12_narrow_owners.sql")!;
+    for (const routine of routines) {
+      const ownerChange = lp12.upgrade.find(change => change.section === "routines" &&
+        change.before?.nspname === "app" && change.before.proname === routine.proname);
+      expect(ownerChange).toMatchObject({ before: { proowner: "jobguard_migration" }, after: { proowner: "jobguard_money_owner" } });
+      expect(routine).toMatchObject({ prosecdef: true, proconfig: ["search_path=pg_catalog, app"],
+        owner: "jobguard_money_owner", executable: true, public_execute: false });
+    }
     const constraints = (await admin.query("SELECT tgname,tgdeferrable,tginitdeferred FROM pg_trigger WHERE tgname IN('journal_balanced','journal_line_balanced') ORDER BY tgname")).rows;
     expect(constraints).toEqual(["journal_balanced", "journal_line_balanced"].map(tgname => ({ tgname, tgdeferrable: true, tginitdeferred: true })));
     const reversalKey = (await admin.query("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conrelid='app.journal'::regclass AND conname='journal_full_reversal_uq' AND contype='u'")).rows;

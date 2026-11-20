@@ -5,6 +5,7 @@ const names = { card: "Card", pay_by_bank: "Pay by bank", bank_transfer: "Bank t
 const gbp = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
 export function PracticePayNowView({ view }: { view: View }) {
   return <><h2>Invoice {view.invoiceNumber}</h2><p>Amount due {gbp(view.amountDue.pence)}</p>
+    <p>This includes VAT at 20%, as shown on your quote and extras.</p>
     <ul aria-label="Practice payment options" style={{ padding: 0, listStyle: "none" }}>
       {view.options.map(option => <li key={option.rail} style={{ padding: "16px", border: "1px solid currentColor", marginBottom: "12px", fontWeight: 400 }}>
         <span>{names[option.rail]}</span><span> · {gbp(option.customerTotal.pence)}</span>

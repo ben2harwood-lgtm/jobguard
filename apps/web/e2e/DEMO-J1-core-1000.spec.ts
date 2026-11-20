@@ -110,6 +110,7 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   const before = await read(page, `${root}/final-check`);
   expect(before).toMatchObject({ state: "unlocked", items: [] });
   expect(JSON.stringify(before)).not.toMatch(/signalCount|heldCount|shadowCount/);
+  await page.getByRole("checkbox", { name: 'Leave "Pending trim repair" off this bill on purpose' }).check();
   await click(page, "Complete final account");
   await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   const locked = await read(page, `${root}/final-account/lock`);

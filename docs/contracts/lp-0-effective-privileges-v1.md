@@ -581,3 +581,24 @@ only to migration. The JSON baseline, scanners, pins and earlier migrations are
 unchanged. Proof fragments declare the precise owners, ACLs and static call paths.
 This is source construction and local unit validation; PostgreSQL/catalogue,
 browser and independent security evidence remain outstanding. It is not closure.
+
+### LP-12 narrow chokepoint owners (0768)
+
+The binding-store owner loses table-level SELECT on the three credential stores
+and EXECUTE on the SSO membership helper. Its private job-proof reader retains
+SELECT on the four practice-session columns it needs to resolve the bound
+credential. LP-11's private session lookup retains its installed credential
+checks and scoped policies.
+
+The migration owner takes custody of the command registry, lifecycle claims
+and immutable operational records. The command writer keeps registry SELECT,
+claim and record SELECT/INSERT, and claim UPDATE on authorization_id,
+effect_ref and outcome. The new money owner holds the four ledger routines
+with their installed bodies and search paths. Its policies use the LP-11
+protected tenant once per statement. Its only table privileges are the
+listed reads, ledger inserts and column grants required for row locks.
+
+The migration proof records the exact owner, ACL and policy changes. If the
+installation fails, the migration transaction rolls back. After installation,
+correct the grants and owners in a reviewed forward migration while retaining
+the command and ledger history.
