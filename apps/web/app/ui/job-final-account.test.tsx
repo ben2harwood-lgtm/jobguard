@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import * as React from "react";
 import { CustomerInvoices } from "./customer-invoices";
+import { FinalAccountLock } from "./final-account-lock";
 import { JobFinalAccount } from "./job-final-account";
 
 // Use the real source contract before workspace dist artifacts have been built.
@@ -122,4 +123,24 @@ it("does not assemble on a variation save; explicit rebuilding passes the saved 
  function all(node:React.ReactNode):Node[]{if(Array.isArray(node))return node.flatMap(all);if(!React.isValidElement<Record<string,unknown>>(node))return [];return [node,...all(node.props.children as React.ReactNode)];}
  const invoice=all(render()).find(node=>node.type===CustomerInvoices)!;
  expect(invoice.props).toMatchObject({jobId,finalAccount:{id:account.id,sourceHash:account.sourceHash}});
+});
+
+it("passes the explicit build action to final-account completion", async () => {
+ const { fetch, render, button } = await setup();
+ const account = { id: "11111111-1111-4111-8111-111111111112", revision: 1, sourceHash: "a".repeat(64), taxPolicyVersion: "reference",
+  totals: { net: { pence: 18000, currency: "GBP" }, tax: { pence: 36000, currency: "GBP" }, total: { pence: 54000, currency: "GBP" } },
+  issueBlocked: false, findings: [], lines: [], proof: [], pending: [] };
+ fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ...view, account }) });
+ (button.props.onClick as () => void)();
+ await tick();
+ function findLock(node: React.ReactNode): Node | undefined {
+  if (Array.isArray(node)) return node.map(findLock).find(Boolean);
+  if (!React.isValidElement<Record<string, unknown>>(node)) return undefined;
+  return node.type === FinalAccountLock ? node : findLock(node.props.children as React.ReactNode);
+ }
+ const lock = findLock(render());
+ expect(lock?.props.onRebuild).toEqual(expect.any(Function));
+ (lock!.props.onRebuild as () => Promise<void>)();
+ await tick();
+ expect(fetch.mock.calls.at(-1)?.[1]).toMatchObject({ method: "POST", body: expect.stringContaining('"expectedRevision":1') });
 });

@@ -24,12 +24,18 @@ const viewV1 = z.object({
 }).strict();
 type LockView = z.infer<typeof viewV1>;
 const targetSize = { minHeight: 44, minWidth: 44 };
+const pounds = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 
-export function FinalAccountLock({ jobId, account, onChanged }: {
-  jobId: string; account: NonNullable<FinalAccountResponse["account"]>; onChanged: () => Promise<void>;
+function isWaiting(capture: LockView["captures"][number]) {
+  return capture.state === "draft" || capture.state === "priced";
+}
+
+export function FinalAccountLock({ jobId, account, onChanged, onRebuild }: {
+  jobId: string; account: NonNullable<FinalAccountResponse["account"]>; onChanged: () => Promise<void>; onRebuild?: () => Promise<void>;
 }) {
   const [view, setView] = useState<LockView | null>(null), [error, setError] = useState("");
   const [busy, setBusy] = useState(false), [description, setDescription] = useState(""), [amount, setAmount] = useState("");
+  const [leftOff, setLeftOff] = useState<string[]>([]);
   const errorTarget = useRef<HTMLParagraphElement | null>(null);
   useEffect(() => { if (error) errorTarget.current?.focus(); }, [error]);
   const writing = useRef(false), active = useRef<AbortController | null>(null), lifetime = useRef(0), readGeneration = useRef(0), currentJob = useRef(jobId);
@@ -47,7 +53,7 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
     } catch (failure) { if (isCurrent()) { setView(null); setError(failure instanceof Error ? failure.message : "DATABASE_UNAVAILABLE"); } }
   }, [jobId]);
   useEffect(() => {
-    setView(null); setError(""); writing.current = false; setBusy(false); setDescription(""); setAmount("");
+    setView(null); setError(""); writing.current = false; setBusy(false); setDescription(""); setAmount(""); setLeftOff([]);
     const changed = (event: Event) => { if ((event as CustomEvent<{jobId?: string}>).detail?.jobId === jobId) void load(); };
     window.addEventListener(FINAL_CHECK_CHANGED_EVENT, changed); window.addEventListener(JOB_SAVED_EVENT, changed); window.addEventListener(INVOICE_CHANGED_EVENT, changed);
     const focus = () => { void load(); };
@@ -56,6 +62,11 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
     void load();
     return () => { lifetime.current++; readGeneration.current++; window.removeEventListener("focus", focus); document.removeEventListener("visibilitychange", visible); if (currentJob.current !== jobId) active.current?.abort(); window.removeEventListener(FINAL_CHECK_CHANGED_EVENT, changed); window.removeEventListener(JOB_SAVED_EVENT, changed); window.removeEventListener(INVOICE_CHANGED_EVENT, changed); };
   }, [load, account.id, jobId]);
+  useEffect(() => {
+    if (!view) return;
+    const stillWaiting = leftOff.filter(id => view.captures.some(capture => capture.id === id && isWaiting(capture)));
+    if (stillWaiting.length !== leftOff.length) setLeftOff(stillWaiting);
+  }, [view, leftOff]);
   async function command(route: string, body: unknown, after?: () => void) {
     if (writing.current) return;
     const generation = lifetime.current;
@@ -68,6 +79,13 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
     } catch (failure) { if (currentJob.current === jobId && lifetime.current === generation) setError(failure instanceof Error ? failure.message : "DATABASE_UNAVAILABLE"); }
     finally { if (currentJob.current === jobId && lifetime.current === generation) { writing.current = false; setBusy(false); } }
   }
+  async function rebuild() {
+    if (!onRebuild || writing.current) return;
+    const generation = lifetime.current;
+    writing.current = true; setBusy(true);
+    try { await onRebuild(); }
+    finally { if (lifetime.current === generation) { writing.current = false; setBusy(false); } }
+  }
   async function addReviewExtra() {
     let price: number | null = null;
     try { if (amount.trim()) price = parsePoundsToPence(amount.trim()); }
@@ -78,6 +96,8 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
       price: price === null ? null : { quantity: "1", unit: "item", unitRatePence: price, direction: "addition" },
     }, () => { setDescription(""); setAmount(""); void onChanged(); });
   }
+  const waiting = view?.captures.filter(isWaiting) ?? [];
+  const hasUntickedExtra = waiting.some(capture => !leftOff.includes(capture.id));
   const baseline = account.lines.filter(line => line.kind === "baseline");
   const allDisposed = baseline.every(line => view?.dispositions.some(item => item.scopeItemId === line.scopeItemId));
   return <section data-testid="final-account-lock" aria-label="Final-account completion" aria-busy={busy}>
@@ -105,7 +125,23 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
           {!allDisposed && <p>Choose Done, Removed or Deferred for every accepted line before completing the final account.</p>}
           {!view.termsAccepted && <p>Press “Accept final check terms” before completing the final account.</p>}
           {account.issueBlocked && <p>Complete the required proof, then press “Rebuild from approved sources” to include the saved proof in this bill. You can then complete the final account.</p>}
-          <button className="primary" style={targetSize} disabled={!allDisposed || !view.termsAccepted || account.issueBlocked}
+          {waiting.length > 0 && <section aria-label="Extras not on this bill yet">
+            <h3>Extras not on this bill yet</h3>
+            <ul>
+              {waiting.map(capture => <li key={capture.id}>
+                <p>{capture.description} · {capture.state === "draft" || capture.netPence === null
+                  ? "Needs a price" : `${pounds.format(capture.netPence / 100)} — not approved yet`}</p>
+                <a href={`#variation-${capture.id}`}>Price or approve it</a>
+                <label style={{ display: "block" }}>
+                  <input type="checkbox" checked={leftOff.includes(capture.id)}
+                    onChange={event => setLeftOff(event.target.checked ? [...leftOff, capture.id] : leftOff.filter(id => id !== capture.id))} />
+                  {`Leave "${capture.description}" off this bill on purpose`}
+                </label>
+              </li>)}
+            </ul>
+          </section>}
+          {hasUntickedExtra && <p>Approve or price each extra above, or tick to leave it off this bill on purpose, before completing the final account.</p>}
+          <button className="primary" style={targetSize} disabled={!allDisposed || !view.termsAccepted || account.issueBlocked || hasUntickedExtra}
             onClick={() => void command("lock", { version: "final-account.lock.v1", commandId: crypto.randomUUID(), finalAccountRevisionId: account.id, expectedRevision: account.revision, declarationVersion: FINAL_ACCOUNT_DECLARATION_VERSION })}>Complete final account</button>
         </fieldset>
       </> : <>
@@ -115,6 +151,11 @@ export function FinalAccountLock({ jobId, account, onChanged }: {
       </>}
       <CustomerInvoices jobId={jobId} finalAccount={view.account ?? { ...account, issueBlocked: true }} lockGuard={{ code: view.invoiceGuard, kind: "final", ...(view.lock ? {lockedRevision:{id:view.lock.finalAccountRevisionId,sourceHash:view.lock.sourceHash,issueBlocked:false}} : {}) }} />
     </> : null}
-    {error ? <p ref={errorTarget} tabIndex={-1} data-testid="final-account-lock-error" role="alert" data-error-code={error}>{Object.hasOwn(invoiceGuardMessages, error) ? invoiceGuardMessages[error as keyof typeof invoiceGuardMessages] : error}</p> : null}
+    {error && <p ref={errorTarget} tabIndex={-1} data-testid="final-account-lock-error" role="alert" data-error-code={error}>{
+      error === "STALE_REVISION"
+        ? "You approved a change after this bill was built. Update the bill, check the new total, then press Complete final account again."
+        : Object.hasOwn(invoiceGuardMessages, error) ? invoiceGuardMessages[error as keyof typeof invoiceGuardMessages] : error
+    }</p>}
+    {error === "STALE_REVISION" && onRebuild && <button style={targetSize} disabled={busy} onClick={() => void rebuild()}>Update the bill with approved extras</button>}
   </section>;
 }

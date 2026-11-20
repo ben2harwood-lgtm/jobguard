@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "lp-12-narrow-owner-lp11": {
+      "branches": [
+        "codex/sandbox/lp-12-narrow-owner-lp11"
+      ],
+      "note": "LP-12 RED build ahead on LP-11 and LP-8a. Migration 0768. Exact-head review, LP-11 r9 re-merge and LP-8b landing alignment remain separate.",
+      "allow": [
+        "apps/web/test/setup-worker-role.ts",
+        "docs/contracts/lp-0-effective-privileges-v1.md",
+        "packages/db/migrations/0768_lp12_narrow_owners.sql",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/test/administrative-role-setup.ts",
+        "packages/db/test/demo-bootstrap.integration.test.ts",
+        "packages/db/test/job-work-state-upgrade.integration.test.ts",
+        "packages/db/test/lp12-narrow-owners.integration.test.ts",
+        "packages/db/test/lp12-narrow-owners.test.ts",
+        "packages/db/test/lp12-narrow-owners.ts",
+        "packages/db/test/lp6a-binding.test.ts",
+        "packages/db/test/lp6c-customer-delegation.integration.test.ts",
+        "packages/db/test/migfix-2.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0768_lp12_narrow_owners.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/tools/synthetic-restore.mjs"
+      ]
+    }
+  }
+}
