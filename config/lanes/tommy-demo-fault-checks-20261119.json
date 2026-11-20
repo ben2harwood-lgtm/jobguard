@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "tommy-demo-fault-checks-20261119": {
+      "branches": ["codex/sandbox/tommy-demo-fault-checks-20261119"],
+      "note": "Test-only: support-v01 real committed quote-acceptance response loss, and concurrent confirm-scope/open-recovery commands. Browser spec apps/web/e2e/TOMMY-demo-faults.spec.ts; preserve M4-1-S money assertions. No product or migration changes.",
+      "allow": [
+        "apps/web/e2e/TOMMY-demo-faults.spec.ts",
+        "apps/web/e2e/M4-1-S.spec.ts",
+        "docs/receipts/tommy-demo-fault-checks-20261119.md"
+      ]
+    }
+  }
+}

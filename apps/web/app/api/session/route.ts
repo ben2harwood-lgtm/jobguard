@@ -1,4 +1,4 @@
-import { pairingCookie, practiceCookieOptions } from "../../lib/linked-practice-entry";
+import { pairingCookie, practiceCookieOptions, practiceSessionMaxAgeSeconds } from "../../lib/linked-practice-entry";
 import { practiceFailure } from "../../lib/synthetic-server";
 import { issuePracticeSession } from "@jobguard/db";
 import { cookies } from "next/headers";
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   let token:string;
   try { token=await issuePracticeSession(syntheticPool()); } catch (practiceError){const denied=practiceFailure(practiceError);if(denied)return denied; return NextResponse.json({ code: "DATABASE_UNAVAILABLE", recoverable: true }, { status: 503 }); }
   const response = NextResponse.json({ ok: true });
-  response.cookies.set("jg_session", token, { httpOnly: true, sameSite: "lax", secure: new URL(request.url).protocol === "https:", path: "/" });
+  response.cookies.set("jg_session", token, { httpOnly: true, sameSite: "lax", secure: new URL(request.url).protocol === "https:", path: "/", maxAge: practiceSessionMaxAgeSeconds });
   response.cookies.delete("jg_decision_job");
   // Explicit anonymous demo entry replaces the practice credential and its receipt together.
   response.cookies.set(pairingCookie, "", { ...practiceCookieOptions(new URL(request.url).protocol === "https:"), maxAge: 0 });

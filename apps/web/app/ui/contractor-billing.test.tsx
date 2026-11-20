@@ -2,7 +2,7 @@ import * as React from "react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { BillingView, billingLineState, advanceCommand, contractorBillingReadV1, deliveryCommand, exactPounds, exportCommand, importCommand } from "./contractor-billing";
+import { BillingView, billingLineState, advanceCommand, contractorBillingReadV1, deliveryCommand, exactPounds, exportCommand, importCommand, practiceBillingEvents } from "./contractor-billing";
 
 vi.stubGlobal("React", React);
 
@@ -104,4 +104,52 @@ it("ENT-11b derives billed, part-paid and paid from exact balances, preserving c
   expect(billingLineState({ ...line, creditedNet: p("100") })).toBe("Credited");
   expect(billingLineState({ ...line, rejected: true, paidNet: p("100") })).toBe("Rejected");
   expect(billingLineState({ ...line, paidNet: p("-1") })).toBe("Billed");
+});
+
+describe("Northside practice billing", () => {
+  const uuid = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
+  const match = { exportLineId: uuid(1), jobId: uuid(2), extraId: uuid(3), scopeItemId: uuid(4), revisionId: uuid(5), revisionHash: "a".repeat(64) };
+  const line = { ...match, approvedNet: { pence: 108000, currency: "GBP" }, ignored: "not copied" };
+  const batch = { ...read.exports[0]!, lines: [line] };
+  const view = contractorBillingReadV1.parse({ ...read, exports: [batch], clientContractIds: [uuid(6)] });
+  const common = {
+    version: "billing-status.v1", clientContractId: uuid(6), source: "northside-fictional", invoiceNumber: "NS-INVOICE-1",
+    remittanceReference: null, originalEventId: null, explicit: null, separateInvoice: false, lineAdjustments: [],
+  };
+
+  it("fills the exact invoice and two replayable half payments", () => {
+    const total = { netPence: 208000, vatPence: 41600, grossPence: 249600 };
+    const existedAt = "2026-10-01T00:00:00Z";
+    expect(practiceBillingEvents(view, "invoice")).toEqual({
+      ...common, sourceEventId: `northside-invoice-${match.exportLineId}`, factType: "invoiced",
+      effectiveAt: "2026-10-02T12:00:00Z", reconciliationId: null, amount: total,
+      composition: { declared: total, lines: [
+        { externalInvoiceLineId: "order", kind: "original_order", existedAt, netPence: 100000, vatPence: 20000, grossPence: 120000, match: null },
+        { externalInvoiceLineId: "extra", kind: "extra", existedAt, netPence: 108000, vatPence: 21600, grossPence: 129600, match },
+      ] },
+    });
+    for (const [step, day] of [["part", "03"], ["balance", "04"]] as const) {
+      expect(practiceBillingEvents(view, step)).toEqual({
+        ...common, sourceEventId: `northside-${step}-${match.exportLineId}`, factType: "paid",
+        effectiveAt: `2026-10-${day}T12:00:00Z`, reconciliationId: `northside-${step}`,
+        amount: { netPence: 104000, vatPence: 20800, grossPence: 124800 }, composition: null,
+      });
+    }
+  });
+
+  it("needs exactly one valid export line and whole-penny VAT on both payments", () => {
+    for (const exports of [[], [batch, batch], [{ ...batch, lines: [line, line] }], [{ ...batch, lines: [{}] }],
+      [{ ...batch, lines: [{ ...line, approvedNet: { pence: 108005 } }] }]]) {
+      expect(practiceBillingEvents({ ...view, exports }, "invoice")).toBeNull();
+    }
+  });
+
+  it("renders fill buttons only with both practice and send controls", () => {
+    const props = { jobId: "job-1", view };
+    const send = () => undefined;
+    expect(renderToStaticMarkup(createElement(BillingView, { ...props, send }))).not.toContain("Fill practice");
+    expect(renderToStaticMarkup(createElement(BillingView, { ...props, practice: true }))).not.toContain("Fill practice");
+    const html = renderToStaticMarkup(createElement(BillingView, { ...props, practice: true, send }));
+    for (const label of ["invoice", "part payment", "balance payment"]) expect(html).toContain(`Fill practice ${label}`);
+  });
 });

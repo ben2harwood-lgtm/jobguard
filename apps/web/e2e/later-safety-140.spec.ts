@@ -116,6 +116,7 @@ test("LATER-SAFETY-140 email sign-in and core-1000 show found recovery with both
   const before = await read(page, `${root}/final-check`);
   expect(before).toMatchObject({ state: "unlocked", items: [] });
   expect(JSON.stringify(before)).not.toMatch(/signalCount|heldCount|shadowCount/);
+  await page.getByRole("checkbox", { name: 'Leave "Pending trim repair" off this bill on purpose' }).check();
   await click(page, "Complete final account");
   await expect(page.getByTestId("lock-state")).toHaveText("Final account completed");
   const locked = await read(page, `${root}/final-account/lock`);

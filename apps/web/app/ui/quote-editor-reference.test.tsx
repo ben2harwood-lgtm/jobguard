@@ -245,3 +245,36 @@ it("does not clear a newer preview when an older navigation read finishes", asyn
  expect(all(tree,n=>n.props["aria-label"]==="Quote preview")).toHaveLength(1);
  expect(text(tree)).toContain("Quote Q-0044");
 });
+
+it("follows the saved customer email until the builder types a recipient", async () => {
+ const original = vi.mocked(fetch).getMockImplementation()!;
+ let email = "first-customer@example.invalid";
+ vi.mocked(fetch).mockImplementation(async (url, init) => String(url).endsWith("/parties")
+  ? response({ current: { customer: { name: "Fictional", email } }, currentIds: { bindingId: null } }) as Response
+  : original(url, init));
+ const recipient = () => all(render(), n => n.props["aria-label"] === "Confirmed recipient")[0]!;
+ render();
+ await settle();
+ expect(recipient().props.value).toBe(email);
+
+ email = "updated-customer@example.invalid";
+ window.dispatchEvent(new Event("job-parties-saved"));
+ await settle();
+ expect(recipient().props.value).toBe(email);
+
+ recipient().props.onChange({ target: { value: "typed-recipient@example.invalid" } });
+ email = "latest-customer@example.invalid";
+ window.dispatchEvent(new Event("job-parties-saved"));
+ await settle();
+ expect(recipient().props.value).toBe("typed-recipient@example.invalid");
+});
+
+it("disables the practice link and explains what to add when the saved email is missing", async () => {
+ vi.mocked(fetch).mockResolvedValueOnce(response({ current: { customer: { name: "Fictional" } }, currentIds: { bindingId: null } }) as Response);
+ render();
+ await settle();
+ await button(render(), "Preview immutable quote").props.onClick();
+ const tree = render();
+ expect(button(tree, "Get practice customer link").props.disabled).toBe(true);
+ expect(text(tree)).toContain("Add a fictional customer email in Customer and site to get a practice link.");
+});
