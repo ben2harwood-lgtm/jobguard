@@ -353,10 +353,28 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   const presenceSql = await readFile(new URL("../migrations/0753_lp6d_worker_binding_presence.sql", import.meta.url), "utf8");
   for (const m of presenceSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+(\$\w*\$)(.*?)\3\s*;/gis))
     lp6dBodies.set(m[1]!, [m[4]!]);
+  const billingProof = loadMigrationProofs().proofs.find(proof => proof.migration === "0766_lp8a_billing_revokes.sql")!;
+  const advanceDelta = billingProof.upgrade.find(change => change.section === "routines" && change.before?.nspname === "app" && change.before.proname === "advance_final_account_draft");
+  if (advanceDelta?.section !== "routines" || !advanceDelta.before || !advanceDelta.after) throw new Error("Missing LP-8a draft routine proof");
+  const advanceSql = await readFile(new URL(`../migrations/${billingProof.migration}`, import.meta.url), "utf8");
+  const advanceBody = advanceSql.split("CREATE OR REPLACE FUNCTION app.advance_final_account_draft(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+  const searchPath = (config: string[] | null) => {
+    const value = config?.find(setting => setting.startsWith("search_path="));
+    if (!value) throw new Error("Missing LP-8a search path in proof");
+    return "SET search_path TO " + value.slice("search_path=".length).split(", ").map(schema => `'${schema}'`).join(", ");
+  };
   for (const match of lp11Sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
     lp6dBodies.set(match[1]!, [match[3]!]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
+    if (prior.nspname === advanceDelta.before.nspname && prior.proname === advanceDelta.before.proname && prior.args === advanceDelta.before.args) {
+      const before = searchPath(advanceDelta.before.proconfig);
+      const after = searchPath(advanceDelta.after.proconfig);
+      expect(prior.definition).toContain(before);
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => advanceBody).replace(before, after));
+      expect(current?.source).toBe(advanceBody);
+      continue;
+    }
     // 0751 succeeds LP-6d for this exact dispatcher; pin it before generic LP-6d successor handling.
     if (prior.nspname === "app" && prior.proname === "accounting_export" &&
       prior.args === "t uuid, digest text, operation text, source text, v jsonb") {

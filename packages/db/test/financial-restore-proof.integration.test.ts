@@ -51,7 +51,8 @@ it("cold-restores the command-built fee chain through reversal/refund, reconcile
   try {
     const receipt = await runSyntheticRestoreRehearsal({ environment: "synthetic_demo" }, database, {
       async beforeBackup(phase: RestorePhase) {
-        await phase.admin.query(`CREATE DATABASE ${databaseName}`);
+        // The rehearsal helper already runs in the trusted practice database; reuse it, never drop it.
+        if (!(await phase.admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [databaseName])).rowCount) await phase.admin.query(`CREATE DATABASE ${databaseName}`);
         const createLogin = (await phase.admin.query("SELECT format('CREATE ROLE restore_money_shadow LOGIN PASSWORD %L', $1::text) sql", [phase.admin.options.password])).rows[0].sql;
         await phase.admin.query(createLogin);
         await phase.admin.query("GRANT jobguard_shadow TO restore_money_shadow");

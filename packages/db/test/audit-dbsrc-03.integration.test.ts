@@ -15,7 +15,7 @@ import { migrate } from "../src/migrate.js";
 import { readSyntheticDemo } from "../src/demo-runtime.js";
 import { UserCommandDispatcher } from "../src/commands.js";
 import { withTenant } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 let postgres: EmbeddedPostgres | undefined, admin: Pool, runtime: Pool, directory: string;
@@ -144,7 +144,8 @@ it("preserves an exact legacy service receipt without rewriting history", async 
   const f = await invoiceFixture(), input = { version: "customer-payment.record.v1", commandId: randomUUID(), actorMembershipId: DEMO_MEMBERSHIP_ID,
     jobId: f.jobId, invoiceId: f.invoiceId, paidOn: "2026-10-13", amountPence: 5000, currency: "GBP", method: "bank_transfer", reference: "INV-100", builderAttestsReceived: true };
   const paymentId = randomUUID();
-  const original = await new UserCommandDispatcher(runtime).dispatch(context, {
+  // Seed the historical receipt and its payment atomically as owner; runtime INSERT is revoked.
+  const original = await new UserCommandDispatcher(admin).dispatch(await testBoundTenantContext(admin, DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID), {
     version: "command.v1", commandId: input.commandId, commandType: "customer_payment.record", semanticKey: `payment:${input.invoiceId}:${input.reference}`,
     actorMembershipId: input.actorMembershipId, subjectType: "job", subjectRef: input.jobId,
     action: { actionType: "customer_payment.record", recipient: null, contentHash: createHash("sha256").update(JSON.stringify(input)).digest("hex"),
