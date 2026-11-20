@@ -158,8 +158,10 @@ it("refuses digest-only reset authority and the legacy entry point without chang
     await client.query("SELECT app.create_practice_sandbox_job($1,$2,$3,$4)", [auth.context.tenantId, job, auth.membershipId, auth.digest]);
     await client.query("COMMIT");
     // The attacker can read this digest through the shared synthetic tenant.
+    const attacker = await authenticatePracticeSession(c.runtime, await issuePracticeSession(c.runtime));
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.tenant_id',$1,true)", [auth.context.tenantId]);
+    await bindOwnSession(client, attacker.digest);
     const digest = (await client.query("SELECT practice_session_digest FROM app.job WHERE id=$1", [job])).rows[0].practice_session_digest;
     await client.query("COMMIT");
     const before = (await c.admin.query("SELECT row_to_json(s) value FROM control_plane.practice_session s ORDER BY token_digest")).rows;

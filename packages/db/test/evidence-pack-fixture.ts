@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { createSyntheticInvoicePdf, money } from "@jobguard/core";
+import { bindTestClient } from "./tenant-context-test-utils.js";
 import { DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID } from "../src/demo-seed.js";
 
 /** Test setup only: writes actual source rows with foreign keys/triggers enabled. */
@@ -34,6 +35,8 @@ export async function seedEvidencePackFixture(admin: Pool, options: { withVariat
       await db.query("SELECT set_config('app.practice_material_digest',$1,true)", [sessionDigest]);
       await db.query("INSERT INTO app.job(id,tenant_id,title,practice_session_digest,practice_scenario) VALUES($1,$3,'Evidence fixture job',$4,'capture'),($2,$3,'Unrelated fixture job',NULL,NULL)", [jobId, otherJobId, tenantId, sessionDigest]);
     } else {
+      if ((await db.query("SELECT to_regprocedure('app.lp11_policy_tenant()') IS NOT NULL installed")).rows[0].installed)
+        await bindTestClient(db, db, tenantId, memberId);
       await db.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$3,'Evidence fixture job'),($2,$3,'Unrelated fixture job')", [jobId, otherJobId, tenantId]);
     }
     await db.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [scopeId, tenantId, jobId]);
@@ -58,7 +61,7 @@ export async function seedEvidencePackFixture(admin: Pool, options: { withVariat
     if (options.withVariation !== false) {
     // 0053 (SH-1) requires a bound track before a variation; a database held at 0041 for the 0042 upgrade test has no such table yet.
     if ((await db.query("SELECT to_regclass('app.job_commercial_track') AS tracked")).rows[0].tracked) {
-      await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture')", [tenantId, jobId]);
+      await db.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT (tenant_id,job_id) DO NOTHING", [tenantId, jobId]);
     }
     await db.query("INSERT INTO app.variation(id,tenant_id,job_id,scope_item_id,existing_scope_item_id,capture_kind,capture_text,description,state) VALUES($1,$2,$3,$4,$4,'text','Fictional additional work','Synthetic fixture extra','approved')", [variationId, tenantId, jobId, scopeId]);
     await db.query("INSERT INTO app.variation_revision(id,tenant_id,job_id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version) VALUES($1,$2,$3,$4,$5,1,'Synthetic fixture extra','1','each',12500,12500,$6,$7,'human_entered','fixture',$6,'fixture.v1')", [variationRevisionId, tenantId, jobId, variationId, scopeId, hash("approved variation fixture"), memberId]);

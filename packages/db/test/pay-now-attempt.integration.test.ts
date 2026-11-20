@@ -38,7 +38,7 @@ describe("MON-6 durable fake attempts on real PostgreSQL",()=>{
     await db.query("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=$2",[t,command]);
     await db.query("INSERT INTO app.variation_revision(tenant_id,job_id,id,variation_id,scope_item_id,revision,description,quantity_decimal,unit,unit_rate_pence,signed_delta_pence,content_hash,confirmed_by_membership_id,rate_provenance_kind,rate_source_ref,rate_source_hash,rate_version) VALUES($1,$2,$3,$4,$5,1,'Fictional catch','1','item',500,500,$6,$7,'human_entered','synthetic://fixture',$6,'fixture-v1')",[t,j,priced,variation,scope,h,a.actorId]);
     await db.query("UPDATE app.variation SET current_revision_id=$3,state='priced' WHERE tenant_id=$1 AND id=$2",[t,variation,priced]);
-   });
+   }, { membershipId: a.actorId });
    const {VariationRepository,approvePricedVariation}=await import("../src/variation-repository.js");
    await new VariationRepository(c.runtime).transact(a.context,db=>approvePricedVariation(db,t,variation,{
     id:approval,revisionId:priced,revision:1,contentHash:h,signedDeltaPence:500,method:"builder_attestation",

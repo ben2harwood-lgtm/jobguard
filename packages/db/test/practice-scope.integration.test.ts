@@ -16,7 +16,8 @@ import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from ".
 const tenant="a1000000-0000-4000-8000-000000000001", otherTenant="a1000000-0000-4000-8000-000000000002";
 const job="a2000000-0000-4000-8000-000000000001",otherJob="a2000000-0000-4000-8000-000000000002",emptyJob="a2000000-0000-4000-8000-000000000003",foreignJob="a2000000-0000-4000-8000-000000000004";
 const member="a3000000-0000-4000-8000-000000000001",retired="00000000-0000-4000-8000-000000000001",reserved="00000000-0000-4000-8000-000000000002",first="b0000000-0000-4000-8000-000000000001",second="b0000000-0000-4000-8000-000000000002";
-const context=testTenantContext(tenant, { membershipId: member }),foreignContext=testTenantContext(otherTenant, { membershipId: member });
+const foreignMember="a3000000-0000-4000-8000-000000000002";
+const context=testTenantContext(tenant, { membershipId: member }),foreignContext=testTenantContext(otherTenant, { membershipId: foreignMember });
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 beforeAll(async()=>{
  directory=await mkdtemp(join(tmpdir(),"jobguard-practice-scope-"));const port=await freePort(59000,300);
@@ -26,6 +27,8 @@ beforeAll(async()=>{
  INSERT INTO identity.identity_user(id) VALUES('a4000000-0000-4000-8000-000000000001');
  INSERT INTO app.account(id,tenant_id,name) VALUES('a5000000-0000-4000-8000-000000000001','${tenant}','Synthetic proof regression');
  INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES('${member}','${tenant}','a5000000-0000-4000-8000-000000000001','a4000000-0000-4000-8000-000000000001','owner');
+ INSERT INTO app.account(id,tenant_id,name) VALUES('a5000000-0000-4000-8000-000000000002','${otherTenant}','Fictional foreign practice firm');
+ INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES('${foreignMember}','${otherTenant}','a5000000-0000-4000-8000-000000000002','a4000000-0000-4000-8000-000000000001','owner');
 `);
  for(const [t,j] of [[tenant,job],[tenant,otherJob],[tenant,emptyJob],[otherTenant,foreignJob]]) await importWatchdogFixtureJob(admin,t!,j!);
  await admin.query(`

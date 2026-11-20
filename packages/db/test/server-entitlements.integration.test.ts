@@ -6,6 +6,7 @@ import { cluster, startSession, status, unchanged, type Cluster } from "./contra
 import { currentCommand } from "./contractor-practice-session-fixtures.js";
 import { company } from "./practice-worker-switch-fixtures.js";
 import { ownerTx, memberSession, track } from "./contractor-retained-read-fixtures.js";
+import { testTenantContext } from "./tenant-context-test-utils.js";
 let c: Cluster;
 beforeAll(async () => { process.env.JOBGUARD_ENV = "synthetic_demo"; c = await cluster(); }, 120000);
 afterAll(async () => { await c?.close(); });
@@ -121,7 +122,11 @@ it("MON-8 track reassignment refuses legacy contractor writers while retaining r
   await ownerTx(c, f.p.tenantId, async db => {
     expect((await db.$client.query("SELECT app.ef_actor($1) actor", [finance.session])).rows[0].actor).toBe(finance.p.membershipId);
     expect((await db.$client.query("SELECT app.enterprise_baseline_actor($1) actor", [finance.session])).rows[0].actor).toBe(finance.p.membershipId);
+  }, requireContractorRequestContext(finance.p));
+  await ownerTx(c, f.p.tenantId, async db => {
     expect((await db.$client.query("SELECT decision FROM app.ent3a_extra_authority($1,'LogSiteExtra',$2)", [supervisor.p.membershipId, f.jobId])).rows[0].decision).toBe("allowed");
+  }, requireContractorRequestContext(supervisor.p));
+  await ownerTx(c, f.p.tenantId, async db => {
     expect((await db.$client.query("SELECT decision FROM app.practice_worker_switch_decision($1,$2)", [f.sessionRef, f.members.operative])).rows[0].decision).toBe("allowed");
   });
   const agreement = randomUUID(), deriveCommand = randomUUID(), prepareCommand = randomUUID();
@@ -162,7 +167,8 @@ it("MON-8 track reassignment refuses legacy contractor writers while retaining r
       // on entitlement, before malformed/missing business input can hide a bypass.
       // LP-6d: each call is the named member's own bound request (finance, supervisor, else the owner).
       const session = args.includes(finance.session) ? finance.session : args.includes(supervisor.session) || args.includes(supervisor.p.membershipId) ? supervisor.session : f.session;
-      await expect(ownerTx(c, f.p.tenantId, async db => { await db.$client.query("SELECT app.bind_request('contractor_practice',$1,$2)", [session, f.p.tenantId]); return db.$client.query(sql, args); }), sql).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN" });
+      await expect(ownerTx(c, f.p.tenantId, async db => { await db.$client.query("SELECT app.bind_request('contractor_practice',$1,$2)", [session, f.p.tenantId]); return db.$client.query(sql, args); },
+        testTenantContext(f.p.tenantId, { bindRequest: false })), sql).rejects.toMatchObject({ code: "42501", message: "FORBIDDEN" });
     }
   });
   expect(await new ContractorRepository(c.runtime).query(f.p, query)).toEqual(before);

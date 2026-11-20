@@ -359,7 +359,7 @@ describe("ENT-2 DW4 live from import, with no fee setup", () => {
     const saved = await importOf(p, csv), workOrderId = saved.rows[0]!.workOrderId!;
     const retained = { overview: await orders.overview(p), batch: await orders.batch(p, saved.batchId), revisions: await orders.revisions(p, workOrderId) };
     const before = await counts(p.tenantId);
-    await withTenant(admin, testTenantContext(p.tenantId), async db => {
+    await withTenant(admin, ctx(p), async db => {
       const assignment = randomUUID();
       await db.$client.query("SELECT app.assign_commercial_track($1,$2,'small_builder',$3,1,'operations:test')", [p.tenantId, assignment, `synthetic-agreement:${p.tenantId}`]);
       const { appendAuditBatch } = await import("../src/index.js");

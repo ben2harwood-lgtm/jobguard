@@ -104,7 +104,8 @@ function revisionFor(proposal: VariationProposal, id: string, previous: Variatio
     contentHash: "c".repeat(64), confirmed: { ...price, unitRatePence: pence, confirmedByMembershipId: membership, rateProvenance: provenance } });
 }
 it("L144 other-tenant probes see a populated tenant as absent and the same calls succeed in the owning tenant", async () => {
-  const ownContext = testTenantContext(T2), foreignContext = testTenantContext(DEMO_TENANT_ID);
+  const ownContext = testTenantContext(T2, { membershipId: M2 });
+  const foreignContext = testTenantContext(DEMO_TENANT_ID, { membershipId: DEMO_MEMBERSHIP_ID });
   await admin.query("INSERT INTO app.job(id,tenant_id,title,status) VALUES($1,$2,'Fictional tenant two job','live')", [J2, T2]);
   await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($1,$2,$3,'confirmed')", [P2, T2, J2]);
   const proposal: VariationProposal = { version: "variation-proposal.v1", id: V2, jobId: J2, scopeItemId: S2, existingScopeItemId: null,

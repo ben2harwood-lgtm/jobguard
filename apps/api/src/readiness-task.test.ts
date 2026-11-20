@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { JobHelpers } from "graphile-worker";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readinessTasks, syntheticTimerAdapters } from "./readiness-task.js";
 import { DarkReadinessScheduler, type ScheduledPlan } from "./readiness-scheduler.js";
 
@@ -9,14 +9,13 @@ const scope = { tenantId: randomUUID(), jobId: randomUUID(), taskId: randomUUID(
 const plan: ScheduledPlan = { version: "readiness-scheduled-plan.v1", synthetic: true, scope, factRevision: 1,
   ruleRevision: "readiness-scheduled.v1", status: "confirmed", plannedDate: "2026-03-30", jurisdiction: "scotland",
   localTime: "09:00", timeZone: "Europe/London", predecessors: [], edges: [], material: { requiredUnits: 1, landedUnits: 1 }, access: "unknown", crew: true };
-function harness() {
-  const query = vi.fn(async (sql: string) => ({ rows: sql.includes("SELECT payload") ? [{ payload: plan }] : [] }));
-  const client = { query, release: vi.fn() };
-  const pool = { connect: vi.fn(async () => client) } as unknown as Pool;
-  // No context construction in this test: the scheduling boundary is tested with a
-  // genuine queued context supplied by the test-only bridge below.
-  return { pool, query };
-}
+const pool = {} as Pool;
+const worker = vi.hoisted(() => ({ run: vi.fn() }));
+vi.mock("@jobguard/db", async importOriginal => ({
+  ...await importOriginal<typeof import("@jobguard/db")>(),
+  runScheduledReadinessWork: worker.run,
+}));
+beforeEach(() => { worker.run.mockReset().mockResolvedValue(plan); });
 import { verifiedTenantContextForQueuedJob } from "@jobguard/db";
 const context = (store: import("./readiness-store.js").DurableReadinessStore, scope: typeof plan.scope) => {
   const context = verifiedTenantContextForQueuedJob(scope.tenantId);
@@ -30,7 +29,6 @@ describe("synthetic readiness worker timer", () => {
     }
   });
   it("discovers identifier-only jobs with tenant-qualified minute-bucket keys", async () => {
-    const { pool } = harness();
     const { tasks } = readinessTasks(pool, "synthetic_demo", context, () => "2026-03-27T08:00:00.000Z");
     const addJob = vi.fn(async () => ({}));
     const helpers = { addJob, withPgClient: async (fn: (client: unknown) => unknown) => fn({ query: async () => ({ rows: [{ tenant_id: scope.tenantId, job_id: scope.jobId, task_id: scope.taskId }] }) }) } as unknown as JobHelpers;
@@ -41,10 +39,10 @@ describe("synthetic readiness worker timer", () => {
       { jobKey: `readiness-schedule:${scope.tenantId}:${scope.jobId}:${scope.taskId}:${Math.floor(Date.parse("2026-03-27T08:00:00Z") / 60000)}`, jobKeyMode: "preserve_run_at" }]);
   });
   it("queues the configured local time on the workday BEFORE work across the clock change", async () => {
-    const { pool } = harness();
     const { tasks } = readinessTasks(pool, "synthetic_demo", context, () => "2026-03-27T08:00:00.000Z");
     const addJob = vi.fn(async () => ({}));
     await tasks.readiness_schedule!({ version: "readiness-schedule-task.v1", scope }, { addJob } as unknown as JobHelpers);
+    expect(worker.run).toHaveBeenCalledExactlyOnceWith(pool, scope, "load");
     expect(addJob).toHaveBeenCalledWith("readiness_evaluate", expect.anything(), expect.objectContaining({ runAt: new Date("2026-03-27T09:00:00.000Z") }));
   });
 });

@@ -26,6 +26,20 @@ export class JobRepository{
  constructor(private readonly pool:Pool){}
  async create(c:VerifiedTenantContext,ps:readonly JobPermission[],raw:unknown){requirePermission(ps,"job:update");const i=createJobV1.parse(raw);return withTenant(this.pool,c,async d=>(await d.$client.query(`INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,$3) RETURNING *`,[i.id??randomUUID(),c.tenantId,i.title])).rows[0])}
  async get(c:VerifiedTenantContext,ps:readonly JobPermission[],jobId:string){requirePermission(ps,"job:view");uuid.parse(jobId);return withTenant(this.pool,c,async d=>(await d.$client.query(`SELECT * FROM app.job WHERE tenant_id=$1 AND id=$2`,[c.tenantId,jobId])).rows[0])}
+ async readWorkspace(tenantContext: VerifiedTenantContext, permissions: readonly JobPermission[], jobId: string) {
+  requirePermission(permissions, "job:view");
+  uuid.parse(jobId);
+  return withTenant(this.pool, tenantContext, async db => {
+   const result = await db.$client.query<{
+    id: string; title: string; status: string; revision: number; updatedAt: Date; scopeIdentityIds: string[];
+   }>(`SELECT j.id,j.title,j.status,j.revision,j.updated_at AS "updatedAt",
+     ARRAY(SELECT s.id FROM app.scope_identity s WHERE (s.tenant_id,s.job_id)=(j.tenant_id,j.id)
+      AND s.state='confirmed' ORDER BY s.created_at,s.id) AS "scopeIdentityIds"
+    FROM app.job j WHERE (j.tenant_id,j.id)=($1,$2)`, [tenantContext.tenantId, jobId]);
+   if (!result.rows[0]) throw new JobRepositoryError("NOT_FOUND");
+   return result.rows[0];
+  });
+ }
  async reserveProposal(c:VerifiedTenantContext,ps:readonly JobPermission[],raw:unknown){requirePermission(ps,"quote:edit");const i=reserveProposalV1.parse(raw),scope=i.scopeItemId??randomUUID(),id=i.id??randomUUID();return withTenant(this.pool,c,async d=>{await d.$client.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id) VALUES($1,$2,$3)`,[scope,c.tenantId,i.jobId]);return(await d.$client.query(`INSERT INTO app.proposal_line(id,tenant_id,job_id,scope_item_id,source_hash,source_reference) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[id,c.tenantId,i.jobId,scope,i.sourceHash,i.sourceReference])).rows[0]})}
  async confirmProposal(c:VerifiedTenantContext,ps:readonly JobPermission[],raw:unknown){requirePermission(ps,"quote:edit");const i=confirmProposalV1.parse(raw);return withTenant(this.pool,c,async d=>{const p=(await d.$client.query<{scope_item_id:string}>(`SELECT scope_item_id FROM app.proposal_line WHERE tenant_id=$1 AND id=$2 AND job_id=$3 AND state='proposed' FOR UPDATE`,[c.tenantId,i.proposalId,i.jobId])).rows[0];if(!p)throw new JobRepositoryError("NOT_FOUND");await d.$client.query(`UPDATE app.proposal_line SET state='accepted' WHERE tenant_id=$1 AND id=$2`,[c.tenantId,i.proposalId]);await d.$client.query(`UPDATE app.scope_identity SET state='confirmed' WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[c.tenantId,i.jobId,p.scope_item_id]);const row=(await d.$client.query(`INSERT INTO app.scope_revision(id,tenant_id,job_id,scope_item_id,revision,description,quantity_decimal,unit,unit_price_pence,total_pence) VALUES($1,$2,$3,$4,1,$5,$6,$7,$8,$9) RETURNING *`,[i.revisionId??randomUUID(),c.tenantId,i.jobId,p.scope_item_id,i.description,i.quantityDecimal,i.unit,i.unitPricePence,i.totalPence])).rows[0];await d.$client.query(`INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id) VALUES($1,$2,$3)`,[c.tenantId,i.jobId,p.scope_item_id]);return row})}
  async transition(c:VerifiedTenantContext,ps:readonly JobPermission[],raw:unknown){const i=transitionJobV1.parse(raw);requirePermission(ps,i.to==="live"?"commercial:approve":i.to==="paid"||i.reason==="payment_reversal"?"finance:approve":"job:update");try{return await withTenant(this.pool,c,async d=>(await d.$client.query(`SELECT * FROM app.transition_job($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[c.tenantId,i.jobId,i.expectedRevision,i.to,i.reason,i.quoteVersionId,i.acceptedNetValuePence,i.feePolicyVersion,i.recoveryCapPence])).rows[0])}catch(e){const code=(e as{code?:string}).code;if(code==="40001")throw new JobRepositoryError("REVISION_CONFLICT");if(code==="22023")throw new JobRepositoryError("ILLEGAL_TRANSITION");throw e}}

@@ -55,13 +55,17 @@ export class WormCommandRepository {
     private readonly executorPool?: Pool, private readonly operatorPool?: Pool,
     private readonly sessionDigest = "") {}
   private async transaction<T>(pool: Pool, context: VerifiedTenantContext,
-    work: (db: TenantTransaction) => Promise<T>): Promise<T> {
+    work: (db: TenantTransaction) => Promise<T>, scope?: { operation: "execute" | "recover" | "alerts"; commandId: string | null }): Promise<T> {
     let rejected: WormCommandError | undefined;
     let entered = false;
     try {
       return await withTenant(pool, context, async db => {
         entered = true;
-        try { return await work(db); }
+        try {
+          if (scope) await db.$client.query("SELECT worm_control.lp11_bind_worm_scope($1,$2,$3)",
+            [context.tenantId, scope.commandId, scope.operation]);
+          return await work(db);
+        }
         catch (error) { rejected = refusal(error); throw rejected; }
       });
     } catch (error) {
@@ -120,7 +124,8 @@ export class WormCommandRepository {
     this.requireDark();
     if (!this.operatorPool) throw new WormCommandError("WORM_REFUSED");
     return this.transaction(this.operatorPool, context, async db =>
-      (await db.$client.query<WormOperatorAlert>("SELECT * FROM worm_control.worm_operator_alerts()")).rows
+      (await db.$client.query<WormOperatorAlert>("SELECT * FROM worm_control.worm_operator_alerts()")).rows,
+      { operation: "alerts", commandId: null },
     );
   }
 
@@ -159,7 +164,7 @@ export class WormCommandRepository {
       const c = (await db.$client.query<WormReceipt>("SELECT * FROM app.worm_claim($1)", [commandId])).rows[0]!;
       const claimed = !!prior && ["queued", "pending"].includes(prior.status) && c.status === "executing";
       return { c, claimed };
-    });
+    }, { operation: "execute", commandId });
     if (!claim.claimed) return claim.c;
     const { c } = claim;
     const target = { tenantId: context.tenantId, key: c.object_key, versionId: c.object_version_id };
@@ -189,7 +194,7 @@ export class WormCommandRepository {
         [commandId, c.attempts, status, JSON.stringify(material)])).rows[0]!;
       // worm_finish appends its restricted audit event atomically.
       return finished;
-    });
+    }, { operation: "execute", commandId });
   }
 
   /** Operator reconciliation only: exact-version reads, never a storage mutation or retry.
@@ -203,7 +208,8 @@ export class WormCommandRepository {
     if (!this.operatorPool) throw new WormCommandError("WORM_REFUSED");
     const { commandId } = parsed.data;
     const c = await this.transaction(this.operatorPool, context, async db =>
-      (await db.$client.query<WormReceipt>("SELECT * FROM worm_control.worm_recovery_target($1)", [commandId])).rows[0]!
+      (await db.$client.query<WormReceipt>("SELECT * FROM worm_control.worm_recovery_target($1)", [commandId])).rows[0]!,
+      { operation: "recover", commandId },
     );
     if (c.status === "applied") return c;
     let observed: boolean | null = null;
@@ -219,7 +225,7 @@ export class WormCommandRepository {
         [commandId, c.attempts, observed])).rows[0]!;
       // The restricted SQL routine appends the audit event in this transaction.
       return finished;
-    });
+    }, { operation: "recover", commandId });
   }
 
   /** No policy inferred from hold release; D07 has not approved expiry or deletion. */

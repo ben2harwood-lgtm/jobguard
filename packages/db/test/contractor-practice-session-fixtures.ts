@@ -4,7 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
 import { expect } from "vitest";
-import { cluster, ownerTx, type Cluster } from "./extra-fixtures.js";
+import { cluster, fixtureOwnerContext, ownerTx, type Cluster } from "./extra-fixtures.js";
 import { MIGRATION_URLS, ContractorRepository, ContractorPartyRepository, WorkOrderRepository, contractorSessionContext, issuePracticeSession, DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_IDENTITY_USER_ID, DEMO_MEMBERSHIP_ID, verifiedTenantContextFromMembership, type VerifiedTenantContext } from "../src/index.js";
 export { cluster, ownerTx };
 export type { Cluster };
@@ -44,6 +44,8 @@ export async function startSession(c: Cluster, home = false, activeAgreement = t
  if (activeAgreement) await seedActiveContractorAgreement(c.admin, p.tenantId);
  const hasBinding = (await c.admin.query("SELECT to_regprocedure('app.bind_request(text,text,uuid)') IS NOT NULL AS installed")).rows[0].installed;
  const context: VerifiedTenantContext = hasBinding ? await contractorSessionContext(c.runtime, session) : verifiedTenantContextFromMembership(p);
+ const boundPolicies = (await c.admin.query("SELECT to_regprocedure('app.lp11_policy_tenant()') IS NOT NULL AS installed")).rows[0].installed;
+ if (boundPolicies) fixtureOwnerContext(c, p.tenantId, () => contractorSessionContext(c.runtime, session));
  return { session, p, context, home };
 }
 export const startSessionWithHomeRecord = (c: Cluster) => startSession(c, true);

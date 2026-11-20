@@ -1,4 +1,4 @@
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,11 +9,12 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { migrate, withTenant} from "../src/index.js";
 import { listConfirmedPracticeScopes, listPracticeFindingScopes } from "../src/practice-scope.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
+import { jobDoorsActor } from "./lp-job-doors-fixtures.js";
 
 let postgres:EmbeddedPostgres,admin:Pool,runtime:Pool,directory:string;
 const tenant=randomUUID(),otherTenant=randomUUID(),job=randomUUID();
 const retired="00000000-0000-4000-8000-000000000001",reserved="00000000-0000-4000-8000-000000000002",confirmed="f0000000-0000-4000-8000-000000000001";
-const context=testTenantContext(tenant);
+let context:Awaited<ReturnType<typeof testBoundTenantContext>>,foreignContext:typeof context;
 beforeAll(async()=>{
  directory=await mkdtemp(join(tmpdir(),"jobguard-finding-scope-"));const port=await freePort(59300,200);
  postgres=new EmbeddedPostgres({databaseDir:directory,port,user:"postgres",password:"synthetic",persistent:false,createPostgresUser:process.getuid?.()===0,initdbFlags:["--lc-messages=C","--encoding=UTF8"],onLog:()=>undefined});
@@ -22,6 +23,9 @@ beforeAll(async()=>{
  INSERT INTO app.job(id,tenant_id,title,status) VALUES('${job}','${tenant}','Synthetic draft finding scope','draft');
  INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES('${retired}','${tenant}','${job}','retired'),('${reserved}','${tenant}','${job}','reserved');
  CREATE ROLE finding_scope_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;GRANT jobguard_runtime TO finding_scope_login;`);
+ const member=await jobDoorsActor(admin,tenant),foreign=await jobDoorsActor(admin,otherTenant);
+ context=await testBoundTenantContext(admin,tenant,member.member);
+ foreignContext=await testBoundTenantContext(admin,otherTenant,foreign.member);
  runtime=new Pool({host:"127.0.0.1",port,user:"finding_scope_login",password:"synthetic",database:"postgres"});
 },60_000);
 afterAll(async()=>{await closeTestPools(runtime,admin);await postgres?.stop();if(directory)await rm(directory,{recursive:true,force:true})});
@@ -35,6 +39,6 @@ it("keeps draft findings separate from operational proof, then uses confirmed wo
  expect(await withTenant(runtime,context,db=>listConfirmedPracticeScopes(db,tenant,job,1))).toEqual([{id:confirmed}]);
 });
 it("does not bypass tenant isolation or borrow another job's finding subject",async()=>{
- expect(await withTenant(runtime,testTenantContext(otherTenant),db=>listPracticeFindingScopes(db,tenant,job,2))).toEqual([]);
+ expect(await withTenant(runtime,foreignContext,db=>listPracticeFindingScopes(db,tenant,job,2))).toEqual([]);
  expect(await withTenant(runtime,context,db=>listPracticeFindingScopes(db,tenant,randomUUID(),2))).toEqual([]);
 });

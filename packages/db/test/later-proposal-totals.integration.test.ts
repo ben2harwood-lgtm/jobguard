@@ -2,25 +2,29 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MAX_MONEY_PENCE } from "@jobguard/core";
 import { JobRepository } from "../src/job-repository.js";
-import { createWorkFixture, closeWorkFixture, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { withTenant, type VerifiedTenantContext } from "../src/tenant-context.js";
+import { createWorkFixture, closeWorkFixture, type WorkFixture } from "./job-work-state-fixtures.js";
+import { jobDoorsActor } from "./lp-job-doors-fixtures.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 
 let fixture: WorkFixture;
-const tenantId = randomUUID(), context = testTenantContext(tenantId);
+const tenantId = randomUUID();
+let context: VerifiedTenantContext;
 beforeAll(async () => {
   fixture = await createWorkFixture();
-  await fixture.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenantId]);
+  const actor = await jobDoorsActor(fixture.admin, tenantId);
+  context = await testBoundTenantContext(fixture.admin, tenantId, actor.member);
 }, 60_000);
 afterAll(async () => { await closeWorkFixture(fixture); });
 
 async function reserved() {
   const repository = new JobRepository(fixture.runtime), jobId = randomUUID();
-  await repository.create(context, ["job:update"], { id: jobId, title: "Fictional money boundary job" });
+  await fixture.admin.query("INSERT INTO app.job(id,tenant_id,title) VALUES($1,$2,'Fictional money boundary job')", [jobId, tenantId]);
   const row = await repository.reserveProposal(context, ["quote:edit"], {
     jobId, sourceHash: "a".repeat(64), sourceReference: "synthetic:proposal:1",
   });
   const input = { jobId, proposalId: row.id as string, description: "Fictional scope", quantityDecimal: "1.5", unit: "item", unitPricePence: 101, totalPence: 152 };
-  const snapshot = () => workTenant(fixture.runtime, tenantId, async db => (await db.query(`SELECT
+  const snapshot = () => withTenant(fixture.runtime, context, async db => (await db.$client.query(`SELECT
     (SELECT row_to_json(p)::text FROM app.proposal_line p WHERE tenant_id=$1 AND id=$2) proposal,
     (SELECT row_to_json(s)::text FROM app.scope_identity s WHERE tenant_id=$1 AND id=$3) identity,
     (SELECT count(*)::int FROM app.scope_revision WHERE tenant_id=$1 AND job_id=$4) revisions,

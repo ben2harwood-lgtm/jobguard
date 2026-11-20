@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { PostgresReservationStore } from "../../../apps/api/src/fee-collection/postgres-reservation-store.js";
 import { ctx, fixture, id } from "../../../apps/api/src/fee-collection/test-fixture.js";
 import { startBeforeMigration, applyMigration } from "./contractor-practice-session-fixtures.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { feeFixtureContext, seedFeeFixtureTenant } from "./fee-reservation-membership-fixture.js";
 import { migrate } from "../src/migrate.js";
 
 const own = "0604_fee_reservation_archive.sql";
@@ -19,9 +19,9 @@ describe("M4-12 reservation archive populated upgrade", () => {
       f.rail.definiteFailure = true;
       await f.executor.execute(ctx, id(10));
       const legacy = { version: "fee-reservation-book.v1", ...f.book() };
-      await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [ctx.tenantId]);
+      await seedFeeFixtureTenant(db.admin, ctx.tenantId);
       await db.admin.query("INSERT INTO app.fee_reservation_book VALUES($1,$2)", [ctx.tenantId, JSON.stringify(legacy)]);
-      await withTenant(db.runtime, testTenantContext(ctx.tenantId), tx => appendAuditBatch(tx, f.book().audit.map(entry => ({
+      await withTenant(db.runtime, feeFixtureContext(ctx.tenantId), tx => appendAuditBatch(tx, f.book().audit.map(entry => ({
         id: randomUUID(), version: "audit.v1" as const, actorRef: id(2), eventType: `fee.collection.${entry.state}`,
         subjectType: "fee_collection_attempt", subjectRef: entry.commandId, payload: { classifications: { action: "financial" as const } },
       }))));
@@ -31,7 +31,7 @@ describe("M4-12 reservation archive populated upgrade", () => {
       expect((await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [ctx.tenantId])).rows[0]?.book).toEqual(legacy);
       await migrate(db.admin);
       await migrate(db.admin);
-      const store = new PostgresReservationStore(db.runtime, testTenantContext(ctx.tenantId), () => ({
+      const store = new PostgresReservationStore(db.runtime, feeFixtureContext(ctx.tenantId), () => ({
         collection: async () => f.source, credit: async () => f.credit,
       }));
       const read = () => store.transaction(ctx.tenantId, async book => structuredClone(book));
@@ -75,19 +75,19 @@ describe("FEE-STORE-UPDATE-GRANT populated upgrade", () => {
       f.rail.crashAfterAcceptance = true;
       await expect(f.executor.execute(ctx, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
       const legacy = { version: "fee-reservation-book.v1", ...f.book() };
-      await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [ctx.tenantId]);
+      await seedFeeFixtureTenant(db.admin, ctx.tenantId);
       await db.admin.query("INSERT INTO app.fee_reservation_book VALUES($1,$2)", [ctx.tenantId, JSON.stringify(legacy)]);
       await applyMigration(db, migration);
       const raw = async () => (await db.admin.query("SELECT book FROM app.fee_reservation_book WHERE tenant_id=$1", [ctx.tenantId])).rows[0]?.book;
       expect(await raw()).toEqual(legacy);
       await migrate(db.admin);
-      const store = new PostgresReservationStore(db.runtime, testTenantContext(ctx.tenantId), () => ({
+      const store = new PostgresReservationStore(db.runtime, feeFixtureContext(ctx.tenantId), () => ({
         collection: async () => f.source, credit: async () => f.credit,
       }));
       expect(await store.transaction(ctx.tenantId, async book => book)).toEqual(legacy);
       // This catches a SECURITY DEFINER owner silently seeing zero rows under FORCE RLS.
       expect(await raw()).toEqual({ ...legacy, audit: [] });
-      await expect(withTenant(db.runtime, testTenantContext(ctx.tenantId), tx => tx.$client.query(
+      await expect(withTenant(db.runtime, feeFixtureContext(ctx.tenantId), tx => tx.$client.query(
         "UPDATE app.fee_reservation_book SET book=book WHERE tenant_id=$1", [ctx.tenantId])))
         .rejects.toMatchObject({ code: "42501" });
       await migrate(db.admin);
@@ -107,9 +107,9 @@ describe("FEE-STORE-AUTHORITY populated forward upgrade", () => {
       f.rail.crashAfterAcceptance = true;
       await expect(f.executor.execute(ctx, id(10))).rejects.toThrow("FAKE_CRASH_AFTER_ACCEPTANCE");
       const legacy = { version: "fee-reservation-book.v1", ...f.book() };
-      await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [ctx.tenantId]);
+      await seedFeeFixtureTenant(db.admin, ctx.tenantId);
       await db.admin.query("INSERT INTO app.fee_reservation_book VALUES($1,$2)", [ctx.tenantId, JSON.stringify(legacy)]);
-      await withTenant(db.runtime, testTenantContext(ctx.tenantId), tx => appendAuditBatch(tx, legacy.audit.map(entry => ({
+      await withTenant(db.runtime, feeFixtureContext(ctx.tenantId), tx => appendAuditBatch(tx, legacy.audit.map(entry => ({
         id: randomUUID(), version: "audit.v1" as const, actorRef: id(2), eventType: `fee.collection.${entry.state}`,
         subjectType: "fee_collection_attempt", subjectRef: entry.commandId, payload: { classifications: { action: "financial" as const } },
       }))));
@@ -141,18 +141,18 @@ describe("FEE-STORE-AUTHORITY populated forward upgrade", () => {
       }
       const guardedBody = sql.split("CREATE FUNCTION app.replace_fee_reservation_book")[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(live.find(row => row.identity === "app.replace_fee_reservation_book(uuid,jsonb,jsonb)")?.definition.split("$function$")[1]).toEqual(guardedBody);
-      const store = new PostgresReservationStore(db.runtime, testTenantContext(ctx.tenantId), () => ({ collection: async () => f.source, credit: async () => f.credit }));
+      const store = new PostgresReservationStore(db.runtime, feeFixtureContext(ctx.tenantId), () => ({ collection: async () => f.source, credit: async () => f.credit }));
       const read = () => store.transaction(ctx.tenantId, async book => structuredClone(book));
       const restored = await read();
       expect(restored.attempts).toEqual(expect.arrayContaining([released, ...legacy.attempts]));
       expect(restored.audit).toEqual(legacy.audit);
-      await expect(withTenant(db.runtime, testTenantContext(ctx.tenantId), tx => tx.$client.query(
+      await expect(withTenant(db.runtime, feeFixtureContext(ctx.tenantId), tx => tx.$client.query(
         "INSERT INTO app.fee_reservation_archive VALUES($1,'audit','999','null')", [ctx.tenantId])))
         .rejects.toMatchObject({ code: "42501" });
       const forged = structuredClone(restored);
       forged.attempts.find(a => a.commandId === id(10))!.state = "released";
       forged.audit.push({ commandId: id(10), state: "released" });
-      await expect(withTenant(db.runtime, testTenantContext(ctx.tenantId), tx => tx.$client.query(
+      await expect(withTenant(db.runtime, feeFixtureContext(ctx.tenantId), tx => tx.$client.query(
         "SELECT app.replace_fee_reservation_book($1,$2::jsonb)", [ctx.tenantId, JSON.stringify(forged)])))
         .rejects.toMatchObject({ code: "23514" });
       const archive = (await db.admin.query("SELECT * FROM app.fee_reservation_archive WHERE tenant_id=$1 ORDER BY kind,key", [ctx.tenantId])).rows;
@@ -178,14 +178,14 @@ describe("LATER-SAFETY-14 populated forward upgrade", () => {
       await f.executor.execute(ctx, id(10));
       const original = { version: "fee-reservation-book.v1", ...f.book() };
       original.attempts[0]!.paymentState = "confirmed";
-      await db.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [ctx.tenantId]);
+      await seedFeeFixtureTenant(db.admin, ctx.tenantId);
       await db.admin.query("INSERT INTO app.fee_provider_fixture_key VALUES($1,'stripe_card',$2)", [ctx.tenantId, "synthetic-test-signing-secret"]);
       await db.admin.query("INSERT INTO app.fee_reservation_book VALUES($1,$2)", [ctx.tenantId, JSON.stringify(original)]);
-      const store = new PostgresReservationStore(db.runtime, testTenantContext(ctx.tenantId), () => ({
+      const store = new PostgresReservationStore(db.runtime, feeFixtureContext(ctx.tenantId), () => ({
         collection: async () => f.source, credit: async () => f.credit,
       }));
       const read = () => store.transaction(ctx.tenantId, async book => structuredClone(book));
-      const replace = (book: unknown, proof: unknown = null) => withTenant(db.runtime, testTenantContext(ctx.tenantId), tx => tx.$client.query(
+      const replace = (book: unknown, proof: unknown = null) => withTenant(db.runtime, feeFixtureContext(ctx.tenantId), tx => tx.$client.query(
         "SELECT app.replace_fee_reservation_book($1,$2::jsonb,$3::jsonb)", [ctx.tenantId, JSON.stringify(book), JSON.stringify(proof)]));
       const stale = structuredClone(original);
       stale.attempts[0]!.paymentState = "submitted";

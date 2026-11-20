@@ -1,4 +1,5 @@
 import { testActorContext } from "./tenant-context-test-utils.js";
+import { workerFixturePool } from "./worker-login-fixture.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { ExtraApprovalRepository, escalateOverdueExtrasTask, verifiedTenantContextForQueuedJob, withTenant } from "../src/index.js";
@@ -35,10 +36,10 @@ it("ENT-5 worker discovery, crash rollback, concurrent restart, tenant confineme
   await sleep(61_000);
   expect(await discover()).toEqual(expect.arrayContaining([{tenant_id: a.p.tenantId}, {tenant_id: b.p.tenantId}]));
   expect((await discover()).every(row => Object.keys(row).join() === "tenant_id")).toBe(true);
-  // Crash after the fact insert but before appendAuditBatch: rollback must leave neither behind.
-  // The worker runs each tenant under the queued job's unbound context.
-  await expect(withTenant(c.runtime, verifiedTenantContextForQueuedJob(context.tenantId), async db => {
-    // LP-6d (router ruling r11): the actor-less sweep runs through the worker definer, as the repository does.
+  // Crash before the worker transaction commits: rollback must remove both fact and audit.
+  const worker = await workerFixturePool(c.runtime);
+  await expect(withTenant(worker, verifiedTenantContextForQueuedJob(context.tenantId), async db => {
+    await db.$client.query("SELECT app.lp11_open_extra_escalation($1)", [context.tenantId]);
     const fired = await db.$client.query("SELECT * FROM app.lp6d_escalate_overdue_worker()");
     expect(fired.rows.some(row => row.request_id === overdue.requestId)).toBe(true);
     throw new Error("synthetic crash before audit");

@@ -4,6 +4,7 @@ import { RETENTION_REVIEW_OWNER } from "@jobguard/core";
 import { RetentionRecordRepository } from "../src/retention-record-repository.js";
 import { createWorkFixture, closeWorkFixture, workTenant, type WorkFixture } from "./job-work-state-fixtures.js";
 import { meterCompany } from "./meter-persistence-fixtures.js";
+import { workerFixturePool } from "./worker-login-fixture.js";
 let f: WorkFixture;
 beforeAll(async () => { f = await createWorkFixture(); }, 240000);
 afterAll(async () => { if (f) await closeWorkFixture(f); });
@@ -33,12 +34,13 @@ it.each(["invoiced", "paid"])("reads, reviews and runs the retention timer after
  const rv = await repo.command(a.context, { sessionDigest: a.digest }, { version: "retention-record-command.v1", jobId: a.jobId, commandId: randomUUID(),
   record: { version: "retention.review.v1", profileId: pid, conditionId: cond, owner: RETENTION_REVIEW_OWNER, trigger: "human", raisedOn: "2026-01-01" } })
   .then(() => "REVIEW_OK", (e: { code?: string }) => `REVIEW_REFUSED ${e.code}`);
- const timer = await repo.raiseTimerReviews(a.context);
+ const timer = await new RetentionRecordRepository(await workerFixturePool(f.runtime)).raiseTimerReviews(a.context);
  expect({ read, rv, timer }).toEqual({ read: "READ_OK", rv: "REVIEW_OK", timer: { appended: 0, refused: 0 } });
 }, 240000);
 
 it("refuses new human and timer rows before live while preserving reads and exact replay", async () => {
  const a = await meterCompany(f), repo = new RetentionRecordRepository(f.runtime);
+ const timer = new RetentionRecordRepository(await workerFixturePool(f.runtime));
  const source = { kind: "contract_profile", profileVersion: "fictional.v1", clause: "fictional" };
  const pid = randomUUID(), conditionId = randomUUID();
  const input = { version: "retention-record-command.v1", jobId: a.jobId, commandId: pid,
@@ -65,11 +67,11 @@ it("refuses new human and timer rows before live while preserving reads and exac
   await db.query("SELECT app.retention_records($1,$2,$3,$4,$5::jsonb,$6)",
    [a.tenantId, a.digest, a.jobId, id, JSON.stringify(record), stored.bookHash]);
  }, { membershipId: a.actorId, bindRequest: false })).rejects.toThrow("JOB_NOT_LIVE");
- expect(await repo.raiseTimerReviews(a.context)).toEqual({ appended: 0, refused: 1 });
+ expect(await timer.raiseTimerReviews(a.context)).toEqual({ appended: 0, refused: 1 });
  expect((await repo.read(a.context, { sessionDigest: a.digest }, a.jobId)).book).toEqual(before.book);
  // The same pending timer is allowed when the job reaches invoiced.
  await setJobStatus(a.tenantId, a.jobId, "invoiced");
- expect(await repo.raiseTimerReviews(a.context)).toEqual({ appended: 1, refused: 0 });
- expect(await repo.raiseTimerReviews(a.context)).toEqual({ appended: 0, refused: 0 });
+ expect(await timer.raiseTimerReviews(a.context)).toEqual({ appended: 1, refused: 0 });
+ expect(await timer.raiseTimerReviews(a.context)).toEqual({ appended: 0, refused: 0 });
  expect((await repo.read(a.context, { sessionDigest: a.digest }, a.jobId)).book.records).toHaveLength(2);
 }, 240000);

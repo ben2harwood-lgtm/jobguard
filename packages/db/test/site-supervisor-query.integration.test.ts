@@ -1,3 +1,4 @@
+import { bindIssuedCredential } from "../src/tenant-context.js";
 import { testActorContext } from "./tenant-context-test-utils.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -43,7 +44,7 @@ it("immutable query: replay, conflict, tenant/assignment/cancellation refusal, s
   await expect(repo.recordSupervisorQuery(await testActorContext(c.admin, f.ctx, actor), actor, order.jobId, { ...body, commandId: randomUUID(), expectedOrderRevisionId: revised.revisionId, quantity: "4" })).rejects.toMatchObject({ code: "INVALID_QUANTITY" });
   const owner = await c.admin.connect();
   try {
-   await owner.query("BEGIN"); await owner.query("SET LOCAL ROLE jobguard_migration");
+   await owner.query("BEGIN"); await bindIssuedCredential(owner, f.ctx); await owner.query("SET LOCAL ROLE jobguard_migration");
    await owner.query("SELECT set_config('app.tenant_id',$1,true)", [f.p.tenantId]);
    await expect(owner.query("UPDATE app.site_supervisor_query SET quantity='2' WHERE tenant_id=$1 AND id=$2", [f.p.tenantId, first.queryId])).rejects.toMatchObject({ code: "55000" });
   } finally { await owner.query("ROLLBACK"); owner.release(); }

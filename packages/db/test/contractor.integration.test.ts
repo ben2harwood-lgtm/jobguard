@@ -65,7 +65,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
  it('isolates two contractor tenants and one small-builder tenant, including scoped IDs and pooled context',async()=>{
   const a=await setup(),b=await setup(),s=await setup();
   const retainedBefore=await query(s.p);
-  const assignment=randomUUID();await withTenant(admin,verifiedTenantContextFromMembership(s.p),async db=>{
+  const assignment=randomUUID();await withTenant(admin,boundOf(s.p),async db=>{
    await db.$client.query("SELECT app.assign_commercial_track($1,$2,'small_builder',$3,1,'operations:test')",[s.p.tenantId,assignment,`synthetic-agreement:${s.p.tenantId}`]);
    await appendAuditBatch(db,[{id:assignment,version:'audit.v1',actorRef:'operations:test',eventType:'commercial_track.assigned',subjectType:'tenant',subjectRef:s.p.tenantId,payload:{references:{environment:'synthetic_demo'}}}]);
   });
@@ -124,18 +124,18 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   for(const role of contractorRoles.filter(x=>x!=='owner')){
    const scope=role==='finance'?'tenant':role==='client_approver'?'client':'team';const id=scope==='tenant'?p.tenantId:scope==='client'?client:own;
    const member=await fixtureMember(p,role,scope,id,role==='client_approver'?client:null);
-   for(const permission of contractorPermissions)expect((await withTenant(runtime,verifiedTenantContextFromMembership(member),db=>db.$client.query('SELECT app.contractor_allowed($1,$2,$3) allowed',[member.membershipId,permission,randomUUID()]))).rows[0].allowed).toBe(false);
+   for(const permission of contractorPermissions)expect((await withTenant(runtime,boundOf(member),db=>db.$client.query('SELECT app.contractor_allowed($1,$2,$3) allowed',[member.membershipId,permission,randomUUID()]))).rows[0].allowed).toBe(false);
    for(const permission of contractorPermissions)for(const [index,target]of[own,otherTeam,otherBranchTeam,distantTeam].entries()){
-    const allowed=(await withTenant(runtime,verifiedTenantContextFromMembership(member),db=>db.$client.query<{allowed:boolean}>('SELECT app.contractor_allowed($1,$2,$3) allowed',[member.membershipId,permission,target]))).rows[0]!.allowed;
+    const allowed=(await withTenant(runtime,boundOf(member),db=>db.$client.query<{allowed:boolean}>('SELECT app.contractor_allowed($1,$2,$3) allowed',[member.membershipId,permission,target]))).rows[0]!.allowed;
     expect(allowed,`${role} ${permission} scope ${index}`).toBe(role==='finance'?contractorPermissionMatrix.finance.includes(permission):role!=='client_approver'&&index===0&&contractorPermissionMatrix[role].includes(permission));
    }
    if(role==='operative'||role==='admin') for(const permission of ['extra.approve','extra.price','data.export','data.import','statement.read']){
     if(role==='admin'&&permission==='extra.price')continue;
-    expect((await withTenant(runtime,verifiedTenantContextFromMembership(member),db=>db.$client.query('SELECT app.contractor_allowed($1,$2,$3) allowed',[member.membershipId,permission,own]))).rows[0].allowed).toBe(false);
+    expect((await withTenant(runtime,boundOf(member),db=>db.$client.query('SELECT app.contractor_allowed($1,$2,$3) allowed',[member.membershipId,permission,own]))).rows[0].allowed).toBe(false);
    }
   }
   // Unit scopes include their descendants; moving outside the region denies.
-  for(const scope of ['branch','region'] as const){const member=await fixtureMember(p,'surveyor',scope,scope==='branch'?branch:region);for(const [index,target]of[own,otherTeam,otherBranchTeam,distantTeam].entries())expect((await withTenant(runtime,verifiedTenantContextFromMembership(member),db=>db.$client.query('SELECT app.contractor_allowed($1,$2,$3) allowed',[member.membershipId,'job.read',target]))).rows[0].allowed).toBe(index<(scope==='branch'?2:3));}
+  for(const scope of ['branch','region'] as const){const member=await fixtureMember(p,'surveyor',scope,scope==='branch'?branch:region);for(const [index,target]of[own,otherTeam,otherBranchTeam,distantTeam].entries())expect((await withTenant(runtime,boundOf(member),db=>db.$client.query('SELECT app.contractor_allowed($1,$2,$3) allowed',[member.membershipId,'job.read',target]))).rows[0].allowed).toBe(index<(scope==='branch'?2:3));}
  });
  it('covers every administration command and query for all roles; client invitation is bounded',async()=>{
   const {p,v}=await setup();const branch=v.units.find(x=>x.kind==='branch')!.id,region=v.units.find(x=>x.kind==='region')!.id,team=v.teams[0]!.id;
@@ -172,7 +172,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   const client=(await command(p,{kind:'client.create',branchId:branch,name:'Fictional writer client',clientType:'insurer'})).id,contractId=randomUUID(),membershipId=randomUUID();
   await command(p,{kind:'member.invite',id:membershipId,role:'commercial_manager',email:'manager@fictional.invalid',scope:{kind:'branch',id:branch},clientId:null,contractId:null});
   // Authentication fixture lookup uses the real runtime role, never the migration connection.
-  const identity=(await withTenant(runtime,verifiedTenantContextFromMembership(p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[membershipId]))).rows[0].identity_user_id;
+  const identity=(await withTenant(runtime,boundOf(p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[membershipId]))).rows[0].identity_user_id;
   const manager=await ownContext({...p,membershipId,identityUserId:identity} as AuthenticatedMembership);
   let projection=await query(manager,'contracts');expect(projection.revision).toBe(2);expect(projection.members).toEqual([]);expect(projection.grants).toEqual([]);
   await expect(query(manager)).rejects.toMatchObject({code:'NOT_FOUND'});
@@ -180,7 +180,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   projection=await query(manager,'contracts');expect(projection.revision).toBe(revise.revision);expect(projection.contracts[0]!.contract_id).toBe(contractId);
   const invitedId=randomUUID();
   await repo.command(manager,{version:'contractor-command.v1',environment:'synthetic_demo',commandId:randomUUID(),id:invitedId,expectedRevision:projection.revision,kind:'member.invite',role:'client_approver',scope:{kind:'client',id:client},email:'approver@fictional.invalid',clientId:client,contractId});
-  const clientIdentity=(await withTenant(runtime,verifiedTenantContextFromMembership(p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[invitedId]))).rows[0].identity_user_id;
+  const clientIdentity=(await withTenant(runtime,boundOf(p),db=>db.$client.query('SELECT identity_user_id FROM app.membership WHERE id=$1',[invitedId]))).rows[0].identity_user_id;
   const restricted=await ownContext({...p,membershipId:invitedId,identityUserId:clientIdentity} as AuthenticatedMembership);
   const before=await query(restricted,'contracts');expect(before.revision).toBe(0);expect(before.members).toEqual([]);expect(before.grants).toEqual([]);
   await command(p,{kind:'team.create',branchId:branch,name:'Fictional unrelated administration'});
@@ -271,7 +271,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
  it('revokes on next request, moves teams atomically and audits the actor and exact command',async()=>{
   const {p,v}=await setup();const old=v.teams[0]!.id,newTeam=(await command(p,{kind:'team.create',branchId:v.teams[0]!.branch_id,name:'Fictional move'})).id;
   const member=await fixtureMember(p,'operative','team',old);
-  const allowed=(target:string)=>withTenant(runtime,verifiedTenantContextFromMembership(member),db=>db.$client.query('SELECT app.contractor_allowed($1,$2,$3) allowed',[member.membershipId,'job.read',target]));
+  const allowed=(target:string)=>withTenant(runtime,boundOf(member),db=>db.$client.query('SELECT app.contractor_allowed($1,$2,$3) allowed',[member.membershipId,'job.read',target]));
   expect((await allowed(old)).rows[0].allowed).toBe(true);
   await command(p,{kind:'team.move',membershipId:member.membershipId,fromTeamId:old,toTeamId:newTeam});expect((await allowed(old)).rows[0].allowed).toBe(false);expect((await allowed(newTeam)).rows[0].allowed).toBe(true);
   const grant=(await query(p)).grants.find(x=>x.membership_id===member.membershipId&&x.scope_id===newTeam)!;
@@ -287,7 +287,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   const approver=await fixtureMember(p,'client_approver','client',a,a,ca);
   expect((await query(approver,'contracts')).contracts.map(x=>x.contract_id)).toEqual([ca]);
   for(const id of [cb,ca2,randomUUID()])await expect(query(approver,'contracts',id)).rejects.toMatchObject({code:'NOT_FOUND'});
-  for(const permission of ['job.read','statement.read','dashboard.read','resident.read','data.export','data.import'])expect((await withTenant(runtime,verifiedTenantContextFromMembership(approver),db=>db.$client.query('SELECT app.contractor_allowed($1,$2,$3) allowed',[approver.membershipId,permission,a]))).rows[0].allowed).toBe(false);
+  for(const permission of ['job.read','statement.read','dashboard.read','resident.read','data.export','data.import'])expect((await withTenant(runtime,boundOf(approver),db=>db.$client.query('SELECT app.contractor_allowed($1,$2,$3) allowed',[approver.membershipId,permission,a]))).rows[0].allowed).toBe(false);
   await expect(command(p,{kind:'grant.create',membershipId:approver.membershipId,role:'admin',scope:{kind:'tenant',id:p.tenantId},contractId:null})).rejects.toMatchObject({code:'FORBIDDEN'});
   await expect(command(p,{kind:'grant.create',membershipId:approver.membershipId,role:'client_approver',scope:{kind:'client',id:b},contractId:null})).rejects.toMatchObject({code:'FORBIDDEN'});
  });
@@ -299,7 +299,7 @@ describe('ENT-1 PostgreSQL guarantees',()=>{
   for(const contractId of [null,ca]){
    const approver=await fixtureMember(p,'client_approver','client',a,a,contractId);
    for(const [client,targetContract]of [[a,ca],[a,ca2],[b,cb]]){
-    const allowed=await withTenant(runtime,verifiedTenantContextFromMembership(approver),db=>db.$client.query("SELECT app.contractor_allowed($1,'extra.approve',$2,$3) approved, app.contractor_allowed($1,'contract.read',$2,$3) readable",[approver.membershipId,client,targetContract]));
+    const allowed=await withTenant(runtime,boundOf(approver),db=>db.$client.query("SELECT app.contractor_allowed($1,'extra.approve',$2,$3) approved, app.contractor_allowed($1,'contract.read',$2,$3) readable",[approver.membershipId,client,targetContract]));
     expect(allowed.rows[0].approved).toBe(false);
     expect(allowed.rows[0].readable).toBe(client===a&&(contractId===null||contractId===targetContract));
    }
@@ -344,7 +344,7 @@ it('CH-3b client customer link requires organisation.manage on the exact client'
  const otherBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:region,name:'Fictional adjacent branch'})).id;
  const otherRegion=(await command(p,{kind:'unit.create',unitKind:'region',parentId:p.tenantId,name:'Fictional distant region'})).id;
  const distantBranch=(await command(p,{kind:'unit.create',unitKind:'branch',parentId:otherRegion,name:'Fictional distant branch'})).id;
- const job=(await jobs.create(verifiedTenantContextFromMembership(p),['job:update'],{title:'Fictional client registry command anchor'})).id;
+ const job=(await jobs.create(boundOf(p),['job:update'],{title:'Fictional client registry command anchor'})).id;
  const customer=await registry.command(testTenantContext(p.tenantId, { membershipId: p.membershipId }),p.membershipId,job,{version:'job-parties-command.v1',commandId:randomUUID(),action:'create_customer',customer:{version:'customer.v1',name:'Fictional insurer',type:'insurer'}});
  const clientForApprover=(await command(p,{kind:'client.create',branchId:branch,name:'Fictional approver client',clientType:'insurer'})).id;
  for(const role of contractorRoles)for(const scope of ['tenant','region','branch','team'] as const){

@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate } from "../src/migrate.js";
 import { appendAuditBatch } from "../src/audit.js";
 import { withTenant } from "../src/tenant-context.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
 
 describe("LP-1 actual-role refusal requirements", () => {
@@ -40,7 +40,7 @@ describe("LP-1 actual-role refusal requirements", () => {
         VALUES($1,$2,$3,$4,'member',CASE WHEN $5='revoked' THEN transaction_timestamp()-interval '1 day' END,
         CASE WHEN $5='expired' THEN transaction_timestamp()-interval '1 day' END)`, [id, tenant, account, person, state]);
     }
-    await withTenant(owner, testTenantContext(tenant), async db => {
+    await withTenant(owner, testTenantContext(tenant, { membershipId: active }), async db => {
       await db.$client.query(`INSERT INTO app.command_receipt(command_id,tenant_id,command_type,semantic_key,request_hash,status,result,actor_membership_id,completed_at)
         VALUES($1,$2,'lp1.fixture','lp1.fixture',$3,'succeeded','{}',$4,clock_timestamp())`, [randomUUID(), tenant, "a".repeat(64), active]);
       await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${active}`, eventType: "lp1.fixture",
@@ -83,6 +83,7 @@ describe("LP-1 actual-role refusal requirements", () => {
     try {
       await client.query("BEGIN");
       if (context !== null) await client.query("SELECT set_config('app.tenant_id',$1,true)", [context]);
+      if (context === tenant) await bindTestClient(owner, client, tenant, active);
       try { await client.query(sql, values); } catch (error) { failure = error; }
       // COMMIT an aborted transaction proves the refusal cannot persist earlier statement effects.
       if (failure) await client.query("COMMIT"); else await client.query("ROLLBACK");
@@ -137,6 +138,7 @@ describe("LP-1 actual-role refusal requirements", () => {
       const client = await pool.connect();
       try {
         await client.query("BEGIN"); await client.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
+        await bindTestClient(owner, client, tenant, active);
         expect((await client.query("SELECT id FROM app.account WHERE id=$1", [account])).rowCount).toBe(1);
         expect((await client.query("SELECT id FROM app.membership WHERE id=$1", [active])).rowCount).toBe(1);
         await client.query("COMMIT");
@@ -216,6 +218,7 @@ describe("LP-1 actual-role refusal requirements", () => {
       await setup.query("REVOKE ALL ON FUNCTION public.lp1_update_effect() FROM PUBLIC");
       await setup.query(`CREATE TRIGGER aaa_lp1_update_effect BEFORE UPDATE ON app.account FOR EACH ROW EXECUTE FUNCTION public.lp1_update_effect()`);
       await setup.query("SAVEPOINT refusal");
+      await bindTestClient(owner, setup, tenant, active);
       await setup.query("SET LOCAL ROLE jobguard_runtime");
       await setup.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
       await expect(setup.query("UPDATE app.account SET created_at=created_at WHERE tenant_id=$1", [tenant])).rejects.toMatchObject({ code: "42501" });

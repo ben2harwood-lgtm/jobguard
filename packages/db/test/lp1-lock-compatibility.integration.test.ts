@@ -10,7 +10,7 @@ import { migrate } from "../src/migrate.js";
 import { RecoveryCaseRepository } from "../src/recovery-case-repository.js";
 import { RecoveryMessageRepository } from "../src/recovery-message-repository.js";
 import { RecoveryFollowUpRepository } from "../src/recovery-follow-up-repository.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testTenantContext } from "./tenant-context-test-utils.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 
 describe("LP-1 row-lock compatibility", () => {
@@ -41,8 +41,10 @@ describe("LP-1 row-lock compatibility", () => {
     runtime = new Pool({ ...options, user: "lp1_lock_login", max: 2 });
   }, 60_000);
   afterAll(async () => { await closeTestPools(runtime, owner); await postgres?.stop(); });
-  async function begin(db: PoolClient, context: string = tenant) {
-    await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [context]);
+  async function begin(db: PoolClient) {
+    await db.query("BEGIN");
+    await bindTestClient(owner, db, tenant, membership);
+    await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
   }
   async function waitBlocked(pid: number, blocker: number) {
     const deadline = performance.now() + 5000;
@@ -103,8 +105,11 @@ describe("LP-1 row-lock compatibility", () => {
         await db.query("BEGIN");
         expect((await db.query(`SELECT id FROM ${table} FOR SHARE`)).rows).toEqual([]);
         await db.query("ROLLBACK");
-        await begin(db, "invalid");
-        await expect(db.query(`SELECT id FROM ${table} FOR SHARE`)).rejects.toMatchObject({ code: "22P02" });
+        await db.query("BEGIN");
+        await db.query("SELECT set_config('app.tenant_id','invalid',true)");
+        expect((await db.query(`SELECT id FROM ${table} FOR SHARE`)).rows).toEqual([]);
+        await expect(db.query("SELECT app.bind_request('real',$1,$2::uuid)", ["a".repeat(64), "invalid"]))
+          .rejects.toMatchObject({ code: "22P02" });
         await db.query("ROLLBACK");
         await begin(db); expect((await db.query(`SELECT id FROM ${table} FOR SHARE`)).rowCount).toBe(1);
         await db.query("COMMIT");
@@ -115,6 +120,7 @@ describe("LP-1 row-lock compatibility", () => {
     const control = await owner.connect();
     try {
       await control.query("BEGIN");
+      await bindTestClient(owner, control, tenant, membership);
       for (const table of ["account", "membership"]) {
         await control.query(`CREATE POLICY lp1_restrict_update ON app.${table} AS RESTRICTIVE FOR UPDATE TO jobguard_runtime USING(false)`);
       }

@@ -7,7 +7,7 @@ import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appendAuditBatch, migrate, verifyAuditChain, withTenant } from "../src/index.js";
 import { closeTestPools, freePort } from "./pool-test-utils.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 
 const membershipConstraint = "audit_export_tenant_id_actor_membership_id_fkey";
 const quoteIdentifier = (name: string) => `"${name.replaceAll('"', '""')}"`;
@@ -47,17 +47,18 @@ type ExportFixture = {
 async function withFixture(work: (db: PoolClient, fixture: ExportFixture) => Promise<void>) {
   const tenantId = randomUUID(), foreignTenantId = randomUUID();
   const membershipId = randomUUID(), foreignMembershipId = randomUUID();
-  await withTenant(admin!, testTenantContext(tenantId), async database => {
+  // These admin-only fixtures exercise relational integrity, not runtime authorization.
+  for (const [tenant, member] of [[tenantId, membershipId], [foreignTenantId, foreignMembershipId]]) {
+    const accountId = randomUUID(), userId = randomUUID();
+    await admin!.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
+    await admin!.query("INSERT INTO identity.identity_user(id) VALUES($1)", [userId]);
+    await admin!.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'LATER-B22 fictional account')", [tenant, accountId]);
+    await admin!.query(`INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role)
+      VALUES($1,$2,$3,$4,'owner')`, [tenant, member, accountId, userId]);
+  }
+  const context = await testBoundTenantContext(admin!, tenantId, membershipId);
+  await withTenant(admin!, context, async database => {
     const db = database.$client;
-    // These admin-only fixtures exercise relational integrity, not runtime authorization.
-    for (const [tenant, member] of [[tenantId, membershipId], [foreignTenantId, foreignMembershipId]]) {
-      const accountId = randomUUID(), userId = randomUUID();
-      await db.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
-      await db.query("INSERT INTO identity.identity_user(id) VALUES($1)", [userId]);
-      await db.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'LATER-B22 fictional account')", [tenant, accountId]);
-      await db.query(`INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role)
-        VALUES($1,$2,$3,$4,'owner')`, [tenant, member, accountId, userId]);
-    }
     const eventId = randomUUID();
     const events = await appendAuditBatch(database, [{
       id: eventId, version: "audit.v1", actorRef: `membership:${membershipId}`,
