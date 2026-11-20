@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-11b-presenter-path": {
+      "branches": [
+        "codex/sandbox/ent-11b-presenter-path"
+      ],
+      "note": "Northside fictional presenter controls and their focused acceptance tests.",
+      "allow": [
+        "apps/web/app/api/northside/route.test.ts",
+        "apps/web/app/api/northside/route.ts",
+        "apps/web/app/api/northside/routes.test.ts",
+        "apps/web/app/northside/northside-hub.tsx",
+        "apps/web/app/ui/contractor-billing.test.tsx",
+        "apps/web/app/ui/contractor-billing.tsx",
+        "apps/web/app/ui/enterprise-dashboard.test.tsx",
+        "apps/web/app/ui/enterprise-dashboard.tsx",
+        "apps/web/e2e/ENT-11b-presenter.spec.ts",
+        "docs/operations/contractor-full-demo-package.md",
+        "packages/db/src/northside-run.ts"
+      ]
+    }
+  }
+}
