@@ -1,4 +1,4 @@
-import { bindOwnSession } from "../../../packages/db/test/tenant-context-test-utils";
+import { bindPracticeRequest } from "./helpers/bind-practice-request";
 import{expect,test,type Locator,type Page}from"@playwright/test";import{openReview}from"./helpers/capture-journey";
 test.setTimeout(180_000);
 const V=async(page:Page,id:string,value:string)=>expect.poll(async()=>page.getByTestId(id).textContent(),{timeout:45_000}).toBe(value);
@@ -327,7 +327,7 @@ test("approved £2,500 plus overlapping manual £1,000 remains received in full 
   try {
    await db.query("BEGIN");
    await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);
-   await bindOwnSession(db, (await db.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2", [tenantId,jobId])).rows[0].practice_session_digest);
+   await bindPracticeRequest(db, page, tenantId);
    await db.query("SET LOCAL session_replication_role=replica");
    await db.query("INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at)VALUES($1,$2,$3,$4,1,repeat('a',64),'synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',$5,now())",[activation,tenantId,jobId,baseline,randomUUID()]);
    await db.query("INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative)VALUES($1,$2,$3,$4,$5,1880000,'GBP',28200,'reference_fee_policy_v1',true)",[randomUUID(),tenantId,jobId,activation,baseline]);
@@ -402,7 +402,7 @@ test("repair 17: a below-settled retry keeps a delayed £900 amendment held acro
   try {
    await db.query("BEGIN");
    await db.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]);
-   await bindOwnSession(db, (await db.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2", [tenantId,jobId])).rows[0].practice_session_digest);
+   await bindPracticeRequest(db, page, tenantId);
    await db.query("SET LOCAL session_replication_role=replica");
    await db.query("INSERT INTO app.job_activation(id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,fee_policy_version,actor_membership_id,activated_at)VALUES($1,$2,$3,$4,1,repeat('a',64),'synthetic_demo','synthetic_demo_illustrative.v1','reference_fee_policy_v1',$5,now())",[activation,tenantId,jobId,baseline,randomUUID()]);
    await db.query("INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,currency,recovery_cap_pence,fee_policy_version,illustrative)VALUES($1,$2,$3,$4,$5,1880000,'GBP',28200,'reference_fee_policy_v1',true)",[randomUUID(),tenantId,jobId,activation,baseline]);
@@ -433,7 +433,7 @@ test("repair 17: a below-settled retry keeps a delayed £900 amendment held acro
   const reversed=await admin.connect();
   try {
    await reversed.query("BEGIN"); await reversed.query("SELECT set_config('app.tenant_id',$1,true)",[tenantId]); await reversed.query("SET LOCAL ROLE jobguard_runtime");
-   await bindOwnSession(reversed, (await reversed.query("SELECT practice_session_digest FROM app.job WHERE tenant_id=$1 AND id=$2", [tenantId,jobId])).rows[0].practice_session_digest);
+   await bindPracticeRequest(reversed, page, tenantId);
    await reversed.query("SELECT app.reverse_synthetic_landing($1,$2,$3,$4,$5,$6,$7)",[tenantId,randomUUID(),randomUUID(),randomUUID(),allocation,100000,"Practice receipt reversed"]);
    await reversed.query("COMMIT");
   } catch(error) {await reversed.query("ROLLBACK");throw error} finally {reversed.release()}

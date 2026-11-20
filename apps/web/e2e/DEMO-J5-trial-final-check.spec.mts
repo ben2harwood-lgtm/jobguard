@@ -9,10 +9,13 @@ import { exactTarget, preparedTrialFixture } from "../../../packages/db/test/fre
 import { seedWorkJob, workTenant, type WorkFixture } from "../../../packages/db/test/job-work-state-fixtures.js";
 import { generatePracticePng } from "../../../packages/db/src/practice-proof-image.js";
 import { closeTestPools } from "../../../packages/db/test/pool-test-utils.js";
-const admin = new Pool({ connectionString: "postgresql://postgres:sbox-e2e-owner@127.0.0.1:55432/jobguard_synthetic_demo", max: 2 });
-const runtime = new Pool({ connectionString: "postgresql://jobguard_runtime:sbox-e2e-runtime@127.0.0.1:55432/jobguard_synthetic_demo", max: 2 });
-const f = { admin, runtime } as WorkFixture;
+let admin: Pool, runtime: Pool, f: WorkFixture;
 test.setTimeout(180_000);
+test.beforeAll(() => {
+ admin = new Pool({ connectionString: "postgresql://postgres:sbox-e2e-owner@127.0.0.1:55432/jobguard_synthetic_demo", max: 2 });
+ runtime = new Pool({ connectionString: "postgresql://jobguard_runtime:sbox-e2e-runtime@127.0.0.1:55432/jobguard_synthetic_demo", max: 2 });
+ f = { admin, runtime } as WorkFixture;
+});
 test.afterAll(() => closeTestPools(runtime, admin));
 async function prepared(context: BrowserContext, baseURL: string, withTrial = true) {
  const a = await preparedTrialFixture(f, {

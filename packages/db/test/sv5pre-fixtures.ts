@@ -36,7 +36,7 @@ export async function closeLockFixture(f: LockFixture) { await closeTestPools(f.
 /** `as` binds this raw transaction to one fixture member's own request (LP-6d), as main's tests do. */
 export async function asFixtureTenant<T>(pool: Pool, tenantId: string, work: (db: PoolClient) => Promise<T>, as?: { owner: Pool; membershipId: string }): Promise<T> {
  const db = await pool.connect();
- try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); if (as) await bindTestClient(as.owner, db, tenantId, as.membershipId); const result = await work(db); await db.query("COMMIT"); return result; }
+ try { await db.query("BEGIN"); await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]); if (as) await bindTestClient(as.owner === pool ? db : as.owner, db, tenantId, as.membershipId); const result = await work(db); await db.query("COMMIT"); return result; }
  catch (error) { await db.query("ROLLBACK"); throw error; } finally { db.release(); }
 }
 export async function seedAccount(admin: Pool, tenantId = randomUUID(), net = 3360000) {
@@ -157,7 +157,11 @@ export async function prepareInvoicePrerequisites(admin: Pool, runtime: Pool, te
  await admin.query(`CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${material}'; GRANT jobguard_shadow TO ${login}`);
  // pg defaults database to user when absent; a fixture login is not a database.
  const database=(await admin.query("SELECT current_database() name")).rows[0].name;
- const shadow=new Pool({...connection,database,user:login,password:material,max:1});
+ // A connection string takes precedence over individual pg options. Its
+ // administrative credentials must never be reused for the shadow fixture.
+ const endpoint=connection.connectionString ? new URL(connection.connectionString) : undefined;
+ if(endpoint){endpoint.username=login;endpoint.password=material;}
+ const shadow=new Pool({...connection,connectionString:endpoint?.href,database,user:login,password:material,max:1});
  try { await publishFixtureCompletion(shadow,admin,tenantId,jobId); } finally { await shadow.end(); }
 }
 
