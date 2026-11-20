@@ -31,6 +31,15 @@ export async function northsideSwitchTargets(pool: Pool, member: AuthenticatedMe
      (('operative','demo.operative@fictional.invalid'),('surveyor','surveyor@northside-fictional.invalid'),
       ('supervisor','supervisor@northside-fictional.invalid'),('finance','finance@northside-fictional.invalid'),('client_approver','client.approver@northside-fictional.invalid')) ORDER BY m.role`, [member.tenantId])).rows);
 }
+export async function northsideJourneyTargets(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext) {
+  return withTenant(pool, context, async db => {
+    const { rows: [journeyOrder] } = await db.$client.query<{ workOrderId: string; jobId: string; reference: string }>(
+      `SELECT id "workOrderId",job_id "jobId",reference FROM app.work_order WHERE tenant_id=$1 AND reference='NS-1-0001' ORDER BY id LIMIT 1`, [member.tenantId]);
+    const { rows: practiceTeams } = await db.$client.query<{ id: string; name: string }>(
+      "SELECT id,name FROM app.team WHERE tenant_id=$1 ORDER BY id LIMIT 2", [member.tenantId]);
+    return { journeyOrder: journeyOrder ?? null, practiceTeams };
+  });
+}
 /** The actor's own attribution references only; this reveals no other client's extra or commercial content. */
 export async function northsideOwnActions(pool: Pool, member: AuthenticatedMembership, context: VerifiedTenantContext) {
   return withTenant(pool, context, async db => (await db.$client.query<{

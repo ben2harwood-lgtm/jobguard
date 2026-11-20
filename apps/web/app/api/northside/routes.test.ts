@@ -18,6 +18,7 @@ vi.mock("@jobguard/db", () => ({
   northsideExtras: h.extras,
   northsideApprovalArtifact: h.approvalArtifact,
   northsideRun: h.run, northsideFacts: h.facts, northsideTargets: { month: "2026-10" }, northsideSwitchTargets: h.targets, northsideOwnActions: h.ownActions,
+  northsideJourneyTargets: vi.fn(async () => ({ journeyOrder: null, practiceTeams: [] })),
   ExtraApprovalRepository: class { priceExtra = h.priceExtra; queue = h.queue; clientApprovalView = h.clientView; decideClientApproval = h.clientDecide; issueClientApproval = h.issueClientApproval; },
 }));
 vi.mock("../../lib/northside-server", () => ({
