@@ -3,14 +3,15 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { SyntheticTenantKeyRegistry, TenantKeyRegistryError } from "../src/tenant-key-registry.js";
 import { migrate } from "../src/migrate.js";
-import { verifiedTenantContextForQueuedJob, withTenant } from "../src/tenant-context.js";
+import { withTenant, type VerifiedTenantContext } from "../src/tenant-context.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
 
 const own = "0508_tenant_key_registry.sql";
 let c: Cluster, owner: Pool;
 let before: Awaited<ReturnType<typeof snapshot>>;
 const t = randomUUID(), other = randomUUID();
-const context = verifiedTenantContextForQueuedJob(t), foreign = verifiedTenantContextForQueuedJob(other);
+let context: VerifiedTenantContext, foreign: VerifiedTenantContext;
 const request = () => ({ version: "tenant-key-command.v1", commandId: randomUUID() });
 function key() {
   const keys = generateKeyPairSync("ed25519");
@@ -19,6 +20,14 @@ function key() {
 }
 function input(keyVersion: number, fingerprint: string, operation: string) {
   return { version: "tenant-key-use.v1", keyVersion, fingerprint, operation };
+}
+async function registryFixtureActor(tenantId: string) {
+  const identityId = randomUUID(), accountId = randomUUID(), membershipId = randomUUID();
+  await c.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [identityId]);
+  await c.admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional key registry')", [accountId, tenantId]);
+  await c.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",
+    [membershipId, tenantId, accountId, identityId]);
+  return testBoundTenantContext(c.admin, tenantId, membershipId);
 }
 beforeAll(async () => {
   c = await startBeforeMigration(own);
@@ -37,6 +46,10 @@ it("upgrade adds exactly empty registry tables; repeat migration preserves every
   await migrate(c.admin);
   // Freeze the own-step table set; later migrations may add unrelated tables.
   expect(await snapshot(c.admin, Object.keys(after))).toEqual(after);
+  // The independent assurance login binds its fixture requests without business runtime grants.
+  await c.admin.query("GRANT EXECUTE ON FUNCTION app.bind_request(text,text,uuid),app.current_tenant(),app.current_actor() TO key_registry_test");
+  context = await registryFixtureActor(t);
+  foreign = await registryFixtureActor(other);
 });
 
 it("rotation retains old signatures, retires signing, and persists revocation across fresh pools and services", async () => {

@@ -43,8 +43,23 @@ describe("M4-15 durable synthetic Direct Debit facts",()=>{
  it("deduplicates across a new pool and an independent node process and rejects changed content",async()=>{
   const f=await fixture(),pool=freshPool();
   try{await new DirectDebitFixtureRepository(pool).recordMandate(f.context,f.binding,f.event,null);}finally{await pool.end();}
-  const script=`import pg from 'pg'; const v=JSON.parse(process.env.DD_FIXTURE); const p=new pg.Pool(v.config); try { const c=await p.connect(); try { await c.query('BEGIN'); await c.query("SELECT set_config('app.tenant_id',$1,true)",[v.tenant]); await c.query('SELECT app.direct_debit_fixture($1,$2,$3::jsonb,$4::jsonb,$5::uuid)',[v.tenant,'mandate',JSON.stringify(v.binding),JSON.stringify(v.event),null]); await c.query('COMMIT'); } finally { c.release(); } } finally { await p.end(); }`;
-  await promisify(execFile)(process.execPath,["--input-type=module","-e",script],{cwd:new URL("../",import.meta.url),env:{...process.env,DD_FIXTURE:JSON.stringify({config:{...c.config,database:"jobguard_synthetic_demo",user:"ent4b_login"},tenant:f.tenantId,binding:f.binding,event:f.event})}});
+  const script=`
+    import pg from 'pg';
+    const v = JSON.parse(process.env.DD_FIXTURE);
+    const p = new pg.Pool(v.config);
+    try {
+      const c = await p.connect();
+      try {
+        await c.query('BEGIN');
+        await c.query("SELECT app.bind_request('real',$1,$2)", [v.credential,v.tenant]);
+        await c.query("SELECT set_config('app.tenant_id',$1,true)", [v.tenant]);
+        await c.query('SELECT app.direct_debit_fixture($1,$2,$3::jsonb,$4::jsonb,$5::uuid)',
+          [v.tenant,'mandate',JSON.stringify(v.binding),JSON.stringify(v.event),null]);
+        await c.query('COMMIT');
+      } finally { c.release(); }
+    } finally { await p.end(); }
+  `;
+  await promisify(execFile)(process.execPath,["--input-type=module","-e",script],{cwd:new URL("../",import.meta.url),env:{...process.env,DD_FIXTURE:JSON.stringify({config:{...c.config,database:"jobguard_synthetic_demo",user:"ent4b_login"},tenant:f.tenantId,credential:f.digest,binding:f.binding,event:f.event})}});
   expect((await f.repo.read(f.context,f.binding)).history).toHaveLength(1);
   await expect(f.repo.recordMandate(f.context,f.binding,{...f.event,state:"active"},null)).rejects.toThrow("DD_CONFLICT");
  });
@@ -119,6 +134,6 @@ describe("M4-15 durable synthetic Direct Debit facts",()=>{
    await db.query("SELECT set_config('app.fixture_marker','caller',true)");
    await db.query("SELECT app.direct_debit_fixture($1,'read',$2::jsonb,'{}',NULL)",[f.tenantId,JSON.stringify(f.binding)]);
    expect((await db.query("SELECT current_setting('app.tenant_id') tenant,current_setting('app.fixture_marker') marker")).rows[0]).toEqual({tenant:f.tenantId,marker:"caller"});
-  });
+  }, { membershipId: f.actorId });
  });
 });

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { ContractorRepository, ExtraRepository, appendAuditBatch, withTenant } from "../src/index.js";
+import { ContractorRepository, ExtraRepository, appendAuditBatch, withTenant, type TenantTransaction } from "../src/index.js";
 import { cluster, fixture, raise, ownerTx, type Cluster } from "./extra-fixtures.js";
 import { startSession, status, snapshot, unchanged } from "./contractor-entitlement-fixtures.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
@@ -10,8 +10,14 @@ let c:Cluster;
 beforeAll(async()=>{process.env.JOBGUARD_ENV="synthetic_demo";c=await cluster();},120000);
 afterAll(async()=>{await c?.close();});
 const invite=(tenant:string)=>({version:"contractor-command.v1",environment:"synthetic_demo",kind:"member.invite",role:"operative",commandId:randomUUID(),id:randomUUID(),expectedRevision:0,email:"worker@fictional.invalid",scope:{kind:"tenant",id:tenant},clientId:null,contractId:null});
+async function boundOwnerTx<T>(f:Awaited<ReturnType<typeof startSession>>,work:(db:TenantTransaction)=>Promise<T>) {
+ return withTenant(c.admin,f.context,async db=>{
+  await db.$client.query("SET LOCAL ROLE jobguard_migration");
+  return work(db);
+ });
+}
 async function track(f:Awaited<ReturnType<typeof startSession>>,value:"contractor"|"small_builder") {
- await ownerTx(c,f.p.tenantId,async db=>{
+ await boundOwnerTx(f,async db=>{
   const id=randomUUID(),actorRef=`membership:${f.p.membershipId}`;
   const rev=(await db.$client.query("SELECT max(revision)::int n FROM app.commercial_track_assignment WHERE tenant_id=$1",[f.p.tenantId])).rows[0].n;
   await db.$client.query("SELECT app.assign_commercial_track($1,$2,$3,$4,$5,$6)",[f.p.tenantId,id,value,`synthetic-agreement:${randomUUID()}`,rev,actorRef]);
@@ -32,7 +38,7 @@ it("active agreement creates exactly one operative; duplicate and conflicting re
 it.each(["Solo","Builder"])("small-builder %s cannot create membership, grant, invitation or site origin through SQL or routes",async _plan=>{
  // Plans cannot grant contractor features: no plan field is consulted in these writes.
  const f=await startSession(c);await track(f,"small_builder");await status(c,f,"active");
- const tenant=f.p.tenantId,run=(sql:string,params:unknown[])=>ownerTx(c,tenant,db=>db.$client.query(sql,params));
+ const tenant=f.p.tenantId,run=(sql:string,params:unknown[])=>boundOwnerTx(f,db=>db.$client.query(sql,params));
  for(const [sql,params] of [
   ["INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) SELECT tenant_id,$2,account_id,identity_user_id,'operative' FROM app.membership WHERE tenant_id=$1 AND id=$3",[tenant,randomUUID(),f.p.membershipId]],
   ["UPDATE app.membership SET role='operative' WHERE tenant_id=$1 AND id=$2",[tenant,f.p.membershipId]],
@@ -79,7 +85,7 @@ it("a write waiting behind suspension observes the committed latest status",asyn
   await writer.query("BEGIN");await writer.query("SELECT set_config('app.tenant_id',$1,true)",[f.p.tenantId]);
   // The status trigger itself takes the exclusive fence; no manual lock substitutes for it.
   await writer.query("INSERT INTO app.contractor_agreement_status_revision(tenant_id,id,assignment_id,revision,status,schema_version,environment,fictional_source) SELECT tenant_id,$2,assignment_id,revision+1,'suspended',schema_version,environment,$3 FROM app.contractor_agreement_status_revision WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1",[f.p.tenantId,randomUUID(),`fictional-fixture:${randomUUID()}`]);
-  const pending=ownerTx(c,f.p.tenantId,db=>db.$client.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) SELECT tenant_id,$2,account_id,identity_user_id,'operative' FROM app.membership WHERE tenant_id=$1 AND id=$3",[f.p.tenantId,randomUUID(),f.p.membershipId])).catch(error=>error);
+  const pending=boundOwnerTx(f,db=>db.$client.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) SELECT tenant_id,$2,account_id,identity_user_id,'operative' FROM app.membership WHERE tenant_id=$1 AND id=$3",[f.p.tenantId,randomUUID(),f.p.membershipId])).catch(error=>error);
   let waiting=false;
   for(let i=0;i<200;i++){
    waiting=(await c.admin.query("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted) waiting")).rows[0].waiting;
@@ -99,7 +105,7 @@ it("a replacement contractor assignment cannot borrow the old active status for 
   ["INSERT INTO identity.invitation(id,email,tenant_id,account_id,role,expires_at,issuer_user_id) SELECT $2,'worker@fictional.invalid',tenant_id,account_id,'operative',clock_timestamp()+interval '1 day',identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$3",[tenant,randomUUID(),f.p.membershipId]],
   ["INSERT INTO app.extra_origin(tenant_id,kind,job_track) VALUES($1,'site_user','contractor')",[tenant]],
   ["INSERT INTO app.extra_origin(tenant_id,kind,job_track) VALUES($1,'jobguard_surfaced_confirmed','contractor')",[tenant]],
- ] as Array<[string,unknown[]]>) await unchanged(c,()=>expect(ownerTx(c,tenant,db=>db.$client.query(sql,params))).rejects.toMatchObject({code:"42501"}));
+ ] as Array<[string,unknown[]]>) await unchanged(c,()=>expect(boundOwnerTx(f,db=>db.$client.query(sql,params))).rejects.toMatchObject({code:"42501"}));
  await status(c,f,"active");
  expect((await new ContractorRepository(c.runtime).command(f.p,invite(tenant))).kind).toBe("member.invite");
 });

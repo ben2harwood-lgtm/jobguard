@@ -14,7 +14,7 @@ const invoice = { id: invoiceId, invoice_number: "DEMO-CUST-000001", issued_on: 
  pdf_sha256: "a".repeat(64), source_hash: "b".repeat(64), final_account_revision_id: randomUUID(),
  net_pence: "10000", tax_pence: "2000", total_pence: "12000", credited_pence: "1200", paid_pence: "3000" };
 function fixture(answer: (sql: string) => unknown[]) {
- const query = vi.fn(async (sql: string) => { const rows = answer(sql); return { rows, rowCount: rows.length }; });
+ const query = vi.fn(async (sql: string) => { const rows = sql.includes("app.current_actor() actor") ? [{actor: actorMembershipId, tenant: tenantId}] : answer(sql); return { rows, rowCount: rows.length }; });
  const pool = { connect: async () => ({ query, release: vi.fn() }) } as unknown as Pool;
  return { pool, query, repo: new PracticeInvoiceRepository(pool) };
 }
@@ -54,7 +54,7 @@ describe("LATER-B16 invoice projections", () => {
  }
  for (const change of [{ invoiceId: randomUUID() }, { reason: "Changed synthetic reason" }]) {
   it(`L076 changed credit ${Object.keys(change)[0]} conflicts on replay`, async () => {
-   const { pool, query } = fixture(sql => sql.includes("FROM app.customer_credit_note") ? [{
+   const { pool, query } = fixture(sql => sql.includes("FROM app.command_receipt") ? [{semantic_key: "synthetic-credit"}] : sql.includes("FROM app.customer_credit_note") ? [{
     job_id: jobId, invoice_id: invoiceId, amount_pence: "1200", reason: "Synthetic correction",
    }] : []);
    vi.spyOn(UserCommandDispatcher.prototype, "dispatch").mockImplementation(async (_context, raw, handler) => {

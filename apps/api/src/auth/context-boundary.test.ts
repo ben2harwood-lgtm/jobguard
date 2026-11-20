@@ -83,7 +83,6 @@ const APPROVED_PRACTICE_FILES = [
   // (they take the session context from contractor-repository.requireContractorRequestContext), so they leave the list.
   "packages/db/src/practice-session.ts",
   "packages/db/src/contractor-repository.ts",
-  "packages/db/src/work-order-fixtures.ts",
   "packages/db/src/contractor-session-context.ts",
 ];
 // Bound to the source-inspected main 41d83ac implementations and ENT-2's four contractor files at main fd81315
@@ -108,7 +107,7 @@ const REVIEWED_PRACTICE_SOURCES: Readonly<Record<string, string>> = {
   // persisted session. The tenant lock and import permission check stay.
   // LP-6d repair 10 re-pin (checker accepted on source: prechecks/lp-6d-r10-403be3a6-s9-and-oracle.md): principal type only (the
   // context-bearing alias is gone); the three DEMO fixture constructors are unchanged.
-  "packages/db/src/work-order-fixtures.ts": "46a27d5662376acf51c51bd602c5556b566099f73c0caa3998a67a1092eaceb0",
+  "packages/db/src/work-order-fixtures.ts": "7a819ffa0a3fc465dfb44133d887b86500672afb82fcc203f6b66a4bb6dc18d4",
   "packages/db/src/contractor-session-context.ts": "6fc5382c5b912992d715ded455a79f115884eba53f25ee55f9a1050878f4605c",
 };
 const reviewedPracticeSource = (file: SourceFile) => REVIEWED_PRACTICE_SOURCES[file.path] === createHash("sha256").update(file.text).digest("hex");
@@ -684,7 +683,7 @@ export function boundaryViolations(files: SourceFile[]): string[] {
       }
     } else if (APPROVED_PRACTICE_FILES.includes(file.path)) {
       // Exact reviewed source identities and call shapes; a name on the list alone never authorizes another minting path.
-      const EXPECTED_PRACTICE_CALLS: Readonly<Record<string, number>> = { "packages/db/src/practice-session.ts": 1, "packages/db/src/contractor-repository.ts": 1, "packages/db/src/work-order-fixtures.ts": 3, "packages/db/src/contractor-session-context.ts": 1 };
+      const EXPECTED_PRACTICE_CALLS: Readonly<Record<string, number>> = { "packages/db/src/practice-session.ts": 1, "packages/db/src/contractor-repository.ts": 1, "packages/db/src/contractor-session-context.ts": 1 };
       const expectedCalls = EXPECTED_PRACTICE_CALLS[file.path] ?? -1;
       if (!reviewedPracticeSource(file) || membershipCalls.length !== expectedCalls || queuedCalls.length || casts.length || declarations.length) problems.push(`${file.path} practice constructors must match the exact reviewed authenticated practice-session source; changed code needs renewed caller review and grants no pilot/production authority`);
     } else if (file.path === REHEARSAL) {

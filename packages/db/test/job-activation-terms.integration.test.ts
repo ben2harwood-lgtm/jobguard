@@ -56,6 +56,10 @@ describe("CH-1 v3 activation",()=>{
   await repo.start(context,job,{commandId,scenario:"no_charge"});
   expect(await counts(job)).toEqual({activations:1,terms:1,caps:0,obligations:0,journals:0});
   await expect(repo.start(context,job,{commandId,scenario:"simulated_base_obligation"})).rejects.toThrow("COMMAND_CONFLICT");
+  const replayId=randomUUID();
+  await repo.start(context,job,{commandId:replayId,scenario:"no_charge"});
+  await expect(repo.start(context,job,{commandId:replayId,scenario:"simulated_base_obligation"})).rejects.toThrow("COMMAND_CONFLICT");
+  expect(await counts(job)).toEqual({activations:1,terms:1,caps:0,obligations:0,journals:0});
  });
  it("keeps parties mandatory and rolls failed activation back before audit",async()=>{
   const job=await prepareActivationFixtureV3(admin,context,"parties-guard",100000),before=(await admin.query(`SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1`,[T])).rows[0].n;

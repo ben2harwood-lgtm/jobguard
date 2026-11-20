@@ -55,7 +55,7 @@ export async function retainedExport(f: WorkFixture, a: SubscriptionCompany) {
 }
 export async function retained(f: WorkFixture, a: SubscriptionCompany, exports: () => Promise<unknown>) {
   const tables = ["job", "quote_document_version", "final_account_revision", "final_account_line"];
-  const data = await workTenant(f.runtime, a.tenantId, async db => {
+  const data = await withTenant(f.runtime, a.context, async ({ $client: db }) => {
     const result: Record<string, unknown> = {};
     for (const table of tables) result[table] = (await db.query(`SELECT row_to_json(t)::text bytes FROM app.${table} t WHERE tenant_id=$1 ORDER BY id`, [a.tenantId])).rows;
     return result;

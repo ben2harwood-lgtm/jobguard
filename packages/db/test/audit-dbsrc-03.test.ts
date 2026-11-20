@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CustomerBillingCommandService } from "../src/customer-billing-repository.js";
 import { PracticeInvoiceRepository } from "../src/practice-invoice-repository.js";
 import { readSyntheticDemo } from "../src/demo-runtime.js";
-import { DEMO_EMPTY_TENANT_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
+import { DEMO_EMPTY_MEMBERSHIP_ID, DEMO_EMPTY_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_TENANT_ID } from "../src/demo-seed.js";
 import { testTenantContext } from "./tenant-context-test-utils.js";
 
 const billingFixture = () => ({ tenantId: randomUUID(), jobId: randomUUID(), invoiceId: randomUUID(), actorMembershipId: randomUUID() });
@@ -218,13 +218,15 @@ describe("dbsrc-03 audit reproductions with query doubles", () => {
     const pool = { connect: async () => {
       let tenant: string;
       return { release() {}, query: async (sql: string, values: unknown[] = []) => {
+        if (sql.includes("app.bind_request")) tenant = values[2] as string;
         if (sql.includes("set_config")) tenant = values[0] as string;
-        const rows = sql.includes("FROM app.membership") ? tenant! === DEMO_EMPTY_TENANT_ID ? [] : [{ name: "Primary workshop" }]
+        const rows = sql.includes("app.current_actor") ? [{ tenant: tenant!, actor: tenant! === DEMO_EMPTY_TENANT_ID ? DEMO_EMPTY_MEMBERSHIP_ID : DEMO_MEMBERSHIP_ID }]
+          : sql.includes("FROM app.membership") ? tenant! === DEMO_EMPTY_TENANT_ID ? [] : [{ name: "Primary workshop" }]
           : sql.includes("FROM app.job j") ? [job] : [];
         return { rows, rowCount: rows.length };
       } };
     } } as unknown as Pool;
-    const result = await readSyntheticDemo(pool);
+    const result = await readSyntheticDemo(pool, "f".repeat(64));
     expect(result.tenant.id).toBe(DEMO_TENANT_ID);
     expect(result.jobs).toEqual([job]);
     expect(result.tenants).toEqual([result.tenant]);
@@ -235,12 +237,14 @@ describe("dbsrc-03 audit reproductions with query doubles", () => {
     const pool = { connect: async () => {
       let tenant: string;
       return { release() {}, query: async (sql: string, values: unknown[] = []) => {
+        if (sql.includes("app.bind_request")) tenant = values[2] as string;
         if (sql.includes("set_config")) tenant = values[0] as string;
         if (sql.includes("FROM app.membership") && tenant! === DEMO_EMPTY_TENANT_ID && failure === "empty database failure") throw new Error("fixture database unavailable");
-        const rows = sql.includes("FROM app.membership") && failure !== "primary forbidden" ? [{ name: "Primary workshop" }] : [];
+        const rows = sql.includes("app.current_actor") ? [{ tenant: tenant!, actor: tenant! === DEMO_EMPTY_TENANT_ID ? DEMO_EMPTY_MEMBERSHIP_ID : DEMO_MEMBERSHIP_ID }]
+          : sql.includes("FROM app.membership") && failure !== "primary forbidden" ? [{ name: "Primary workshop" }] : [];
         return { rows, rowCount: rows.length };
       } };
     } } as unknown as Pool;
-    await expect(readSyntheticDemo(pool)).rejects.toThrow(failure === "primary forbidden" ? "MEMBERSHIP_FORBIDDEN" : "fixture database unavailable");
+    await expect(readSyntheticDemo(pool, "f".repeat(64))).rejects.toThrow(failure === "primary forbidden" ? "MEMBERSHIP_FORBIDDEN" : "fixture database unavailable");
   });
 });

@@ -100,8 +100,9 @@ it.each(["own job", "imported child"] as const)("refuses B invoicing A's %s with
 it("follows multiple trusted import edges, scopes every edge to the tenant and keeps the helper private", async () => {
   const a = await seedFinalCheckJob(f), b = await seedFinalCheckJob(f);
   const child = await importedChild(a), grandchild = await importedChild(child);
-  const owns = (tenant: string, job: string, digest: string | null) => finalCheckTenant(f.admin, tenant, async db =>
-    (await db.query("SELECT app.final_check_practice_owns_job($1,$2,$3) owns", [tenant, job, digest])).rows[0].owns);
+  const owns = (tenant: string, job: string, digest: string | null) => finalCheckTenant(f.admin, a.tenantId, async db =>
+    (await db.query("SELECT app.final_check_practice_owns_job($1,$2,$3) owns", [tenant, job, digest])).rows[0].owns,
+    { practiceDigest: a.digest });
   expect(await owns(a.tenantId, grandchild.jobId, a.digest)).toBe(true);
   expect(await owns(a.tenantId, grandchild.jobId, b.digest)).toBe(false);
   expect(await owns(randomUUID(), grandchild.jobId, a.digest)).toBe(false);
@@ -177,9 +178,11 @@ async function v1Child(parent: FinalCheckJob, fault = "none") {
 }
 
 const ownsJob = (job: FinalCheckJob, digest: string) => finalCheckTenant(f.admin, job.tenantId, async db =>
-  (await db.query("SELECT app.final_check_practice_owns_job($1,$2,$3) owns", [job.tenantId, job.jobId, digest])).rows[0].owns as boolean);
-const trustedEdge = (child: FinalCheckJob, parent: FinalCheckJob) => finalCheckTenant(f.admin, child.tenantId, async db =>
-  (await db.query("SELECT app.trusted_import_edge($1,$2,$3) trusted", [child.tenantId, child.jobId, parent.jobId])).rows[0].trusted as boolean);
+  (await db.query("SELECT app.final_check_practice_owns_job($1,$2,$3) owns", [job.tenantId, job.jobId, digest])).rows[0].owns as boolean,
+  { practiceDigest: digest });
+const trustedEdge = (child: FinalCheckJob, parent: FinalCheckJob) => finalCheckTenant(f.admin, parent.tenantId, async db =>
+  (await db.query("SELECT app.trusted_import_edge($1,$2,$3) trusted", [child.tenantId, child.jobId, parent.jobId])).rows[0].trusted as boolean,
+  { practiceDigest: parent.digest });
 
 it("v1 receipt child issues a final and supplementary invoice and replays both under its parent's digest", async () => {
   const parent = await seedFinalCheckJob(f), other = await seedFinalCheckJob(f);
@@ -291,6 +294,7 @@ it.each(["receipt branch", "source parent"] as const)("mutation proof: removing 
     await db.query("SELECT set_config('app.tenant_id',$1,true)", [child.tenantId]);
     await db.query(changed);
     const digest = mutation === "receipt branch" ? parent.digest : wrong.digest;
+    await db.query("SELECT app.bind_request('practice',$1,$2)", [digest, child.tenantId]);
     const expected = mutation === "receipt branch";
     const owns = (await db.query("SELECT app.final_check_practice_owns_job($1,$2,$3) owns", [child.tenantId, child.jobId, digest])).rows[0].owns;
     // The acceptance/refusal expectation turns red in this scratch transaction.

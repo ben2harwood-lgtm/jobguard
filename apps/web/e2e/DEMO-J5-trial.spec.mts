@@ -6,8 +6,8 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { Pool } from "pg";
 import { closeTestPools } from "../../../packages/db/test/pool-test-utils.js";
 import { exactTarget } from "../../../packages/db/test/free-first-job-lifecycle-fixtures.js";
-import { meterCompany, verifyBusiness, type TrialCompany } from "../../../packages/db/test/free-first-job-admission-fixtures.js";
-import { seedWorkJob, type WorkFixture } from "../../../packages/db/test/job-work-state-fixtures.js";
+import { meterCompany, verifyBusiness } from "../../../packages/db/test/free-first-job-admission-fixtures.js";
+import { seedWorkJob, workTenant, type WorkFixture } from "../../../packages/db/test/job-work-state-fixtures.js";
 const E2E_ADMIN_DATABASE_URL = "postgresql://postgres:sbox-e2e-owner@127.0.0.1:55432/jobguard_synthetic_demo";
 const E2E_RUNTIME_URL = "postgresql://jobguard_runtime:sbox-e2e-runtime@127.0.0.1:55432/jobguard_synthetic_demo";
 const E2E_AUTH_CODE_SECRET = "sbox-only-identity-hmac-secret-32-bytes";
@@ -25,16 +25,15 @@ const facts = async (tenantId: string) => (await f.admin.query(`SELECT
   (SELECT coalesce(jsonb_agg(admission_kind ORDER BY admission_kind),'[]') FROM app.trial_admission WHERE tenant_id=$1) admissions`, [tenantId])).rows[0];
 
 async function company(context: BrowserContext, baseURL: string, verified = true) {
-  const a: TrialCompany = await meterCompany(f), token = randomUUID();
+  const token = randomUUID();
   const digest = createHmac("sha256", E2E_AUTH_CODE_SECRET).update(`session:${token}`).digest("hex");
-  await f.admin.query("UPDATE identity.session SET token_digest=$1 WHERE id=$2", [digest, a.sessionId]);
-  const owner = { ...a, digest };
-  if (verified) await verifyBusiness(f, owner);
-  await exactTarget(f, owner);
+  const a = await meterCompany(f, undefined, digest);
+  if (verified) await verifyBusiness(f, a);
+  await exactTarget(f, a);
   const second = await seedWorkJob(f, a.tenantId);
-  await exactTarget(f, { ...owner, jobId: second.jobId });
+  await exactTarget(f, { ...a, jobId: second.jobId });
   await context.addCookies([{ name: "jobguard_session", value: token, url: baseURL }]);
-  return { tenantId: a.tenantId, first: a.jobId, second: second.jobId };
+  return { tenantId: a.tenantId, first: a.jobId, second: second.jobId, actorId: a.actorId, sessionId: a.sessionId };
 }
 const button = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
 const alert = (page: Page) => page.getByRole("main").getByRole("alert");
@@ -158,7 +157,7 @@ test("DEMO-J5 without an approved identity nothing is offered and no trial start
 });
 
 test("DEMO-A1 stale authority: a revoked member and a revoked session cannot replay saved trial commands", async ({ page, context, baseURL }) => {
-  const { tenantId, first, second } = await company(context, baseURL!);
+  const { tenantId, first, second, actorId, sessionId } = await company(context, baseURL!);
   await openGuide(page);
   const runId = new URL(page.url()).searchParams.get("runId")!;
   const session = await (await page.request.get("/api/auth/session")).json();
@@ -169,18 +168,13 @@ test("DEMO-A1 stale authority: a revoked member and a revoked session cannot rep
   expect((await send(bound)).status()).toBe(200);
   expect((await send(read)).status()).toBe(200);
   const refused = async () => { for (const command of [bound, read]) expect((await send(command)).ok()).toBe(false); };
-  const membership = (await f.admin.query("SELECT id FROM app.membership WHERE tenant_id=$1", [tenantId])).rows[0].id;
-  await f.admin.query("BEGIN");
-  await f.admin.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
-  await f.admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [tenantId, membership]);
-  await f.admin.query("COMMIT");
+  await workTenant(f.admin, tenantId, db => db.query(
+    "UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [tenantId, actorId]));
   await refused();
-  await f.admin.query("BEGIN");
-  await f.admin.query("SELECT set_config('app.tenant_id',$1,true)", [tenantId]);
-  await f.admin.query("UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2", [tenantId, membership]);
-  await f.admin.query("COMMIT");
+  await workTenant(f.admin, tenantId, db => db.query(
+    "UPDATE app.membership SET revoked_at=NULL WHERE tenant_id=$1 AND id=$2", [tenantId, actorId]));
   expect((await send(read)).status()).toBe(200);
-  await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE user_id=(SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2)", [tenantId, membership]);
+  await f.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE id=$1", [sessionId]);
   await refused();
   expect(await facts(tenantId)).toMatchObject({ starts: 0, activations: 0 });
 });

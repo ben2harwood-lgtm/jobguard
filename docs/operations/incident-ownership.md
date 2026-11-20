@@ -64,7 +64,9 @@ values. It refuses symlinks, an absent/empty folder, and every non-loopback DB.
 Use only a disposable local migrated database with two populated fictional
 account tenants. Supply `PREFLIGHT_DATABASE_URL` using literal `127.0.0.1` or
 `[::1]` (no query parameters), `PREFLIGHT_TENANT_A`, and `PREFLIGHT_TENANT_B` in
-the environment, never command-line credentials.
+the environment. Supply the two disposable tenants' persisted synthetic
+session digests as `PREFLIGHT_A_TOKEN` and `PREFLIGHT_B_TOKEN`. Keep all
+credentials out of command-line arguments.
 
 Preflight runs the existing LP-0 catalogue comparator against the supplied
 connection, verifies non-owner/non-superuser/non-bypass runtime posture, checks

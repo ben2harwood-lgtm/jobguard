@@ -20,7 +20,7 @@ const address = (port: number, user: string, phrase: string, database = SYNTHETI
 
 describe("LP-1 explicit owner bootstrap", () => {
   const phrase = randomUUID(), runtimePhrase = randomUUID();
-  let postgres: EmbeddedPostgres, control: Pool, owner: Pool, runtime: Pool, port: number;
+  let postgres: EmbeddedPostgres, control: Pool, owner: Pool, verifier: Pool, runtime: Pool, port: number;
   let ownerUrl: string, runtimeUrl: string;
   const previous = process.env.JOBGUARD_ENV;
   beforeAll(async () => {
@@ -33,12 +33,13 @@ describe("LP-1 explicit owner bootstrap", () => {
     await control.query(`CREATE DATABASE ${SYNTHETIC_DATABASE_NAME} OWNER lp1_bootstrap_owner`);
     ownerUrl = address(port, "lp1_bootstrap_owner", phrase); runtimeUrl = address(port, "jobguard_runtime", runtimePhrase);
     owner = new Pool({ connectionString: ownerUrl });
+    verifier = new Pool({ connectionString: address(port, "postgres", phrase) });
     process.env.JOBGUARD_ENV = "synthetic_demo";
   }, 60_000);
   afterAll(async () => {
     vi.restoreAllMocks();
     if (previous === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = previous;
-    await closeTestPools(runtime, owner, control); await postgres?.stop();
+    await closeTestPools(runtime, verifier, owner, control); await postgres?.stop();
   });
   async function observedBootstrap() {
     const trace: Trace[] = [];
@@ -59,17 +60,17 @@ describe("LP-1 explicit owner bootstrap", () => {
     finally { observer.mockRestore(); }
   }
   async function rows() {
-    // Separately authenticated verifier can assume migration because bootstrap explicitly granted it.
-    const db = await owner.connect();
+    // Bootstrap writes are traced separately. Use the fixture administrator to
+    // compare both persisted tenants without treating a setting as authority.
+    const db = await verifier.connect();
     try {
-      await db.query("BEGIN"); await db.query("SET LOCAL ROLE jobguard_migration");
+      await db.query("BEGIN READ ONLY");
       const result: { accounts: unknown[]; memberships: unknown[] } = { accounts: [], memberships: [] };
       for (const [tenant, account, member] of [[DEMO_TENANT_ID, DEMO_ACCOUNT_ID, DEMO_MEMBERSHIP_ID], [DEMO_EMPTY_TENANT_ID, DEMO_EMPTY_ACCOUNT_ID, DEMO_EMPTY_MEMBERSHIP_ID]]) {
-        await db.query("SELECT set_config('app.tenant_id',$1,true)", [tenant]);
         result.accounts.push(...(await db.query(`SELECT row_to_json(t)::text AS bytes FROM
-          (SELECT id,tenant_id,name,created_at,updated_at FROM app.account WHERE id=$1) t`, [account])).rows);
+          (SELECT id,tenant_id,name,created_at,updated_at FROM app.account WHERE tenant_id=$1 AND id=$2) t`, [tenant,account])).rows);
         result.memberships.push(...(await db.query(`SELECT row_to_json(t)::text AS bytes FROM
-          (SELECT id,tenant_id,account_id,identity_user_id,role,created_at,revoked_at,expires_at FROM app.membership WHERE id=$1) t`, [member])).rows);
+          (SELECT id,tenant_id,account_id,identity_user_id,role,created_at,revoked_at,expires_at FROM app.membership WHERE tenant_id=$1 AND id=$2) t`, [tenant,member])).rows);
       }
       return result;
     } finally { await db.query("ROLLBACK"); db.release(); }
@@ -79,13 +80,15 @@ describe("LP-1 explicit owner bootstrap", () => {
     const first = await observedBootstrap(), before = await rows(), second = await observedBootstrap();
     expect(before.accounts).toHaveLength(2); expect(before.memberships).toHaveLength(2);
     expect(await rows()).toEqual(before);
+    const identityWrites = (trace: Trace[]) => trace.filter(row => row.table === "account" || row.table === "membership");
+    expect(identityWrites(first)).toEqual([
+        { table: "account", role: "jobguard_migration", login: "lp1_bootstrap_owner" },
+        { table: "membership", role: "jobguard_migration", login: "lp1_bootstrap_owner" },
+        { table: "account", role: "jobguard_migration", login: "lp1_bootstrap_owner" },
+        { table: "membership", role: "jobguard_migration", login: "lp1_bootstrap_owner" },
+    ]);
+    expect(identityWrites(second)).toEqual([]);
     for (const trace of [first, second]) {
-      expect(trace.filter(row => row.table === "account" || row.table === "membership")).toEqual([
-        { table: "account", role: "jobguard_migration", login: "lp1_bootstrap_owner" },
-        { table: "membership", role: "jobguard_migration", login: "lp1_bootstrap_owner" },
-        { table: "account", role: "jobguard_migration", login: "lp1_bootstrap_owner" },
-        { table: "membership", role: "jobguard_migration", login: "lp1_bootstrap_owner" },
-      ]);
       const jobs = trace.filter(row => row.table === "job"); expect(jobs.length).toBeGreaterThan(0);
       expect(jobs.every(row => row.role === "jobguard_migration" && row.login === "lp1_bootstrap_owner")).toBe(true);
     }

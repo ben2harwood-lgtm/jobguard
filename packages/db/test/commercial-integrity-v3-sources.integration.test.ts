@@ -88,7 +88,7 @@ it("CH-6 persisted user/phone/card assertions are opaque, immutable, session sco
  const projected=async(zone:string)=>transaction(f.runtime,async db=>{
   await db.query("SELECT set_config('TimeZone',$1,true)",[zone]);
   return (await db.query("SELECT app.ch6_integrity_sources($1,$2,$3) result",[tenant,job,f.auth.digest])).rows[0].result;
- });
+ },f.auth.digest);
  const utc=await projected("UTC"),local=await projected("Pacific/Auckland");
  expect({...local,input:{...local.input,evaluatedAt:utc.input.evaluatedAt}}).toEqual(utc);
 

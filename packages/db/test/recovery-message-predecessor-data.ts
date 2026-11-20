@@ -19,7 +19,8 @@ export async function seedPredecessorRecoveryMessage(
   const command = randomUUID();
   const requestHash = createHash("sha256").update(command).digest("hex");
   const reference = `fake-recovery:${action}`;
-  await withTenant(owner, testTenantContext(tenant, { bindRequest: false }), async db => {
+  const cutover = (await owner.query("SELECT to_regprocedure('app.lp11_policy_tenant()') IS NOT NULL AS applied")).rows[0].applied;
+  await withTenant(owner, testTenantContext(tenant, { membershipId: actor.membershipId, bindRequest: cutover }), async db => {
     const client = db.$client;
     let revision = view.revision;
     const audits: AuditEventInput[] = [];

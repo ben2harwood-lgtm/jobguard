@@ -3,7 +3,7 @@ import { randomBytes, randomUUID, createHash } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { cluster, ownerTx, type Cluster } from "./contractor-practice-session-fixtures.js";
+import { cluster, type Cluster } from "./contractor-practice-session-fixtures.js";
 import { ExtraApprovalRepository, appendAuditBatch, canonicalJson, type TenantTransaction } from "../src/index.js";
 import { beginRepositoryCommand, completeRepositoryCommand } from "../src/repository-command.js";
 import { chainWorld, submitted, approveInput, emailOf, newToken } from "./extra-approval-chain-fixtures.js";
@@ -24,7 +24,7 @@ async function world() {
   await c.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
   await c.admin.query("INSERT INTO identity.user_email(email,user_id) VALUES($1,$2)", [`${user}@fixture.invalid`, user]);
   await c.admin.query("INSERT INTO app.account(tenant_id,id,name) VALUES($1,$2,'Fictional lock test')", [tenant, account]);
-  await ownerTx(c, tenant, db => db.$client.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [tenant, member, account, user]));
+  await c.admin.query("INSERT INTO app.membership(tenant_id,id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')", [tenant, member, account, user]);
   await c.admin.query("INSERT INTO identity.membership_locator(user_id,tenant_id,membership_id) VALUES($1,$2,$3)", [user, tenant, member]);
   await c.admin.query("INSERT INTO identity.session(id,user_id,token_digest,csrf_token,expires_at,environment) VALUES($1,$2,$3,'fictional-csrf-token',clock_timestamp()+interval '1 hour','synthetic_demo')", [randomUUID(), user, builder]);
   await c.admin.query("INSERT INTO app.job(tenant_id,id,title) VALUES($1,$2,'Fictional portal job')", [tenant, job]);

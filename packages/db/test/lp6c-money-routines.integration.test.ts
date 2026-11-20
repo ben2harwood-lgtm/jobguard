@@ -154,14 +154,13 @@ it("meter credential bridge binds once and refuses credential substitution and w
 
 // These ports have no separate approval parameter: owner permission and protected
 // identity remain required; invoice issuance retains its own exact atomic approval.
-it("permits a bound owner through the invoice owner/resource boundary and number path", async () => {
+it("permits the bound invoice owner boundary but withdraws standalone runtime numbering", async () => {
   const s = await session();
   await request(db.owner, s, true, async c => {
     await c.query("SELECT app.final_lock_require_owner($1,$2)", [s.tenant, s.member]);
   });
   await request(db.runtime, s, true, async c => {
-    const result = await c.query("SELECT app.reserve_customer_invoice_number($1) n", [s.tenant]);
-    expect(BigInt(result.rows[0].n)).toBeGreaterThan(0n);
+    await failure(c, "SELECT app.reserve_customer_invoice_number($1)", [s.tenant], {code: "42501"});
   });
   await db.owner.query("UPDATE app.membership SET role='worker' WHERE tenant_id=$1 AND id=$2", [s.tenant, s.member]);
   await request(db.owner, s, true, c => failure(c, "SELECT app.final_lock_require_owner($1,$2)", [s.tenant, s.member], { code: "42501", message: "FORBIDDEN" }));

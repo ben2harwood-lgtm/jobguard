@@ -28,7 +28,10 @@ beforeAll(async () => {
   runtime = new Pool({ host: "127.0.0.1", port, database: "postgres", user: "evidence_sources_login", password: "synthetic" });
 }, 60_000);
 afterAll(async () => { await closeTestPools(runtime, admin); await pg?.stop(); if (dir) await rm(dir, { recursive: true, force: true }); });
-const load = (caseId: string, tenantId = fixture.tenantId) => withTenant(runtime, testTenantContext(tenantId), db => loadEvidencePackSources(db, tenantId, caseId));
+const load = (caseId: string, source:Pick<typeof fixture,"tenantId"|"memberId"> = fixture) => withTenant(
+  runtime, testTenantContext(source.tenantId, { membershipId:source.memberId }),
+  db => loadEvidencePackSources(db, source.tenantId, caseId),
+);
 
 describe("evidence pack immutable sources", () => {
   it("maps stored exact versions, approval records and proof bytes without unrelated supplier rows", async () => {
@@ -61,7 +64,7 @@ describe("evidence pack immutable sources", () => {
   it("rejects missing/wrong-job references instead of fabricating a document", async () => {
     await expect(load(fixture.badReferenceCaseId)).rejects.toMatchObject({ code: "EVIDENCE_PACK_SOURCE_NOT_FOUND" });
     await expect(load(fixture.crossJobReferenceCaseId)).rejects.toMatchObject({ code: "EVIDENCE_PACK_SOURCE_NOT_FOUND" });
-    await expect(load(fixture.caseId, fixture.otherTenantId)).rejects.toMatchObject({ code: "EVIDENCE_PACK_CASE_NOT_FOUND" });
+    await expect(load(fixture.caseId, {tenantId:fixture.otherTenantId,memberId:fixture.memberId})).rejects.toMatchObject({ code: "EVIDENCE_PACK_CASE_NOT_FOUND" });
   });
   it("does not substitute a historical acceptance after the accepted baseline is cleared", async () => {
     await admin!.query("UPDATE app.job SET accepted_quote_version_id=NULL WHERE tenant_id=$1 AND id=$2", [fixture.tenantId, fixture.jobId]);
@@ -75,7 +78,7 @@ describe("evidence pack immutable sources", () => {
   });
   it("does not invent a variation requirement for an unchanged job", async () => {
     const unchanged = await seedEvidencePackFixture(admin!, { withVariation: false });
-    const result = await load(unchanged.caseId, unchanged.tenantId);
+    const result = await load(unchanged.caseId, unchanged);
     expect(result.sources.some(source => source.kind === "variation")).toBe(false);
     expect(result.omissions).toEqual([]);
   });

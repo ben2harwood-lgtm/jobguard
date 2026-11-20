@@ -4,6 +4,7 @@ import { afterAll, expect, it } from 'vitest';
 import { createScimHarness, fixture, person, canonicalRows, type ScimHarness } from './scim-fixtures.js';
 import { migrate, MIGRATION_URLS } from '../src/migrate.js';
 import { predecessorCatalogue } from './contractor-entitlement-fixtures.js';
+import { advanceToTenantCutover, expectedTenantCutover, tenantCutoverCatalogue } from './upgrade-proof-utils.js';
 type Relation = { nspname:string; relname:string; relacl:unknown; [key:string]:unknown };
 function expectRelationsUnchanged(before:Relation[],after:Relation[],laterAcl:Set<string>) {
  // 0733 adds only these quote bindings; retain every other predecessor attribute.
@@ -102,7 +103,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const f=await fixture(h);await person(f,'finance');
  const tables=['identity.session','identity.sso_subject','identity.sso_emergency_window','identity.sso_required_event','app.membership','app.role_grant'];
  const before=await Promise.all(tables.map(t=>canonicalRows(h!,t))),catalogue=await predecessorCatalogue(h.admin);
- await migrate(h.admin);await migrate(h.admin);
+ await advanceToTenantCutover(h.admin);
  expect(await Promise.all(tables.map(t=>canonicalRows(h!,t)))).toEqual(before);
  const after=await predecessorCatalogue(h.admin);
  const delegationSql=await readFile(new URL('../migrations/0724_lp6c_customer_portal_delegation.sql',import.meta.url),'utf8');
@@ -128,7 +129,9 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  const boundary=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0613_scim2_machine.sql'));
  expect(boundary).toBeGreaterThanOrEqual(0);
  const later=new Set<string>();
- for(const url of MIGRATION_URLS.slice(boundary+1))
+ const cutover=MIGRATION_URLS.findIndex(u=>u.pathname.endsWith('/0765_lp11_bound_tenant_rls.sql'));
+ expect(cutover).toBeGreaterThan(boundary);
+ for(const url of MIGRATION_URLS.slice(boundary+1,cutover))
   for(const m of (await readFile(url,'utf8')).matchAll(/CREATE OR REPLACE FUNCTION ([a-z_]+)\.([a-z0-9_]+)\(/gu))later.add(`${m[1]}.${m[2]}`);
  // 0642 and 0644 re-create these exact bodies by text replacement; plan-entitlement-lifecycle-upgrade pins each body.
  for(const name of ['app.xa_issue_link','app.lp5b_contractor_permission','app.northside_capture_action'])later.add(name);
@@ -138,7 +141,7 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
  later.add('app.ch4_capture_site_source');
  // A later GRANT/REVOKE on a predecessor table may change its ACL only; that migration's proof and LP-0 pin it.
  const laterAcl=new Set<string>(["app.action_attempt","app.action_outbox"]);
- for(const url of MIGRATION_URLS.slice(boundary+1))
+ for(const url of MIGRATION_URLS.slice(boundary+1,cutover))
   for(const m of (await readFile(url,'utf8')).matchAll(/\b(?:GRANT|REVOKE)\b[^;]*?\bON\s+(?:TABLE\s+)?((?:[a-z_]+\.[a-z0-9_]+)(?:\s*,\s*[a-z_]+\.[a-z0-9_]+)*)\s+(?:TO|FROM)\b/gu))
    for(const name of m[1]!.split(','))laterAcl.add(name.trim());
  expectPoliciesUnchanged(catalogue.policies,after.policies);
@@ -312,4 +315,8 @@ it('emergency_dual_owner/scim2_machine preserve populated identity state, instal
   expect((await h.admin.query("SELECT has_table_privilege('jobguard_runtime',$1,'SELECT,INSERT,UPDATE,DELETE') allowed",['identity.'+table])).rows[0].allowed).toBe(false);
  }
  expect((await h.admin.query("SELECT rolcanlogin,rolsuper,rolbypassrls FROM pg_roles WHERE rolname='jobguard_scim'")).rows[0]).toEqual({rolcanlogin:false,rolsuper:false,rolbypassrls:false});
+ const priorCutover=await tenantCutoverCatalogue(h.admin);
+ await migrate(h.admin);await migrate(h.admin);
+ expect(await tenantCutoverCatalogue(h.admin)).toEqual(await expectedTenantCutover(h.admin,priorCutover));
+ expect(await Promise.all(tables.map(t=>canonicalRows(h!,t)))).toEqual(before);
 },120000);

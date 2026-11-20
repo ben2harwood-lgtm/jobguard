@@ -159,7 +159,10 @@ describe("read-only operator WORM recovery", () => {
       code: "WORM_STORAGE_REFUSED", severity: "critical", occurred_at: new Date() };
     fake.query.mockResolvedValue({ rows: [alert] });
     expect(await operator().operatorAlerts(context)).toEqual([alert]);
-    expect(fake.query).toHaveBeenCalledExactlyOnceWith("SELECT * FROM worm_control.worm_operator_alerts()");
+    expect(fake.query.mock.calls).toEqual([
+      ["SELECT worm_control.lp11_bind_worm_scope($1,$2,$3)", [context.tenantId, null, "alerts"]],
+      ["SELECT * FROM worm_control.worm_operator_alerts()"],
+    ]);
     expect(fake.pools).toEqual([operatorPool]);
     expect(storage.hold).not.toHaveBeenCalled(); expect(storage.retain).not.toHaveBeenCalled();
     fake.query.mockRejectedValue(new Error("secret database detail"));

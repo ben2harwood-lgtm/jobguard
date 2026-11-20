@@ -184,10 +184,12 @@ describe("SH-1 real PostgreSQL origin and track guarantees",()=>{
   expect(refusedReal).toEqual(await runtimeRefusal(randomUUID()));expect(refusedReal).toEqual(await runtimeRefusal(null));
   expect(refusedReal).toMatchObject({code:"42501",message:"shadow origin unavailable through runtime"});
   const privileged=async(source:string|null,type?:string)=>{
-   const client=await admin.connect(),id=randomUUID(),command=randomUUID();
-   try{await client.query("BEGIN");await client.query("SELECT set_config('app.tenant_id',$1,true)",[T]);await client.query("SET LOCAL ROLE jobguard_migration");
-    await catchOrigin(client,id,command,source,type);await client.query("COMMIT");return {id,command};
-   }catch(e){await client.query("ROLLBACK");throw e}finally{client.release()}
+   const id=randomUUID(),command=randomUUID();
+   return withTenant(admin,ctx(),async db=>{
+    await db.$client.query("SET LOCAL ROLE jobguard_migration");
+    await catchOrigin(db.$client,id,command,source,type);
+    return {id,command};
+   });
   };
   await expect(privileged(signal,"LogBuilderExtra")).rejects.toMatchObject({code:"23514"});
   await expect(privileged(null)).rejects.toMatchObject({code:"23514"});

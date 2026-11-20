@@ -16,7 +16,7 @@ import { FinalCheckWorker } from "./final-check.worker.js";
 import { generatePracticePng } from "./proof/proof.application.js";
 import { ShadowFixtureProposer, shadowFixtureCorpusV1 } from "@jobguard/ai";
 import { ShadowDetectionWorker } from "./shadow-detection.worker.js";
-import { ActionExecutor, closeOutboundWorkerPool, type OutboundAdapter, type SafeTelemetry, verifiedTenantContextForQueuedJob } from "@jobguard/db";
+import { ActionExecutor, closeOutboundWorkerPool, outboundWorkerPool, type OutboundAdapter, type SafeTelemetry, verifiedTenantContextForQueuedJob } from "@jobguard/db";
 import { run, type TaskList } from "graphile-worker";
 import { Pool } from "pg";
 import { z } from "zod";
@@ -38,7 +38,7 @@ const posture=(await shadowPool.query<{safe:boolean}>(`SELECT NOT r.rolsuper AND
  AS safe FROM pg_roles r WHERE r.rolname=session_user`)).rows[0];
 if(posture?.safe!==true)throw new Error("SHADOW_POOL_ROLE_UNSAFE");
 const corpus=shadowFixtureCorpusV1.parse(JSON.parse(await readFile(new URL("../../../docs/fixtures/ai/shadow-observations.v1.json",import.meta.url),"utf8")));
-const observationReader=new ShadowObservationReader(runtimePool,new FixtureObservationSources(corpus.cases.flatMap(c=>c.observations)));
+const observationReader=new ShadowObservationReader(runtimePool,new FixtureObservationSources(corpus.cases.flatMap(c=>c.observations)),shadowPool);
 const detectionRepository=new ShadowDetectionRepository(shadowPool);
 const fixtureProposer=new ShadowFixtureProposer(Object.assign({},...corpus.cases.map(c=>c.responses)));
 const detectionWorker=new ShadowDetectionWorker({assertTermsRelation:()=>observationReader.assertTermsRelation(),hasAcceptedTerms:(context,jobId)=>observationReader.hasAcceptedTerms(context,jobId),read:(context,request)=>observationReader.read(context,request),propose:(o,id,at)=>fixtureProposer.propose(o,id,at),persist:(context,request)=>detectionRepository.persist(context,request)},process.env.JOBGUARD_ENV??"disabled");
@@ -74,7 +74,7 @@ registerPracticeFinalCheckTasks(tasks,async parsed=>executePracticeFinalCheck(qu
 },finalCheckEnvironment));
 // Demo-only DEMO-J3 guide step: the practice builder asks, this worker holds signals from saved sources before lock.
 const practicePhotoHash=(fixture:"completion-photo"|"j3-drainage-photo")=>createHash("sha256").update(generatePracticePng(fixture)).digest("hex");
-const practiceHoldReader=new ShadowObservationReader(runtimePool,{async decode(source){return source.kind==="completion_photo"?decodePracticePhoto(source.sha256,practicePhotoHash("completion-photo"),practicePhotoHash("j3-drainage-photo")):null;}});
+const practiceHoldReader=new ShadowObservationReader(runtimePool,{async decode(source){return source.kind==="completion_photo"?decodePracticePhoto(source.sha256,practicePhotoHash("completion-photo"),practicePhotoHash("j3-drainage-photo")):null;}},shadowPool);
 const demoHoldTaskV1=z.object({version:z.literal("demo-source-hold.v1"),requestId:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" }),jobId:z.guid({ error: "Invalid uuid" })}).strict();
 tasks.discover_demo_source_holds=async(_payload,helpers)=>{
  await helpers.withPgClient(async client=>{
@@ -92,7 +92,7 @@ tasks.discover_demo_source_holds=async(_payload,helpers)=>{
 tasks.hold_demo_sources=async(payload,helpers)=>{
  if(finalCheckEnvironment!=="synthetic_demo")throw new FinalCheckError("FINAL_CHECK_FORBIDDEN");
  const task=demoHoldTaskV1.parse(payload),context=queueContext({tenantId:task.tenantId});
- const late=await readLateSourceObservations(runtimePool,context,task.jobId);
+ const late=await readLateSourceObservations(runtimePool,context,task.jobId,shadowPool);
  if(late.length){
   if(!await practiceHoldReader.hasAcceptedTerms(context,task.jobId))throw new Error("SHADOW_TERMS_NOT_ACCEPTED");
   await detectionRepository.persist(context,{version:"shadow-detection-batch.v1",jobId:task.jobId,observations:late,captures:[],
@@ -135,7 +135,8 @@ Object.assign(tasks, readiness.tasks);
 const extraEscalationCrontab=registerExtraEscalationTasks(tasks,finalCheckEnvironment,parsed=>
  escalateOverdueExtrasTask(runtimePool,queueContext({tenantId:parsed.tenantId})));
 const extraEscalationTasks=extraEscalationCrontab?{discover_extra_escalations:tasks.discover_extra_escalations!,escalate_overdue_extras:tasks.escalate_overdue_extras!}:{};
-const retentionRepository=new RetentionRecordRepository(runtimePool);
+const workerPool=await outboundWorkerPool();
+const retentionRepository=new RetentionRecordRepository(workerPool);
 const retentionCrontab=registerRetentionReviewTasks(tasks,process.env.JOBGUARD_ENV??"disabled",async tenantId=>{
  const context=queueContext({tenantId});
  await retentionRepository.raiseTimerReviews(context,refusal=>console.warn("retention book refused",refusal));

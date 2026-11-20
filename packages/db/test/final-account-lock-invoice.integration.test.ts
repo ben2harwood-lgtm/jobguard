@@ -15,7 +15,14 @@ const invoiceInput=(a:Account,invoiceKind:'final'|'supplementary'='final')=>({jo
 async function appendCheck(f:LockFixture,a:Account,status:'pending'|'failed'|'completed',overrides:{lockId?:string;cutoff?:string;jobId?:string}={}){
  const row=(await f.admin.query("SELECT id,locked_at::text cutoff FROM app.final_account_lock WHERE tenant_id=$1 AND job_id=$2",[a.tenantId,a.jobId])).rows[0];
  if(status==='completed' && Object.keys(overrides).length===0) return publishEmptyCompletion(f,a);
- const id=randomUUID();await asFixtureTenant(f.shadow,a.tenantId,db=>db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5::timestamptz,$6)",[a.tenantId,overrides.jobId??a.jobId,id,overrides.lockId??row.id,overrides.cutoff??row.cutoff,status]));return id;
+ const id=randomUUID();
+ await asFixtureTenant(f.shadow,a.tenantId,async db=>{
+  if((await db.query("SELECT to_regprocedure('app.lp11_bind_shadow_job(uuid,uuid)') installed")).rows[0].installed) {
+   await db.query("SELECT app.lp11_bind_shadow_job($1,$2)",[a.tenantId,a.jobId]);
+  }
+  await db.query("INSERT INTO app.final_account_lock_check(tenant_id,job_id,id,lock_id,evidence_cutoff_at,status) VALUES($1,$2,$3,$4,$5::timestamptz,$6)",[a.tenantId,overrides.jobId??a.jobId,id,overrides.lockId??row.id,overrides.cutoff??row.cutoff,status]);
+ });
+ return id;
 }
 describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
  let f:LockFixture;
@@ -58,7 +65,7 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
      VALUES($1,$2,$3,$4,'variation',$5,$6,$5,$9,'Fictional supplementary line',$7,$8)`,[randomUUID(),a.tenantId,a.jobId,revision,source,a.scopeItemId,net,index+2,randomUUID()]);
    }
    await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=2 WHERE tenant_id=$2 AND id=$3",[revision,a.tenantId,a.draftId]);
-  });return {revision,hash};
+  },{owner:f.admin,membershipId:LOCK_OWNER});return {revision,hash};
  }
  async function stored(a:Account,id:string){
   return (await f.admin.query(`SELECT l.final_account_line_id id,l.net_pence,l.tax_pence,l.gross_pence FROM app.final_account_invoiced_line l
@@ -166,7 +173,7 @@ describe("SV-4 DW7 lock-bound final and supplementary issue",()=>{
    await db.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal) SELECT gen_random_uuid(),tenant_id,job_id,$1,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal FROM app.final_account_line WHERE tenant_id=$2 AND final_account_revision_id=$3",[revision,a.tenantId,a.revisionId]);
    await db.query("INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'variation',$5,$6,$7,$8,'Synthetic fixture catch line',80000,2)",[line,a.tenantId,a.jobId,revision,source,scope,commercial,randomUUID()]);
    await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=2 WHERE tenant_id=$2 AND id=$3",[revision,a.tenantId,a.draftId]);
-  });
+  },{owner:f.admin,membershipId:LOCK_OWNER});
   const supplemental=await repo.issueInvoice(a.context,{...invoiceInput(a,'supplementary'),finalAccountRevisionId:revision,expectedSourceHash:hash});
   const invoices=(await f.admin.query("SELECT i.id,i.net_pence,i.tax_pence,i.total_pence,b.invoice_kind,b.check_id FROM app.customer_invoice i JOIN app.final_account_invoice_binding b ON(b.tenant_id,b.job_id,b.invoice_id)=(i.tenant_id,i.job_id,i.id) WHERE i.tenant_id=$1 AND i.job_id=$2 ORDER BY i.created_at,i.id",[a.tenantId,a.jobId])).rows;
   expect(invoices).toHaveLength(2);const supplementary=invoices.find(i=>i.invoice_kind==='supplementary')!;
