@@ -35,10 +35,10 @@ export async function persistedRecoverySources<T = undefined>(page: Page, before
   await expect(page.locator(".quote-editor")).toHaveAttribute("data-quote-ready", "true");
   await page.getByLabel("Unit rate Clean site").fill("200.00");
   await click(page, "Save draft revision"); await expect(page.getByTestId("quote-revision")).toHaveText("1");
-  await click(page, "Preview immutable quote"); await click(page, "Simulate sending this quote");
+  await click(page, "Preview this quote"); await click(page, "Simulate sending this quote");
   await click(page, "Continue fake worker"); await click(page, "Record practice acceptance"); await click(page, "Start this practice job");
   // Activation is asynchronous: wait for its persisted result before calling live-job APIs.
-  await expect(page.getByRole("heading", { name: "Live · baseline frozen" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Job started · agreed quote saved" })).toBeVisible();
   const jobId = (await page.locator(".quote-editor").getAttribute("data-job-id"))!;
   const quote = await get(page, `/api/jobs/${jobId}/quotes/delivery`);
   const variationsPath = `/api/jobs/${jobId}/variations`, variationBefore = await get(page, variationsPath);

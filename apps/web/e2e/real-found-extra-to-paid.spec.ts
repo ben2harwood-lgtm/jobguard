@@ -205,7 +205,7 @@ for (const scenario of [...scenarios.map(s=>({...s,paid:true})),{...scenarios[0]
     await expect(extra.getByRole("button",{name:"Approve exact revision",exact:true})).toBeVisible();
     await expect(supplement).toBeDisabled();
     await extra.getByRole("button",{name:"Approve exact revision",exact:true}).click();
-    await expect(extra).toContainText("Approved immutable commercial fact");
+    await expect(extra).toContainText("Approved and saved");
     await expect(supplement).toBeDisabled();
     const rebuild=page.waitForResponse(r=>r.url().endsWith(`/api/jobs/${jobId}/final-account`)&&r.request().method()==="POST");
     await click(page,"Rebuild from approved sources");

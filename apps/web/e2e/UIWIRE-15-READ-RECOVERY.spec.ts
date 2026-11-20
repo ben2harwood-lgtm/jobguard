@@ -20,7 +20,7 @@ await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
 await click(page,"Save draft revision");
 await expect(page.getByText("Rate confirmations are recorded once; nothing was sent or billed.",{exact:false})).toBeVisible();
 await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
-await click(page,"Preview immutable quote");
+await click(page,"Preview this quote");
 await click(page,"Simulate sending this quote");
 await click(page,"Continue fake worker");
 await click(page,"Record practice acceptance");

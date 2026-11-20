@@ -109,7 +109,7 @@ test("paid main bill still flags an approved unbilled catch on Today and overvie
   await draft.getByRole("button", { name: "Save new proposed revision", exact: true }).click();
   await expect(draft).toContainText("Price revision 1 · £150.00");
   await draft.getByRole("button", { name: "Approve exact revision", exact: true }).click();
-  await expect(draft).toContainText("Approved immutable commercial fact");
+  await expect(draft).toContainText("Approved and saved");
   const paid = await page.request.post(`/api/jobs/${jobId}/customer-invoices/${main.id}/receipts`, { data: {
     version: "practice-customer-receipt.record.v1", commandId: crypto.randomUUID(), invoiceId: main.id,
     paidOn: "2026-11-11", amountPence: main.totalPence, method: "bank_transfer", reference: "Fictional main bill",

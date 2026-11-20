@@ -41,10 +41,10 @@ test("blank firm saves its name and issues an ordinary-words quote", async ({ pa
  await expect(quote).toHaveAttribute("data-quote-ready","true");
  await click(page,"Save draft revision");
  await expect(page.getByTestId("quote-revision")).toHaveText("1");
- await click(page,"Preview immutable quote");
+ await click(page,"Preview this quote");
  await expect(page.getByRole("region",{name:"Quote preview"})).toContainText(name);
  const hash = await page.getByTestId("quote-artifact-hash").textContent();
- const downloading = page.waitForEvent("download"); await click(page,"Download runtime PDF");
+ const downloading = page.waitForEvent("download"); await click(page,"Download quote PDF");
  const download = await downloading, path = await download.path();
  expect(path).not.toBeNull();
  const bytes = await readFile(path!);

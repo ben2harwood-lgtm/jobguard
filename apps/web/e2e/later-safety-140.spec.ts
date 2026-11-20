@@ -70,7 +70,7 @@ test("LATER-SAFETY-140 email sign-in and core-1000 show found recovery with both
   await click(page, "Save draft revision");
   await expect(page.getByTestId("quote-revision")).toHaveText("2");
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
-  for (const step of ["Preview immutable quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) await click(page, step);
+  for (const step of ["Preview this quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) await click(page, step);
   await expect(page.getByTestId("activation-policy")).toHaveText("reference_fee_policy_v3");
   const activation = await read(page, `${root}/quotes/activation`);
   expect(activation.activation.recoveryCapPence).toBeNull();

@@ -8,7 +8,7 @@ async function click(page:Page,name:string){const b=page.getByRole("button",{nam
 async function audit(page:Page){await expect(page.getByRole("heading",{name:"Extra work and omissions",exact:true})).toBeVisible();await expect(page.getByTestId("activation-policy")).toHaveText("reference_fee_policy_v3");expect(await page.locator("body").innerText()).not.toMatch(forbidden);await expect(page.getByText(banner,{exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);}
 test("CH-1 new job persists v3 terms across reload, Jobs and a second context",async({page,browser})=>{
  await openQuotingWatchdogJob(page);await page.getByLabel("Unit rate Clean site").fill("200.00");
- for(const name of["Save draft revision","Preview immutable quote","Simulate sending this quote","Continue fake worker","Record practice acceptance"])await click(page,name);
+ for(const name of["Save draft revision","Preview this quote","Simulate sending this quote","Continue fake worker","Record practice acceptance"])await click(page,name);
  const button=page.getByRole("button",{name:"Start this practice job",exact:true});await button.focus();await expect(button).toBeFocused();const box=await button.boundingBox();expect(box!.height).toBeGreaterThanOrEqual(44);expect(box!.width).toBeGreaterThanOrEqual(44);await button.press("Enter");
  await audit(page);const jobId=(await page.locator(".quote-editor").getAttribute("data-job-id"))!,url=page.url(),path=`/api/jobs/${jobId}/quotes/activation`;
  const view=await(await page.request.get(path)).json();expect(view.terms).toMatchObject({acceptedNetPence:100000,smallJob:true,trialPlanContext:"none_recorded_pre_mon2a"});expect(view.effects).toMatchObject({activations:1,termsRows:1,capSnapshots:0,simulatedObligations:0,settlements:0,platformJournals:0});
@@ -20,7 +20,7 @@ test("CH-1 new job persists v3 terms across reload, Jobs and a second context",a
 });
 test("CH-1 saved v1 sample retains labelled historic pricing",async({page})=>{
  await openV1Quote(page);for(const input of await page.getByLabel(/Unit rate/u).all())if(await input.inputValue()==="")await input.fill("100.00");
- for(const name of["Save draft revision","Preview immutable quote","Simulate sending this quote","Continue fake worker","Record practice acceptance","Start this practice job"])await click(page,name);
+ for(const name of["Save draft revision","Preview this quote","Simulate sending this quote","Continue fake worker","Record practice acceptance","Start this practice job"])await click(page,name);
  await expect(page.getByRole("heading",{name:"Earlier proposed pricing (v1)",exact:true})).toBeVisible();await expect(page.getByTestId("recovery-cap")).toBeVisible();await expect(page.getByTestId("variation-cap")).toBeVisible();
 });
 

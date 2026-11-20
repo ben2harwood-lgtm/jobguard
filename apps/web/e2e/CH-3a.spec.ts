@@ -83,10 +83,10 @@ async function quotingJob(page:Page){
 test("CH-3a captures structured parties, gates live, and preserves authoritative identity across browsers",async({page,browser})=>{
   test.setTimeout(180000);const jobId=await quotingJob(page);
   await expect(page.getByText("Customer and site are required before this job can switch live.",{exact:true})).toBeVisible();
-  await expect(B(page,"Start this practice job")).toBeDisabled();await expect(B(page,"Preview immutable quote")).toBeDisabled();
+  await expect(B(page,"Start this practice job")).toBeDisabled();await expect(B(page,"Preview this quote")).toBeDisabled();
   const missing=await page.request.post(`/api/jobs/${jobId}/quotes/activation`,{data:{version:"practice-activation-command.v1",commandId:crypto.randomUUID(),scenario:"no_charge"}});
   expect(missing.status()).toBe(409);expect((await missing.json()).code).toBe("JOB_PARTIES_REQUIRED");
-  await expect(B(page,"Import the fictional underway job")).toBeDisabled();
+  await expect(B(page,"Bring in the practice job already under way")).toBeDisabled();
   const missingImport=await page.request.post(`/api/jobs/${jobId}/parties/import`,{data:{version:"job-parties-import.v1",commandId:crypto.randomUUID(),expectedBindingId:crypto.randomUUID()}});expect(missingImport.status()).toBe(409);expect((await missingImport.json()).code).toBe("JOB_PARTIES_REQUIRED");
   const invalid=await page.request.post(`/api/jobs/${jobId}/parties`,{data:{version:"job-parties-command.v1",commandId:crypto.randomUUID(),action:"create_site",site:{version:"site.v1",addressLines:["Fictional road"],town:"London",postcode:"not a postcode",uprn:"12x"}}});expect(invalid.status()).toBe(400);
   await expect(page.getByLabel("Who pays?")).toHaveValue("");
@@ -99,8 +99,8 @@ test("CH-3a captures structured parties, gates live, and preserves authoritative
   await B(page,"Save customer and site").click();await expect(page.getByTestId("party-customer")).toHaveText("Fictional Lettings");await expect(page.getByTestId("party-site")).toContainText("SW1A 1AA");
   const view=(await (await page.request.get(`/api/jobs/${jobId}/parties`)).json());const binding=view.current.bindingId;
   expect(view.current.customer.type).toBe("landlord_or_agent");expect(view.current.payingPartyRevisionId).toBe(view.current.customerRevisionId);expect(view.realExternalActions).toBe(0);
-  await B(page,"Preview immutable quote").click();await B(page,"Simulate sending this quote").click();await B(page,"Continue fake worker").click();await B(page,"Record practice acceptance").click();await B(page,"Start this practice job").click();
-  await expect(page.getByRole("heading",{name:"Live · baseline frozen",exact:true})).toBeVisible();
+  await B(page,"Preview this quote").click();await B(page,"Simulate sending this quote").click();await B(page,"Continue fake worker").click();await B(page,"Record practice acceptance").click();await B(page,"Start this practice job").click();
+  await expect(page.getByRole("heading",{name:"Job started · agreed quote saved",exact:true})).toBeVisible();
   await page.reload();await expect(page.getByTestId("party-binding-id")).toHaveText(binding);
   await page.goto("/classic");await page.getByLabel("Search jobs").fill("Fictional Lettings");const card=page.locator(".job-card").filter({has:page.locator(`a[href="/jobs/${jobId}"]`)});await expect(card).toContainText("SW1A 1AA");await card.getByRole("link").click();await expect(page.getByTestId("party-binding-id")).toHaveText(binding);
   const other=await browser.newContext();await other.addCookies(await page.context().cookies());const second=await other.newPage();await second.goto(`/jobs/${jobId}`);await expect(second.getByTestId("party-binding-id")).toHaveText(binding);await expect(second.getByTestId("party-customer")).toHaveText("Fictional Lettings");await other.close();
@@ -215,9 +215,9 @@ test("CH-3a tells a stale panel the job went live instead of showing a raw code"
   const before = await partiesView(page, jobId);
   // The second panel loads while the job is still quoting; the first window then takes the job live.
   const { context, other } = await secondWriter(page, browser, jobId);
-  await B(page, "Preview immutable quote").click(); await B(page, "Simulate sending this quote").click(); await B(page, "Continue fake worker").click();
+  await B(page, "Preview this quote").click(); await B(page, "Simulate sending this quote").click(); await B(page, "Continue fake worker").click();
   await B(page, "Record practice acceptance").click(); await B(page, "Start this practice job").click();
-  await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Job started · agreed quote saved", exact: true })).toBeVisible();
   // The second panel still believes the job is quoting.
   await saveAs(other, "Late edit");
   await expect(other.getByRole("alert").filter({ hasText: "went live" })).toBeVisible();
@@ -234,7 +234,7 @@ test("CH-3a quote preview shows its frozen customer and a changed binding needs 
   test.setTimeout(180000); const jobId = await quotingJob(page);
   await saveAs(page, "Original fictional customer"); await expect(page.getByTestId("party-customer")).toHaveText("Original fictional customer");
   const previewed = page.waitForResponse(r => r.url().endsWith(`/api/jobs/${jobId}/quotes/preview`) && r.request().method() === "POST");
-  await B(page, "Preview immutable quote").click(); const first = (await (await previewed).json()).view as { documentId: string; contentHash: string; documentVersion: number };
+  await B(page, "Preview this quote").click(); const first = (await (await previewed).json()).view as { documentId: string; contentHash: string; documentVersion: number };
   const section = page.getByRole("region", { name: "Quote preview" }); await expect(section).toContainText("Original fictional customer");
   await expect(page.getByTestId("quote-artifact-hash")).toHaveText(first.contentHash);
   const bytes = async (id: string) => createHash("sha256").update(Buffer.from(await (await page.request.get(`/api/jobs/${jobId}/quotes/artifacts/${id}`)).body())).digest("hex");
@@ -250,7 +250,7 @@ test("CH-3a quote preview shows its frozen customer and a changed binding needs 
   expect(send.status()).toBe(409); expect((await send.json()).code).toBe("QUOTE_CHANGED");
   expect(await bytes(first.documentId)).toBe(first.contentHash);
   const again = page.waitForResponse(r => r.url().endsWith(`/api/jobs/${jobId}/quotes/preview`) && r.request().method() === "POST");
-  await B(page, "Preview immutable quote").click(); const second = (await (await again).json()).view as { documentId: string; contentHash: string; documentVersion: number };
+  await B(page, "Preview this quote").click(); const second = (await (await again).json()).view as { documentId: string; contentHash: string; documentVersion: number };
   expect(second.documentId).not.toBe(first.documentId); expect(second.contentHash).not.toBe(first.contentHash); expect(second.documentVersion).toBe(first.documentVersion + 1);
   await expect(section).toContainText("Corrected fictional customer"); await expect(section).not.toContainText("customer or site changed");
   await B(page, "Simulate sending this quote").click();

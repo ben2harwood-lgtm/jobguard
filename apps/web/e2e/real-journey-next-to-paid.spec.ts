@@ -46,7 +46,7 @@ async function start(page: Page, text = ordinary) {
  for (let i = 0; i < await rates.count(); i++) await rates.nth(i).fill(text === ordinary ? i === 0 ? "900.00" : "0.00" : i === 4 ? "100.00" : "200.00");
  await expect(page.getByTestId("quote-net")).toHaveText("GBP 900.00");
  await click(page, "Save draft revision"); await expect(page.getByTestId("quote-revision")).toHaveText("1");
- await click(page, "Preview immutable quote"); await click(page, "Simulate sending this quote");
+ await click(page, "Preview this quote"); await click(page, "Simulate sending this quote");
  await expect(page.getByTestId("quote-delivery")).toHaveText("Simulated delivery — nothing sent");
  expect((await saved(page, jobId, "quotes/delivery")).status).toBe("simulated_delivery");
  await expect(page.getByRole("button", { name: "Continue fake worker", exact: true })).toHaveCount(0);
@@ -59,7 +59,7 @@ async function start(page: Page, text = ordinary) {
  await expect(button).toBeFocused();
  const bounds = await button.boundingBox(); expect(bounds).not.toBeNull(); expect(bounds!.y).toBeGreaterThanOrEqual(0); expect(bounds!.y + bounds!.height).toBeLessThan(page.viewportSize()!.height - 60);
  await button.click();
- await expect(page.getByRole("heading", { name: "Live · baseline frozen", exact: true })).toBeVisible();
+ await expect(page.getByRole("heading", { name: "Job started · agreed quote saved", exact: true })).toBeVisible();
  return jobId;
 }
 async function proof(page: Page) {

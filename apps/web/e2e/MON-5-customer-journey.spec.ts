@@ -14,7 +14,7 @@ test("MON-5 customer link through quote, extras, stage and builder message evide
   try {
     await openQuotingWatchdogJob(page);
     const job = (await page.getByTestId("workspace-job-id").getAttribute("data-job-id"))!;
-    for (const name of ["Save draft revision","Preview immutable quote","Simulate sending this quote","Continue fake worker"]) {
+    for (const name of ["Save draft revision","Preview this quote","Simulate sending this quote","Continue fake worker"]) {
       const button = page.getByRole("button",{name,exact:true});
       await expect(button).toBeEnabled(); await button.click();
       if (name === "Save draft revision") await expect(page.getByTestId("quote-revision")).toHaveText("1");

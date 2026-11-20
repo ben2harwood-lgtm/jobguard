@@ -88,7 +88,7 @@ test("steps 1–9: double-click every save/send without duplicate commercial rec
   await expect(page.getByTestId("workspace-job-id")).toHaveAttribute("data-job-id", own);
   await double(page, "Save customer and site");
   await expect(page.getByTestId("party-customer")).not.toBeEmpty();
-  await double(page, "Preview immutable quote");
+  await double(page, "Preview this quote");
   await expect(page.getByLabel("Quote preview")).toContainText("Document version 1");
   await double(page, "Simulate sending this quote");
   await expect(page.getByTestId("quote-delivery")).toHaveText(/^(Queued — not sent|Simulated delivery — nothing sent)$/u);
@@ -211,7 +211,7 @@ test("step 2: invalid quote rates block sending without overwriting the saved qu
   const before = await read(page, path);
   await button(page, "Save customer and site").click();
   await expect(page.getByTestId("party-customer")).not.toBeEmpty();
-  const preview = button(page, "Preview immutable quote");
+  const preview = button(page, "Preview this quote");
   await expect(preview).toBeEnabled();
   const rate = page.getByLabel(/^Unit rate /u).first();
   const original = await rate.inputValue();

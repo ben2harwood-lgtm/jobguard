@@ -24,7 +24,7 @@ async function createQuote(page: Page, title: string) {
 }
 async function preview(page: Page): Promise<Preview> {
  const response = page.waitForResponse(r => r.url().endsWith("/quotes/preview") && r.request().method() === "POST");
- await click(page, "Preview immutable quote");
+ await click(page, "Preview this quote");
  const result = await response; expect(result.ok(), await result.text()).toBe(true);
  const data = await result.json() as Preview;
  await expect(page.getByRole("region", {name:"Quote preview"}).getByRole("heading")).toHaveText(`Quote ${data.document.reference}`);
@@ -42,7 +42,7 @@ test("two own jobs keep their references across revision and reload", async ({ p
  const firstId = await createQuote(page, "Fictional first decorating job"), first = await preview(page);
  expect(first.document.reference).toBe("Q-0001");
  async function download(p: Preview, name: string) {
-  const waiting = page.waitForEvent("download"); await click(page, "Download runtime PDF");
+  const waiting = page.waitForEvent("download"); await click(page, "Download quote PDF");
   const file = await waiting, path = info.outputPath(name); await file.saveAs(path);
   const bytes = await readFile(path);
   expect(bytes.toString()).toContain(`Quote ${p.document.reference} | Document version ${p.view.documentVersion}`);
@@ -106,7 +106,7 @@ test("two own jobs keep their references across revision and reload", async ({ p
  await history.locator(":scope > summary").click();
  await expect(history).not.toHaveAttribute("open", "");
  const start=page.locator("#practice-start-job");await expect(start).toBeVisible();await expect(start).toBeEnabled();await start.click();
- await expect(page.getByRole("heading",{name:"Live · baseline frozen",exact:true})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Job started · agreed quote saved",exact:true})).toBeVisible();
  await expect(page.getByRole("button",{name:"Attach generated practice image",exact:true})).toBeVisible();
  await page.getByRole("button",{name:"Attach generated practice image",exact:true}).click();
  await expect(page.getByTestId("proof-state")).toHaveText("Uploading");

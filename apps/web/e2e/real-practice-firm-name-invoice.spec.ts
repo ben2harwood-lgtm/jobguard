@@ -44,10 +44,10 @@ async function journey(page: Page, savedName: string | null) {
  await expect(quote).toHaveAttribute("data-quote-ready","true");
  await click(page,"Save draft revision");
  await expect(page.getByTestId("quote-revision")).toHaveText("1");
- await click(page,"Preview immutable quote");
+ await click(page,"Preview this quote");
  await expect(page.getByRole("region",{name:"Quote preview"})).toContainText(quoteName);
  const hash = await page.getByTestId("quote-artifact-hash").textContent();
- const downloading = page.waitForEvent("download"); await click(page,"Download runtime PDF");
+ const downloading = page.waitForEvent("download"); await click(page,"Download quote PDF");
  const download = await downloading, path = await download.path();
  expect(path).not.toBeNull();
  const bytes = await readFile(path!);
@@ -73,7 +73,7 @@ async function journey(page: Page, savedName: string | null) {
  await noOverflow(page); await page.reload();
  await expect(page.getByText(`Actor: ${quoteName} (builder)`,{exact:true})).toBeVisible();
  await click(page,"Start this practice job");
- await expect(page.getByRole("heading",{name:"Live · baseline frozen",exact:true})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Job started · agreed quote saved",exact:true})).toBeVisible();
  await page.goto(`/jobs/${job}/work#quote`);
  await click(page,"Finished on site");
  await expect(page.getByTestId("work-state")).toHaveText("Finished on site");
