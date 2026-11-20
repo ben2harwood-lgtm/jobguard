@@ -47,8 +47,14 @@ it("restores the final catalogue and rechecks stale sessions, membership, expire
         await admin.query("UPDATE identity.session SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [expiredSession.sessionId]);
         await admin.query("UPDATE app.membership SET revoked_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2", [revokedMember.tenant, revokedMember.member]);
         // Administrative fixture ageing, never a product operation or a real approval.
-        await admin.query("UPDATE app.action_authorization SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [expired.authorization]);
-        await admin.query("UPDATE app.action_outbox SET authorization_expires_at=(SELECT expires_at FROM app.action_authorization WHERE id=$2) WHERE id=$1", [expired.id, expired.authorization]);
+        const owner = await admin.connect();
+        try {
+          await owner.query("BEGIN");
+          await owner.query("SET LOCAL session_replication_role=replica");
+          await owner.query("UPDATE app.action_authorization SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [expired.authorization]);
+          await owner.query("UPDATE app.action_outbox SET authorization_expires_at=(SELECT expires_at FROM app.action_authorization WHERE id=$2) WHERE id=$1", [expired.id, expired.authorization]);
+          await owner.query("COMMIT");
+        } catch (error) { await owner.query("ROLLBACK"); throw error; } finally { owner.release(); }
         attempts = (await admin.query("SELECT * FROM app.action_attempt WHERE action_id=ANY($1::uuid[]) ORDER BY id", [[expired.id, revoked.id, completed.id]])).rows;
         committedCounts = await jobDoorCounts(admin, valid.tenant);
         catalog = await gateCatalog(admin); migrations = await gateMigrationEvidence(admin);

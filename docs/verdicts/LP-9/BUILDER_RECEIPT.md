@@ -58,6 +58,8 @@ All paths relative to repository root unless a working directory is given. No da
 | `git diff --check`; TypeScript compiler API diagnostics for the three new files/imports | PASS after correction of a local type-assertion line break; zero final diagnostics. |
 | `command -v pg_dump`; `command -v pg_restore` | Neither executable available on builder PATH; logical restore NOT RUN. |
 
+**Repair 1 (Claude Opus 5.5, medium, 2026-11-20):** `lp9-restore` aged the approval as plain owner and the append-only guard (0005_commands.sql:61-68) rightly refused it; the two fixture-ageing updates now run in one owner transaction under `SET LOCAL session_replication_role=replica` (the LP-6d pattern), test-only, no assertion changed. On current origin/main merged in, real embedded PostgreSQL via pg-check: `lp9-restore` + `lp9-final-gate` 2 files / 5 tests PASS (exit 0); `turbo run typecheck` 7/7; lane lint PASS. Still needs CI and an independent re-check.
+
 No installs or dependency builds were used to work around the missing package output. The failed collection is an environment prerequisite for coordinator CI, not a security refusal. No existing check was weakened or skipped in source.
 
 ## Coordinator execution handoff
