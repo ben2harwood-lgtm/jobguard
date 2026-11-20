@@ -105,7 +105,7 @@ export async function runSyntheticRestoreRehearsal(options = {}, api, fixture) {
     assert.match(postgresVersion, /^16\./);
     // Match current migration prerequisites in this disposable cluster. These
     // non-login writer roles never become runtime credentials or memberships.
-    for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_worker", "jobguard_session_lookup"]) {
+    for (const role of ["jobguard_audit_writer", "jobguard_command_writer", "jobguard_binding_owner", "jobguard_worker", "jobguard_session_lookup", "jobguard_money_owner"]) {
       await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN
         CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
         END IF; END $$`);

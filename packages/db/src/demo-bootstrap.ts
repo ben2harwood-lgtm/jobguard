@@ -37,7 +37,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
       runtimeRole.rolcreatedb || runtimeRole.rolcreaterole || runtimeRole.rolinherit || !runtimeRole.rolcanlogin) {
     throw new Error("jobguard_runtime does not have the required least-privilege posture");
   }
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_worker", "jobguard_session_lookup", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_worker", "jobguard_session_lookup", "jobguard_money_owner", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"]) {
     await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${name}') THEN
       CREATE ROLE ${name} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
       END IF; END $$`);
@@ -56,7 +56,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   // which is why the support route checks USAGE), but it is the one holder bootstrap cannot appoint or
   // remove. Accept exactly that shape and nothing else: any other member, or any holder that can use or
   // assume the role, fails closed. Neither bootstrap nor the migration appoints a support holder.
-  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_session_lookup", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"]) {
+  for (const name of ["jobguard_shadow", "jobguard_shadow_emergency_access", "jobguard_meter", "jobguard_meter_owner", "jobguard_audit_writer", "jobguard_command_writer", "jobguard_outbound_operator", "jobguard_connector", "jobguard_machine", "jobguard_binding_owner", "jobguard_session_lookup", "jobguard_money_owner", "jobguard_worm_executor", "jobguard_worm_operator", "jobguard_scim"]) {
     const holders = await admin.query<{ member: string; admin_option: boolean; inherit_option: boolean; set_option: boolean }>(
       `SELECT pg_get_userbyid(m.member) AS member,m.admin_option,m.inherit_option,m.set_option
        FROM pg_auth_members m WHERE m.roleid=(SELECT oid FROM pg_roles WHERE rolname=$1)`, [name]);
@@ -155,6 +155,7 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
     await client.query("GRANT jobguard_command_writer TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
     await client.query("GRANT jobguard_binding_owner TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
     await client.query("GRANT jobguard_session_lookup TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
+    await client.query("GRANT jobguard_money_owner TO jobguard_migration WITH INHERIT TRUE, SET TRUE");
     await client.query("SET ROLE jobguard_migration");
     await migrate(client);
     const result = await client.query<{count:number}>("SELECT count(*)::int count FROM public.jobguard_schema_migration");
@@ -164,14 +165,17 @@ async function migrateAsMigrationOwner(client: PoolClient): Promise<number> {
     throw error;
   } finally {
     await client.query("RESET ROLE");
-    try { await client.query("REVOKE jobguard_session_lookup FROM jobguard_migration"); }
+    try { await client.query("REVOKE jobguard_money_owner FROM jobguard_migration"); }
     finally {
-      try { await client.query("REVOKE jobguard_binding_owner FROM jobguard_migration"); }
+      try { await client.query("REVOKE jobguard_session_lookup FROM jobguard_migration"); }
       finally {
-        try { await client.query("REVOKE jobguard_command_writer FROM jobguard_migration"); }
+        try { await client.query("REVOKE jobguard_binding_owner FROM jobguard_migration"); }
         finally {
-          try { await client.query("REVOKE jobguard_audit_writer FROM jobguard_migration"); }
-          finally { await assertBindingOwnerHolders(client, administrator); }
+          try { await client.query("REVOKE jobguard_command_writer FROM jobguard_migration"); }
+          finally {
+            try { await client.query("REVOKE jobguard_audit_writer FROM jobguard_migration"); }
+            finally { await assertBindingOwnerHolders(client, administrator); }
+          }
         }
       }
     }

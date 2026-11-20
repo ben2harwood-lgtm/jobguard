@@ -26,6 +26,9 @@ EmbeddedPostgres.prototype.start = async function () {
       IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='jobguard_session_lookup') THEN
         CREATE ROLE jobguard_session_lookup NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
       END IF;
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='jobguard_money_owner') THEN
+        CREATE ROLE jobguard_money_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+      END IF;
     END $$`);
   } finally {
     await admin.end();
