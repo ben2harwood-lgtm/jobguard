@@ -1,7 +1,8 @@
-import { pilotQueueSchema, requireG1ForPilot, requirePilotResources } from "@jobguard/config";
+import { parsePilotOperations, pilotQueueSchema, requireG1ForPilot, requirePilotResources } from "@jobguard/config";
 import { assertPilotConnection } from "@jobguard/db";
 import { run, type Logger, type TaskList } from "graphile-worker";
 import { Pool } from "pg";
+import { pilotQueueStatus, pilotWorkerHealth, pilotWorkerHeartbeat } from "./pilot-worker-health.js";
 
 /** No real execution port exists in this slice. These are the effect task
  * names a copied or previously populated queue might try to replay. */
@@ -20,10 +21,35 @@ export async function startPilotWorker(env: NodeJS.ProcessEnv, logger: Logger): 
     try { await assertPilotConnection(pool, connectionString); }
     finally { await pool.end(); }
   }
-  await run({
+  const { PILOT_WORKER_HEALTH_PORT: port, PILOT_QUEUE_BACKLOG_SECONDS: backlogSeconds } = parsePilotOperations(env);
+  const runner = await run({
     connectionString: binding.queue,
     schema: pilotQueueSchema,
     logger,
     taskList: pilotWorkerTasks(),
   });
+  if (port === undefined) return runner.promise;
+
+  const pool = new Pool({ connectionString: binding.queue, max: 1, connectionTimeoutMillis: 2_000,
+    statement_timeout: 2_000, idleTimeoutMillis: 0 });
+  // A lost idle monitoring connection is reflected in the next probe.
+  pool.on("error", () => {});
+  const heartbeat = pilotWorkerHeartbeat(runner.events);
+  const health = pilotWorkerHealth(heartbeat, () => pilotQueueStatus(pool, backlogSeconds));
+  try {
+    await Promise.race([
+      new Promise<never>((_, reject) => {
+        health.on("error", reject);
+        health.listen(port, "0.0.0.0");
+      }),
+      runner.promise,
+    ]);
+  } catch (error) {
+    await runner.stop().catch(() => {});
+    throw error;
+  } finally {
+    health.close();
+    health.closeAllConnections();
+    await pool.end();
+  }
 }
