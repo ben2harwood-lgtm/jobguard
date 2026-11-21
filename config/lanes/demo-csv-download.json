@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-csv-download": {
+      "branches": ["codex/sandbox/demo-csv-download"],
+      "allow": [
+        "apps/web/app/api/contractor/jobs/[id]/billing/[action]/route.ts",
+        "apps/web/app/api/contractor/jobs/[id]/billing/[action]/route.actions.test.ts",
+        "apps/web/app/ui/contractor-billing.tsx",
+        "apps/web/e2e/ENT-11b-presenter.spec.ts"
+      ]
+    }
+  }
+}

@@ -21,6 +21,6 @@ export async function GET(request:Request,context:{params:Promise<{id:string;act
  try{
   const {id,action}=await context.params;if(action!=="download")throw new ContractorBillingError("BILLING_NOT_FOUND");
   const result=await new BillingApplication(syntheticPool()).download((await cookies()).get("jg_session")?.value,id,new URL(request.url).searchParams.get("batchId"));
-  return new Response(result.csv,{headers:{...headers,"x-content-sha256":result.hash}});
+  return new Response(result.csv,{headers:{...headers,"content-disposition":'attachment; filename="jobguard-billing-export.csv"',"x-content-sha256":result.hash}});
  }catch(e){const f=billingHttpFailure(e);return NextResponse.json(f.body,{status:f.status,headers:{"cache-control":"no-store"}});}
 }

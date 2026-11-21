@@ -12,3 +12,4 @@ export * from "./enterprise-real-data.js";
 export * from "./release-inventory.js";
 
 export * from "./pilot-resources.js";
+export * from "./pilot-operations.js";
