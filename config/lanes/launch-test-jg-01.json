@@ -5,11 +5,12 @@
       "branches": [
         "codex/sandbox/launch-test-jg-01"
       ],
-      "test": "apps/web/e2e/DEMO-J1-core-1000.spec.ts",
+      "test": "apps/web/e2e/LAUNCH-TEST-JG-01.spec.ts",
       "receipt": "docs/launch-test/JG-RESULTS-2026-11-21.md",
       "note": "RED: synthetic launch verification and offline-first evidence tooling only. C1: no web workflow changes. No migrations, grants or product code.",
       "allow": [
         "apps/web/e2e/DEMO-J1-core-1000.spec.ts",
+        "apps/web/e2e/LAUNCH-TEST-JG-01.spec.ts",
         "apps/web/e2e/DEMO-J3-shadow.spec.ts",
         "apps/web/e2e/helpers/j3-settlement.ts",
         "apps/web/e2e/global-setup.ts",

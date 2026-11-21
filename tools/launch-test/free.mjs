@@ -8,7 +8,7 @@ const checks = {
   build: ["build"],
   browser: [...web, "--project=mobile-360", "--project=desktop",
     "DEMO-J1-core-1000.spec.ts", "DEMO-J2.spec.ts", "DEMO-J3-shadow.spec.ts",
-    "TOMMY-money-gaps.spec.ts", "ENT-11b.spec.ts"],
+    "TOMMY-money-gaps.spec.ts", "ENT-11b.spec.ts", "LAUNCH-TEST-JG-01.spec.ts"],
   database: [...database,
     "test/final-account-lock-invoice.integration.test.ts",
     "test/lp8b-outbox-evidence.integration.test.ts",
