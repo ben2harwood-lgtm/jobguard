@@ -63,7 +63,7 @@ it("rereads unlocked to pending after lock, then automatically completes without
  vi.useFakeTimers({toFake:["setInterval","clearInterval"]});const fetch=server();render();await tick();
  expect(text(render())).toContain("runs after you complete");status="pending";changed();await tick();render();
  status="completed";await vi.advanceTimersByTimeAsync(2000);await tick();
- expect(text(render())).toContain("found nothing missing");
+ expect(text(render())).toContain("didn't spot anything missing");
  expect(fetch.mock.calls.every(call=>!(call[1] as RequestInit|undefined)?.method)).toBe(true);
  const count=fetch.mock.calls.length;await vi.advanceTimersByTimeAsync(6000);expect(fetch).toHaveBeenCalledTimes(count);
 });
@@ -95,7 +95,7 @@ it.each([403,500])("read refusal %s clears completed revealed data, stops pollin
 });
 it("page return rereads saved state, while unrelated jobs cannot trigger reads",async()=>{
  const fetch=server();render();await tick();const count=fetch.mock.calls.length;changed("another-job");expect(fetch).toHaveBeenCalledTimes(count);
- status="completed";window.dispatchEvent(new Event("focus"));await tick();expect(text(render())).toContain("found nothing missing");
+ status="completed";window.dispatchEvent(new Event("focus"));await tick();expect(text(render())).toContain("didn't spot anything missing");
 });
 it("navigation rejects obsolete replies and unmount removes listeners",async()=>{
  const fetch=server();let finish!:(value:ReturnType<typeof response>)=>void;
@@ -121,7 +121,7 @@ it("a lost restart reply followed by unavailable reads blocks another POST until
 });
 it("losing access during the disputes read also clears the saved reveal",async()=>{
  const fetch=server();fetch.mockImplementation(async input=>input.endsWith("/disputes")?response({},false,403):response(saved("completed")));
- render();await tick();expect(text(render())).toContain("unavailable");expect(text(render())).not.toContain("found nothing missing");
+ render();await tick();expect(text(render())).toContain("unavailable");expect(text(render())).not.toContain("didn't spot anything missing");
 });
 it("a stalled saved read is cancelled and shown as unavailable, never a failed check",async()=>{
  vi.useFakeTimers({toFake:["setTimeout","clearTimeout"]});const fetch=server();
@@ -176,7 +176,7 @@ it.each([403, 500, "abort"] as const)("retains pending after read failure %s and
  expect(text(tree)).not.toContain("could not finish");
  status = "completed";
  await vi.advanceTimersByTimeAsync(2000); await tick();
- expect(text(render())).toContain("found nothing missing");
+ expect(text(render())).toContain("didn't spot anything missing");
  expect(text(render())).not.toContain("temporarily unavailable");
  expect(poll).not.toHaveBeenCalled(); poll.mockRestore();
  const count = fetch.mock.calls.length;
@@ -190,7 +190,7 @@ it("rejects an older pending reply after a newer completed read", async () => {
  click(render(), "Load the saved final check");
  status = "completed"; window.dispatchEvent(new Event("focus")); await tick(); render();
  finish(response(saved("pending"))); await tick();
- expect(text(render())).toContain("found nothing missing");
+ expect(text(render())).toContain("didn't spot anything missing");
 });
 
 it("unmount leaves a pending poll unaborted, discards it, and removes its timer and listeners", async () => {

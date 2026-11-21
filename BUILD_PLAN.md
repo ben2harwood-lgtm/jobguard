@@ -1536,7 +1536,7 @@ A deterministic, versioned D13 rule shows a signal at once as a mandatory Decisi
 - **Included in original scope.** The builder must pick the baseline item.
 - **Not completed**, **Not chargeable**, **Wrong job or wrong evidence.** The item is dismissed and the reason is recorded.
 
-Nothing is charged automatically. A check that finds nothing is a normal outcome: "JobGuard's final check found nothing missing from your bill."
+Nothing is charged automatically. A check that finds nothing is a normal outcome: "JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill."
 
 #### 10.2.8 Attribution predicate
 
@@ -1883,7 +1883,7 @@ The exact allocation and cumulative-rounding module is shared with the contracto
 - Tests B, D, E, I, J, K, L and O pass as browser journeys in both projects, and still show the same state after a reload.
 - Only "Yes — this was extra work" creates a variation or case. The catch then follows the ordinary path through pricing, approval and customer approval into a revision linked to the lock.
 - "Already included" needs an exact locked line or item. An unmatched claim stays `attribution_disputed`, with no fee, until a person resolves it.
-- A zero result shows "JobGuard's final check found nothing missing from your bill." after the same steps.
+- A zero result shows "JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill." after the same steps.
 - Rerunning reconciliation creates no duplicate classification.
 - Evidence received after lock produces signals shown at once with `evidence_after_lock` (Test L).
 

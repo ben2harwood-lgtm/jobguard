@@ -1,11 +1,11 @@
 import { z } from "zod";
 import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
-import { detectShadowObservations, groupShadowProposals, observationMustSurface, observationV1, reconcileFinalCheck, shadowProposalV1, shadowCaptureV1, shadowDetectionId, type DetectionGroup } from "@jobguard/core";
-import { FinalCheckRepository, type FinalCheckManifest, type FinalCheckSourceResult } from "./final-check-repository.js";
+import { detectShadowObservations, groupShadowProposals, matchBuilderCapture, observationMustSurface, observationV1, reconcileFinalCheck, shadowProposalV1, shadowCaptureV1, shadowDetectionId, type DetectionGroup } from "@jobguard/core";
+import { FinalCheckRepository, type FinalCheckClassification, type FinalCheckManifest, type FinalCheckSourceResult } from "./final-check-repository.js";
 import { decodePracticePhoto } from "./practice-photo-observation.js";
 import { decodeFinalCheckSourceFixture } from "./job-source-fixtures.js";
-import { readFinalCheckTypedText } from "./final-check-typed-text.js";
+import { FINAL_CHECK_LOOK_LABEL, readFinalCheckTypedText } from "./final-check-typed-text.js";
 import { readPracticeStructuredSource } from "./final-check-practice-readers.js";
 import { ShadowObservationReadError, withObservationRead } from "./shadow-observation-reader.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
@@ -168,6 +168,14 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
   const repo = new FinalCheckRepository(shadowPool), sink = new ShadowDetectionRepository(shadowPool);
   const baselineCaptures = (context: VerifiedTenantContext, m: FinalCheckManifest) => m.comparisons.baseline.map(line => shadowCaptureV1.parse({ version: "shadow-capture.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId, id: line.scope_item_id, scopeItemId: line.scope_item_id,
     revisionId: line.commercial_revision_id, serverRecordedAt: m.comparisons.baselineRecordedAt, valuePence: null, kind: "baseline", state: null, scopeArea: "job", description: line.description, recordedPhase: "pre_lock", aiStructured: false, sourceRef: String(line.id) }));
+  const readForJob = (context: VerifiedTenantContext, jobId: string) => async <T>(read: (db: TenantTransaction) => Promise<T>): Promise<T | undefined> => {
+    try {
+      return await withObservationRead(runtimePool, context, jobId, read, shadowPool);
+    } catch (error) {
+      if (error instanceof ShadowObservationReadError && error.code === "OBSERVATION_JOB_UNAVAILABLE") return undefined;
+      throw error;
+    }
+  };
   async function sourceResult(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]): Promise<FinalCheckSourceResult> {
     const signalIds = await withShadowJob(shadowPool, context, m.comparisons.jobId, async db => (await db.$client.query<{ signal_id: string }>(`
       SELECT signal_id FROM app.shadow_signal_evidence
@@ -191,14 +199,7 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
   return {
     read: (context: VerifiedTenantContext, task: { jobId: string; manifestId: string }) => repo.manifest(context, task.jobId, task.manifestId),
     async process(context: VerifiedTenantContext, m: FinalCheckManifest, s: FinalCheckManifest["sources"][number]): Promise<FinalCheckSourceResult> {
-      const readSource = async <T>(read: (db: TenantTransaction) => Promise<T>): Promise<T | undefined> => {
-        try {
-          return await withObservationRead(runtimePool, context, m.comparisons.jobId, read, shadowPool);
-        } catch (error) {
-          if (error instanceof ShadowObservationReadError && error.code === "OBSERVATION_JOB_UNAVAILABLE") return undefined;
-          throw error;
-        }
-      };
+      const readSource = readForJob(context, m.comparisons.jobId);
       const structured = s.evidenceId === null && s.processable &&
         ["unlinked_supplier_version", "unlinked_supplier_document", "unlinked_purchase_order"].includes(s.sourceKind);
       const decoded = structured ? await readPracticeStructuredSource(context, m, s, readSource) : null;
@@ -278,7 +279,9 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
       } else observation = includedCertificate ?? (s.processable ? await observe(context, m, s) : null);
       if (!observation || observationMustSurface(observation).firedRules.length)
         return { version: "final-check.source-result.v1", inputHash: s.inputHash, status: "unsupported", failureCode: s.processable ? "UNSUPPORTED_SOURCE" : "SOURCE_INVALID", signalIds: [] };
-      const captures = m.comparisons.captures.map(c => shadowCaptureV1.parse(c));
+      // Worth-a-look signals retain their display title in storage. Keep the
+      // entire evidence group for matching during reconciliation.
+      const captures = observation.facts.description === FINAL_CHECK_LOOK_LABEL ? [] : m.comparisons.captures.map(c => shadowCaptureV1.parse(c));
       let observations = [observation];
       let ambiguousPrice = false;
       if (["job_diary_text", "customer_message_text"].includes(s.sourceKind)) {
@@ -319,10 +322,41 @@ export function practiceFinalCheckPorts(shadowPool: Pool, runtimePool: Pool, pra
       if (m.result) return { runId: m.result.runId, lockId: m.result.lockId, zeroResult: m.result.zeroResult };
       const baseline = baselineCaptures(context, m);
       const locked = { ...m.comparisons, captures: [...m.comparisons.captures, ...baseline] };
-      const classifications = m.signals.map(s => {
+      const worthEvidenceIds = new Set(m.signals.filter(s => s.description === FINAL_CHECK_LOOK_LABEL).flatMap(s => s.evidenceIds));
+      const originals = new Map<string, string>();
+      if (worthEvidenceIds.size) {
+        const readSource = readForJob(context, m.comparisons.jobId);
+        for (const source of m.sources) {
+          if (!source.evidenceId || !worthEvidenceIds.has(source.evidenceId)) continue;
+          const read = await readFinalCheckTypedText(context, m, source, readSource);
+          if (read.status === "proposal" && read.proposal.facts.description === FINAL_CHECK_LOOK_LABEL)
+            originals.set(source.evidenceId, read.proposal.text);
+        }
+      }
+      const captureIds = m.comparisons.captures.map(c => shadowCaptureV1.parse(c).id);
+      const classifications = m.signals.map((s): FinalCheckClassification => {
+        const worthALook = s.description === FINAL_CHECK_LOOK_LABEL;
+        const evidenceTexts = s.evidenceIds.map(id => originals.get(id)).filter(text => text !== undefined);
         const result = reconcileFinalCheck({ tenantId: context.tenantId, jobId: m.comparisons.jobId, signalId: s.signalId, description: s.description, scopeArea: "job", scopeItemId: s.scopeItemId,
-          coalescedIntoSignalId: s.coalescedIntoSignalId, hasEvidence: s.evidenceIds.length > 0, permanentExclusion: s.permanentExclusion }, locked);
-        return { signalId: s.signalId, expectedRevision: s.revision, ...result, comparisons: { ...result.comparisons, captureIds: m.comparisons.captures.map(c => shadowCaptureV1.parse(c).id) } };
+          coalescedIntoSignalId: s.coalescedIntoSignalId, hasEvidence: s.evidenceIds.length > 0 && (!worthALook || evidenceTexts.length === s.evidenceIds.length), permanentExclusion: s.permanentExclusion },
+        worthALook ? { ...locked, captures: [] } : locked);
+        const classification = { signalId: s.signalId, expectedRevision: s.revision, ...result, comparisons: { ...result.comparisons, captureIds } };
+        if (!worthALook || result.outcome !== "reveal") return classification;
+
+        // One verified original can establish that the whole coalesced item is
+        // already captured. Report only references valid for the chosen outcome.
+        const matches = new Set(evidenceTexts.flatMap(description => matchBuilderCapture({
+          version: "shadow-match.v1", tenantId: context.tenantId, jobId: m.comparisons.jobId, scopeArea: "job", description,
+          dateCompatibility: "unknown", valueCompatibility: "unknown", ruleVersion: "builder-favourable-match.v1",
+        }, locked.captures).references.map(ref => ref.id)));
+        for (const [outcome, ids] of [
+          ["already_in_original_scope", m.comparisons.baselineItemIds],
+          ["builder_captured", captureIds],
+        ] as const) {
+          const references = ids.filter(id => matches.has(id));
+          if (references.length) return { ...classification, outcome, references };
+        }
+        return classification;
       });
       return repo.reconcile(context, m.comparisons.jobId, m.id, classifications);
     },

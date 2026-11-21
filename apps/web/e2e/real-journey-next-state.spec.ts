@@ -105,7 +105,7 @@ test("walk 2 saved facts select the no-extra account and paid end states", async
     await expect.poll(async () => (await readCheck()).state, { timeout: 180_000, intervals: [3000] }).not.toBe("pending");
   }
   expect((await readCheck()).state).toBe("completed");
-  await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+  await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
   expect((await savedFacts("completed-check-no-invoice")).result.nextStep).toBe("issue_invoice");
   await click("Issue and simulate this invoice");
   await expect(page.getByTestId("invoice-gross")).toHaveText("GBP 1,080.00");

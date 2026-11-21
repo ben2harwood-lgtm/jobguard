@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import { DEMO_TENANT_ID, DEMO_MEMBERSHIP_ID, DEMO_IDENTITY_USER_ID, FinalCheckRepository, practiceOwnedJobsSql } from "@jobguard/db";
-import { FinalCheckError } from "@jobguard/core";
+import { FINAL_CHECK_EMPTY_TEXT, FinalCheckError } from "@jobguard/core";
 import { FinalCheckApplication, finalCheckFailure } from "./final-check.application.js";
 const id="18000000-0000-4000-8000-000000000002",session="18000000-0000-4000-8000-000000000001";
 function fixture(owns=true){vi.stubEnv("JOBGUARD_ENV","synthetic_demo");const query=vi.fn(async(sql:string)=>({rows:sql==="SELECT app.current_actor() actor, app.current_tenant() tenant"?[{actor:DEMO_MEMBERSHIP_ID,tenant:DEMO_TENANT_ID}]:sql.includes("authenticate_practice_session")?[{tenant_id:DEMO_TENANT_ID,membership_id:DEMO_MEMBERSHIP_ID,identity_user_id:DEMO_IDENTITY_USER_ID}]:sql.startsWith(practiceOwnedJobsSql())&&owns?[{id}]:[]}));return {query,app:new FinalCheckApplication({query,connect:async()=>({query,release:vi.fn()})} as unknown as Pool,session)};}
@@ -16,7 +16,7 @@ it("SV5-24 pre-lock read returns fixed unlocked state through controlled project
 });
 it("SV5-04 zero completed result gives the exact server message",async()=>{
  const f=fixture();vi.spyOn(FinalCheckRepository.prototype,"read").mockResolvedValue({state:"completed",items:[]});
- expect((await f.app.get(id)).message).toBe("JobGuard's final check found nothing missing from your bill.");
+ expect((await f.app.get(id)).message).toBe(FINAL_CHECK_EMPTY_TEXT);
 });
 it("SV5-30 strict disposition refuses client authority after access",async()=>{
  const f=fixture(),spy=vi.spyOn(FinalCheckRepository.prototype,"disposition");

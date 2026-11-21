@@ -120,7 +120,7 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   await click(page, "Run the final check (practice)");
   await expect.poll(async () => (await read(page, `${root}/final-check`)).state, { timeout: 180_000, intervals: [5_000] }).toBe("completed");
   await click(page, "Load the saved final check");
-  await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+  await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
   // A fabricated source hash cannot substitute for the immutable locked bill.
   expect((await page.request.post(`${root}/customer-invoices`, { data: { ...issue, commandId: crypto.randomUUID(), expectedSourceHash: "0".repeat(64) } })).ok()).toBe(false);
   await page.goto(`${guidedUrl}#final-account-title`);

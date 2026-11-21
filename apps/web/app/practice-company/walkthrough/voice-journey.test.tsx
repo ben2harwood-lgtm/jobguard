@@ -73,7 +73,7 @@ describe("WALK-TOUR-FIXES completion and reload", () => {
     vi.stubGlobal("document", { getElementById: () => ({ querySelector: () => ({ textContent: amount }) }) });
     expect(approvedExtraDone()).toBe(done);
   });
-  it.each([["JobGuard's final check found 2 possible extras.", true], ["JobGuard's final check found nothing missing from your bill.", true], ["Final check queued", false], ["", false]])("Final Check result %s completes step 7: %s", (status, done) => {
+  it.each([["JobGuard's final check found 2 possible extras.", true], ["JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.", true], ["Final check queued", false], ["", false]])("Final Check result %s completes step 7: %s", (status, done) => {
     vi.stubGlobal("document", { getElementById: () => ({ querySelector: () => ({ textContent: status }) }) });
     expect(finalCheckDone()).toBe(done);
   });

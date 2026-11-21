@@ -1,6 +1,7 @@
 "use client";
 import { captureWorkspaceResponseV1 } from "@jobguard/api/capture-contracts";
 import { quoteWorkspaceResponseV1 } from "@jobguard/api/quote-contracts";
+import { FINAL_CHECK_EMPTY_TEXT } from "@jobguard/core";
 import { z } from "zod";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sessionResponseV1 } from "../../lib/contracts";
@@ -146,7 +147,7 @@ export async function addOnSiteEvidence(_: HTMLElement, signal: AbortSignal) {
   if (!evidenceDone()) await click("Complete this stage", signal);
 }
 
-export const finalCheckDone = () => text("final-check-status").startsWith("JobGuard's final check found");
+export const finalCheckDone = () => { const status = text("final-check-status"); return status.startsWith("JobGuard's final check found") || status === FINAL_CHECK_EMPTY_TEXT; };
 
 export function stageWords(index: number, prepared: string) {
   const words = stages[index]![1];
