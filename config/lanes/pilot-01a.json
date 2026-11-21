@@ -22,6 +22,7 @@
         "apps/api/src/final-check-task-executor.ts",
         "apps/api/src/final-check.application.ts",
         "apps/api/src/job-source.application.ts",
+        "apps/api/src/practice-session.test.ts",
         "apps/api/src/worker.ts",
         "apps/api/src/workspace/application.ts",
         "apps/api/src/workspace/workspace.service.ts",
