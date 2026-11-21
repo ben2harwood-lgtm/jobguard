@@ -64,7 +64,11 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   await click(page, "Save draft revision");
   await expect(page.getByTestId("quote-revision")).toHaveText("2");
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
-  for (const step of ["Preview this quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance", "Start this practice job"]) await click(page, step);
+  await page.reload();
+  await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
+  for (const step of ["Preview this quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance"]) await click(page, step);
+  await page.reload();
+  await click(page, "Start this practice job");
   await expect(page.getByTestId("activation-policy")).toHaveText("reference_fee_policy_v3");
   const activation = await read(page, `${root}/quotes/activation`);
   expect(activation.activation.recoveryCapPence).toBeNull();
@@ -79,6 +83,9 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   await expect(page.getByTestId("approved-additions")).toHaveText("£125.00");
   await page.getByRole("button", { name: "Approve exact revision", exact: true }).nth(0).click();
   await expect(page.getByTestId("approved-omissions")).toHaveText("−£25.00");
+  await page.reload();
+  await expect(page.getByTestId("approved-additions")).toHaveText("£125.00");
+  await expect(page.getByTestId("approved-omissions")).toHaveText("−£25.00");
   // Evaluate the ordinary Watchdog command, not a seeded finding or completion.
   const session = await read(page, "/api/session");
   await post(page, "/api/decisions", { version: "finding-evaluation-command.v1", commandId: crypto.randomUUID(), tenantId: session.tenants[0].id, jobId });
@@ -88,6 +95,8 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   await click(page, "Attach generated practice image");
   await click(page, "Check file integrity");
   await click(page, "Complete this stage");
+  await expect(page.getByTestId("stage-status")).toHaveText("Complete");
+  await page.reload();
   await expect(page.getByTestId("stage-status")).toHaveText("Complete");
   await click(page, "Rebuild from approved sources");
   await expect(page.getByText("Finish the required proof before issuing this bill", { exact: true })).toHaveCount(0);
@@ -124,14 +133,31 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   // A fabricated source hash cannot substitute for the immutable locked bill.
   expect((await page.request.post(`${root}/customer-invoices`, { data: { ...issue, commandId: crypto.randomUUID(), expectedSourceHash: "0".repeat(64) } })).ok()).toBe(false);
   await page.goto(`${guidedUrl}#final-account-title`);
-  await click(page, "Issue and simulate this invoice");
+  const invoiceWrite = page.waitForRequest(request => request.url().endsWith(`${root}/customer-invoices`) && request.method() === "POST");
+  const secondTab = await page.context().newPage();
+  await secondTab.goto(guidedUrl);
+  await page.getByRole("button", { name: "Issue and simulate this invoice", exact: true }).dblclick();
+  const invoiceIntent = (await invoiceWrite).postDataJSON();
+  const invoiceReplay = await secondTab.request.post(`${root}/customer-invoices`, { data: invoiceIntent });
+  expect(invoiceReplay.ok(), await invoiceReplay.text()).toBe(true);
   await expect(page.getByTestId("invoice-gross")).toHaveText("GBP 1,320.00");
-  const issued = (await read(page, `${root}/customer-invoices`)).invoices[0];
+  const { invoices } = await read(page, `${root}/customer-invoices`);
+  expect(invoices).toHaveLength(1);
+  const issued = invoices[0];
+  await page.reload();
+  await expect(page.getByTestId("invoice-gross")).toHaveText("GBP 1,320.00");
   const receipts = `${root}/customer-invoices/${issued.id}/receipts`;
   // Negative, fractional, over-limit and invented allocation authority fail closed.
   const receipt = { version: "practice-customer-receipt.record.v1", commandId: crypto.randomUUID(), paidOn: "2026-10-29", amountPence: 50000, method: "bank_transfer", reference: "Fictional first payment" };
   for (const extra of [{ amountPence: -1 }, { amountPence: 1.5 }, { amountPence: 1_000_000_000_001 }, { allocationPence: 50000 }]) expect((await page.request.post(receipts, { data: { ...receipt, ...extra } })).status()).toBe(400);
-  await recordThroughUi(page, "500.00");
+  await page.getByTestId("uiwire12-receipt-amount").fill("500.00");
+  const firstWrite = page.waitForRequest(request => request.url().endsWith(receipts) && request.method() === "POST");
+  await page.getByRole("button", { name: "Record practice receipt", exact: true }).dblclick();
+  const firstIntent = (await firstWrite).postDataJSON();
+  const firstReplay = await secondTab.request.post(receipts, { data: firstIntent });
+  expect(firstReplay.ok(), await firstReplay.text()).toBe(true);
+  expect((await read(page, receipts)).receipts).toHaveLength(1);
+  await secondTab.close();
   await expect(page.getByTestId("invoice-balance")).toHaveText("GBP 820.00");
   // Replay the actual second UI intent; no extra payment is recorded.
   const secondRequest = page.waitForRequest((request: Request) => request.url().endsWith(receipts) && request.method() === "POST");
@@ -184,7 +210,18 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   const other = await browser.newContext({ baseURL: new URL(guidedUrl).origin });
   try {
     expect((await other.request.post("/api/session")).ok()).toBe(true);
-    for (const path of [`${root}/proposal`, `${root}/final-check`, `${root}/final-account/lock`, receipts, `${root}/value`]) expect((await other.request.get(path)).ok()).toBe(false);
+    const invoicePdf = `${root}/customer-invoices/${issued.id}`;
+    for (const path of [root, invoicePdf, `${root}/proof`, `${root}/proposal`, `${root}/final-check`, `${root}/final-account/lock`, receipts, `${root}/value`]) {
+      const ownerRead = await page.request.get(path);
+      expect(ownerRead.ok(), `Owner can read ${path}`).toBe(true);
+      const denied = await other.request.get(path);
+      expect([403, 404], `Other session refused ${path}`).toContain(denied.status());
+      const body = await denied.text();
+      for (const privateValue of [jobId, issued.id, "Extra preparation", "Practice Customer"]) {
+        expect(body).not.toContain(privateValue);
+      }
+      expect(denied.headers()["content-type"]).not.toContain("application/pdf");
+    }
     expect((await other.request.post(receipts, { data: second })).ok()).toBe(false);
     const tab = await other.newPage(); await tab.goto(guidedUrl);
     await expect(tab.getByRole("heading", { name: "You cannot open this job", exact: true })).toBeVisible();
