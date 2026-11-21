@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import type * as InboxMetrics from "../../../../../../lib/inbox-metrics-server";
 import { routeErrorCode } from "../../../../../../lib/route-error-code";
 import { practiceFailure, hasSyntheticSession, syntheticPool } from "../../../../../../lib/synthetic-server";
 import { workspaceApplication } from "../../../../../../lib/workspace-server";
@@ -30,7 +31,9 @@ export async function POST(r: Request, { params }: { params: Promise<{ id: strin
     let metricFailure = false;
     if (reason && process.env.JOBGUARD_ENV === "synthetic_demo") {
       try {
-        const { recordInboxDismissal } = await import("../../../../../../lib/inbox-metrics-server.js");
+        const { recordInboxDismissal }: typeof InboxMetrics =
+          // @ts-expect-error TS2835: webpack resolves the TypeScript source from the extensionless path.
+          await import("../../../../../../lib/inbox-metrics-server");
         await recordInboxDismissal(syntheticPool(), sessionId, id, decisionId, reason);
       }
       catch {

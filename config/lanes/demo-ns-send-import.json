@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "demo-ns-send-import": {
+      "branches": ["codex/sandbox/demo-ns-send-import"],
+      "note": "Fix server import resolution in the Northside send and relevance inbox dismissal routes.",
+      "allow": [
+        "apps/web/app/api/jobs/[id]/relevance-inbox/decisions/[decisionId]/route.ts",
+        "apps/web/app/api/northside/extras/[extraId]/[action]/route.ts",
+        "apps/web/app/api/northside/extras/[extraId]/[action]/send-expiry.test.ts",
+        "apps/web/app/lib/route-error-code.test.ts"
+      ]
+    }
+  }
+}

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { randomBytes, randomUUID } from "node:crypto";
 import { ExtraApprovalRepository, northsideApprovalArtifact, northsideExtras, northsideRateCard, northsideRun, withTenant } from "@jobguard/db";
 import { DemoError, bodyOf, demoActor, demoContext, failure, json, requireOrigin, parseDemoBody } from "../../../../../lib/northside-server";
+import { identityApplication } from "../../../../../lib/identity-server";
 import { CLIENT_APPROVAL_LIFETIME_MS } from "../../../../../lib/northside-client-link-policy";
 
 const uuid = (value: unknown): string => { if (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value)) return value.toLowerCase(); throw new DemoError("INVALID_COMMAND", 422); };
@@ -116,7 +117,6 @@ export async function POST(request: Request, context: { params: Promise<{ extraI
         const sent = await repo.issueClientApproval(tenant, member, { version: "issue-client-approval.v1", commandId, jobId, requestId: extra.requestId, approverMembershipId: extra.clientApproverMembershipId, recipient: extra.clientApproverEmail, linkToken: token, signinDigest: identityApplication().provider.digest(`customer-link:${token}`), expiresAt });
         return { token, sent };
       };
-      const { identityApplication } = await import("../../../../../lib/identity-server.js");
       const prior = await recover();
       let issued;
       try { issued = await issue(prior); }
