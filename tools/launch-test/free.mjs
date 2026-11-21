@@ -12,6 +12,7 @@ const checks = {
   database: [...database,
     "test/final-account-lock-invoice.integration.test.ts",
     "test/lp8b-outbox-evidence.integration.test.ts",
+    "test/signed-evidence-export-store.integration.test.ts",
     "test/fee-webhook-receipt-binding.integration.test.ts",
     "test/payment-fee-standing-authority.integration.test.ts",
     "test/practice-bank-member-accounts.integration.test.ts",
