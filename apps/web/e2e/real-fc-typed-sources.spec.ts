@@ -17,6 +17,9 @@ const scenarios = [
   { name: "message-only unpriced hallway work permits a practice invoice", note: null, message: request, found: true },
   { name: "case and punctuation variants permit a practice invoice", note: "ALSO PAINTED THE HALLWAY CEILING, CUSTOMER ASKED!", message: "CAN YOU ALSO PAINT THE HALLWAY CEILING?", found: true },
   { name: "readable unrelated originals finish with nothing found and permit an invoice", note: "Weather was sunny today.", message: "Thanks for the update.", found: false },
+  { name: "ordinary pipe boxing evidence leads to one priced and paid extra", found: true, look: true,
+    note: "Mrs Sample asked us to box in the boiler pipes under the sink while we were there. Said 95 quid.",
+    message: "Thanks both, the boxing in round the pipes looks great, £95 is fine, just add it on." },
 ];
 for (const scenario of scenarios) test(scenario.name, async ({ page }) => {
   await page.goto("/practice-company");
@@ -95,10 +98,22 @@ for (const scenario of scenarios) test(scenario.name, async ({ page }) => {
   // Reload the saved job after persisted completion to refresh the existing invoice guard.
   await page.goto(`/jobs/${jobId}#quote`);
   await click(page, "Load the saved final check");
-  await expect(page.getByTestId("final-check-status")).toContainText(scenario.found ? "found 1 thing" : "found nothing missing");
+  await expect(page.getByTestId("final-check-status")).toContainText(scenario.found ? "found 1 thing" : "didn't spot anything missing");
   const items = page.getByTestId("final-check-item");
   await expect(items).toHaveCount(scenario.found ? 1 : 0);
-  if (scenario.found) {
+  if (scenario.look) {
+    const label = "Unmatched wording spotted";
+    await expect(items).toContainText(label);
+    await expect(items).toContainText("Estimated extra: £95.00");
+    await expect(items.getByRole("listitem")).toHaveCount(2);
+    await items.getByRole("button", { name: "Yes — this was extra work", exact: true }).click();
+    const row = page.getByTestId(/^variation-/u).filter({ has: page.getByRole("heading", { name: label, exact: true }) });
+    await row.getByRole("button", { name: "Change price", exact: true }).click();
+    await row.getByLabel(`New price ${label}`).fill("95.00");
+    await row.getByRole("button", { name: "Save new proposed revision", exact: true }).click();
+    await row.getByRole("button", { name: "Approve exact revision", exact: true }).click();
+    await expect(row).toContainText("Approved and saved");
+  } else if (scenario.found) {
     await expect(items).toContainText("hallway ceiling");
     await expect(items.getByRole("listitem")).toHaveCount(scenario.note === null ? 1 : 2);
   }
@@ -120,4 +135,15 @@ for (const scenario of scenarios) test(scenario.name, async ({ page }) => {
   const invoices = await page.request.get(`/api/jobs/${jobId}/customer-invoices`);
   expect(invoices.ok()).toBe(true);
   expect((await invoices.json()).invoices).toHaveLength(1);
+  if (scenario.look) {
+    await click(page, "Rebuild from approved sources");
+    await expect(page.getByTestId("final-variation-net")).toHaveText("£95.00");
+    await click(page, "Issue supplementary invoice");
+    const extraInvoice = page.locator("article[id^=invoice-]").filter({ has: page.getByTestId("invoice-balance").filter({ hasText: "GBP 114.00" }) });
+    await extraInvoice.getByTestId("uiwire12-receipt-amount").fill("114.00");
+    await extraInvoice.getByTestId("uiwire12-receipt-reference").fill("Fictional pipe boxing receipt");
+    await extraInvoice.getByRole("button", { name: "Record practice receipt", exact: true }).click();
+    await expect(page.getByTestId("invoice-balance")).toHaveText(["GBP 0.00", "GBP 0.00"]);
+    await expect(page.getByTestId("customer-payment-status")).toHaveText(["Paid", "Paid"]);
+  }
 });

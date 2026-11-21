@@ -75,6 +75,31 @@ export function decodeFinalCheckTypedText(text: string, reference: string | null
   } } };
 }
 
+export const FINAL_CHECK_LOOK_LABEL = "Unmatched wording spotted";
+
+export function worthALook(text: string, kind: "note_or_voice" | "customer_request"): TypedTextResult | null {
+  if (/\b(?:there is a safety risk|written agreement is legally required|there is an active dispute|do not proceed)\b/iu.test(text))
+    return { status: "invalid" };
+  if (/\b(?:no charge|don['’]?t charge|deposit|as per the quote|included in|job price)\b/iu.test(text)) return null;
+
+  const amounts = [...text.matchAll(/£\s*(\d+(?:[.,]\d+)*)|(?<![\p{L}\p{N}£.,+-])([+-]?\d+(?:[.,]\d+)*)\s+(?:quid|pounds?|squid|all in|cash)\b|\bpay(?:ing)?\s+(\d+(?:[.,]\d+)*)/giu)];
+  const yes = /\b(?:asked (?:us|me|if|can|could|for|whether|to)|(?:can|could|would) you|go ahead|yes please|go on then|happy to pay|(?:add|put) (?:it|that|this) on|on (?:the|my|her|his|their|your) bill|ok['’]d|okayed|agreed|(?:said|says) (?:yes|ok|fine)|is fine|while (?:you['’]re|we were|we['’]re) (?:there|here|at it|on site))\b/iu.test(text);
+  if (!amounts.length && !yes) return null;
+
+  let estimatedValuePence: number | null = null;
+  if (amounts.length === 1 && !/\b(?:each|per)\b/iu.test(text)) {
+    const [token] = amounts;
+    try { estimatedValuePence = parsePoundsToPence(token![1] ?? token![2] ?? token![3]!); } catch { /* bounded unknown */ }
+  }
+  const reference = estimatedValuePence ?? createHash("sha256").update(text).digest("hex").slice(0, 16);
+  return { status: "proposal", proposal: { text, citations: [{ start: 0, end: text.length, quote: text }], facts: {
+    workReference: `practice:typed:look:${reference}`, scopeArea: "job", description: FINAL_CHECK_LOOK_LABEL,
+    status: kind === "note_or_voice" ? "completed" : "requested", estimatedValuePence,
+    safetyImplication: false, customerClearlyRequested: false, needsPriorWrittenAgreement: false, significantWork: null,
+    activeDispute: false, silenceMateriallyWorsensDispute: false, disclosureDuty: false,
+  } } };
+}
+
 /** Runtime-only SELECTs: exact current original + intake + verified upload and
  * frozen evidence row. No hidden-table grant or caller-created evidence identity. */
 export async function readFinalCheckTypedText(
@@ -115,9 +140,8 @@ export async function readFinalCheckTypedText(
     let text: string;
     try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(row.bytes); } catch { return { status: "invalid" }; }
     if (!Buffer.from(text, "utf8").equals(row.bytes)) return { status: "invalid" };
-    const result = decodeFinalCheckTypedText(text, row.synthetic_fixture_ref, s.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request");
-    // Unsupported extra-bearing originals remain pending, including unsafe
-    // trailing clauses. Readability alone is not evidence of commercial absence.
-    return result.status === "readable" && /\b(extra|additional|added|as well|on top)\b/iu.test(text) ? { status: "invalid" } : result;
+    const kind = s.sourceKind === "job_diary_text" ? "note_or_voice" : "customer_request";
+    const result = decodeFinalCheckTypedText(text, row.synthetic_fixture_ref, kind);
+    return result.status === "readable" ? worthALook(text, kind) ?? result : result;
   })) ?? { status: "invalid" };
 }

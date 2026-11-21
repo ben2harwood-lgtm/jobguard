@@ -1,7 +1,8 @@
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
-import { FinalCheckError } from "@jobguard/core";
+import { FinalCheckError, matchBuilderCapture } from "@jobguard/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { decodeFinalCheckTypedText } from "./final-check-typed-text.js";
+import { decodeFinalCheckTypedText, FINAL_CHECK_LOOK_LABEL, worthALook } from "./final-check-typed-text.js";
 import { FinalCheckRepository, type FinalCheckManifest } from "./final-check-repository.js";
 import * as structuredReader from "./final-check-practice-readers.js";
 import { practiceFinalCheckPorts, ShadowDetectionRepository } from "./shadow-detection-repository.js";
@@ -9,6 +10,46 @@ import { verifiedTenantContextFromMembership, type AuthenticatedMembership } fro
 
 const diary = "also painted the hallway ceiling, customer asked";
 const request = "Please paint the hallway ceiling as an extra.";
+const pipeDiary = "Mrs Sample asked us to box in the boiler pipes under the sink while we were there. Said 95 quid.";
+const pipeReply = "Thanks both, the boxing in round the pipes looks great, £95 is fine, just add it on.";
+const perSocket = "Added 2 double sockets, £85 each";
+it.each([
+  [pipeDiary, "note_or_voice", 9500, "9500"],
+  [pipeReply, "customer_request", 9500, "9500"],
+  ["fitted extra rad on back wall, 220 quid", "note_or_voice", 22000, "22000"],
+  [perSocket, "note_or_voice", null, createHash("sha256").update(perSocket).digest("hex").slice(0, 16)],
+] as const)("flags readable wording worth a look: %s", (text, kind, estimatedValuePence, reference) => {
+  expect(worthALook(text, kind)).toMatchObject({ status: "proposal", proposal: {
+    text, citations: [{ start: 0, end: text.length, quote: text }],
+    facts: { description: FINAL_CHECK_LOOK_LABEL, scopeArea: "job", workReference: `practice:typed:look:${reference}`,
+      status: kind === "note_or_voice" ? "completed" : "requested", estimatedValuePence, customerClearlyRequested: false,
+      safetyImplication: false, needsPriorWrittenAgreement: false, significantWork: null,
+      activeDispute: false, silenceMateriallyWorsensDispute: false, disclosureDuty: false },
+  } });
+});
+it.each([
+  ["Sent the £500 deposit this morning", null],
+  ["hung the towel rail Mrs T bought herself, no charge", null],
+  ["Weather was sunny today.", null],
+  ["Thanks for the update.", null],
+  ["Boxed in the pipes under the sink", null],
+  ...["There is a safety risk", "Written agreement is legally required", "There is an active dispute", "Do not proceed"].map(clause =>
+    [`Fitted the towel rail as an extra. Agreed £180. ${clause}.`, { status: "invalid" }] as const),
+] as const)("returns an honest zero or keeps a trailing clause pending: %s", (text, expected) => {
+  expect(worthALook(text, "note_or_voice")).toEqual(expected);
+});
+it("keeps the approved item name unmatched against ordinary quote lines", () => {
+  const id = "10000000-0000-4000-8000-000000000001";
+  const scope = { tenantId: id, jobId: id, scopeArea: "job" };
+  const captures = ["Paint walls", "Fit kitchen units", "Box in pipes", "Labour", "Fictional kitchen work", "Generated fictional work"].map(description => ({
+    ...scope, version: "shadow-capture.v1", description, id, scopeItemId: id, revisionId: id, sourceRef: id,
+    kind: "baseline", state: null, recordedPhase: "pre_lock", aiStructured: false, valuePence: 10000,
+    serverRecordedAt: "2026-11-11T10:00:00Z",
+  }));
+  expect(matchBuilderCapture({ ...scope, version: "shadow-match.v1", description: FINAL_CHECK_LOOK_LABEL,
+    ruleVersion: "builder-favourable-match.v1", dateCompatibility: "unknown", valueCompatibility: "unknown" }, captures).outcome).toBe("unmatched");
+});
+
 it.each([".", "!", "?"])("keeps a bounded duration/estimate diary and its same-work request after terminal punctuation %s", punctuation => {
   const text = `Painted the hallway ceiling as asked, three hours extra, about 150 pounds${punctuation}`;
   const result = decodeFinalCheckTypedText(text, null, "note_or_voice");

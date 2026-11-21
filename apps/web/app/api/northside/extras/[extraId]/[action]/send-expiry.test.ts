@@ -9,7 +9,7 @@ vi.mock("@jobguard/db", () => ({
   northsideRun: async () => ({}),
   northsideApprovalArtifact: h.recover,
 }));
-vi.mock("../../../../../lib/identity-server.js", () => ({
+vi.mock("../../../../../lib/identity-server", () => ({
   identityApplication: () => ({ provider: { digest: () => "c".repeat(64) } }),
 }));
 vi.mock("../../../../../lib/northside-server", () => ({

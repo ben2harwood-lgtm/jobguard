@@ -161,7 +161,7 @@ test("D (practice run): a photo of work in the original quote is reconciled, nev
   // The worker discovers requests once a minute, then freezes, examines, reconciles and publishes.
   await expect.poll(async () => (await (await page.request.get(`/api/jobs/${jobId}/final-check`)).json()).state, { timeout: 180_000, intervals: [5_000] }).toBe("completed");
   await page.reload();
-  await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+  await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
   await expect(page.getByTestId("final-check-item")).toHaveCount(0);
   await withSyntheticShadow(tenantId, async (_shadow, admin) => {
     const outcomes = (await admin.query("SELECT c.outcome FROM app.shadow_signal_classification c JOIN app.shadow_commercial_signal s ON (s.tenant_id,s.job_id,s.id)=(c.tenant_id,c.job_id,c.signal_id) WHERE c.tenant_id=$1 AND c.job_id=$2", [tenantId, jobId])).rows.map(r => r.outcome);
@@ -176,7 +176,7 @@ test("B (real run): a held extra captured for £800 at final review is never rev
     { timeout: 180_000, intervals: [5_000] }).toBe("completed");
   for (let pass = 0; pass < 2; pass++) {
     await page.goto(`/jobs/${jobId}#final-check`);
-    await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+    await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
     await expect(page.getByTestId("final-check-item")).toHaveCount(0);
     await page.reload();
   }
@@ -207,7 +207,7 @@ test("O (real run): zero-result wording survives reload and replay creates no du
   const main = page.getByRole("main");
   const panel = main.getByTestId("final-check-reveal");
   const assertZeroResult = async () => {
-    await expect(panel.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+    await expect(panel.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
     await expect(panel.getByTestId("final-check-item")).toHaveCount(0);
     await expect(panel.getByTestId("final-check-post-lock")).toHaveCount(0);
     await expect(panel).toHaveAttribute("aria-busy", "false");

@@ -22,7 +22,7 @@ describe("SV-5 pure reconciliation",()=>{
  });
  it("SV5-04 empty inventory has an explicit normal zero-result message",()=>{
   expect(checkSourceCompletion([],[])).toBe(true);
-  expect(FINAL_CHECK_EMPTY_TEXT).toBe("JobGuard's final check found nothing missing from your bill.");
+  expect(FINAL_CHECK_EMPTY_TEXT).toBe("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
  });
  it("SV5-05 SV5-07 all capture states and ambiguous overlap favour the builder",()=>{
   for(const state of ["draft","priced","approved","rejected","withdrawn"])expect(reconcileFinalCheck(signal,{...locked,captures:[{...capture,state}]}).outcome).toBe("builder_captured");

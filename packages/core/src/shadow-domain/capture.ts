@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_JOB_SOURCE_TEXT } from "../job-sources.js";
 import { instantV1 } from "../receipt-allocation.js";
 import { freezeShadow, parseShadow, shadowAmount, shadowId, shadowRef } from "./types.js";
 export const captureStates = ["draft", "priced", "approved", "rejected", "withdrawn"] as const;
@@ -9,7 +10,7 @@ export function classifyShadowSource(raw: unknown): "capture" | "evidence" {
 }
 export const shadowCaptureV1 = z.object({ version: z.literal("shadow-capture.v1"), tenantId: shadowId, jobId: shadowId, id: shadowId, scopeItemId: shadowId, revisionId: shadowId, serverRecordedAt: instantV1, valuePence: shadowAmount.nullable(), kind: z.enum(["baseline", "log_extra", "final_review"]), state: z.enum(captureStates).nullable(), scopeArea: shadowRef, description: z.string().min(1).max(4000), recordedPhase: z.enum(["pre_lock", "post_lock"]), aiStructured: z.boolean(), sourceRef: shadowRef }).strict().refine(v => v.kind === "log_extra" ? v.state !== null : v.state === null).readonly();
 export type ShadowCapture = z.infer<typeof shadowCaptureV1>;
-export const shadowMatchV1 = z.object({ version: z.literal("shadow-match.v1"), tenantId: shadowId, jobId: shadowId, scopeArea: shadowRef, description: z.string().min(1).max(4000), dateCompatibility: z.enum(["compatible", "incompatible", "unknown"]), valueCompatibility: z.enum(["compatible", "incompatible", "unknown"]), ruleVersion: z.literal("builder-favourable-match.v1") }).strict().readonly();
+export const shadowMatchV1 = z.object({ version: z.literal("shadow-match.v1"), tenantId: shadowId, jobId: shadowId, scopeArea: shadowRef, description: z.string().min(1).max(MAX_JOB_SOURCE_TEXT), dateCompatibility: z.enum(["compatible", "incompatible", "unknown"]), valueCompatibility: z.enum(["compatible", "incompatible", "unknown"]), ruleVersion: z.literal("builder-favourable-match.v1") }).strict().readonly();
 // Reversible reference normalization: NFKC, lower case, punctuation to spaces, whitespace trim.
 // One common complete word is overlap. No score, date window, value tolerance or production threshold.
 const normalize = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();

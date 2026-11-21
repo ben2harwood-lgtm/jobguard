@@ -59,7 +59,7 @@ ITEM: Replace shelves`);
   await expect.poll(readCheck, { timeout: 180_000, intervals: [3000] }).not.toBe("pending");
  }
  expect(await readCheck()).toBe("completed");
- await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+ await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
  const issuedResponse = page.waitForResponse(r => r.url().endsWith(`/api/jobs/${jobId}/customer-invoices`) && r.request().method() === "POST");
  await click(page, "Issue and simulate this invoice");
  const issued = await issuedResponse; expect(issued.ok(), await issued.text()).toBe(true);

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { matchBuilderCapture } from "./shadow-domain/capture.js";
 
-export const FINAL_CHECK_EMPTY_TEXT = "JobGuard's final check found nothing missing from your bill." as const;
+export const FINAL_CHECK_EMPTY_TEXT = "JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill." as const;
 const uuid = z.string().uuid();
 export const finalCheckDispositionV1 = z.object({
  version:z.literal("final-check.disposition.v1"), commandId:uuid, lockId:uuid, runId:uuid, signalId:uuid,

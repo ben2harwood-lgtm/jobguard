@@ -107,7 +107,7 @@ async function journey(page: Page, savedName: string | null) {
  };
  if (await readCheck() !== "completed") await click(page,"Run the final check (practice)");
  await expect.poll(readCheck,{timeout:180_000,intervals:[1000,3000]}).toBe("completed");
- await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check found nothing missing from your bill.");
+ await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
  const issuing = page.waitForResponse(r=>r.url().endsWith(`/api/jobs/${job}/customer-invoices`)&&r.request().method()==="POST");
  await click(page,"Issue and simulate this invoice");
  const issued = await issuing; expect(issued.ok(),await issued.text()).toBe(true);

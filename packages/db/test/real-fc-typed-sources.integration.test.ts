@@ -1,9 +1,11 @@
 // Real PostgreSQL + actual worker ports. Private synthetic fixture only; no seeded detections.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { approvePricedVariation, VariationRepository } from "../src/variation-repository.js";
 import { withTenant } from "../src/tenant-context.js";
 import { practiceMaterialPool } from "../src/practice-session.js";
 import { JobSourceRepository } from "../src/job-source-repository.js";
+import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { FinalCheckRepository } from "../src/final-check-repository.js";
 import { FinalCheckCompletionRepository, practiceFinalCheckPorts } from "../src/shadow-detection-repository.js";
 import { FinalCheckWorker } from "../../../apps/api/src/final-check.worker.js";
@@ -13,13 +15,15 @@ import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, fin
 let f: FinalCheckFixture;
 const diary = "also painted the hallway ceiling, customer asked";
 const request = "Please paint the hallway ceiling as an extra.";
+const pipeDiary = "Mrs Sample asked us to box in the boiler pipes under the sink while we were there. Said 95 quid.";
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); f = await createFinalCheckFixture(); }, 240000);
 afterAll(async () => { await closeFinalCheckFixture(f); vi.unstubAllEnvs(); });
-async function setup(note: string | null = diary, message: string | null = request) {
+async function setup(note: string | null = diary, message: string | null = request, prepareAndLock?: (job: Awaited<ReturnType<typeof seedFinalCheckJob>>) => Promise<unknown>) {
   const a = await seedFinalCheckJob(f), sources = new JobSourceRepository(f.runtime);
   if (message !== null) await sources.intake(a.context, a.jobId, a.digest, "customer_message", { version: "customer-message-input.v1", commandId: randomUUID(), fictionalCustomer: { kind: "named_fictional_customer", name: "Fictional Alex" }, text: message });
   if (note !== null) await sources.intake(a.context, a.jobId, a.digest, "diary", { version: "job-diary-input.v1", commandId: randomUUID(), entryMode: "typed", onSite: false, text: note });
-  await a.lock();
+  if (prepareAndLock) await prepareAndLock(a);
+  else await a.lock();
   // LP-6c: shadow-side calls use an unbound tenant context, as main's final-check tests do.
   const shadow = testTenantContext(a.tenantId, { bound: false });
   const repo = new FinalCheckRepository(f.shadow), m = await repo.begin(shadow, a.jobId);
@@ -62,6 +66,85 @@ it.each([
   await issue(); await issue();
   expect((await f.admin.query("SELECT count(*)::int n FROM app.final_account_lock_check WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0].n).toBe(1);
   expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0].n).toBe(1);
+});
+
+it.each([
+  [pipeDiary,
+    "Thanks both, the boxing in round the pipes looks great, £95 is fine, just add it on.", 9500],
+  ["fitted extra rad on back wall, 220 quid", null, 22000],
+  ["Fitted the towel rail, added a shelf for her", null, null],
+] as const)("completes and issues once for everyday wording: %s", async (note, message, estimate) => {
+  const a = await setup(note, message), { runId } = await a.execute() as { runId: string };
+  const completed = await a.repo.manifest(a.shadow, a.jobId, a.m.id);
+  expect(completed.sources.map(s => s.status)).toEqual(Array(message === null ? 1 : 2).fill(estimate === null ? "zero_result" : "detected"));
+  const completion = new FinalCheckCompletionRepository(f.shadow);
+  await completion.publish(a.shadow, { version: "final-check-publication.v1", jobId: a.jobId, runId, checkId: randomUUID() });
+  const view = await new FinalCheckRepository(f.runtime).read(a.context, a.jobId, a.digest);
+  expect(view.state).toBe("completed");
+  expect(view.items).toHaveLength(estimate === null ? 0 : 1);
+  if (estimate !== null) {
+    expect(view.items[0]).toMatchObject({ description: "Unmatched wording spotted", estimatedValuePence: estimate });
+    expect((view.items[0]!.evidence as { id: string }[]).map(e => e.id).sort()).toEqual(completed.sources.map(s => s.evidenceId).sort());
+  }
+  const issueId = randomUUID();
+  const issue = () => withTenant(practiceMaterialPool(f.runtime, a.digest), a.context, db => db.$client.query("SELECT app.issue_lock_bound_customer_invoice($1,$2,$3,$4,$5,'final','fictional@example.invalid','2026-11-09'::date,$6)", [a.tenantId, a.jobId, a.revisionId, FINAL_CHECK_ACTOR, issueId, "a".repeat(64)]));
+  await issue(); await issue();
+  expect((await f.admin.query("SELECT count(*)::int n FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [a.tenantId, a.jobId])).rows[0].n).toBe(1);
+});
+
+it("excludes an already approved £95 builder capture from the pipe diary finding", async () => {
+  const variationId = randomUUID(), description = "Box in boiler pipes";
+  const a = await setup(pipeDiary, null, async job => {
+    const variations = new VariationRepository(practiceMaterialPool(f.runtime, job.digest));
+    await variations.logBuilderExtra(job.context, {
+      version: "log-builder-extra.v1", actorMembershipId: FINAL_CHECK_ACTOR, deviceId: null, deviceCapturedAt: null,
+      proposal: { version: "variation-proposal.v1", id: variationId, jobId: job.jobId, scopeItemId: randomUUID(),
+        existingScopeItemId: null, lineageParentScopeItemId: null, captureKind: "text", captureText: description, description, suggestion: null },
+      price: { direction: "addition", quantity: "1", unit: "item", unitRatePence: 9500, confirmedByMembershipId: FINAL_CHECK_ACTOR,
+        rateProvenance: { kind: "human_entered", sourceRef: "synthetic-pipe-capture", sourceHash: "a".repeat(64), rateVersion: "synthetic.v1" } },
+    });
+    const variation = (await variations.read(job.context, job.jobId)).variations.find(v => v.id === variationId)!;
+    const revision = variation.revisions.find(r => r.id === variation.currentRevisionId)!;
+    const approvalId = randomUUID();
+    await variations.transact(job.context, db => approvePricedVariation(db, job.tenantId, variationId, {
+      id: approvalId, revisionId: revision.id, revision: revision.revision, contentHash: revision.contentHash,
+      signedDeltaPence: revision.signedDeltaPence, method: "builder_attestation", actorMembershipId: FINAL_CHECK_ACTOR,
+      evidenceId: null, approvedAt: new Date(),
+    }));
+    // Extend the seeded account with the exact real approval before locking it.
+    const finalRevisionId = randomUUID();
+    await finalCheckTenant(f.admin, job.tenantId, async db => {
+      await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,previous_revision_id,source_hash,baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
+       SELECT $3,tenant_id,job_id,final_account_draft_id,2,id,$4,baseline_quote_version_id,currency,tax_policy_version,109500,21900,131400,false,findings
+       FROM app.final_account_revision WHERE tenant_id=$1 AND id=$2`, [job.tenantId, job.revisionId, finalRevisionId, "b".repeat(64)]);
+      await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
+       SELECT gen_random_uuid(),tenant_id,job_id,$3,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal
+       FROM app.final_account_line WHERE tenant_id=$1 AND final_account_revision_id=$2`, [job.tenantId, job.revisionId, finalRevisionId]);
+      await db.query(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,commercial_revision_id,approval_id,description,net_pence,ordinal)
+       VALUES(gen_random_uuid(),$1,$2,$3,'variation',$4,$5,$4,$6,$7,9500,2)`, [job.tenantId, job.jobId, finalRevisionId, revision.id, variation.scopeItemId, approvalId, description]);
+      await db.query("UPDATE app.final_account_draft SET revision=2,current_revision_id=$3 WHERE tenant_id=$1 AND job_id=$2", [job.tenantId, job.jobId, finalRevisionId]);
+    });
+    await new FinalAccountLockRepository(practiceMaterialPool(f.runtime, job.digest)).lock(job.context, {
+      jobId: job.jobId, actorMembershipId: FINAL_CHECK_ACTOR, commandId: randomUUID(), finalAccountRevisionId: finalRevisionId,
+      expectedRevision: 2, declarationVersion: "final_account_declaration.v1",
+    });
+  });
+  expect(a.m.comparisons.captures).toContainEqual(expect.objectContaining({ id: variationId, description, state: "approved", valuePence: 9500 }));
+  const { runId } = await a.execute() as { runId: string };
+  await new FinalCheckCompletionRepository(f.shadow).publish(a.shadow, {
+    version: "final-check-publication.v1", jobId: a.jobId, runId, checkId: randomUUID(),
+  });
+  expect(await new FinalCheckRepository(f.runtime).read(a.context, a.jobId, a.digest)).toMatchObject({ state: "completed", items: [] });
+  const completed = await a.repo.manifest(a.shadow, a.jobId, a.m.id);
+  expect(completed.result?.classifications).toContainEqual(expect.objectContaining({ outcome: "builder_captured", references: [variationId] }));
+
+  const uncaptured = await setup(pipeDiary, null);
+  const uncapturedRun = await uncaptured.execute() as { runId: string };
+  await new FinalCheckCompletionRepository(f.shadow).publish(uncaptured.shadow, {
+    version: "final-check-publication.v1", jobId: uncaptured.jobId, runId: uncapturedRun.runId, checkId: randomUUID(),
+  });
+  expect(await new FinalCheckRepository(f.runtime).read(uncaptured.context, uncaptured.jobId, uncaptured.digest))
+    .toMatchObject({ state: "completed", items: [{ description: "Unmatched wording spotted", estimatedValuePence: 9500 }] });
 });
 
 it("preserves the reviewed must-surface fixture refusal in the actual worker", async () => {

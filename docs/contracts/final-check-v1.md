@@ -48,8 +48,10 @@ for compatibility and coalesce with the existing hallway fixtures. Explicit
 `Estimated extra` sentences accept pounds, £ or quid using the existing exact
 bounded GBP parser; hours are not prices, conflicting/malformed amounts stay
 unknown, and an estimate grants no approval or authoritative price. Readable
-verified text outside this grammar produces an examined `zero_result`, distinct
-from invalid/unsupported evidence. This is no claim of arbitrary trade, negation,
+verified text outside this grammar may yield one ordinary proposal when it
+contains an amount or agreement cue, or an examined `zero_result` otherwise,
+including when a stop phrase applies, while the four designated safety,
+written-agreement, dispute and do-not-proceed clauses keep the check pending. This is no claim of arbitrary trade, negation,
 safety or legal understanding. Existing captures, baseline matching, immutable
 lock/cutoff, attempts, disclosure rules, invoice approval and production gates
 remain authoritative. Automatic invoice-guard refresh, retry UI and displayed
