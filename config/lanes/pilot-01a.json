@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-01a": {
+      "branches": [
+        "codex/sandbox/pilot-01a"
+      ],
+      "note": "RED pilot G1 policy, server boundaries and job-list proof with fictional approval and isolated data.",
+      "allow": [
+        "apps/api/src/auth/customer-signin.ts",
+        "apps/api/src/auth/identity-http.ts",
+        "apps/api/src/auth/persisted-auth-provider.ts",
+        "apps/api/src/auth/pilot-identity.test.ts",
+        "apps/api/src/customer-invoice.application.ts",
+        "apps/api/src/effects/pilot-effects.test.ts",
+        "apps/api/src/effects/provider-dispatch.ts",
+        "apps/api/src/effects/tax-invoice.ts",
+        "apps/api/src/final-account-lock.application.ts",
+        "apps/api/src/final-check-task-executor.test.ts",
+        "apps/api/src/final-check-task-executor.ts",
+        "apps/api/src/final-check.application.ts",
+        "apps/api/src/job-source.application.ts",
+        "apps/api/src/worker.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/workspace.service.ts",
+        "apps/web/app/api/jobs/route.ts",
+        "apps/web/app/lib/pilot-workspace-server.test.ts",
+        "apps/web/app/lib/pilot-workspace-server.ts",
+        "docs/contracts/environment-modes-v1.md",
+        "packages/config/src/enterprise-real-data.test.ts",
+        "packages/config/src/policy-gates.pilot-test-fixture.ts",
+        "packages/config/src/policy-gates.pilot.test.ts",
+        "packages/config/src/policy-gates.ts",
+        "packages/db/migration-notes/0771_pilot_identity_session.md",
+        "packages/db/migrations/0771_pilot_identity_session.sql",
+        "packages/db/test/migration-proofs/0771_pilot_identity_session.proof.json"
+      ]
+    }
+  }
+}

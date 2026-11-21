@@ -1,7 +1,9 @@
-import { expect, it, vi } from "vitest";
+import { pilotApprovalFixture, unavailablePilotApproval, unavailablePilotApprovals } from "../../../packages/config/dist/policy-gates.pilot-test-fixture.js";
+import { afterEach, expect, it, vi } from "vitest";
 import type { FinalCheckManifest } from "@jobguard/db";
 import { executeFinalCheckTask, type FinalCheckExecutionPorts } from "./final-check-task-executor.js";
 const { testTenantContext } = await import(new URL("../../../packages/db/test/tenant-context-test-utils.ts", import.meta.url).href);
+afterEach(() => vi.unstubAllEnvs());
 const tenantId="10000000-0000-4000-8000-000000000001", jobId="10000000-0000-4000-8000-000000000002";
 const task={version:"final-check-task.v1",tenantId,jobId,lockId:"10000000-0000-4000-8000-000000000003",manifestId:"10000000-0000-4000-8000-000000000004",executionId:"10000000-0000-4000-8000-000000000005"};
 function setup(){
@@ -44,4 +46,26 @@ it("a changed frozen bill or result lock cannot publish",async()=>{
 it("certificate proof failures and idempotency conflicts propagate instead of acknowledging success",async()=>{
  for(const code of ["FINAL_CHECK_INPUT_UNAVAILABLE","IDEMPOTENCY_PAYLOAD_CONFLICT"]){const {ports,context}=setup();ports.publish.mockRejectedValue(new Error(code));
  await expect(executeFinalCheckTask(context,task,ports,"synthetic_demo")).rejects.toThrow(code);}
+});
+
+it.each(unavailablePilotApprovals)("the pilot executor refuses %s evidence before reading, even for a persisted task", async (_name, value) => {
+  for (const [key, input] of Object.entries(unavailablePilotApproval(value))) vi.stubEnv(key, input);
+  const { ports, context } = setup();
+  await expect(executeFinalCheckTask(context, task, { ...ports, environment: "pilot_no_charge" }, "pilot_no_charge")).rejects.toThrow("PILOT_G1_CLOSED");
+  expect(ports.read).not.toHaveBeenCalled();
+});
+
+it("checks current G1 before processing and publication, including after a queued task has started", async () => {
+  for (const [key, value] of Object.entries(pilotApprovalFixture().env)) vi.stubEnv(key, value);
+  const approved = setup();
+  await executeFinalCheckTask(approved.context, task, { ...approved.ports, environment: "pilot_no_charge" }, "pilot_no_charge");
+  expect(approved.ports.publish).toHaveBeenCalledOnce();
+
+  const revoked = setup(), execute = revoked.ports.execute.getMockImplementation()!;
+  revoked.ports.execute.mockImplementation(async () => {
+    await execute();
+    vi.stubEnv("JOBGUARD_PILOT_21_APPROVAL", unavailablePilotApproval("revoked").JOBGUARD_PILOT_21_APPROVAL);
+  });
+  await expect(executeFinalCheckTask(revoked.context, task, { ...revoked.ports, environment: "pilot_no_charge" }, "pilot_no_charge")).rejects.toThrow("PILOT_G1_CLOSED");
+  expect(revoked.ports.publish).not.toHaveBeenCalled();
 });

@@ -1,3 +1,4 @@
+import { PilotG1DeniedError, requireG1ForPilot } from "@jobguard/config";
 import { customerSigninLink } from "@jobguard/db";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
@@ -29,6 +30,7 @@ export class CustomerSigninApplication {
   }
   async run(action: CustomerAction, raw: unknown, request: IdentityHttpRequest): Promise<{ body: unknown; cookie?: string; clearCookie?: true }> {
     try {
+      requireG1ForPilot(this.environment, process.env);
       if (this.environment !== "synthetic_demo" || request.headers.origin !== this.identity.allowedOrigin || request.headers["x-tenant-id"]) throw new CustomerRefused();
       if (action === "issue" || action === "revoke") {
         if (customerToken(request) !== undefined) throw new CustomerRefused();
@@ -61,7 +63,7 @@ export class CustomerSigninApplication {
       return action === "signout" ? { body: { version: "customer-signed-out.v1" }, clearCookie: true } : { body };
     } catch (error) {
       // Credential state, foreign scope, schema failures and unknown resources have one public refusal.
-      if (error instanceof CustomerRefused || error instanceof z.ZodError || (error as { code?: string })?.code === "42501" || (error as { code?: string })?.code === "UNAUTHENTICATED" || (error as { code?: string })?.code === "TENANT_FORBIDDEN" || (error as { code?: string })?.code === "ORIGIN_FORBIDDEN") throw new CustomerRefused();
+      if (error instanceof CustomerRefused || error instanceof PilotG1DeniedError || error instanceof z.ZodError || (error as { code?: string })?.code === "42501" || (error as { code?: string })?.code === "UNAUTHENTICATED" || (error as { code?: string })?.code === "TENANT_FORBIDDEN" || (error as { code?: string })?.code === "ORIGIN_FORBIDDEN") throw new CustomerRefused();
       throw error;
     }
   }

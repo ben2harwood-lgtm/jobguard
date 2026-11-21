@@ -1,3 +1,4 @@
+import { PilotG1DeniedError } from "@jobguard/config";
 import { ZodError } from "zod";
 import { AuthError } from "./auth-provider.js";
 import { IdentityRouteBlocked } from "./identity-email.js";
@@ -8,7 +9,7 @@ export function cookieToken(request:IdentityHttpRequest):string|undefined {
 }
 export function identityStatus(error:unknown):{code:string;status:number} {
   if(error instanceof ZodError || error instanceof SyntaxError)return {code:"INVALID_AUTH_INPUT",status:400};
-  if(error instanceof IdentityRouteBlocked)return {code:error.code,status:403};
+  if(error instanceof IdentityRouteBlocked || error instanceof PilotG1DeniedError)return {code:error.code,status:403};
   if(error instanceof AuthError)return {code:error.code,status:error.code==="RATE_LIMITED"?429:error.code==="DELIVERY_UNAVAILABLE"?503:error.code==="INVALID_CODE"?400:error.code==="UNAUTHENTICATED"?401:403};
   if((error as {code?:string})?.code==="42501")return {code:"TENANT_FORBIDDEN",status:403};
   return {code:"IDENTITY_UNAVAILABLE",status:503};

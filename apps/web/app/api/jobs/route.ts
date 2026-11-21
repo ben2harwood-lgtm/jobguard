@@ -9,6 +9,10 @@ import { tenantIdV1 } from "../../lib/contracts";
 import { hasSyntheticSession, syntheticWorkspace } from "../../lib/synthetic-server";
 
 export async function GET(request: NextRequest) {
+  if (process.env.JOBGUARD_ENV === "pilot_no_charge") {
+    const { pilotJobList } = await import("../../lib/pilot-workspace-server.js");
+    return pilotJobList(request);
+  }
   const cookie = (await cookies()).get("jg_session")?.value;
   if (!hasSyntheticSession(cookie)) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
   const parsed = tenantIdV1.safeParse(request.nextUrl.searchParams.get("tenantId"));
