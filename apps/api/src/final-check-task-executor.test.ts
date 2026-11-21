@@ -1,4 +1,4 @@
-import { pilotApprovalFixture, unavailablePilotApproval, unavailablePilotApprovals } from "../../../packages/config/dist/policy-gates.pilot-test-fixture.js";
+import { pilotApprovalFixture, unavailablePilotApproval, unavailablePilotApprovals } from "@jobguard/config/test/pilot-approval";
 import { afterEach, expect, it, vi } from "vitest";
 import type { FinalCheckManifest } from "@jobguard/db";
 import { executeFinalCheckTask, type FinalCheckExecutionPorts } from "./final-check-task-executor.js";

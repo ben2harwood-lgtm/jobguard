@@ -5,7 +5,7 @@ import { FinalCheckApplication } from "../final-check.application.js";
 import { JobSourceApplication } from "../job-source.application.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { PilotG1DeniedError, PolicyGateDeniedError, proposedDecisionRecords } from "@jobguard/config";
-import { pilotApprovalFixture, unavailablePilotApproval, unavailablePilotApprovals } from "../../../../packages/config/dist/policy-gates.pilot-test-fixture.js";
+import { pilotApprovalFixture, unavailablePilotApproval, unavailablePilotApprovals } from "@jobguard/config/test/pilot-approval";
 import { dispatchToProvider, executePracticeDispatch } from "./provider-dispatch.js";
 import { issueTaxInvoice } from "./tax-invoice.js";
 

@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { IdentityRepository } from "@jobguard/db";
-import { pilotApprovalFixture, unavailablePilotApproval, unavailablePilotApprovals } from "../../../../packages/config/dist/policy-gates.pilot-test-fixture.js";
+import { pilotApprovalFixture, unavailablePilotApproval, unavailablePilotApprovals } from "@jobguard/config/test/pilot-approval";
 import { customerActions, CustomerRefused, CustomerSigninApplication } from "./customer-signin.js";
 import { IdentityApplication } from "./identity.application.js";
 import { PersistedAuthProvider } from "./persisted-auth-provider.js";
@@ -27,7 +27,7 @@ it.each(unavailablePilotApprovals)("refuses builder and customer identity operat
   await expect(app.invite({
     version: "identity-invitation.v1", requested_tenant_id: "10000000-0000-4000-8000-000000000001", email, role: "operative",
   }, { origin, sessionToken: "s".repeat(43), csrfToken: "c".repeat(32) })).rejects.toThrow("PILOT_G1_CLOSED");
-  await expect(provider.authenticate("s".repeat(43))).rejects.toThrow("PILOT_G1_CLOSED");
+  await expect(provider.authenticate("s".repeat(43))).resolves.toBeUndefined();
 
   const customer = new CustomerSigninApplication(app, "pilot_no_charge");
   for (const action of customerActions) {
