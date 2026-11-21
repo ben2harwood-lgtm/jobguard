@@ -11,6 +11,16 @@ import { closeTestDatabase, freePort, installAuditCommandWriterRoles } from "../
 import { pilotApprovalFixture, unavailablePilotApproval, unavailablePilotApprovals } from "../../../../packages/config/src/policy-gates.pilot-test-fixture.js";
 import { pilotSessionCookie } from "../../../../packages/config/src/pilot-resources.js";
 import { GET } from "../api/jobs/route";
+import { POST as captureJob } from "../api/jobs/capture/route";
+import { POST as saveReview } from "../api/jobs/[id]/review/route";
+import { POST as confirmScope } from "../api/jobs/[id]/confirm/route";
+import { POST as saveProfile } from "../api/firm-profile/route";
+import { POST as saveParties } from "../api/jobs/[id]/parties/route";
+import { GET as readQuote, POST as saveQuote } from "../api/jobs/[id]/quotes/route";
+import { POST as previewQuote } from "../api/jobs/[id]/quotes/preview/route";
+import { POST as issueQuote } from "../api/jobs/[id]/quotes/delivery/route";
+import { GET as readArtifact } from "../api/jobs/[id]/quotes/artifacts/[artifactId]/route";
+
 
 const { cookieJar, blockedPractice } = vi.hoisted(() => ({ cookieJar: new Map<string, { value: string }>(), blockedPractice: vi.fn() }));
 vi.mock("server-only", () => ({}));
@@ -52,7 +62,7 @@ beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "jobguard-pilot-boundary-"));
   port = await freePort(57200, 100);
   postgres = new EmbeddedPostgres({ databaseDir: directory, port, user: "postgres", password: credential, persistent: true,
-    createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
+    createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C", "--encoding=UTF8"], onLog: () => undefined });
   await postgres.initialise();
   await postgres.start();
   await postgres.createDatabase(database);
@@ -159,3 +169,111 @@ it("refuses a revoked membership at the same boundary", async () => {
   cookieJar.set(pilotSessionCookie, { value: memberSession });
   expect((await request()).status).toBe(403);
 });
+
+function pilotRequest(path: string, body?: unknown, tenant = tenantA) {
+  return new NextRequest(`${origin}/api/${path}`, { method: body === undefined ? "GET" : "POST",
+    headers: { ...(body === undefined ? {} : { origin, "content-type": "application/json" }),
+      "x-csrf-token": csrf, "x-tenant-id": tenant },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+async function readOk(response: Response) {
+  const body = await response.json();
+  expect(response.ok, JSON.stringify(body)).toBe(true);
+  return body;
+}
+
+it("captures, confirms and stages the exact pilot PDF and invitation through bound Next routes", async () => {
+  configure(pilotApprovalFixture().env);
+  await admin.query("UPDATE app.membership SET revoked_at=NULL WHERE id=$1", [member]);
+  cookieJar.set(pilotSessionCookie, { value: memberSession });
+  const capture = { contractVersion: "job_capture_v1", requested_tenant_id: tenantA, captureId: randomUUID(),
+    source: { kind: "text", text: "JOB: Fictional shed\nITEM: Paint shed | 1 item | £100.00" },
+    fixtureId: "deterministic-local-v1" };
+  expect((await captureJob(pilotRequest("jobs/capture", { ...capture, requested_tenant_id: tenantB }))).status).toBe(403);
+  const created = await readOk(await captureJob(pilotRequest("jobs/capture", capture)));
+  expect(created.environment).toBe("pilot_no_charge");
+  expect((await readOk(await captureJob(pilotRequest("jobs/capture", capture)))).jobId).toBe(created.jobId);
+  expect((await readOk(await request())).jobs.map((job: { id: string }) => job.id)).toContain(created.jobId);
+  const id: string = created.jobId;
+  const route = { params: Promise.resolve({ id }) };
+  const path = `jobs/${id}`;
+  const review = { version: "proposal_review_v1", reviewId: created.reviewId, proposalId: created.proposalId, jobId: id, revision: 0,
+    lines: created.proposal.lines.map((line: { id: string; scopeItemId: string; description: { value: string }; sourceExcerpt: string }) => ({
+      id: line.id, scopeItemId: line.scopeItemId, description: line.description.value, quantity: "1", unit: "item", unitPricePence: 10000,
+      room: "Shed", category: "Work", origin: "proposal", disposition: "accepted", dismissalReason: null,
+      parentScopeItemIds: [], sourceExcerpt: line.sourceExcerpt,
+    })),
+    questions: created.proposal.questions.map(({ question }: { question: { value: string } }) => ({
+      id: randomUUID(), question: question.value, blocking: true, disposition: "answered", answer: "Confirmed from the fixture",
+    })),
+  };
+  await readOk(await saveReview(pilotRequest(`${path}/review`, { contractVersion: "proposal_review_command_v1", expectedRevision: 0, review }), route));
+  const confirm = { contractVersion: "proposal_review_confirm_v1", commandId: randomUUID(), expectedRevision: 1 };
+  expect((await confirmScope(pilotRequest(`${path}/confirm`, { ...confirm, expectedRevision: 2 }), route)).status).toBe(409);
+  await readOk(await confirmScope(pilotRequest(`${path}/confirm`, confirm), route));
+  await readOk(await saveProfile(pilotRequest("firm-profile", { version: "firm-profile.v1", tradingName: "Fictional Pilot Works",
+    addressLines: ["1 Fixture Lane"], contactEmail: "builder@fictional.invalid", contactPhone: "" })));
+  const recipient = "customer@fictional.invalid";
+  await readOk(await saveParties(pilotRequest(`${path}/parties`, {
+    version: "job-parties-command.v1", commandId: randomUUID(), action: "save_form",
+    expectedJobRevision: 1, expectedBindingId: null, customer: { version: "customer.v1", name: "Fictional Customer", type: "business", email: recipient },
+    customerRef: null, site: { version: "site.v1", addressLines: ["2 Fixture Lane"], town: "Fixturetown", postcode: "AA1 1AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  }), route));
+  const workspace = await readOk(await readQuote(pilotRequest(`${path}/quotes`), route));
+  const draft = { contractVersion: "quote_draft_command_v1", draftId: randomUUID(), expectedRevision: 0,
+    currency: "GBP", taxPolicyVersion: "candidate_m1_standard_v1", lines: workspace.scope.map((line: Record<string, unknown>) => ({
+      ...line, id: randomUUID(), included: true, origin: "captured", exclusionReason: null, discountPercent: "0", taxTreatment: "standard_rate_20",
+      rateProvenance: "entered", category: null, region: null,
+    })) };
+  await readOk(await saveQuote(pilotRequest(`${path}/quotes`, draft), route));
+  const preview = (expectedRevision: number) => previewQuote(pilotRequest(`${path}/quotes/preview`, {
+    version: "quote-preview-command.v1", recipient, expectedRevision,
+  }), route);
+  const first = await readOk(await preview(1));
+  await readOk(await saveQuote(pilotRequest(`${path}/quotes`, { ...draft, expectedRevision: 1 }), route));
+  const send = (view: { documentId: string; contentHash: string }) => ({
+    version: "quote-send-command.v1", commandId: randomUUID(), documentId: view.documentId, contentHash: view.contentHash, recipient,
+  });
+  const issue = (body: unknown, routeArg = route, tenant = tenantA) => issueQuote(pilotRequest(`${path}/quotes/delivery`, body, tenant), routeArg);
+  expect((await issue(send(first.view))).status).toBe(409);
+  expect((await preview(1)).status).toBe(409);
+  const second = await readOk(await preview(2));
+  const approved = send(second.view);
+  expect((await issue({ ...approved, contentHash: "0".repeat(64) })).status).toBe(409);
+  expect((await issue({ ...approved, recipient: "other@fictional.invalid" })).status).toBe(409);
+  expect((await issue(approved, { params: Promise.resolve({ id: jobB }) })).status).toBe(404);
+  expect((await issue(approved, route, tenantB)).status).toBe(403);
+
+  await admin.query("UPDATE app.membership SET role='read_only' WHERE id=$1", [member]);
+  expect((await request()).status).toBe(200);
+  expect((await issue(approved)).status).toBe(403);
+  await admin.query("UPDATE app.membership SET role='owner' WHERE id=$1", [member]);
+  const sessionDigest = createHmac("sha256", secret).update(`session:${memberSession}`).digest("hex");
+  await admin.query("UPDATE identity.session SET revoked_at=now() WHERE token_digest=$1", [sessionDigest]);
+  expect((await issue(approved)).status).toBe(401);
+  await admin.query("UPDATE identity.session SET revoked_at=NULL WHERE token_digest=$1", [sessionDigest]);
+  configure(unavailablePilotApproval(unavailablePilotApprovals[0]![1]));
+  expect((await issue(approved)).status).toBe(403);
+  configure(pilotApprovalFixture().env);
+
+  const artifact = await readArtifact(pilotRequest(`${path}/quotes/artifacts/${approved.documentId}`),
+    { params: Promise.resolve({ id, artifactId: approved.documentId }) });
+  expect(artifact.ok).toBe(true);
+  const bytes = Buffer.from(await artifact.arrayBuffer());
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe(approved.contentHash);
+  expect(bytes.toString()).toContain("You are invited to review this exact quote");
+  expect(await readOk(await issue(approved))).toMatchObject({ status: "queued", invitation: {
+    jobId: id, documentId: approved.documentId, contentHash: approved.contentHash, recipient, documentVersion: second.view.documentVersion,
+  } });
+  expect((await readOk(await issue(approved))).status).toBe("queued");
+  const actions = (await admin.query(`SELECT o.immutable_content, o.content_hash, o.adapter, o.status, o.recipient, a.actor_membership_id
+    FROM app.action_outbox o JOIN app.action_authorization a ON (a.tenant_id,a.id)=(o.tenant_id,o.authorization_id)
+    WHERE o.tenant_id=$1 AND o.action_type='quote.send'`, [tenantA])).rows;
+  expect(actions).toEqual([{ immutable_content: bytes.toString(), content_hash: approved.contentHash, adapter: "fake_quote_delivery",
+    status: "pending", recipient: JSON.stringify([recipient]), actor_membership_id: member }]);
+  expect(blockedPractice).not.toHaveBeenCalled();
+}, 60_000);

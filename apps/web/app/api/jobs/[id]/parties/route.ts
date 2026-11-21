@@ -4,6 +4,13 @@ import { JobPartiesError } from "@jobguard/api/workspace";
 import { hasSyntheticSession, practiceFailure } from "../../../../lib/synthetic-server";
 import { workspaceApplication } from "../../../../lib/workspace-server";
 async function handle(request: NextRequest, context: { params: Promise<{ id: string }> }, write: boolean) {
+  if (process.env.JOBGUARD_ENV === "pilot_no_charge") {
+   const { pilotWorkspaceRoute } = await import("../../../../lib/pilot-workspace-route.mjs");
+   return pilotWorkspaceRoute(request, async app => {
+     const id = (await context.params).id;
+     return write ? app.parties.save(id, await request.json().catch(() => null)) : app.parties.read(id);
+   });
+  }
   const cookie = (await cookies()).get("jg_session")?.value;
   if (!hasSyntheticSession(cookie)) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
   const tenant = request.nextUrl.searchParams.get("requested_tenant_id");

@@ -2,5 +2,15 @@ import { routeErrorCode } from "../../../../../lib/route-error-code";
 import { practiceFailure } from "../../../../../lib/synthetic-server";
 import{cookies}from"next/headers";import{NextResponse}from"next/server";import{hasSyntheticSession}from"../../../../../lib/synthetic-server";import{workspaceApplication}from"../../../../../lib/workspace-server";
 const auth=async()=>hasSyntheticSession((await cookies()).get("jg_session")?.value);
-export async function GET(_r:Request,{params}:{params:Promise<{id:string}>}){if(!await auth())return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});try{return NextResponse.json(await (await workspaceApplication()).quote.deliveryView((await params).id));}catch(e){const denied=practiceFailure(e);if(denied)return denied;throw e;}}
-export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){const body=await request.json();if(!await auth())return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});try{return NextResponse.json(await (await workspaceApplication()).quote.issue((await params).id,body));}catch(e){const denied=practiceFailure(e);if(denied)return denied;return NextResponse.json({code:routeErrorCode(e,"DATABASE_UNAVAILABLE")},{status:routeErrorCode(e,"DATABASE_UNAVAILABLE")==="QUOTE_CHANGED"?409:400});}}
+export async function GET(request:Request,{params}:{params:Promise<{id:string}>}){
+ if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+  const { pilotWorkspaceRoute } = await import("../../../../../lib/pilot-workspace-route.mjs");
+  return pilotWorkspaceRoute(request, async app => app.quote.deliveryView((await params).id));
+ }
+ if(!await auth())return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});try{return NextResponse.json(await (await workspaceApplication()).quote.deliveryView((await params).id));}catch(e){const denied=practiceFailure(e);if(denied)return denied;throw e;}}
+export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){
+ if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+  const { pilotWorkspaceRoute } = await import("../../../../../lib/pilot-workspace-route.mjs");
+  return pilotWorkspaceRoute(request, async app => app.quote.issue((await params).id, await request.json().catch(() => null)));
+ }
+ const body=await request.json();if(!await auth())return NextResponse.json({code:"UNAUTHENTICATED"},{status:401});try{return NextResponse.json(await (await workspaceApplication()).quote.issue((await params).id,body));}catch(e){const denied=practiceFailure(e);if(denied)return denied;return NextResponse.json({code:routeErrorCode(e,"DATABASE_UNAVAILABLE")},{status:routeErrorCode(e,"DATABASE_UNAVAILABLE")==="QUOTE_CHANGED"?409:400});}}

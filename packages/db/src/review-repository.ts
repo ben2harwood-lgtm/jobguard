@@ -1,3 +1,4 @@
+import { requirePilotCommandOwner } from "./pilot-command-owner.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { assertReviewConfirmable, calculateNetLine, money, parseQuantity, proposalReviewV1, ReviewConflictError, type ProposalReview } from "@jobguard/core";
@@ -7,10 +8,11 @@ import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "
 export class ProposalReviewRepository {
   constructor(private readonly pool: Pool) {}
 
-  async save(context: VerifiedTenantContext, raw: unknown, expectedRevision: number): Promise<ProposalReview> {
+  async save(context: VerifiedTenantContext, raw: unknown, expectedRevision: number, pilot = false): Promise<ProposalReview> {
     const review=proposalReviewV1.parse(raw);
     if(review.revision!==expectedRevision) throw new ReviewConflictError("The submitted review revision is stale");
     return withTenant(this.pool,context,async db=>{
+      if (pilot) await requirePilotCommandOwner(db);
       const current=(await db.$client.query<{revision:number;state:string}>(`SELECT revision,state FROM app.proposal_review WHERE tenant_id=$1 AND (id=$2 OR proposal_id=$3) AND job_id=$4 FOR UPDATE`,[context.tenantId,review.reviewId,review.proposalId,review.jobId])).rows[0];
       if(current && (current.revision!==expectedRevision || current.state!=="reviewing")) throw new ReviewConflictError("The review changed; reconcile before saving");
       const proposal=(await db.$client.query<{proposal:{questions:Array<{question:{value:string}}>}}>(`SELECT proposal FROM app.job_record_proposal WHERE tenant_id=$1 AND job_id=$2 AND id=$3`,[context.tenantId,review.jobId,review.proposalId])).rows[0];
