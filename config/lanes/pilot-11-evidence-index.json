@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-11-evidence-index": {
+      "branches": ["codex/sandbox/pilot-11-evidence-index"],
+      "allow": ["docs/operations/foundation-gates.md"],
+      "note": "PILOT-11 immediate evidence-index slice only; RED release evidence, NOPR. Gates and approvals remain unmet."
+    }
+  }
+}
