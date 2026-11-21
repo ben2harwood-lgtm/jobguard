@@ -29,8 +29,10 @@
         "docs/contracts/final-check-v1.md",
         "packages/core/src/final-check.test.ts",
         "packages/core/src/final-check.ts",
+        "packages/core/src/shadow-domain/capture.ts",
         "packages/db/src/final-check-typed-text.test.ts",
         "packages/db/src/final-check-typed-text.ts",
+        "packages/db/src/shadow-detection-repository.ts",
         "packages/db/test/free-first-job-final-check.integration.test.ts",
         "packages/db/test/real-fc-typed-sources.integration.test.ts"
       ]
