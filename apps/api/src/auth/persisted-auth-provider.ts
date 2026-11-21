@@ -4,7 +4,7 @@ import { createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from 
 import { EnterpriseIdentityRepository, IdentityRepository } from "@jobguard/db";
 import { AuthError, roles, type ActiveMembership, type AuthPrincipal, type AuthProvider, type ChallengeRequest, type Role, type VerificationResult } from "./auth-provider.js";
 import { challengeRequestV1, verifyCodeV1 } from "./auth-schemas.js";
-import { FixtureIdentityEmail } from "./identity-email.js";
+import { FixtureIdentityEmail, identityChallengeMessage, type IdentityChallengeDelivery } from "./identity-email.js";
 
 export class PersistedAuthProvider implements AuthProvider {
   // Nest and Next both compose this provider. Binding belongs here so every consumer,
@@ -13,10 +13,11 @@ export class PersistedAuthProvider implements AuthProvider {
   constructor(
     readonly repository: IdentityRepository,
     private readonly secret: string,
-    private readonly emailAdapter = new FixtureIdentityEmail(),
+    private readonly emailAdapter: IdentityChallengeDelivery = new FixtureIdentityEmail(),
     readonly environment = "synthetic_demo",
     private readonly now: () => number = Date.now,
     private readonly makeCode: () => string = () => randomInt(100_000_000).toString().padStart(8, "0"),
+    private readonly pilotFirstOwners: ReadonlySet<string> = new Set(),
   ) {
     if (secret.length < 32) throw new Error("Identity code key is missing");
     this.enterpriseIdentity = new EnterpriseIdentityRepository(repository.pool);
@@ -26,6 +27,9 @@ export class PersistedAuthProvider implements AuthProvider {
     this.emailAdapter.assertRecipient(email,this.environment);
   }
   digest(value: string): string { return createHmac("sha256", this.secret).update(value).digest("hex"); }
+  private mayUseCode(email: string, purpose: ChallengeRequest["purpose"]): boolean {
+    return this.environment !== "pilot_no_charge" || purpose !== "signup" || this.pilotFirstOwners.has(email);
+  }
   async requestCode(raw: ChallengeRequest): Promise<{ accepted: true; fixtureCode?: string }> {
     const input = challengeRequestV1.parse(raw), email = input.email.trim().toLowerCase();
     this.assertRecipient(email);
@@ -46,10 +50,13 @@ export class PersistedAuthProvider implements AuthProvider {
         VALUES($1,$2,$3,$4,$5,$6,$7)`, [id,email,input.purpose,input.invitationId ?? null,this.digest(`${id}:${code}`),new Date(time),new Date(time+600_000)]);
       await client.query("INSERT INTO identity.security_event(id,event_type,subject_id) VALUES($1,'challenge.requested',$2)", [randomUUID(), id]);
     });
+    if (!this.mayUseCode(email, input.purpose)) return { accepted: true };
     // Delivery happens only after commit; pending/unknown never implies successful delivery.
     try {
       requireG1ForPilot(this.environment, process.env);
-      await this.emailAdapter.deliver({version:"identity-email.v1",category:"identity_challenge",challengeId:id,email,code,environment:this.environment});
+      await this.emailAdapter.deliver(identityChallengeMessage.parse({
+        version:"identity-email.v1",category:"identity_challenge",challengeId:id,email,code,environment:this.environment,
+      }));
       await this.repository.pool.query("UPDATE identity.challenge SET delivery_state='fixture_delivered' WHERE id=$1", [id]);
     } catch {
       await this.repository.pool.query("UPDATE identity.challenge SET delivery_state='outcome_unknown' WHERE id=$1", [id]);
@@ -69,7 +76,7 @@ export class PersistedAuthProvider implements AuthProvider {
       if (!c || c.consumed_at || c.expires_at.getTime() <= this.now() || c.attempts >= 5) return undefined;
       await client.query("UPDATE identity.challenge SET attempts=attempts+1 WHERE id=$1", [c.id]);
       const valid = timingSafeEqual(Buffer.from(c.digest, "hex"), Buffer.from(this.digest(`${c.id}:${code}`), "hex"));
-      if (!valid || (c.invitation_id ?? undefined) !== invitationId) return undefined;
+      if (!valid || (c.invitation_id ?? undefined) !== invitationId || !this.mayUseCode(email, purpose)) return undefined;
       if (purpose === "invitation") {
         const gate = (await client.query<{ allowed: boolean; connection_id: string | null }>("SELECT * FROM identity.sso_invitation_accept_allowed($1)", [invitationId])).rows[0];
         if (gate?.allowed !== true || (gate.connection_id !== null && !this.isConnectionId(gate.connection_id))) {
@@ -87,7 +94,9 @@ export class PersistedAuthProvider implements AuthProvider {
         for (const connectionId of targets.length?targets:["identity"]) refusals.push({connectionId,code:"SSO_REQUIRED_CODE_SIGNIN"});
         return undefined;
       }
-      if (purpose === "invitation" && previousSessionToken) {
+      if (previousSessionToken && this.environment === "pilot_no_charge") {
+        await this.revokeSessionInTransaction(client, previousSessionToken);
+      } else if (purpose === "invitation" && previousSessionToken) {
         const previous = (await client.query<{user_id:string}>("SELECT user_id FROM identity.session WHERE token_digest=$1", [this.digest(`session:${previousSessionToken}`)])).rows[0];
         if (previous && previous.user_id !== userId) await this.revokeSessionInTransaction(client, previousSessionToken);
       }
@@ -108,7 +117,7 @@ export class PersistedAuthProvider implements AuthProvider {
     return result;
   }
   private async revokeSessionInTransaction(client: PoolClient, sessionToken: string): Promise<void> {
-    const revoked = await client.query<{id:string}>("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1 AND revoked_at IS NULL RETURNING id", [this.digest(`session:${sessionToken}`)]);
+    const revoked = await client.query<{id:string}>("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1 AND environment=$2 AND revoked_at IS NULL RETURNING id", [this.digest(`session:${sessionToken}`),this.environment]);
     for (const row of revoked.rows) {
       await client.query("INSERT INTO identity.security_event(id,event_type,subject_id) VALUES($1,'session.revoked',$2)", [randomUUID(),row.id]);
     }

@@ -77,3 +77,33 @@ blocked for real data pending approved D12, with export/deletion and backup gate
 Technical acceptance requires actual PostgreSQL 16 fresh/upgrade/catalog/race/rollback results,
 Playwright in both projects, prior regressions, and a Claude verdict on the dispatcher commit
 plus separate acceptance. Builder unit checks cannot substitute for those results.
+
+### PILOT-02 builder enrollment
+
+The pilot sign-in page uses the same persisted challenge, invitation and session
+services. The web auth routes require the pilot origin, current G1 approval and
+pinned identity resources. They issue `__Host-jobguard_pilot_session` as a
+host-only `Secure`, `HttpOnly`, `SameSite=Strict` cookie. Signed-in mutations
+check the session's CSRF token and exact origin. Sign-out revokes the matching
+persisted session before clearing the cookie. A successful verification that
+replaces a pilot session revokes the previous browser session in the issuance
+transaction.
+
+Set `PILOT_FIRST_OWNER_EMAILS` in trusted server configuration to a comma-separated
+list of the exact addresses invited to set up their own pilot business. Omit it
+to close first-owner enrollment. Restart the identity processes after changing
+the list. An unlisted signup receives the generic acknowledgement and cannot
+provision a tenant. An eligible address still needs its verified code. The
+existing transaction-scoped signup routine can create only the new tenant and
+its first owner. Additional memberships require the current owner's invitation,
+which binds the address, tenant and role. The principal bridge checks current
+membership and tenant selection on each business request.
+
+The restricted identity role is used for all of these operations. The fictional
+delivery adapter is injected directly by isolated tests through
+`IdentityChallengeDelivery`. Runtime composition still uses the existing
+fixture adapter, which refuses pilot email even with G1 approval. PILOT-03 owns
+the delivery-port follow-up. PILOT-17 must confirm that Cloudflare overwrites the
+client address header at the trusted ingress and that direct API requests use
+only the socket peer for throttling. An unavailable edge address uses a shared
+bucket. Forwarding headers supplied by the caller do not set that bucket.

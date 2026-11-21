@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-02": {
+      "branches": [
+        "codex/sandbox/pilot-02"
+      ],
+      "note": "RED pilot builder enrollment and verified membership with isolated identity fixtures.",
+      "allow": [
+        "apps/api/src/auth/identity-email.ts",
+        "apps/api/src/auth/identity-http.ts",
+        "apps/api/src/auth/identity.application.ts",
+        "apps/api/src/auth/identity.controller.ts",
+        "apps/api/src/auth/index.ts",
+        "apps/api/src/auth/persisted-auth-provider.ts",
+        "apps/web/app/api/auth/invitations/route.ts",
+        "apps/web/app/api/auth/pilot-identity.test.ts",
+        "apps/web/app/api/auth/request/route.ts",
+        "apps/web/app/api/auth/session/route.ts",
+        "apps/web/app/api/auth/signout/route.ts",
+        "apps/web/app/api/auth/verify/route.ts",
+        "apps/web/app/lib/pilot-identity-server.ts",
+        "apps/web/app/sign-in/page.tsx",
+        "apps/web/app/sign-in/sign-in.tsx",
+        "docs/operations/m0-6l-identity.md",
+        "packages/config/src/identity-environment.pilot.test.ts",
+        "packages/config/src/identity-environment.ts",
+        "packages/db/migration-notes/0772_pilot_identity_invitations.md",
+        "packages/db/migrations/0772_pilot_identity_invitations.sql",
+        "packages/db/test/identity.integration.test.ts",
+        "packages/db/test/migration-proofs/0772_pilot_identity_invitations.proof.json"
+      ]
+    }
+  }
+}

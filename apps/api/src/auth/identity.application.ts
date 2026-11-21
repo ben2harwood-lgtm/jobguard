@@ -11,32 +11,38 @@ import { resolveVerifiedTenantContext, type TenantRequestCredentials } from "./p
 export const identityRequestV1 = z.object({version:z.literal("identity-request.v1"),email:z.email({ error: "Invalid email" }).max(320),purpose:z.enum(["signup","signin","invitation"]),invitationId:z.guid({ error: "Invalid uuid" }).optional()}).strict();
 export const identityVerifyV1 = verifyCodeV1.extend({version:z.literal("identity-verify.v1")}).strict();
 export const identityInvitationV1 = z.object({version:z.literal("identity-invitation.v1"),requested_tenant_id:z.guid({ error: "Invalid uuid" }),email:z.email({ error: "Invalid email" }).max(320),role:z.enum(["admin","estimator","foreman","operative","finance","read_only"])}).strict();
-export const identitySessionV1 = z.object({version:z.literal("identity-session.v1"),environment:z.literal("synthetic_demo"),principal:z.object({id:z.guid({ error: "Invalid uuid" }),sessionId:z.guid({ error: "Invalid uuid" })}),csrfToken:z.string().min(24),memberships:z.array(z.object({id:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" }),role:z.enum(["owner","admin","estimator","foreman","operative","finance","read_only"]),name:z.string()}))}).strict();
+export const identitySessionV1 = z.object({version:z.literal("identity-session.v1"),environment:z.enum(["synthetic_demo","pilot_no_charge"]),principal:z.object({id:z.guid({ error: "Invalid uuid" }),sessionId:z.guid({ error: "Invalid uuid" })}),csrfToken:z.string().min(24),memberships:z.array(z.object({id:z.guid({ error: "Invalid uuid" }),tenantId:z.guid({ error: "Invalid uuid" }),role:z.enum(["owner","admin","estimator","foreman","operative","finance","read_only"]),name:z.string()}))}).strict();
 
 /** Same application service for Nest and the server-only Next adapter. */
 export class IdentityApplication {
   constructor(readonly provider: PersistedAuthProvider, readonly allowedOrigin: string) {}
+  get environment() { return this.provider.environment === "pilot_no_charge" ? "pilot_no_charge" : "synthetic_demo"; }
   requireOrigin(origin: string | undefined): void { if(origin!==this.allowedOrigin)throw new AuthError("ORIGIN_FORBIDDEN"); }
-  async request(raw:unknown,ip:string,origin:string|undefined) {
+  async request(raw:unknown,ip:string,origin:string|undefined,credentials:TenantRequestCredentials = {}) {
     this.requireOrigin(origin);
     const {version: _version,...input}=identityRequestV1.parse(raw);
-    return {version:"identity-request-response.v1" as const,environment:"synthetic_demo" as const,...await this.provider.requestCode({...input,ip})};
+    if (this.environment === "pilot_no_charge") await this.requireSessionCsrf(credentials);
+    return {version:"identity-request-response.v1" as const,environment:this.environment,...await this.provider.requestCode({...input,ip})};
   }
   async verify(raw:unknown,origin:string|undefined,credentials:TenantRequestCredentials = {}) {
     this.requireOrigin(origin);
     const input=identityVerifyV1.parse(raw);
-    if(input.purpose === "invitation") await this.requireSessionCsrf(credentials);
-    return this.provider.verifyCode(input.email,input.purpose,input.code,input.invitationId,input.purpose === "invitation" ? credentials.sessionToken : undefined);
+    const replacesSession = this.environment === "pilot_no_charge" || input.purpose === "invitation";
+    const principal = replacesSession ? await this.requireSessionCsrf(credentials) : undefined;
+    const previousSession = this.environment === "pilot_no_charge" && !principal ? undefined : credentials.sessionToken;
+    return this.provider.verifyCode(input.email,input.purpose,input.code,input.invitationId,replacesSession ? previousSession : undefined);
   }
-  private async requireSessionCsrf(credentials:TenantRequestCredentials):Promise<void> {
+  private async requireSessionCsrf(credentials:TenantRequestCredentials):Promise<AuthPrincipal | undefined> {
     const principal=credentials.sessionToken?await this.provider.authenticate(credentials.sessionToken):undefined;
     if(principal && (!credentials.csrfToken || credentials.csrfToken!==principal.csrfToken))throw new AuthError("ORIGIN_FORBIDDEN");
+    return principal;
   }
   async signout(credentials:TenantRequestCredentials) {
     this.requireOrigin(credentials.origin);
+    requireG1ForPilot(this.provider.environment, process.env);
     await this.requireSessionCsrf(credentials);
     if(credentials.sessionToken)await this.provider.revokeSession(credentials.sessionToken);
-    return {version:"identity-signed-out.v1" as const,environment:"synthetic_demo" as const};
+    return {version:"identity-signed-out.v1" as const,environment:this.environment};
   }
   async principal(token:string|undefined):Promise<AuthPrincipal> {
     const principal=token?await this.provider.authenticate(token):undefined;
@@ -44,7 +50,7 @@ export class IdentityApplication {
   }
   async session(token:string|undefined) {
     const principal=await this.principal(token);
-    return identitySessionV1.parse({version:"identity-session.v1",environment:"synthetic_demo",principal:{id:principal.identityUserId,sessionId:principal.sessionId},csrfToken:principal.csrfToken,memberships:(await this.provider.memberships(principal)).map(m=>({id:m.id,tenantId:m.tenantId,role:m.role,name:m.name}))});
+    return identitySessionV1.parse({version:"identity-session.v1",environment:this.environment,principal:{id:principal.identityUserId,sessionId:principal.sessionId},csrfToken:principal.csrfToken,memberships:(await this.provider.memberships(principal)).map(m=>({id:m.id,tenantId:m.tenantId,role:m.role,name:m.name}))});
   }
   context(request:TenantRequestCredentials):Promise<VerifiedTenantContext> {
     return resolveVerifiedTenantContext(this.provider,request,this.allowedOrigin);
@@ -78,7 +84,7 @@ export class IdentityApplication {
       catch (error) { Object.defineProperty(forbidden,"cause",{value:error}); }
       throw forbidden;
     }
-    return {version:"identity-invitation-response.v1",id,environment:"synthetic_demo"};
+    return {version:"identity-invitation-response.v1",id,environment:this.environment};
   }
 }
 export function createIdentityApplication(raw:unknown, poolOptions: Pick<PoolConfig,"max"|"maxUses"> = {}):IdentityApplication {
@@ -86,5 +92,8 @@ export function createIdentityApplication(raw:unknown, poolOptions: Pick<PoolCon
   const deployment = raw as NodeJS.ProcessEnv;
   if (env.JOBGUARD_ENV === "pilot_no_charge") requirePilotResources(deployment, "api");
   else refusePilotResourcesOutsidePilot(deployment);
-  return new IdentityApplication(new PersistedAuthProvider(new IdentityRepository(new Pool({connectionString:env.IDENTITY_DATABASE_URL,max:4,...poolOptions,application_name:"jobguard-identity"})),env.AUTH_CODE_SECRET,undefined,env.JOBGUARD_ENV),env.AUTH_ALLOWED_ORIGIN);
+  const pool = new Pool({connectionString:env.IDENTITY_DATABASE_URL,max:4,...poolOptions,application_name:"jobguard-identity"});
+  const provider = new PersistedAuthProvider(new IdentityRepository(pool),env.AUTH_CODE_SECRET,undefined,env.JOBGUARD_ENV,
+    undefined,undefined,new Set(env.PILOT_FIRST_OWNER_EMAILS));
+  return new IdentityApplication(provider,env.AUTH_ALLOWED_ORIGIN);
 }
