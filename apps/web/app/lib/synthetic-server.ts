@@ -6,6 +6,7 @@ import { closeOutboundWorkerPool, authenticatePracticeSession, isBlankPracticeCo
 import { readSyntheticDemo } from "@jobguard/db";
 import { SYNTHETIC_SESSION as WORKSPACE_SYNTHETIC_SESSION } from "@jobguard/api/workspace";
 import { Pool } from "pg";
+import { refusePilotResourcesOutsidePilot } from "@jobguard/api/identity";
 import type { JobSummary } from "./contracts";
 
 export const SYNTHETIC_SESSION = WORKSPACE_SYNTHETIC_SESSION;
@@ -15,6 +16,7 @@ export function hasSyntheticSession(value: string | undefined) { return !!value 
 const poolRegistry = globalThis as typeof globalThis & { __jobguardSyntheticPool?: Pool };
 export function syntheticPool() {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw Object.assign(new Error("Synthetic workflow is unavailable"), {code:"UNAUTHENTICATED"});
+  refusePilotResourcesOutsidePilot(process.env);
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw Object.assign(new Error("Database configuration is unavailable"), { code: "DATABASE_UNAVAILABLE" });
   // Workers cannot share sockets across requests. maxUses closes on release,

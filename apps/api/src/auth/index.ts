@@ -21,3 +21,6 @@ export * from "./customer-stages.js";
 export * from "./customer-variation.js";
 
 export * from "./extra-customer.js";
+
+export { hasNonPilotCookie } from "../pilot-ingress.js";
+export { requirePilotResources, refusePilotResourcesOutsidePilot } from "@jobguard/config";
