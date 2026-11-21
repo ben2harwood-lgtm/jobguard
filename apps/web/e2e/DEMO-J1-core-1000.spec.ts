@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Request } from "@playwright/test";
-import { click, jsonResult, recordThroughUi } from "./helpers/customer-invoice-journey";
+import { click, enterQuote, jsonResult, recordThroughUi } from "./helpers/customer-invoice-journey";
 import { releaseChooserSignIns, signInForChooser } from "./helpers/chooser-sign-in";
 
 test.setTimeout(300_000);
@@ -65,9 +65,11 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   await expect(page.getByTestId("quote-revision")).toHaveText("2");
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
   await page.reload();
+  await enterQuote(page);
   await expect(page.getByTestId("quote-net")).toHaveText("GBP 1,000.00");
   for (const step of ["Preview this quote", "Simulate sending this quote", "Continue fake worker", "Record practice acceptance"]) await click(page, step);
   await page.reload();
+  await enterQuote(page);
   await click(page, "Start this practice job");
   await expect(page.getByTestId("activation-policy")).toHaveText("reference_fee_policy_v3");
   const activation = await read(page, `${root}/quotes/activation`);
