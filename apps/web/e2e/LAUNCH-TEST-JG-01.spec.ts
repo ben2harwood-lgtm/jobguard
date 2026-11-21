@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { issueInvoice, jsonResult } from "./helpers/customer-invoice-journey";
+import { enterQuote, issueInvoice, jsonResult } from "./helpers/customer-invoice-journey";
 
 test("J8 records one bank transfer when the same receipt is submitted from two tabs", async ({ page, context }) => {
   test.setTimeout(180_000);
@@ -11,6 +11,7 @@ test("J8 records one bank transfer when the same receipt is submitted from two t
   const tabs = [page, other];
   const reference = "Fictional bank transfer JG01-0001";
   for (const tab of tabs) {
+    await enterQuote(tab);
     await expect(tab.getByTestId("invoice-balance")).toHaveText("GBP 1,320.00");
     await tab.getByTestId("uiwire12-receipt-amount").fill("500.00");
     await tab.getByTestId("uiwire12-receipt-date").fill("2026-11-21");

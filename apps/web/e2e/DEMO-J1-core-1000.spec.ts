@@ -86,6 +86,7 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   await page.getByRole("button", { name: "Approve exact revision", exact: true }).nth(0).click();
   await expect(page.getByTestId("approved-omissions")).toHaveText("−£25.00");
   await page.reload();
+  await enterQuote(page);
   await expect(page.getByTestId("approved-additions")).toHaveText("£125.00");
   await expect(page.getByTestId("approved-omissions")).toHaveText("−£25.00");
   // Evaluate the ordinary Watchdog command, not a seeded finding or completion.
@@ -99,6 +100,7 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   await click(page, "Complete this stage");
   await expect(page.getByTestId("stage-status")).toHaveText("Complete");
   await page.reload();
+  await enterQuote(page);
   await expect(page.getByTestId("stage-status")).toHaveText("Complete");
   await click(page, "Rebuild from approved sources");
   await expect(page.getByText("Finish the required proof before issuing this bill", { exact: true })).toHaveCount(0);
@@ -147,6 +149,7 @@ test("DEMO-J1 fresh selection launch, five-line job, completed worker check, rec
   expect(invoices).toHaveLength(1);
   const issued = invoices[0];
   await page.reload();
+  await enterQuote(page);
   await expect(page.getByTestId("invoice-gross")).toHaveText("GBP 1,320.00");
   const receipts = `${root}/customer-invoices/${issued.id}/receipts`;
   // Negative, fractional, over-limit and invented allocation authority fail closed.
