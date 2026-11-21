@@ -238,7 +238,8 @@ async function finishAndInvoice(page: Page, jobId: string, netPence: number, gro
     // Do not restart failed work or infer completion from an absent control.
     await expect.poll(async () => (await read(page, root(jobId) + "/final-check")).state, { timeout: 180_000, intervals: [3_000] }).toBe("completed");
     await click(page, "Load the saved final check");
-    await expect(page.getByTestId("final-check-status")).toContainText("JobGuard's final check found");
+    await expect(page.getByTestId("final-check-status")).toHaveText("JobGuard's final check didn't spot anything missing from your bill. It looks for prices and agreed extras in your notes and messages and can miss other wording, so read them through before you send the bill.");
+    await expect(page.getByTestId("final-check-item")).toHaveCount(0);
   });
   const invoice = await phase("Issue the invoice from the checked locked account", async () => {
     await click(page, "Issue and simulate this invoice");

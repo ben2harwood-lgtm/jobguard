@@ -16,6 +16,7 @@
         "apps/web/e2e/DEMO-J1-core-1000.spec.ts",
         "apps/web/e2e/DEMO-J5-trial-final-check.spec.mts",
         "apps/web/e2e/SV-5.spec.ts",
+        "apps/web/e2e/TOMMY-money-gaps.spec.ts",
         "apps/web/e2e/later-safety-140.spec.ts",
         "apps/web/e2e/real-fc-ordinary-words.spec.ts",
         "apps/web/e2e/real-fc-typed-sources.spec.ts",
