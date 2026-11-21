@@ -1,3 +1,4 @@
+import { PilotG1DeniedError, requireG1ForPilot } from "@jobguard/config";
 import type { PoolClient } from "pg";
 import { createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { EnterpriseIdentityRepository, IdentityRepository } from "@jobguard/db";
@@ -13,14 +14,17 @@ export class PersistedAuthProvider implements AuthProvider {
     readonly repository: IdentityRepository,
     private readonly secret: string,
     private readonly emailAdapter = new FixtureIdentityEmail(),
-    private readonly environment = "synthetic_demo",
+    readonly environment = "synthetic_demo",
     private readonly now: () => number = Date.now,
     private readonly makeCode: () => string = () => randomInt(100_000_000).toString().padStart(8, "0"),
   ) {
     if (secret.length < 32) throw new Error("Identity code key is missing");
     this.enterpriseIdentity = new EnterpriseIdentityRepository(repository.pool);
   }
-  assertRecipient(email:string):void { this.emailAdapter.assertRecipient(email,this.environment); }
+  assertRecipient(email:string):void {
+    requireG1ForPilot(this.environment, process.env);
+    this.emailAdapter.assertRecipient(email,this.environment);
+  }
   digest(value: string): string { return createHmac("sha256", this.secret).update(value).digest("hex"); }
   async requestCode(raw: ChallengeRequest): Promise<{ accepted: true; fixtureCode?: string }> {
     const input = challengeRequestV1.parse(raw), email = input.email.trim().toLowerCase();
@@ -44,6 +48,7 @@ export class PersistedAuthProvider implements AuthProvider {
     });
     // Delivery happens only after commit; pending/unknown never implies successful delivery.
     try {
+      requireG1ForPilot(this.environment, process.env);
       await this.emailAdapter.deliver({version:"identity-email.v1",category:"identity_challenge",challengeId:id,email,code,environment:this.environment});
       await this.repository.pool.query("UPDATE identity.challenge SET delivery_state='fixture_delivered' WHERE id=$1", [id]);
     } catch {
@@ -112,6 +117,12 @@ export class PersistedAuthProvider implements AuthProvider {
     await this.repository.transaction(client => this.revokeSessionInTransaction(client, sessionToken));
   }
   async authenticate(sessionToken: string): Promise<AuthPrincipal | undefined> {
+    try {
+      requireG1ForPilot(this.environment, process.env);
+    } catch (error) {
+      if (error instanceof PilotG1DeniedError) return undefined;
+      throw error;
+    }
     const row = (await this.repository.pool.query<{id:string;user_id:string;csrf_token:string}>("SELECT id,user_id,csrf_token FROM identity.session WHERE token_digest=$1 AND revoked_at IS NULL AND expires_at>$2 AND environment=$3", [this.digest(`session:${sessionToken}`),new Date(this.now()),this.environment])).rows[0];
     if (!row || (await this.enterpriseIdentity.sessionScope(row.id))?.revoked) return undefined;
     return Object.defineProperty({sessionId:row.id,identityUserId:row.user_id,csrfToken:row.csrf_token}, "sessionCredential", {value:this.digest(`session:${sessionToken}`)});

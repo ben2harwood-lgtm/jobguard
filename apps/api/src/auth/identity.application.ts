@@ -1,7 +1,7 @@
 import { memberAdministrationV1, memberAdministrationResultV1 } from "./member-administration.js";
 import { z } from "zod";
 import { IdentityRepository, type VerifiedTenantContext } from "@jobguard/db";
-import { parseIdentityEnvironment } from "@jobguard/config";
+import { parseIdentityEnvironment, requireG1ForPilot } from "@jobguard/config";
 import { Pool, type PoolConfig } from "pg";
 import { AuthError, type AuthPrincipal } from "./auth-provider.js";
 import { verifyCodeV1 } from "./auth-schemas.js";
@@ -65,6 +65,7 @@ export class IdentityApplication {
   }
   async invite(raw:unknown,credentials:TenantRequestCredentials) {
     const input=identityInvitationV1.parse(raw);
+    requireG1ForPilot(this.provider.environment, process.env);
     await this.context({...credentials,requestedTenantId:input.requested_tenant_id});
     // SQL checks current owner membership under a row lock, including expiry/revocation.
     const email=input.email.toLowerCase();
