@@ -28,7 +28,10 @@
         "packages/db/migration-notes/0772_pilot_identity_invitations.md",
         "packages/db/migrations/0772_pilot_identity_invitations.sql",
         "packages/db/test/identity.integration.test.ts",
-        "packages/db/test/migration-proofs/0772_pilot_identity_invitations.proof.json"
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0772_pilot_identity_invitations.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts"
       ]
     }
   }
