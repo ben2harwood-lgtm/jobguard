@@ -8,12 +8,18 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deflateSync } from "node:zlib";
+import { crc32, deflateSync } from "node:zlib";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { PrivateVersionedStorage, StoredObject } from "@jobguard/storage";
-import { EvidenceError, EvidenceService, ProofCommandService, migrate, withTenant } from "../src/index.js";
+import { NativeCaptureUploadApplication } from "../../../apps/api/src/native-capture-upload.application.js";
+import { IdentityApplication } from "../../../apps/api/src/auth/identity.application.js";
+import { PersistedAuthProvider } from "../../../apps/api/src/auth/persisted-auth-provider.js";
+import { NativeCaptures } from "../../../apps/mobile/src/capture.js";
+import { NativeCaptureUpload } from "../../../apps/mobile/src/capture-upload.js";
+import { WorkspaceDocument } from "../../../apps/mobile/src/workspace-document.js";
+import { EvidenceError, EvidenceService, ProofCommandService, ResumableEvidenceService, IdentityRepository, generatePracticePng, migrate, withTenant } from "../src/index.js";
 
 const TENANT="71000000-0000-4000-8000-000000000001", OTHER="71000000-0000-4000-8000-000000000002";
 const MEMBER="74000000-0000-4000-8000-000000000001";
@@ -176,4 +182,196 @@ it("fixture WAV requires the current tenant's synthetic job at upload and finali
   await expect(bound.finalize(context,final)).rejects.toMatchObject({code:"EVIDENCE_NOT_AUTHORIZED"});
  });
  expect(await service.finalize(context,final)).toEqual(object);
+});
+
+// Native workspace and authentication cross the owning API adapter. The local
+// store below is an in-memory interface double, with no SQLCipher or device claim.
+describe("M3-5 native synthetic transfers on PostgreSQL", () => {
+ let identityPool: Pool;
+ let owner: Awaited<ReturnType<typeof signUp>>;
+ const origin = "https://native-uploads.practice.invalid";
+ const jobId = randomUUID();
+
+ async function signUp() {
+  const provider = new PersistedAuthProvider(new IdentityRepository(identityPool),
+   "fictional-native-upload-identity-secret", undefined, "synthetic_demo", Date.now, () => "12345678");
+  const email = `${randomUUID()}@practice.invalid`;
+  await provider.requestCode({ email, purpose: "signup", ip: randomUUID() });
+  const session = await provider.verifyCode(email, "signup", "12345678");
+  const principal = (await provider.authenticate(session.sessionToken))!;
+  const member = (await provider.memberships(principal))[0]!;
+  return { identity: new IdentityApplication(provider, origin), member, credentials: { ...session, requestedTenantId: member.tenantId, origin } };
+ }
+ beforeAll(async () => {
+  await admin.query("ALTER ROLE jobguard_identity LOGIN PASSWORD 'fictional-native-upload-identity'");
+  identityPool = new Pool({ host: "127.0.0.1", port: admin.options.port, database: "postgres",
+   user: "jobguard_identity", password: "fictional-native-upload-identity" });
+  owner = await signUp();
+  await importWatchdogFixtureJob(admin, owner.member.tenantId, jobId, "Fictional native capture job");
+  vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
+ });
+ afterAll(async () => { vi.unstubAllEnvs(); await closeTestPools(identityPool); });
+
+ function paddedPng() {
+  const png = generatePracticePng();
+  const data = Buffer.from(`Comment\0${"Fictional photo. ".repeat(2500)}`, "ascii");
+  const chunk = Buffer.alloc(data.length + 12);
+  chunk.writeUInt32BE(data.length);
+  chunk.write("tEXt", 4);
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(crc32(chunk.subarray(4, -4)), chunk.length - 4);
+  return Buffer.concat([png.subarray(0, -12), chunk, png.subarray(-12)]);
+ }
+ async function fixture(bytes: Uint8Array, contentType = "image/png") {
+  const { member, identity, credentials } = owner;
+  const partition = { userId: member.identityUserId, tenantId: member.tenantId, membershipId: member.id,
+   mobileSessionId: randomUUID(), deviceInstanceId: "fictional-native-upload" };
+  const scopeItemId = randomUUID();
+  await admin.query("INSERT INTO app.scope_identity(id,tenant_id,job_id,state) VALUES($3,$1,$2,'confirmed')", [member.tenantId, jobId, scopeItemId]);
+  await admin.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage) VALUES($1,$2,$3,'in_progress')", [member.tenantId, jobId, scopeItemId]);
+  let json = JSON.stringify({ version: "mobile-cache.v1", metadata: { version: "mobile-local-metadata.v1", partition, localSchemaVersion: 1 },
+   notes: [], files: [], unsyncedWork: "none" });
+  const inMemoryCipherStoreDouble = { encryption: "sqlcipher" as const, read: async () => json,
+   write: async (value: string) => { json = value; }, close: async () => {} };
+  const uploadId = randomUUID(), finalizeCommandId = randomUUID();
+  const request = { version: "native-capture-upload.v1", uploadId, jobId };
+  const capture = { version: request.version, environment: "synthetic_demo", jobId, scopeItemId,
+   attachment: { id: uploadId, base64: Buffer.from(bytes).toString("base64") }, contentType, capturedAtMs: 0,
+   expiresAtMs: Date.now() + 48 * 60 * 60 * 1000, finalizeCommandId };
+  const connect = () => {
+   const app = new NativeCaptureUploadApplication(runtime, identity, true);
+   return (raw: unknown) => app.transfer(credentials, raw);
+  };
+  const auth = { assertCurrent: async () => { await identity.context(credentials); } };
+  const reopen = (transfer = connect()) => {
+   const doc = new WorkspaceDocument(inMemoryCipherStoreDouble, partition);
+   return { driver: new NativeCaptureUpload(doc, auth, { transfer }, async data => hash(data)),
+    captures: new NativeCaptures(doc, auth, { sha256: async text => hash(Buffer.from(text)) }) };
+  };
+  const checkProof = async () => {
+   const authenticatedContext = await identity.context(credentials);
+   const actor = { membershipId: member.id, identityUserId: member.identityUserId };
+   const proofStorage = new ResumableEvidenceService(runtime, true).storageForProof(authenticatedContext, actor,
+    { ...request, version: "resumable-evidence.v1", actorMembershipId: member.id });
+   return new ProofCommandService(runtime, proofStorage).complete(authenticatedContext, {
+    version: "proof.complete.v1", commandId: randomUUID(), actorMembershipId: member.id, jobId, scopeItemId,
+    stage: "completion", evidenceId: uploadId, requiredEvidenceType: "site_photo", decisionId: null,
+   });
+  };
+  return { capture, request, uploadId, finalizeCommandId, connect, reopen, checkProof, inMemoryCipherStoreDouble,
+   saved: () => JSON.parse(json) };
+ }
+
+ it("resumes a committed chunk and replays a lost finalization across fresh application objects", async () => {
+  const bytes = paddedPng(), f = await fixture(bytes);
+  const firstTransport = f.connect();
+  const first = f.reopen(vi.fn(async raw => {
+   const reply = await firstTransport(raw);
+   if ((raw as { action: string }).action === "append") throw new Error("fictional dropped chunk reply");
+   return reply;
+  }));
+  await first.driver.keep(f.capture);
+  await first.driver.keep(f.capture);
+  expect((await first.captures.views())[0]).toMatchObject({ status: "local_only", isServerProof: false });
+  expect((await first.driver.transfer(f.uploadId))[0]).toMatchObject({ status: "uploading", nextOffset: 0, isServerProof: false });
+  const started = f.saved().captures[0].upload;
+  expect(started.serverExpiresAtMs).toBeLessThan(started.requestedExpiresAtMs);
+  await expect(f.checkProof()).rejects.toMatchObject({ code: "PROOF_NOT_FINAL" });
+
+  const secondTransport = f.connect();
+  const second = vi.fn(async (raw: unknown) => {
+   const reply = await secondTransport(raw);
+   if ((raw as { action: string }).action === "finalize") throw new Error("fictional dropped finalize reply");
+   return reply;
+  });
+  expect((await f.reopen(second).driver.transfer(f.uploadId))[0]).toMatchObject({ status: "uploading", nextOffset: bytes.length });
+  expect(second.mock.calls.map(([raw]) => raw)).toMatchObject([
+   { ...f.request, action: "status" }, { ...f.request, action: "append", offset: 32_768 },
+   { ...f.request, action: "finalize", commandId: f.finalizeCommandId },
+  ]);
+  const replayTransport = f.connect(), replay = vi.fn(replayTransport);
+  const recovered = f.reopen(replay);
+  expect((await recovered.driver.transfer(f.uploadId))[0]).toMatchObject({ status: "verified", isServerProof: true,
+   jobId, scopeItemId: f.capture.scopeItemId });
+  expect(replay.mock.calls.map(([raw]) => raw)).toEqual([
+   { ...f.request, action: "status" }, { ...f.request, action: "finalize", commandId: f.finalizeCommandId },
+  ]);
+  expect(f.saved()).toMatchObject({ files: [f.capture.attachment], unsyncedWork: "present", captures: [{
+   item: { status: "verified", serverVerification: { evidenceId: f.uploadId, objectVersionId: `synthetic-${hash(bytes)}`, sha256: hash(bytes), byteLength: bytes.length } },
+   upload: { ...started, nextOffset: bytes.length },
+  }] });
+  const result = await admin.query(`SELECT e.id, e.job_id, e.scope_item_id, e.object_version_id, e.sha256,
+   e.device_captured_at, e.server_verified_at, u.expires_at FROM app.evidence_object e
+   JOIN app.evidence_upload u ON (u.tenant_id,u.id)=(e.tenant_id,e.upload_id) WHERE e.upload_id=$1`, [f.uploadId]);
+  expect(result.rows).toEqual([expect.objectContaining({ id: f.uploadId, job_id: jobId, scope_item_id: f.capture.scopeItemId,
+   sha256: hash(bytes), object_version_id: `synthetic-${hash(bytes)}`, device_captured_at: new Date(0),
+   server_verified_at: expect.any(Date), expires_at: new Date(started.serverExpiresAtMs) })]);
+  await expect(f.checkProof()).resolves.toMatchObject({ state: "complete" });
+ });
+
+ it("preserves changed local bytes as a conflict without sending them", async () => {
+  const bytes = paddedPng(), f = await fixture(bytes), send = f.connect();
+  const initial = f.reopen(async raw => {
+   const reply = await send(raw);
+   if ((raw as { action: string }).action === "append") throw new Error("fictional dropped chunk reply");
+   return reply;
+  });
+  await initial.driver.keep(f.capture);
+  await initial.driver.transfer(f.uploadId);
+  const saved = f.saved();
+  bytes[24] = bytes[24]! ^ 1;
+  saved.files[0].base64 = bytes.toString("base64");
+  await f.inMemoryCipherStoreDouble.write(JSON.stringify(saved));
+  const transport = vi.fn(f.connect());
+  expect((await f.reopen(transport).driver.transfer(f.uploadId))[0]).toMatchObject({ status: "conflict", isServerProof: false });
+  expect(transport).not.toHaveBeenCalled();
+  expect(f.saved()).toMatchObject({ files: saved.files, unsyncedWork: "present" });
+  await expect(f.checkProof()).rejects.toMatchObject({ code: "PROOF_NOT_FINAL" });
+ });
+
+ it("recovers a lost begin acknowledgement without minting another identity", async () => {
+  const f = await fixture(generatePracticePng()), send = f.connect();
+  const first = f.reopen(async raw => {
+   await send(raw);
+   throw new Error("fictional dropped begin reply");
+  });
+  await first.driver.keep(f.capture);
+  expect((await first.driver.transfer(f.uploadId))[0]).toMatchObject({ status: "uploading", nextOffset: 0 });
+  const expiry = (await admin.query("SELECT expires_at FROM app.evidence_upload WHERE id=$1", [f.uploadId])).rows[0].expires_at;
+  expect((await f.reopen().driver.transfer(f.uploadId))[0]).toMatchObject({ status: "verified" });
+  expect(f.saved().captures[0].upload.serverExpiresAtMs).toBe(expiry.getTime());
+ });
+
+ it("keeps rejected bytes and leaves valid WAV processing queued", async () => {
+  const bad = await fixture(Buffer.from("Fictional malformed PNG")), rejected = bad.reopen();
+  await rejected.driver.keep(bad.capture);
+  expect((await rejected.driver.transfer(bad.uploadId))[0]).toMatchObject({ status: "rejected", isServerProof: false });
+  expect(await bad.connect()({ ...bad.request, action: "status" })).toMatchObject({ status: { state: "rejected" } });
+  expect(bad.saved()).toMatchObject({ files: [bad.capture.attachment], unsyncedWork: "present" });
+  await expect(bad.checkProof()).rejects.toMatchObject({ code: "PROOF_NOT_FINAL" });
+  const wav = await fixture(syntheticSpeechAudio(), "audio/wav"), voice = wav.reopen();
+  await voice.driver.keep(wav.capture);
+  expect((await voice.driver.transfer(wav.uploadId))[0]).toMatchObject({ kind: "voice", status: "verified" });
+  expect((await admin.query("SELECT evidence_type,content_type FROM app.evidence_object WHERE id=$1", [wav.uploadId])).rows)
+   .toEqual([{ evidence_type: "site_voice", content_type: "audio/wav" }]);
+  await expect(wav.checkProof()).rejects.toMatchObject({ code: "PROOF_NOT_FINAL" });
+ });
+
+ it("refuses disabled, spoofed, foreign and revoked requests at the authenticated seam", async () => {
+  const f = await fixture(generatePracticePng());
+  const { identity, credentials } = owner;
+  const app = new NativeCaptureUploadApplication(runtime, identity, true);
+  const status = { ...f.request, action: "status" };
+  await expect(new NativeCaptureUploadApplication(runtime, identity).transfer(credentials, status)).rejects.toMatchObject({ code: "DISABLED" });
+  await expect(app.transfer(credentials, { ...status, actorMembershipId: randomUUID() })).rejects.toThrow();
+  await expect(app.transfer({ ...credentials, csrfToken: "x".repeat(32) }, status)).rejects.toMatchObject({ code: "ORIGIN_FORBIDDEN" });
+  const other = await signUp();
+  await expect(app.transfer(other.credentials, status)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  const native = f.reopen();
+  await native.driver.keep(f.capture);
+  await native.driver.transfer(f.uploadId);
+  await admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1",
+   [identity.provider.digest(`session:${credentials.sessionToken}`)]);
+  await expect(app.transfer(credentials, status)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+ });
 });

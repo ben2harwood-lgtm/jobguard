@@ -57,7 +57,11 @@
       "vite@>=7.0.0 <=7.3.6": "7.3.7",
       "qs@>=6.7.0 <6.16.1": "6.16.1",
       "@nestjs/cli>fork-ts-checker-webpack-plugin": "-",
-      "undici@>=7.0.0 <7.30.1": "7.30.1"
+      "undici@>=7.0.0 <7.30.1": "7.30.1",
+      "metro>image-size@<2.0.3": "2.0.3"
+    },
+    "patchedDependencies": {
+      "metro@0.83.3": "apps/mobile/patches/metro@0.83.3.patch"
     }
   }
 }

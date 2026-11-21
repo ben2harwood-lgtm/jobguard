@@ -1,0 +1,29 @@
+{
+  "reason": "Merged model/suite registrations archived unchanged; current branch owns only its own active lane. No source code, assertion or guard changed.",
+  "entries": [
+    {
+      "source": "config/lanes/m3-4-reconcile.json",
+      "archive": "docs/archive/lanes/native-model-imports/m3-4-reconcile.json",
+      "sha256": "bedd12e0a014e2f30090f91ee47d8412469af356741817fa93d49f4f38bd12a9",
+      "remoteHead": "94a30eeed7107f01bdc56e29ccf0788d844aa562"
+    },
+    {
+      "source": "config/lanes/m3-6-shared.json",
+      "archive": "docs/archive/lanes/native-model-imports/m3-6-shared.json",
+      "sha256": "a6bdf72162ee66758e2543b60f43122d3d32fed46c41755f3f2245c2a1fdc965",
+      "remoteHead": "fc9cf0148567339d984db80db9f76172ef122f74"
+    },
+    {
+      "source": "config/lanes/m3-7-suite.json",
+      "archive": "docs/archive/lanes/native-model-imports/m3-7-suite.json",
+      "sha256": "ca36bca72733d06a181a6be22c53c4c1162045bcbae7a1c5f85486f645e42da0",
+      "remoteHead": "6cc9e27a3ca0cf078d38dd78a502309714bc5adc"
+    },
+    {
+      "source": "config/lanes/ent-12-operative.json",
+      "archive": "docs/archive/lanes/native-model-imports/ent-12-operative.json",
+      "sha256": "4590acc3174cecabb336a046cc1f32f83917c115cb4155137460308b5e557522",
+      "remoteHead": "e6e8c5c4697a84097dc97ce726f872e64ba1c83e"
+    }
+  ]
+}

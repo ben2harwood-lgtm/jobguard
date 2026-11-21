@@ -1,0 +1,60 @@
+{
+  "checkedAt": "2026-11-21T04:20:49.753Z",
+  "releases": {
+    "expo": {
+      "version": "54.0.35",
+      "publishedAt": "2026-05-28T21:20:41.675Z",
+      "integrity": "sha512-E+tXpQwjGm5fK/uwa55p0Xx/kuo5dXDKfVJ95IargTNa5KiFt26lSTXXa9KnHbI4EDLwFD38/xTKZvzPTlGTdg=="
+    },
+    "expo-dev-client": {
+      "version": "6.0.21",
+      "publishedAt": "2026-04-27T13:45:11.679Z",
+      "integrity": "sha512-SWI6HD0pa4eJujkYFkvvpezUE1zmJXGLu+34azpu7+QJgO+FLutDYDj8BSTdeH/NYDEClDFjCGqVMcWETvmsCQ=="
+    },
+    "expo-sqlite": {
+      "version": "16.0.10",
+      "publishedAt": "2025-12-05T06:48:22.549Z",
+      "integrity": "sha512-tUOKxE9TpfneRG3eOfbNfhN9236SJ7IiUnP8gCqU7umd9DtgDGB/5PhYVVfl+U7KskgolgNoB9v9OZ9iwXN8Eg=="
+    },
+    "expo-secure-store": {
+      "version": "15.0.8",
+      "publishedAt": "2025-12-05T06:48:52.082Z",
+      "integrity": "sha512-lHnzvRajBu4u+P99+0GEMijQMFCOYpWRO4dWsXSuMt77+THPIGjzNvVKrGSl6mMrLsfVaKL8BpwYZLGlgA+zAw=="
+    },
+    "expo-crypto": {
+      "version": "15.0.9",
+      "publishedAt": "2026-04-27T13:43:55.393Z",
+      "integrity": "sha512-SNWKa2fXx7v9gkp1h/7nqXY5XN7qgNDn3yRc2aO0gWGbeMbvob/haMxxsPFe9f51aqH5NjNCqHf2kvLhvAd8KQ=="
+    },
+    "react": {
+      "version": "19.1.0",
+      "publishedAt": "2025-03-28T19:59:42.053Z",
+      "integrity": "sha512-FS+XFBNvn3GTAWq26joslQgWNoFu08F4kl0J4CgdNKADkdSGXQyTCnKteIAJy96Br6YbpEU1LSzV5dYtjMkMDg=="
+    },
+    "react-native": {
+      "version": "0.81.5",
+      "publishedAt": "2025-10-21T17:58:13.913Z",
+      "integrity": "sha512-1w+/oSjEXZjMqsIvmkCRsOc8UBYv163bTWKTI8+1mxztvQPhCRYGTvZ/PL1w16xXHneIj/SLGfxWg2GWN2uexw=="
+    },
+    "zod": {
+      "version": "4.6.6",
+      "publishedAt": "2026-10-11T16:18:23.878Z",
+      "integrity": "sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA=="
+    },
+    "@types/react": {
+      "version": "19.1.8",
+      "publishedAt": "2025-06-11T13:41:18.158Z",
+      "integrity": "sha512-AwAfQ2Wa5bCx9WP8nZL2uMZWod7J7/JSplxbTmBQ5ms6QpqNYm672H0Vu9ZVKVngQ+ii4R/byguVEUZQyeg44g=="
+    },
+    "typescript": {
+      "version": "5.8.3",
+      "publishedAt": "2025-04-05T00:17:37.851Z",
+      "integrity": "sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ=="
+    },
+    "vitest": {
+      "version": "4.1.12",
+      "publishedAt": "2026-10-15T14:51:24.991Z",
+      "integrity": "sha512-5eWdz2yb3ajxWF3C8C4TjkXl7FGm3n2E/VlazALrQHzK7nYMSGFnCZto0bbPNl77AwkOZVLk0YnBAejUu0NiWA=="
+    }
+  }
+}

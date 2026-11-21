@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "ent-12-operative": {
+      "branches": ["codex/sandbox/ent-12-operative"],
+      "allow": [
+        "packages/core/src/index.ts",
+        "packages/core/src/operative-view-models.ts",
+        "packages/core/src/operative-view-models.test.ts"
+      ],
+      "note": "ENT-12 synthetic operative view-model groundwork; RED; native and D08 holds remain."
+    }
+  }
+}
