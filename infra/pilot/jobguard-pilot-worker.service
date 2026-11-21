@@ -1,0 +1,23 @@
+[Unit]
+Description=JobGuard no-charge pilot worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jobguard-worker
+Group=jobguard-worker
+WorkingDirectory=/opt/jobguard/current
+# Host provisioning materializes these references as a root-owned runtime file.
+EnvironmentFile=/run/jobguard/pilot-worker.env
+ExecStart=/usr/bin/env JOBGUARD_ENV=pilot_no_charge JOBGUARD_COMMERCIAL_OUTBOUND=paused PILOT_WORKER_HEALTH_PORT=7308 /usr/bin/node apps/api/dist/worker.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=35
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target
