@@ -1,30 +1,30 @@
 {
-  "checkedAt": "2026-11-05T16:53:32.672Z",
+  "checkedAt": "2026-11-21T04:20:49.753Z",
   "releases": {
     "expo": {
-      "version": "54.0.20",
-      "publishedAt": "2025-10-23T23:13:29.431Z",
-      "integrity": "sha512-mWHky+H63W60P5Oo+VbtqzF2sLvdaoSSwG57H9rlq1DrgIla++QJZuwJkXXo55lYPymVmkVhwG6FjWYKKylwpw=="
+      "version": "54.0.35",
+      "publishedAt": "2026-05-28T21:20:41.675Z",
+      "integrity": "sha512-E+tXpQwjGm5fK/uwa55p0Xx/kuo5dXDKfVJ95IargTNa5KiFt26lSTXXa9KnHbI4EDLwFD38/xTKZvzPTlGTdg=="
     },
     "expo-dev-client": {
-      "version": "6.0.16",
-      "publishedAt": "2025-10-21T20:20:39.289Z",
-      "integrity": "sha512-8GLud/dtNteqChL9pNGqLBSHd7of2scFmsgN5WwWgtt2dET7+EJM/K1zp0FYUzfmIF5NLsf5xUDg6AjDldOLqg=="
+      "version": "6.0.21",
+      "publishedAt": "2026-04-27T13:45:11.679Z",
+      "integrity": "sha512-SWI6HD0pa4eJujkYFkvvpezUE1zmJXGLu+34azpu7+QJgO+FLutDYDj8BSTdeH/NYDEClDFjCGqVMcWETvmsCQ=="
     },
     "expo-sqlite": {
-      "version": "16.0.8",
-      "publishedAt": "2025-09-10T18:40:43.856Z",
-      "integrity": "sha512-xw776gFgH4ZM5oGs0spSLNmkHO/kJ/EuRXGzE4/22yII9EmG84vm7aM/M2aEb8taBTqwhSGYUpkwkRT5YFFmsg=="
+      "version": "16.0.10",
+      "publishedAt": "2025-12-05T06:48:22.549Z",
+      "integrity": "sha512-tUOKxE9TpfneRG3eOfbNfhN9236SJ7IiUnP8gCqU7umd9DtgDGB/5PhYVVfl+U7KskgolgNoB9v9OZ9iwXN8Eg=="
     },
     "expo-secure-store": {
-      "version": "15.0.7",
-      "publishedAt": "2025-09-11T20:23:31.069Z",
-      "integrity": "sha512-9q7+G1Zxr5P6J5NRIlm86KulvmYwc6UnQlYPjQLDu1drDnerz6AT6l884dPu29HgtDTn4rR0heYeeGFhMKM7/Q=="
+      "version": "15.0.8",
+      "publishedAt": "2025-12-05T06:48:52.082Z",
+      "integrity": "sha512-lHnzvRajBu4u+P99+0GEMijQMFCOYpWRO4dWsXSuMt77+THPIGjzNvVKrGSl6mMrLsfVaKL8BpwYZLGlgA+zAw=="
     },
     "expo-crypto": {
-      "version": "15.0.7",
-      "publishedAt": "2025-09-11T20:25:44.611Z",
-      "integrity": "sha512-FUo41TwwGT2e5rA45PsjezI868Ch3M6wbCZsmqTWdF/hr+HyPcrp1L//dsh/hsrsyrQdpY/U96Lu71/wXePJeg=="
+      "version": "15.0.9",
+      "publishedAt": "2026-04-27T13:43:55.393Z",
+      "integrity": "sha512-SNWKa2fXx7v9gkp1h/7nqXY5XN7qgNDn3yRc2aO0gWGbeMbvob/haMxxsPFe9f51aqH5NjNCqHf2kvLhvAd8KQ=="
     },
     "react": {
       "version": "19.1.0",
