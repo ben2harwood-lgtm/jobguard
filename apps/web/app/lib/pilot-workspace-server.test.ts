@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +9,7 @@ import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { migrate } from "@jobguard/db";
 import { closeTestDatabase, freePort, installAuditCommandWriterRoles } from "../../../../packages/db/test/pool-test-utils.js";
 import { pilotApprovalFixture, unavailablePilotApproval, unavailablePilotApprovals } from "../../../../packages/config/src/policy-gates.pilot-test-fixture.js";
+import { pilotSessionCookie } from "../../../../packages/config/src/pilot-resources.js";
 import { GET } from "../api/jobs/route";
 
 const { cookieJar, blockedPractice } = vi.hoisted(() => ({ cookieJar: new Map<string, { value: string }>(), blockedPractice: vi.fn() }));
@@ -22,15 +23,20 @@ vi.mock("./workspace-server", () => ({ workspaceApplication: (...args: unknown[]
 
 import { closeIdentityApplication } from "./identity-server";
 
-const origin = "https://boundary.invalid";
+const origin = "https://pilot-boundary.invalid";
 const secret = "fictional identity boundary signing fixture";
 const credential = randomUUID();
+const runtimePassword = randomUUID(), identityPassword = randomUUID();
+const database = "jobguard_pilot_boundary";
 const csrf = "fictional-boundary-csrf-token";
 const tenantA = randomUUID(), tenantB = randomUUID(), jobA = randomUUID(), jobB = randomUUID();
 const practiceJob = randomUUID(), contractorJob = randomUUID(), practiceSession = "s".repeat(43), memberSession = "m".repeat(43);
 const member = randomUUID();
 let admin: Pool, postgres: EmbeddedPostgres, directory: string, port: number;
-const url = (user: string) => `postgresql://${user}:${credential}@127.0.0.1:${port}/postgres`;
+const url = (user: string, db = database) => {
+  const password = user === "jobguard_runtime" ? runtimePassword : user === "jobguard_identity" ? identityPassword : credential;
+  return `postgresql://${user}:${password}@127.0.0.1:${port}/${db}`;
+};
 function configure(env: Record<string, string | undefined>) {
   for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
 }
@@ -49,12 +55,12 @@ beforeAll(async () => {
     createPostgresUser: process.getuid?.() === 0, initdbFlags: ["--lc-messages=C"], onLog: () => undefined });
   await postgres.initialise();
   await postgres.start();
+  await postgres.createDatabase(database);
   admin = new Pool({ connectionString: url("postgres") });
   await installAuditCommandWriterRoles(admin);
   await migrate(admin);
-  for (const role of ["jobguard_runtime", "jobguard_identity"]) {
-    await admin.query(`ALTER ROLE ${role} LOGIN PASSWORD '${credential}'`);
-  }
+  await admin.query(`ALTER ROLE jobguard_runtime LOGIN PASSWORD '${runtimePassword}'`);
+  await admin.query(`ALTER ROLE jobguard_identity LOGIN PASSWORD '${identityPassword}'`);
 
   const user = randomUUID(), account = randomUUID();
   await admin.query("INSERT INTO identity.identity_user(id) VALUES($1)", [user]);
@@ -76,13 +82,25 @@ beforeAll(async () => {
     await admin.query("INSERT INTO app.job(tenant_id,id,title) VALUES($1,$2,'Fictional job')", [tenant,job]);
     await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,$3,$4,'quote_activation')", [tenant,job,track,environment]);
   }
-  configure({
-    ...pilotApprovalFixture().env,
-    JOBGUARD_HOSTING: "cloudflare", // Single-use runtime connections.
+  const bindings = {
     PILOT_RUNTIME_DATABASE_URL: url("jobguard_runtime"),
     IDENTITY_DATABASE_URL: url("jobguard_identity"),
     AUTH_CODE_SECRET: secret,
     AUTH_ALLOWED_ORIGIN: origin,
+    PILOT_API_ORIGIN: "https://pilot-api-boundary.invalid",
+    S3_ENDPOINT: "https://storage.invalid",
+    S3_REGION: "fictional",
+    S3_BUCKET: "jobguard-pilot-evidence",
+    S3_ACCESS_KEY_ID: "fictional-pilot-access",
+    S3_SECRET_ACCESS_KEY: "fictional-pilot-storage-secret",
+  };
+  const sha256 = Object.fromEntries(Object.entries(bindings).map(([key, value]) =>
+    [key, createHash("sha256").update(value).digest("hex")]));
+  configure({
+    ...pilotApprovalFixture().env,
+    JOBGUARD_HOSTING: "cloudflare", // Single-use runtime connections.
+    ...bindings,
+    JOBGUARD_PILOT_RESOURCES: JSON.stringify({ version: "pilot-resources.v1", sha256 }),
   });
 }, 120_000);
 
@@ -93,7 +111,7 @@ afterAll(async () => {
 });
 
 it("lists only the verified member's pilot jobs through the Next route and gives no practice fallback", async () => {
-  cookieJar.set("jobguard_session", { value: memberSession });
+  cookieJar.set(pilotSessionCookie, { value: memberSession });
   const result = await request();
   expect(result.status).toBe(200);
   expect(result.headers.get("Cache-Control")).toBe("no-store");
@@ -106,22 +124,29 @@ it("lists only the verified member's pilot jobs through the Next route and gives
 });
 
 it("rejects practice cookies, synthetic persisted sessions, and privileged runtime configuration", async () => {
-  cookieJar.set("jobguard_session", { value: memberSession });
+  cookieJar.set(pilotSessionCookie, { value: memberSession });
   cookieJar.set("jg_session", { value: practiceSession });
   expect((await request()).status).toBe(401);
   cookieJar.delete("jg_session");
-  cookieJar.set("jobguard_session", { value: practiceSession });
+  cookieJar.set(pilotSessionCookie, { value: practiceSession });
   expect((await request()).status).toBe(401);
-  cookieJar.set("jobguard_session", { value: memberSession });
+  cookieJar.set(pilotSessionCookie, { value: memberSession });
   vi.stubEnv("PILOT_RUNTIME_DATABASE_URL", url("postgres"));
   expect((await request()).status).toBe(503);
   vi.stubEnv("PILOT_RUNTIME_DATABASE_URL", url("jobguard_runtime"));
   expect(blockedPractice).not.toHaveBeenCalled();
 });
 
+it("refuses the old cookie name even when its value is a current pilot session", async () => {
+  cookieJar.set(pilotSessionCookie, { value: memberSession });
+  cookieJar.set("jobguard_session", { value: memberSession });
+  try { expect((await request()).status).toBe(401); }
+  finally { cookieJar.delete("jobguard_session"); }
+});
+
 it.each(unavailablePilotApprovals)("refuses the request when PILOT-21 evidence is %s", async (_name, value) => {
   configure(unavailablePilotApproval(value));
-  cookieJar.set("jobguard_session", { value: memberSession });
+  cookieJar.set(pilotSessionCookie, { value: memberSession });
   const result = await request();
   expect(result.status).toBe(403);
   expect(await result.json()).toEqual({ code: "PILOT_G1_CLOSED" });
@@ -131,6 +156,6 @@ it.each(unavailablePilotApprovals)("refuses the request when PILOT-21 evidence i
 it("refuses a revoked membership at the same boundary", async () => {
   configure(pilotApprovalFixture().env);
   await admin.query("UPDATE app.membership SET revoked_at=now() WHERE tenant_id=$1 AND id=$2", [tenantA, member]);
-  cookieJar.set("jobguard_session", { value: memberSession });
+  cookieJar.set(pilotSessionCookie, { value: memberSession });
   expect((await request()).status).toBe(403);
 });

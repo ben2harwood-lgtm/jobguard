@@ -14,7 +14,9 @@ export class DemoBootstrapSafetyError extends Error { readonly code = "DEMO_BOOT
 function connection(value: string, label: string) {
   let parsed: URL;
   try { parsed = new URL(value); } catch { throw new DemoBootstrapSafetyError(`${label} must be a PostgreSQL URL`); }
-  if (!/^postgres(?:ql)?:$/.test(parsed.protocol) || parsed.pathname.slice(1) !== SYNTHETIC_DATABASE_NAME) {
+  if (!/^postgres(?:ql)?:$/.test(parsed.protocol) || !parsed.hostname || parsed.hash ||
+      parsed.pathname.slice(1) !== SYNTHETIC_DATABASE_NAME ||
+      (parsed.search !== "" && !/^\?sslmode=(?:require|verify-ca|verify-full)$/u.test(parsed.search))) {
     throw new DemoBootstrapSafetyError(`${label} must target the database ${SYNTHETIC_DATABASE_NAME}`);
   }
   return parsed;

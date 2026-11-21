@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   DeleteObjectCommand,
+  GetBucketVersioningCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -41,9 +42,24 @@ export class MissingObjectVersionError extends Error {
 export class S3PrivateVersionedStorage implements PrivateVersionedStorage {
   readonly #client: S3Client;
   readonly #bucket: string;
+  readonly #pilot: boolean;
 
-  constructor(config: z.input<typeof storageEnvironmentSchema>) {
+  constructor(config: z.input<typeof storageEnvironmentSchema>, deployment = process.env) {
     const parsed = storageEnvironmentSchema.parse(config);
+    this.#pilot = deployment.JOBGUARD_ENV === "pilot_no_charge";
+    if (this.#pilot !== parsed.S3_BUCKET.startsWith("jobguard-pilot-") ||
+        parsed.S3_BUCKET.startsWith("jobguard-pilot-restore-")) throw new Error("STORAGE_MODE_REFUSED");
+    if (this.#pilot) {
+      let raw: unknown;
+      try { raw = JSON.parse(deployment.JOBGUARD_PILOT_RESOURCES ?? "null"); }
+      catch { throw new Error("STORAGE_MODE_REFUSED"); }
+      const binding = z.object({
+        version: z.literal("pilot-resources.v1"),
+        sha256: z.record(z.string(), z.string()),
+      }).safeParse(raw);
+      if (!binding.success || Object.entries(parsed).some(([key, value]) =>
+        binding.data.sha256[key] !== createHash("sha256").update(value).digest("hex"))) throw new Error("STORAGE_MODE_REFUSED");
+    }
     const clientConfig: S3ClientConfig = {
       endpoint: parsed.S3_ENDPOINT,
       region: parsed.S3_REGION,
@@ -54,21 +70,36 @@ export class S3PrivateVersionedStorage implements PrivateVersionedStorage {
     this.#bucket = parsed.S3_BUCKET;
   }
 
-  createUploadUrl(input: { key: string; contentType: string; expiresInSeconds: number }) {
+  async #assertObjectMode(key: string) {
+    if (this.#pilot !== key.startsWith("pilot_no_charge/")) throw new Error("STORAGE_MODE_REFUSED");
+    if (this.#pilot && key.split("/").some(part => !part || part === "." || part === ".." || !/^[a-zA-Z0-9_.-]+$/u.test(part))) {
+      throw new Error("STORAGE_MODE_REFUSED");
+    }
+    if (this.#pilot) {
+      const versioning = await this.#client.send(new GetBucketVersioningCommand({ Bucket: this.#bucket }));
+      if (versioning.Status !== "Enabled") throw new Error("PILOT_BUCKET_VERSIONING_REQUIRED");
+    }
+  }
+
+  async createUploadUrl(input: { key: string; contentType: string; expiresInSeconds: number }) {
+    await this.#assertObjectMode(input.key);
     return getSignedUrl(this.#client, new PutObjectCommand({ Bucket: this.#bucket, Key: input.key,
       ContentType: input.contentType }), { expiresIn: input.expiresInSeconds });
   }
 
   createDownloadUrl(input: { key: string; versionId: string; expiresInSeconds: number }) {
     if (!input.versionId || input.versionId === "null") throw new MissingObjectVersionError();
-    return getSignedUrl(this.#client, new GetObjectCommand({ Bucket: this.#bucket, Key: input.key,
+    if (!this.#pilot && input.key.startsWith("pilot_no_charge/")) throw new Error("STORAGE_MODE_REFUSED");
+    const sign = () => getSignedUrl(this.#client, new GetObjectCommand({ Bucket: this.#bucket, Key: input.key,
       VersionId: input.versionId }), { expiresIn: input.expiresInSeconds });
+    return this.#pilot ? this.#assertObjectMode(input.key).then(sign) : sign();
   }
 
   async readExactVersion(key: string, versionId: string): Promise<StoredObject> {
     if (!versionId || versionId === "null") throw new MissingObjectVersionError();
+    await this.#assertObjectMode(key);
     const head = await this.#client.send(new HeadObjectCommand({ Bucket: this.#bucket, Key: key, VersionId: versionId }));
-    if (!head.VersionId || head.VersionId === "null") throw new MissingObjectVersionError();
+    if (!head.VersionId || head.VersionId === "null" || (this.#pilot && head.VersionId !== versionId)) throw new MissingObjectVersionError();
     const result = await this.#client.send(new GetObjectCommand({ Bucket: this.#bucket, Key: key, VersionId: versionId }));
     if (!result.VersionId || result.VersionId === "null" || result.VersionId !== head.VersionId) throw new MissingObjectVersionError();
     const bytes = await result.Body?.transformToByteArray();
@@ -79,6 +110,7 @@ export class S3PrivateVersionedStorage implements PrivateVersionedStorage {
 
   async deleteExactVersion(key: string, versionId: string): Promise<void> {
     if (!versionId || versionId === "null") throw new MissingObjectVersionError();
+    await this.#assertObjectMode(key);
     await this.#client.send(new DeleteObjectCommand({ Bucket: this.#bucket, Key: key, VersionId: versionId }));
   }
 }

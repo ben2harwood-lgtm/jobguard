@@ -10,3 +10,5 @@ export * from "./connector-environment.js";
 export * from "./auth-url.js";
 export * from "./enterprise-real-data.js";
 export * from "./release-inventory.js";
+
+export * from "./pilot-resources.js";

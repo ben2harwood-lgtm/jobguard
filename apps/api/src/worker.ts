@@ -1,4 +1,4 @@
-import { requireG1ForPilot } from "@jobguard/config";
+import { refusePilotResourcesOutsidePilot, requireG1ForPilot } from "@jobguard/config";
 import { executePracticeDispatch } from "./effects/provider-dispatch.js";
 import { registerOutboxDiscoveryTask } from "./outbox-discovery-task.js";
 import { RetentionRecordRepository } from "@jobguard/db";
@@ -156,5 +156,13 @@ for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{
   .catch(()=>{logger.error("WORKER_TASK_FAILED");process.exitCode=1;});
 });
 }
-try { await startWorker(); }
+try {
+  refusePilotResourcesOutsidePilot(process.env);
+  if (process.env.JOBGUARD_ENV === "pilot_no_charge") {
+    const { startPilotWorker } = await import("./pilot-worker.js");
+    await startPilotWorker(process.env, redactingWorkerLogger(logger));
+  } else {
+    await startWorker();
+  }
+}
 catch (error) { logger.error("WORKER_START_FAILED"); throw redactedWorkerError(error, "WORKER_START_FAILED"); }

@@ -3,32 +3,42 @@ import { cookies } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
 import { Pool } from "pg";
 import { createPilotWorkspaceApplication, pilotWorkspaceFailure, requirePilotG1 } from "@jobguard/api/workspace";
-import { AuthError } from "@jobguard/api/identity";
-import { identityApplication, identityCredentials } from "./identity-server";
+import { assertPilotConnection } from "@jobguard/db";
+import { AuthError, hasNonPilotCookie, requirePilotResources } from "@jobguard/api/identity";
+import { pilotIdentityApplication, identityCredentials } from "./identity-server";
 import { jobsResponseV1, tenantIdV1 } from "./contracts";
 
-const poolRegistry = globalThis as typeof globalThis & { __jobguardPilotPool?: Pool };
+const poolRegistry = globalThis as typeof globalThis & { __jobguardPilotPool?: { url: string; pool: Pool } };
 
-function pilotPool(): Pool {
-  const connectionString = process.env.PILOT_RUNTIME_DATABASE_URL;
-  const url = new URL(connectionString ?? "");
-  if (!/^postgres(?:ql)?:$/u.test(url.protocol) || decodeURIComponent(url.username) !== "jobguard_runtime") {
-    throw new Error("Pilot requires the non-owner runtime credential");
-  }
+function pilotPool(connectionString: string): Pool {
   if (process.env.JOBGUARD_HOSTING === "cloudflare") {
     return new Pool({ connectionString, max: 1, maxUses: 1, application_name: "jobguard-pilot-web" });
   }
-  return poolRegistry.__jobguardPilotPool ??= new Pool({ connectionString, max: 4, application_name: "jobguard-pilot-web" });
+  const configured = poolRegistry.__jobguardPilotPool;
+  if (configured && configured.url !== connectionString) throw new Error("PILOT_DATABASE_BINDING_CHANGED");
+  return (poolRegistry.__jobguardPilotPool ??= {
+    url: connectionString, pool: new Pool({ connectionString, max: 4, application_name: "jobguard-pilot-web" }),
+  }).pool;
 }
 
 export async function pilotWorkspaceApplication(request: NextRequest, requestedTenantId: string) {
   requirePilotG1(process.env);
-  // The presence of a practice credential is a refusal, regardless of other cookies.
-  if ((await cookies()).get("jg_session")) {
+  const jar = await cookies();
+  if (jar.get("jg_session") || jar.get("jg_practice_pair") || jar.get("jobguard_session") ||
+      jar.get("jobguard_customer") || hasNonPilotCookie(request.headers.get("cookie") ?? undefined)) {
     throw new AuthError("UNAUTHENTICATED");
   }
+  const resources = requirePilotResources(process.env, "web");
+  if (request.nextUrl.origin !== resources.webOrigin) throw new AuthError("ORIGIN_FORBIDDEN");
   const credentials = await identityCredentials(request);
-  return createPilotWorkspaceApplication({ pool: pilotPool(), identity: identityApplication() }, { ...credentials, requestedTenantId });
+  if (!credentials.sessionToken) throw new AuthError("UNAUTHENTICATED");
+  const identity = pilotIdentityApplication();
+  const pool = pilotPool(resources.runtime);
+  await Promise.all([
+    assertPilotConnection(pool, resources.runtime),
+    assertPilotConnection(identity.provider.repository.pool, resources.identity),
+  ]);
+  return createPilotWorkspaceApplication({ pool, identity }, { ...credentials, requestedTenantId });
 }
 
 export async function pilotJobList(request: NextRequest) {

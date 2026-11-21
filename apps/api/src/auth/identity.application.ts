@@ -1,7 +1,7 @@
 import { memberAdministrationV1, memberAdministrationResultV1 } from "./member-administration.js";
 import { z } from "zod";
 import { IdentityRepository, type VerifiedTenantContext } from "@jobguard/db";
-import { parseIdentityEnvironment, requireG1ForPilot } from "@jobguard/config";
+import { parseIdentityEnvironment, refusePilotResourcesOutsidePilot, requireG1ForPilot, requirePilotResources } from "@jobguard/config";
 import { Pool, type PoolConfig } from "pg";
 import { AuthError, type AuthPrincipal } from "./auth-provider.js";
 import { verifyCodeV1 } from "./auth-schemas.js";
@@ -83,5 +83,8 @@ export class IdentityApplication {
 }
 export function createIdentityApplication(raw:unknown, poolOptions: Pick<PoolConfig,"max"|"maxUses"> = {}):IdentityApplication {
   const env=parseIdentityEnvironment(raw);
+  const deployment = raw as NodeJS.ProcessEnv;
+  if (env.JOBGUARD_ENV === "pilot_no_charge") requirePilotResources(deployment, "api");
+  else refusePilotResourcesOutsidePilot(deployment);
   return new IdentityApplication(new PersistedAuthProvider(new IdentityRepository(new Pool({connectionString:env.IDENTITY_DATABASE_URL,max:4,...poolOptions,application_name:"jobguard-identity"})),env.AUTH_CODE_SECRET,undefined,env.JOBGUARD_ENV),env.AUTH_ALLOWED_ORIGIN);
 }
