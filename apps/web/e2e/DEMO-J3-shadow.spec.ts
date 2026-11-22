@@ -263,15 +263,19 @@ test("DEMO-J3 fresh shadow-30000 completes customer approvals, one paid invoice,
   try {
    expect((await other.request.post("/api/session")).ok()).toBe(true);
    for (const pack of packs) {
-    for (const path of [`/api/recovery-cases/${pack.caseId}/evidence-packs?version=3`, pack.downloadPath]) {
+    const listPath = `/api/recovery-cases/${pack.caseId}/evidence-packs?version=3`;
+    for (const path of [listPath, pack.downloadPath]) {
      const denied = await other.request.get(path);
      expect([403, 404]).toContain(denied.status());
      const body = await denied.text();
      for (const secret of [jobId, pack.caseId, pack.manifestHash, "fitted garden drainage"]) expect(body).not.toContain(secret);
-     const owner = await page.request.get(path);
-     expect(owner.ok()).toBe(true);
-     expect(await owner.text()).toContain(pack.manifestHash);
     }
+    const ownerList = await jsonResult(page.request.get(listPath), "List saved evidence packs as owner");
+    const listed = ownerList.packs.find((item: { manifestHash: string }) => item.manifestHash === pack.manifestHash);
+    expect(listed).toBeDefined();
+    const ownerDownload = await page.request.get(pack.downloadPath);
+    expect(ownerDownload.ok()).toBe(true);
+    expect(await ownerDownload.text()).toBe(listed.artifactText);
    }
   } finally { await other.close(); }
  });
