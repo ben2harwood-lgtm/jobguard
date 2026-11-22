@@ -9,6 +9,8 @@ import { CUSTOMER_MESSAGE_SAFETY_TEXT } from "../src/customer-message-fixtures.j
 import { decodeJobSourceFixture } from "../src/job-source-fixtures.js";
 import { migrate } from "../src/migrate.js";
 import { WorkerActionExecutor } from "../src/worker-action-executor.js";
+import { CommercialEmailOutbox } from "../src/commercial-email-outbox.js";
+import { InvoiceEmailRepository } from "../src/invoice-email-repository.js";
 import { customerSigninLink, type OutboundAdapter } from "../src/outbox.js";
 import { FirmProfileRepository } from "../src/firm-profile-repository.js";
 import { PilotJobRepository } from "../src/pilot-job-repository.js";
@@ -60,7 +62,7 @@ async function identity(sql: string, args: unknown[], prepare?: (client: PoolCli
   } finally { client.release(); }
 }
 
-async function ready() {
+async function ready(checkedEmail = false) {
   const [tenant, account, member, user, jobId, scope, revision] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
   const db = cluster.admin;
   const builder = hmac(randomUUID());
@@ -132,9 +134,19 @@ async function ready() {
     },
     async reconcile() { return "succeeded"; },
   };
-  const executor = new WorkerActionExecutor(await workerFixturePool(db), new Map([[adapter.name, adapter]]), { emit() {} }, hmac);
-  await executor.execute(email.id);
-  await executor.execute(email.id);
+  const worker = await workerFixturePool(db);
+  const adapters = new Map([[adapter.name, adapter]]);
+  if (checkedEmail) {
+    const executor = new CommercialEmailOutbox(worker, adapters, { emit() {} }, hmac, () => true);
+    const payload = { actionId: email.id, tenantId: tenant };
+    expect(await executor.discover()).toContainEqual(payload);
+    await executor.execute(payload);
+    await executor.execute(payload);
+  } else {
+    const executor = new WorkerActionExecutor(worker, adapters, { emit() {} }, hmac);
+    await executor.execute(email.id);
+    await executor.execute(email.id);
+  }
   expect(inbox.get("uninvited@fixture.invalid")).toBeUndefined();
   const delivered = inbox.get(recipient)!;
   expect(delivered).toBe(`/customer/sign-in#${tenant}/${jobId}/${customer}/${link}`);
@@ -156,6 +168,115 @@ async function ready() {
   await expect(redeem(digest)).rejects.toMatchObject(refused);
   return { tenant, member, jobId, customer, grant, builder, session, context, preview };
 }
+
+it("dispatches the exact queued quote and portal invite with the pilot commercial email outbox", async () => {
+  const w = await ready(true);
+  const { outbox_action_id: actionId } = (await cluster.admin.query(
+    "SELECT outbox_action_id FROM app.quote_send WHERE (tenant_id,document_id)=($1,$2)", [w.tenant, w.preview.documentId],
+  )).rows[0];
+  let calls = 0;
+  const adapter: OutboundAdapter = {
+    name: "fake_quote_delivery", supportsProviderDeduplication: false,
+    async deliver(action) {
+      calls++;
+      expect(action.recipient).toBe(JSON.stringify([recipient]));
+      expect(Buffer.from(action.immutableContent)).toEqual(Buffer.from(renderQuotePdf(w.preview.document)));
+      // A different connection sees the committed claim before the fake runs.
+      expect((await cluster.admin.query("SELECT status FROM app.action_outbox WHERE id=$1", [actionId])).rows[0].status).toBe("executing");
+      return { kind: "outcome_unknown", code: "FIXTURE_TIMEOUT" };
+    },
+    async reconcile() { return "unknown"; },
+  };
+  const worker = await workerFixturePool(cluster.admin);
+  const outbox = new CommercialEmailOutbox(worker, new Map([[adapter.name, adapter]]), { emit() {} }, hmac, () => true);
+  await outbox.execute({ actionId, tenantId: randomUUID() });
+  expect(calls).toBe(0);
+  await Promise.all([outbox.execute({ actionId, tenantId: w.tenant }), outbox.execute({ actionId, tenantId: w.tenant })]);
+  await outbox.execute({ actionId, tenantId: w.tenant });
+  expect(calls).toBe(1);
+  expect((await cluster.admin.query("SELECT outcome FROM app.action_attempt WHERE action_id=$1", [actionId])).rows).toEqual([{ outcome: "outcome_unknown" }]);
+  await expect(cluster.runtime.query("SELECT * FROM app.pilot_email_signals()")).rejects.toMatchObject({ code: "42501" });
+  await expect(worker.query("SELECT * FROM app.quote_document_version")).rejects.toMatchObject({ code: "42501" });
+});
+
+it("preserves queued quote evidence when a newer customer revision makes the send stale", async () => {
+  const w = await ready();
+  const { outbox_action_id: actionId } = (await cluster.admin.query(
+    "SELECT outbox_action_id FROM app.quote_send WHERE (tenant_id,document_id)=($1,$2)", [w.tenant, w.preview.documentId],
+  )).rows[0];
+  await cluster.admin.query(`INSERT INTO app.customer_revision(tenant_id,id,customer_id,revision,payload)
+    SELECT tenant_id,$3,customer_id,revision+1,payload || '{"email":"new@fictional.invalid"}'
+    FROM app.customer_revision WHERE (tenant_id,customer_id)=($1,$2)`, [w.tenant, w.customer, randomUUID()]);
+  const adapter: OutboundAdapter = {
+    name: "fake_quote_delivery", supportsProviderDeduplication: false,
+    async deliver() { throw new Error("Fixture must stay queued"); },
+    async reconcile() { return "unknown"; },
+  };
+  const outbox = new CommercialEmailOutbox(await workerFixturePool(cluster.admin), new Map([[adapter.name, adapter]]),
+    { emit() {} }, hmac, () => true);
+  await outbox.execute({ actionId, tenantId: w.tenant });
+  expect((await cluster.admin.query("SELECT status,content_hash FROM app.action_outbox WHERE id=$1", [actionId])).rows)
+    .toEqual([{ status: "pending", content_hash: w.preview.hash }]);
+  expect((await cluster.admin.query("SELECT id FROM app.action_attempt WHERE action_id=$1", [actionId])).rows).toEqual([]);
+});
+
+it("stages an existing invoice with separate fake delivery approval and its server amount", async () => {
+  const w = await ready();
+  const { tenant, jobId, context, member } = w;
+  const [baseline, draft, revision, invoice, decision, resolution, approval] = Array.from({ length: 7 }, () => randomUUID());
+  const content = "Fictional PDF bytes";
+  const contentHash = hash(content);
+  const amount = 12000;
+  const db = cluster.admin;
+  await db.query(`INSERT INTO app.quote_version(id,tenant_id,job_id,version,content_hash,net_value_pence,status)
+    VALUES($1,$2,$3,1,$4,10000,'accepted')`, [baseline, tenant, jobId, w.preview.hash]);
+  await db.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draft, tenant, jobId]);
+  await db.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,
+    baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
+    VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',10000,2000,$7,false,'[]')`,
+  [revision, tenant, jobId, draft, w.preview.hash, baseline, amount]);
+  await db.query("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE (tenant_id,id)=($2,$3)",
+    [revision, tenant, draft]);
+  await db.query("INSERT INTO app.decision(id,tenant_id,subject_type,subject_ref,action_type) VALUES($1,$2,'job',$3,'final_account.issue')", [decision, tenant, jobId]);
+  await db.query("INSERT INTO app.decision_resolution(id,tenant_id,decision_id,resolution,actor_membership_id) VALUES($1,$2,$3,'approved',$4)",
+    [resolution, tenant, decision, member]);
+  await db.query(`INSERT INTO app.action_authorization(id,tenant_id,decision_id,resolution_id,actor_membership_id,action_type,
+    content_hash,aggregate_revision,amount_pence,currency,policy_version,expires_at)
+    VALUES($1,$2,$3,$4,$5,'final_account.issue',$6,1,$7,'GBP','candidate_m1_standard_v1',clock_timestamp()+interval '1 hour')`,
+  [approval, tenant, decision, resolution, member, contentHash, amount]);
+  await db.query(`INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,
+    issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
+    VALUES($1,$2,$3,$4,$5,'FIXTURE-001',current_date,'{}','candidate_m1_standard_v1','GBP',10000,2000,$6,$7,$8,$9,true,'SYNTHETIC - NOT A REAL INVOICE')`,
+  [invoice, tenant, jobId, revision, approval, amount, w.preview.hash, contentHash, Buffer.from(content)]);
+  await db.query(`INSERT INTO app.action_outbox(id,tenant_id,authorization_id,adapter,provider_effect_key,action_type,content_hash,
+    immutable_content,aggregate_revision,amount_pence,currency,policy_version,authorization_expires_at,status,completed_at)
+    SELECT $1,tenant_id,id,'fake_invoice_delivery',$2,action_type,content_hash,$3,aggregate_revision,amount_pence,currency,
+    policy_version,expires_at,'succeeded',clock_timestamp() FROM app.action_authorization WHERE id=$4`,
+  [randomUUID(), `invoice:${invoice}`, content, approval]);
+  const service = new InvoiceEmailRepository(cluster.runtime);
+  const input = { version: "invoice-email.v1", commandId: randomUUID(), invoiceId: invoice, contentHash, revision: 1, recipient };
+  const pilot = { actorMembershipId: member, checkGate() {} };
+  await expect(service.stage(context, jobId, { ...input, recipient: "wrong@fixture.invalid" }, pilot)).rejects.toThrow("INVOICE_EMAIL_CHANGED");
+  const staged = await service.stage(context, jobId, input, pilot);
+  expect(await service.stage(context, jobId, input, pilot)).toEqual(staged);
+  const rows = (await db.query("SELECT id,status FROM app.action_outbox WHERE tenant_id=$1 AND action_type='customer_invoice.send'", [tenant])).rows;
+  expect(rows).toHaveLength(1);
+  expect(rows[0].status).toBe("pending");
+  let calls = 0;
+  const adapter: OutboundAdapter = {
+    name: "fake_invoice_delivery", supportsProviderDeduplication: false,
+    async deliver(action) {
+      calls++;
+      expect(action).toMatchObject({ immutableContent: content, amountPence: amount, currency: "GBP", recipient, contentHash });
+      return { kind: "succeeded", providerReference: "fictional-invoice-receipt" };
+    },
+    async reconcile() { return "unknown"; },
+  };
+  const outbox = new CommercialEmailOutbox(await workerFixturePool(db), new Map([[adapter.name, adapter]]),
+    { emit() {} }, hmac, () => true);
+  await outbox.execute({ actionId: rows[0].id, tenantId: tenant });
+  expect(calls).toBe(1);
+});
 
 it("pins the issued quote, accepts once at database time and admits the authenticated acceptance to no-charge activation", async () => {
   const w = await ready();

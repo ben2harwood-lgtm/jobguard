@@ -4,7 +4,7 @@ import { createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from 
 import { EnterpriseIdentityRepository, IdentityRepository } from "@jobguard/db";
 import { AuthError, roles, type ActiveMembership, type AuthPrincipal, type AuthProvider, type ChallengeRequest, type Role, type VerificationResult } from "./auth-provider.js";
 import { challengeRequestV1, verifyCodeV1 } from "./auth-schemas.js";
-import { FixtureIdentityEmail, identityChallengeMessage, type IdentityChallengeDelivery } from "./identity-email.js";
+import { assertIdentityEmailEnabled, FixtureIdentityEmail, identityChallengeMessage, type IdentityChallengeDelivery } from "./identity-email.js";
 
 export class PersistedAuthProvider implements AuthProvider {
   // Nest and Next both compose this provider. Binding belongs here so every consumer,
@@ -33,6 +33,7 @@ export class PersistedAuthProvider implements AuthProvider {
   async requestCode(raw: ChallengeRequest): Promise<{ accepted: true; fixtureCode?: string }> {
     const input = challengeRequestV1.parse(raw), email = input.email.trim().toLowerCase();
     this.assertRecipient(email);
+    assertIdentityEmailEnabled();
     const id = randomUUID(), code = this.makeCode();
     await this.repository.transaction(async client => {
       // Serialize the backstop across processes before the existing IP/email locks.
@@ -54,6 +55,7 @@ export class PersistedAuthProvider implements AuthProvider {
     // Delivery happens only after commit; pending/unknown never implies successful delivery.
     try {
       requireG1ForPilot(this.environment, process.env);
+      assertIdentityEmailEnabled();
       await this.emailAdapter.deliver(identityChallengeMessage.parse({
         version:"identity-email.v1",category:"identity_challenge",challengeId:id,email,code,environment:this.environment,
       }));

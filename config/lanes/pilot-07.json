@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-07": {
+      "branches": [
+        "codex/sandbox/pilot-07"
+      ],
+      "note": "RED pilot fixture email, checked outbox delivery and outbound stop. The lane guard grants this manifest implicitly.",
+      "allow": [
+        "apps/api/src/auth/identity-email.test.ts",
+        "apps/api/src/auth/identity-email.ts",
+        "apps/api/src/auth/persisted-auth-provider.ts",
+        "apps/api/src/effects/commercial-email.test.ts",
+        "apps/api/src/effects/commercial-email.ts",
+        "apps/api/src/effects/fake-email.ts",
+        "apps/api/src/pilot-worker.ts",
+        "apps/api/src/workspace/pilot-final-account.ts",
+        "apps/web/app/api/jobs/[id]/customer-invoices/route.ts",
+        "docs/operations/commercial-outbound-pause.md",
+        "packages/config/src/commercial-email-environment.test.ts",
+        "packages/config/src/commercial-email-environment.ts",
+        "packages/config/src/index.ts",
+        "packages/db/migrations/0777_pilot_commercial_email.sql",
+        "packages/db/src/commercial-email-outbox.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/invoice-email-repository.ts",
+        "packages/db/src/worker-action-executor.ts",
+        "packages/db/test/migration-proofs/0777_pilot_commercial_email.proof.json",
+        "packages/db/test/pilot-customer-portal.integration.test.ts"
+      ]
+    }
+  }
+}
