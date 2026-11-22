@@ -1,0 +1,514 @@
+{
+  "migration": "0776_pilot_final_account.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-pilot-final-account",
+        "description": "Bound pilot owners may review and lock a pilot job against an independently approved disclosure version.",
+        "title": "Pilot final account authority",
+        "cards": [
+          "LP-6a",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6a": "Resolve the current protected pilot binding before admitting an owner to review or lock a job.",
+          "LP-12": "Keep terms approval writes privileged and bind each immutable lock to the approved version."
+        },
+        "sources": [
+          "packages/db/migrations/0776_pilot_final_account.sql"
+        ],
+        "tests": [
+          "packages/db/test/final-account-lock.integration.test.ts",
+          "apps/web/app/lib/pilot-workspace-server.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-pilot-final-account",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Keep the approval writer privileged and the pilot routines bound to a current pilot owner."
+        },
+        "downstream": "Bound pilot owners may review and lock a pilot job against an independently approved disclosure version.",
+        "path": "ap-pilot-final-account",
+        "title": "Pilot final account authority",
+        "cards": [
+          "LP-6a",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6a": "Resolve the current protected pilot binding before admitting an owner to review or lock a job.",
+          "LP-12": "Keep terms approval writes privileged and bind each immutable lock to the approved version."
+        },
+        "sources": [
+          "packages/db/migrations/0776_pilot_final_account.sql"
+        ],
+        "tests": [
+          "packages/db/test/final-account-lock.integration.test.ts",
+          "apps/web/app/lib/pilot-workspace-server.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_final_account_terms(uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-pilot-final-account"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_lock_final_account(uuid,uuid,uuid,uuid,uuid,integer,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-pilot-final-account"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_prepare_final_review_extra(uuid,uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-pilot-final-account"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_record_final_account_disposition(uuid,uuid,uuid,uuid,uuid,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-pilot-final-account"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_final_account_terms(uuid,uuid)|jobguard_migration",
+        "group": "a-pilot-final-account"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_lock_final_account(uuid,uuid,uuid,uuid,uuid,integer,text)|jobguard_migration",
+        "group": "a-pilot-final-account"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_prepare_final_review_extra(uuid,uuid,uuid)|jobguard_migration",
+        "group": "a-pilot-final-account"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_record_final_account_disposition(uuid,uuid,uuid,uuid,uuid,text)|jobguard_migration",
+        "group": "a-pilot-final-account"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.guard_final_lock_disclosure_terms()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_check_job_terms"
+        ]
+      },
+      "after": {
+        "identity": "function:app.guard_final_lock_disclosure_terms()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_check_job_terms",
+          "app.pilot_final_account_has_terms"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_final_account_has_terms(uuid,uuid,text,timestamp with time zone)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.pilot_final_account_job"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_final_account_job(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_final_account_owner(uuid,uuid,uuid,boolean)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "app.final_lock_require_owner",
+          "app.pilot_capture_real_binding",
+          "app.pilot_final_account_job"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_final_account_terms(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.current_actor",
+          "app.pilot_final_account_owner"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_lock_final_account(uuid,uuid,uuid,uuid,uuid,integer,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.command_receipt",
+          "app.final_account_lock"
+        ],
+        "staticCalls": [
+          "app.append_final_lock_audit",
+          "app.final_lock_hash",
+          "app.pilot_final_account_owner",
+          "app.pilot_final_account_terms",
+          "app.read_final_account_lock_sources"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_prepare_final_review_extra(uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.pilot_final_account_owner"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_record_final_account_disposition(uuid,uuid,uuid,uuid,uuid,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.pilot_final_account_owner",
+          "app.record_final_account_disposition"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.pilot_final_check_terms_approval|pilot_terms_owner|PERMISSIVE|ALL|jobguard_migration|ade3739356a579ac"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.pilot_final_check_terms_approval|pilot_terms_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE/TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": {
+        "nspname": "app",
+        "proname": "guard_final_lock_disclosure_terms",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      },
+      "after": {
+        "nspname": "app",
+        "proname": "guard_final_lock_disclosure_terms",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_lock_final_account",
+        "args": "p_tenant uuid, p_job uuid, p_actor uuid, p_command uuid, p_revision uuid, p_expected integer, p_declaration text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_prepare_final_review_extra",
+        "args": "t uuid, j uuid, actor uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_record_final_account_disposition",
+        "args": "t uuid, j uuid, actor uuid, command uuid, scope uuid, disposition text",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_final_account_job",
+        "args": "t uuid, j uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_final_account_owner",
+        "args": "t uuid, j uuid, actor uuid, locking boolean",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_final_account_terms",
+        "args": "t uuid, j uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_final_account_has_terms",
+        "args": "t uuid, j uuid, v text, cutoff timestamp with time zone",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, app"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "pilot_final_check_terms_approval",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "pilot_final_check_terms_approval_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "pilot_final_check_terms_approval",
+        "policyname": "pilot_terms_owner",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "with_check": null
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "pilot_final_check_terms_approval",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": false,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}

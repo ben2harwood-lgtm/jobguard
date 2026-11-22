@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { JOB_SAVED_EVENT } from "../ui/job-page-fetch";
 import { Card } from "./designed-ui";
+import { PilotFinalAccount } from "./pilot-final-account";
 
 const exactQuote = z.object({
   documentId: z.guid(), documentVersion: z.number().int(), documentHash: z.string(),
@@ -192,5 +193,6 @@ export function PilotJobContinuation({ jobId, pilotFetch, canWrite, onLive }: {
         <button type="submit" disabled={busy}>Log extra</button>
       </form>}
     </Card>}
+    {job?.baselineDocumentId && canWrite && <PilotFinalAccount jobId={jobId} pilotFetch={pilotFetch}/>}
   </>;
 }

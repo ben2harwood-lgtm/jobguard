@@ -12,6 +12,11 @@ function failure(error: unknown) {
   return NextResponse.json({ code, ...(existingLockId ? { existingLockId } : {}) }, { status: /ALREADY_LOCKED|IDEMPOTENCY|STALE|SOURCE_CHANGED/u.test(code) ? 409 : 400 });
 }
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+    const { pilotWorkspaceRoute } = await import("../../../../../lib/pilot-workspace-route.mjs");
+    return pilotWorkspaceRoute(request, async app => app.finalAccount.reviewExtra((await params).id, await request.json().catch(() => null)));
+  }
+
   if (!await authenticated()) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
   try {
     const body: unknown = await request.json();

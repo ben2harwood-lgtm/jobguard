@@ -114,13 +114,14 @@ export class VariationRepository{
  constructor(private readonly pool:Pool){}
 
  /** AddFinalReviewExtra keeps SH-1 identity/pricing/origin and serializes against the immutable lock. */
- async addFinalReviewExtra(context: VerifiedTenantContext, raw: unknown): Promise<{variationId:string}> {
+ async addFinalReviewExtra(context: VerifiedTenantContext, raw: unknown, pilotGate?: () => void): Promise<{variationId:string}> {
   const checked=finalReviewCaptureV1.safeParse(raw);
   if(!checked.success)throw new BuilderCaptureError("INVALID_BUILDER_CAPTURE");
   const p=variationProposalV1.parse(checked.data.proposal),price=confirmedVariationPriceV1.nullable().parse(checked.data.price),c=checked.data;
   if(!instantV1.nullable().safeParse(c.deviceCapturedAt).success || (price && price.confirmedByMembershipId!==c.actorMembershipId))throw new BuilderCaptureError("INVALID_BUILDER_CAPTURE");
   const legacyJson=captureCanonical({...c,proposal:p,price});
   return withTenant(this.pool,context,async db=>{
+   pilotGate?.();
    const member=(await db.$client.query<{role:string}>(`SELECT role FROM app.membership WHERE tenant_id=$1 AND id=$2 AND role='owner' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>clock_timestamp())`,[context.tenantId,c.actorMembershipId])).rows[0];
    if(!member)throw new BuilderCaptureError("FORBIDDEN");
    const begin=()=>beginRepositoryCommand<{variationId:string}>(db,{tenantId:context.tenantId,actorMembershipId:c.actorMembershipId,
@@ -130,7 +131,8 @@ export class VariationRepository{
    if((await db.$client.query("SELECT 1 FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2",[context.tenantId,p.id])).rowCount){
     const prior=await begin();if(prior.kind==="replay")return prior.result;
    }
-   await db.$client.query(`SELECT app.prepare_final_review_extra($1,$2,$3)`,[context.tenantId,p.jobId,c.actorMembershipId]);
+   const routine = pilotGate ? "app.pilot_prepare_final_review_extra" : "app.prepare_final_review_extra";
+   await db.$client.query(`SELECT ${routine}($1,$2,$3)`,[context.tenantId,p.jobId,c.actorMembershipId]);
    const claimed=await begin();if(claimed.kind==="replay")return claimed.result;
    // Same proposal writer, with a server-selected origin; no human/AI origin is trusted.
    if(!p.existingScopeItemId){await db.$client.query(`INSERT INTO app.scope_identity(id,tenant_id,job_id,state)VALUES($1,$2,$3,'reserved') ON CONFLICT DO NOTHING`,[p.scopeItemId,context.tenantId,p.jobId]);if(p.lineageParentScopeItemId)await db.$client.query(`INSERT INTO app.scope_lineage(tenant_id,job_id,parent_scope_item_id,child_scope_item_id,kind)VALUES($1,$2,$3,$4,'variation') ON CONFLICT DO NOTHING`,[context.tenantId,p.jobId,p.lineageParentScopeItemId,p.scopeItemId]);}
