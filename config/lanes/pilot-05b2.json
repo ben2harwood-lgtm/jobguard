@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-05b2": {
+      "branches": [
+        "codex/sandbox/pilot-05b2"
+      ],
+      "note": "RED pilot Final Check reveal, dispute and human confirmation with invoice policy pending.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/pilot-final-check.ts",
+        "apps/web/app/(designed)/pilot-final-account.tsx",
+        "apps/web/app/api/jobs/[id]/customer-invoices/route.ts",
+        "apps/web/app/api/jobs/[id]/final-check/catches/route.ts",
+        "apps/web/app/api/jobs/[id]/final-check/dispositions/route.ts",
+        "apps/web/app/api/jobs/[id]/final-check/disputes/route.ts",
+        "apps/web/app/api/jobs/[id]/final-check/route.ts",
+        "apps/web/app/lib/pilot-workspace-server.test.ts",
+        "apps/web/app/ui/final-check-reveal.tsx",
+        "apps/web/e2e/pilot-04a.browser.ts",
+        "packages/db/migration-notes/0779_pilot_final_check_reveal.md",
+        "packages/db/migrations/0779_pilot_final_check_reveal.sql",
+        "packages/db/src/final-check-repository.ts",
+        "packages/db/test/final-check-rerun-upgrade.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0779_pilot_final_check_reveal.proof.json",
+        "packages/db/test/pilot-final-check.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/real-fc-ordinary-words-saved-estimate.integration.test.ts"
+      ]
+    }
+  }
+}

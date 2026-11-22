@@ -1,7 +1,7 @@
 import { execFileSync, fork, type ChildProcess } from "node:child_process";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { request as httpRequest } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,6 +17,8 @@ const fixtureDatabase = "jobguard_pilot_browser";
 const tenant = randomUUID(), other = randomUUID(), sessionToken = randomBytes(32).toString("base64url");
 let origin: string, directory: string, database: EmbeddedPostgres, admin: Pool;
 let server: ChildProcess | undefined;
+let storage: ReturnType<typeof createServer>;
+let storedPhoto: { key: string; bytes: Buffer } | undefined;
 let identityFixture: { member: string; digest: string; secret: string };
 
 test.beforeAll(async () => {
@@ -38,13 +40,31 @@ test.beforeAll(async () => {
   await migrate(admin);
   await admin.query(`ALTER ROLE jobguard_runtime LOGIN PASSWORD '${runtimePassword}'; ALTER ROLE jobguard_identity LOGIN PASSWORD '${identityPassword}'`);
 
+  storage = createServer((request, response) => {
+    const url = new URL(request.url!, "http://127.0.0.1");
+    if (!request.headers.authorization) {
+      response.writeHead(403).end();
+    } else if (url.searchParams.has("versioning")) {
+      response.writeHead(200, { "content-type": "application/xml" })
+        .end("<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>");
+    } else if (storedPhoto && url.pathname === `/jobguard-pilot-browser/${storedPhoto.key}` &&
+      url.searchParams.get("versionId") === "fictional-v1") {
+      response.writeHead(200, { "x-amz-version-id": "fictional-v1", "content-type": "image/png",
+        "content-length": storedPhoto.bytes.length }).end(request.method === "HEAD" ? undefined : storedPhoto.bytes);
+    } else {
+      response.writeHead(404).end();
+    }
+  });
+  await new Promise<void>(resolve => storage.listen(0, "127.0.0.1", resolve));
+  const address = storage.address();
+  if (!address || typeof address === "string") throw new Error("Missing fixture storage port");
   const bindings = {
     PILOT_RUNTIME_DATABASE_URL: url("jobguard_runtime", runtimePassword),
     IDENTITY_DATABASE_URL: url("jobguard_identity", identityPassword),
     AUTH_CODE_SECRET: randomBytes(32).toString("hex"),
     AUTH_ALLOWED_ORIGIN: origin,
     PILOT_API_ORIGIN: "https://pilot-api-browser.invalid",
-    S3_ENDPOINT: "https://fixture-storage.invalid",
+    S3_ENDPOINT: `http://127.0.0.1:${address.port}`,
     S3_REGION: "fictional",
     S3_BUCKET: "jobguard-pilot-browser",
     S3_ACCESS_KEY_ID: "fictional-browser-key",
@@ -88,6 +108,7 @@ test.afterAll(async () => {
     server.kill();
     await exited;
   }
+  if (storage) await new Promise<void>(resolve => storage.close(() => resolve()));
   if (database && admin) await closeTestDatabase(database, join(directory, "db"), admin);
   if (directory) await rm(directory, { recursive: true, force: true });
 });
@@ -336,3 +357,129 @@ async function checkDirectNestRead(jobId: string, cookie: string, expected: unkn
     }
   }
 }
+
+test("pilot owner locks, waits for a certificate, disputes and confirms a draft while invoices are pending", async ({ page, context }) => {
+  await page.setViewportSize({ width: 1080, height: 900 });
+  await context.addCookies([{ name: "__Host-jobguard_pilot_session", value: sessionToken, url: origin,
+    httpOnly: true, secure: true, sameSite: "Lax" }]);
+  await stagePilotQuote(page, 1080);
+  await page.getByRole("button", { name: "Record fixture acceptance" }).click();
+  await expect(page.getByText(/Acceptance recorded from a customer fixture/)).toBeVisible();
+  await page.getByRole("button", { name: "Switch this job live" }).click();
+  await expect(page.getByText("Job live on the accepted quote. No JobGuard charge.")).toBeVisible();
+  const jobId = new URL(page.url()).pathname.split("/")[2]!;
+  await page.getByRole("button", { name: "Start work", exact: true }).click();
+  await expect(page.getByText("In progress", { exact: true })).toBeVisible();
+  const finalCheck = `/api/jobs/${jobId}/final-check`;
+  const { csrfToken } = await page.evaluate(async () =>
+    (await fetch("/api/auth/session")).json() as Promise<{ csrfToken: string }>);
+  const headers = { "x-csrf-token": csrfToken, "x-tenant-id": tenant };
+  const readCheck = () => page.evaluate(async ({ finalCheck, headers }) => {
+    const response = await fetch(finalCheck, { headers, cache: "no-store" });
+    return { status: response.status, body: await response.json() };
+  }, { finalCheck, headers });
+
+  await expect(page.getByText("Final Check terms are not yet approved.")).toBeVisible();
+  await expect(page.getByTestId("final-check-reveal")).toHaveCount(0);
+  const unlocked = await readCheck();
+  expect(unlocked).toEqual({ status: 200, body: { state: "unlocked", items: [], message: null } });
+
+  const nativeImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<unknown>;
+  const dbModule = await nativeImport(pathToFileURL(join(process.cwd(), "../../packages/db/dist/index.js")).href) as typeof import("@jobguard/db");
+  const workerModule = await nativeImport(pathToFileURL(join(process.cwd(), "../api/dist/pilot-worker.js")).href) as typeof import("../../api/src/pilot-worker.js");
+  const { generatePracticePng } = await nativeImport(pathToFileURL(join(process.cwd(), "../../packages/db/dist/practice-proof-image.js")).href) as
+    typeof import("../../../packages/db/src/practice-proof-image.js");
+  const { pilotFixtureFinalCheckPorts } = await nativeImport(pathToFileURL(join(process.cwd(), "../../packages/db/dist/shadow-detection-repository.js")).href) as
+    typeof import("../../../packages/db/src/shadow-detection-repository.js");
+  const photo = generatePracticePng();
+  const photoHash = createHash("sha256").update(photo).digest("hex");
+  const scope = (await admin.query("SELECT id FROM app.scope_identity WHERE tenant_id=$1 AND job_id=$2 AND state='confirmed'",
+    [tenant, jobId])).rows[0].id as string;
+  const proofPath = `/api/jobs/${jobId}/proof`;
+  const upload = await post<{ uploadId: string; uploadUrl: string }>(page, proofPath, {
+    version: "pilot-proof.v1", action: "begin", commandId: randomUUID(), scopeItemId: scope,
+    expectedSha256: photoHash, byteLength: photo.length, contentType: "image/png",
+  }, headers);
+  expect(upload.status, JSON.stringify(upload.body)).toBe(200);
+  const key = new URL(upload.body.uploadUrl).pathname.replace(/^\/jobguard-pilot-browser\//u, "");
+  storedPhoto = { key, bytes: photo };
+  const proof = await post<{ evidenceId: string }>(page, proofPath, {
+    version: "pilot-proof.v1", action: "finalize", commandId: randomUUID(), uploadId: upload.body.uploadId,
+    objectVersionId: "fictional-v1",
+  }, headers);
+  expect(proof.status, JSON.stringify(proof.body)).toBe(200);
+  const evidence = proof.body.evidenceId;
+  const receipt = (await admin.query("SELECT server_received_at::text AS received FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",
+    [tenant, evidence])).rows[0];
+  const descriptions = ["Fitted shelving units", "Installed kitchen tiles"] as const;
+  for (const description of descriptions) {
+    const signal = randomUUID();
+    await admin.query(`INSERT INTO app.shadow_commercial_signal(
+      tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
+      VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),$5,'low','held_for_final_check')`,
+    [tenant, jobId, signal, randomUUID(), description]);
+    await admin.query(`INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at)
+      VALUES($1,$2,$3,$4,'fictional-v1',$5,$6)`, [tenant, jobId, signal, evidence, photoHash, receipt.received]);
+    await expect(page.getByText(description, { exact: true })).toHaveCount(0);
+  }
+  expect(await readCheck()).toEqual(unlocked);
+  await expect(page.getByTestId("final-check-reveal")).toHaveCount(0);
+
+  const terms = "pilot_final_check_terms.v1";
+  await admin.query("INSERT INTO app.pilot_final_check_terms_approval(tenant_id,version,approval_sha256) VALUES($1,$2,$3)",
+    [tenant, terms, createHash("sha256").update(terms).digest("hex")]);
+  await page.reload();
+  await page.getByRole("button", { name: "Mark complete" }).click();
+  await expect(page.getByText("Complete", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Prepare final account" }).click();
+  await page.getByRole("combobox", { name: /Paint shed/ }).selectOption("done");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Complete final account" }).click();
+  await expect(page.getByText("Final account locked.", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("final-check-status")).toContainText("Running JobGuard's final check");
+
+  const runtimeUrl = new URL(process.env.PILOT_RUNTIME_DATABASE_URL!);
+  const shadowPassword = randomUUID();
+  await admin.query(`CREATE ROLE jobguard_pilot_shadow_login LOGIN PASSWORD '${shadowPassword}';
+    GRANT jobguard_shadow,jobguard_pilot_final_check TO jobguard_pilot_shadow_login`);
+  runtimeUrl.username = "jobguard_pilot_shadow_login";
+  runtimeUrl.password = shadowPassword;
+  const shadow = new Pool({ connectionString: runtimeUrl.toString() });
+  try {
+    const { rows } = await shadow.query("SELECT * FROM app.pilot_final_check_requests()");
+    const reservation = rows.find(row => row.job_id === jobId);
+    expect(reservation).toBeDefined();
+    const task = { version: "final-check-task.v1" as const, jobId, tenantId: tenant,
+      lockId: reservation.lock_id, manifestId: reservation.manifest_id, executionId: randomUUID() };
+    await shadow.query("SELECT app.pilot_final_check_ack($1,$2,$3,$4)", [tenant, jobId, task.lockId, task.manifestId]);
+    const { requirePilotG1 } = await nativeImport(pathToFileURL(join(process.cwd(), "../../packages/config/dist/index.js")).href) as typeof import("../../../packages/config/src/index.js");
+    const executor = workerModule.pilotFinalCheckExecutor(shadow, () => requirePilotG1(process.env), pool => {
+      const certificates = new dbModule.FinalCheckCompletionRepository(pool);
+      return { worker: pilotFixtureFinalCheckPorts(pool, photoHash), publish: certificates.publish.bind(certificates) };
+    });
+    const actor = (await admin.query("SELECT identity_user_id FROM app.membership WHERE tenant_id=$1 AND id=$2",
+      [tenant, identityFixture.member])).rows[0];
+    // The fixture leaves request credentials off the worker context. The dedicated
+    // shadow login still has to bind the exact persisted reservation in PostgreSQL.
+    const workerContext = dbModule.verifiedTenantContextFromMembership({
+      tenantId: tenant, membershipId: identityFixture.member, identityUserId: actor.identity_user_id,
+    } as Parameters<typeof dbModule.verifiedTenantContextFromMembership>[0]);
+    await workerModule.pilotWorkerTasks(payload => executor(workerContext, payload)).final_check!(task, {} as never);
+    expect((await admin.query("SELECT check_id FROM app.shadow_final_check_completion WHERE tenant_id=$1 AND job_id=$2",
+      [tenant, jobId])).rows).toEqual([{ check_id: task.manifestId }]);
+  } finally { await shadow.end(); }
+
+  const findings = page.getByTestId("final-check-reveal");
+  const disputed = findings.locator("article").filter({ hasText: descriptions[0] });
+  await disputed.getByRole("button", { name: "Dispute without a reference" }).click();
+  await expect(findings.getByTestId("final-check-disputes")).toContainText("1 answer is disputed");
+  const confirmed = findings.locator("article").filter({ hasText: descriptions[1] });
+  await confirmed.getByRole("button", { name: "Yes — this was extra work" }).click();
+  await expect(confirmed.getByTestId("final-check-disposition")).toContainText("added to your extras as a draft");
+  await expect(page.getByText("Installed kitchen tiles · draft", { exact: true })).toBeVisible();
+
+  await expect(page.getByText("Invoices are not yet available in the pilot until the invoice rules are approved.")).toBeVisible();
+  expect(await post(page, `/api/jobs/${jobId}/customer-invoices`, {}, headers))
+    .toEqual({ status: 409, body: { code: "PILOT_INVOICE_POLICY_PENDING" } });
+  expect((await admin.query("SELECT 1 FROM app.customer_invoice WHERE tenant_id=$1 AND job_id=$2", [tenant, jobId])).rowCount).toBe(0);
+});

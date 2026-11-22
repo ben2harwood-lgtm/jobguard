@@ -437,6 +437,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const pilotFinalCheckBodies = new Map<string, string>();
   for (const match of pilotFinalCheckSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
     pilotFinalCheckBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
+  const pilotRevealSql = await readFile(new URL("../migrations/0779_pilot_final_check_reveal.sql", import.meta.url), "utf8");
+  for (const match of pilotRevealSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
+    pilotFinalCheckBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);

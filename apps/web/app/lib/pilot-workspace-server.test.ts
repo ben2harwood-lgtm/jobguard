@@ -30,6 +30,10 @@ import { GET as readProof, POST as saveProof } from "../api/jobs/[id]/proof/rout
 import { GET as readFinalAccount, POST as assembleFinalAccount } from "../api/jobs/[id]/final-account/route";
 import { POST as lockFinalAccount } from "../api/jobs/[id]/final-account/lock/route";
 import { POST as recordScopeDisposition } from "../api/jobs/[id]/final-account/dispositions/route";
+import { GET as readFinalCheck } from "../api/jobs/[id]/final-check/route";
+import { GET as readFinalCheckDisputes } from "../api/jobs/[id]/final-check/disputes/route";
+import { POST as confirmFinalCheckCatch } from "../api/jobs/[id]/final-check/catches/route";
+import { POST as issuePilotInvoice } from "../api/jobs/[id]/customer-invoices/route";
 
 
 
@@ -415,6 +419,17 @@ it("captures, confirms and stages the exact pilot PDF and invitation through bou
     baseline_quote_version_id: accept.documentId, obligations: 0, journals: 0 }]);
   const accountPath = `${path}/final-account`;
   const lockPath = `${accountPath}/lock`;
+  const checkPath = `${path}/final-check`;
+  expect(await readOk(await readFinalCheck(pilotRequest(checkPath), route)))
+    .toEqual({ state: "unlocked", items: [], message: null });
+  expect((await readFinalCheck(pilotRequest(checkPath), { params: Promise.resolve({ id: practiceJob }) })).status).toBe(404);
+  expect((await readFinalCheck(pilotRequest(checkPath), { params: Promise.resolve({ id: jobB }) })).status).toBe(404);
+  await admin.query("UPDATE app.membership SET role='read_only' WHERE id=$1", [member]);
+  try {
+    expect((await readFinalCheck(pilotRequest(checkPath), route)).status).toBe(403);
+    expect((await issuePilotInvoice(pilotRequest(`${path}/customer-invoices`, {}), route)).status).toBe(403);
+  } finally { await admin.query("UPDATE app.membership SET role='owner' WHERE id=$1", [member]); }
+
   expect(await readOk(await readFinalAccount(pilotRequest(accountPath), route))).toMatchObject({
     jobId: id, termsApproved: false, lock: null, account: null,
   });
@@ -439,6 +454,20 @@ it("captures, confirms and stages the exact pilot PDF and invitation through bou
   expect(await readOk(await readFinalAccount(pilotRequest(accountPath), route)))
     .toMatchObject({ termsApproved: true, lock: locked.lock });
   expect(await readOk(await lockFinalAccount(pilotRequest(lockPath, lockCommand), route))).toEqual(locked);
+  const pending = await readFinalCheck(pilotRequest(checkPath), route);
+  expect(pending.headers.get("Cache-Control")).toBe("no-store");
+  expect(await readOk(pending)).toMatchObject({ state: "pending", lockId: locked.lock.id, items: [] });
+  expect(await readOk(await readFinalCheckDisputes(pilotRequest(`${checkPath}/disputes`), route))).toEqual([]);
+  const rejected = await confirmFinalCheckCatch(pilotRequest(`${checkPath}/catches`, {
+    version: "final-check.catch.v1", commandId: randomUUID(), lockId: locked.lock.id, runId: randomUUID(),
+    signalId: randomUUID(), expectedSignalRevision: 0,
+  }), route);
+  expect(rejected.ok).toBe(false);
+  expect(await rejected.json()).toEqual({ code: "FINAL_CHECK_PENDING" });
+  const invoice = await issuePilotInvoice(pilotRequest(`${path}/customer-invoices`, {}), route);
+  expect(invoice.status).toBe(409);
+  expect(await invoice.json()).toEqual({ code: "PILOT_INVOICE_POLICY_PENDING" });
+
   expect((await admin.query("SELECT onboarding_terms_version FROM app.final_account_lock WHERE job_id=$1", [id])).rows)
     .toEqual([{ onboarding_terms_version: "pilot_final_check_terms.v1" }]);
   expect(blockedPractice).not.toHaveBeenCalled();

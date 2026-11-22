@@ -46,12 +46,20 @@ function failure(error: unknown, issuing = false) {
  // SQL diagnostics and other unexpected failures are never a public error code.
  return NextResponse.json({ code: "INTERNAL_SERVER_ERROR" }, { status: 500, headers: noStore });
 }
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+ if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+  const { pilotWorkspaceRoute } = await import("../../../../lib/pilot-workspace-route.mjs");
+  return pilotWorkspaceRoute(request, async app => app.invoicePolicyPending((await params).id));
+ }
  if (!await auth()) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401, headers: noStore });
  try { return NextResponse.json(await (await workspaceApplication()).customerInvoice.get((await params).id), { headers: noStore }); }
  catch (error) { return failure(error); }
 }
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+ if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+  const { pilotWorkspaceRoute } = await import("../../../../lib/pilot-workspace-route.mjs");
+  return pilotWorkspaceRoute(request, async app => app.invoicePolicyPending((await params).id));
+ }
  if (!await auth()) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401, headers: noStore });
  try { return NextResponse.json(await (await workspaceApplication()).customerInvoice.issue((await params).id, await request.json()), { headers: noStore }); }
  catch (error) { return failure(error, true); }

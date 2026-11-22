@@ -4,6 +4,7 @@ import { FINAL_ACCOUNT_DECLARATION, FINAL_ACCOUNT_DECLARATION_VERSION } from "@j
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { pounds } from "../lib/pounds";
+import { FinalCheckReveal } from "../ui/final-check-reveal";
 import { Card } from "./designed-ui";
 
 const viewSchema = z.object({
@@ -118,6 +119,7 @@ export function PilotFinalAccount({ jobId, pilotFetch }: { jobId: string; pilotF
         })}>Complete final account</button>
       </>}
     </Card>
-    <p>Final Check certificates, revealing findings, disputing or confirming findings, and customer invoices are not yet available in the pilot.</p>
+    {view?.lock && <FinalCheckReveal jobId={jobId} pilotFetch={pilotFetch}/>}
+    <p>Invoices are not yet available in the pilot until the invoice rules are approved.</p>
   </>;
 }
