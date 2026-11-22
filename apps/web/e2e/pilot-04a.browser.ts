@@ -184,11 +184,12 @@ for (const viewport of [{ width: 360, height: 800 }, { width: 1280, height: 800 
     await page.getByRole("button", { name: "Start work", exact: true }).click();
     await expect(page.getByText("In progress", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Mark complete" })).toBeDisabled();
-    await page.getByLabel("Extra work").fill("Paint the fictional shelf");
-    await page.getByRole("button", { name: "Log extra" }).click();
-    await expect(page.getByText("Paint the fictional shelf · draft")).toBeVisible();
+    const extras = page.locator("section.card").filter({ has: page.getByRole("heading", { name: "Extras", exact: true }) });
+    await extras.getByRole("textbox", { name: "Extra work", exact: true }).fill("Paint the fictional shelf");
+    await extras.getByRole("button", { name: "Log extra", exact: true }).click();
+    await expect(extras.getByText("Paint the fictional shelf · draft", { exact: true })).toBeVisible();
     await page.reload();
-    await expect(page.getByText("Paint the fictional shelf · draft")).toBeVisible();
+    await expect(extras.getByText("Paint the fictional shelf · draft", { exact: true })).toBeVisible();
     await page.goto(`${origin}/jobs`);
     await expect(page.getByText(title)).toBeVisible();
   });
