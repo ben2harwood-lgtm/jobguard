@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-10": {
+      "branches": ["codex/sandbox/pilot-10"],
+      "note": "RED pilot measurement and restricted no-charge report. This lane file is implicitly permitted.",
+      "allow": [
+        "docs/operations/m1-15s-read-records.md",
+        "packages/core/src/shadow-pilot-financial-record.ts",
+        "packages/core/src/shadow-pilot-report.test.ts",
+        "packages/core/src/shadow-pilot-report.ts",
+        "packages/db/src/shadow-pilot-financial-reader.ts",
+        "packages/db/test/shadow-pilot-financial.integration.test.ts"
+      ]
+    }
+  }
+}
