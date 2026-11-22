@@ -5,12 +5,15 @@ import {FinalCheckRepository} from '../src/final-check-repository.js';
 import {FinalCheckCompletionRepository} from '../src/shadow-detection-repository.js';
 import {createFinalCheckFixture,closeFinalCheckFixture,seedFinalCheckJob,insertFinalCheckEvidence,type FinalCheckFixture} from './final-check-fixture.js';
 import {installLegacySyntheticPartyFixtures} from './pool-test-utils.js';
-const own='0698_final_check_post_invoice_rerun.sql';let f:FinalCheckFixture;
+const own='0698_final_check_post_invoice_rerun.sql';
+const pilotSuccessor='0777_pilot_final_check.sql';
+let f:FinalCheckFixture;
 beforeAll(async()=>{vi.stubEnv('JOBGUARD_ENV','synthetic_demo');f=await createFinalCheckFixture(false);
  await f.admin.query('CREATE TABLE public.jobguard_schema_migration(migration_name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT clock_timestamp())');
- // Install the exact predecessor schema with the ordinary migration runner.
- await f.admin.query('INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1)',[own]);await migrate(f.admin);
- await f.admin.query('DELETE FROM public.jobguard_schema_migration WHERE migration_name=$1',[own]);
+ // 0777 depends on the request's manifest reservation added by 0698. Apply
+ // both in their registered order only after populating the predecessor.
+ await f.admin.query('INSERT INTO public.jobguard_schema_migration(migration_name) VALUES($1),($2)',[own,pilotSuccessor]);await migrate(f.admin);
+ await f.admin.query('DELETE FROM public.jobguard_schema_migration WHERE migration_name IN ($1,$2)',[own,pilotSuccessor]);
  await installLegacySyntheticPartyFixtures(f.admin);
  await f.admin.query('GRANT jobguard_runtime TO '+f.runtime.options.user);await f.admin.query('GRANT jobguard_shadow TO '+f.shadow.options.user);
 },60000);

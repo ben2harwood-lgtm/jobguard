@@ -12,6 +12,7 @@ const databases = {
   PILOT_RUNTIME_DATABASE_URL: /^jobguard_runtime$/u,
   IDENTITY_DATABASE_URL: /^jobguard_identity$/u,
   WORKER_DATABASE_URL: /^jobguard_pilot_worker_login$/u,
+  PILOT_SHADOW_DATABASE_URL: /^jobguard_pilot_shadow_login$/u,
   GRAPHILE_DATABASE_URL: /^jobguard_pilot_queue_login$/u,
 } as const;
 type DatabaseSetting = keyof typeof databases;
@@ -89,7 +90,10 @@ export function requirePilotResources(env: Environment, process: PilotProcess) {
   }
 
   const settings: DatabaseSetting[] = ["PILOT_RUNTIME_DATABASE_URL", "IDENTITY_DATABASE_URL"];
-  if (process === "worker") settings.push("WORKER_DATABASE_URL", "GRAPHILE_DATABASE_URL");
+  if (process === "worker") {
+    settings.push("WORKER_DATABASE_URL", "GRAPHILE_DATABASE_URL");
+    if (env.PILOT_SHADOW_DATABASE_URL !== undefined || pins.PILOT_SHADOW_DATABASE_URL !== undefined) settings.push("PILOT_SHADOW_DATABASE_URL");
+  }
   const passwords = new Set([pinned("AUTH_CODE_SECRET"), pinned("S3_SECRET_ACCESS_KEY")]);
   if (passwords.size !== 2) throw new PilotResourceError("S3_SECRET_ACCESS_KEY");
   for (const setting of settings) {
@@ -106,13 +110,17 @@ export function requirePilotResources(env: Environment, process: PilotProcess) {
   if (worker && (new URL(worker).host !== new URL(runtime).host || new URL(worker).pathname !== new URL(runtime).pathname)) {
     throw new PilotResourceError("WORKER_DATABASE_URL");
   }
-  return { webOrigin, apiOrigin, runtime, identity, queue, worker };
+  const shadow = settings.includes("PILOT_SHADOW_DATABASE_URL") ? pinned("PILOT_SHADOW_DATABASE_URL") : undefined;
+  if (shadow && (new URL(shadow).host !== new URL(runtime).host || new URL(shadow).pathname !== new URL(runtime).pathname)) {
+    throw new PilotResourceError("PILOT_SHADOW_DATABASE_URL");
+  }
+  return { webOrigin, apiOrigin, runtime, identity, queue, worker, shadow };
 }
 
 /** Reserve pilot resource names even when a legacy deployment has no pilot manifest. */
 export function refusePilotResourcesOutsidePilot(env: Environment): void {
   if (env.JOBGUARD_ENV === "pilot_no_charge") return;
-  if (env.JOBGUARD_PILOT_RESOURCES || ["PILOT_RUNTIME_DATABASE_URL", "PILOT_API_ORIGIN", "PILOT_RESTORE_DATABASE_URL",
+  if (env.JOBGUARD_PILOT_RESOURCES || ["PILOT_RUNTIME_DATABASE_URL", "PILOT_SHADOW_DATABASE_URL", "PILOT_API_ORIGIN", "PILOT_RESTORE_DATABASE_URL",
       "PILOT_RESTORE_BUCKET", "PILOT_RESTORE_S3_ENDPOINT", "PILOT_RESTORE_S3_ACCESS_KEY_ID", "PILOT_RESTORE_S3_SECRET_ACCESS_KEY"].some(key => env[key]) ||
       ["DATABASE_URL", "RUNTIME_DATABASE_URL", "SHADOW_DATABASE_URL", "IDENTITY_DATABASE_URL",
         "WORKER_DATABASE_URL", "GRAPHILE_DATABASE_URL", "MIGRATION_DATABASE_URL"].some(setting => {
