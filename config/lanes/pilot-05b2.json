@@ -7,6 +7,7 @@
       ],
       "note": "RED pilot Final Check reveal, dispute and human confirmation with invoice policy pending.",
       "allow": [
+        "packages/core/package.json",
         "apps/api/src/workspace/application.ts",
         "apps/api/src/workspace/pilot-final-check.ts",
         "apps/web/app/(designed)/pilot-final-account.tsx",
