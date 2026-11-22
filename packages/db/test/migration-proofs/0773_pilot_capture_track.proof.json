@@ -2,11 +2,68 @@
   "migration": "0773_pilot_capture_track.sql",
   "lp0": [
     {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-pilot-capture-binding",
+        "description": "The pilot capture trigger checks that the current protected request is a real, unscoped binding for the capture tenant. The predicate returns a boolean and does not disclose the binding record.",
+        "title": "Private pilot capture binding predicate",
+        "cards": [
+          "LP-6a",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6a": "Reuse the protected request binding to verify the tenant and credential kind for pilot capture.",
+          "LP-12": "Keep the predicate under the binding owner with its sole non-owner EXECUTE grant to jobguard_migration."
+        },
+        "sources": [
+          "packages/db/migrations/0773_pilot_capture_track.sql"
+        ],
+        "tests": [
+          "apps/web/app/lib/pilot-workspace-server.test.ts",
+          "packages/db/test/lp-0-grant-freeze.integration.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-pilot-capture-binding",
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Keep EXECUTE limited to the binding owner and the migration-owned trigger caller."
+        },
+        "downstream": "The pilot capture trigger checks that the current protected request is a real, unscoped binding for the capture tenant. The predicate returns a boolean and does not disclose the binding record.",
+        "path": "ap-pilot-capture-binding",
+        "title": "Private pilot capture binding predicate",
+        "cards": [
+          "LP-6a",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6a": "Reuse the protected request binding to verify the tenant and credential kind for pilot capture.",
+          "LP-12": "Keep the predicate under the binding owner with its sole non-owner EXECUTE grant to jobguard_migration."
+        },
+        "sources": [
+          "packages/db/migrations/0773_pilot_capture_track.sql"
+        ],
+        "tests": [
+          "apps/web/app/lib/pilot-workspace-server.test.ts",
+          "packages/db/test/lp-0-grant-freeze.integration.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
       "section": "entries",
       "before": null,
       "after": {
         "key": "acl|routine|function:app.pilot_capture_real_binding(uuid)|jobguard_migration|EXECUTE|-",
-        "group": "a-bound-context-reader"
+        "group": "a-pilot-capture-binding"
       }
     },
     {
@@ -14,7 +71,7 @@
       "before": null,
       "after": {
         "key": "owner|routine|function:app.pilot_capture_real_binding(uuid)|jobguard_binding_owner",
-        "group": "a-bound-context-reader"
+        "group": "a-pilot-capture-binding"
       }
     },
     {
