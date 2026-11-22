@@ -25,8 +25,11 @@
         "packages/db/src/index.ts",
         "packages/db/src/invoice-email-repository.ts",
         "packages/db/src/worker-action-executor.ts",
+        "packages/db/test/job-work-state-upgrade.integration.test.ts",
+        "packages/db/test/lp5-command-catalog.ts",
         "packages/db/test/migration-proofs/0778_pilot_commercial_email.proof.json",
-        "packages/db/test/pilot-customer-portal.integration.test.ts"
+        "packages/db/test/pilot-customer-portal.integration.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts"
       ]
     }
   }
