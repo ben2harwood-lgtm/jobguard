@@ -387,6 +387,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   ]);
   const pilotFinalCheckSql = await readFile(new URL("../migrations/0777_pilot_final_check.sql", import.meta.url), "utf8");
   const pilotRevealSql = await readFile(new URL("../migrations/0779_pilot_final_check_reveal.sql", import.meta.url), "utf8");
+  const receiptDedupSql = await readFile(new URL("../migrations/0780_receipt_deduplication.sql", import.meta.url), "utf8");
+  const receiptDedupBody = receiptDedupSql.split("CREATE OR REPLACE FUNCTION app.record_practice_customer_receipt(")[1]!
+    .split("AS $$")[1]!.split("$$;")[0]!;
   const pilotRevealRoutines = new Set([
     "app.read_final_check_reveal(t uuid, j uuid, d text)",
     "app.read_final_check_disputes(t uuid, j uuid, d text)",
@@ -431,6 +434,12 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     // 0775 replaces these exact bodies; the catalogue proof below still checks all routine privileges.
     const identity = `${prior.nspname}.${prior.proname}(${prior.args})`;
+    if (identity === "app.record_practice_customer_receipt(p_tenant uuid, p_job uuid, p_invoice uuid, p_actor uuid, p_command uuid, p_paid_on date, p_amount bigint, p_method text, p_reference text)") {
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => receiptDedupBody));
+      expect(current?.source).toBe(receiptDedupBody);
+      continue;
+    }
     if (pilotFinalCheckRoutines.has(identity) || pilotRevealRoutines.has(identity)) {
       expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
       const source = pilotRevealRoutines.has(identity) ? pilotRevealSql : pilotFinalCheckSql;
