@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "receipt-dup-1": {
+      "branches": [
+        "codex/sandbox/receipt-dup-1"
+      ],
+      "allow": [
+        "packages/db/migrations/0780_receipt_deduplication.sql",
+        "packages/db/test/UIWIRE-12.integration.test.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/migration-proofs/0780_receipt_deduplication.proof.json",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts"
+      ]
+    }
+  }
+}
