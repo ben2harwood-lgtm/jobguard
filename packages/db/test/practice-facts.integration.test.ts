@@ -71,8 +71,8 @@ async function invoice(jobId: string) {
   const issued = await invoices.issue(context, { jobId, finalAccountRevisionId: revisionId, actorMembershipId: DEMO_MEMBERSHIP_ID, commandId: randomUUID(), recipient: "practice@example.invalid", issuedOn: "2026-09-19" });
   return { invoices, invoiceId: issued.id };
 }
-async function receipt(f: { jobId: string }, inv: Awaited<ReturnType<typeof invoice>>, amountPence: number) {
-  return (await inv.invoices.recordReceipt(context, { jobId: f.jobId, invoiceId: inv.invoiceId, actorMembershipId: DEMO_MEMBERSHIP_ID, commandId: randomUUID(), paidOn: "2026-09-18", amountPence, method: "bank_transfer", reference: "Fictional receipt" })).paymentId;
+async function receipt(f: { jobId: string }, inv: Awaited<ReturnType<typeof invoice>>, amountPence: number, reference = "Fictional receipt") {
+  return (await inv.invoices.recordReceipt(context, { jobId: f.jobId, invoiceId: inv.invoiceId, actorMembershipId: DEMO_MEMBERSHIP_ID, commandId: randomUUID(), paidOn: "2026-09-18", amountPence, method: "bank_transfer", reference })).paymentId;
 }
 // Tenant-wide row counts of every table a settled movement must never reach.
 const moneyTables = async () => Object.fromEntries(await Promise.all(["landing_allocation", "landing_reversal", "recovery_fee_journal", "recovery_fee_derivation", "synthetic_recovery_receipt", "simulated_settlement_event", "journal", "journal_line"]
@@ -253,7 +253,7 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
   });
   it("ordinary £120 receipt stays merged beside the separate matched F18 £120 interest receipt", async () => {
     const f = await connected(), inv = await invoice(f.jobId);
-    const ordinaryId = await receipt(f, inv, 12000), interestId = await receipt(f, inv, 12000);
+    const ordinaryId = await receipt(f, inv, 12000), interestId = await receipt(f, inv, 12000, "Fictional interest receipt");
     const interest = practiceFactsCatalogueV1.find(e => e.fixture === "F18-outside-vat" && e.grossPence === 12000)!;
     let facts = await factsCmd(f, 1, { action: "advance", movement: interest.movement, step: "settled" });
     facts = await factsCmd(f, facts.revision, { action: "match_receipt", movement: interest.movement, paymentId: interestId });
@@ -271,7 +271,7 @@ describe("PRACTICE-FACTS-1 real PostgreSQL (written first; NOT RUN in builder sa
       let facts = await factsView(f);
       facts = await factsCmd(f, facts.revision, { action: "advance", movement: e.movement, step: "settled" });
       if (e.kind === "customer_receipt") {
-        const paymentId = await receipt(f, inv, e.grossPence);
+        const paymentId = await receipt(f, inv, e.grossPence, `Fictional ${e.movement}`);
         await factsCmd(f, facts.revision, { action: "match_receipt", movement: e.movement, paymentId });
       }
     }
