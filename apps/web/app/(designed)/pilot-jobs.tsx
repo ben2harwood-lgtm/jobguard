@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { captureWorkspaceResponseV1, type CaptureWorkspaceResponse } from "@jobguard/api/capture-contracts";
@@ -11,6 +11,7 @@ import { jobPageFetch } from "../ui/job-page-fetch";
 import { ReviewProposal } from "../ui/review-proposal";
 import { jobStatusLabels } from "../ui/workspace-lifecycle";
 import { Card, Legacy, statusTag } from "./designed-ui";
+import { PilotJobContinuation } from "./pilot-job-continuation";
 
 const sessionSchema = z.object({
   environment: z.literal("pilot_no_charge"),
@@ -48,7 +49,7 @@ export function PilotJobs({ screen, jobId }: { screen: "list" | "capture" | "rev
   return <main id="main" className="rr-main">
     <header className="rr-header">
       <a href={jobsHref}>JobGuard · Jobs</a>
-      <h1>{screen === "list" ? "Your jobs" : screen === "capture" ? "Start a new job" : "Review the job"}</h1>
+      <h1>{screen === "list" ? "Your jobs" : screen === "capture" ? "Start a new job" : "Job details"}</h1>
       {session && !!session.memberships.length && <label>Business <select value={selected} onChange={event => {
         const tenant = event.target.value;
         history.replaceState(null, "", `${location.pathname}?tenant=${encodeURIComponent(tenant)}`);
@@ -61,7 +62,7 @@ export function PilotJobs({ screen, jobId }: { screen: "list" | "capture" | "rev
       {error ? <Card title={error === "UNAUTHENTICATED" ? "Sign in to see your jobs" : "Your workspace could not load"}>
         {error === "UNAUTHENTICATED" ? <a href="/sign-in">Sign in</a> : <button onClick={() => { setError(""); setRetry(value => value + 1); }}>Try again</button>}
       </Card> : !session ? <p role="status">Loading your account…</p> : !member ? <p>No businesses are available to this account.</p>
-        : <PilotWorkspace key={member.tenantId} tenant={member.tenantId} canWrite={member.role === "owner"}
+        : <PilotWorkspace key={`${member.tenantId}:${jobId ?? screen}`} tenant={member.tenantId} canWrite={member.role === "owner"}
             csrfToken={session.csrfToken} screen={screen} jobId={jobId} jobsHref={jobsHref}/>}
     </div>
   </main>;
@@ -75,12 +76,13 @@ function PilotWorkspace({ tenant, canWrite, csrfToken, screen, jobId, jobsHref }
   const [jobs, setJobs] = useState<JobSummary[]>();
   const [proposal, setProposal] = useState<CaptureWorkspaceResponse>();
   const [error, setError] = useState("");
-  const pilotFetch: typeof fetch = (input, init) => {
+  const [isLive, setIsLive] = useState(false);
+  const pilotFetch = useCallback<typeof fetch>((input, init) => {
     const headers = new Headers(init?.headers);
     headers.set("x-csrf-token", csrfToken);
     headers.set("x-tenant-id", tenant);
     return jobPageFetch(input, { ...init, headers, cache: "no-store" });
-  };
+  }, [csrfToken, tenant]);
   useEffect(() => {
     if (screen === "capture") return;
     const controller = new AbortController();
@@ -106,11 +108,15 @@ function PilotWorkspace({ tenant, canWrite, csrfToken, screen, jobId, jobsHref }
   if (screen === "capture") return canWrite ? <Legacy label="Capture job" cards>
     <WalkIt pilotFetch={pilotFetch} tenantId={tenant} mode="own" close={() => router.push(jobsHref)} reviewHref={id => `/jobs/${id}/work${query}`}/>
   </Legacy> : <p>Only the business owner can start a job.</p>;
-  if (screen === "review" && canWrite) return proposal ? <Legacy label="Review and quote" cards>
-    <JobParties jobId={proposal.jobId} pilotFetch={pilotFetch}/>
-    <ReviewProposal result={proposal} back={() => router.push(jobsHref)} onSnapshot={setProposal}
-      pilotFetch={pilotFetch} pilotProfile={<PilotFirmProfile pilotFetch={pilotFetch}/>}/>
-  </Legacy> : <p role="status">Loading the job…</p>;
+  if (screen === "review" && jobId) return <>
+    {!canWrite && !isLive && jobs?.map(job => <p key={job.id}>{job.title} · {jobStatusLabels[job.status]}</p>)}
+    <PilotJobContinuation jobId={jobId} pilotFetch={pilotFetch} canWrite={canWrite} onLive={setIsLive}/>
+    {canWrite && !isLive && (proposal ? <Legacy label="Review and quote" cards>
+      <JobParties jobId={proposal.jobId} pilotFetch={pilotFetch}/>
+      <ReviewProposal result={proposal} back={() => router.push(jobsHref)} onSnapshot={setProposal}
+        pilotFetch={pilotFetch} pilotProfile={<PilotFirmProfile pilotFetch={pilotFetch}/>}/>
+    </Legacy> : <p role="status">Loading the job…</p>)}
+  </>;
   return <Card title={screen === "list" ? "Jobs" : "Saved job"} action={screen === "list" && canWrite ? <a className="btn primary" href={`/jobs/new${query}`}>New job</a> : null}>
     <div data-testid="pilot-jobs-list">
       {!jobs ? <p role="status">Loading jobs…</p> : jobs.length ? jobs.map(job => <article className="job-row" key={job.id}>

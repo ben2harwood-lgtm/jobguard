@@ -30,7 +30,7 @@ export class WorkspaceService {
         FROM app.job j
         JOIN app.job_commercial_track c ON (c.tenant_id,c.job_id) = (j.tenant_id,j.id)
         WHERE j.tenant_id = $1 AND c.job_track = 'small_builder' AND c.environment = 'pilot_no_charge'
-          AND j.practice_session_digest IS NULL AND ($2::uuid IS NULL OR j.id = $2)
+          AND j.practice_session_digest IS NULL AND j.practice_scenario IS NULL AND ($2::uuid IS NULL OR j.id = $2)
           AND NOT EXISTS (
             SELECT 1 FROM app.command_receipt r WHERE r.tenant_id = j.tenant_id
               AND r.command_type = 'job.discard_draft' AND r.status = 'succeeded'

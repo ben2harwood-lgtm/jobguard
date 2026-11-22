@@ -237,3 +237,5 @@ export * from "./worker-action-executor.js";
 export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
 
 export { assertPilotConnection } from "./pilot-connection.js";
+
+export { PilotJobRepository } from "./pilot-job-repository.js";

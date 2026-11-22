@@ -1,3 +1,4 @@
+import { pilotJobContinuation } from "./pilot-job-continuation.js";
 import { PilotG1DeniedError, requirePilotG1 } from "@jobguard/config";
 import { CaptureConflictError, FirmProfileRepository, firmProfileV1, JobPartiesRepository, RequestBindingRefusedError } from "@jobguard/db";
 import { AuthError } from "../auth/auth-provider.js";
@@ -138,6 +139,7 @@ export async function createPilotWorkspaceApplication(
   const parties = new JobPartiesRepository(pool);
   return {
     listJobs: (jobId?: string) => jobs.listPilotJobs(context, jobId),
+    continuation: pilotJobContinuation(pool, context, access),
     capture: {
       create: capture.capture.bind(capture), get: capture.view.bind(capture),
       save: capture.save.bind(capture), confirm: capture.confirm.bind(capture),
@@ -180,12 +182,18 @@ export function pilotWorkspaceFailure(error: unknown): { code: string; status: n
   if (error instanceof Error) {
     const code = "code" in error && error.code !== "22023" ? error.code : error.message;
     switch (code) {
-      case "NOT_FOUND": return { code, status: 404 };
+      case "NOT_FOUND": case "UPLOAD_NOT_FOUND": case "JOB_NOT_FOUND": case "P0002": return { code: "NOT_FOUND", status: 404 };
       case "FORBIDDEN": case "AUTHORIZATION_INVALID": case "TENANT_FORBIDDEN": return { code, status: 403 };
       case "42501": return { code: "FORBIDDEN", status: 403 };
-      case "INVALID_CAPTURE": case "INVALID_QUOTE": case "INVALID_PROFILE": case "INVALID_PARTIES":
+      case "INVALID_COMMAND": case "INVALID_BUILDER_CAPTURE": case "INVALID_CAPTURE": case "INVALID_QUOTE": case "INVALID_PROFILE": case "INVALID_PARTIES":
       case "REVIEW_INCOMPLETE": case "QUOTE_NOT_ISSUABLE": case "JOB_PARTIES_REQUIRED": case "RECIPIENT_CHANGED":
         return { code, status: 400 };
+      case "PROOF_NOT_FINAL": return { code: "PROOF_INVALID", status: 422 };
+      case "PROOF_INVALID": case "OBJECT_INVALID": case "UPLOAD_EXPIRED": return { code, status: 422 };
+      case "40001": return { code: "REVISION_CONFLICT", status: 409 };
+      case "STALE_ACCEPTANCE": case "stale or unissued exact quote": case "superseded exact quote":
+      case "acceptance is not allowed": return { code: "STALE_ACCEPTANCE", status: 409 };
+      case "JOB_NOT_LIVE": case "ACTIVATION_REQUIRED": case "IDEMPOTENCY_CONFLICT":
       case "REVIEW_REVISION_CONFLICT": case "QUOTE_REVISION_CONFLICT": case "COMMAND_CONFLICT":
       case "REVISION_CONFLICT": case "QUOTE_CHANGED": case "STALE_QUOTE_APPROVAL":
         return { code, status: 409 };
