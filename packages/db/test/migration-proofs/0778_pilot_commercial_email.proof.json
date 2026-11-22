@@ -1,5 +1,5 @@
 {
-  "migration": "0777_pilot_commercial_email.sql",
+  "migration": "0778_pilot_commercial_email.sql",
   "lp0": [
     {
       "section": "authorityPaths",
@@ -17,7 +17,7 @@
           "LP-12": "Keep source reads tenant scoped and worker credentials free of table grants."
         },
         "sources": [
-          "packages/db/migrations/0777_pilot_commercial_email.sql"
+          "packages/db/migrations/0778_pilot_commercial_email.sql"
         ],
         "tests": [
           "packages/db/test/pilot-customer-portal.integration.test.ts"
@@ -41,7 +41,7 @@
           "LP-12": "Keep source reads tenant scoped and worker credentials free of table grants."
         },
         "sources": [
-          "packages/db/migrations/0777_pilot_commercial_email.sql"
+          "packages/db/migrations/0778_pilot_commercial_email.sql"
         ],
         "tests": [
           "packages/db/test/pilot-customer-portal.integration.test.ts"
