@@ -21,7 +21,7 @@ export class CustomerVariationApplication {
       const input = action === "variations/read" ? customerVariationReadV1.parse(raw) : customerVariationApprovalCommandV1.parse(raw);
       await new CustomerSigninApplication(this.identity, this.environment).run("read", { version: "customer-read.v1", jobId: input.jobId }, request);
       // The sign-in boundary has validated this exact cookie and its current server-side scope.
-      const token = customerToken(request)!;
+      const token = customerToken(request, this.environment)!;
       const [tenantId, jobId, customerId] = token.split(".");
       return (await this.identity.provider.repository.pool.query<{ result: unknown }>(
         "SELECT identity.customer_variation($1,$2,$3,$4,$5::jsonb) result",

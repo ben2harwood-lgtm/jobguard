@@ -21,7 +21,7 @@ export class CustomerMessageApplication {
     if (!parsed.success) throw new CustomerRefused();
     const input = parsed.data;
     await new CustomerSigninApplication(this.identity, this.environment).run("read", { version: "customer-read.v1", jobId: input.jobId }, request);
-    const token = customerToken(request)!;
+    const token = customerToken(request, this.environment)!;
     // The existing sign-in boundary has checked the exact credential tuple and bound job.
     const [tenantId, jobId, customerId] = token.split(".");
     const digest = this.identity.provider.digest(`customer-session:${token}`);

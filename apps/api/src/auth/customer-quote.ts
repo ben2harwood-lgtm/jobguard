@@ -12,7 +12,7 @@ export class CustomerQuoteApplication {
     if (!parsed.success) throw new CustomerRefused();
     // Reuse the session boundary unchanged, including same-origin and customer/job checks.
     await new CustomerSigninApplication(this.identity, this.environment).run("read", { version: "customer-read.v1", jobId: parsed.data.jobId }, request);
-    const token = customerToken(request)!;
+    const token = customerToken(request, this.environment)!;
     const [tenant, job, customer] = token.split(".");
     try {
       return (await this.identity.provider.repository.pool.query<{ result: unknown }>(
