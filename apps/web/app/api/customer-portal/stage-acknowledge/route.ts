@@ -1,5 +1,5 @@
 import { CustomerStagesApplication, customerStagesHttp } from "@jobguard/api/identity";
-import { identityApplication } from "../../../lib/identity-server";
+import { customerPortalRequest } from "../../../lib/customer-portal-server";
 export async function POST(request: Request) {
-  return customerStagesHttp(() => new CustomerStagesApplication(identityApplication(), process.env.JOBGUARD_ENV), "stage-acknowledge", request);
+  return customerPortalRequest(request, identityApplication => customerStagesHttp(() => new CustomerStagesApplication(identityApplication(), process.env.JOBGUARD_ENV), "stage-acknowledge", request));
 }

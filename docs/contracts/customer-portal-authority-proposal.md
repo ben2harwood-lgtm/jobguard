@@ -289,3 +289,20 @@ CH-3a, SV-7A and each named source/consumer/security handoff. Runtime route appr
 customer execution, browser proof, stage semantics and real data gates remain
 separate. Two actual independent Claude exact-head verdicts and separate acceptance
 must be supplied by the dispatcher; no review or approval is created here.
+
+## PILOT-06 no-charge customer portal
+
+Both Next and Nest require the current G1 release approval, including the exact
+D06 v2 and D12 v4 records, and the configured pilot web Origin. Nest accepts only
+the registered portal POST routes on the pilot API host. The pilot customer
+cookie is separate from practice and pilot builder cookies. Issuance and
+revocation require the pilot builder session, CSRF and an active owner role. Customer actions recheck the stored grant and session under database locks.
+
+The invitation targets the .invalid address on the current job party revision
+and exact issued quote for one pilot capture job. The outbox stores a reference,
+and the isolated fake delivery port derives the one-time link for that recipient.
+The link lasts ten minutes and the server-side browser session lasts one hour.
+Replacement, revocation and a stale quote or party binding invalidate access.
+Customer quote acceptance uses the stored amount and a server timestamp.
+Domestic pilot fixture quotes freeze the labelled synthetic cancellation notice
+with the document before hashing and issuing it.
