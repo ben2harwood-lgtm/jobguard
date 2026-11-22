@@ -1,0 +1,126 @@
+{
+  "migration": "0780_receipt_deduplication.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-receipt-deduplication",
+        "description": "The checked practice receipt routine binds tenant, actor and invoice before checking for an identical unreversed receipt. Record and reversal share the invoice advisory transaction lock. The replacement preserves existing grants, owner and RLS. A forward migration can replace the routine while preserving all receipt history.",
+        "title": "Duplicate practice customer receipts",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Keep receipt lookup tenant-bound and limited to the verified synthetic invoice.",
+          "LP-12": "Keep writes behind the existing controlled routine and serialize duplicate checks with receipts and reversals."
+        },
+        "sources": [
+          "packages/db/migrations/0780_receipt_deduplication.sql"
+        ],
+        "tests": [
+          "packages/db/test/UIWIRE-12.integration.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "title": "Duplicate practice customer receipts",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Keep receipt lookup tenant-bound and limited to the verified synthetic invoice.",
+          "LP-12": "Keep writes behind the existing controlled routine and serialize duplicate checks with receipts and reversals."
+        },
+        "sources": [
+          "packages/db/migrations/0780_receipt_deduplication.sql"
+        ],
+        "tests": [
+          "packages/db/test/UIWIRE-12.integration.test.ts"
+        ],
+        "gaps": [],
+        "id": "a-receipt-deduplication",
+        "kind": "money",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Keep the tenant, actor, invoice and concurrency checks inside the controlled routine."
+        },
+        "downstream": "The checked practice receipt routine binds tenant, actor and invoice before checking for an identical unreversed receipt. Record and reversal share the invoice advisory transaction lock. The replacement preserves existing grants, owner and RLS. A forward migration can replace the routine while preserving all receipt history.",
+        "path": "ap-receipt-deduplication"
+      }
+    },
+    {
+      "section": "entries",
+      "before": {
+        "key": "acl|routine|function:app.record_practice_customer_receipt(uuid,uuid,uuid,uuid,uuid,date,bigint,text,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-exec-checked-billing-money"
+      },
+      "after": {
+        "key": "acl|routine|function:app.record_practice_customer_receipt(uuid,uuid,uuid,uuid,uuid,date,bigint,text,text)|jobguard_runtime|EXECUTE|-",
+        "group": "a-receipt-deduplication"
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.record_practice_customer_receipt(uuid,uuid,uuid,uuid,uuid,date,bigint,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "c7738f4268d0323ed810aedd00d595ac6ae6e327e4f888bea4b4a79b310ed588",
+        "staticWrites": [
+          "app.action_authorization",
+          "app.command_receipt",
+          "app.customer_payment",
+          "app.decision",
+          "app.decision_resolution"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "public.digest"
+        ]
+      },
+      "after": {
+        "identity": "function:app.record_practice_customer_receipt(uuid,uuid,uuid,uuid,uuid,date,bigint,text,text)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "9e7d0a538a8e1f8c7af5164fc19959728a6a30661d97736f585c6d2dfa2bcf63",
+        "staticWrites": [
+          "app.action_authorization",
+          "app.command_receipt",
+          "app.customer_payment",
+          "app.decision",
+          "app.decision_resolution"
+        ],
+        "staticCalls": [
+          "app.current_actor",
+          "app.current_tenant",
+          "public.digest"
+        ]
+      }
+    }
+  ],
+  "upgrade": [],
+  "tenancy": []
+}

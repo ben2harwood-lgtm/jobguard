@@ -6,13 +6,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolConfig } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { migrate, MIGRATION_URLS, PracticeInvoiceRepository, withTenant } from "../src/index.js";
 import { closeTestPools, freePort, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 const T="11000000-0000-4000-8000-000000000001", A="21000000-0000-4000-8000-000000000002", U="31000000-0000-4000-8000-000000000003", M="41000000-0000-4000-8000-000000000004";
 let context=testTenantContext(T);
 let pg:EmbeddedPostgres,admin:Pool,runtime:Pool,dir:string,repo:PracticeInvoiceRepository;
+let runtimeConfig:PoolConfig;
 type Fixture={jobId:string;invoiceId:string;quoteId:string;draftId:string;revisionId:string};
 type ReceiptInput=Parameters<PracticeInvoiceRepository["recordReceipt"]>[1];
 let legacy:Fixture,legacyInput:ReceiptInput,legacyPayment:{paymentId:string},legacyReverseCommand:string,legacyReversal:string,legacyHashes:unknown;
@@ -56,7 +57,8 @@ beforeAll(async()=>{
   await admin.query(`INSERT INTO public.jobguard_schema_migration(migration_name)VALUES($1)`,[name]);
  }
  await admin.query(`INSERT INTO control_plane.tenant(id)VALUES('${T}');INSERT INTO identity.identity_user(id)VALUES('${U}');INSERT INTO app.account(id,tenant_id,name)VALUES('${A}','${T}','Synthetic');INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role)VALUES('${M}','${T}','${A}','${U}','owner');CREATE ROLE uiwire12_login LOGIN PASSWORD 'synthetic' NOSUPERUSER NOBYPASSRLS;GRANT jobguard_runtime TO uiwire12_login;`);
- runtime=new Pool({host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"uiwire12_login",password:"synthetic",max:8});repo=new PracticeInvoiceRepository(runtime);
+ runtimeConfig={host:"127.0.0.1",port,database:"jobguard_synthetic_demo",user:"uiwire12_login",password:"synthetic",max:8};
+ runtime=new Pool(runtimeConfig);repo=new PracticeInvoiceRepository(runtime);
  legacy=await freshInvoice();legacyInput=command(legacy);legacyPayment=await repo.recordReceipt(context,legacyInput);legacyReverseCommand=randomUUID();
  legacyReversal=(await withTenant(runtime,context,db=>db.$client.query(`SELECT * FROM app.reverse_practice_customer_receipt($1,$2,$3,$4,$5,$6)`,[T,legacy.jobId,legacyPayment.paymentId,M,legacyReverseCommand,"Practice receipt correction"]))).rows[0].reversal_id;
  legacyHashes=(await admin.query(`SELECT command_id,request_hash,result FROM app.command_receipt WHERE command_id=ANY($1::uuid[]) ORDER BY command_id`,[[legacyInput.commandId,legacyReverseCommand]])).rows;
@@ -114,6 +116,49 @@ describe("UIWIRE-12 customer receipts",()=>{
   expect((await admin.query(`SELECT count(*)::int n FROM app.command_receipt WHERE tenant_id=$1 AND command_id=$2`,[T,c.commandId])).rows[0].n).toBe(1);
   expect((await admin.query(`SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='customer_payment.synthetic_recorded' AND payload->'references'->>'paymentId'=$2`,[T,results[0]!.paymentId])).rows[0].n).toBe(1);
  });
+ it("records one receipt when two connections submit identical details with different command IDs",async()=>{
+  const f=await freshInvoice(),c=command(f);
+  const secondPool=new Pool({...runtimeConfig,max:1});
+  try {
+   await secondPool.query("SELECT 1");
+   const secondRepo=new PracticeInvoiceRepository(secondPool);
+   const [first,second]=await Promise.all([
+    repo.recordReceipt(context,c),
+    secondRepo.recordReceipt(context,{...c,commandId:randomUUID()}),
+   ]);
+   expect(second).toEqual(first);
+   const view=await repo.receiptView(context,f.jobId,f.invoiceId);
+   expect(view.receipts.map(r=>r.id)).toEqual([first.paymentId]);
+   expect(view.invoice.balancePence).toBe(82000);
+   expect((await admin.query(`SELECT count(*)::int n FROM app.audit_event WHERE tenant_id=$1 AND event_type='customer_payment.synthetic_recorded' AND payload->'references'->>'paymentId'=$2`,[T,first.paymentId])).rows[0].n).toBe(1);
+  } finally {await secondPool.end();}
+ });
+ it("returns the existing receipt on a sequential identical submission with a new command ID",async()=>{
+  const f=await freshInvoice(),c=command(f),first=await repo.recordReceipt(context,c);
+  const retry={...c,commandId:randomUUID(),reference:` ${c.reference} `};
+  expect(await repo.recordReceipt(context,retry)).toEqual(first);
+  expect((await repo.receiptView(context,f.jobId,f.invoiceId)).receipts.map(r=>r.id)).toEqual([first.paymentId]);
+  expect((await admin.query(`SELECT command_id FROM app.command_receipt WHERE tenant_id=$1 AND command_id=ANY($2::uuid[])`,[T,[c.commandId,retry.commandId]])).rows).toEqual([{command_id:c.commandId}]);
+ });
+ it.each([{reference:"Another fictional receipt"},{amountPence:49000},{paidOn:"2026-09-17"},{method:"cash"}])("records separate receipts for distinct details %j",async details=>{
+  const f=await freshInvoice(),c=command(f),first=await repo.recordReceipt(context,c);
+  const second=await repo.recordReceipt(context,{...c,...details,commandId:randomUUID()});
+  expect(second.paymentId).not.toBe(first.paymentId);
+  const view=await repo.receiptView(context,f.jobId,f.invoiceId);
+  expect(view.receipts.map(r=>r.id).sort()).toEqual([first.paymentId,second.paymentId].sort());
+ });
+ it("records a new receipt after reversal while the original command still replays the reversed receipt",async()=>{
+  const f=await freshInvoice(),c=command(f),first=await repo.recordReceipt(context,c);
+  const correction=await repo.reverseReceipt(context,reversal(f,first.paymentId));
+  const second=await repo.recordReceipt(context,{...c,commandId:randomUUID()});
+  expect(second.paymentId).not.toBe(first.paymentId);
+  expect(await repo.recordReceipt(context,c)).toEqual(first);
+  const view=await repo.receiptView(context,f.jobId,f.invoiceId);
+  expect(view.receipts).toHaveLength(2);
+  expect(view.receipts.find(r=>r.id===first.paymentId)?.reversal?.id).toBe(correction.reversalId);
+  expect(view.receipts.filter(r=>!r.reversal).map(r=>r.id)).toEqual([second.paymentId]);
+  expect(view.invoice.balancePence).toBe(82000);
+ });
  it("concurrent changed-payload reuse conflicts and cannot record two payments",async()=>{
   const f=await freshInvoice(),c=command(f);
   const outcomes=await Promise.allSettled([repo.recordReceipt(context,c),repo.recordReceipt(context,{...c,amountPence:82000})]);
@@ -137,6 +182,14 @@ describe("UIWIRE-12 customer receipts",()=>{
   const persisted=await admin.query(`SELECT id,job_id FROM app.customer_invoice WHERE tenant_id=$1 AND id=ANY($2::uuid[]) ORDER BY id`,[T,[f.invoiceId,other.id]]);
   expect(persisted.rows).toHaveLength(2);
   for(const invoice of persisted.rows)expect(invoice.job_id).toBe(f.jobId);
+ });
+ it("matches an unreversed pre-upgrade receipt only on its original invoice",async()=>{
+  const {f,p,other}=reversalHistory;
+  expect(await repo.recordReceipt(context,command(f))).toEqual(p);
+  const otherPayment=await repo.recordReceipt(context,{...command(f),invoiceId:other.id});
+  expect(otherPayment.paymentId).not.toBe(p.paymentId);
+  expect((await repo.receiptView(context,f.jobId,f.invoiceId)).receipts.map(r=>r.id)).toEqual([p.paymentId]);
+  expect((await repo.receiptView(context,f.jobId,other.id)).receipts.map(r=>r.id)).toEqual([otherPayment.paymentId]);
  });
  it("binds reversals to the exact invoice, including another invoice in the same job",async()=>{
   const {f,p,other}=reversalHistory;
