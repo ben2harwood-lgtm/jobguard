@@ -321,7 +321,7 @@
     {
       "section": "policies",
       "before": null,
-      "after": "app.pilot_final_check_terms_approval|pilot_terms_owner|PERMISSIVE|ALL|jobguard_migration|ade3739356a579ac"
+      "after": "app.pilot_final_check_terms_approval|pilot_terms_owner|PERMISSIVE|ALL|jobguard_migration|054fb84fb4db9494"
     },
     {
       "section": "triggers",
@@ -494,7 +494,7 @@
         "permissive": "PERMISSIVE",
         "roles": "{jobguard_migration}",
         "cmd": "ALL",
-        "qual": "(tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)",
+        "qual": "(tenant_id = app.lp11_policy_tenant())",
         "with_check": null
       }
     }

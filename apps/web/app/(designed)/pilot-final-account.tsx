@@ -118,6 +118,6 @@ export function PilotFinalAccount({ jobId, pilotFetch }: { jobId: string; pilotF
         })}>Complete final account</button>
       </>}
     </Card>
-    <p>Final Check and customer invoices are not yet available in the pilot.</p>
+    <p>Final Check certificates, revealing findings, disputing or confirming findings, and customer invoices are not yet available in the pilot.</p>
   </>;
 }

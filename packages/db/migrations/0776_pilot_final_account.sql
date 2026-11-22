@@ -13,7 +13,7 @@ ALTER TABLE app.pilot_final_check_terms_approval OWNER TO jobguard_migration;
 ALTER TABLE app.pilot_final_check_terms_approval ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app.pilot_final_check_terms_approval FORCE ROW LEVEL SECURITY;
 CREATE POLICY pilot_terms_owner ON app.pilot_final_check_terms_approval TO jobguard_migration
- USING (tenant_id=nullif(current_setting('app.tenant_id',true),'')::uuid);
+ USING (tenant_id=app.lp11_policy_tenant());
 REVOKE ALL ON app.pilot_final_check_terms_approval FROM PUBLIC,jobguard_runtime,jobguard_shadow,jobguard_identity,jobguard_infrastructure;
 CREATE TRIGGER pilot_terms_immutable BEFORE UPDATE OR DELETE OR TRUNCATE ON app.pilot_final_check_terms_approval
  FOR EACH STATEMENT EXECUTE FUNCTION app.reject_immutable_commercial_mutation();
