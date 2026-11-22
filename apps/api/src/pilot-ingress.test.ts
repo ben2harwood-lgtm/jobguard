@@ -3,6 +3,7 @@ import { ctx, fixture } from "./fee-collection/test-fixture.js";
 import { pilotApiIngress } from "./pilot-ingress.js";
 import { requireProductionSettlementEligibility } from "./production-settlement-guard.js";
 import { pilotWorkerTasks } from "./pilot-worker.js";
+import { pilotApprovalFixture } from "@jobguard/config/test/pilot-approval";
 
 const host = "pilot-api.invalid";
 const ingress = pilotApiIngress(`https://${host}`);
@@ -21,12 +22,37 @@ it.each([
   ["/auth/verify", { "webhook-signature": "fictional" }],
   ["/auth/oidc/00000000-0000-4000-8000-000000000001/callback", {}],
   ["/sandbox/runs", {}],
-  ["/customer-portal/signin", {}],
+  ["/auth/verify", { cookie: "__Host-jobguard_pilot_customer=fixture" }],
+  ["/jobs", { cookie: "__Host-jobguard_pilot_customer=fixture" }],
+  ["/customer-portal/signin", { host: "practice.invalid" }],
+  ["/customer-portal/signin", { cookie: "jg_session=fixture" }],
+  ["/customer-portal/signin", { cookie: "jobguard_customer=fixture; __Host-jobguard_pilot_customer=fixture" }],
+  ["/customer-portal/signin", { "stripe-signature": "fictional" }],
+  ["/customer-portal/signin", { "webhook-signature": "fictional" }],
+  ["/customer-portal/unlisted", {}],
   ["/payments/webhook", {}],
 ] as const)("refuses %s at the pilot API ingress before reaching any controller", (path, headers) => {
-  const { response, next } = dispatch(path, headers);
-  expect(response.status).toHaveBeenCalledExactlyOnceWith(403);
-  expect(next).not.toHaveBeenCalled();
+  for (const [name, value] of Object.entries(pilotApprovalFixture().env)) vi.stubEnv(name, value);
+  try {
+    const { response, next } = dispatch(path, headers);
+    expect(response.status).toHaveBeenCalledExactlyOnceWith(403);
+    expect(next).not.toHaveBeenCalled();
+  } finally { vi.unstubAllEnvs(); }
+});
+
+it("delegates exact portal POSTs only with G1 open", () => {
+  for (const [name, value] of Object.entries(pilotApprovalFixture().env)) vi.stubEnv(name, value);
+  try {
+    expect(dispatch("/customer-portal/signin").next).toHaveBeenCalledOnce();
+    expect(dispatch("/customer-portal/read", { cookie: "__Host-jobguard_pilot_customer=fixture" }).next).toHaveBeenCalledOnce();
+    expect(dispatch("/customer-portal/read", {}, "GET").response.status).toHaveBeenCalledExactlyOnceWith(403);
+    vi.stubEnv("JOBGUARD_PILOT_21_APPROVAL", undefined);
+    for (const path of ["/customer-portal/signin", "/customer-portal/read", "/customer-portal/quote-accept"]) {
+      const { response, next } = dispatch(path);
+      expect(response.status).toHaveBeenCalledExactlyOnceWith(403);
+      expect(next).not.toHaveBeenCalled();
+    }
+  } finally { vi.unstubAllEnvs(); }
 });
 
 it("lets the existing identity and health handlers enforce their own authorization", () => {

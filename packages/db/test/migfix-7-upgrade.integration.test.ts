@@ -242,10 +242,10 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["app.retention_records(t uuid, digest text, j uuid, cid uuid, v jsonb, expected text)", "0646_retention_timer_runtime_rules.sql"],
     ["app.notice_fixture_records(j uuid, n uuid, digest text, operation text, v jsonb)", "0647_notice_live_job_check.sql"],
     ["app.pay_now_fake_attempt(t uuid, digest text, j uuid, operation text, v jsonb)", "0648_pay_now_catch_statement.sql"],
-    ["app.customer_portal_current(g app.customer_portal_grant)", "0733_real_customer_link_own_quote.sql"],
+    ["app.customer_portal_current(g app.customer_portal_grant)", "0775_pilot_customer_portal.sql"],
     ["app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)", "0733_real_customer_link_own_quote.sql"],
-    ["identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0733_real_customer_link_own_quote.sql"],
-    ["identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)", "0733_real_customer_link_own_quote.sql"],
+    ["identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0775_pilot_customer_portal.sql"],
+    ["identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)", "0775_pilot_customer_portal.sql"],
     ["identity.customer_stages(t uuid, j uuid, c uuid, digest text, completion uuid, command uuid, expected_hash text)", "0765_lp11_bound_tenant_rls.sql"],
     ["identity.customer_variation(t uuid, j uuid, c uuid, digest text, command jsonb)", "0765_lp11_bound_tenant_rls.sql"],
     ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0765_lp11_bound_tenant_rls.sql"],
@@ -424,12 +424,28 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     const body = pilotInvitationsSql.split(`CREATE OR REPLACE FUNCTION identity.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]!;
     lp6dBodies.set(`identity.${name}(${args})`, body);
   }
+  // 0775 supersedes the LP-11 and earlier portal bodies; catalogue metadata is still checked above.
+  const pilotPortalSql = await readFile(new URL("../migrations/0775_pilot_customer_portal.sql", import.meta.url), "utf8");
+  const pilotPortalBodies = new Map<string, string>();
+  for (const match of pilotPortalSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
+    pilotPortalBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
   const pilotFinalAccountSql = await readFile(new URL("../migrations/0776_pilot_final_account.sql", import.meta.url), "utf8");
   const pilotDisclosureBody = pilotFinalAccountSql.split("CREATE OR REPLACE FUNCTION app.guard_final_lock_disclosure_terms(")[1]!
     .split("AS $$")[1]!.split("$$;")[0]!;
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);
+    const pilotPortalBody = pilotPortalBodies.get(lp6dKey(row));
+    if (pilotPortalBody !== undefined) {
+      if (prior) {
+        const parts = prior.definition.split("$function$");
+        parts[1] = pilotPortalBody;
+        expect(row.definition, identity).toBe(parts.join("$function$"));
+      } else {
+        expect(row.definition.split("$function$")[1], identity).toBe(pilotPortalBody);
+      }
+      continue;
+    }
     if (identity === "app.guard_final_lock_disclosure_terms()") {
       expect(row.definition.split("$function$")[1], identity).toBe(pilotDisclosureBody);
       if (prior) {

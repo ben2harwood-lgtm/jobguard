@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { evaluateDraftQuote, jobPartiesSnapshotV1, quoteDocumentV1, renderQuotePdf, type QuoteLine } from "@jobguard/core";
+import { attachCancellationKit, evaluateDraftQuote, jobPartiesSnapshotV1, quoteDocumentV1, renderQuotePdf, type QuoteLine } from "@jobguard/core";
 import type { Pool } from "pg";
 import { UserCommandDispatcher } from "./commands.js";
 import { firmProfileIssuer } from "./firm-profile-repository.js";
@@ -68,6 +68,7 @@ export class PilotQuoteDeliveryRepository {
       const previous = latest ? quoteDocumentV1.parse(latest.snapshot) : undefined;
       if (latest && previous?.quoteRevisionId === pricing.id && previous.reference === reference &&
         previous.jobParties?.bindingId === parties.bindingId && previous.customer.email === recipient &&
+        (parties.customer.type !== "person" || previous.cancellationKit) &&
         previous.qualifications.includes(invitationText) && JSON.stringify(previous.issuer) === JSON.stringify(issuer)) {
         if (hashBytes(renderQuotePdf(previous)) !== latest.content_hash) throw new Error("QUOTE_CHANGED");
         return { documentId: latest.id, document: previous };
@@ -78,7 +79,7 @@ export class PilotQuoteDeliveryRepository {
         scopeItemId: line.scopeItemId, description: line.description, quantity: line.quantity, unit: line.unit,
         netPence: evaluateDraftQuote({ currency: pricing.currency, taxPolicyVersion: pricing.tax_policy_version, lines: [line] }).totals.net.pence,
       }));
-      const document = quoteDocumentV1.parse({
+      const document = quoteDocumentV1.parse(attachCancellationKit({
         jobParties: parties, schemaVersion: "quote-document.v1", documentVersion, reference,
         quoteRevisionId: pricing.id, currency: "GBP", issuer,
         customer: {
@@ -90,7 +91,7 @@ export class PilotQuoteDeliveryRepository {
         qualifications: [invitationText, `Invitation for quote ${reference}, document version ${documentVersion}.`],
         subtotalPence: Number(pricing.subtotal_pence), discountPence: Number(pricing.discount_pence),
         netPence: Number(pricing.net_pence), taxPence: Number(pricing.tax_pence), totalPence: Number(pricing.total_pence),
-      });
+      }, "synthetic_demo"));
       if (lines.reduce((total, line) => total + line.netPence, 0) !== document.netPence) throw new Error("QUOTE_NOT_ISSUABLE");
       const pdf = renderQuotePdf(document);
       const hash = hashBytes(pdf), documentId = randomUUID();

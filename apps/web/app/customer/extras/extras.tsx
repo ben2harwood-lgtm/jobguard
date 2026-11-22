@@ -13,7 +13,7 @@ export function extraPriceWords(pence: number, revision: number) {
   };
 }
 
-export default function CustomerExtras() {
+export default function CustomerExtras({ pilot = false }: { pilot?: boolean }) {
   const [view, setView] = useState<CustomerVariationView>(), [notice, setNotice] = useState("Loading extras…"), [busy, setBusy] = useState(false);
   async function load() {
     setView(undefined);
@@ -37,11 +37,14 @@ export default function CustomerExtras() {
     } catch { setView(undefined); setNotice("Approval could not be confirmed. Reload extras to check before trying again."); }
     finally { setBusy(false); }
   }
-  return <main style={{ overflowWrap: "anywhere" }}><h1>Review extras</h1><p>Synthetic practice · each approval applies only to the revision and signed amount shown.</p><p role="status">{notice}</p>
+  return <main style={{ overflowWrap: "anywhere" }}><h1>Review extras</h1><p>{pilot ? "No-charge pilot fixture" : "Synthetic practice"} · each approval applies only to the revision and signed amount shown.</p><p role="status">{notice}</p>
     <button disabled={busy} onClick={() => void load()}>Reload extras</button>
     {view?.variations.length === 0 && <p>No priced extras to review.</p>}
     {view?.variations.map(item => {
-      const { price, approval } = extraPriceWords(item.amount.pence, item.revision);
+      const { price, approval } = pilot ? {
+        price: `Revision ${item.revision} · ${pounds(item.amount.pence)} net`,
+        approval: `Approve revision ${item.revision} for ${pounds(item.amount.pence)} net`,
+      } : extraPriceWords(item.amount.pence, item.revision);
       return <section key={item.id}><h2>{item.description}</h2><p>{price}</p><p>Content hash: <code>{item.hash}</code></p>
         {item.approved ? <p>Approved · {item.method === "customer_authenticated" ? "authenticated customer" : item.method === "builder_attestation" ? "builder attestation" : "customer evidence"}</p> : <button disabled={busy} onClick={() => void approve(item)}>{approval}</button>}
       </section>;
