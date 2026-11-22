@@ -52,6 +52,110 @@ the approval column means **no owner approval recorded**.
 | `g1-contractor-d12` — D12 v4 (164) | `needs_owner_approval` | — | [docs/decisions/d12-data-protection-role-third-party-transparency.md](../../docs/decisions/d12-data-protection-role-third-party-transparency.md) | D12 v4 remains proposed; existing version text does not supply founder approval. |
 | `g1-checkpoint` — Keep an independently restricted checkpoint (306) | `blocked` | — | [BUILD_PLAN.md](../../BUILD_PLAN.md)<br>[packages/db/test/audit.integration.test.ts](../../packages/db/test/audit.integration.test.ts) | Audit test source is not evidence of a restricted checkpoint deployed before G1. |
 
+## PILOT-11 evidence index · 22 November 2026
+
+Source base `6cf0a9a6b31297d3f57c96fd5f2c3a03142efc4a`.
+The [PILOT-11 contract][pilot-plan] assigns the matrix and the evidence index.
+The [local verification receipt](pilot-11-verification-2026-11-22.md) records
+the tested commit, commands, counts and gaps. G0 and G1 remain unmet.
+Every owner approval is pending, and contractor access remains blocked.
+
+[pilot-plan]: https://github.com/ben2harwood-lgtm/jobguard/blob/eefbdcd7dfdd13e0f81598c3e905ae65b07ed738/docs/plans/PILOT-G1-PLAN.md#pilot-11--prepare-the-evidence-index-and-current-head-test-matrix
+
+### Merged evidence
+
+Independent Claude verdicts are from the coordinator verdict ledger (outside repo), 22 Nov 2026.
+Each PASS applies to the full SHA shown.
+PILOT-21 needs independent review of the eventual release candidate.
+
+| Piece | PR and merge on base | Independent Claude verdicts | Automated review |
+|---|---|---|---|
+| PILOT-01a | [#872][pr872] · `64fc0ebb9` | PASS `5181967425347f226c920ead617c3ca0f9b09adf` | Code review completed at `5f5715b5` with no findings. [Review][review872] |
+| PILOT-01b | [#874][pr874] · `f15856a3c` | PASS `dc96a515303f2f3d050d3b5cf4523820bf38d041`<br>Catch-up PASS `a2ef7dcc668d9c05d4b4bf61a3a3ae4a3ed5a2df` | Code review completed at `a1a15ed8` with no findings. [Review][review874] |
+| PILOT-08 | [#875][pr875] · `402414f1d` | PASS `1f1068721cc7fc5369ec9db63e702a5f3f8ed8e3`<br>Catch-up PASS `bc05186d26523da3ff80dab9d43f4ff1a8fab7bd` | Code review completed at `1f106872` with no findings. [Review][review875] |
+| PILOT-02 | [#876][pr876] · `79d946fc4` | PASS `ff014e94d4dade11fec9bda6d48f672932b7eb6f`<br>CI repair PASS `94afa0949546b92e69dbf2eb2d52ef1ea9614ec1` | Security review completed at `ff014e94`. [Review][review876] |
+| PILOT-04a | [#877][pr877] · `896763757` | PASS `e5fde95cfe69b2946dd984f483c21e04a169c0fb`<br>Repair PASS `fcd132b9737ac6830ec830175e4fb2088a20b87f`<br>Catch-up PASS `1c022e8c504df0e56899d510ecfa8ef08d275829` | Code review at `0f69f85e` raised the open P2 recorded below. [Review][review877] |
+| PILOT-03 | [#878][pr878] · `29663aba9` | PASS `5e8d0892e3b71f61fbfabaf139a05a25f08dd868`<br>Catch-up PASS `2e57021d63b1e78f29c8ccdb3c10b9feb5026f18` | Code review completed at `5e8d0892` with no findings. [Review][review878] |
+| PILOT-04b | [#879][pr879] · `cd905628a` | PASS `cd8cbad9820408cec3d1a6ee22945f612ed84790`<br>Catch-up PASS `9c48bca105cd22d03882cc507e575aa3acc0e52c`<br>Catch-up PASS `3c8fb1e3ef8c23efc18211ca8c9f93737a58aa1a` | Code review completed at `cd8cbad9` with no findings. [Review][review879] |
+| PILOT-06 | [#880][pr880] · `6cf0a9a6b` | PASS `5d4bfd94b919d977ba9b719e167f8388ca89e262`<br>Catch-up PASS `01cc91cfeeef1231e1de77560bacfed7d7535da8` | Code review completed at `2d29f1ca` with no findings. [Review][review880] |
+
+[pr872]: https://github.com/ben2harwood-lgtm/jobguard/pull/872
+[pr874]: https://github.com/ben2harwood-lgtm/jobguard/pull/874
+[pr875]: https://github.com/ben2harwood-lgtm/jobguard/pull/875
+[pr876]: https://github.com/ben2harwood-lgtm/jobguard/pull/876
+[pr877]: https://github.com/ben2harwood-lgtm/jobguard/pull/877
+[pr878]: https://github.com/ben2harwood-lgtm/jobguard/pull/878
+[pr879]: https://github.com/ben2harwood-lgtm/jobguard/pull/879
+[pr880]: https://github.com/ben2harwood-lgtm/jobguard/pull/880
+[review872]: https://github.com/ben2harwood-lgtm/jobguard/pull/872#issuecomment-7060038627
+[review874]: https://github.com/ben2harwood-lgtm/jobguard/pull/874#issuecomment-7061007278
+[review875]: https://github.com/ben2harwood-lgtm/jobguard/pull/875#issuecomment-7061707709
+[review876]: https://github.com/ben2harwood-lgtm/jobguard/pull/876#issuecomment-7070244742
+[review877]: https://github.com/ben2harwood-lgtm/jobguard/pull/877#pullrequestreview-6008884475
+[review878]: https://github.com/ben2harwood-lgtm/jobguard/pull/878#issuecomment-7072152192
+[review879]: https://github.com/ben2harwood-lgtm/jobguard/pull/879#issuecomment-7072627171
+[review880]: https://github.com/ben2harwood-lgtm/jobguard/pull/880#issuecomment-7074026627
+
+### Open LATER follow-up
+
+**PILOT-04a automated-review P2.** If the response to a completed quote command
+is lost and the draft changes before the caller retries, the retry shows a
+misleading refusal. The original send stays queued, its data is preserved, and
+the retry causes no double send. [Repository check](../../packages/db/src/pilot-quote-delivery-repository.ts#L145) · [Automated finding](https://github.com/ben2harwood-lgtm/jobguard/pull/877#discussion_r4655562895)
+
+### Pending pieces
+
+| Piece | Evidence still due |
+|---|---|
+| PILOT-05 | Final account, Final Check, builder invoice and off-platform receipt fixture. |
+| PILOT-07 | Authorized fake delivery, stop/drain, unknown-outcome reconciliation and controlled resume. |
+| PILOT-09 | Pilot privacy, retention and revocation fixture. |
+| PILOT-10 | Measurement instrumentation and fixture report. |
+| PILOT-12 | D04 provider and residency approvals. |
+| PILOT-13 | Approved regional adapter and deployment wiring. |
+| PILOT-14 | Approved D02/D06 tax, invoice and customer approval scope. |
+| PILOT-15 | Approved D07/D12 retention and privacy scope. |
+| PILOT-16 | Approved no-charge terms and D13 Final Check disclosure. |
+| PILOT-17 | Locked UK deployment and deployed operational receipts. |
+| PILOT-18 | Deployed fictional privacy rehearsal. |
+| PILOT-19 | Deployed backup and measured isolated restore. |
+| PILOT-20 | Deployment-representative LP-9 evidence and independent human review. |
+| PILOT-21 | Separate G0 technical acceptance, G1 evidence and candidate-bound activation decision. |
+| PILOT-22 | Authorized controlled smoke and cohort onboarding after G1. |
+| PILOT-23 | Authorized measurement period and reviewed report after G1. |
+
+### Gate evidence and runners
+
+The checklist above carries the fail-closed status and current artifacts for each
+row. The table below names the additional artifact and who runs or records it.
+PILOT-21 binds each receipt to the full candidate SHA, date, outcome, topology,
+roles, ordered migration names and hashes, and exact policy versions. Approval
+references also need dated approver evidence. Publish scrubbed references only.
+
+| Row | Artifact and runner or owner |
+|---|---|
+| `g0-m0` | M0 exit matrix, using the local receipt and required CI. PILOT-11 assembles fixtures. PILOT-17–21 supply deployed operations and acceptance. |
+| `g0-contracts` | Versioned contracts in the checklist and the foundation pack check, run by PILOT-11 and CI. PILOT-21 binds the versions used by the candidate. |
+| `g0-policies` | Config, API and web refusal results in the local matrix. PILOT-21 repeats candidate-specific checks with either gate pending. |
+| `g0-postgres` | Fresh, upgrade, installed catalog and runtime-role checks in the local matrix. CI and the PILOT-20 operator run against the pinned candidate and representative topology. |
+| `g0-acceptance` | Dated technical acceptance from the PILOT-21 acceptor, separate from the builder and checker. |
+| `g1-d04` | [Provider register](provider-register.md) and exact D04 approval, recorded by the PILOT-12 owner with PILOT-13/17 operational verification. |
+| `g1-invoice` | D02/D06 scope and notice approvals from PILOT-14 legal/tax reviewers and owner, plus PILOT-05 invoice and receipt fixture. |
+| `g1-permissions` | Identity, portal, tenancy and catalog receipts in the local matrix, plus deployed permission/revocation evidence from PILOT-17 and LP-9 review from PILOT-20. |
+| `g1-d07` | D07 retention and recovery approval from PILOT-15, with [privacy rehearsal](privacy-operations.md) and restore receipts from PILOT-18/19 operators. |
+| `g1-d12` | Small-builder D12 scope, DPIA and notices from PILOT-15, with PILOT-18 operator proving access, export, deletion and revocation. Reconcile the MON-5 v3 reference with proposed D12 v4 before recording approval. |
+| `g1-secrets` | [Pilot topology](pilot-infrastructure.md), deployed binding/rotation and catalog receipts from PILOT-17/20 operators. |
+| `g1-alerts` | [Pilot infrastructure](pilot-infrastructure.md) fixture and deployed supervised restart, heartbeat and alert-delivery receipt from PILOT-17 operations. |
+| `g1-backup` | Deployed backup schedule and database/object/checkpoint backup references from PILOT-17/19 operations. |
+| `g1-restore` | [Restore runbook](restore-runbook.md) and measured isolated restore receipt from PILOT-19, with PILOT-20 refusal rerun. |
+| `g1-outbound` | [Outbound pause runbook](commercial-outbound-pause.md), PILOT-07 fake receipt and PILOT-17 operator stop, drain, reconcile and resume receipt. |
+| `g1-terms` | [Pilot terms](../contracts/pilot-terms-v1.md) and dated PILOT-16 owner/legal approval of `pilot_no_charge_v1` or reviewed successor, with onboarding receipt. |
+| `g1-d13` | PILOT-05 lock/reveal fixture and dated PILOT-16 D13 approval of disclosure, exceptions and disputes. |
+| `g1-checkpoint` | Audit/checkpoint fixture plus PILOT-17/19/20 operator proof of independent storage, runtime write denial, mismatch and tail-loss verification. |
+| `g1-contractor-pilot` | Contractor access blocked and outside this cohort. A future ENT-14 owner must record the signed agreement and solicitor/founder approvals. |
+| `g1-contractor-dpa` | Contractor access blocked and outside this cohort. A future ENT-14 owner must record the signed DPA and solicitor/founder approvals. |
+| `g1-contractor-d12` | Contractor access blocked and outside this cohort. A future contractor approval owner must record the exact D12 v4 approval. |
+
 ## Validation and evidence limits
 
 [Validator](../../packages/config/src/foundation-gates.ts) uses a strict versioned
@@ -78,7 +182,9 @@ therefore fails at the commit checked by CI, rather than being accepted as a lin
 future work. The validator is offline only and is not imported by a runtime gate.
 No server authorization or deployment configuration is changed.
 
-Catch-up validation (4 November 2026): the launcher merged `origin/main`
+### Historical M0-13d validation · 4 November 2026
+
+Catch-up validation: the launcher merged `origin/main`
 `155a3eb0680e1e270bdf2ecfe1e381374b62c889` into this branch at
 `86fb99d991272dd060a842943d37f4646e6086ca`. The merge is complete, with no
 unresolved conflicts. Local `main` is stale; comparisons use the merged
