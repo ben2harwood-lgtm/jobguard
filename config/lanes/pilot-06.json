@@ -38,8 +38,11 @@
         "docs/contracts/customer-portal-authority-proposal.md",
         "packages/db/migrations/0775_pilot_customer_portal.sql",
         "packages/db/src/pilot-quote-delivery-repository.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0775_pilot_customer_portal.proof.json",
-        "packages/db/test/pilot-customer-portal.integration.test.ts"
+        "packages/db/test/pilot-customer-portal.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts"
       ]
     }
   }
