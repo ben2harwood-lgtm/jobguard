@@ -1,3 +1,4 @@
+import { createServer, type Server } from "node:http";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,6 +22,12 @@ import { POST as previewQuote } from "../api/jobs/[id]/quotes/preview/route";
 import { POST as issueQuote } from "../api/jobs/[id]/quotes/delivery/route";
 import { GET as readArtifact } from "../api/jobs/[id]/quotes/artifacts/[artifactId]/route";
 
+import { GET as readAcceptance, POST as recordAcceptance } from "../api/jobs/[id]/quotes/acceptance/route";
+import { POST as activateJob } from "../api/jobs/[id]/quotes/activation/route";
+import { GET as readProgress, POST as changeProgress } from "../api/jobs/[id]/work-state/route";
+import { GET as readExtras, POST as logExtra } from "../api/jobs/[id]/variations/route";
+import { GET as readProof, POST as saveProof } from "../api/jobs/[id]/proof/route";
+
 
 const { cookieJar, blockedPractice } = vi.hoisted(() => ({ cookieJar: new Map<string, { value: string }>(), blockedPractice: vi.fn() }));
 vi.mock("server-only", () => ({}));
@@ -42,6 +49,8 @@ const csrf = "fictional-boundary-csrf-token";
 const tenantA = randomUUID(), tenantB = randomUUID(), jobA = randomUUID(), jobB = randomUUID();
 const practiceJob = randomUUID(), contractorJob = randomUUID(), practiceSession = "s".repeat(43), memberSession = "m".repeat(43);
 const member = randomUUID();
+let storage: Server;
+const objectVersionId = "fictional-version-1";
 let admin: Pool, postgres: EmbeddedPostgres, directory: string, port: number;
 const url = (user: string, db = database) => {
   const password = user === "jobguard_runtime" ? runtimePassword : user === "jobguard_identity" ? identityPassword : credential;
@@ -92,13 +101,46 @@ beforeAll(async () => {
     await admin.query("INSERT INTO app.job(tenant_id,id,title) VALUES($1,$2,'Fictional job')", [tenant,job]);
     await admin.query("INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance) VALUES($1,$2,$3,$4,'quote_activation')", [tenant,job,track,environment]);
   }
+  const objects = new Map<string, { bytes: Buffer; type: string }>();
+  storage = createServer(async (req, res) => {
+    const target = new URL(req.url!, "http://127.0.0.1");
+    if (!req.headers.authorization && !target.searchParams.has("X-Amz-Signature")) {
+      res.writeHead(403).end();
+      return;
+    }
+    if (target.searchParams.has("versioning")) {
+      res.setHeader("Content-Type", "application/xml");
+      res.end("<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>");
+      return;
+    }
+    if (req.method === "PUT") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(Buffer.from(chunk));
+      const version = objects.has(`${target.pathname}/${objectVersionId}`) ? randomUUID() : objectVersionId;
+      objects.set(`${target.pathname}/${version}`, { bytes: Buffer.concat(chunks), type: String(req.headers["content-type"]) });
+      res.setHeader("x-amz-version-id", version);
+      res.end();
+      return;
+    }
+    const version = target.searchParams.get("versionId");
+    const item = objects.get(`${target.pathname}/${version}`);
+    if (!item || !version) {
+      res.writeHead(404).end();
+      return;
+    }
+    res.writeHead(200, { "x-amz-version-id": version, "Content-Type": item.type, "Content-Length": item.bytes.length });
+    res.end(req.method === "HEAD" ? undefined : item.bytes);
+  });
+  await new Promise<void>(resolve => storage.listen(0, "127.0.0.1", resolve));
+  const storageAddress = storage.address();
+  if (!storageAddress || typeof storageAddress === "string") throw new Error("Missing fixture storage port");
   const bindings = {
     PILOT_RUNTIME_DATABASE_URL: url("jobguard_runtime"),
     IDENTITY_DATABASE_URL: url("jobguard_identity"),
     AUTH_CODE_SECRET: secret,
     AUTH_ALLOWED_ORIGIN: origin,
     PILOT_API_ORIGIN: "https://pilot-api-boundary.invalid",
-    S3_ENDPOINT: "https://storage.invalid",
+    S3_ENDPOINT: `http://127.0.0.1:${storageAddress.port}`,
     S3_REGION: "fictional",
     S3_BUCKET: "jobguard-pilot-evidence",
     S3_ACCESS_KEY_ID: "fictional-pilot-access",
@@ -117,6 +159,7 @@ beforeAll(async () => {
 afterAll(async () => {
   vi.unstubAllEnvs();
   await closeIdentityApplication();
+  if (storage) await new Promise<void>(resolve => storage.close(() => resolve()));
   if (postgres) await closeTestDatabase(postgres, directory, admin);
 });
 
@@ -275,5 +318,95 @@ it("captures, confirms and stages the exact pilot PDF and invitation through bou
     WHERE o.tenant_id=$1 AND o.action_type='quote.send'`, [tenantA])).rows;
   expect(actions).toEqual([{ immutable_content: bytes.toString(), content_hash: approved.contentHash, adapter: "fake_quote_delivery",
     status: "pending", recipient: JSON.stringify([recipient]), actor_membership_id: member }]);
+  const acceptancePath = `${path}/quotes/acceptance`;
+  const offer = await readOk(await readAcceptance(pilotRequest(acceptancePath), route));
+  expect(offer).toMatchObject({ jobId: id, acceptance: null, baselineDocumentId: null, offered: {
+    documentId: approved.documentId, documentHash: approved.contentHash, documentVersion: second.view.documentVersion, totalPence: 12000,
+  } });
+  const accept = { version: "pilot-acceptance-fixture.v1", commandId: randomUUID(), expectedJobRevision: offer.jobRevision,
+    documentId: approved.documentId, documentVersion: second.view.documentVersion, documentHash: approved.contentHash,
+    acceptedAt: new Date().toISOString() };
+  const sameTenant = { params: Promise.resolve({ id: jobA }) };
+  expect((await recordAcceptance(pilotRequest(acceptancePath, accept), sameTenant)).status).toBe(409);
+  expect((await recordAcceptance(pilotRequest(acceptancePath, accept), { params: Promise.resolve({ id: jobB }) })).status).toBe(404);
+  expect((await recordAcceptance(pilotRequest(acceptancePath, accept, tenantB), route)).status).toBe(403);
+  expect((await recordAcceptance(pilotRequest(acceptancePath, { ...accept, expectedJobRevision: offer.jobRevision - 1 }), route)).status).toBe(409);
+
+  const accepted = await readOk(await recordAcceptance(pilotRequest(acceptancePath, accept), route));
+  expect(accepted).toMatchObject({ jobId: id, status: "accepted", baselineDocumentId: null, acceptance: {
+    documentId: accept.documentId, documentVersion: accept.documentVersion, documentHash: accept.documentHash, method: "fixture",
+  } });
+  expect(await readOk(await recordAcceptance(pilotRequest(acceptancePath, accept), route))).toEqual(accepted);
+  const activationPath = `${path}/quotes/activation`;
+  const start = { version: "pilot-switch-live.v1", commandId: randomUUID(), expectedJobRevision: accepted.jobRevision,
+    documentId: accept.documentId, documentVersion: accept.documentVersion, documentHash: accept.documentHash };
+  await admin.query("UPDATE app.membership SET role='read_only' WHERE id=$1", [member]);
+  expect((await readAcceptance(pilotRequest(acceptancePath), route)).status).toBe(200);
+  expect((await activateJob(pilotRequest(activationPath, start), route)).status).toBe(403);
+  await admin.query("UPDATE app.membership SET role='owner' WHERE id=$1", [member]);
+  await admin.query("UPDATE identity.session SET revoked_at=now() WHERE token_digest=$1", [sessionDigest]);
+  expect((await activateJob(pilotRequest(activationPath, start), route)).status).toBe(401);
+  await admin.query("UPDATE identity.session SET revoked_at=NULL WHERE token_digest=$1", [sessionDigest]);
+  expect((await activateJob(pilotRequest(activationPath, { ...start, expectedJobRevision: offer.jobRevision }), route)).status).toBe(409);
+  const activated = await readOk(await activateJob(pilotRequest(activationPath, start), route));
+  expect(activated).toMatchObject({ jobId: id, status: "live", baselineDocumentId: accept.documentId });
+  expect(await readOk(await activateJob(pilotRequest(activationPath, start), route))).toEqual(activated);
+
+  const progressPath = `${path}/work-state`;
+  const work = await readOk(await readProgress(pilotRequest(progressPath), route));
+  const scopeItemId = work.scope[0].scopeItemId;
+  expect((await readProgress(pilotRequest(progressPath), { params: Promise.resolve({ id: practiceJob }) })).status).toBe(404);
+  cookieJar.set(pilotSessionCookie, { value: practiceSession });
+  expect((await readProgress(pilotRequest(progressPath), route)).status).toBe(401);
+  cookieJar.set(pilotSessionCookie, { value: memberSession });
+  expect(work).toMatchObject({ jobId: id, scope: [{ scopeItemId, description: "Paint shed", stage: "not_started", revision: 0 }] });
+  const progress = { version: "pilot-scope-progress.v1", scopeItemId, action: "start", expectedRevision: 0 };
+  expect((await changeProgress(pilotRequest(progressPath, { ...progress, scopeItemId: randomUUID() }), route)).status).toBe(404);
+  expect(await readOk(await changeProgress(pilotRequest(progressPath, progress), route))).toMatchObject({
+    scope: [{ scopeItemId, stage: "in_progress", revision: 1 }],
+  });
+  expect((await changeProgress(pilotRequest(progressPath, progress), route)).status).toBe(409);
+
+  const variationsPath = `${path}/variations`;
+  const extra = { version: "pilot-log-extra.v1", commandId: randomUUID(), description: "Fictional extra coat" };
+  expect(await readOk(await logExtra(pilotRequest(variationsPath, extra), route))).toEqual({ variationId: extra.commandId });
+  expect(await readOk(await logExtra(pilotRequest(variationsPath, extra), route))).toEqual({ variationId: extra.commandId });
+  expect(await readOk(await readExtras(pilotRequest(variationsPath), route))).toMatchObject({
+    jobId: id, variations: [{ id: extra.commandId, description: extra.description, state: "draft" }],
+  });
+
+  const proofPath = `${path}/proof`;
+  const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/gV8AAAAASUVORK5CYII=", "base64");
+  const begin = { version: "pilot-proof.v1", action: "begin", commandId: randomUUID(), scopeItemId,
+    expectedSha256: createHash("sha256").update(photo).digest("hex"), byteLength: photo.length, contentType: "image/png" };
+  const upload = await readOk(await saveProof(pilotRequest(proofPath, begin), route));
+  expect(upload.uploadId).toBe(begin.commandId);
+  expect(await readOk(await readProof(pilotRequest(proofPath), route))).toMatchObject({ evidence: [] });
+  const complete = { ...progress, commandId: randomUUID(), expectedRevision: 1, action: "complete", evidenceId: upload.uploadId };
+  expect((await changeProgress(pilotRequest(progressPath, complete), route)).status).toBe(422);
+  expect((await fetch(upload.uploadUrl, { method: "PUT", headers: { "Content-Type": begin.contentType }, body: photo })).ok).toBe(true);
+  const finalize = { version: "pilot-proof.v1", action: "finalize", commandId: randomUUID(), uploadId: upload.uploadId, objectVersionId };
+  expect((await saveProof(pilotRequest(proofPath, finalize), sameTenant)).status).toBe(404);
+  expect(await readOk(await saveProof(pilotRequest(proofPath, finalize), route))).toEqual({ evidenceId: upload.uploadId });
+  expect(await readOk(await saveProof(pilotRequest(proofPath, finalize), route))).toEqual({ evidenceId: upload.uploadId });
+  expect((await readProof(pilotRequest(`${proofPath}?evidenceId=${upload.uploadId}`), sameTenant)).status).toBe(404);
+  const proof = await readOk(await readProof(pilotRequest(`${proofPath}?evidenceId=${upload.uploadId}`), route));
+  const download = new URL(proof.downloadUrl);
+  expect(download.searchParams.get("versionId")).toBe(objectVersionId);
+  expect(download.pathname).toContain(`/pilot_no_charge/tenants/${tenantA}/uploads/${upload.uploadId}/original`);
+  const unsigned = new URL(download.pathname, download.origin);
+  unsigned.searchParams.set("versionId", objectVersionId);
+  expect((await fetch(unsigned)).status).toBe(403);
+  expect(Buffer.from(await (await fetch(download)).arrayBuffer())).toEqual(photo);
+  expect((await changeProgress(pilotRequest(progressPath, { ...complete, expectedRevision: 0 }), route)).status).toBe(409);
+  const completed = await readOk(await changeProgress(pilotRequest(progressPath, complete), route));
+  expect(completed).toMatchObject({ scope: [{ scopeItemId, stage: "complete", revision: 2 }] });
+  expect(await readOk(await changeProgress(pilotRequest(progressPath, complete), route))).toEqual(completed);
+  const persisted = (await admin.query(`SELECT a.mode,a.accepted_document_hash,j.baseline_quote_version_id,
+    (SELECT count(*)::int FROM app.synthetic_obligation WHERE job_id=$1) obligations,
+    (SELECT count(*)::int FROM app.journal WHERE tenant_id=$2) journals
+    FROM app.job_activation a JOIN app.job j ON (j.tenant_id,j.id)=(a.tenant_id,a.job_id) WHERE a.job_id=$1`, [id, tenantA])).rows;
+  expect(persisted).toEqual([{ mode: "pilot_no_charge", accepted_document_hash: accept.documentHash,
+    baseline_quote_version_id: accept.documentId, obligations: 0, journals: 0 }]);
   expect(blockedPractice).not.toHaveBeenCalled();
 }, 60_000);

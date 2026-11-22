@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-04b": {
+      "branches": [
+        "codex/sandbox/pilot-04b"
+      ],
+      "note": "RED pilot quote acceptance, no-charge activation, progress, extras and proof.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/pilot-job-continuation.ts",
+        "apps/api/src/workspace/workspace.service.ts",
+        "apps/web/app/(designed)/jobs/[id]/money/page.tsx",
+        "apps/web/app/(designed)/jobs/[id]/records/page.tsx",
+        "apps/web/app/(designed)/pilot-job-continuation.tsx",
+        "apps/web/app/(designed)/pilot-jobs.tsx",
+        "apps/web/app/api/jobs/[id]/proof/route.ts",
+        "apps/web/app/api/jobs/[id]/quotes/acceptance/route.ts",
+        "apps/web/app/api/jobs/[id]/quotes/activation/route.ts",
+        "apps/web/app/api/jobs/[id]/variations/route.ts",
+        "apps/web/app/api/jobs/[id]/work-state/route.ts",
+        "apps/web/app/jobs/[id]/page.tsx",
+        "apps/web/app/lib/pilot-workspace-server.test.ts",
+        "apps/web/e2e/pilot-04a.browser.ts",
+        "packages/db/migrations/0774_pilot_job_continuation.sql",
+        "packages/db/src/evidence.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/pilot-job-repository.ts",
+        "packages/db/src/proof-repository.ts",
+        "packages/db/src/variation-repository.ts",
+        "packages/db/test/migration-proofs/0774_pilot_job_continuation.proof.json"
+      ]
+    }
+  }
+}
