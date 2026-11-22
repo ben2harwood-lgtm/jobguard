@@ -619,8 +619,12 @@ export const discardDraftRegistryRow = {
   command_type: "job.discard_draft", version: "command.v1", permission_rule: "owner",
   lock_adapter: "route_before_begin", completion_adapter: "discard", audit_class: "commercial", outbox_class: null,
 };
+export const invoiceSendRegistryRow = {
+  command_type: "customer_invoice.send", version: "command.v1", permission_rule: "owner",
+  lock_adapter: "route_before_begin", completion_adapter: "invoice", audit_class: "commercial", outbox_class: "fake_invoice_delivery",
+};
 export const currentCommandRegistryRows = [...lp5RegistryRows.map(row => row.command_type === "IssueClientApproval"
-  ? { ...row, permission_rule: "contractor" } : row), lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow, duplicateDispositionRegistryRow,extraProceedRegistryRow,abandonedSiteVisitRegistryRow,discardDraftRegistryRow];
+  ? { ...row, permission_rule: "contractor" } : row), lateSourceRegistryRow, managedRecoveryRegistryRow, siteSupervisorQueryRegistryRow, darkOrderRegistryRow, rateSuggestionRegistryRow, contractorJobFinishRegistryRow, duplicateDispositionRegistryRow,extraProceedRegistryRow,abandonedSiteVisitRegistryRow,discardDraftRegistryRow,invoiceSendRegistryRow];
 export const lp5bRoutines = [
   {
     "signature": "app.lp5b_bind_follow_up_cancel()",

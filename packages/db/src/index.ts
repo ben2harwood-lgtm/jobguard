@@ -19,6 +19,8 @@ export * from "./job-repository.js";
 export * from "./ledger.js";
 export * from "./commands.js";
 export * from "./outbox.js";
+export { CommercialEmailOutbox } from "./commercial-email-outbox.js";
+export { InvoiceEmailRepository } from "./invoice-email-repository.js";
 export * from "./capture-repository.js";
 export * from "./review-repository.js";
 export * from "./quote-repository.js";

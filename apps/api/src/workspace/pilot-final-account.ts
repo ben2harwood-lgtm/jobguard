@@ -1,5 +1,5 @@
 import { requirePilotG1 } from "@jobguard/config";
-import { FinalAccountCommandService, FinalAccountLockRepository, VariationRepository, type VerifiedTenantContext } from "@jobguard/db";
+import { FinalAccountCommandService, FinalAccountLockRepository, InvoiceEmailRepository, VariationRepository, type VerifiedTenantContext } from "@jobguard/db";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { finalAccountCommandV1 } from "../final-account.contracts.js";
@@ -37,6 +37,11 @@ export function pilotFinalAccount(pool: Pool, context: VerifiedTenantContext, ac
 
   return {
     read,
+    stageInvoiceEmail: async (jobId: string, raw: unknown) => {
+      const actor = await access(jobId, true);
+      return new InvoiceEmailRepository(pool).stage(context, jobId, raw,
+        { actorMembershipId: actor.membershipId, checkGate: gate });
+    },
     assemble: async (jobId: string, raw: unknown) => {
       const actor = await access(jobId, true);
       const input = command(finalAccountCommandV1, raw);

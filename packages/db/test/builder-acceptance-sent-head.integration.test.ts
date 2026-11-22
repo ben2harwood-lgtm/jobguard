@@ -17,7 +17,7 @@ import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 import { snapshotRows } from "./upgrade-proof-utils.js";
 import { loadMigrationProofs } from "./migration-proof-loader.js";
 import { lp11EmptyTables } from "./later-empty-tables.js";
-import { discardDraftRegistryRow } from "./lp5-command-catalog.js";
+import { discardDraftRegistryRow, invoiceSendRegistryRow } from "./lp5-command-catalog.js";
 
 const own = "0743_builder_acceptance_sent_head.sql";
 const sqlUrl = new URL(`../migrations/${own}`, import.meta.url);
@@ -352,7 +352,7 @@ describe("0745 populated predecessor upgrade",()=>{
     await migrate(db.owner);
     // Require every earlier row plus the exact empty LP-6d, LP-10 and LP-11 tables.
     const upgraded=await snapshotRows(db.owner);
-    expect(upgraded).toEqual({...before,...lp11EmptyTables,"identity.lp6d_sso_grant_permit":[],"control_plane.worker_action_binding":[],"app.command_type_registry":(await db.owner.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify([...(before["app.command_type_registry"] as unknown[]), discardDraftRegistryRow])])).rows[0].data});
+    expect(upgraded).toEqual({...before,...lp11EmptyTables,"identity.lp6d_sso_grant_permit":[],"control_plane.worker_action_binding":[],"app.command_type_registry":(await db.owner.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify([...(before["app.command_type_registry"] as unknown[]), discardDraftRegistryRow, invoiceSendRegistryRow])])).rows[0].data});
     expect(await catalog(db.owner)).toEqual(acl);
     expect(acl.map(r=>r.runtime)).toEqual([false,true]);
     expect(acl.every(r=>r.owner==="jobguard_migration"&&r.prosecdef)).toBe(true);
