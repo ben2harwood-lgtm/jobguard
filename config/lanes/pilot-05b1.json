@@ -26,7 +26,8 @@
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
         "packages/db/test/migration-proofs/0777_pilot_final_check.proof.json",
         "packages/db/test/pilot-final-check.integration.test.ts",
-        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts"
       ]
     }
   }
