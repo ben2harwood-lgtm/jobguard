@@ -25,7 +25,7 @@ export async function readFirmProfile(db: TenantTransaction): Promise<FirmProfil
   addressLines: row.address_lines, contactEmail: row.contact_email, contactPhone: row.contact_phone }) : null;
 }
 /** Snapshot only: callers persist the returned issuer in a new document version. */
-export async function firmProfileIssuer(db: TenantTransaction, jobId?: string, legacyIssuer = { name: "A Builder Ltd", address: ["1 Trade Road", "London"], email: "builder@example.invalid" }) {
+export async function firmProfileIssuer(db: TenantTransaction, jobId?: string, legacyIssuer = { name: "A Builder Ltd", address: ["1 Trade Road", "London"], email: "builder@example.invalid" }, requireSaved = false) {
  // Serialize issuer reads with saves, including the first profile insert.
  if ((await db.$client.query("SELECT to_regprocedure('app.current_firm_profile_key()') IS NOT NULL present")).rows[0]?.present) {
   const { key, tenant } = (await db.$client.query("SELECT app.current_firm_profile_key() key, current_setting('app.tenant_id',true) tenant")).rows[0];
@@ -38,6 +38,7 @@ export async function firmProfileIssuer(db: TenantTransaction, jobId?: string, l
   else if (profile && row.name !== null) profile = { ...profile, tradingName: row.name };
  }
  // Supplied historical documents retain their issuer when no saved profile exists.
+ if (requireSaved && (!profile?.addressLines.length || !profile.contactEmail.toLowerCase().endsWith(".invalid"))) throw new FirmProfileError("INVALID_PROFILE");
  if (!profile) return legacyIssuer;
  return { name: profile.tradingName,
   address: profile.addressLines.length ? profile.addressLines : ["Address not provided"],

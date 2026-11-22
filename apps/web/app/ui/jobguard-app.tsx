@@ -88,7 +88,7 @@ function Logo(){return <span className="logo" aria-hidden="true">JG</span>} func
 
 const referenceWalk=`Practice decorating. Protect room £200.00. Prepare walls £200.00. Paint walls £200.00. Finish trim £200.00. Clean site £100.00. Replace shelves`;
 type CaptureResult=ReviewCaptureResult;
-export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id:string)=>`/jobs/${id}`,onCaptured}:{tenantId:string;close:()=>void;initialText?:string;mode?:"own"|"example";reviewHref?:(id:string)=>string;onCaptured?:(result:ReviewCaptureResult)=>void}) {
+export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id:string)=>`/jobs/${id}`,onCaptured, pilotFetch}:{tenantId:string;pilotFetch?: typeof fetch;close:()=>void;initialText?:string;mode?:"own"|"example";reviewHref?:(id:string)=>string;onCaptured?:(result:ReviewCaptureResult)=>void}) {
   const [reviewing,setReviewing]=useState(false),
     [textValue,setTextValue]=useState(initialText ?? (mode==="own"?"":referenceWalk)),
     [dictation,setDictation]=useState<{raw:string}|null>(null),
@@ -121,7 +121,7 @@ export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id
     // The ref closes the same-tick double-click window before React renders disabled controls.
     submitting.current=true;setBusy(true);setMessage("Making your draft…");
     try {
-      const response=await fetch("/api/jobs/capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...input,captureId})});
+      const response=await (pilotFetch ?? fetch)("/api/jobs/capture",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...input,captureId})});
       if(!response.ok)throw new Error(((await response.json())as{code?:string}).code);
       const captured=await response.json() as CaptureResult;
       setResult(captured);onCaptured?.(captured);
@@ -136,7 +136,7 @@ export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id
   }
   return <section className="walk">
     <button type="button" className="back" onClick={close}>← Back to jobs</button>
-    <p className="eyebrow">New job · safe demo</p><h1>Walk the job</h1>
+    <p className="eyebrow">{pilotFetch ? "New job · free pilot" : "New job · safe demo"}</p><h1>Walk the job</h1>
     <p className="screen-intro">Say or type the job the way you'd tell the customer. JobGuard splits it into lines for you to check. You can edit anything before it goes further.</p>
     <LocalDictation applyDisabled={busy} onUse={(text,raw)=>{if(submitting.current)return;setTextValue(text);setDictation({raw});sourceChanged();}}/>
     <div className="walk-grid"><div className="walk-input">

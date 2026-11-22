@@ -1,5 +1,5 @@
 import { PilotG1DeniedError, requirePilotG1 } from "@jobguard/config";
-import { RequestBindingRefusedError } from "@jobguard/db";
+import { CaptureConflictError, FirmProfileRepository, firmProfileV1, JobPartiesRepository, RequestBindingRefusedError } from "@jobguard/db";
 import { AuthError } from "../auth/auth-provider.js";
 import { resolveVerifiedTenantContext, type TenantRequestCredentials } from "../auth/principal-bridge.js";
 import { z } from "zod";
@@ -33,6 +33,8 @@ import type { IdentityApplication } from "../auth/identity.application.js";
 import { EnterpriseIdentityRepository } from "@jobguard/db";
 import { PreventionCheckApplication } from "../prevention-check.application.js";
 import type { Pool } from "pg";
+import { pilotJobAccess } from "./pilot-job-access.js";
+import { jobPartiesFormV1 } from "@jobguard/core";
 import { WorkspaceService, WorkspaceServiceError } from "./workspace.service.js";
 import { SandboxRepository } from "@jobguard/db";
 import { SandboxService } from "../sandbox/sandbox.service.js";
@@ -129,7 +131,43 @@ export async function createPilotWorkspaceApplication(
   const context = await resolveVerifiedTenantContext(identity.provider, credentials, identity.allowedOrigin);
 
   const jobs = new WorkspaceService(pool);
-  return { listJobs: (jobId?: string) => jobs.listPilotJobs(context, jobId) };
+  const access = pilotJobAccess(pool, context);
+  const capture = new CaptureApplication(pool, undefined, access);
+  const quote = new QuoteApplication(pool, undefined, access);
+  const firmProfile = new FirmProfileRepository(pool);
+  const parties = new JobPartiesRepository(pool);
+  return {
+    listJobs: (jobId?: string) => jobs.listPilotJobs(context, jobId),
+    capture: {
+      create: capture.capture.bind(capture), get: capture.view.bind(capture),
+      save: capture.save.bind(capture), confirm: capture.confirm.bind(capture),
+    },
+    quote: {
+      get: quote.get.bind(quote), save: quote.save.bind(quote), preview: quote.preview.bind(quote),
+      issue: quote.issue.bind(quote), deliveryView: quote.deliveryView.bind(quote), pdf: quote.pdf.bind(quote),
+    },
+    profile: {
+      read: () => firmProfile.read(context),
+      save: async (raw: unknown) => {
+        await access(undefined, true);
+        const input = firmProfileV1.safeParse(raw);
+        if (!input.success || !input.data.contactEmail.toLowerCase().endsWith(".invalid")) throw new Error("INVALID_PROFILE");
+        return firmProfile.save(context, input.data);
+      },
+    },
+    parties: {
+      read: async (id: string) => {
+        const actor = await access(id, true);
+        return parties.view(context, actor.membershipId, id);
+      },
+      save: async (id: string, raw: unknown) => {
+        const actor = await access(id, true);
+        const input = jobPartiesFormV1.safeParse(raw);
+        if (!input.success || !input.data.customer.email?.toLowerCase().endsWith(".invalid")) throw new Error("INVALID_PARTIES");
+        return parties.command(context, actor.membershipId, id, input.data);
+      },
+    },
+  };
 }
 
 export function pilotWorkspaceFailure(error: unknown): { code: string; status: number } {
@@ -138,6 +176,21 @@ export function pilotWorkspaceFailure(error: unknown): { code: string; status: n
   if (error instanceof RequestBindingRefusedError) return { code: "TENANT_FORBIDDEN", status: 403 };
   if (error instanceof WorkspaceServiceError && error.code === "NOT_FOUND") return { code: error.code, status: 404 };
   if (error instanceof z.ZodError) return { code: "TENANT_FORBIDDEN", status: 403 };
+  if (error instanceof CaptureConflictError) return { code: error.code, status: 409 };
+  if (error instanceof Error) {
+    const code = "code" in error && error.code !== "22023" ? error.code : error.message;
+    switch (code) {
+      case "NOT_FOUND": return { code, status: 404 };
+      case "FORBIDDEN": case "AUTHORIZATION_INVALID": case "TENANT_FORBIDDEN": return { code, status: 403 };
+      case "42501": return { code: "FORBIDDEN", status: 403 };
+      case "INVALID_CAPTURE": case "INVALID_QUOTE": case "INVALID_PROFILE": case "INVALID_PARTIES":
+      case "REVIEW_INCOMPLETE": case "QUOTE_NOT_ISSUABLE": case "JOB_PARTIES_REQUIRED": case "RECIPIENT_CHANGED":
+        return { code, status: 400 };
+      case "REVIEW_REVISION_CONFLICT": case "QUOTE_REVISION_CONFLICT": case "COMMAND_CONFLICT":
+      case "REVISION_CONFLICT": case "QUOTE_CHANGED": case "STALE_QUOTE_APPROVAL":
+        return { code, status: 409 };
+    }
+  }
   return { code: "DATABASE_UNAVAILABLE", status: 503 };
 }
 

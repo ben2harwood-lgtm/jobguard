@@ -37,11 +37,22 @@ function failure(error: unknown) {
  if ((error as { code?: string })?.code === "UNAUTHENTICATED" || (error instanceof Error && error.message === "UNAUTHENTICATED")) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401, headers });
  return practiceFailure(error) ?? NextResponse.json({ code: "DATABASE_UNAVAILABLE" }, { status: 503, headers });
 }
-export async function GET() {
+export function GET(): Promise<NextResponse>;
+export function GET(request: Request): Promise<NextResponse>;
+export async function GET(request?: Request) {
+ if (process.env.JOBGUARD_ENV === "pilot_no_charge") {
+  if (!request) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401, headers });
+  const { pilotWorkspaceRoute } = await import("../../lib/pilot-workspace-route.mjs");
+  return pilotWorkspaceRoute(request, app => app.profile.read());
+ }
  try { const pool = syntheticPool(); const context: VerifiedTenantContext = await profileContext(pool); return NextResponse.json(await new FirmProfileRepository(pool).read(context), { headers }); }
  catch (error) { return failure(error); }
 }
 export async function POST(request: Request) {
+ if (process.env.JOBGUARD_ENV === "pilot_no_charge") {
+  const { pilotWorkspaceRoute } = await import("../../lib/pilot-workspace-route.mjs");
+  return pilotWorkspaceRoute(request, async app => app.profile.save(await request.json().catch(() => null)));
+ }
  if (!isTrustedBrowserOrigin(request)) return NextResponse.json({ code: "FORBIDDEN" }, { status: 403, headers });
  try {
   const pool = syntheticPool(); const context: VerifiedTenantContext = await profileContext(pool);
