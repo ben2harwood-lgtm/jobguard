@@ -5,13 +5,14 @@ export const identityChallengeMessage = z.object({
   environment: z.enum(["synthetic_demo", "pilot_no_charge"]),
 }).strict();
 export const identityEmailV1 = identityChallengeMessage.extend({ environment: z.literal("synthetic_demo") });
+export type IdentityChallenge = z.infer<typeof identityChallengeMessage>;
 export interface IdentityChallengeDelivery {
   assertRecipient(email: string, environment: string): void;
-  deliver(message: z.infer<typeof identityChallengeMessage>): Promise<unknown>;
+  deliver(message: IdentityChallenge): Promise<unknown>;
 }
 export class IdentityRouteBlocked extends Error { readonly code = "IDENTITY_ROUTE_BLOCKED"; }
 /** D04 is proposed. No live transport can be constructed, regardless of a supplied mode flag. */
-export class FixtureIdentityEmail {
+export class FixtureIdentityEmail implements IdentityChallengeDelivery {
   assertRecipient(email: string, environment: string): void {
     if (environment !== "synthetic_demo" || !email.toLowerCase().endsWith(".invalid")) throw new IdentityRouteBlocked("D04 has not approved an identity email route");
   }
