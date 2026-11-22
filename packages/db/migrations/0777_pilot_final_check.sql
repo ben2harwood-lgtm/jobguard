@@ -3,6 +3,9 @@ BEGIN;
 -- Separate pilot entrypoints preserve the synthetic shadow role's grant set.
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='jobguard_pilot_final_check') THEN
+  IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolcreaterole)) THEN
+   RAISE EXCEPTION 'jobguard_pilot_final_check missing; run administrative ensureRoles' USING ERRCODE='42704';
+  END IF;
   CREATE ROLE jobguard_pilot_final_check NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
  END IF;
  IF EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname='jobguard_pilot_final_check'
