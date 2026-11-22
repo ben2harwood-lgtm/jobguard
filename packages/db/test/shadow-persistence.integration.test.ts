@@ -9,6 +9,7 @@ import { migrate, MIGRATION_URLS } from "../src/migrate.js";
 import { withTenant, verifiedTenantContextFromMembership } from "../src/tenant-context.js";
 import { closeTestPools, installLegacySyntheticPartyFixtures } from "./pool-test-utils.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
+import { createPilotPrivacyRehearsal } from "../../../tools/pilot-privacy-rehearsal.mjs";
 const T=randomUUID(), O=randomUUID(), J=randomUUID(), K=randomUUID(), L=randomUUID(), M=randomUUID(), U=randomUUID(), H="a".repeat(64);
 const context=(tenantId:string=T)=>verifiedTenantContextFromMembership({tenantId,membershipId:M,identityUserId:U} as Parameters<typeof verifiedTenantContextFromMembership>[0]);
 let postgres:EmbeddedPostgres, admin:Pool, runtime:Pool, shadow:Pool, emergency:Pool, directory:string, port:number;
@@ -193,6 +194,47 @@ it('SB-26: Links across tenants or jobs on signals, locks, allocations, attribut
   expect(keys.length,table).toBeGreaterThan(0);
   for(const key of keys) { expect(key.def,table).toContain('tenant_id'); expect(key.convalidated,table).toBe(true); }
  }
+});
+
+it("PILOT-09 commits scoped privacy disclosures before returning reviewed excerpts", async () => {
+ const subject = { tenantId: T, subjectId: randomUUID() };
+ const selected = await signal();
+ const unselected = await signal();
+ const otherTenant = await signal(L, O);
+ const workflow = createPilotPrivacyRehearsal({
+  records: [
+   { ...subject, kind: "shadow", id: selected, jobId: J, release: { note: "Reviewed fictional excerpt" } },
+   { ...subject, kind: "shadow", id: unselected, jobId: J },
+   { ...subject, tenantId: O, kind: "shadow", id: otherTenant, jobId: L, release: { note: "Foreign excerpt" } },
+  ],
+  verify(credential: string, role: string) {
+   if (credential === "operator" && role === "privacy_operator") return { tenantId: T, role };
+   if (credential === "requester" && role === "subject_request") {
+    return { ...subject, identityVerified: true, authorityVerified: true, controller: "jobguard" };
+   }
+  },
+  snapshot: () => [],
+  clock: Date.now,
+  async disclose(event: { tenantId: string; jobId: string; signalId: string; eventId: string; route: string }) {
+   return withTenant(shadow, context(), async db => (await db.$client.query<{ id: string }>(
+    "SELECT app.record_shadow_disclosure($1,$2,$3,$4,$5) AS id",
+    [event.tenantId, event.jobId, event.signalId, event.eventId, event.route],
+   )).rows[0]!.id);
+  },
+ });
+ const operator = workflow.operator("operator", "privacy_operator");
+ for (const operation of ["access", "export"]) {
+  const approval = workflow.review(operator, { ...subject, operation, requesterCredential: "requester" });
+  expect(await workflow.execute(operator, approval)).toEqual([
+   { id: selected, kind: "shadow", data: { note: "Reviewed fictional excerpt" } },
+  ]);
+ }
+ expect((await admin.query("SELECT route,before_lock FROM app.shadow_disclosure_event WHERE signal_id=$1 ORDER BY route", [selected])).rows)
+  .toEqual([{ route: "data_subject_access", before_lock: true }, { route: "export", before_lock: true }]);
+ expect((await admin.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE signal_id=$1", [selected])).rows)
+  .toContainEqual({ reason: "disclosed_before_lock" });
+ expect((await admin.query("SELECT disclosed_before_lock FROM app.shadow_commercial_signal WHERE id=ANY($1::uuid[])", [[unselected, otherTenant]])).rows)
+  .toEqual([{ disclosed_before_lock: false }, { disclosed_before_lock: false }]);
 });
 });
 

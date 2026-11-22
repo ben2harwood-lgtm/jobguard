@@ -1,8 +1,11 @@
 import { PolicyGateDeniedError, proposedDecisionRecords } from "@jobguard/config";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { pilotApprovalFixture } from "@jobguard/config/test/pilot-approval";
 import { postFeeObligation } from "./fee-posting.js";
 import { dispatchToProvider } from "./provider-dispatch.js";
 import { issueTaxInvoice } from "./tax-invoice.js";
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe("production policy gates", () => {
   it.each([
@@ -36,10 +39,13 @@ describe.each([
 
   it.each(["synthetic_demo", "pilot_no_charge", "provider_sandbox", "production_billing"] as const)(
     "preserves known mode %s", mode => {
-      if (mode === "production_billing") {
+      if (mode === "production_billing" || mode === "pilot_no_charge") {
         expect(() => effect(mode, decision)).toThrow(PolicyGateDeniedError);
       } else {
         expect(effect(mode, decision)).toBe("gate_passed");
+      }
+      if (mode === "pilot_no_charge") {
+        for (const [key, value] of Object.entries(pilotApprovalFixture().env)) vi.stubEnv(key, value);
       }
       expect(effect(mode, { ...decision, status: "approved" })).toBe("gate_passed");
     },

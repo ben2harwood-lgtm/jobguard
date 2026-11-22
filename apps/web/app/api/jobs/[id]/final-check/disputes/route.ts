@@ -4,7 +4,11 @@ import { hasSyntheticSession,practiceFailure } from "../../../../../lib/syntheti
 import { workspaceApplication } from "../../../../../lib/workspace-server";
 export const dynamic="force-dynamic";
 const headers={"Cache-Control":"no-store"};
-export async function GET(_request:Request,{params}:{params:Promise<{id:string}>}) {
+export async function GET(request:Request,{params}:{params:Promise<{id:string}>}) {
+ if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+  const { pilotWorkspaceRoute } = await import("../../../../../lib/pilot-workspace-route.mjs");
+  return pilotWorkspaceRoute(request, async app => app.finalCheck.disputes((await params).id));
+ }
  if(!hasSyntheticSession((await cookies()).get("jg_session")?.value))return NextResponse.json({code:"UNAUTHENTICATED"},{status:401,headers});
  try {return NextResponse.json(await (await workspaceApplication()).finalCheck.disputes((await params).id),{headers});}
  catch(error){

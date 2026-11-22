@@ -4,7 +4,7 @@ import { instantV1 } from "./receipt-allocation.js";
 import { freezeShadow, shadowId } from "./shadow-domain/types.js";
 import { measureShadowPilot, ShadowPilotMeasurementError, shadowPilotMeasurementV1 } from "./shadow-pilot-measurement.js";
 
-import { shadowPilotFinancialRecordV1, shadowPilotFinancialHash, shadowPilotFinancialCounts } from "./shadow-pilot-financial-record.js";
+import { shadowPilotFinancialRecordV1, shadowPilotFinancialHash, shadowPilotFinancialCounts, shadowPilotSubscriptionCounts } from "./shadow-pilot-financial-record.js";
 
 const ref = z.string().regex(/^synthetic:[a-z0-9_.-]+$/u).max(150);
 const binding = { tenantId: shadowId, jobId: shadowId, lockId: shadowId };
@@ -62,7 +62,8 @@ export function generateShadowPilotReport(raw: unknown, access: Parameters<typeo
     || [...financial.jobIds].sort().join() !== financial.jobIds.join()
     || shadowPilotFinancialHash(financial) !== sourceHash
     || financial.sources.some(row => !financial.jobIds.includes(row.jobId))) invalid();
-  if (financial.sources.length) throw new ShadowPilotReportError(financial.sources);
+  const financialSources = [...financial.sources, ...(financial.subscriptionSources ?? [])];
+  if (financialSources.length) throw new ShadowPilotReportError(financialSources);
   const fairness = observations(input.fairness, input.measurement), harm = observations(input.harm, input.measurement);
   const reveal = input.reveal;
   if (reveal && (reveal.tenantId !== usage.tenantId || reveal.jobId !== usage.jobId || reveal.lockId !== usage.lockId)) invalid();
@@ -71,6 +72,8 @@ export function generateShadowPilotReport(raw: unknown, access: Parameters<typeo
   }
   const records = { ...input, measurement: usage.records, fairness, harm };
   const missing = [...usage.missing];
+  const subscriptionEffects = shadowPilotSubscriptionCounts(input.financialRecord);
+  if (!subscriptionEffects) missing.push("subscriptionEffects");
   const metric = <T>(name: string, value: T | null, method: string) => {
     if (value === null) missing.push(name);
     return { status: value === null ? "missing" as const : "observed" as const, value, method };
@@ -79,12 +82,29 @@ export function generateShadowPilotReport(raw: unknown, access: Parameters<typeo
     version: "shadow-pilot-generated-report.v1", environment: "synthetic_demo", label: "Synthetic illustration — no charge",
     tenantId: usage.tenantId, jobId: usage.jobId, lockId: usage.lockId,
     inputDigest: sha256(JSON.stringify(records)), records, usage: usage.metrics,
+    denominators: {
+      jobs: 1,
+      lockSnapshots: 1,
+      signals: records.measurement.signals?.length ?? null,
+      falsePositiveAssessments: records.measurement.signals?.filter(row => row.falsePositive !== null).length ?? null,
+      confirmedAmountAssessments: records.measurement.signals?.filter(row => row.confirmedNetPence !== null).length ?? null,
+      attributionAssessments: records.measurement.signals?.filter(row => row.attributionDisputed !== null).length ?? null,
+      usefulnessAssessments: records.measurement.signals?.filter(row => row.useful !== null).length ?? null,
+      settledReceipts: records.measurement.receipts?.length ?? null,
+      allocationsAndReversals: records.measurement.allocations?.length ?? null,
+      mustSurfaceEvents: records.measurement.mustSurface?.length ?? null,
+      mustSurfaceAssessments: records.measurement.mustSurface?.filter(row => row.surfacedByDeadline !== null).length ?? null,
+      fairnessResponses: fairness?.length ?? null,
+      withholdingObservations: harm?.length ?? null,
+      subscriptionScenarios: records.measurement.subscriptionScenario === null ? null : 1,
+    },
     fairness: metric("fairness", fairness?.length ? fairness.map(row => ({ responseId: row.id, rating: row.rating })) : null,
       "List distinct explicit synthetic ratings on a 1–5 fairness scale, only after the referenced reveal; report separately from usage, with no inferred rating or causal claim."),
     harmFromWithholding: metric("harmFromWithholding", harm?.length ? harm.map(row => ({ observationId: row.id, harmObserved: row.harmObserved })) : null,
       "List distinct explicit synthetic withholding-harm observations, including explicit negative observations; absent observations never mean no harm."),
     missing, notCollected: ["randomised hidden-versus-shown trial (requires approved D13 scope and human observations)"],
-    effects: shadowPilotFinancialCounts(input.financialRecord), financialRecord: input.financialRecord, releaseApproval: false,
+    effects: shadowPilotFinancialCounts(input.financialRecord), subscriptionEffects,
+    financialRecord: input.financialRecord, releaseApproval: false,
     reviewRequirement: "Report review required before G4-S; this report is evidence for decisions, not an approval.",
   });
 }

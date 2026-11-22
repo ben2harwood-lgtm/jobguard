@@ -2,7 +2,7 @@ import { afterAll, expect, it } from "vitest";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
 import { migrate } from "../src/migrate.js";
 import { lp11EmptyTables } from "./later-empty-tables.js";
-import { discardDraftRegistryRow } from "./lp5-command-catalog.js";
+import { discardDraftRegistryRow, invoiceSendRegistryRow } from "./lp5-command-catalog.js";
 
 let cluster: Cluster | undefined;
 afterAll(async () => { await cluster?.close(); });
@@ -39,5 +39,5 @@ it("0761 preserves populated predecessor rows and routine bodies while closing w
     .toEqual({ web_update: false, web_attempt: false, web_claim: false, worker_claim: true, worker_pause_read: true });
   // Migrator replay is harmless; rollback uses forward-fix, never reopened web grants.
   await migrate(db);
-  expect(await snapshot(db)).toEqual({ ...before, ...lp11EmptyTables, "control_plane.worker_action_binding": [], "app.command_type_registry": (await db.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify([...(before["app.command_type_registry"] as unknown[]), discardDraftRegistryRow])])).rows[0].data });
+  expect(await snapshot(db)).toEqual({ ...before, ...lp11EmptyTables, "control_plane.worker_action_binding": [], "app.command_type_registry": (await db.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)", [JSON.stringify([...(before["app.command_type_registry"] as unknown[]), discardDraftRegistryRow, invoiceSendRegistryRow])])).rows[0].data });
 }, 120_000);

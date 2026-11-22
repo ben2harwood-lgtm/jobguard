@@ -1,0 +1,153 @@
+# Isolated fictional fixture. Nothing publishes a port to the host.
+x-app: &app
+  image: jobguard-pilot-08-fixture
+  build:
+    context: ../..
+    dockerfile: infra/pilot/Containerfile
+
+x-app-env: &app-env
+  JOBGUARD_COMMERCIAL_OUTBOUND: paused
+  PILOT_FIXTURE_RUNTIME_PASSWORD: ${FIXTURE_RUNTIME_PASSWORD:?}
+  PILOT_FIXTURE_IDENTITY_PASSWORD: ${FIXTURE_IDENTITY_PASSWORD:?}
+  PILOT_FIXTURE_AUTH_SECRET: ${FIXTURE_AUTH_SECRET:?}
+  PILOT_FIXTURE_STORAGE_ID: ${FIXTURE_STORAGE_ID:?}
+  PILOT_FIXTURE_STORAGE_SECRET: ${FIXTURE_STORAGE_SECRET:?}
+
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    networks: [app, recovery]
+    environment:
+      POSTGRES_PASSWORD: ${FIXTURE_POSTGRES_PASSWORD:?}
+      FIXTURE_RUNTIME_PASSWORD: ${FIXTURE_RUNTIME_PASSWORD:?}
+      FIXTURE_IDENTITY_PASSWORD: ${FIXTURE_IDENTITY_PASSWORD:?}
+      FIXTURE_WORKER_PASSWORD: ${FIXTURE_WORKER_PASSWORD:?}
+      FIXTURE_QUEUE_PASSWORD: ${FIXTURE_QUEUE_PASSWORD:?}
+      FIXTURE_BACKUP_PASSWORD: ${FIXTURE_BACKUP_PASSWORD:?}
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ${FIXTURE_DATABASE_INIT:?}:/docker-entrypoint-initdb.d/01-fixture.sh:ro
+    healthcheck:
+      test: [CMD, pg_isready, -h, 127.0.0.1, -U, postgres]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  objects:
+    <<: *app
+    command: [node, infra/pilot/fixture-objects.mjs]
+    networks: [storage]
+    environment:
+      FIXTURE_STORAGE_ID: ${FIXTURE_STORAGE_ID:?}
+    volumes: [objects:/fixture-objects]
+  web:
+    <<: *app
+    command: [node, infra/pilot/fixture-app.mjs, web]
+    environment: *app-env
+    networks: [app]
+  api:
+    <<: *app
+    command: [node, infra/pilot/fixture-app.mjs, api]
+    environment: *app-env
+    networks: [app, storage]
+    depends_on:
+      postgres: {condition: service_healthy}
+  worker:
+    <<: *app
+    command: [node, infra/pilot/fixture-app.mjs, worker]
+    restart: always
+    stop_grace_period: 35s
+    networks: [app]
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      <<: *app-env
+      PILOT_FIXTURE_WORKER_PASSWORD: ${FIXTURE_WORKER_PASSWORD:?}
+      PILOT_FIXTURE_QUEUE_PASSWORD: ${FIXTURE_QUEUE_PASSWORD:?}
+      PILOT_WORKER_HEALTH_PORT: 7308
+      PILOT_QUEUE_BACKLOG_SECONDS: 5
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:7308/healthz').then(r=>{if(!r.ok) process.exitCode=1}).catch(()=>{process.exitCode=1})"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  monitor:
+    <<: *app
+    command: [node, tools/pilot-monitor.mjs]
+    restart: always
+    environment:
+      PILOT_WORKER_HEALTH_URL: http://worker:7308/healthz
+    networks: [app]
+  exercise:
+    <<: *app
+    profiles: [exercise]
+    command: [node, infra/pilot/fixture-app.mjs, exercise]
+    environment:
+      <<: *app-env
+      PILOT_FIXTURE_QUEUE_PASSWORD: ${FIXTURE_QUEUE_PASSWORD:?}
+    networks: [app, storage]
+  backup:
+    image: postgres:16.10-alpine
+    profiles: [exercise]
+    networks: [recovery]
+    environment:
+      PGPASSWORD: ${FIXTURE_BACKUP_PASSWORD:?}
+      PGHOST: postgres
+      PGUSER: fixture_backup
+      PGDATABASE: jobguard_pilot_fixture
+    volumes: [backups:/backup]
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        umask 077
+        rm -f /backup/fixture.pending
+        if ! pg_dump --table=public.fixture_recovery -Fc -f /backup/fixture.pending 2>/dev/null ||
+           ! pg_restore --list /backup/fixture.pending >/dev/null 2>&1; then
+          echo '{"signal":"backup.failed","ownerRole":"BACKUP_OPERATOR"}'
+          exit 1
+        fi
+        mv /backup/fixture.pending /backup/fixture.dump
+        echo PILOT_FIXTURE_BACKUP_VERIFIED
+  restore-db:
+    image: postgres:16.10-alpine
+    profiles: [exercise]
+    networks: [restore]
+    environment:
+      POSTGRES_PASSWORD: ${FIXTURE_RESTORE_PASSWORD:?}
+      POSTGRES_DB: jobguard_pilot_restore_fixture
+    healthcheck:
+      test: [CMD, pg_isready, -h, 127.0.0.1, -U, postgres]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+  restore:
+    image: postgres:16.10-alpine
+    profiles: [exercise]
+    networks: [restore]
+    environment:
+      PGPASSWORD: ${FIXTURE_RESTORE_PASSWORD:?}
+      PGHOST: restore-db
+      PGUSER: postgres
+      PGDATABASE: jobguard_pilot_restore_fixture
+    volumes: [backups:/backup:ro]
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        pg_restore --exit-on-error --no-owner --no-acl --dbname="$$PGDATABASE" /backup/fixture.dump >/dev/null 2>&1
+        test "$$(psql --no-psqlrc --tuples-only --no-align --command='SELECT payload FROM public.fixture_recovery')" = fictional-recovery-sentinel
+        echo PILOT_FIXTURE_RESTORE_VERIFIED
+  checkpoint:
+    <<: *app
+    profiles: [exercise]
+    network_mode: none
+    volumes: [checkpoints:/fixture-checkpoints]
+    command: [node, infra/pilot/fixture-checkpoint.mjs]
+networks:
+  app: {internal: true}
+  storage: {internal: true}
+  recovery: {internal: true}
+  restore: {internal: true}
+volumes:
+  database: {}
+  objects: {}
+  checkpoints: {}
+  backups: {}

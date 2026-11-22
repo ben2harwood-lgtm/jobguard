@@ -2,13 +2,14 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { shadowPilotFinancialCounts, shadowPilotFinancialHash } from "@jobguard/core";
+import { shadowPilotFinancialCounts, shadowPilotFinancialHash, shadowPilotSubscriptionCounts } from "@jobguard/core";
 import { ShadowPilotFinancialReader } from "../src/shadow-pilot-financial-reader.js";
 import { SimulationFeeStatementRepository } from "../src/simulation-fee-statement-repository.js";
 import { SimulationFeeCollectionRepository } from "../src/simulation-fee-collection-repository.js";
-import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, type FinalCheckFixture } from "./final-check-fixture.js";
+import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, finalCheckTenant, FINAL_CHECK_ACTOR, type FinalCheckFixture } from "./final-check-fixture.js";
 import { catchFeeFixture } from "./success-fee-catch-fixture.js";
-import { testTenantContext } from "./tenant-context-test-utils.js";
+import { bindTestClient, testBoundTenantContext, testTenantContext } from "./tenant-context-test-utils.js";
+import { preparedPeriod } from "./subscription-persistence-fixtures.js";
 
 let f: FinalCheckFixture, research: Pool, reader: ShadowPilotFinancialReader;
 beforeAll(async () => {
@@ -90,4 +91,80 @@ it("refuses and names gross accrual, invoice and collection rows as each is stor
       expect((await client.query(`SELECT id FROM app.${table} WHERE job_id=$1`, [x.jobId])).rows).toEqual([]);
     await client.query("ROLLBACK");
   } finally { client.release(); }
+
+  await finalCheckTenant(f.admin, x.context.tenantId, async db => {
+    await db.query("SELECT set_config('app.practice_material_digest',$1,true)", [x.auth.digest]);
+    await bindTestClient(f.admin, db, x.context.tenantId, x.actor.membershipId);
+    await db.query("SELECT app.write_platform_fee_collection($1,$2,$3::jsonb)", [x.jobId, x.auth.digest, {
+      version: "simulation-fee-collection-command.v1", action: "settle", commandId: randomUUID(), attemptId: attempt.attemptId,
+    }]);
+  });
+  await x.invoices.reverseReceipt(x.context, {
+    jobId: x.jobId, invoiceId: x.invoiceId, paymentId: x.paymentId, actorMembershipId: x.actor.membershipId,
+    commandId: randomUUID(), reason: "Fictional payment reversal",
+  });
+  const correction = await statements.command(x.context, x.jobId, x.auth.digest,
+    { version: "simulation-fee-statement-command.v1", action: "issue", commandId: randomUUID() });
+  const refund = await new SimulationFeeCollectionRepository(f.runtime).command(x.context, x.jobId, x.auth.digest,
+    { version: "simulation-fee-collection-command.v1", action: "refund", commandId: randomUUID(),
+      statementId: correction.statementId, statementHash: correction.documentHash, amountPence: 8000 });
+  expect(shadowPilotFinancialCounts(await reader.read(x.context, [x.jobId]))).toEqual({ accruals: 1, invoices: 2, collections: 2 });
+  await expect(reader.report(x.context, [x.jobId], input, access)).rejects.toThrow(refund.attemptId);
+});
+
+it("refuses tenant-wide subscription activation and period effects even when the selected job books are empty", async () => {
+  const { a } = await preparedPeriod(f);
+  const { input, access } = reportInput(a.tenantId, a.jobId);
+  const record = await reader.read(a.context, [a.jobId]);
+  expect(record.sources).toEqual([]);
+  expect(shadowPilotSubscriptionCounts(record)).toEqual({ activations: 1, effects: 2 });
+  expect(record.subscriptionSources?.map(row => row.table)).toEqual([
+    "subscription_agreement_revision", "platform_statement", "subscription_period",
+  ]);
+  await expect(reader.report(a.context, [a.jobId], input, access)).rejects.toMatchObject({
+    message: expect.stringContaining("subscription_agreement_revision"), financialSources: record.subscriptionSources,
+  });
+  const clean = await seedFinalCheckJob(f);
+  expect(shadowPilotSubscriptionCounts(await reader.read(clean.context, [clean.jobId]))).toEqual({ activations: 0, effects: 0 });
+});
+
+it("exports only the counts of an existing pilot lock and refuses earlier or foreign reads", async () => {
+  const a = await seedFinalCheckJob(f);
+  const offline = await testBoundTenantContext(f.admin, a.tenantId, FINAL_CHECK_ACTOR);
+  const denial = { message: "INVALID_PILOT_REPORT", financialSources: [] };
+  await expect(reader.pilotReport(offline, a.jobId)).rejects.toMatchObject(denial);
+  await a.lock();
+  await expect(reader.pilotReport(offline, a.jobId)).rejects.toMatchObject(denial);
+
+  // Model a stored pilot lock inside the isolated fixture. The production reader never changes a lock.
+  const marker = "fictional-private-capture@example.invalid";
+  const fixture = await f.admin.connect();
+  try {
+    await fixture.query("BEGIN");
+    await fixture.query("SET LOCAL session_replication_role = replica");
+    await fixture.query("UPDATE app.job SET practice_session_digest=NULL,practice_scenario=NULL WHERE (tenant_id,id)=($1,$2)", [a.tenantId, a.jobId]);
+    await fixture.query(`UPDATE app.job_commercial_track SET environment='pilot_no_charge',provenance='pilot_capture'
+      WHERE (tenant_id,job_id)=($1,$2)`, [a.tenantId, a.jobId]);
+    await fixture.query(`UPDATE app.final_account_lock SET onboarding_terms_version='pilot_final_check_terms.v2',
+      snapshot=s.value,snapshot_digest=app.final_lock_hash(s.value),capture_register_hash=app.final_lock_hash(s.value->'captureRegister')
+      FROM (SELECT jsonb_set(snapshot,'{captureRegister}',jsonb_build_array(jsonb_build_object('id',$3::uuid,'description',$4::text))) value
+        FROM app.final_account_lock WHERE (tenant_id,job_id)=($1,$2)) s
+      WHERE (tenant_id,job_id)=($1,$2)`, [a.tenantId, a.jobId, randomUUID(), marker]);
+    await fixture.query("COMMIT");
+  } finally {
+    await fixture.query("ROLLBACK");
+    fixture.release();
+  }
+  const result = await reader.pilotReport(offline, a.jobId);
+  expect(result.report).toMatchObject({
+    usage: { capturesPerJob: { status: "observed", value: 1, denominator: 1 } },
+    missing: expect.arrayContaining(["signalsRemainingAtLock", "fairness", "recoveredAmount"]),
+    effects: { accruals: 0, invoices: 0, collections: 0 }, subscriptionEffects: { activations: 0, effects: 0 },
+    randomisedArm: "disabled",
+  });
+  expect(JSON.stringify(result.report)).not.toMatch(/[a-f0-9]{8}-[a-f0-9]{4}-|[a-f0-9]{64}|@/u);
+  expect(JSON.stringify(result)).not.toContain(marker);
+  expect(await reader.pilotReport(offline, a.jobId)).toEqual(result);
+  await expect(reader.pilotReport(testTenantContext(randomUUID()), a.jobId)).rejects.toMatchObject(denial);
+  await expect(new ShadowPilotFinancialReader(f.runtime).pilotReport(offline, a.jobId)).rejects.toMatchObject({ code: "42501" });
 });

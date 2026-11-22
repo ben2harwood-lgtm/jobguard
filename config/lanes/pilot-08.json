@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-08": {
+      "branches": [
+        "codex/sandbox/pilot-08"
+      ],
+      "note": "RED pilot infrastructure and recovery fixture with an isolated worker and redacted operational alerts.",
+      "allow": [
+        ".env.example",
+        "DEPLOY.md",
+        "apps/api/src/pilot-worker-health.test.ts",
+        "apps/api/src/pilot-worker-health.ts",
+        "apps/api/src/pilot-worker.ts",
+        "docs/operations/pilot-infrastructure.md",
+        "infra/pilot/Containerfile",
+        "infra/pilot/Containerfile.dockerignore",
+        "infra/pilot/fixture-app.mjs",
+        "infra/pilot/fixture-checkpoint.mjs",
+        "infra/pilot/fixture-database.sh",
+        "infra/pilot/fixture-exercise.mjs",
+        "infra/pilot/fixture-objects.mjs",
+        "infra/pilot/fixture.yml",
+        "infra/pilot/jobguard-pilot-worker.service",
+        "infra/pilot/topology.v1.json",
+        "packages/config/src/index.ts",
+        "packages/config/src/pilot-operations.test.ts",
+        "packages/config/src/pilot-operations.ts",
+        "tools/pilot-fixture.sh",
+        "tools/pilot-monitor.mjs",
+        "tools/pilot-monitor.test.mjs"
+      ]
+    }
+  }
+}

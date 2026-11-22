@@ -139,6 +139,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       "SELECT p.prosrc FROM pg_proc p WHERE p.pronamespace='connector'::regnamespace AND p.proname=$1", [routine],
     )).rows).toEqual([{ prosrc: source }]);
   }
+  const pilotFinalAccountSql = await readFile(new URL("../migrations/0776_pilot_final_account.sql", import.meta.url), "utf8");
+  const pilotDisclosureBody = pilotFinalAccountSql.split("CREATE OR REPLACE FUNCTION app.guard_final_lock_disclosure_terms(")[1]!
+    .split("AS $$")[1]!.split("$$;")[0]!;
   const recoverySql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql", import.meta.url), "utf8");
   for (const [name,args] of [
     ["final_check_read_authority","t uuid, j uuid, d text, locking boolean"],
@@ -371,6 +374,30 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   };
   for (const match of lp11Sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
     lp6dBodies.set(match[1]!, [match[3]!]);
+  const pilotInvitationsSql = await readFile(new URL("../migrations/0772_pilot_identity_invitations.sql", import.meta.url), "utf8");
+  const pilotInviteBody = pilotInvitationsSql.split("CREATE OR REPLACE FUNCTION identity.invite_member(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+  const pilotPortalSql = await readFile(new URL("../migrations/0775_pilot_customer_portal.sql", import.meta.url), "utf8");
+  const pilotPortalRoutines = new Set([
+    "app.customer_portal_current(g app.customer_portal_grant)",
+    "app.customer_portal_issuer(t uuid, digest text)",
+    "app.job_source_insert_guard()",
+    "identity.customer_portal_issue(t uuid, builder_digest text, j uuid, c uuid, link_digest text, content text)",
+    "identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)",
+    "identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)",
+  ]);
+  const pilotFinalCheckSql = await readFile(new URL("../migrations/0777_pilot_final_check.sql", import.meta.url), "utf8");
+  const pilotRevealSql = await readFile(new URL("../migrations/0779_pilot_final_check_reveal.sql", import.meta.url), "utf8");
+  const pilotRevealRoutines = new Set([
+    "app.read_final_check_reveal(t uuid, j uuid, d text)",
+    "app.read_final_check_disputes(t uuid, j uuid, d text)",
+    "app.record_final_check_disposition(t uuid, j uuid, d text, p jsonb)",
+    "app.confirm_final_check_catch(t uuid, j uuid, d text, p jsonb)",
+  ]);
+  const pilotFinalCheckRoutines = new Set([
+    "app.lp11_bind_shadow_job(t uuid, j uuid)",
+    "app.final_check_require_worker(p_tenant uuid, p_job uuid)",
+    "app.final_check_worker(t uuid, j uuid)",
+  ]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     if (prior.nspname === advanceDelta.before.nspname && prior.proname === advanceDelta.before.proname && prior.args === advanceDelta.before.args) {
@@ -387,6 +414,39 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => residentBody)
         .replace(" LANGUAGE plpgsql\n", " LANGUAGE plpgsql\n SECURITY DEFINER\n"));
       expect(current?.source).toBe(residentBody);
+      continue;
+    }
+    if (prior.nspname === "app" && prior.proname === "guard_final_lock_disclosure_terms" && prior.args === "") {
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => pilotDisclosureBody));
+      expect(current?.source).toBe(pilotDisclosureBody);
+      continue;
+    }
+    // 0772 replaces this exact invitation body without changing its definition header or privileges.
+    if (prior.nspname === "identity" && prior.proname === "invite_member" &&
+      prior.args === "session_digest character, t uuid, recipient character varying, assigned_role character varying") {
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => pilotInviteBody));
+      expect(current?.source).toBe(pilotInviteBody);
+      continue;
+    }
+    // 0775 replaces these exact bodies; the catalogue proof below still checks all routine privileges.
+    const identity = `${prior.nspname}.${prior.proname}(${prior.args})`;
+    if (pilotFinalCheckRoutines.has(identity) || pilotRevealRoutines.has(identity)) {
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
+      const source = pilotRevealRoutines.has(identity) ? pilotRevealSql : pilotFinalCheckSql;
+      const body = source.split(`CREATE OR REPLACE FUNCTION ${prior.nspname}.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => body));
+      expect(current?.source).toBe(body);
+      continue;
+    }
+    if (pilotPortalRoutines.has(identity)) {
+      const expected = identity === "identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)"
+        ? { ...prior, proacl: "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration,jobguard_binding_owner=X/jobguard_migration}" }
+        : prior;
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(expected);
+      const body = pilotPortalSql.split(`CREATE OR REPLACE FUNCTION ${prior.nspname}.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => body));
+      expect(current?.source).toBe(body);
       continue;
     }
     // 0751 succeeds LP-6d for this exact dispatcher; pin it before generic LP-6d successor handling.
@@ -415,19 +475,10 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       }
       continue;
     }
-    // 0733 changes these exact bodies; retain every routine's security metadata.
-    const customerLinkRoutines = [
-      "app.customer_portal_current(g app.customer_portal_grant)",
-      "app.demo_issue_customer_link(t uuid, j uuid, c uuid, session_digest text, link_digest text, content text)",
-      "identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)",
-      "identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)",
-    ];
-    if (customerLinkRoutines.includes(`${prior.nspname}.${prior.proname}(${prior.args})`)) {
-      const expected = `${prior.nspname}.${prior.proname}(${prior.args})` ===
-        "identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)"
-        ? { ...prior, proacl: "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration,jobguard_binding_owner=X/jobguard_migration}" }
-        : prior;
-      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(expected);
+    // 0733 remains the exact body for the practice-only link issuer.
+    if (prior.nspname === "app" && prior.proname === "demo_issue_customer_link" &&
+      prior.args === "t uuid, j uuid, c uuid, session_digest text, link_digest text, content text") {
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
       const sql = await readFile(new URL("../migrations/0733_real_customer_link_own_quote.sql", import.meta.url), "utf8");
       const body = sql.split(`FUNCTION ${prior.nspname}.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
       expect(current?.definition?.split("$function$")[1]).toBe(body);

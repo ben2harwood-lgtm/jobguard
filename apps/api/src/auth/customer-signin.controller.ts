@@ -1,7 +1,7 @@
 import { ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { CustomerAuthGuard, type CustomerRequest } from "./customer-auth.guard.js";
 import { Body, Controller, HttpCode, HttpException, Inject, Post, Req, Res, UseGuards } from "@nestjs/common";
-import { CUSTOMER_APPLICATION, CustomerSigninApplication, customerCookieName, customerCookieOptions, customerRefusal, type CustomerAction } from "./customer-signin.js";
+import { CUSTOMER_APPLICATION, CustomerSigninApplication, customerSessionCookie, customerCookieOptions, customerRefusal, type CustomerAction } from "./customer-signin.js";
 import type { IdentityHttpRequest } from "./identity-http.js";
 interface Reply { cookie(name: string, value: string, options: typeof customerCookieOptions & { maxAge?: number }): void; setHeader(name: string, value: string): void }
 @ApiTags("customer portal") @ApiResponse({status:401,description:"CUSTOMER_REFUSED: no credential or scope diagnostics"})
@@ -11,10 +11,10 @@ export class CustomerSigninController {
   private async run(action: CustomerAction, body: unknown, request: IdentityHttpRequest, response: Reply) {
     response.setHeader("Cache-Control", "no-store"); response.setHeader("Referrer-Policy", "no-referrer");
     // Clear only this browser's customer credential, even if revocation refuses.
-    if (action === "signout") response.cookie(customerCookieName, "", { ...customerCookieOptions, maxAge: 0 });
+    if (action === "signout") response.cookie(customerSessionCookie(), "", { ...customerCookieOptions, maxAge: 0 });
     try {
       const result = await this.application().run(action, body, request);
-      if (result.cookie) response.cookie(customerCookieName, result.cookie, customerCookieOptions);
+      if (result.cookie) response.cookie(customerSessionCookie(), result.cookie, customerCookieOptions);
       return result.body;
     } catch (error) { const failure = customerRefusal(error); throw new HttpException(failure.body, failure.status); }
   }

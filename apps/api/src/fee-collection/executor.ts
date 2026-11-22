@@ -74,7 +74,7 @@ export class DarkFeeCollectionExecutor {
     private readonly now: () => Date = () => new Date(),
     private readonly sessions?: Pick<AuthProvider, "authenticate" | "findMembership">) {}
   private async actor(ctx: CollectionSessionContext): Promise<string> {
-    if (ctx.environment !== "synthetic_demo" || !this.sessions) throw new FeeCollectionError("COLLECTION_DARK");
+    if (process.env.JOBGUARD_ENV === "pilot_no_charge" || ctx.environment !== "synthetic_demo" || !this.sessions) throw new FeeCollectionError("COLLECTION_DARK");
     if (typeof ctx.sessionToken !== "string" || !ctx.sessionToken) return refuse();
     const principal = await this.sessions.authenticate(ctx.sessionToken);
     if (!principal) return refuse();
@@ -144,7 +144,7 @@ export class DarkFeeCollectionExecutor {
     return this.processWebhook(ctx, railName, body, signature);
   }
   async directDebitWebhook(ctx: DirectDebitWebhookContext, body: string, signature: string) {
-    if (ctx.environment !== "synthetic_demo") throw new FeeCollectionError("COLLECTION_DARK");
+    if (process.env.JOBGUARD_ENV === "pilot_no_charge" || ctx.environment !== "synthetic_demo") throw new FeeCollectionError("COLLECTION_DARK");
     return this.processWebhook(ctx, "direct_debit", body, signature);
   }
   private async processWebhook(ctx: DirectDebitWebhookContext, railName: CollectionRail["name"], body: string, signature: string) {

@@ -44,7 +44,10 @@ beforeAll(async () => {
   await migrate({ query: async (sql: string, values?: unknown[]) => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
       && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
-        "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql",
+        // 0772 replaces an invitation routine introduced by the deferred LP-11 migration.
+        "_pilot_identity_invitations.sql", "_pilot_customer_portal.sql", "_pilot_final_account.sql", "_pilot_final_check.sql",
+        "_pilot_commercial_email.sql", "_pilot_final_check_reveal.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);

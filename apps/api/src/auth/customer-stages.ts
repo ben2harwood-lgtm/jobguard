@@ -12,7 +12,7 @@ export class CustomerStagesApplication {
     try {
       const input = action === "stages" ? customerStagesRead.parse(raw) : customerStageAcknowledge.parse(raw);
       await new CustomerSigninApplication(this.identity, this.environment).run("read", { version: "customer-read.v1", jobId: input.jobId }, request);
-      const token = customerToken(request)!;
+      const token = customerToken(request, this.environment)!;
       const [tenant, job, customer] = token.split(".");
       const result = await this.identity.provider.repository.pool.query<{result: unknown}>(
         "SELECT identity.customer_stages($1,$2,$3,$4,$5,$6,$7) result",
