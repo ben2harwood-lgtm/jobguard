@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { identityCookieOptions, identityStatus } from "@jobguard/api/identity";
 import { identityApplication, identityCredentials } from "../../../lib/identity-server";
 import { pairingCookie, practiceCookieOptions } from "../../../lib/linked-practice-entry";
+import { pilotIdentityRequest } from "../../../lib/pilot-identity-server";
 export async function POST(request:Request) {
+  if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") return pilotIdentityRequest(request, async (app, credentials, reply) =>
+    reply(await app.signout(credentials), ""));
   try {
     const result=await identityApplication().signout(await identityCredentials(request));
     const response=NextResponse.json(result,{headers:{"Cache-Control":"no-store"}});

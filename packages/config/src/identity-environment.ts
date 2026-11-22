@@ -8,5 +8,8 @@ const identityEnvironmentV1 = z.object({
   }, "Identity storage requires the separate jobguard_identity credential"),
   AUTH_CODE_SECRET: z.string().min(32),
   AUTH_ALLOWED_ORIGIN: authUrlV1,
+  PILOT_FIRST_OWNER_EMAILS: z.string().max(8192).transform(value =>
+    value.split(",").map(email => email.trim().toLowerCase()),
+  ).pipe(z.array(z.email().max(320))).optional(),
 });
 export const parseIdentityEnvironment = (raw: unknown) => identityEnvironmentV1.parse(raw);

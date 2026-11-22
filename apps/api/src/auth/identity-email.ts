@@ -1,9 +1,14 @@
 import { z } from "zod";
-export const identityEmailV1 = z.object({
+export const identityChallengeMessage = z.object({
   version: z.literal("identity-email.v1"), category: z.literal("identity_challenge"),
   challengeId: z.guid({ error: "Invalid uuid" }), email: z.email({ error: "Invalid email" }), code: z.string().regex(/^\d{8}$/u),
-  environment: z.literal("synthetic_demo"),
+  environment: z.enum(["synthetic_demo", "pilot_no_charge"]),
 }).strict();
+export const identityEmailV1 = identityChallengeMessage.extend({ environment: z.literal("synthetic_demo") });
+export interface IdentityChallengeDelivery {
+  assertRecipient(email: string, environment: string): void;
+  deliver(message: z.infer<typeof identityChallengeMessage>): Promise<unknown>;
+}
 export class IdentityRouteBlocked extends Error { readonly code = "IDENTITY_ROUTE_BLOCKED"; }
 /** D04 is proposed. No live transport can be constructed, regardless of a supplied mode flag. */
 export class FixtureIdentityEmail {
