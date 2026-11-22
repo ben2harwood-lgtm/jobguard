@@ -12,7 +12,7 @@ import { readLateSourceObservations } from "@jobguard/db";
 import { detectShadowObservations } from "@jobguard/core";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { FinalCheckCompletionRepository, FinalCheckRepository, ShadowDetectionRepository, ShadowObservationReader, FixtureObservationSources, decodePracticePhoto, practiceFinalCheckPorts } from "@jobguard/db";
+import { FinalCheckCompletionRepository, FinalCheckRepository, ShadowDetectionRepository, ShadowObservationReader, FixtureObservationSources, decodePracticePhoto, practiceFinalCheckPorts, pilotFixtureFinalCheckPorts } from "@jobguard/db";
 import { FinalCheckError } from "@jobguard/core";
 import { FinalCheckWorker } from "./final-check.worker.js";
 import { generatePracticePng } from "./proof/proof.application.js";
@@ -29,6 +29,9 @@ import { requireOutboxSettlementEligibility } from "./production-settlement-guar
 import { RedactingLogger, redactingWorkerLogger, redactingTasks, redactedWorkerError } from "./safe-logging.js";
 
 const logger = new RedactingLogger();
+// Queued identifiers enter business repositories only through this constructor.
+function queueContext(payload:unknown){const parsed=z.object({tenantId:z.string().uuid()}).strict().parse(payload);return verifiedTenantContextForQueuedJob(parsed.tenantId);}
+
 async function startWorker() {
 requireG1ForPilot(process.env.JOBGUARD_ENV, process.env);
 const environmentSchema=z.object({WORKER_DATABASE_URL:z.string().url(),GRAPHILE_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url"),RUNTIME_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url"),SHADOW_DATABASE_URL:z.string().refine(value => URL.canParse(value), "Invalid url")}).strict();
@@ -46,8 +49,6 @@ const detectionRepository=new ShadowDetectionRepository(shadowPool);
 const fixtureProposer=new ShadowFixtureProposer(Object.assign({},...corpus.cases.map(c=>c.responses)));
 const detectionWorker=new ShadowDetectionWorker({assertTermsRelation:()=>observationReader.assertTermsRelation(),hasAcceptedTerms:(context,jobId)=>observationReader.hasAcceptedTerms(context,jobId),read:(context,request)=>observationReader.read(context,request),propose:(o,id,at)=>fixtureProposer.propose(o,id,at),persist:(context,request)=>detectionRepository.persist(context,request)},process.env.JOBGUARD_ENV??"disabled");
 await detectionWorker.start();
-// Queued identifiers enter business repositories only through this constructor.
-function queueContext(payload:unknown){const parsed=z.object({tenantId:z.string().uuid()}).strict().parse(payload);return verifiedTenantContextForQueuedJob(parsed.tenantId);}
 const fakeAdapter:OutboundAdapter={name:"fake_capture",supportsProviderDeduplication:false,async deliver(action){return {kind:"succeeded",providerReference:`synthetic:${action.providerEffectKey}`};},async reconcile(){return "unknown";}};
 const telemetry:SafeTelemetry={emit(name,fields){logger.log({event:name,...fields});}};
 const executor=new ActionExecutor(runtimePool,new Map([[fakeAdapter.name,fakeAdapter]]),telemetry);
@@ -159,8 +160,15 @@ for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,()=>{
 try {
   refusePilotResourcesOutsidePilot(process.env);
   if (process.env.JOBGUARD_ENV === "pilot_no_charge") {
-    const { startPilotWorker } = await import("./pilot-worker.js");
-    await startPilotWorker(process.env, redactingWorkerLogger(logger));
+    const { startPilotWorker, pilotFinalCheckExecutor } = await import("./pilot-worker.js");
+    const fixtureHash = createHash("sha256").update(generatePracticePng()).digest("hex");
+    await startPilotWorker(process.env, redactingWorkerLogger(logger), (shadow, gate) => {
+      const execute = pilotFinalCheckExecutor(shadow, gate, pool => {
+        const completion = new FinalCheckCompletionRepository(pool);
+        return { worker: pilotFixtureFinalCheckPorts(pool, fixtureHash), publish: completion.publish.bind(completion) };
+      });
+      return task => execute(queueContext({ tenantId: task.tenantId }), task);
+    });
   } else {
     await startWorker();
   }

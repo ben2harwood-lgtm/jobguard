@@ -385,6 +385,12 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     "identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)",
     "identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)",
   ]);
+  const pilotFinalCheckSql = await readFile(new URL("../migrations/0777_pilot_final_check.sql", import.meta.url), "utf8");
+  const pilotFinalCheckRoutines = new Set([
+    "app.lp11_bind_shadow_job(t uuid, j uuid)",
+    "app.final_check_require_worker(p_tenant uuid, p_job uuid)",
+    "app.final_check_worker(t uuid, j uuid)",
+  ]);
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     if (prior.nspname === advanceDelta.before.nspname && prior.proname === advanceDelta.before.proname && prior.args === advanceDelta.before.args) {
@@ -418,6 +424,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     }
     // 0775 replaces these exact bodies; the catalogue proof below still checks all routine privileges.
     const identity = `${prior.nspname}.${prior.proname}(${prior.args})`;
+    if (pilotFinalCheckRoutines.has(identity)) {
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
+      const body = pilotFinalCheckSql.split(`CREATE OR REPLACE FUNCTION ${prior.nspname}.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => body));
+      expect(current?.source).toBe(body);
+      continue;
+    }
     if (pilotPortalRoutines.has(identity)) {
       const expected = identity === "identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)"
         ? { ...prior, proacl: "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration,jobguard_binding_owner=X/jobguard_migration}" }

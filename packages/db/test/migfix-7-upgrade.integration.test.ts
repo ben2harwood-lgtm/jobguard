@@ -432,9 +432,25 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const pilotFinalAccountSql = await readFile(new URL("../migrations/0776_pilot_final_account.sql", import.meta.url), "utf8");
   const pilotDisclosureBody = pilotFinalAccountSql.split("CREATE OR REPLACE FUNCTION app.guard_final_lock_disclosure_terms(")[1]!
     .split("AS $$")[1]!.split("$$;")[0]!;
+  // 0777 succeeds these exact worker bodies without changing the catalogue metadata.
+  const pilotFinalCheckSql = await readFile(new URL("../migrations/0777_pilot_final_check.sql", import.meta.url), "utf8");
+  const pilotFinalCheckBodies = new Map<string, string>();
+  for (const match of pilotFinalCheckSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
+    pilotFinalCheckBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);
+    const pilotFinalCheckBody = pilotFinalCheckBodies.get(lp6dKey(row));
+    if (pilotFinalCheckBody !== undefined) {
+      if (prior) {
+        const parts = prior.definition.split("$function$");
+        parts[1] = pilotFinalCheckBody;
+        expect(row.definition, identity).toBe(parts.join("$function$"));
+      } else {
+        expect(row.definition.split("$function$")[1], identity).toBe(pilotFinalCheckBody);
+      }
+      continue;
+    }
     const pilotPortalBody = pilotPortalBodies.get(lp6dKey(row));
     if (pilotPortalBody !== undefined) {
       if (prior) {
