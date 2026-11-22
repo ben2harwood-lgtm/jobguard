@@ -64,21 +64,20 @@ Every owner approval is pending, and contractor access remains blocked.
 
 ### Merged evidence
 
-Merge and review SHAs are abbreviated. A reporting PR records the verdict
-where an independent verdict has no accessible standalone receipt. Automated
-review results apply to the listed review SHA. PILOT-21 needs independently
-reviewed evidence for the eventual release candidate.
+Independent Claude verdicts are from the coordinator verdict ledger (outside repo), 22 Nov 2026.
+Each PASS applies to the full SHA shown.
+PILOT-21 needs independent review of the eventual release candidate.
 
-| Piece | Merge on base | Recorded verdict and scope |
-|---|---|---|
-| PILOT-01a | `64fc0ebb9` | PASS at `51819674`, reported in [#874][pr874]. Automated code review completed at `5f5715b5` with no findings. [#872][pr872] · [automated review][review872] |
-| PILOT-01b | `f15856a3c` | PASS reported in [#875][pr875], which gives no verdict SHA. Automated code review completed at `a1a15ed8` with no findings. [#874][pr874] · [automated review][review874] |
-| PILOT-08 | `402414f1d` | Automated code review completed at `1f106872` with no findings. Independent verdict receipt pending. [#875][pr875] · [automated review][review875] |
-| PILOT-02 | `79d946fc4` | Check PASS reported in [#877][pr877] while CI repair was in progress. No verdict SHA supplied. Automated security review completed at `ff014e94`. [#876][pr876] · [automated review][review876] |
-| PILOT-04a | `896763757` | PASS reported in [#879][pr879] while CI repair was in progress. No verdict SHA supplied. Automated code review at `0f69f85e` recorded an open P2 on replay of a completed quote after a draft revision. Exact-merge disposition unverified. [#877][pr877] · [automated review][review877] |
-| PILOT-03 | `29663aba9` | Automated code review completed at `5e8d0892` with no findings. Independent verdict receipt pending. [#878][pr878] · [automated review][review878] |
-| PILOT-04b | `cd905628a` | Automated code review completed at `cd8cbad9` with no findings. Independent verdict receipt pending. [#879][pr879] · [automated review][review879] |
-| PILOT-06 | `6cf0a9a6b` | Automated code review completed at `2d29f1ca` with no findings. Independent verdict receipt pending. [#880][pr880] · [automated review][review880] |
+| Piece | PR and merge on base | Independent Claude verdicts | Automated review |
+|---|---|---|---|
+| PILOT-01a | [#872][pr872] · `64fc0ebb9` | PASS `5181967425347f226c920ead617c3ca0f9b09adf` | Code review completed at `5f5715b5` with no findings. [Review][review872] |
+| PILOT-01b | [#874][pr874] · `f15856a3c` | PASS `dc96a515303f2f3d050d3b5cf4523820bf38d041`<br>Catch-up PASS `a2ef7dcc668d9c05d4b4bf61a3a3ae4a3ed5a2df` | Code review completed at `a1a15ed8` with no findings. [Review][review874] |
+| PILOT-08 | [#875][pr875] · `402414f1d` | PASS `1f1068721cc7fc5369ec9db63e702a5f3f8ed8e3`<br>Catch-up PASS `bc05186d26523da3ff80dab9d43f4ff1a8fab7bd` | Code review completed at `1f106872` with no findings. [Review][review875] |
+| PILOT-02 | [#876][pr876] · `79d946fc4` | PASS `ff014e94d4dade11fec9bda6d48f672932b7eb6f`<br>CI repair PASS `94afa0949546b92e69dbf2eb2d52ef1ea9614ec1` | Security review completed at `ff014e94`. [Review][review876] |
+| PILOT-04a | [#877][pr877] · `896763757` | PASS `e5fde95cfe69b2946dd984f483c21e04a169c0fb`<br>Repair PASS `fcd132b9737ac6830ec830175e4fb2088a20b87f`<br>Catch-up PASS `1c022e8c504df0e56899d510ecfa8ef08d275829` | Code review at `0f69f85e` raised the open P2 recorded below. [Review][review877] |
+| PILOT-03 | [#878][pr878] · `29663aba9` | PASS `5e8d0892e3b71f61fbfabaf139a05a25f08dd868`<br>Catch-up PASS `2e57021d63b1e78f29c8ccdb3c10b9feb5026f18` | Code review completed at `5e8d0892` with no findings. [Review][review878] |
+| PILOT-04b | [#879][pr879] · `cd905628a` | PASS `cd8cbad9820408cec3d1a6ee22945f612ed84790`<br>Catch-up PASS `9c48bca105cd22d03882cc507e575aa3acc0e52c`<br>Catch-up PASS `3c8fb1e3ef8c23efc18211ca8c9f93737a58aa1a` | Code review completed at `cd8cbad9` with no findings. [Review][review879] |
+| PILOT-06 | [#880][pr880] · `6cf0a9a6b` | PASS `5d4bfd94b919d977ba9b719e167f8388ca89e262`<br>Catch-up PASS `01cc91cfeeef1231e1de77560bacfed7d7535da8` | Code review completed at `2d29f1ca` with no findings. [Review][review880] |
 
 [pr872]: https://github.com/ben2harwood-lgtm/jobguard/pull/872
 [pr874]: https://github.com/ben2harwood-lgtm/jobguard/pull/874
@@ -96,6 +95,13 @@ reviewed evidence for the eventual release candidate.
 [review878]: https://github.com/ben2harwood-lgtm/jobguard/pull/878#issuecomment-7072152192
 [review879]: https://github.com/ben2harwood-lgtm/jobguard/pull/879#issuecomment-7072627171
 [review880]: https://github.com/ben2harwood-lgtm/jobguard/pull/880#issuecomment-7074026627
+
+### Open LATER follow-up
+
+**PILOT-04a automated-review P2.** If the response to a completed quote command
+is lost and the draft changes before the caller retries, the retry shows a
+misleading refusal. The original send stays queued, its data is preserved, and
+the retry causes no double send. [Repository check](../../packages/db/src/pilot-quote-delivery-repository.ts#L145) · [Automated finding](https://github.com/ben2harwood-lgtm/jobguard/pull/877#discussion_r4655562895)
 
 ### Pending pieces
 

@@ -6,6 +6,10 @@ PILOT-11 adds the [evidence index](foundation-gates.md#pilot-11-evidence-index--
 and this receipt to that base. The release candidate and its independent review,
 deployed checks, separate technical acceptance and activation decision remain pending.
 
+The merged pieces' independent Claude PASS verdicts come from the
+coordinator verdict ledger (outside repo), 22 Nov 2026. The evidence index records their full
+SHAs and the open PILOT-04a automated-review P2. [Merged evidence](foundation-gates.md#merged-evidence) · [Open LATER follow-up](foundation-gates.md#open-later-follow-up)
+
 **Runner** Codex in the isolated JobGuard workspace. Node 24.15.0, pnpm 10.28.1,
 Vitest 4.1.12 and the repository's embedded PostgreSQL 16.10 fixture. The DB
 harness creates disposable loopback clusters and applies migrations with fixture
