@@ -371,6 +371,8 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   };
   for (const match of lp11Sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
     lp6dBodies.set(match[1]!, [match[3]!]);
+  const pilotInvitationsSql = await readFile(new URL("../migrations/0772_pilot_identity_invitations.sql", import.meta.url), "utf8");
+  const pilotInviteBody = pilotInvitationsSql.split("CREATE OR REPLACE FUNCTION identity.invite_member(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
   for (const prior of security) {
     const current = live.find(row => row.oid === prior.oid);
     if (prior.nspname === advanceDelta.before.nspname && prior.proname === advanceDelta.before.proname && prior.args === advanceDelta.before.args) {
@@ -387,6 +389,13 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => residentBody)
         .replace(" LANGUAGE plpgsql\n", " LANGUAGE plpgsql\n SECURITY DEFINER\n"));
       expect(current?.source).toBe(residentBody);
+      continue;
+    }
+    // 0772 replaces this exact invitation body without changing its definition header or privileges.
+    if (prior.nspname === "identity" && prior.proname === "invite_member" &&
+      prior.args === "session_digest character, t uuid, recipient character varying, assigned_role character varying") {
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => pilotInviteBody));
+      expect(current?.source).toBe(pilotInviteBody);
       continue;
     }
     // 0751 succeeds LP-6d for this exact dispatcher; pin it before generic LP-6d successor handling.

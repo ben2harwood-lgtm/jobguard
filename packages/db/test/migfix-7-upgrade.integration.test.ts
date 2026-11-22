@@ -418,6 +418,12 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   }
   for (const match of lp11Sql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
     lp6dBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
+  // 0772 supersedes the two invitation bodies. The catalogue proof still checks all routine metadata.
+  const pilotInvitationsSql = await readFile(new URL("../migrations/0772_pilot_identity_invitations.sql", import.meta.url), "utf8");
+  for (const [name, args] of [["invite_member", "session_digest,t,recipient,assigned_role"], ["lp11_invitation_sso_state", "d,t"]]) {
+    const body = pilotInvitationsSql.split(`CREATE OR REPLACE FUNCTION identity.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]!;
+    lp6dBodies.set(`identity.${name}(${args})`, body);
+  }
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);
