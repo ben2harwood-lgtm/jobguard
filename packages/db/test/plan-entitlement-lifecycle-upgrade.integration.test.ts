@@ -139,6 +139,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       "SELECT p.prosrc FROM pg_proc p WHERE p.pronamespace='connector'::regnamespace AND p.proname=$1", [routine],
     )).rows).toEqual([{ prosrc: source }]);
   }
+  const pilotFinalAccountSql = await readFile(new URL("../migrations/0776_pilot_final_account.sql", import.meta.url), "utf8");
+  const pilotDisclosureBody = pilotFinalAccountSql.split("CREATE OR REPLACE FUNCTION app.guard_final_lock_disclosure_terms(")[1]!
+    .split("AS $$")[1]!.split("$$;")[0]!;
   const recoverySql = await readFile(new URL("../migrations/0732_final_check_typed_recovery.sql", import.meta.url), "utf8");
   for (const [name,args] of [
     ["final_check_read_authority","t uuid, j uuid, d text, locking boolean"],
@@ -398,6 +401,12 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => residentBody)
         .replace(" LANGUAGE plpgsql\n", " LANGUAGE plpgsql\n SECURITY DEFINER\n"));
       expect(current?.source).toBe(residentBody);
+      continue;
+    }
+    if (prior.nspname === "app" && prior.proname === "guard_final_lock_disclosure_terms" && prior.args === "") {
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
+      expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => pilotDisclosureBody));
+      expect(current?.source).toBe(pilotDisclosureBody);
       continue;
     }
     // 0772 replaces this exact invitation body without changing its definition header or privileges.

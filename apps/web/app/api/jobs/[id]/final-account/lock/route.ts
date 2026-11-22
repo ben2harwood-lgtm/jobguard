@@ -11,12 +11,22 @@ function failure(error: unknown) {
   const existingLockId = error !== null && typeof error === "object" && "existingLockId" in error ? error.existingLockId : undefined;
   return NextResponse.json({ code, ...(existingLockId ? { existingLockId } : {}) }, { status: /ALREADY_LOCKED|IDEMPOTENCY|STALE|SOURCE_CHANGED/u.test(code) ? 409 : 400 });
 }
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+    const { pilotWorkspaceRoute } = await import("../../../../../lib/pilot-workspace-route.mjs");
+    return pilotWorkspaceRoute(request, async app => app.finalAccount.read((await params).id));
+  }
+
   if (!await authenticated()) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
   try { return NextResponse.json(await (await workspaceApplication()).finalAccountLock.get((await params).id)); }
   catch (error) { return failure(error); }
 }
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+    const { pilotWorkspaceRoute } = await import("../../../../../lib/pilot-workspace-route.mjs");
+    return pilotWorkspaceRoute(request, async app => app.finalAccount.lock((await params).id, await request.json().catch(() => null)));
+  }
+
   if (!await authenticated()) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401 });
   try {
     const body: unknown = await request.json();

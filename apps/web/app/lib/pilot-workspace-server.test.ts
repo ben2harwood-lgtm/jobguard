@@ -27,6 +27,11 @@ import { POST as activateJob } from "../api/jobs/[id]/quotes/activation/route";
 import { GET as readProgress, POST as changeProgress } from "../api/jobs/[id]/work-state/route";
 import { GET as readExtras, POST as logExtra } from "../api/jobs/[id]/variations/route";
 import { GET as readProof, POST as saveProof } from "../api/jobs/[id]/proof/route";
+import { GET as readFinalAccount, POST as assembleFinalAccount } from "../api/jobs/[id]/final-account/route";
+import { POST as lockFinalAccount } from "../api/jobs/[id]/final-account/lock/route";
+import { POST as recordScopeDisposition } from "../api/jobs/[id]/final-account/dispositions/route";
+
+
 
 
 const { cookieJar, blockedPractice } = vi.hoisted(() => ({ cookieJar: new Map<string, { value: string }>(), blockedPractice: vi.fn() }));
@@ -408,5 +413,33 @@ it("captures, confirms and stages the exact pilot PDF and invitation through bou
     FROM app.job_activation a JOIN app.job j ON (j.tenant_id,j.id)=(a.tenant_id,a.job_id) WHERE a.job_id=$1`, [id, tenantA])).rows;
   expect(persisted).toEqual([{ mode: "pilot_no_charge", accepted_document_hash: accept.documentHash,
     baseline_quote_version_id: accept.documentId, obligations: 0, journals: 0 }]);
+  const accountPath = `${path}/final-account`;
+  const lockPath = `${accountPath}/lock`;
+  expect(await readOk(await readFinalAccount(pilotRequest(accountPath), route))).toMatchObject({
+    jobId: id, termsApproved: false, lock: null, account: null,
+  });
+  const account = await readOk(await assembleFinalAccount(pilotRequest(accountPath, {
+    version: "final-account.assemble.v1", commandId: randomUUID(), expectedRevision: 0,
+  }), route));
+  expect(account).toMatchObject({ account: { issueBlocked: false, totals: { total: { pence: 12000 } } } });
+  const lockCommand = { version: "final-account.lock.v1", commandId: randomUUID(),
+    finalAccountRevisionId: account.account.id, expectedRevision: account.account.revision,
+    declarationVersion: "final_account_declaration.v1" };
+  const refused = await lockFinalAccount(pilotRequest(lockPath, lockCommand), route);
+  expect(refused.status).toBe(409);
+  expect(await refused.json()).toEqual({ code: "TERMS_PENDING" });
+  expect((await admin.query("SELECT id FROM app.final_account_lock WHERE job_id=$1", [id])).rows).toEqual([]);
+  await admin.query("INSERT INTO app.pilot_final_check_terms_approval(tenant_id,version,approval_sha256) VALUES($1,$2,$3)",
+    [tenantA, "pilot_final_check_terms.v1", createHash("sha256").update("fictional pilot terms approval").digest("hex")]);
+  expect(await readOk(await recordScopeDisposition(pilotRequest(`${accountPath}/dispositions`, {
+    version: "final-account.disposition.v1", commandId: randomUUID(), scopeItemId, disposition: "done",
+  }), route))).toMatchObject({ scopeItemId, disposition: "done" });
+  const locked = await readOk(await lockFinalAccount(pilotRequest(lockPath, lockCommand), route));
+  expect(locked).toMatchObject({ jobId: id, lock: { id: expect.any(String) } });
+  expect(await readOk(await readFinalAccount(pilotRequest(accountPath), route)))
+    .toMatchObject({ termsApproved: true, lock: locked.lock });
+  expect(await readOk(await lockFinalAccount(pilotRequest(lockPath, lockCommand), route))).toEqual(locked);
+  expect((await admin.query("SELECT onboarding_terms_version FROM app.final_account_lock WHERE job_id=$1", [id])).rows)
+    .toEqual([{ onboarding_terms_version: "pilot_final_check_terms.v1" }]);
   expect(blockedPractice).not.toHaveBeenCalled();
 }, 60_000);

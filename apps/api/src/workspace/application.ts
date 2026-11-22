@@ -1,3 +1,4 @@
+import { pilotFinalAccount } from "./pilot-final-account.js";
 import { pilotJobContinuation } from "./pilot-job-continuation.js";
 import { PilotG1DeniedError, requirePilotG1 } from "@jobguard/config";
 import { CaptureConflictError, FirmProfileRepository, firmProfileV1, JobPartiesRepository, RequestBindingRefusedError } from "@jobguard/db";
@@ -140,6 +141,7 @@ export async function createPilotWorkspaceApplication(
   return {
     listJobs: (jobId?: string) => jobs.listPilotJobs(context, jobId),
     continuation: pilotJobContinuation(pool, context, access),
+    finalAccount: pilotFinalAccount(pool, context, access),
     capture: {
       create: capture.capture.bind(capture), get: capture.view.bind(capture),
       save: capture.save.bind(capture), confirm: capture.confirm.bind(capture),
@@ -182,6 +184,10 @@ export function pilotWorkspaceFailure(error: unknown): { code: string; status: n
   if (error instanceof Error) {
     const code = "code" in error && error.code !== "22023" ? error.code : error.message;
     switch (code) {
+      case "DISCLOSURE_TERMS_NOT_ACCEPTED": return { code: "TERMS_PENDING", status: 409 };
+      case "FINAL_ACCOUNT_ALREADY_LOCKED": case "SCOPE_DISPOSITION_MISSING": case "STALE_REVISION":
+      case "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS": case "FINAL_REVIEW_CLOSED": return { code, status: 409 };
+      case "INVALID_FINAL_ACCOUNT_LOCK_INPUT": return { code, status: 400 };
       case "NOT_FOUND": case "UPLOAD_NOT_FOUND": case "JOB_NOT_FOUND": case "P0002": return { code: "NOT_FOUND", status: 404 };
       case "FORBIDDEN": case "AUTHORIZATION_INVALID": case "TENANT_FORBIDDEN": return { code, status: 403 };
       case "42501": return { code: "FORBIDDEN", status: 403 };

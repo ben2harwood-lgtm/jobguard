@@ -429,6 +429,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const pilotPortalBodies = new Map<string, string>();
   for (const match of pilotPortalSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
     pilotPortalBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
+  const pilotFinalAccountSql = await readFile(new URL("../migrations/0776_pilot_final_account.sql", import.meta.url), "utf8");
+  const pilotDisclosureBody = pilotFinalAccountSql.split("CREATE OR REPLACE FUNCTION app.guard_final_lock_disclosure_terms(")[1]!
+    .split("AS $$")[1]!.split("$$;")[0]!;
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);
@@ -440,6 +443,15 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
         expect(row.definition, identity).toBe(parts.join("$function$"));
       } else {
         expect(row.definition.split("$function$")[1], identity).toBe(pilotPortalBody);
+      }
+      continue;
+    }
+    if (identity === "app.guard_final_lock_disclosure_terms()") {
+      expect(row.definition.split("$function$")[1], identity).toBe(pilotDisclosureBody);
+      if (prior) {
+        const parts = prior.definition.split("$function$");
+        parts[1] = pilotDisclosureBody;
+        expect(row.definition, identity).toBe(parts.join("$function$"));
       }
       continue;
     }
