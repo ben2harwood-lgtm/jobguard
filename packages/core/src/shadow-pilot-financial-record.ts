@@ -11,6 +11,16 @@ export const shadowPilotFinancialRecordV1 = z.object({
     table: z.enum(["recovery_fee_journal", "success_fee_journal", "platform_fee_statement", "platform_fee_attempt"]),
     jobId: shadowId, rowId: shadowId, rowHash: digest,
   }).strict()),
+  // Older synthetic snapshots checked job books only. An absent inventory is unknown.
+  subscriptionSources: z.array(z.object({
+    kind: z.enum(["activations", "effects"]),
+    table: z.enum([
+      "subscription_agreement_revision", "subscription_mandate_event", "subscription_plan_change",
+      "trial_subscription_source", "subscription_period", "platform_statement",
+      "subscription_simulated_work", "subscription_simulated_attempt", "subscription_simulated_result",
+    ]),
+    rowId: shadowId, rowHash: digest,
+  }).strict()).optional(),
   sourceHash: digest,
 }).strict();
 export type ShadowPilotFinancialRecord = z.infer<typeof shadowPilotFinancialRecordV1>;
@@ -25,5 +35,13 @@ export function shadowPilotFinancialCounts(record: Pick<ShadowPilotFinancialReco
     accruals: record.sources.filter(row => row.kind === "accruals").length,
     invoices: record.sources.filter(row => row.kind === "invoices").length,
     collections: record.sources.filter(row => row.kind === "collections").length,
+  };
+}
+
+export function shadowPilotSubscriptionCounts(record: Pick<ShadowPilotFinancialRecord, "subscriptionSources">) {
+  if (!record.subscriptionSources) return null;
+  return {
+    activations: record.subscriptionSources.filter(row => row.kind === "activations").length,
+    effects: record.subscriptionSources.filter(row => row.kind === "effects").length,
   };
 }
