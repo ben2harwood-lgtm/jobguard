@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-11": {
+      "branches": ["codex/sandbox/pilot-11"],
+      "note": "RED G0/G1 evidence index and current-base fixture verification.",
+      "allow": [
+        "docs/operations/foundation-gates.md",
+        "docs/operations/pilot-11-verification-2026-11-22.md"
+      ]
+    }
+  }
+}
