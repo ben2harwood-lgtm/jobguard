@@ -1,9 +1,11 @@
-import { randomUUID } from "node:crypto";
-import { parsePilotOperations, pilotQueueSchema, requireG1ForPilot, requirePilotResources } from "@jobguard/config";
+import { createHmac, randomUUID } from "node:crypto";
+import { commercialEmailEnabled, parsePilotOperations, pilotQueueSchema, requireG1ForPilot, requirePilotResources } from "@jobguard/config";
 import { FinalCheckError } from "@jobguard/core";
-import { assertPilotConnection, FinalCheckRepository, type VerifiedTenantContext } from "@jobguard/db";
+import { assertPilotConnection, CommercialEmailOutbox, FinalCheckRepository, type VerifiedTenantContext } from "@jobguard/db";
 import { run, type Logger, type TaskList } from "graphile-worker";
 import { Pool } from "pg";
+import { commercialEmailAdapter, fixtureEmailRecipient } from "./effects/commercial-email.js";
+import { FakeEmail } from "./effects/fake-email.js";
 import { executeFinalCheckTask, type FinalCheckExecutionPorts } from "./final-check-task-executor.js";
 import { withFinalCheckWorkerConnection } from "./final-check-worker-connection.js";
 import { FinalCheckWorker, type FinalCheckWorkerPorts } from "./final-check.worker.js";
@@ -19,6 +21,23 @@ export const pilotWorkerTasks = (execute?: (task: FinalCheckTask) => Promise<voi
   else tasks.final_check = refuse;
   return tasks;
 };
+
+export function pilotCommercialEmailTasks(env: NodeJS.ProcessEnv, outbox: Pick<CommercialEmailOutbox, "discover" | "execute">): TaskList {
+  const canRun = () => commercialEmailEnabled("pilot_no_charge", env) &&
+    (env.JOBGUARD_COMMERCIAL_OUTBOUND ?? "enabled") === "enabled";
+  return {
+    async execute_outbox(payload) {
+      if (!canRun()) throw new Error("PILOT_QUEUE_EXECUTION_REFUSED");
+      await outbox.execute(payload);
+    },
+    async discover_outbox(_payload, helpers) {
+      if (!canRun()) return;
+      for (const job of await outbox.discover()) {
+        await helpers.addJob("execute_outbox", job, { jobKey: `outbox:${job.actionId}`, jobKeyMode: "preserve_run_at" });
+      }
+    },
+  };
+}
 
 type PilotTaskFactory = (pool: Pool, gate: () => void) => (task: FinalCheckTask) => Promise<void>;
 
@@ -89,6 +108,7 @@ export async function startPilotWorker(env: NodeJS.ProcessEnv, logger: Logger, c
     } finally { await pool.end(); }
   }
   const { PILOT_WORKER_HEALTH_PORT: port, PILOT_QUEUE_BACKLOG_SECONDS: backlogSeconds } = parsePilotOperations(env);
+  const worker = new Pool({ connectionString: binding.worker, connectionTimeoutMillis: 10_000 });
   const shadow = binding.shadow ? new Pool({ connectionString: binding.shadow, connectionTimeoutMillis: 10_000 }) : undefined;
   shadow?.on("error", () => {});
   const gate = () => requireG1ForPilot("pilot_no_charge", env);
@@ -109,9 +129,16 @@ export async function startPilotWorker(env: NodeJS.ProcessEnv, logger: Logger, c
       final_check: taskList.final_check!,
       discover_pilot_final_checks: pilotFinalCheckDiscovery(shadow, gate),
     }));
+    const adapters = (["fake_quote_delivery", "fake_invoice_delivery", "fake_email"] as const).map(name =>
+      [name, commercialEmailAdapter(name, "pilot_no_charge", new FakeEmail([], false).commercial())] as const);
+    const outbox = new CommercialEmailOutbox(worker, new Map(adapters),
+      { emit: (event, fields) => logger.info(event, fields) },
+      value => createHmac("sha256", env.AUTH_CODE_SECRET!).update(value).digest("hex"),
+      action => commercialEmailEnabled("pilot_no_charge", env) && fixtureEmailRecipient(action));
+    Object.assign(taskList, redactingTasks(pilotCommercialEmailTasks(env, outbox)));
     await runPilotQueue(binding.queue, logger, taskList, shadow !== undefined, port, backlogSeconds);
   } finally {
-    await shadow?.end();
+    await Promise.all([worker.end(), shadow?.end()]);
   }
 }
 
@@ -122,7 +149,7 @@ async function runPilotQueue(queue: string, logger: Logger, taskList: TaskList, 
     schema: pilotQueueSchema,
     logger,
     taskList,
-    ...(discovery ? { crontab: "* * * * * discover_pilot_final_checks" } : {}),
+    crontab: "*/1 * * * * discover_outbox" + (discovery ? "\n* * * * * discover_pilot_final_checks" : ""),
   });
   if (port === undefined) return runner.promise;
 

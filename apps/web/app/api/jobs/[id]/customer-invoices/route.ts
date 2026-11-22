@@ -52,6 +52,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
  catch (error) { return failure(error); }
 }
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+ if (globalThis.process?.env.JOBGUARD_ENV === "pilot_no_charge") {
+  const { pilotWorkspaceRoute } = await import("../../../../lib/pilot-workspace-route.mjs");
+  return pilotWorkspaceRoute(request, async app => app.finalAccount.stageInvoiceEmail(
+   (await params).id, await request.json().catch(() => null),
+  ), 202);
+ }
  if (!await auth()) return NextResponse.json({ code: "UNAUTHENTICATED" }, { status: 401, headers: noStore });
  try { return NextResponse.json(await (await workspaceApplication()).customerInvoice.issue((await params).id, await request.json()), { headers: noStore }); }
  catch (error) { return failure(error, true); }

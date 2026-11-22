@@ -13,3 +13,4 @@ export * from "./release-inventory.js";
 
 export * from "./pilot-resources.js";
 export * from "./pilot-operations.js";
+export * from "./commercial-email-environment.js";

@@ -61,10 +61,18 @@ ActionExecutor. Identity challenge email and storage operations are outside this
 commercial switch. A paused action remains queued, with its artifact, evidence and audit
 history intact; resume still checks current authorization and expiry. A shared
 state lock serializes claim commits with operator changes. Calls already claimed
-or in flight when pause is requested cannot be recalled. Stop/drain workers and
-reconcile unknown outcomes before resuming after an incident or restore. Do not
-blindly retry unknown outcomes. Identity bootstrap messages and read-only
+or in flight when pause is requested cannot be recalled.
+
+1. Commit the operator pause and verify claims are disabled. Stop the workers with a graceful shutdown and wait for in-flight work to drain. Keep discovery and dispatch paused during reconciliation.
+2. Review queued work and its attempt history. Keep the artifacts, audit evidence and unknown attempts. Establish each unknown result from independent evidence, or leave it held. Record the reconciliation receipt UUID against the current resume request.
+3. Have a separate operator login verify that receipt and approve the exact resume request and revision. Restart workers with delivery enabled only after confirming the new state. Inspect a fictional queued action and its attempt history.
+
+Identity bootstrap messages and read-only
 reconciliation are outside this commercial claim path.
+
+The pilot worker discovers opaque action and tenant IDs in the business database and queues them in the pilot queue database. The business worker verifies the ID pair, approval and current source in the claim transaction. It calls the fake email port after commit. The pilot worker accepts checked quote deliveries, invoice-document sends, portal invitations and extra approval requests. Existing recovery-message simulations use their dedicated sink and reconciliation path. The commercial worker uses only fictional `.invalid` addresses and requires a current G1 approval in pilot mode. An unknown fake result is held across process restarts and is never retried automatically. Portal invitations keep the opaque reference in the outbox and derive the sign-in link only for the fake delivery call. Attempt receipts and telemetry exclude the recipient, artifact bytes and sign-in link.
+
+Identity challenges keep their own cooldown, per-recipient and per-IP request limits, global request limit and verification attempt cap. Set `JOBGUARD_IDENTITY_EMAIL=disabled` to stop new identity email delivery independently of the commercial stop. Values other than `enabled` fail closed. Codes already issued can still be verified under the usual limits. See the [identity email data-flow register](identity-email-data-flow.md).
 
 Forward fix: keep deployment paused while applying a new migration. Do not drop
 or rewrite the state/event history to roll back a safety control. Removing this
@@ -73,5 +81,4 @@ code requires an explicit operational decision; do not roll back only the schema
 Verification: unit tests exercise deployment precedence and fail-closed behavior;
 `outbox.integration.test.ts` exercises two real operator logins, runtime privilege
 refusal, preserved queue/evidence, exact replay and concurrent one-effect delivery.
-PostgreSQL/catalog/upgrade suites must run in CI; the builder sandbox cannot start
-PostgreSQL. Independent RED review is required before merge.
+PostgreSQL/catalog/upgrade suites must run in CI. Independent RED review is required before merge.

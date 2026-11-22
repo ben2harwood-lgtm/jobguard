@@ -27,7 +27,8 @@ async function workerActionMatches(client: PoolClient, actionId: string, expecte
 export class WorkerActionExecutor {
   constructor(private pool: Pool, private adapters: Map<string, OutboundAdapter>, private telemetry: SafeTelemetry, private customerSigninDigest?: (value: string) => string) {}
 
-  async execute(id: string, beforeClaim?: (actionType: string) => void, expectedTenant?: string) {
+  async execute(id: string, beforeClaim?: (actionType: string) => void, expectedTenant?: string,
+    validateClaim?: (client: PoolClient, action: Readonly<z.infer<typeof outboundActionV1Schema>>) => Promise<boolean>) {
     z.guid().parse(id);
     // Each checked routine commits before/after the adapter call. No business
     // network call occurs in a transaction, and the claim token fences replay.
@@ -67,6 +68,10 @@ export class WorkerActionExecutor {
       if (action.id !== id) throw new Error("WORKER_ACTION_MISMATCH");
       beforeClaim?.(action.actionType);
       if (createHash("sha256").update(action.immutableContent).digest("hex") !== action.contentHash) throw new Error("CONTENT_HASH_MISMATCH");
+      if (validateClaim && !await validateClaim(client, action)) {
+        await client.query("ROLLBACK");
+        return;
+      }
       if (action.actionType === "customer_portal.signin.send") {
         if (action.adapter !== "fake_email" || action.policyVersion !== "customer-signin.synthetic.v1" || !this.customerSigninDigest) throw new Error("CUSTOMER_SIGNIN_DELIVERY_UNAVAILABLE");
         signinLink = customerSigninLink(action.immutableContent, this.customerSigninDigest);
