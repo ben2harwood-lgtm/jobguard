@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-09": {
+      "branches": ["codex/sandbox/pilot-09"],
+      "note": "RED pilot privacy operator rehearsal and unapproved notice drafts.",
+      "allow": [
+        "docs/contracts/pilot-builder-privacy-notice-draft.md",
+        "docs/contracts/pilot-homeowner-privacy-notice-draft.md",
+        "docs/operations/privacy-operations.md",
+        "packages/db/test/shadow-persistence.integration.test.ts",
+        "tools/pilot-privacy-rehearsal.mjs",
+        "tools/pilot-privacy-rehearsal.test.mjs"
+      ]
+    }
+  }
+}
