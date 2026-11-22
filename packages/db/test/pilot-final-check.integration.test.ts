@@ -6,6 +6,7 @@ import { pilotApprovalFixture } from "../../config/src/policy-gates.pilot-test-f
 import { requirePilotG1 } from "../../config/src/policy-gates.js";
 import { pilotFinalCheckDiscovery, pilotFinalCheckExecutor, pilotWorkerTasks } from "../../../apps/api/src/pilot-worker.js";
 import { generatePracticePng } from "../src/practice-proof-image.js";
+import { FinalCheckRepository } from "../src/final-check-repository.js";
 import { FinalAccountLockRepository } from "../src/final-account-lock-repository.js";
 import { migrate } from "../src/migrate.js";
 import { FinalCheckCompletionRepository, pilotFixtureFinalCheckPorts } from "../src/shadow-detection-repository.js";
@@ -117,7 +118,7 @@ async function fixture({ approved = true, photo }: { approved?: boolean; photo?:
   const context = verifiedTenantContextFromMembership({ tenantId, membershipId: member, identityUserId: user } as AuthenticatedMembership, { kind: "real", credential });
   const locks = new FinalAccountLockRepository(c.runtime);
   await locks.disposition(context, { jobId, actorMembershipId: member, commandId: randomUUID(), scopeItemId: scope, disposition: "done" }, gate);
-  return { tenantId, jobId, gate, lock: () => locks.lock(context, { jobId, actorMembershipId: member,
+  return { tenantId, jobId, context, credential, member, evidence, gate, lock: () => locks.lock(context, { jobId, actorMembershipId: member,
     commandId: randomUUID(), finalAccountRevisionId: revision, expectedRevision: 1, declarationVersion: "final_account_declaration.v1" }, gate) };
 }
 
@@ -211,6 +212,8 @@ it("does not enqueue without approved terms or publish for an unsupported source
   expect(await counts(f.jobId)).toEqual({ manifests: 1, certificates: 0 });
   const attempts = await c.admin.query("SELECT status,failure_code FROM app.final_check_source_attempt WHERE job_id=$1", [f.jobId]);
   expect(attempts.rows).toEqual([{ status: "unsupported", failure_code: "UNSUPPORTED_SOURCE" }]);
+  await expect(new FinalCheckRepository(c.runtime).read(f.context, f.jobId, null))
+    .resolves.toEqual({ state: "failed", lockId: task.lockId, items: [] });
 });
 
 
@@ -254,4 +257,83 @@ it("discovers and executes a persisted reservation through the separate Graphile
     await expect(queue.query("SELECT * FROM control_plane.pilot_final_check_binding")).rejects.toThrow();
     expect((await c.admin.query("SELECT has_database_privilege('jobguard_pilot_queue_login', current_database(), 'CONNECT') allowed")).rows[0]?.allowed).toBe(false);
   } finally { await utils.release(); }
+});
+
+it("keeps pilot facts private until the matching certificate, then permits a dispute and an idempotent draft catch", async () => {
+  const f = await fixture({ photo: digest(generatePracticePng()) });
+  const repository = new FinalCheckRepository(c.runtime);
+  const read = () => repository.read(f.context, f.jobId, null);
+  const disputes = () => repository.disputes(f.context, f.jobId, null);
+  const privateRead = await read();
+  expect(privateRead).toEqual({ state: "unlocked", items: [] });
+  expect(await disputes()).toEqual([]);
+  const evidence = (await c.admin.query(
+    "SELECT object_version_id,sha256,server_received_at::text received FROM app.evidence_object WHERE tenant_id=$1 AND id=$2",
+    [f.tenantId, f.evidence],
+  )).rows[0];
+  for (const description of ["Fitted shelving units", "Installed kitchen tiles"]) {
+    const signalId = randomUUID();
+    await c.admin.query(`INSERT INTO app.shadow_commercial_signal(
+      tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,confidence_band,state)
+      VALUES($1,$2,$3,$4,'possible_extra','deterministic','synthetic.v1',clock_timestamp(),$5,'low','held_for_final_check')`,
+    [f.tenantId, f.jobId, signalId, randomUUID(), description]);
+    await c.admin.query(`INSERT INTO app.shadow_signal_evidence(tenant_id,job_id,signal_id,evidence_id,object_version_id,sha256,source_received_at)
+      VALUES($1,$2,$3,$4,$5,$6,$7)`, [f.tenantId, f.jobId, signalId, f.evidence, evidence.object_version_id, evidence.sha256, evidence.received]);
+  }
+  expect(await read()).toEqual(privateRead);
+  expect(await disputes()).toEqual([]);
+  await expect(c.runtime.query("SELECT app.read_final_check_reveal($1,$2,NULL)", [f.tenantId, f.jobId]))
+    .rejects.toMatchObject({ code: "42501" });
+  await expect(repository.read(f.context, f.jobId, "a".repeat(64))).rejects.toMatchObject({ code: "FINAL_CHECK_FORBIDDEN" });
+
+  const task = await lockTask(f);
+  expect(await read()).toEqual({ state: "pending", lockId: task.lockId, items: [] });
+  expect(await disputes()).toEqual([]);
+  const approval = process.env.JOBGUARD_PILOT_21_APPROVAL;
+  let checks = 0;
+  await expect(executor(() => {
+    if (++checks === 6) vi.stubEnv("JOBGUARD_PILOT_21_APPROVAL", undefined);
+    f.gate();
+  })(task)).rejects.toThrow("PILOT_G1_CLOSED");
+  vi.stubEnv("JOBGUARD_PILOT_21_APPROVAL", approval);
+  expect(await counts(f.jobId)).toEqual({ manifests: 1, certificates: 0 });
+  expect(await read()).toEqual({ state: "pending", lockId: task.lockId, items: [] });
+  expect(await disputes()).toEqual([]);
+
+  await executor(f.gate)(task);
+  const view = await read();
+  expect(view).toMatchObject({ state: "completed", lockId: task.lockId });
+  function subject(description: string) {
+    const item = view.items.find(item => item.description === description);
+    expect(item, JSON.stringify(view.items)).toBeDefined();
+    return { commandId: randomUUID(), lockId: view.lockId!, runId: view.runId!,
+      signalId: item!.signalId as string, expectedSignalRevision: item!.signalRevision as number };
+  }
+  const disposition = { version: "final-check.disposition.v1" as const, ...subject("Fitted shelving units"),
+    answer: "already_included" as const, referenceId: null };
+  await expect(repository.disposition(f.context, f.jobId, null, disposition))
+    .resolves.toMatchObject({ disposition: "attribution_disputed" });
+  expect(await disputes()).toEqual([expect.objectContaining({ signalId: disposition.signalId, answer: "already_included" })]);
+  expect((await c.admin.query("SELECT reason FROM app.shadow_signal_ineligibility WHERE job_id=$1 AND signal_id=$2",
+    [f.jobId, disposition.signalId])).rows).toEqual([{ reason: "attribution_disputed" }]);
+  const confirmation = { version: "final-check.catch.v1", ...subject("Installed kitchen tiles") };
+  await expect(repository.confirmCatch(f.context, f.jobId, null, { ...confirmation, runId: randomUUID() }))
+    .rejects.toMatchObject({ code: "FINAL_CHECK_FORBIDDEN" });
+  await expect(repository.confirmCatch(f.context, f.jobId, null, {
+    ...confirmation, expectedSignalRevision: confirmation.expectedSignalRevision + 1,
+  })).rejects.toMatchObject({ code: "STALE_REVISION" });
+  const result = await repository.confirmCatch(f.context, f.jobId, null, confirmation);
+  expect(result).toMatchObject({ variationId: confirmation.commandId, disposition: "confirmed_extra" });
+  expect(await repository.confirmCatch(f.context, f.jobId, null, confirmation)).toEqual(result);
+  expect((await c.admin.query("SELECT id,origin FROM app.variation WHERE job_id=$1", [f.jobId])).rows)
+    .toEqual([{ id: confirmation.commandId, origin: "jobguard_catch" }]);
+  for (const table of ["variation_revision", "variation_approval", "customer_invoice"]) {
+    expect((await c.admin.query(`SELECT 1 FROM app.${table} WHERE job_id=$1`, [f.jobId])).rowCount).toBe(0);
+  }
+
+  await approve(f.tenantId, "pilot_final_check_terms.v2");
+  await expect(read()).rejects.toMatchObject({ code: "FINAL_CHECK_FORBIDDEN" });
+  await expect(repository.confirmCatch(f.context, f.jobId, null, confirmation)).rejects.toMatchObject({ code: "FINAL_CHECK_FORBIDDEN" });
+  await c.admin.query("UPDATE identity.session SET revoked_at=clock_timestamp() WHERE token_digest=$1", [f.credential]);
+  await expect(read()).rejects.toThrow();
 });

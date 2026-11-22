@@ -1,6 +1,7 @@
+import { pilotFinalCheck } from "./pilot-final-check.js";
 import { pilotFinalAccount } from "./pilot-final-account.js";
 import { pilotJobContinuation } from "./pilot-job-continuation.js";
-import { PilotG1DeniedError, requirePilotG1 } from "@jobguard/config";
+import { requirePilotG1 } from "@jobguard/config";
 import { CaptureConflictError, FirmProfileRepository, firmProfileV1, JobPartiesRepository, RequestBindingRefusedError } from "@jobguard/db";
 import { AuthError } from "../auth/auth-provider.js";
 import { resolveVerifiedTenantContext, type TenantRequestCredentials } from "../auth/principal-bridge.js";
@@ -142,6 +143,11 @@ export async function createPilotWorkspaceApplication(
     listJobs: (jobId?: string) => jobs.listPilotJobs(context, jobId),
     continuation: pilotJobContinuation(pool, context, access),
     finalAccount: pilotFinalAccount(pool, context, access),
+    finalCheck: pilotFinalCheck(pool, context, access),
+    invoicePolicyPending: async (id: string) => {
+      await access(id, true);
+      throw new Error("PILOT_INVOICE_POLICY_PENDING");
+    },
     capture: {
       create: capture.capture.bind(capture), get: capture.view.bind(capture),
       save: capture.save.bind(capture), confirm: capture.confirm.bind(capture),
@@ -175,7 +181,8 @@ export async function createPilotWorkspaceApplication(
 }
 
 export function pilotWorkspaceFailure(error: unknown): { code: string; status: number } {
-  if (error instanceof PilotG1DeniedError) return { code: error.code, status: 403 };
+  const check = finalCheckFailure(error);
+  if (check) return { code: check.body.code, status: check.status };
   if (error instanceof AuthError) return { code: error.code, status: error.code === "UNAUTHENTICATED" ? 401 : 403 };
   if (error instanceof RequestBindingRefusedError) return { code: "TENANT_FORBIDDEN", status: 403 };
   if (error instanceof WorkspaceServiceError && error.code === "NOT_FOUND") return { code: error.code, status: 404 };
@@ -185,7 +192,7 @@ export function pilotWorkspaceFailure(error: unknown): { code: string; status: n
     const code = "code" in error && error.code !== "22023" ? error.code : error.message;
     switch (code) {
       case "DISCLOSURE_TERMS_NOT_ACCEPTED": return { code: "TERMS_PENDING", status: 409 };
-      case "FINAL_ACCOUNT_ALREADY_LOCKED": case "SCOPE_DISPOSITION_MISSING": case "STALE_REVISION":
+      case "PILOT_INVOICE_POLICY_PENDING": case "FINAL_ACCOUNT_ALREADY_LOCKED": case "SCOPE_DISPOSITION_MISSING": case "STALE_REVISION":
       case "FINAL_ACCOUNT_UPLOADS_IN_PROGRESS": case "FINAL_REVIEW_CLOSED": return { code, status: 409 };
       case "INVALID_FINAL_ACCOUNT_LOCK_INPUT": return { code, status: 400 };
       case "NOT_FOUND": case "UPLOAD_NOT_FOUND": case "JOB_NOT_FOUND": case "P0002": return { code: "NOT_FOUND", status: 404 };
