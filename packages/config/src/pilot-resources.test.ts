@@ -16,6 +16,7 @@ const values = {
   PILOT_RUNTIME_DATABASE_URL: url("jobguard_runtime"),
   IDENTITY_DATABASE_URL: url("jobguard_identity"),
   WORKER_DATABASE_URL: url("jobguard_pilot_worker_login"),
+  PILOT_SHADOW_DATABASE_URL: url("jobguard_pilot_shadow_login"),
   GRAPHILE_DATABASE_URL: url("jobguard_pilot_queue_login", "jobguard_pilot_queue"),
 };
 
@@ -44,6 +45,9 @@ it.each([
   { PILOT_RUNTIME_DATABASE_URL: `${values.PILOT_RUNTIME_DATABASE_URL}?dbname=jobguard_synthetic_demo` },
   { PILOT_RUNTIME_DATABASE_URL: url("jobguard_runtime", "jobguard_pilot_restore") },
   { WORKER_DATABASE_URL: url("jobguard_runtime") },
+  { PILOT_SHADOW_DATABASE_URL: url("jobguard_pilot_shadow_login", "jobguard_pilot_other") },
+  { PILOT_SHADOW_DATABASE_URL: url("jobguard_shadow") },
+  { PILOT_SHADOW_DATABASE_URL: values.PILOT_SHADOW_DATABASE_URL.replace("fictional-jobguard_pilot_shadow_login", "fictional-jobguard_pilot_worker_login") },
   { GRAPHILE_DATABASE_URL: url("jobguard_pilot_queue_login") },
   { S3_BUCKET: "jobguard-practice-evidence" },
   { S3_BUCKET: "jobguard-pilot-restore-evidence" },

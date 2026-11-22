@@ -33,3 +33,21 @@ it("the job's own walk-it text is listed but never processed or recorded, and do
  expect(await worker.execute(await context(),{version:"final-check.task.v1",jobId,manifestId})).toEqual({runId:manifestId});
  expect(process).not.toHaveBeenCalled();expect(record).not.toHaveBeenCalled();expect(reconcile).toHaveBeenCalledTimes(1);
 });
+
+
+it("admits only explicitly bound pilot processing and retains the non-pilot refusals", async () => {
+ const actor = await context();
+ const frozen = { ...manifest(), sources: [] };
+ const ports = { read: vi.fn(async () => frozen), process: vi.fn(), record: vi.fn(), reconcile: vi.fn() };
+ const task = { version: "final-check.task.v1", jobId, manifestId };
+ for (const mode of ["pilot_no_charge", "production", "disabled"])
+   await expect(new FinalCheckWorker(ports, mode).execute(actor, task)).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+ const assertBinding = vi.fn((request) => {
+   if (request.manifestId !== manifestId) throw new Error("FINAL_CHECK_FORBIDDEN");
+ });
+ const worker = new FinalCheckWorker(ports, "pilot_no_charge", assertBinding);
+ await expect(worker.execute(actor, { ...task, manifestId: jobId })).rejects.toThrow("FINAL_CHECK_FORBIDDEN");
+ expect(ports.read).not.toHaveBeenCalled();
+ await worker.execute(actor, task);
+ expect(ports.reconcile).toHaveBeenCalledExactlyOnceWith(actor, frozen);
+});

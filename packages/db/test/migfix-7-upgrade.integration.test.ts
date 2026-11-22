@@ -79,13 +79,14 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const advanceSql = await readFile(new URL(`../migrations/${billingProof.migration}`, import.meta.url), "utf8");
   const advanceBody = advanceSql.split("CREATE OR REPLACE FUNCTION app.advance_final_account_draft(")[1]!.split("AS $$")[1]!.split("$$;")[0]!;
   // Exact successor metadata is checked above. Project the reviewed LP-11,
-  // LP-12 and pilot email deltas back to compare the original raw catalogue fields.
+  // LP-12 and pilot deltas back to compare the original raw catalogue fields.
   const lp11 = successors.find(proof => proof.migration === "0765_lp11_bound_tenant_rls.sql")!;
   const lp12 = successors.find(proof => proof.migration === "0768_lp12_narrow_owners.sql")!;
+  const pilotFinalCheck = successors.find(proof => proof.migration === "0777_pilot_final_check.sql")!;
   const pilotEmail = successors.find(proof => proof.migration === "0778_pilot_commercial_email.sql")!;
   const lp11Policies = lp11.upgrade.filter(change => change.section === "policies");
   const lp11Relations = lp11.upgrade.filter(change => change.section === "relations");
-  const addedPolicies = [...lp12.upgrade, ...pilotEmail.upgrade]
+  const addedPolicies = [...lp12.upgrade, ...pilotFinalCheck.upgrade, ...pilotEmail.upgrade]
     .filter(change => change.section === "policies" && change.before === null);
   const lp12Relations = lp12.upgrade.filter(change => change.section === "relations");
   const replayCatalog = installedCatalog.map(relation => {
@@ -434,9 +435,25 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const pilotFinalAccountSql = await readFile(new URL("../migrations/0776_pilot_final_account.sql", import.meta.url), "utf8");
   const pilotDisclosureBody = pilotFinalAccountSql.split("CREATE OR REPLACE FUNCTION app.guard_final_lock_disclosure_terms(")[1]!
     .split("AS $$")[1]!.split("$$;")[0]!;
+  // 0777 succeeds these exact worker bodies without changing the catalogue metadata.
+  const pilotFinalCheckSql = await readFile(new URL("../migrations/0777_pilot_final_check.sql", import.meta.url), "utf8");
+  const pilotFinalCheckBodies = new Map<string, string>();
+  for (const match of pilotFinalCheckSql.matchAll(/CREATE OR REPLACE FUNCTION ([\w.]+)\((.*?)\)\s*RETURNS\b.*?\bAS\s+\$\$(.*?)\$\$;/gsu))
+    pilotFinalCheckBodies.set(`${match[1]}(${argNames(match[2]!)})`, match[3]!);
   for (const row of replayRoutines) {
     const identity = `${row.nspname}.${row.proname}(${row.args})`;
     const prior = afterRoutines.find(r => `${r.nspname}.${r.proname}(${r.args})` === identity);
+    const pilotFinalCheckBody = pilotFinalCheckBodies.get(lp6dKey(row));
+    if (pilotFinalCheckBody !== undefined) {
+      if (prior) {
+        const parts = prior.definition.split("$function$");
+        parts[1] = pilotFinalCheckBody;
+        expect(row.definition, identity).toBe(parts.join("$function$"));
+      } else {
+        expect(row.definition.split("$function$")[1], identity).toBe(pilotFinalCheckBody);
+      }
+      continue;
+    }
     const pilotPortalBody = pilotPortalBodies.get(lp6dKey(row));
     if (pilotPortalBody !== undefined) {
       if (prior) {

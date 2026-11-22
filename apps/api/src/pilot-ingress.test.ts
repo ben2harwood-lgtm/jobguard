@@ -70,6 +70,24 @@ it("rejects effect jobs copied or replayed into the pilot queue before using que
   }
 });
 
+it("only passes valid Final Check identifiers to the installed pilot executor", async () => {
+  const execute = vi.fn(async () => {});
+  const tasks = pilotWorkerTasks(execute);
+  const helpers = {} as Parameters<NonNullable<typeof tasks.final_check>>[1];
+  const task = { version: "final-check-task.v1", tenantId: "10000000-0000-4000-8000-000000000001",
+    jobId: "10000000-0000-4000-8000-000000000002", lockId: "10000000-0000-4000-8000-000000000003",
+    manifestId: "10000000-0000-4000-8000-000000000004", executionId: "10000000-0000-4000-8000-000000000005" };
+  for (const [name, handler] of Object.entries(tasks)) {
+    if (name === "final_check") continue;
+    await expect(handler!(task, helpers)).rejects.toThrow("PILOT_QUEUE_EXECUTION_REFUSED");
+  }
+  await expect(tasks.final_check!({ ...task, version: "final-check-practice-run.v1" }, helpers)).rejects.toThrow("INVALID_FINAL_CHECK_TASK");
+  await expect(tasks.final_check!({ ...task, completed: true }, helpers)).rejects.toThrow("INVALID_FINAL_CHECK_TASK");
+  expect(execute).not.toHaveBeenCalled();
+  await tasks.final_check!(task, helpers);
+  expect(execute).toHaveBeenCalledExactlyOnceWith(task);
+});
+
 it("refuses correctly signed synthetic payment event replays at direct execution", async () => {
   const f = fixture();
   await f.settle();

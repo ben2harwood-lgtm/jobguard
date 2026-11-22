@@ -105,7 +105,7 @@ describe("CH-4 own-migration upgrade",()=>{
    name:"app.audit_event.lp4_audit_writer",roles:["jobguard_audit_writer"],
   }];
   const policyProofs=loadMigrationProofs().proofs
-   .filter(proof=>["0765_lp11_bound_tenant_rls.sql","0768_lp12_narrow_owners.sql","0778_pilot_commercial_email.sql"].includes(proof.migration))
+   .filter(proof=>["0765_lp11_bound_tenant_rls.sql","0768_lp12_narrow_owners.sql","0777_pilot_final_check.sql","0778_pilot_commercial_email.sql"].includes(proof.migration))
    .map(proof=>({...proof,upgrade:proof.upgrade.filter(change=>change.section==="policies"
     && oldPolicyTables.has(`${(change.after??change.before)!.schemaname}.${(change.after??change.before)!.tablename}`))}));
   const records=predecessorPolicies.map(({name,roles,...row})=>{
