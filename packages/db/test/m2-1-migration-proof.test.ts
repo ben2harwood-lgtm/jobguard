@@ -75,7 +75,7 @@ describe("M2-1 checked command compatibility", () => {
     if (delta.section !== "rows") throw new Error("Missing registry proof");
     // The 0606 proof predates rate suggestions, EndCheck, duplicate dispositions, client sender authority and the 0722 abandoned-visit successor.
     const historicalCommandRegistryRows = currentCommandRegistryRows.filter(row =>
-      !["rate.suggestion_accept", "EndCheck", "ResolveDuplicateCandidates", "RecordExtraProceed", "CloseAbandonedSiteVisit", "job.discard_draft"].includes(row.command_type))
+      !["rate.suggestion_accept", "EndCheck", "ResolveDuplicateCandidates", "RecordExtraProceed", "CloseAbandonedSiteVisit", "job.discard_draft", "customer_invoice.send"].includes(row.command_type))
       .map(row => row.command_type === "IssueClientApproval" ? { ...row, permission_rule: "owner" } : row);
     expect(delta.after!.data).toEqual(expect.arrayContaining(historicalCommandRegistryRows));
     expect(delta.after!.data).toHaveLength(historicalCommandRegistryRows.length);

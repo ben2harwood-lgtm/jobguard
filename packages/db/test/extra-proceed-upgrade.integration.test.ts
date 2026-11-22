@@ -2,7 +2,7 @@
 import { afterAll, expect, it, vi } from "vitest";
 import { startBeforeMigration, applyMigration, snapshot, type Cluster } from "./contractor-entitlement-fixtures.js";
 import { chainWorld, submitted } from "./extra-approval-chain-fixtures.js";
-import { abandonedSiteVisitRegistryRow, duplicateDispositionLifecycleRegistryRow, discardDraftRegistryRow } from "./lp5-command-catalog.js";
+import { abandonedSiteVisitRegistryRow, duplicateDispositionLifecycleRegistryRow, discardDraftRegistryRow, invoiceSendRegistryRow } from "./lp5-command-catalog.js";
 import { migrate } from "../src/index.js";
 import { lp11EmptyTables } from "./later-empty-tables.js";
 let c: Cluster | undefined;
@@ -42,7 +42,7 @@ it("0905 upgrades populated approval requests without changing any earlier row, 
  const replayedRegistryRows = (after["app.command_type_registry"] as { command_type: string; permission_rule: string }[]).map(row =>
   row.command_type === "IssueClientApproval" && row.permission_rule === "owner" ? { ...row, permission_rule: "contractor" } : row);
  const replayedRegistry = (await c.admin.query("SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",
-  [JSON.stringify([...replayedRegistryRows, abandonedSiteVisitRegistryRow, duplicateDispositionLifecycleRegistryRow, discardDraftRegistryRow])])).rows[0].data;
+  [JSON.stringify([...replayedRegistryRows, abandonedSiteVisitRegistryRow, duplicateDispositionLifecycleRegistryRow, discardDraftRegistryRow, invoiceSendRegistryRow])])).rows[0].data;
  await migrate(c.admin); await migrate(c.admin); expect(await snapshot(c.admin)).toEqual({ ...after, ...lp11EmptyTables, "app.connector_promotion": [], "control_plane.worker_action_binding": [], "control_plane.blank_practice_session": [],
   "control_plane.identity_practice_namespace": [], "control_plane.identity_practice_company": [], "control_plane.identity_practice_credential": [],
   "app.extra_client_command_session": [], "app.extra_client_session": [], "app.extra_client_signin": [], "app.extra_pack_artifact": [], "app.commercial_grant_use": [], "app.job_proof_statement": [], "app.final_account_proof_statement": [], "app.firm_profile": [], "app.quote_firm_counter": [], "app.quote_job_reference": [], "identity.lp6d_sso_grant_permit": [], "app.command_type_registry": replayedRegistry });

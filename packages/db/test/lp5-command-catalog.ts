@@ -619,7 +619,7 @@ export const discardDraftRegistryRow = {
   command_type: "job.discard_draft", version: "command.v1", permission_rule: "owner",
   lock_adapter: "route_before_begin", completion_adapter: "discard", audit_class: "commercial", outbox_class: null,
 };
-const invoiceSendRegistryRow = {
+export const invoiceSendRegistryRow = {
   command_type: "customer_invoice.send", version: "command.v1", permission_rule: "owner",
   lock_adapter: "route_before_begin", completion_adapter: "invoice", audit_class: "commercial", outbox_class: "fake_invoice_delivery",
 };
