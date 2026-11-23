@@ -1,0 +1,9 @@
+{
+ "what": "Deploy logs from two superseded hosted-demo deploy worktrees (cf-deploy-54e3a125f, cf-deploy-ca648dfba) before removing the worktrees to free disk",
+ "zip_sha256": "9a39a930295a51aa9f06e769b4ce966e2e62665d55025855caa7eda807a6f9ad",
+ "files": {
+  "ca648dfba/demo-redeploy-build.log": "c78c46438df7c4d468b19788bf11a839a75dbac24ce925468f527e1d8c60773a",
+  "ca648dfba/demo-redeploy-install.log": "ec5f4c32f0b94b582b6d8845d03d4df88b1def03f41aba0310288e9307432e59",
+  "ca648dfba/demo-redeploy-stubs.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+ }
+}
