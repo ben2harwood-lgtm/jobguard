@@ -35,20 +35,28 @@ const defaults = Object.freeze({
 });
 
 const endpointKey = /(?:^|_)(?:URLS?|URIS?|ENDPOINTS?|DSN|ORIGINS?|HOSTS?|PROXIES|PROXY|BUCKET|HOSTING)(?:_|$)/iu;
-const targetOverride = /^(?:V2_|COMPOSE_|PG(?:HOST|PORT|DATABASE|DATA|SERVICE|OPTIONS))|(?:^|_)(?:STORAGE|S3|DATABASE|POSTGRES)(?:_.*)?_(?:DIR(?:ECTORY)?|PATH|VOLUME|PORT|NAME|DATA)$/iu;
+const targetOverride = /^(?:V2_|JOBGUARD_V2_(?:STORAGE|POSTGRES)_|COMPOSE_|PG(?:HOST|PORT|DATABASE|DATA|SERVICE|OPTIONS))|(?:^|_)(?:STORAGE|S3|DATABASE|POSTGRES)(?:_.*)?_(?:DIR(?:ECTORY)?|PATH|VOLUME|PORT|NAME|DATA)$/iu;
 const uri = /(?:[a-z][a-z0-9+.-]*:\/\/|(?:^|\s)\/\/)/iu;
 
 function phoneSettings(env, interfaces) {
   const address = env.JOBGUARD_V2_PHONE_HOST;
   const certFile = env.JOBGUARD_V2_PHONE_CERT;
   const keyFile = env.JOBGUARD_V2_PHONE_KEY;
-  if (!address && !certFile && !keyFile) return undefined;
+  const generate = env.JOBGUARD_V2_PHONE_SELF_SIGNED;
+  if (generate && generate !== "1") throw new Error("JOBGUARD_V2_PHONE_SELF_SIGNED must be 1");
+  if (!address && !certFile && !keyFile && !generate) return undefined;
   const privateV4 = /^(?:10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/u;
   if (!address || !privateV4.test(address) || !Object.values(interfaces).flat().some(entry =>
     entry.address === address && entry.family === "IPv4" && !entry.internal)) {
     throw new Error("JOBGUARD_V2_PHONE_HOST must be a private IPv4 address assigned to this computer");
   }
+  if (generate === "1" && !certFile && !keyFile) return { address, generate: true };
+  if (generate) throw new Error("Use either JOBGUARD_V2_PHONE_SELF_SIGNED or a local TLS certificate and key");
   if (!certFile || !keyFile) throw new Error("V2 phone access requires a local TLS certificate and key");
+  return validatePhoneCertificate(address, certFile, keyFile);
+}
+
+export function validatePhoneCertificate(address, certFile, keyFile) {
   const cert = readFileSync(certFile);
   const key = readFileSync(keyFile);
   const certificate = new X509Certificate(cert);
@@ -72,7 +80,10 @@ export function validateSettings(env, interfaces = networkInterfaces()) {
   }
   const phone = phoneSettings(env, interfaces);
   const webOrigin = phone ? `https://${phone.address}:${ports.web}` : `http://${host}:${ports.web}`;
-  const settings = { ...defaults, AUTH_ALLOWED_ORIGIN: webOrigin, JOBGUARD_ALLOWED_ORIGINS: webOrigin };
+  const backend = env.JOBGUARD_V2_BACKEND;
+  if (backend && !["embedded", "docker"].includes(backend)) throw new Error("JOBGUARD_V2_BACKEND must be embedded or docker");
+  const settings = { ...defaults, AUTH_ALLOWED_ORIGIN: webOrigin, JOBGUARD_ALLOWED_ORIGINS: webOrigin,
+    ...(phone ? { NEXT_PUBLIC_API_URL: "/api/v2-backend" } : {}) };
   for (const [name, value] of Object.entries(env)) {
     if (!value || ["JOBGUARD_V2_PHONE_HOST", "NO_PROXY", "no_proxy", "__CFBundleIdentifier"].includes(name)) continue;
     if (Object.hasOwn(settings, name)) {
@@ -81,7 +92,7 @@ export function validateSettings(env, interfaces = networkInterfaces()) {
       throw new Error(`${name} is outside the V2 endpoint allowlist`);
     }
   }
-  return { settings, phone };
+  return { settings, phone, backend };
 }
 
 export function refuseDotenvFiles(root) {

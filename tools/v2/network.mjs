@@ -2,6 +2,7 @@ import { Socket } from "node:net";
 import { host, ports } from "./settings.mjs";
 
 const allowedPorts = new Set(Object.values(ports));
+if (process.env.JOBGUARD_LOCAL_V2 === "1" && process.env.JOBGUARD_V2_STORAGE_DIR) allowedPorts.delete(ports.storage);
 const connect = Socket.prototype.connect;
 
 // pg, HTTP(S), undici and the AWS SDK all open TCP sockets through here.

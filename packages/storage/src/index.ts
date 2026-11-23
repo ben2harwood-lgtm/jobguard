@@ -89,3 +89,5 @@ export function sha256(bytes: Uint8Array): string {
 
 export * from "./worm.js";
 export * from "./timestamp.js";
+
+export * from "./v2-filesystem.js";
