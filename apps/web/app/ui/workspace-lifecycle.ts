@@ -14,3 +14,8 @@ export function requestedWorkspaceSection(status:JobStatus,fragment:string):Work
  if(/^#invoice-[a-f0-9-]{36}$/iu.test(fragment))return hasStartedWork(status)?"final-account":"quote";
  return "scope";
 }
+
+/** Fragments whose classic entry now opens the designed Work tab. */
+export function isDesignedWorkFragment(fragment: string): boolean {
+ return ["#quote", "#work-proof", "#variations-title"].includes(fragment) || /^#variation-[a-f0-9-]{36}$/iu.test(fragment);
+}

@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "lanes": {
+    "dui-2": {
+      "branches": [
+        "codex/sandbox/dui-2"
+      ],
+      "allow": [
+        "AGENT_CHOICES.md",
+        "apps/web/app/(designed)/design-fit.css",
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/jobs/[id]/page.tsx",
+        "apps/web/app/ui/job-sources.tsx",
+        "apps/web/app/ui/job-variations.tsx",
+        "apps/web/app/ui/job-work-state.tsx",
+        "apps/web/app/ui/practice-journey.tsx",
+        "apps/web/app/ui/proof-stage.tsx",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/workspace-lifecycle.ts",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/DUI-2.spec.ts",
+        "apps/web/e2e/artifacts/dui-2/README.md",
+        "apps/web/e2e/artifacts/dui-2/desktop-acceptance.png",
+        "apps/web/e2e/artifacts/dui-2/desktop-approved-extra.png",
+        "apps/web/e2e/artifacts/dui-2/desktop-reference-acceptance.png",
+        "apps/web/e2e/artifacts/dui-2/desktop-reference-approved-extra.png",
+        "apps/web/e2e/artifacts/dui-2/desktop-reference-switch-live.png",
+        "apps/web/e2e/artifacts/dui-2/desktop-reference-work-proof.png",
+        "apps/web/e2e/artifacts/dui-2/desktop-switch-live.png",
+        "apps/web/e2e/artifacts/dui-2/desktop-work-proof.png",
+        "apps/web/e2e/artifacts/dui-2/mobile-360-acceptance.png",
+        "apps/web/e2e/artifacts/dui-2/mobile-360-approved-extra.png",
+        "apps/web/e2e/artifacts/dui-2/mobile-360-reference-acceptance.png",
+        "apps/web/e2e/artifacts/dui-2/mobile-360-reference-approved-extra.png",
+        "apps/web/e2e/artifacts/dui-2/mobile-360-reference-switch-live.png",
+        "apps/web/e2e/artifacts/dui-2/mobile-360-reference-work-proof.png",
+        "apps/web/e2e/artifacts/dui-2/mobile-360-switch-live.png",
+        "apps/web/e2e/artifacts/dui-2/mobile-360-work-proof.png"
+      ]
+    }
+  }
+}
