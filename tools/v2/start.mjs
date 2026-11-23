@@ -170,13 +170,17 @@ async function start() {
   delete runtimeEnv.MIGRATION_DATABASE_URL;
   if (!dockerHost) for (const key of Object.keys(runtimeEnv).filter(key => key.startsWith("S3_"))) delete runtimeEnv[key];
 
+  const selectedBackend = dockerHost ? "docker" : "embedded";
+  const phoneEnv = hostEnvironment(["JOBGUARD_V2_PHONE_HOST", "JOBGUARD_V2_PHONE_CERT",
+    "JOBGUARD_V2_PHONE_KEY", "JOBGUARD_V2_PHONE_SELF_SIGNED"]);
   const postgres = dockerHost ? startDocker(dockerHost, baseEnv, settings) : await (await import("./embedded.mjs")).startEmbedded();
   try {
-    run(process.execPath, ["tools/v2/bootstrap.mjs", postgres.id, dockerHost ? "docker" : "embedded"], runtimeEnv);
+    run(process.execPath, ["tools/v2/bootstrap.mjs", postgres.id, selectedBackend], {
+      ...runtimeEnv, ...phoneEnv, JOBGUARD_V2_BACKEND: selectedBackend,
+    });
     await serve({ ...runtimeEnv, AUTH_CODE_SECRET: authSecret() }, phone, () => {
       const signIn = `${settings.AUTH_ALLOWED_ORIGIN}/sign-in`;
       console.log(`JobGuard V2 ${phone ? "phone" : "web"}: ${signIn}`);
-      console.log("Owner sign-in: builder@jobguard-v2.invalid. Use the practice code on the sign-in page.");
       if (phone) console.log("A self-signed certificate can show a warning on your phone. You can choose whether to trust it.");
       const api = phone ? `${settings.AUTH_ALLOWED_ORIGIN}${settings.NEXT_PUBLIC_API_URL}` : settings.NEXT_PUBLIC_API_URL;
       console.log(`JobGuard V2 API: ${api}/healthz`);

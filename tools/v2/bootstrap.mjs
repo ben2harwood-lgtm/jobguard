@@ -1,16 +1,17 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { runMigrations } from "../../apps/api/node_modules/graphile-worker/dist/index.js";
 import { provisionSyntheticSchema } from "../../packages/db/dist/demo-bootstrap.js";
 import { database, migrationUrl, validateSettings } from "./settings.mjs";
-import { assertPostgresTarget, authSecret, checkLocalTargets, storageData } from "./local-targets.mjs";
-import { seedV2 } from "./seed.mjs";
+import { authSecret, checkLocalTargets, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
+import { printSeedLinks, seedV2 } from "./seed.mjs";
 
-const { settings } = validateSettings({});
+const { NODE_OPTIONS, ...env } = process.env;
+const { settings } = validateSettings(env);
 const [, , expectedSystemId, backend] = process.argv;
 const embedded = backend === "embedded";
 if (!/^\d+$/u.test(expectedSystemId ?? "") || process.env.JOBGUARD_ENV !== settings.JOBGUARD_ENV ||
-    process.env.JOBGUARD_LOCAL_V2 !== "1" || !["docker", "embedded"].includes(backend)) {
+    env.JOBGUARD_LOCAL_V2 !== "1" || backend !== env.JOBGUARD_V2_BACKEND || !["docker", "embedded"].includes(backend)) {
   throw new Error("V2 bootstrap requires the dedicated PostgreSQL server identity");
 }
 
@@ -26,7 +27,7 @@ await using pools = {
 const client = await admin.connect();
 try {
   // The expected ID comes from Compose or the embedded cluster's control file.
-  await assertPostgresTarget(client, expectedSystemId, embedded);
+  await verifyDatabaseTarget(client, expectedSystemId, embedded);
 
   await client.query("SELECT pg_advisory_lock(hashtext('jobguard_v2_local_bootstrap'))");
   // The common schema bootstrap requires the shadow group to have no ordinary
@@ -60,8 +61,9 @@ try {
     await client.query(`REVOKE CREATE ON DATABASE "${database}" FROM jobguard_v2_queue`);
   }
   process.env.AUTH_CODE_SECRET = authSecret();
-  const seed = await seedV2();
-  if (seed?.acceptedQuotePath) console.log(`V2 accepted quote: ${process.env.AUTH_ALLOWED_ORIGIN}${seed.acceptedQuotePath}`);
+  await client.query(readFileSync(new URL("./migrations/2001_practice_quote.sql", import.meta.url), "utf8"));
+  const jobId = await seedV2(client, expectedSystemId);
+  printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
 } finally {
   client.release();

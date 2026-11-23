@@ -1,13 +1,17 @@
 import { randomBytes } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { endianness } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { database, host, ports, postgresData } from "./settings.mjs";
+import { database, host, migrationUrl, ports, postgresData, state, storageData } from "./settings.mjs";
 
-const checkout = realpathSync(fileURLToPath(new URL("../../", import.meta.url)));
-export const state = join(checkout, ".jobguard", "v2");
+export { state, storageData } from "./settings.mjs";
 export const embeddedData = join(state, "postgres");
-export const storageData = join(state, "objects");
+
+export function embeddedSystemId() {
+  const control = readFileSync(join(embeddedData, "global", "pg_control"));
+  // In PostgreSQL 16, ControlFileData begins with a native-endian uint64 system identifier.
+  return (endianness() === "LE" ? control.readBigUInt64LE() : control.readBigUInt64BE()).toString();
+}
 
 export function checkDirectory(path, create = false) {
   try {
@@ -51,4 +55,14 @@ export async function assertPostgresTarget(client, expectedId, embedded, name = 
       (embedded && target.address !== host)) {
     throw new Error("V2 PostgreSQL server identity does not match");
   }
+}
+
+export async function verifyDatabaseTarget(client, expectedSystemId, embedded = false) {
+  if (!/^\d+$/u.test(expectedSystemId ?? "")) {
+    throw new Error("V2 bootstrap requires the dedicated PostgreSQL server identity");
+  }
+  if (new URL(migrationUrl).port !== String(ports.database)) {
+    throw new Error("V2 PostgreSQL server identity does not match");
+  }
+  await assertPostgresTarget(client, expectedSystemId, embedded);
 }

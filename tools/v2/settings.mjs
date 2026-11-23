@@ -1,8 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { networkInterfaces } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { createSecureContext } from "node:tls";
 import { X509Certificate } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
 
 const demoIdentifiers = JSON.parse(readFileSync(new URL("./demo-identifiers.json", import.meta.url), "utf8"));
@@ -11,6 +12,9 @@ export const ports = Object.freeze({ database: 56432, storage: 16900, api: 3401,
 export const database = "jobguard_v2_local";
 export const bucket = "jobguard-v2-evidence";
 export const postgresData = "/var/lib/postgresql/data/pgdata-v2";
+const checkout = realpathSync(fileURLToPath(new URL("../../", import.meta.url)));
+export const state = join(checkout, ".jobguard", "v2");
+export const storageData = join(state, "objects");
 const postgresUrl = (login, password) => `postgresql://${login}:${password}@${host}:${ports.database}/${database}`;
 export const migrationUrl = postgresUrl("jobguard_v2_admin", "v2-local-admin-only");
 const runtimeUrl = postgresUrl("jobguard_runtime", "v2-local-runtime-only");
@@ -82,10 +86,15 @@ export function validateSettings(env, interfaces = networkInterfaces()) {
   const webOrigin = phone ? `https://${phone.address}:${ports.web}` : `http://${host}:${ports.web}`;
   const backend = env.JOBGUARD_V2_BACKEND;
   if (backend && !["embedded", "docker"].includes(backend)) throw new Error("JOBGUARD_V2_BACKEND must be embedded or docker");
+  if (env.JOBGUARD_V2_STORAGE_DIR !== undefined &&
+      (backend !== "embedded" || env.JOBGUARD_V2_STORAGE_DIR !== storageData)) {
+    throw new Error("JOBGUARD_V2_STORAGE_DIR must match the V2 embedded storage target");
+  }
   const settings = { ...defaults, AUTH_ALLOWED_ORIGIN: webOrigin, JOBGUARD_ALLOWED_ORIGINS: webOrigin,
     ...(phone ? { NEXT_PUBLIC_API_URL: "/api/v2-backend" } : {}) };
   for (const [name, value] of Object.entries(env)) {
-    if (!value || ["JOBGUARD_V2_PHONE_HOST", "NO_PROXY", "no_proxy", "__CFBundleIdentifier"].includes(name)) continue;
+    if (!value || ["JOBGUARD_V2_PHONE_HOST", "JOBGUARD_V2_PHONE_SELF_SIGNED", "JOBGUARD_V2_BACKEND",
+      "JOBGUARD_V2_STORAGE_DIR", "NO_PROXY", "no_proxy", "__CFBundleIdentifier"].includes(name)) continue;
     if (Object.hasOwn(settings, name)) {
       if (value !== settings[name]) throw new Error(`${name} must match the V2 local settings`);
     } else if (endpointKey.test(name) || targetOverride.test(name) || uri.test(value)) {

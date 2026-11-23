@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { V2FilesystemStorage } from "../packages/storage/src/v2-filesystem.ts";
-import { assertPostgresTarget, checkDirectory, embeddedData } from "./v2/local-targets.mjs";
+import { assertPostgresTarget, checkDirectory, embeddedData, storageData } from "./v2/local-targets.mjs";
 import { database, host, ports, validateSettings } from "./v2/settings.mjs";
 
 test("embedded bootstrap refuses each mismatch after only its read-only identity query", async () => {
@@ -38,6 +38,13 @@ test("launcher refuses alternate embedded directories and ports before starting 
     assert.match(result.stderr, new RegExp(name, "u"));
     assert.doesNotMatch(result.stderr, /ENOENT/u);
   }
+});
+
+test("V2 accepts only the checkout's storage directory in embedded mode", () => {
+  const env = { JOBGUARD_V2_BACKEND: "embedded", JOBGUARD_V2_STORAGE_DIR: storageData };
+  assert.equal(validateSettings(env).backend, "embedded");
+  assert.throws(() => validateSettings({ ...env, JOBGUARD_V2_BACKEND: "docker" }), /JOBGUARD_V2_STORAGE_DIR/u);
+  assert.throws(() => validateSettings({ ...env, JOBGUARD_V2_STORAGE_DIR: storageData + "/other" }), /JOBGUARD_V2_STORAGE_DIR/u);
 });
 
 test("the generated-certificate setting still requires an assigned private LAN address", () => {
