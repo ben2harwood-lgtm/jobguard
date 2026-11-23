@@ -21,7 +21,7 @@ function connection(value: string, label: string) {
 }
 const quoteIdentifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
 const quoteLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
-async function ensureRoles(admin: PoolClient, runtimePassword: string) {
+async function ensureRoles(admin: PoolClient, runtimePassword: string, databaseName = SYNTHETIC_DATABASE_NAME) {
   await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_migration NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
   await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_runtime LOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
   await admin.query(`DO $$ BEGIN CREATE ROLE jobguard_infrastructure NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
@@ -75,7 +75,7 @@ async function ensureRoles(admin: PoolClient, runtimePassword: string) {
   await admin.query(`GRANT jobguard_migration TO ${quoteIdentifier(owner)}`);
   await admin.query(`GRANT jobguard_runtime TO ${quoteIdentifier(owner)}`);
   await admin.query(`GRANT jobguard_infrastructure TO ${quoteIdentifier(owner)}`);
-  await admin.query(`GRANT CREATE ON DATABASE ${quoteIdentifier(SYNTHETIC_DATABASE_NAME)} TO jobguard_migration`);
+  await admin.query(`GRANT CREATE ON DATABASE ${quoteIdentifier(databaseName)} TO jobguard_migration`);
   await admin.query("GRANT USAGE,CREATE ON SCHEMA public TO jobguard_migration");
 }
 /** Administrative post-migration step; never executed as jobguard_migration.
@@ -252,6 +252,14 @@ async function seedDatabase(client: PoolClient) {
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
 }
+/** Schema only. The caller must verify the connection before invoking this privileged setup. */
+export async function provisionSyntheticSchema(client: PoolClient, databaseName: string, runtimePassword: string) {
+  await ensureRoles(client, runtimePassword, databaseName);
+  const migrations = await migrateAsMigrationOwner(client);
+  await finalizeMeterLifecycleOwnership(client);
+  return migrations;
+}
+
 export async function bootstrapSyntheticDemo(options: { ownerUrl: string; runtimeUrl: string }) {
   if (process.env.JOBGUARD_ENV !== "synthetic_demo") throw new DemoBootstrapSafetyError("JOBGUARD_ENV=synthetic_demo is required");
   const owner = connection(options.ownerUrl, "MIGRATION_DATABASE_URL");

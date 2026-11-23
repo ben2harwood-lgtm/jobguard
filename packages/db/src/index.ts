@@ -234,3 +234,4 @@ export * from "./job-proof-statement.js";
 
 export * from "./worker-action-executor.js";
 export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
+export { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";

@@ -10,7 +10,8 @@ try {
   const port = parseApiEnvironment(process.env).API_PORT;
   const app = await NestFactory.create(AppModule, { logger, abortOnError: false });
   configureOpenApi(app);
-  await app.listen(port);
+  if (process.env.JOBGUARD_LOCAL_V2 === "1") await app.listen(port, "127.0.0.1");
+  else await app.listen(port);
 } catch {
   logger.error("SERVER_START_FAILED");
   process.exit(1);
