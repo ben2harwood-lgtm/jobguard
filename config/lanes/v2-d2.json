@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-d2": {
+      "branches": ["codex/sandbox/v2-d2"],
+      "note": "JobGuard V2 pack-count calculation and domain tests.",
+      "allow": [
+        "packages/core/src/materials.ts",
+        "packages/core/src/material-pack-count.test.ts"
+      ]
+    }
+  }
+}
