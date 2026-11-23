@@ -6,7 +6,7 @@ import Link from "next/link";
 import { jobWorkspaceResponseV1, type JobWorkspaceResponse } from "@jobguard/api/workspace-contracts";
 import { captureWorkspaceResponseV1, type CaptureWorkspaceResponse } from "@jobguard/api/capture-contracts";
 import { ReviewProposal } from "./review-proposal";
-import { hasStartedWork, jobStatusLabels, mayOpenSavedQuote, requestedWorkspaceSection, isDesignedWorkFragment } from "./workspace-lifecycle";
+import { hasStartedWork, jobStatusLabels, mayOpenSavedQuote, requestedWorkspaceSection } from "./workspace-lifecycle";
 import { PracticeJourney } from "./practice-journey";
 import { Materials } from "./materials";
 import { PurchaseOrder } from "./purchase-order";
@@ -32,7 +32,7 @@ import { FinalCheckReveal } from "./final-check-reveal";
 const stages=["Scope","Quote","Work","Final account","Payment"];
 
 // Tours can open pricing directly without triggering ordinary fragment navigation.
-export function WorkspaceShell({jobId,initialPricing=false,designed=false,redirectWorkFragment=false}:{jobId:string;initialPricing?:boolean;designed?:boolean;redirectWorkFragment?:boolean}){
+export function WorkspaceShell({jobId,initialPricing=false,designed=false}:{jobId:string;initialPricing?:boolean;designed?:boolean}){
  const legacy = (children: ReactNode) => designed ? <div className="jgd-legacy jgd-tools"><div className="workspace-page">{children}</div></div> : children;
  const legacyWorkspace = (children: ReactNode) => designed ? <Legacy label="Saved job tools" cards>{children}</Legacy> : children;
  const[job,setJob]=useState<JobWorkspaceResponse["job"]|null>(null);
@@ -66,12 +66,7 @@ export function WorkspaceShell({jobId,initialPricing=false,designed=false,redire
   }catch{if(current===generation.current&&!controller.signal.aborted)setError("unavailable");}
   finally{if(current===generation.current){activeRequest.current=null;setLoading(false);}}
  },[jobId]);
- useEffect(()=>{
-  if (redirectWorkFragment && isDesignedWorkFragment(window.location.hash)) {
-   window.location.replace(`${window.location.pathname}/work${window.location.search}${window.location.hash}`);
-   return;
-  }
-  void load();return()=>{generation.current++;if(currentJobId.current!==jobId)activeRequest.current?.abort();}},[load,redirectWorkFragment]);
+ useEffect(()=>{void load();return()=>{generation.current++;if(currentJobId.current!==jobId)activeRequest.current?.abort();}},[load]);
  useEffect(()=>{setFragment(window.location.hash);const changed=()=>{setFragment(window.location.hash);void load();};window.addEventListener("hashchange",changed);return()=>window.removeEventListener("hashchange",changed);},[load]);
  useEffect(()=>{if(error)errorRef.current?.focus();},[error]);
  // Explicit in-workspace controls retain mounted editors and unsaved drafts.

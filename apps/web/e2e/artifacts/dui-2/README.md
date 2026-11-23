@@ -13,14 +13,14 @@ The standalone clickable preview was unavailable in this workspace. The comparis
 
 ## Navigation map
 
-| Incoming classic fragment | Designed destination |
+| Work fragment | Designed URL |
 | --- | --- |
 | `#quote` | `/jobs/[id]/work#quote` |
 | `#work-proof` | `/jobs/[id]/work#work-proof` |
 | `#variations-title` | `/jobs/[id]/work#variations-title` |
 | `#variation-<id>` | `/jobs/[id]/work#variation-<id>` |
 
-The bare job URL opens the classic workspace. These four deep links open Work from an initial classic-page visit. The company query branch continues to serve CH-4. The scope, final account, Final Check, practice tools, diary, customer message and invoice fragments retain their existing destinations.
+The bare job URL and its fragments open the classic workspace. Redirects from classic URLs are deferred until all designed equivalents pass. The company query branch continues to serve CH-4.
 
 ## Workspace panels
 
@@ -34,5 +34,3 @@ The bare job URL opens the classic workspace. These four deep links open Work fr
 ## Regression coverage
 
 Retained guards include `SV-3` through `SV-7A`, `real-fc-*`, `real-lock-pending-extra`, and the money refusal assertions in `real-own-job-to-paid`. The new journey checks the actual stale variation refusal and compares the saved baseline and approved extra in both editors.
-
-The unchanged DUI-1b spec still expects direct `/jobs/[id]#quote` to open the classic editor. That assertion conflicts with the incoming link map above. To see the classic quote, open the bare job first and select Quote in Saved job sections.

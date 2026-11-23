@@ -19,7 +19,7 @@ export default async function JobPage({ params, searchParams }: {
   if (!company || mode === "pilot_no_charge") return <>
     {mode === "pilot_no_charge"
       ? <DesignedLayout><PilotJobs screen="review" jobId={id}/></DesignedLayout>
-      : <WorkspaceShell jobId={id} redirectWorkFragment={company === undefined}/>}
+      : <WorkspaceShell jobId={id}/>}
     {mode === "synthetic_demo" && <MerchantOrder key={id} jobId={id}/>}
   </>;
   // A tenant selection is never authority. Reauthenticate the company session,

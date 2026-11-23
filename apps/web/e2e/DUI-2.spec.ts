@@ -104,7 +104,7 @@ test("DUI-2: accept, start, record proof and approve an exact extra on one own j
   expect(live).toMatchObject({ jobId, status: "live" });
   expect((await read("/quotes/activation")).activation).toMatchObject({ acceptedNetPence: 90000, acceptedDocumentVersion: 1 });
 
-  await page.goto(`${jobPath}#work-proof`);
+  await page.goto(`${jobPath}/work#work-proof`);
   await expect(page).toHaveURL(`${jobPath}/work#work-proof`);
   const proof = workspace.getByRole("region", { name: "Proof of the work" });
   await checkDesigned(button("Attach generated practice image", proof));
@@ -117,7 +117,7 @@ test("DUI-2: accept, start, record proof and approve an exact extra on one own j
   expect(await read("/proof")).toMatchObject({ jobId, upload: { state: "verified" }, completion: { reviewRequired: false }, realExternalActions: 0 });
   await screenshot("work-proof", proof);
 
-  await page.goto(`${jobPath}#variations-title`);
+  await page.goto(`${jobPath}/work#variations-title`);
   await expect(page).toHaveURL(`${jobPath}/work#variations-title`);
   const extras = workspace.getByRole("region", { name: "Extra work and omissions" });
   await checkDesigned(button("Add proposed variation", extras));
@@ -157,7 +157,7 @@ test("DUI-2: accept, start, record proof and approve an exact extra on one own j
   await expect(refusal).toBeVisible();
   expect((await read("/variations")).approvedAdditionsPence).toBe(0);
 
-  await page.goto(`${jobPath}#variation-${original.id}`);
+  await page.goto(`${jobPath}/work#variation-${original.id}`);
   await expect(page).toHaveURL(`${jobPath}/work#variation-${original.id}`);
   await expect(card).toBeFocused();
   await expect(card.getByText("Price revision 2 · £150.00", { exact: true })).toBeVisible();
@@ -183,6 +183,7 @@ test("DUI-2: accept, start, record proof and approve an exact extra on one own j
   await expect(page.getByTestId("accepted-net")).toHaveText("£900.00");
   await expect(page.getByTestId("approved-additions")).toHaveText("£150.00");
   await page.reload();
-  await expect(page).toHaveURL(`${jobPath}/work#quote`);
   await expect(page.getByTestId("accepted-net")).toHaveText("£900.00");
+  await expect(workspace).not.toHaveClass(/designed-workspace/u);
+  await expect(page).toHaveURL(`${jobPath}#quote`);
 });
