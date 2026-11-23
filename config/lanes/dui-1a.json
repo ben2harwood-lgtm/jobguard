@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "lanes": {
+    "dui-1a": {
+      "branches": [
+        "codex/sandbox/dui-1a"
+      ],
+      "allow": [
+        "AGENT_CHOICES.md",
+        "apps/web/app/(designed)/design-fit.css",
+        "apps/web/app/(designed)/jobs-screens.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
+        "apps/web/app/ui/job-parties.tsx",
+        "apps/web/app/ui/jobguard-app.tsx",
+        "apps/web/app/ui/local-dictation.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "apps/web/e2e/DUI-1a.spec.ts",
+        "apps/web/e2e/artifacts/dui-1a/README.md",
+        "apps/web/e2e/artifacts/dui-1a/desktop-capture.png",
+        "apps/web/e2e/artifacts/dui-1a/desktop-customer-and-site.png",
+        "apps/web/e2e/artifacts/dui-1a/desktop-reference-capture.png",
+        "apps/web/e2e/artifacts/dui-1a/desktop-reference-customer-and-site.png",
+        "apps/web/e2e/artifacts/dui-1a/desktop-reference-quotes.png",
+        "apps/web/e2e/artifacts/dui-1a/desktop-reference-scope-review.png",
+        "apps/web/e2e/artifacts/dui-1a/desktop-scope-confirmed.png",
+        "apps/web/e2e/artifacts/dui-1a/desktop-scope-review.png",
+        "apps/web/e2e/artifacts/dui-1a/mobile-360-capture.png",
+        "apps/web/e2e/artifacts/dui-1a/mobile-360-customer-and-site.png",
+        "apps/web/e2e/artifacts/dui-1a/mobile-360-reference-capture.png",
+        "apps/web/e2e/artifacts/dui-1a/mobile-360-reference-customer-and-site.png",
+        "apps/web/e2e/artifacts/dui-1a/mobile-360-reference-quotes.png",
+        "apps/web/e2e/artifacts/dui-1a/mobile-360-reference-scope-review.png",
+        "apps/web/e2e/artifacts/dui-1a/mobile-360-scope-confirmed.png",
+        "apps/web/e2e/artifacts/dui-1a/mobile-360-scope-review.png",
+        "apps/web/e2e/helpers/capture-journey-designed.ts"
+      ]
+    }
+  }
+}
