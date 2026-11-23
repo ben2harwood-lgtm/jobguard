@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { contractorHref } from "../../lib/contractor-href";
 import { siteOrderCheckV1, siteSupervisorQueryV1, siteSupervisorQueriesV1, sorSiteExtraSubmittedV2, siteExtraLoggedV4, siteExtraContentSha256V1, type CloseoutAnswer, type SiteOrderCheck } from "@jobguard/core";
 import { LocalDictation } from "../../ui/local-dictation";
 import { ExtraProceed } from "./extra-proceed";
@@ -16,7 +17,7 @@ const workLabels = { not_started: "Not started", under_way: "Under way", finishe
 const labels: Record<string, string> = { logged: "Logged - waiting for a price and approval", awaiting_approval: "Waiting for approval", approved: "Approved", rejected: "Not approved" };
 
 /** The operative's extra form: description, practice photo, the resident's confirmation, then log. Mobile first, plain, labelled. */
-export function SiteExtra() {
+export function SiteExtra({ designed = false }: { designed?: boolean } = {}) {
   const [jobs, setJobs] = useState<Job[] | null>(null), [extras, setExtras] = useState<Extra[]>([]), [error, setError] = useState(""), [done, setDone] = useState(""), [busy, setBusy] = useState(false);
   const [jobId, setJobId] = useState(""), [description, setDescription] = useState(""), [note, setNote] = useState(""), [photo, setPhoto] = useState<Photo | null>(null), [confirmed, setConfirmed] = useState(false);
   const commandId = useRef(crypto.randomUUID());
@@ -106,11 +107,12 @@ export function SiteExtra() {
       setDone("Question recorded for your supervisor. No extra was created.");
     } catch (cause) { setError((cause as Error).message); } finally { pending.current = false; setBusy(false); }
   }
-  return <main className={styles.page} data-site-extra-state={loadState}>
-    <NorthsidePractice />
-    <Link href="/northside">Practice hub</Link>
+  return <main className={designed ? `${styles.page} contractor-page` : styles.page} data-site-extra-state={loadState}>
+    {!designed && <NorthsidePractice />}
+    <Link href={contractorHref("/northside", designed)}>Practice hub</Link>
     <h1>Log an extra</h1>
     <p className={styles.note}>Practice data for the generated fictional contractor. The photo is a generated picture, nothing is sent.</p>
+    {designed && <details className="contractor-switch"><summary>Switch practice role</summary><NorthsidePractice /></details>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {done && <p role="status" className={styles.ok} data-testid="extra-logged">{done}</p>}
     {loadState === "loading" ? <p role="status">Loading…</p> : loadState === "failed" ? <button onClick={() => void load()}>Reload jobs and extras</button> : jobs?.length === 0 ? <p>No jobs are assigned to you.</p> : <section className={styles.card}>
@@ -121,12 +123,12 @@ export function SiteExtra() {
       <p data-testid="proceed-comparison">Proceed limit comparison: {sorCode ? check?.proceedComparison === "within" ? "within the limit" : check?.proceedComparison === "above" ? "above the limit" : "unavailable" : "above the limit (unpriced)"}. This is a comparison and does not grant permission to proceed.</p>
       <fieldset disabled={locked}><legend>Work status — your own statement</legend><div className={styles.actions}>{(Object.keys(workLabels) as Array<keyof typeof workLabels>).map(value => <button key={value} type="button" aria-pressed={workStatus === value} onClick={() => setWorkStatus(value)}>{workLabels[value]}</button>)}</div>{workStatus && <p role="status">Your statement: {workLabels[workStatus]}</p>}<p>Work timing and any preapproval breach are not determined by this statement. Later approval does not erase a breach.</p></fieldset>
       <div className={styles.row}><label htmlFor="description">What is the extra work?</label><input id="description" value={description} disabled={locked} maxLength={500} onChange={e => setDescription(e.target.value)} /></div>
-      {!sorCode && !locked && <div className={styles.row}><LocalDictation onUse={text => setDescription(text.slice(0, 500))} /></div>}
+      {!sorCode && !locked && <div className={styles.row}><LocalDictation designed={designed} onUse={text => setDescription(text.slice(0, 500))} /></div>}
       <div className={styles.row}><label htmlFor="note">Note for the office</label><textarea id="note" rows={3} value={note} disabled={locked} maxLength={5000} onChange={e => setNote(e.target.value)} /></div>
-      {!photo ? <div className={styles.actions}><button disabled={busy || !workStatus || !jobId || !description.trim() || !note.trim() || Boolean(sorCode && (!workStatus || !check || check.outcome === "already_on_order"))} onClick={() => void attach()}>Attach practice photo</button></div>
+      {!photo ? <div className={styles.actions}><button className={designed ? "contractor-primary" : undefined} disabled={busy || !workStatus || !jobId || !description.trim() || !note.trim() || Boolean(sorCode && (!workStatus || !check || check.outcome === "already_on_order"))} onClick={() => void attach()}>Attach practice photo</button></div>
         : <><p className={styles.ok} data-testid="photo-attached">Practice photo attached. Show the resident this description and photo.</p><p>Content hash: <code>{photo.shownContentSha256}</code></p>
           <label className={styles.confirmation}><input type="checkbox" checked={confirmed} disabled={busy || attempt.current !== null} onChange={e => setConfirmed(e.target.checked)} /> The resident has seen this and confirms it (identity not verified)</label>
-          <div className={styles.actions}><button disabled={busy || !confirmed || !workStatus} onClick={() => void log()}>Log extra</button></div></>}
+          <div className={styles.actions}><button className={designed ? "contractor-primary" : undefined} disabled={busy || !confirmed || !workStatus} onClick={() => void log()}>Log extra</button></div></>}
     </section>}
     <section className={styles.card} aria-label="My extras"><h2>My extras</h2>
       {loadState !== "ready" ? <p>{loadState === "loading" ? "Loading extras…" : "Extras are unavailable."}</p> : extras.length === 0 ? <p>None yet.</p> : <ul>{extras.map(x => <li key={x.extraId} data-testid="my-extra"><strong>{x.orderReference}</strong>: {x.description} <span className={styles.pill} data-testid="my-extra-state">{x.outcome ? labels[x.outcome] ?? x.outcome : labels[x.state] ?? x.state}</span>{x.quotedPence !== null && <> · price {pounds(x.quotedPence)}</>}{x.hasPhoto && " · photo"}{x.residentConfirmed && " · resident confirmed"}{supervisor && workStatements.filter(statement => statement.extraId === x.extraId).map(statement => <p key={statement.extraId}>Operative statement: {workLabels[statement.workStatus]} · operative {statement.operativeMembershipId} · recorded {statement.recordedAt}. Work timing and any preapproval breach remain separate; later approval does not erase a breach.</p>)}{(operative || supervisor) && <ExtraProceed jobId={x.jobId} extraId={x.extraId} canRecord={operative} />}</li>)}</ul>}

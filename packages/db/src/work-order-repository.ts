@@ -311,7 +311,7 @@ export class WorkOrderRepository {
   }
 
   /** Office view: recent import batches and the order register. Resident contact is never part of it (CH-3b). */
-  async overview(principal: AuthenticatedMembership) {
+  async overview(principal: AuthenticatedMembership, register?: { q: string; page: number }) {
     try {
       return await withTenant(this.pool, requireContractorRequestContext(principal), async db => {
         await assertContractorGate(db, principal, "retained_import");
@@ -323,11 +323,19 @@ export class WorkOrderRepository {
            SELECT b.id,b.source_name,b.source_kind,b.created_at,${receiptCounts}
            FROM app.import_batch b LEFT JOIN seen s ON s.batch_id=b.id WHERE b.tenant_id=$1 AND ((SELECT wide FROM me) OR b.actor_membership_id=$2 OR s.batch_id IS NOT NULL)
            GROUP BY b.tenant_id,b.id ORDER BY b.created_at DESC,b.id LIMIT 25`, [principal.tenantId, principal.membershipId])).rows;
+        // The opted-in register searches the same authorized rows before taking a page.
+        // One look-ahead row tells the client whether there is another page.
+        const window = register
+          ? "WHERE ($3 = '' OR strpos(lower(w.reference), lower($3)) > 0 OR strpos(lower(o.name), lower($3)) > 0) ORDER BY w.created_at DESC,w.reference,w.id LIMIT 51 OFFSET $4"
+          : "ORDER BY w.created_at DESC,w.reference LIMIT 200";
+        const parameters = register
+          ? [principal.tenantId, principal.membershipId, register.q, (register.page - 1) * 50]
+          : [principal.tenantId, principal.membershipId];
         const orders = (await c.query<{ id: string; reference: string; job_id: string; job_status: string; client_name: string; status: "ordered" | "cancelled"; revision: number; priority: "routine" | "urgent" | "emergency"; issued_on: string; net_total_pence: string }>(
           `WITH covered AS MATERIALIZED (${COVERED_CLIENTS})
            SELECT w.id,w.reference,w.job_id,j.status job_status,o.name client_name,r.status,r.revision,r.priority,r.issued_on::text,r.net_total_pence
            FROM app.work_order w JOIN covered ON covered.id=w.client_id JOIN app.work_order_current k ON(k.tenant_id,k.work_order_id)=(w.tenant_id,w.id) JOIN app.work_order_revision r ON(r.tenant_id,r.work_order_id,r.id)=(k.tenant_id,k.work_order_id,k.revision_id)
-           JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id) JOIN app.client_organisation o ON(o.tenant_id,o.id)=(w.tenant_id,w.client_id) ORDER BY w.created_at DESC,w.reference LIMIT 200`, [principal.tenantId, principal.membershipId])).rows;
+           JOIN app.job j ON(j.tenant_id,j.id)=(w.tenant_id,w.job_id) JOIN app.client_organisation o ON(o.tenant_id,o.id)=(w.tenant_id,w.client_id) ${window}`, parameters)).rows;
         return workOrderOverviewV1.parse({
           version: "work-order-overview.v1", environment: "synthetic_demo", realExternalActions: 0, samples: workOrderSampleCatalogV1,
           batches: batches.map(b => ({ id: b.id, sourceName: b.source_name, sourceKind: b.source_kind, createdAt: iso(b.created_at), counts: { rows: b.row_count, created: b.created_count, revised: b.revised_count, unchanged: b.unchanged_count, rejected: b.rejected_count } })),

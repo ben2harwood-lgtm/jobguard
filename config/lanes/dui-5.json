@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "lanes": {
+    "dui-5": {
+      "branches": [
+        "codex/sandbox/dui-5"
+      ],
+      "allow": [
+        "apps/api/src/contractor/work-order.application.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/web/app/(designed)/design-fit.css",
+        "apps/web/app/(designed)/designed/approvals/extras/page.tsx",
+        "apps/web/app/(designed)/designed/contractor/work-orders/[workOrderId]/page.tsx",
+        "apps/web/app/(designed)/designed/contractor/work-orders/page.tsx",
+        "apps/web/app/(designed)/designed/layout.tsx",
+        "apps/web/app/(designed)/designed/northside/page.tsx",
+        "apps/web/app/(designed)/designed/site/extra/page.tsx",
+        "apps/web/app/api/contractor/work-order-imports/route.ts",
+        "apps/web/app/approvals/extras/extra-approvals.tsx",
+        "apps/web/app/lib/contractor-href.ts",
+        "apps/web/app/northside/northside-hub.tsx",
+        "apps/web/app/site/extra/site-extra.tsx",
+        "apps/web/app/ui/work-order-imports.tsx",
+        "apps/web/app/ui/work-order-revisions.tsx",
+        "apps/web/e2e/DUI-5-northside.spec.ts",
+        "apps/web/e2e/artifacts/dui-5/README.md",
+        "apps/web/e2e/artifacts/dui-5/desktop-declined-extra.png",
+        "apps/web/e2e/artifacts/dui-5/desktop-northside.png",
+        "apps/web/e2e/artifacts/dui-5/desktop-order-detail.png",
+        "apps/web/e2e/artifacts/dui-5/desktop-site-capture.png",
+        "apps/web/e2e/artifacts/dui-5/desktop-supervisor-review.png",
+        "apps/web/e2e/artifacts/dui-5/desktop-work-orders.png",
+        "apps/web/e2e/artifacts/dui-5/mobile-360-declined-extra.png",
+        "apps/web/e2e/artifacts/dui-5/mobile-360-northside.png",
+        "apps/web/e2e/artifacts/dui-5/mobile-360-order-detail.png",
+        "apps/web/e2e/artifacts/dui-5/mobile-360-site-capture.png",
+        "apps/web/e2e/artifacts/dui-5/mobile-360-supervisor-review.png",
+        "apps/web/e2e/artifacts/dui-5/mobile-360-work-orders.png",
+        "apps/web/next.config.mjs",
+        "packages/db/src/work-order-repository.ts"
+      ],
+      "note": "Changed registration: config/lanes/dui-5.json (covered by the lane checker\u2019s own-file rule)."
+    }
+  }
+}

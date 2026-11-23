@@ -4,6 +4,11 @@ import { SorRepository, WorkOrderRepository, generateWorkOrderSample, prepareWor
 import { WorkOrderError, workOrderFailureV1, workOrderHttpStatus, workOrderImportRequestV1, type WorkOrderImportRequest } from "@jobguard/core";
 import { workOrderPrincipalV1 } from "./work-order.contracts.js";
 
+const registerQueryV1 = z.object({
+  q: z.string().trim().max(100),
+  page: z.string().regex(/^[1-9][0-9]{0,3}$/u).transform(Number),
+}).strict();
+
 /**
  * ENT-2 work-order and schedule-of-rates services: server-only composition used by both the Nest controllers and the Next routes.
  * Tenant, membership and role come from the persisted contractor session; the request carries none of them.
@@ -19,7 +24,13 @@ export class WorkOrderApplication {
     try { return await this.orders.resolveSession(parsed.data.sessionId); } catch (error) { throw workOrderFailure(error); }
   }
   /** The office register: recent import batches, the orders and the selectable generated files. */
-  async overview(principal: unknown) { return this.orders.overview(await this.member(principal)); }
+  async overview(principal: unknown, query?: unknown) {
+    const member = await this.member(principal);
+    if (query === undefined) return this.orders.overview(member);
+    const parsed = registerQueryV1.safeParse(query);
+    if (!parsed.success) throw new WorkOrderError("INVALID_COMMAND");
+    return this.orders.overview(member, parsed.data);
+  }
   /**
    * The screen/HTTP import (Q8): only a generated file can be imported in synthetic_demo - no arbitrary upload. The file is generated for
    * the caller's own demo organisation (created through the existing ENT-1 / CH-3b commands on first use) and imported as ordinary CSV.
