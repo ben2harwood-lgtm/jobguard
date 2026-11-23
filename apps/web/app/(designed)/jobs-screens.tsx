@@ -9,7 +9,7 @@ import { jobsResponseV1, type JobSummary } from "../lib/contracts";
 import { jobWorkspaceResponseV1, type JobWorkspaceResponse } from "@jobguard/api/workspace-contracts";
 import { jobStatusLabels } from "../ui/workspace-lifecycle";
 import { WalkIt } from "../ui/jobguard-app";
-import { Card, Empty, Head, Icon, Legacy, Note, PHOTOS, Screen, Shell, Tag, agreedLine, useJobFacts, useAttention, onJobRefresh, type AttentionLink, catchLabel, type JobFacts, quoteLine, documentLine, known, money, readJson, shortDate, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
+import { Card, Empty, Head, Icon, Note, PHOTOS, Screen, Shell, Tag, agreedLine, useJobFacts, useAttention, onJobRefresh, type AttentionLink, catchLabel, type JobFacts, quoteLine, documentLine, known, money, readJson, shortDate, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
 
 const LIST_SUBTITLE = "One place to manage the job, spot problems early and know what comes next.";
 
@@ -233,7 +233,7 @@ export function MoneyTab({ value, facts, children }: { value: JobValue | null; s
       <MoneyBlocks value={value}/>
       <div style={{ marginTop: 16 }}><Note>An extra being approved does not mean it has been invoiced. An invoice being issued does not mean the customer has paid. A manually entered receipt does not prove bank settlement.</Note></div>
     </div></Card>
-    <div style={{ marginTop: 19 }}><Legacy label="Job money trail" cards>{children}</Legacy></div>
+    <div className="designed-money-stack">{children}</div>
   </>;
 }
 
@@ -257,7 +257,7 @@ function RecordsTab({ jobId, children }: { jobId: string; children?: ReactNode }
         </div></Card>
         <div style={{ marginTop: 18 }}><Card title="Kept records"><div className="work-list">{links.map(([path, title, text]) => <div className="work-item" key={path}><div className="work-item-icon"><Icon name="file"/></div><div className="work-text"><strong>{title}</strong><small>{text}</small></div><a className="btn small" href={`/jobs/${jobId}/${path}`}>Open →</a></div>)}</div></Card></div>
       </div>
-      <div><Legacy label="Job diary and messages" cards>{children}</Legacy></div>
+      <div className="designed-records-stack">{children}</div>
     </div>
   </>;
 }

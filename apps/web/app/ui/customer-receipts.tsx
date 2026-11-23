@@ -5,13 +5,13 @@ import { isReceiptDate, parseReceiptPounds, practiceReceiptViewV1, type Practice
 import { deriveJobPaymentState } from "../lib/invoice-payment-state";
 import { notifyInvoiceChanged } from "./customer-payment-status";
 const gbp=(p:number)=>`GBP ${(p/100).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-type ReceiptProps={jobId:string;invoiceId:string;onChanged:()=>void};
+type ReceiptProps={jobId:string;invoiceId:string;onChanged:()=>void;designed?:boolean};
 export function CustomerReceipts(props:ReceiptProps) {
  return <ReceiptForm key={`${props.jobId}:${props.invoiceId}`} {...props}/>;
 }
 // The keyed form drops every invoice-specific field before another invoice renders.
 const balanceAmount=(p:number)=>p>0?`${Math.trunc(p/100)}.${String(p%100).padStart(2,"0")}`:"";
-function ReceiptForm({jobId,invoiceId,onChanged}:ReceiptProps) {
+function ReceiptForm({jobId,invoiceId,onChanged,designed}:ReceiptProps) {
  const [view,setView]=useState<PracticeReceiptView|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),[busy,setBusy]=useState(false),[unconfirmed,setUnconfirmed]=useState(false);
  const [amount,setAmount]=useState(""),[paidOn,setPaidOn]=useState(()=>new Date().toISOString().slice(0,10)),[method,setMethod]=useState("bank_transfer"),[reference,setReference]=useState("Practice customer receipt"),[reason,setReason]=useState("Practice receipt correction");
  const writing=useRef(false),active=useRef(false),sequence=useRef(0),initialised=useRef(false),uncertain=useRef(false);
@@ -81,7 +81,7 @@ function ReceiptForm({jobId,invoiceId,onChanged}:ReceiptProps) {
   await submit(`${base}/reversals`,{version:"practice-customer-receipt.reverse.v1",commandId:crypto.randomUUID(),paymentId,reason});
  }
  if(loading&&!view)return <section aria-live="polite"><h4>Record a customer receipt</h4><p>Loading customer receipts…</p></section>;
- if(!view)return <section role="alert"><h4>Record a customer receipt</h4><p>{error}</p><button onClick={()=>void load()}>Try receipt history again</button></section>;
+ if(!view)return <section role="alert"><h4>Record a customer receipt</h4><p>{error}</p><button className={designed ? "btn" : undefined} onClick={()=>void load()}>Try receipt history again</button></section>;
  const status=deriveJobPaymentState([view.invoice]);
  const disabled=busy||loading||unconfirmed;
  return <section className="customer-receipts" aria-label="Customer receipts and balance history" aria-busy={busy||loading}>
@@ -94,15 +94,15 @@ function ReceiptForm({jobId,invoiceId,onChanged}:ReceiptProps) {
    <label>Payment date<input data-testid="uiwire12-receipt-date" type="date" min="0001-01-01" max="9999-12-31" value={paidOn} onChange={e=>setPaidOn(e.target.value)}/></label>
    <label>Method<select data-testid="uiwire12-receipt-method" value={method} onChange={e=>setMethod(e.target.value)}><option value="bank_transfer">Bank transfer</option><option value="cash">Cash</option><option value="card_elsewhere">Card elsewhere</option><option value="cheque">Cheque</option><option value="other">Other</option></select></label>
    <label>Reference<input data-testid="uiwire12-receipt-reference" value={reference} maxLength={120} onChange={e=>setReference(e.target.value)}/></label>
-   <button className="primary" disabled={disabled} onClick={()=>void record()}>Record practice receipt</button>
+   <button className={designed ? "btn primary" : "primary"} disabled={disabled} onClick={()=>void record()}>Record practice receipt</button>
   </fieldset>
   <dl><div><dt>Customer payment status</dt><dd data-testid="customer-payment-status">{status.paymentStatus}</dd></div><div><dt>Customer credit</dt><dd data-testid="customer-credit">{gbp(view.invoice.customerCreditPence)}</dd></div><div><dt>Eligible recovery principal</dt><dd data-testid="eligible-recovery-principal">{gbp(view.eligibleRecoveryPrincipalPence)}</dd></div><div><dt>Base credit</dt><dd data-testid="uiwire12-base-credit">{gbp(view.baseCreditPence)}</dd></div></dl>
   <h5>Balance history</h5>
   {view.receipts.length===0&&<p>No customer receipts recorded.</p>}
   {view.receipts.some(p=>!p.reversal)&&<label>Correction reason<input data-testid="uiwire12-reversal-reason" maxLength={240} disabled={disabled} value={reason} onChange={e=>setReason(e.target.value)}/></label>}
-  {view.receipts.map(p=><article key={p.id} data-testid="uiwire12-receipt-history"><p>{p.paidOn} · {gbp(p.amountPence)} · {p.method} · {p.reference}</p><p>Receipt <code>{p.id}</code></p>{p.reversal?<p>Reversed: {p.reversal.reason} · {p.reversal.reversedAt} · <code>{p.reversal.id}</code></p>:<button disabled={disabled} onClick={()=>void reverse(p.id)}>Reverse this receipt</button>}</article>)}
+  {view.receipts.map(p=><article key={p.id} data-testid="uiwire12-receipt-history"><p>{p.paidOn} · {gbp(p.amountPence)} · {p.method} · {p.reference}</p><p>Receipt <code>{p.id}</code></p>{p.reversal?<p>Reversed: {p.reversal.reason} · {p.reversal.reversedAt} · <code>{p.reversal.id}</code></p>:<button className={designed ? "btn" : undefined} disabled={disabled} onClick={()=>void reverse(p.id)}>Reverse this receipt</button>}</article>)}
   {unconfirmed&&<p role="alert">Further receipt changes are paused because the last result is unknown. Read the saved history before leaving this page.</p>}
-  <button type="button" disabled={busy||loading} onClick={()=>void load()}>Refresh receipt history</button>
+  <button className={designed ? "btn" : undefined} type="button" disabled={busy||loading} onClick={()=>void load()}>Refresh receipt history</button>
   {error&&<p role="alert">{error}</p>}
  </section>;
 }

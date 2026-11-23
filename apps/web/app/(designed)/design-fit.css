@@ -165,3 +165,32 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
 .jgd :is(.designed-account-lock,.designed-check-reveal) [role="alert"]:not(.jgd-legacy *){
   padding:10px 12px;border:1px solid #e3ac98;border-radius:7px;background:#fff2eb;color:#832d1b
 }
+
+.jgd :is(.designed-money-stack,.designed-records-stack,.designed-money-card .card-body){display:grid;gap:16px;min-width:0}
+.jgd .designed-money-stack{margin-top:19px}
+.jgd .designed-records-stack .btn:not(.jgd-legacy *){white-space:normal;min-height:44px}
+.jgd .designed-money-card{min-width:0;overflow-wrap:anywhere;scroll-margin-top:96px}
+.jgd .designed-money-card :is(.customer-invoice,.customer-receipts,[data-testid="lock-bound-invoices"],.value-grid){
+  display:grid;gap:12px;min-width:0
+}
+.jgd .designed-money-card :is(.customer-invoice > article,.customer-receipts,.value-card,[data-testid="lock-bound-invoices"]){
+  min-width:0;padding:16px;border:1px solid var(--line);border-radius:10px
+}
+.jgd .designed-money-card :is(.customer-invoice article,.value-card){scroll-margin-top:96px}
+.jgd .designed-money-card .customer-invoice > article > * + *,
+.jgd .designed-money-card.value-page > * + *{margin-top:12px}
+.jgd .designed-money-card :is(dl,fieldset){display:grid;gap:10px;margin:0;min-width:0}
+.jgd .designed-money-card dl{grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}
+.jgd .designed-money-card dl > div,.jgd .designed-money-card .value-card{background:var(--pale);padding:12px;border-radius:8px}
+.jgd .designed-money-card dd{margin:2px 0 0;font-weight:700;font-variant-numeric:tabular-nums}
+.jgd .designed-money-card label{display:grid;gap:4px;min-width:0;font-weight:650}
+.jgd .designed-money-card :is(input,select):not(.jgd-legacy *){
+  width:100%;min-width:0;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--white);color:var(--ink);font:inherit
+}
+.jgd .designed-money-card :is(button,.btn):not(.jgd-legacy *){
+  min-height:44px;min-width:44px;max-width:100%;justify-self:start;white-space:normal
+}
+.jgd .designed-money-card .btn:disabled{opacity:.62;cursor:not-allowed}
+.jgd .designed-money-card :is(button,input,select,a,article):focus-visible{outline:3px solid #078592;outline-offset:2px}
+.jgd .designed-money-card .value-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
+.jgd .designed-money-card .value-card a{display:block}

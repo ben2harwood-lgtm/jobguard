@@ -13,7 +13,7 @@ import { INVOICE_CHANGED_EVENT } from "./customer-payment-status";
 import { FINAL_CHECK_CHANGED_EVENT } from "./final-check-reveal-view";
 
 const uuid = z.string().uuid();
-const viewV1 = z.object({
+export const finalAccountLockViewV1 = z.object({
   version: z.literal("final-account-lock.view.v1"), jobId: uuid,
   account: finalAccountResponseV1.shape.account,
   lock: z.object({ id: uuid, finalAccountRevisionId: uuid, sourceHash: z.string().regex(/^[a-f0-9]{64}$/u), lockedAt: z.string() }).passthrough().nullable(),
@@ -22,7 +22,17 @@ const viewV1 = z.object({
   termsAccepted: z.boolean(), checkStatus: z.enum(["pending", "failed", "completed"]).nullable(),
   invoiceGuard: z.enum(["FINAL_ACCOUNT_LOCK_REQUIRED", "FINAL_CHECK_NOT_COMPLETE", "FINAL_CHECK_FAILED"]).nullable(),
 }).strict();
-type LockView = z.infer<typeof viewV1>;
+type LockView = z.infer<typeof finalAccountLockViewV1>;
+export function lockBoundInvoiceProps(view: LockView, account: NonNullable<FinalAccountResponse["account"]>) {
+  return {
+    finalAccount: view.account ?? { ...account, issueBlocked: true },
+    lockGuard: {
+      code: view.invoiceGuard,
+      kind: "final" as const,
+      ...(view.lock ? { lockedRevision: { id: view.lock.finalAccountRevisionId, sourceHash: view.lock.sourceHash, issueBlocked: false } } : {}),
+    },
+  };
+}
 const targetSize = { minHeight: 44, minWidth: 44 };
 const pounds = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 
@@ -47,7 +57,7 @@ export function FinalAccountLock({ jobId, account, onChanged, onRebuild, designe
     try {
       const response = await fetch(`/api/jobs/${jobId}/final-account/lock`, { cache: "no-store", signal: controller.signal });
       if (!response.ok) { const failure = await response.json(); throw new Error(String(failure.code)); }
-      const next = viewV1.parse(await response.json());
+      const next = finalAccountLockViewV1.parse(await response.json());
       if (next.jobId !== jobId) throw new Error("WRONG_JOB_RESPONSE");
       if (isCurrent()) { setView(next); setError(""); }
     } catch (failure) { if (isCurrent()) { setView(null); setError(failure instanceof Error ? failure.message : "DATABASE_UNAVAILABLE"); } }
@@ -100,7 +110,6 @@ export function FinalAccountLock({ jobId, account, onChanged, onRebuild, designe
   const hasUntickedExtra = waiting.some(capture => !leftOff.includes(capture.id));
   const baseline = account.lines.filter(line => line.kind === "baseline");
   const allDisposed = baseline.every(line => view?.dispositions.some(item => item.scopeItemId === line.scopeItemId));
-  const invoices = view && <CustomerInvoices jobId={jobId} finalAccount={view.account ?? { ...account, issueBlocked: true }} lockGuard={{ code: view.invoiceGuard, kind: "final", ...(view.lock ? {lockedRevision:{id:view.lock.finalAccountRevisionId,sourceHash:view.lock.sourceHash,issueBlocked:false}} : {}) }} />;
   return <section className={designed ? "card card-body designed-account-lock" : undefined} data-testid="final-account-lock" aria-label="Final-account completion" aria-busy={busy}>
     {!view && !error ? <p aria-live="polite">Loading final account…</p> : null}
     {view?.jobId === jobId ? <>
@@ -150,7 +159,7 @@ export function FinalAccountLock({ jobId, account, onChanged, onRebuild, designe
             FinalCheckReveal panel reads that state and owns failure/retry UI. */}
         <p data-testid="final-check-state" role="status">{view.checkStatus === "completed" ? "JobGuard's final check is complete." : FINAL_CHECK_RUNNING_TEXT}</p>
       </>}
-      {designed ? <div className="jgd-legacy jgd-tools">{invoices}</div> : invoices}
+      {!designed && <CustomerInvoices jobId={jobId} {...lockBoundInvoiceProps(view, account)}/>}
     </> : null}
     {error && <p ref={errorTarget} tabIndex={-1} data-testid="final-account-lock-error" role="alert" data-error-code={error}>{
       error === "STALE_REVISION"

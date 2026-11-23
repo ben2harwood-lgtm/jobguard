@@ -137,6 +137,9 @@ export function PracticeJourney({ jobId, status, onSavedLabel, onNavigate, desig
  const [label, fallback] = destinations[step];
  // Only validated saved identities enter fragments; never build a CSS selector from a fragment.
  const target = step === "resolve_extras" && extras && "id" in extras ? `#variation-${extras.id}` : fallback;
+ const moneyTarget = designed && (step === "issue_invoice" || step === "record_payment")
+  ? `/jobs/${jobId}/money${step === "issue_invoice" ? "#customer-invoices" : target}`
+  : null;
  const navigate = (event: React.MouseEvent<HTMLAnchorElement>) => {
   event.preventDefault();
   navigationCleanup.current?.();
@@ -197,7 +200,7 @@ export function PracticeJourney({ jobId, status, onSavedLabel, onNavigate, desig
  const money = (pence: bigint) => `GBP ${(pence / 100n).toLocaleString("en-GB")}.${(pence % 100n).toString().padStart(2, "0")}`;
  return <section className={designed ? "card card-body designed-progress" : "journey-progress"} aria-label="Practice journey progress" data-testid="uiwire15-journey">
   <p className="eyebrow">One persisted practice job</p>
-  {completed ? <><h2>You finished this practice job</h2><p>{result.completion === "paid" ? "Customer paid. The saved receipts settle every invoice." : result.completion === "credit_assisted" ? "Customer payments and credits settle every invoice." : result.completion === "credit_only" ? "Settled by credit; no customer cash payment recorded." : "Zero-value job complete; no customer payment due."}</p><a className={designed ? "btn primary" : "primary"} href={`/jobs/${jobId}/value`}>How JobGuard helps protect your money</a></> : <><h2>Continue this job</h2><a className={designed ? "btn primary" : "primary"} data-testid="uiwire15-continue" href={target} onClick={navigate}>{label}</a></>}
+  {completed ? <><h2>You finished this practice job</h2><p>{result.completion === "paid" ? "Customer paid. The saved receipts settle every invoice." : result.completion === "credit_assisted" ? "Customer payments and credits settle every invoice." : result.completion === "credit_only" ? "Settled by credit; no customer cash payment recorded." : "Zero-value job complete; no customer payment due."}</p><a className={designed ? "btn primary" : "primary"} href={`/jobs/${jobId}/${designed ? "money#paid-report" : "value"}`}>How JobGuard helps protect your money</a></> : <><h2>Continue this job</h2><a className={designed ? "btn primary" : "primary"} data-testid="uiwire15-continue" href={moneyTarget ?? target} onClick={moneyTarget ? undefined : navigate}>{label}</a></>}
   <dl><div><dt>Customer balance</dt><dd data-testid="journey-customer-balance">{money(balancePence)}</dd></div><div><dt>Recorded customer payments</dt><dd data-testid="journey-customer-paid">{money(paidPence)}</dd></div><div><dt>Real external actions</dt><dd data-testid="journey-real-external-actions">{snapshot.realExternalActions}</dd></div></dl>{retry}
  </section>;
 }
