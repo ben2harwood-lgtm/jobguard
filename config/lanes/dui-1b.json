@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "lanes": {
+    "dui-1b": {
+      "branches": [
+        "codex/sandbox/dui-1b"
+      ],
+      "allow": [
+        "AGENT_CHOICES.md",
+        "apps/web/app/(designed)/design-fit.css",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/e2e/DUI-1b.spec.ts",
+        "apps/web/e2e/artifacts/dui-1b/README.md",
+        "apps/web/e2e/artifacts/dui-1b/desktop-preview.png",
+        "apps/web/e2e/artifacts/dui-1b/desktop-pricing.png",
+        "apps/web/e2e/artifacts/dui-1b/desktop-reference-preview.png",
+        "apps/web/e2e/artifacts/dui-1b/desktop-reference-pricing.png",
+        "apps/web/e2e/artifacts/dui-1b/desktop-reference-sent.png",
+        "apps/web/e2e/artifacts/dui-1b/desktop-sent.png",
+        "apps/web/e2e/artifacts/dui-1b/mobile-360-preview.png",
+        "apps/web/e2e/artifacts/dui-1b/mobile-360-pricing.png",
+        "apps/web/e2e/artifacts/dui-1b/mobile-360-reference-preview.png",
+        "apps/web/e2e/artifacts/dui-1b/mobile-360-reference-pricing.png",
+        "apps/web/e2e/artifacts/dui-1b/mobile-360-reference-sent.png",
+        "apps/web/e2e/artifacts/dui-1b/mobile-360-sent.png"
+      ]
+    }
+  }
+}
