@@ -19,7 +19,12 @@ export class WorkPlanApplication {
   async read(jobId: string, query: WorkPlanQuery): Promise<WorkPlan> {
     const { context } = await this.authorize(jobId);
     if (!workPlanQueryV1.safeParse(query).success) throw new WorkPlanError("WORK_PLAN_INVALID_QUERY");
-    return this.plans.openDraft(context, jobId);
+    return this.plans.open(context, jobId);
+  }
+
+  async exportInternal(jobId: string, query: WorkPlanQuery) {
+    return JSON.stringify({ version: "work-plan-export.v1", environment: "synthetic_demo",
+      notice: "Practice sandbox — synthetic data; nothing is sent or charged", plan: await this.read(jobId, query) });
   }
 
   async edit(jobId: string, input: WorkPlanEdit) {

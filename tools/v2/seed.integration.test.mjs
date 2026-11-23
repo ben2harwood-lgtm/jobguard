@@ -542,8 +542,166 @@ test("forced draft edit policies hide receipts and reject writes from the second
   assert.equal((await runtime.query("SELECT * FROM app.v2_work_plan_edit")).rowCount, 0);
   const owner = await signIn("builder");
   const accepted = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId }).workPlan;
-  await assert.rejects(accepted.read(jobId, planQuery), { code: "WORK_PLAN_DRAFT_REQUIRED" });
+  assert.equal((await accepted.read(jobId, planQuery)).state, "accepted");
   const source = await acceptedPlanSource();
   await assert.rejects(accepted.edit(jobId, { ...command, quoteRevisionId: source.quoteRevisionId }),
-    { code: "WORK_PLAN_DRAFT_REQUIRED" });
+    { code: "WORK_PLAN_INVALID_EDIT" });
+});
+
+const switchLive = () => ({ version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" });
+
+async function effectCounts() {
+  const tables = ["graphile_worker._private_jobs", "app.scheduled_readiness_plan", "app.practice_exposure_schedule",
+    "app.action_outbox", "infrastructure.outbox_signal", "app.job_assignment", "app.site_visit",
+    "app.purchase_order_draft", "app.purchase_order_revision", "app.purchase_order_placement",
+    "app.synthetic_obligation", "app.recovery_fee_derivation", "app.recovery_fee_journal", "app.success_fee_derivation",
+    "app.success_fee_journal", "app.platform_fee_statement", "app.payment_fee_statement",
+    "app.job_activation", "app.job_activation_terms", "app.cap_snapshot"];
+  const { rows: [counts] } = await admin.query(`SELECT ${tables.map(table =>
+    `(SELECT count(*)::int FROM ${table}) AS "${table}"`).join(", ")}`);
+  return counts;
+}
+
+test("exact acceptance freezes the issued revision without scheduling, sending, booking, ordering or charging", async () => {
+  const { draftJob, lines, save, read, edit } = await draftForPlan();
+  const { sessionId, realContext, cookies } = await signIn("builder");
+  const { parties, quote, workPlan } = createWorkspaceApplication({ pool: runtime, sessionId });
+  const partyView = await parties.view({ sessionId }, draftJob);
+  const customer = { version: "customer.v1", type: "person", name: "Fictional V2 Customer",
+    email: "customer@jobguard-v2.invalid", phone: "+447700900042" };
+  await parties.command({ sessionId }, draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: partyView.jobRevision, expectedBindingId: null, customer, customerRef: null,
+    site: { version: "site.v1", addressLines: ["43 Make-Believe Mews"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const draft = await read();
+  assert.equal(draft.state, "draft");
+  assert.equal(draft.agreement, null);
+  await assert.rejects(quote.activate(draftJob, switchLive()), { message: "ACCEPTED_PRICED_QUOTE_REQUIRED" });
+  const { view: { documentId, documentVersion, contentHash } } = await quote.preview(draftJob, {
+    version: "quote-preview-command.v1", recipient: customer.email,
+  });
+  await quote.issue(draftJob, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId, contentHash, recipient: customer.email });
+  const delivered = await json(await request(`/api/jobs/${draftJob}/quotes/delivery/execute`, {
+    cookies, body: { version: "quote-execute-command.v1", documentId, mode: "success" },
+  }));
+  assert.equal(delivered.status, "simulated_delivery");
+  const target = { documentId, documentVersion, documentHash: contentHash };
+  const accept = () => quote.accept(draftJob, { ...target, version: "quote-acceptance-command.v1", commandId: randomUUID(),
+    statedCustomerName: customer.name, statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  const effectsBeforeAcceptance = await effectCounts();
+  const acceptance = await accept();
+  assert.equal(acceptance.activeAcceptance.documentId, documentId);
+  const accepted = await read();
+  assert.deepEqual(accepted, { ...draft, state: "accepted", agreement: {
+    documentId, netPence: acceptance.activeAcceptance.netPence, approvedVariations: [],
+  } });
+  assert.deepEqual(await effectCounts(), effectsBeforeAcceptance);
+
+  const dates = planEdit(accepted, accepted.tasks[0], { scheduledDate: "2026-12-07" });
+  await assert.rejects(edit({ ...dates, changes: { scheduledDate: "2026-02-30" } }), { code: "WORK_PLAN_INVALID_EDIT" });
+  const dateReceipt = await edit(dates);
+  const dated = await read();
+  const assignment = planEdit(dated, dated.tasks[0], { assignee: "Fictional Tess Tile" });
+  const assignmentReceipt = await edit(assignment);
+  assert.deepEqual(await edit(assignment), assignmentReceipt);
+  const { rows: [actor] } = await admin.query("SELECT id FROM app.membership WHERE tenant_id=$1 AND role='owner'", [realContext.tenantId]);
+  for (const receipt of [dateReceipt, assignmentReceipt]) {
+    assert.equal(receipt.actorMembershipId, actor.id);
+    assert.ok(receipt.recordedAt instanceof Date);
+  }
+  const edited = await read();
+  assert.equal(edited.tasks[0].scheduledDate, "2026-12-07");
+  assert.equal(edited.tasks[0].assignee, "Fictional Tess Tile");
+  assert.deepEqual(edited.agreement, accepted.agreement);
+  assert.deepEqual(JSON.parse(await workPlan.exportInternal(draftJob, planQuery)), {
+    version: "work-plan-export.v1", environment: "synthetic_demo",
+    notice: "Practice sandbox — synthetic data; nothing is sent or charged", plan: edited,
+  });
+  const outsider = await signIn("second-builder");
+  const otherPlan = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).workPlan;
+  await assert.rejects(otherPlan.exportInternal(draftJob, planQuery), { code: "NOT_FOUND" });
+
+  const cancel = await quote.disposition(draftJob, { ...target, version: "quote-disposition-command.v1",
+    commandId: randomUUID(), kind: "acceptance_cancelled", occurredAt: new Date().toISOString() });
+  assert.equal(cancel.jobStatus, "quoting");
+  assert.equal(cancel.activeAcceptance, null);
+  assert.equal(cancel.events.at(-1).kind, "acceptance_cancelled");
+  const { rows: [retained] } = await admin.query("SELECT document_id, document_hash FROM app.quote_acceptance WHERE id=$1",
+    [acceptance.activeAcceptance.id]);
+  assert.deepEqual(retained, { document_id: documentId, document_hash: contentHash });
+  const later = await save(1, lines.map((line, i) => i ? line : { ...line, description: "Unaccepted replacement scope",
+    quantity: "3", unitRatePence: 30000 }));
+  const laterRevisionId = later.draft.currentRevisionId;
+  assert.notEqual(laterRevisionId, accepted.quoteRevisionId);
+  assert.deepEqual(await planCounts(laterRevisionId), [0, 0]);
+  assert.deepEqual(await read(), edited);
+  const plans = new WorkPlanRepository(runtime);
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const laterSource = planSource(draftJob, laterRevisionId);
+  for (const action of ["read", "generate"]) {
+    await assert.rejects(plans[action](context, laterSource), { code: "WORK_PLAN_VERSION_CONFLICT" });
+  }
+  await assert.rejects(edit({ ...dates, commandId: randomUUID(), quoteRevisionId: laterRevisionId }), { code: "WORK_PLAN_VERSION_CONFLICT" });
+  await assert.rejects(quote.activate(draftJob, switchLive()), { message: "ACCEPTED_PRICED_QUOTE_REQUIRED" });
+  assert.deepEqual(await effectCounts(), effectsBeforeAcceptance);
+});
+
+test("existing Switch live activates a plan once and only approved variation revisions regenerate money scope", async () => {
+  const { cookies, sessionId, csrfToken } = await signIn("builder");
+  const { workPlan, variation, workState } = createWorkspaceApplication({ pool: runtime, sessionId });
+  const accepted = await workPlan.read(jobId, planQuery);
+  assert.equal(accepted.state, "accepted");
+  const path = `/api/jobs/${jobId}/quotes/activation`;
+  const command = switchLive();
+  const before = await effectCounts();
+  const activate = body => request(path, { body, cookies, csrf: csrfToken }).then(response => json(response));
+  const result = await activate(command);
+  assert.equal(result.activation.acceptedDocumentId, accepted.agreement.documentId);
+  assert.equal(result.terms.baselineQuoteVersionId, accepted.agreement.documentId);
+  const live = await workPlan.read(jobId, planQuery);
+  assert.deepEqual(live, { ...accepted, state: "live", activationId: result.activation.id });
+  const afterSwitch = await effectCounts();
+  for (const table of ["app.job_activation", "app.job_activation_terms"]) assert.equal(afterSwitch[table], before[table] + 1);
+  assert.deepEqual(await activate(command), result);
+  assert.deepEqual(await activate(switchLive()), result);
+  assert.deepEqual(await effectCounts(), afterSwitch);
+
+  const proposalId = randomUUID();
+  const scopeItemId = randomUUID();
+  const price = { quantity: "1", unit: "item", unitRatePence: 12500, direction: "addition" };
+  const vary = (action, fields) => variation.command(jobId, { version: "variation-command.v1", action, ...fields });
+  const proposed = await vary("propose", { proposalId, scopeItemId, existingScopeItemId: null, lineageParentScopeItemId: null,
+    description: "Add trim", captureText: "Customer asks about trim", price });
+  assert.deepEqual((await workPlan.read(jobId, planQuery)).agreement, live.agreement);
+  const revisionId = proposed.variations.find(item => item.id === proposalId).currentRevisionId;
+  const approvalId = randomUUID();
+  await vary("approve", { variationId: proposalId, revisionId, approvalId,
+    attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  const expected = { ...live.agreement, approvedVariations: [{ scopeItemId, revisionId, approvalId,
+    description: "Add trim", quantity: "1", unit: "item", signedDeltaPence: 12500 }] };
+  assert.deepEqual((await workPlan.read(jobId, planQuery)).agreement, expected);
+  const pendingId = randomUUID();
+  await vary("revise", { variationId: proposalId, expectedRevisionId: revisionId, revisionId: pendingId,
+    description: "Unapproved replacement trim", price: { ...price, unitRatePence: 35000 } });
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const regenerated = await new WorkPlanRepository(runtime).generate(context, planSource(jobId, live.quoteRevisionId));
+  assert.deepEqual(regenerated, { ...live, agreement: expected });
+  const liveEdit = planEdit(regenerated, regenerated.tasks[0], { scheduledDate: "2026-12-09", assignee: "Fictional Tiler" });
+  const receipt = await workPlan.edit(jobId, liveEdit);
+  assert.equal(receipt.version, 1);
+  const updated = await workPlan.read(jobId, planQuery);
+  assert.equal(updated.tasks[0].scheduledDate, "2026-12-09");
+  assert.equal(updated.tasks[0].assignee, "Fictional Tiler");
+  assert.deepEqual(updated.agreement, expected);
+
+  const state = await workState.get(jobId);
+  const expectedRevision = (state.events.at(-1)?.sequence ?? 0) + state.links.length;
+  const closed = await workState.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(),
+    expectedRevision, action: "close", reason: "cancelled_by_customer", note: "Fictional customer cancelled the work" });
+  assert.equal(closed.events.at(-1).kind, "closed");
+  assert.deepEqual(await workPlan.read(jobId, planQuery), updated);
 });
