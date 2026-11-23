@@ -1,5 +1,5 @@
 export const joineryTemplate = {
-  key: "test-joinery.v1",
+  key: "joinery",
   tasks: [{
     key: "fit-shelf", category: "Joinery", title: "Fit the shelf", trade: "joiner",
     durationMinutes: 45, dependsOn: [], materialNeeds: ["Shelf", "Brackets"],
