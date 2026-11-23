@@ -111,11 +111,13 @@ async function start() {
   const runtimeEnv = { ...baseEnv, ...settings, JOBGUARD_LOCAL_V2: "1",
     NODE_OPTIONS: `--import=${new URL("./network.mjs", import.meta.url).href}` };
   delete runtimeEnv.MIGRATION_DATABASE_URL;
-  run(process.execPath, ["tools/v2/bootstrap.mjs", systemId], runtimeEnv);
+  const secret = authSecret();
+  const phoneEnv = hostEnvironment(["JOBGUARD_V2_PHONE_HOST", "JOBGUARD_V2_PHONE_CERT", "JOBGUARD_V2_PHONE_KEY"]);
+  run(process.execPath, ["tools/v2/bootstrap.mjs", systemId], { ...runtimeEnv, ...phoneEnv, AUTH_CODE_SECRET: secret });
 
   console.log(`JobGuard V2 web: ${settings.AUTH_ALLOWED_ORIGIN}/sign-in`);
   console.log(`JobGuard V2 API: ${settings.NEXT_PUBLIC_API_URL}/healthz`);
-  await serve({ ...runtimeEnv, AUTH_CODE_SECRET: authSecret() }, phone);
+  await serve({ ...runtimeEnv, AUTH_CODE_SECRET: secret }, phone);
 }
 
 try { await start(); }

@@ -134,3 +134,19 @@ test("V2 runtime refuses unlisted TCP and HTTP(S) destinations", () => {
   `], { env: {}, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
 });
+
+test("the fictional seed refuses an unchecked process before connecting", async () => {
+  const { seedV2 } = await import("./v2/seed.mjs");
+  await assert.rejects(seedV2(), /V2 seed requires JOBGUARD_LOCAL_V2=1/u);
+});
+
+test("the V2 database target must match the independent Compose identity", async () => {
+  const { postgresData, verifyDatabaseTarget } = await import("./v2/settings.mjs");
+  const target = { name: database, directory: postgresData, port: 5432, id: "123" };
+  const check = (row, id = "123") => verifyDatabaseTarget({ query: async () => ({ rows: [row] }) }, id);
+  await check(target);
+  for (const override of [{ name: "other_db" }, { directory: "/tmp/other_pg" }, { port: 56432 }, { id: "321" }]) {
+    await assert.rejects(check({ ...target, ...override }), /V2 PostgreSQL server identity does not match/u);
+  }
+  await assert.rejects(check(target, ""), /requires the dedicated PostgreSQL server identity/u);
+});

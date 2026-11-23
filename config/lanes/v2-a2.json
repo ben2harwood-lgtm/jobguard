@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-a2": {
+      "branches": ["codex/sandbox/v2-a2"],
+      "note": "RED. Seed the fictional accepted quote in the checked V2 rehearsal database.",
+      "allow": [
+        "tools/v2-local.test.mjs",
+        "tools/v2/README.md",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/migrations/2001_practice_quote.sql",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/seed.mjs",
+        "tools/v2/settings.mjs",
+        "tools/v2/start.mjs"
+      ]
+    }
+  }
+}

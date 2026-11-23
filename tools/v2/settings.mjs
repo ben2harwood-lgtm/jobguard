@@ -96,3 +96,17 @@ export function refuseDotenvFiles(root) {
     }
   }
 }
+
+export async function verifyDatabaseTarget(client, expectedSystemId) {
+  if (!/^\d+$/u.test(expectedSystemId ?? "")) {
+    throw new Error("V2 bootstrap requires the dedicated PostgreSQL server identity");
+  }
+  const { rows: [target] } = await client.query(`SELECT current_database() AS name,
+    current_setting('data_directory') AS directory, inet_server_port() AS port,
+    system_identifier::text AS id FROM pg_control_system()`);
+  // The expected identifier comes independently from Compose, never the subject URL.
+  if (target?.name !== database || target.directory !== postgresData || target.port !== 5432 ||
+      target.id !== expectedSystemId || new URL(migrationUrl).port !== String(ports.database)) {
+    throw new Error("V2 PostgreSQL server identity does not match");
+  }
+}

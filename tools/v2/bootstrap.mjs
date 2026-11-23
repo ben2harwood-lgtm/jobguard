@@ -1,12 +1,14 @@
+import { readFileSync } from "node:fs";
 import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { runMigrations } from "../../apps/api/node_modules/graphile-worker/dist/index.js";
 import { provisionSyntheticSchema } from "../../packages/db/dist/demo-bootstrap.js";
-import { database, migrationUrl, postgresData, ports, validateSettings } from "./settings.mjs";
-import { seedV2 } from "./seed.mjs";
+import { database, migrationUrl, validateSettings, verifyDatabaseTarget } from "./settings.mjs";
+import { printSeedLinks, seedV2 } from "./seed.mjs";
 
-const { settings } = validateSettings({});
+const { NODE_OPTIONS, ...env } = process.env;
+const { settings } = validateSettings(env);
 const expectedSystemId = process.argv[2];
-if (!/^\d+$/u.test(expectedSystemId ?? "") || process.env.JOBGUARD_ENV !== settings.JOBGUARD_ENV) {
+if (!/^\d+$/u.test(expectedSystemId ?? "") || env.JOBGUARD_LOCAL_V2 !== "1" || env.JOBGUARD_ENV !== settings.JOBGUARD_ENV) {
   throw new Error("V2 bootstrap requires the dedicated PostgreSQL server identity");
 }
 
@@ -16,15 +18,7 @@ await using pools = {
 };
 const client = await admin.connect();
 try {
-  const { rows: [target] } = await client.query(`SELECT current_database() AS name,
-    current_setting('data_directory') AS directory, inet_server_port() AS port,
-    system_identifier::text AS id FROM pg_control_system()`);
-  // Everything up to here is read-only. The system identifier comes independently
-  // from the PostgreSQL container through Compose, never from the subject URL.
-  if (target?.name !== database || target.directory !== postgresData || target.port !== 5432 ||
-      target.id !== expectedSystemId || new URL(migrationUrl).port !== String(ports.database)) {
-    throw new Error("V2 PostgreSQL server identity does not match");
-  }
+  await verifyDatabaseTarget(client, expectedSystemId);
 
   await client.query("SELECT pg_advisory_lock(hashtext('jobguard_v2_local_bootstrap'))");
   // The common schema bootstrap requires the shadow group to have no ordinary
@@ -57,7 +51,9 @@ try {
   } finally {
     await client.query(`REVOKE CREATE ON DATABASE "${database}" FROM jobguard_v2_queue`);
   }
-  await seedV2();
+  await client.query(readFileSync(new URL("./migrations/2001_practice_quote.sql", import.meta.url), "utf8"));
+  const jobId = await seedV2(client, expectedSystemId);
+  printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
 } finally {
   client.release();
