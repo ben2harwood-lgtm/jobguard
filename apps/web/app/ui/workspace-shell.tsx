@@ -92,6 +92,8 @@ export function WorkspaceShell({jobId,initialPricing=false,designed=false}:{jobI
     const open=Array.from(root.querySelectorAll<HTMLButtonElement>(".confirmed-scope button")).find(button=>button.textContent==="Price the work");open?.click();
     if(open)return false;
    }
+   // The reveal moves into the account when its loading panel resolves.
+   if(designed&&fragment==="#final-check"&&root.querySelector(".job-final-account[aria-live]"))return false;
    const target=source?document.getElementById(source):root.querySelector<HTMLElement>(selector);if(!target||!root.contains(target))return false;const focusRegion=target.matches?.("h1,h2,h3")?(target.closest?.("section")??target):target;if(target!==document.activeElement&&focusRegion.contains?.(document.activeElement)&&document.activeElement!==document.body){(document.activeElement as HTMLElement).scrollIntoView?.({block:"center"});observer?.disconnect();return true;}for(let parent=target.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;target.style&&(target.style.scrollMarginTop="96px");target.tabIndex=-1;
    // Reveal the region first: focusing it can redirect focus to a journey control.
    // That control must be the final scroll destination, rather than the region.
@@ -103,7 +105,7 @@ export function WorkspaceShell({jobId,initialPricing=false,designed=false}:{jobI
   observer=new MutationObserver(()=>{focus();});observer.observe(root,{childList:true,subtree:true});
   const timeout=window.setTimeout(()=>observer?.disconnect(),15000);
   return()=>{observer?.disconnect();window.clearTimeout(timeout);};
- },[capture,loading,section,fragment]);
+ },[capture,loading,section,fragment,designed]);
  if(loading||(capture&&capture.jobId!==jobId)||(job&&job.id!==jobId))return legacyWorkspace(<main className="workspace-page" aria-live="polite"><p>Loading your job…</p></main>);
  if(error)return legacyWorkspace(<main className="workspace-page"><section className="workspace-error" role="alert"><h1 ref={errorRef} tabIndex={-1}>{error==="forbidden"?"You cannot open this job":"Your job could not load"}</h1><p>{error==="forbidden"?"Use a job available to this practice session.":"Nothing was changed. Try loading the saved job again."}</p>{error==="unavailable"&&<button className="primary" onClick={()=>void load()}>Try again</button>}<Link href="/classic">Back to Jobs</Link></section></main>);
  if(capture)return <WatchdogStatusProvider jobId={jobId} initialStatus={capture.status}>
@@ -115,7 +117,7 @@ export function WorkspaceShell({jobId,initialPricing=false,designed=false}:{jobI
    <PracticeJourney designed={designed} jobId={jobId} status={capture.status} onSavedLabel={setCompletionLabel} onNavigate={navigateSection}/>
    <JobParties designed={designed} jobId={jobId}/>
    {/* The same saved status removes pre-live proof and enables the editor proof slot. */}
-   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal designed={designed} key={jobId} result={capture} initialPricing={pricing} sectionNavigationKey={fragment} sectionView={fragment==="#scope"?"scope":pricing?"pricing":undefined} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState designed={designed} jobId={jobId}/><JobDiary designed={designed} key={`diary:${jobId}`} jobId={jobId} extrasHref="#variations-title"/><CustomerMessages designed={designed} key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
+   <section id="scope" tabIndex={-1}><div id="quote" tabIndex={-1}><ReviewProposal designed={designed} key={jobId} result={capture} initialPricing={pricing} sectionNavigationKey={fragment} sectionView={fragment==="#scope"?"scope":pricing?"pricing":undefined} proofStage={hasStartedWork(capture.status)?undefined:null} beforeProof={<><JobWorkState designed={designed} jobId={jobId}/><JobDiary designed={designed} key={`diary:${jobId}`} jobId={jobId} extrasHref="#variations-title"/><CustomerMessages designed={designed} key={`messages:${jobId}`} jobId={jobId}/></>} beforeInvoices={<FinalCheckReveal jobId={jobId} designed={designed}/>} practiceTools={null} onSnapshot={acceptSnapshot} onScope={snapshot=>{if(snapshot.jobId!==currentJobId.current)return;acceptSnapshot(snapshot);setFragment("#scope");history.replaceState(null,"",`${location.pathname}${location.search}#scope`);}} back={()=>location.assign("/classic")}/></div></section>
    {legacy(<>
    <hr/>
    <h2 id="practice-tools">Practice tools — demo only, not part of your job</h2>

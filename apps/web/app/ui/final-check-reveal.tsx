@@ -11,7 +11,7 @@ const answers = Object.keys(answerLabels) as RevealAnswer[];
 const pendingReadNotice = "The saved final check is temporarily unavailable. We’ll keep checking for its result.";
 
 /** Show the saved Final Check and record the builder’s explicit answers. */
-export function FinalCheckReveal({ jobId, pilotFetch }: { jobId: string; pilotFetch?: typeof fetch }) {
+export function FinalCheckReveal({ jobId, pilotFetch, designed = false }: { jobId: string; pilotFetch?: typeof fetch; designed?: boolean }) {
  const fetchCheck = pilotFetch ?? jobPageFetch;
  const [savedRead, setRead] = useState<FinalCheckRead | null>(null), [disputes, setDisputes] = useState(0), [busy, setBusy] = useState(true), [error, setError] = useState(""), [requested, setRequested] = useState(false);
  const savedJob = useRef(jobId);
@@ -138,58 +138,58 @@ export function FinalCheckReveal({ jobId, pilotFetch }: { jobId: string; pilotFe
    }
   }
  };
- return <section id="final-check" className={styles.panel} aria-labelledby="final-check-title" aria-busy={busy} data-testid="final-check-reveal">
+ return <section id="final-check" className={designed ? "card card-body designed-check-reveal" : styles.panel} aria-labelledby="final-check-title" aria-busy={busy} data-testid="final-check-reveal">
   <h2 id="final-check-title">JobGuard's final check</h2>
   {error && <p role={error === pendingReadNotice ? "status" : "alert"}>{error}</p>}
   {read && <>
    <p role="status" data-testid="final-check-status">{revealStatus(read)}</p>
-   {!pilotFetch && (read.state === "pending" || read.state === "failed") && read.lockId && <p>
-    <button type="button" disabled={busy || uncertain.current} onClick={() => void requestRun()}>Run the final check (practice)</button>
-    {read.state === "failed" && <button type="button" disabled={busy || uncertain.current} onClick={() => void requestRun()}>Try again</button>}
+   {!pilotFetch && (read.state === "pending" || read.state === "failed") && read.lockId && <p className={designed ? "work-actions" : undefined}>
+    <button className={designed ? "btn primary" : undefined} type="button" disabled={busy || uncertain.current} onClick={() => void requestRun()}>Run the final check (practice)</button>
+    {read.state === "failed" && <button className={designed ? "btn" : undefined} type="button" disabled={busy || uncertain.current} onClick={() => void requestRun()}>Try again</button>}
     {requested && <span data-testid="final-check-run-requested"> Asked for. The saved final check will update here.</span>}
    </p>}
-   {!pilotFetch && read.lockId && <HistoricalEvidence key={jobId} jobId={jobId} onSaved={load}/>}
-   {read.state === "completed" && read.items.map(revealed => <Item key={revealed.signalId} revealed={revealed} read={read} busy={busy} pilot={Boolean(pilotFetch)} onAnswer={answer}/>)}
+   {!pilotFetch && read.lockId && <HistoricalEvidence key={jobId} jobId={jobId} onSaved={load} designed={designed}/>}
+   {read.state === "completed" && read.items.map(revealed => <Item key={revealed.signalId} revealed={revealed} read={read} busy={busy} pilot={Boolean(pilotFetch)} onAnswer={answer} designed={designed}/>)}
    {(read.postLockItems ?? []).length > 0 && <>
     <h3>Found after the lock</h3>
     <p>Evidence that arrived after you completed the final account. You can use it, but it never earns JobGuard a fee.</p>
-    {read.postLockItems!.map(found => <article key={found.signalId} className={styles.movement} data-testid="final-check-post-lock" data-signal-id={found.signalId}><strong>{found.description}</strong>
+    {read.postLockItems!.map(found => <article key={found.signalId} className={designed ? "check-evidence" : styles.movement} data-testid="final-check-post-lock" data-signal-id={found.signalId}><strong>{found.description}</strong>
      <ul>{(found.evidence ?? []).map(e => <li key={e.id}>{e.source ?? "Evidence"} received {when(e.receivedAt)}</li>)}</ul></article>)}
    </>}
    {disputes > 0 && <p data-testid="final-check-disputes">{disputes === 1 ? "1 answer is" : `${disputes} answers are`} disputed: paused with no fee until an independent review exists.</p>}
   </>}
-  <button type="button" disabled={busy} onClick={() => void load()}>Load the saved final check</button>
+  <button className={designed ? "btn" : undefined} type="button" disabled={busy} onClick={() => void load()}>Load the saved final check</button>
  </section>;
 }
 
-function Item({ revealed, read, busy, pilot, onAnswer }: { revealed: RevealItem; read: FinalCheckRead; busy: boolean; pilot: boolean; onAnswer: (revealed: RevealItem, choice: RevealAnswer | "extra_work", referenceId: string | null) => Promise<void> }) {
+function Item({ revealed, read, busy, pilot, onAnswer, designed }: { designed: boolean; revealed: RevealItem; read: FinalCheckRead; busy: boolean; pilot: boolean; onAnswer: (revealed: RevealItem, choice: RevealAnswer | "extra_work", referenceId: string | null) => Promise<void> }) {
  const [choice, setChoice] = useState<RevealAnswer>("already_included");
  const choices = referenceChoices(choice, read.lockedLines ?? []);
  const [reference, setReference] = useState("");
  const needsReference = choice === "already_included" || choice === "in_original_scope";
  const select = `answer-${revealed.signalId}`, ref = `reference-${revealed.signalId}`;
- return <article className={styles.movement} data-testid="final-check-item" data-signal-id={revealed.signalId}>
+ return <article className={designed ? "check-evidence" : styles.movement} data-testid="final-check-item" data-signal-id={revealed.signalId}>
   <h3>{revealed.description}</h3>
   <p data-testid="final-check-estimate">{revealed.estimatedValuePence == null ? "Needs a price" : `Estimated extra: ${pounds(revealed.estimatedValuePence)}`}</p>
   <p>Proposal only — price and approve this extra before billing. This is not charged, recovered or invoiced money.</p>
   <ul aria-label="Evidence and dates">{(revealed.evidence ?? []).map(e => <li key={e.id}>{e.source ?? "Evidence"} received {when(e.receivedAt)}{e.evidenceAfterLock ? " (after the lock: not fee-eligible)" : ""}</li>)}</ul>
   <p>Checked against {revealed.comparisons.lockedLineIds.length} locked lines and {revealed.comparisons.baselineItemIds.length} original quote items: no match found.</p>
   {revealed.disposition ? <p data-testid="final-check-disposition">Your answer: {dispositionLabels[revealed.disposition] ?? revealed.disposition}</p> : <>
-   <button type="button" disabled={busy} onClick={() => void onAnswer(revealed, "extra_work", null)}>Yes — this was extra work</button>
+   <button className={designed ? "btn primary" : undefined} type="button" disabled={busy} onClick={() => void onAnswer(revealed, "extra_work", null)}>Yes — this was extra work</button>
    <p>This adds it to your extras as a draft for you to price and approve. Nothing is charged until your customer approves.</p>
    <div className={styles.actions}>
     <div className={styles.field}><label htmlFor={select}>Or answer</label><select id={select} value={choice} disabled={busy} onChange={e => { setChoice(e.target.value as RevealAnswer); setReference(""); }}>{answers.map(a => <option key={a} value={a}>{answerLabels[a]}</option>)}</select></div>
     {needsReference && <div className={styles.field}><label htmlFor={ref}>{choice === "already_included" ? "Which locked line?" : "Which original quote item?"}</label>
      <select id={ref} value={reference} disabled={busy} onChange={e => setReference(e.target.value)}><option value="">Choose one</option>{choices.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select></div>}
-    <button type="button" disabled={busy || (needsReference && reference === "")} onClick={() => void onAnswer(revealed, choice, needsReference ? reference : null)}>Save answer</button>
-    {pilot && needsReference && <button type="button" disabled={busy} onClick={() => void onAnswer(revealed, choice, null)}>Dispute without a reference</button>}
+    <button className={designed ? "btn" : undefined} type="button" disabled={busy || (needsReference && reference === "")} onClick={() => void onAnswer(revealed, choice, needsReference ? reference : null)}>Save answer</button>
+    {pilot && needsReference && <button className={designed ? "btn" : undefined} type="button" disabled={busy} onClick={() => void onAnswer(revealed, choice, null)}>Dispute without a reference</button>}
    </div>
   </>}
  </article>;
 }
 
 /** Historical import is intentionally separate from the diary and customer-message controls. */
-function HistoricalEvidence({jobId,onSaved}:{jobId:string;onSaved:()=>Promise<void>}) {
+function HistoricalEvidence({jobId,onSaved,designed=false}:{jobId:string;onSaved:()=>Promise<void>;designed?:boolean}) {
  const [name,setName]=useState(""),[text,setText]=useState(""),[date,setDate]=useState("");
  const [busy,setBusy]=useState(false),[message,setMessage]=useState("");
  const [saved,setSaved]=useState<ReturnType<typeof lateSourceReceiptV1.parse>[]>([]);
@@ -222,7 +222,7 @@ function HistoricalEvidence({jobId,onSaved}:{jobId:string;onSaved:()=>Promise<vo
   <label>Fictional sender<input value={name} maxLength={160} onChange={e=>setName(e.target.value)}/></label>
   <label>Stated message date<input type="datetime-local" value={date} onChange={e=>setDate(e.target.value)}/></label>
   <label>Old fictional message<textarea value={text} maxLength={8000} onChange={e=>setText(e.target.value)}/></label>
-  <button type="button" disabled={busy||!name.trim()||!text.trim()||!date} onClick={()=>void save()}>Import as evidence only</button>
+  <button className={designed ? "btn" : undefined} type="button" disabled={busy||!name.trim()||!text.trim()||!date} onClick={()=>void save()}>Import as evidence only</button>
   {message&&<p role="status">{message}</p>}
   {saved.map(source=><details key={source.record.id} data-testid="imported-historical-message"><summary>Old message from {source.record.fictionalCustomer.name}</summary>
    <p>{source.record.text}</p><p>Stated message date: {when(source.statedSentAt)}. Received by JobGuard: {when(source.record.evidence.serverReceivedAt)}.</p>
