@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-a1-mac": {
+      "branches": [
+        "codex/sandbox/v2-a1-mac"
+      ],
+      "note": "Docker-free V2 launcher and same-origin private HTTPS phone route.",
+      "allow": [
+        "apps/api/src/proof/proof.application.ts",
+        "apps/web/next.config.mjs",
+        "packages/db/src/index.ts",
+        "packages/storage/src/index.ts",
+        "packages/storage/src/v2-filesystem.ts",
+        "tools/v2-mac.test.mjs",
+        "tools/v2/README.md",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/embedded.mjs",
+        "tools/v2/local-targets.mjs",
+        "tools/v2/network.mjs",
+        "tools/v2/phone.test.mjs",
+        "tools/v2/settings.mjs",
+        "tools/v2/start.mjs"
+      ]
+    }
+  }
+}

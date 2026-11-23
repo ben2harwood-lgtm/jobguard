@@ -1,13 +1,22 @@
+import { existsSync } from "node:fs";
 import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { runMigrations } from "../../apps/api/node_modules/graphile-worker/dist/index.js";
 import { provisionSyntheticSchema } from "../../packages/db/dist/demo-bootstrap.js";
-import { database, migrationUrl, postgresData, ports, validateSettings } from "./settings.mjs";
+import { database, migrationUrl, validateSettings } from "./settings.mjs";
+import { assertPostgresTarget, authSecret, checkLocalTargets, storageData } from "./local-targets.mjs";
 import { seedV2 } from "./seed.mjs";
 
 const { settings } = validateSettings({});
-const expectedSystemId = process.argv[2];
-if (!/^\d+$/u.test(expectedSystemId ?? "") || process.env.JOBGUARD_ENV !== settings.JOBGUARD_ENV) {
+const [, , expectedSystemId, backend] = process.argv;
+const embedded = backend === "embedded";
+if (!/^\d+$/u.test(expectedSystemId ?? "") || process.env.JOBGUARD_ENV !== settings.JOBGUARD_ENV ||
+    process.env.JOBGUARD_LOCAL_V2 !== "1" || !["docker", "embedded"].includes(backend)) {
   throw new Error("V2 bootstrap requires the dedicated PostgreSQL server identity");
+}
+
+if (embedded) {
+  if (process.env.JOBGUARD_V2_STORAGE_DIR !== storageData || !existsSync(storageData)) throw new Error("V2 storage target does not match");
+  checkLocalTargets();
 }
 
 const admin = new Pool({ connectionString: migrationUrl, max: 1 });
@@ -16,15 +25,8 @@ await using pools = {
 };
 const client = await admin.connect();
 try {
-  const { rows: [target] } = await client.query(`SELECT current_database() AS name,
-    current_setting('data_directory') AS directory, inet_server_port() AS port,
-    system_identifier::text AS id FROM pg_control_system()`);
-  // Everything up to here is read-only. The system identifier comes independently
-  // from the PostgreSQL container through Compose, never from the subject URL.
-  if (target?.name !== database || target.directory !== postgresData || target.port !== 5432 ||
-      target.id !== expectedSystemId || new URL(migrationUrl).port !== String(ports.database)) {
-    throw new Error("V2 PostgreSQL server identity does not match");
-  }
+  // The expected ID comes from Compose or the embedded cluster's control file.
+  await assertPostgresTarget(client, expectedSystemId, embedded);
 
   await client.query("SELECT pg_advisory_lock(hashtext('jobguard_v2_local_bootstrap'))");
   // The common schema bootstrap requires the shadow group to have no ordinary
@@ -57,7 +59,9 @@ try {
   } finally {
     await client.query(`REVOKE CREATE ON DATABASE "${database}" FROM jobguard_v2_queue`);
   }
-  await seedV2();
+  process.env.AUTH_CODE_SECRET = authSecret();
+  const seed = await seedV2();
+  if (seed?.acceptedQuotePath) console.log(`V2 accepted quote: ${process.env.AUTH_ALLOWED_ORIGIN}${seed.acceptedQuotePath}`);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
 } finally {
   client.release();

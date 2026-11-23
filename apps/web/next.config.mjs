@@ -1,8 +1,17 @@
+const localV2Api = process.env.JOBGUARD_LOCAL_V2 === "1" && process.env.NEXT_PUBLIC_API_URL === "/api/v2-backend";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // OpenNext copies the full external package, including its workerd exports.
   // Next's Node trace otherwise includes only pg-cloudflare's empty fallback.
   serverExternalPackages: ["pg-cloudflare"],
+  ...(localV2Api ? {
+    allowedDevOrigins: [new URL(process.env.AUTH_ALLOWED_ORIGIN).hostname],
+    async rewrites() {
+      // Existing Next API routes still handle sign-in and the web workflow.
+      return { fallback: [{ source: "/api/v2-backend/:path*", destination: "http://127.0.0.1:3401/:path*" }] };
+    },
+  } : {}),
 };
 
 export default nextConfig;
