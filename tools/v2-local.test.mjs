@@ -141,7 +141,8 @@ test("the fictional seed refuses an unchecked process before connecting", async 
 });
 
 test("the V2 database target must match the independent Compose identity", async () => {
-  const { postgresData, verifyDatabaseTarget } = await import("./v2/settings.mjs");
+  const { verifyDatabaseTarget } = await import("./v2/local-targets.mjs");
+  const { postgresData } = await import("./v2/settings.mjs");
   const target = { name: database, directory: postgresData, port: 5432, id: "123" };
   const check = (row, id = "123") => verifyDatabaseTarget({ query: async () => ({ rows: [row] }) }, id);
   await check(target);

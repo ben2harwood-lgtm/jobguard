@@ -7,8 +7,12 @@ DECLARE
   demo_literal text := quote_literal('jobguard_synthetic_demo');
   v2_literal text := quote_literal('jobguard_v2_local');
 BEGIN
-  IF current_database() <> 'jobguard_v2_local'
-     OR current_setting('data_directory') <> '/var/lib/postgresql/data/pgdata-v2' THEN
+  -- Bootstrap first verifies the exact directory and system ID for this checkout.
+  IF current_database() <> 'jobguard_v2_local' OR NOT COALESCE(
+    (inet_server_port() = 5432 AND current_setting('data_directory') = '/var/lib/postgresql/data/pgdata-v2')
+    OR (inet_server_port() = 56432 AND host(inet_server_addr()) = '127.0.0.1'
+      AND current_setting('data_directory') LIKE '/%/.jobguard/v2/postgres'), false
+  ) THEN
     RAISE EXCEPTION 'V2 migration requires the dedicated local rehearsal database';
   END IF;
 

@@ -5,11 +5,14 @@ import { after, before, test } from "node:test";
 import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { DEMO_TENANT_ID, authenticatePracticeSession, withTenant } from "../../packages/db/dist/index.js";
-import { migrationUrl, validateSettings, verifyDatabaseTarget } from "./settings.mjs";
+import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
+import { migrationUrl, validateSettings } from "./settings.mjs";
 
 const { settings } = validateSettings({});
 const origin = settings.AUTH_ALLOWED_ORIGIN;
-const systemId = process.env.JOBGUARD_V2_TEST_SYSTEM_ID;
+const backend = process.env.JOBGUARD_V2_BACKEND ?? "docker";
+const embedded = backend === "embedded";
+const systemId = embedded ? embeddedSystemId() : process.env.JOBGUARD_V2_TEST_SYSTEM_ID;
 const authSecret = readFileSync(new URL("../../.jobguard/v2-auth-secret", import.meta.url), "utf8");
 const admin = new Pool({ connectionString: migrationUrl, max: 1 });
 const runtime = new Pool({ connectionString: settings.DATABASE_URL, max: 1 });
@@ -71,7 +74,7 @@ const counts = async () => (await admin.query(`SELECT
 
 let jobId;
 before(async () => {
-  await verifyDatabaseTarget(admin, systemId);
+  await verifyDatabaseTarget(admin, systemId, embedded);
   const proposals = await admin.query(`SELECT job_id, model FROM app.job_record_proposal`);
   assert.equal(proposals.rowCount, 1);
   assert.equal(proposals.rows[0].model, "fixture-capture-v1");
@@ -115,9 +118,11 @@ test("the checked bootstrap reruns without duplicating or delivering anything", 
   const before = await counts();
   assert.deepEqual(before, { identities: 2, firms: 2, jobs: 1, customers: 1, merchants: 1,
     bindings: 1, materials: 1, revisions: 1, documents: 1, acceptances: 1, sends: 1 });
-  const { MIGRATION_DATABASE_URL, ...targets } = settings;
-  const result = spawnSync(process.execPath, ["tools/v2/bootstrap.mjs", systemId], {
-    env: { PATH: process.env.PATH, ...targets, JOBGUARD_LOCAL_V2: "1", AUTH_CODE_SECRET: authSecret,
+  const targets = Object.fromEntries(Object.entries(settings).filter(([key]) =>
+    key !== "MIGRATION_DATABASE_URL" && !(embedded && key.startsWith("S3_"))));
+  const result = spawnSync(process.execPath, ["tools/v2/bootstrap.mjs", systemId, backend], {
+    env: { PATH: process.env.PATH, ...targets, JOBGUARD_LOCAL_V2: "1", JOBGUARD_V2_BACKEND: backend,
+      ...(embedded && { JOBGUARD_V2_STORAGE_DIR: storageData }),
       NODE_OPTIONS: "--import=./tools/v2/network.mjs" },
     encoding: "utf8",
   });

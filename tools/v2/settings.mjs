@@ -1,8 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { networkInterfaces } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { createSecureContext } from "node:tls";
 import { X509Certificate } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
 
 const demoIdentifiers = JSON.parse(readFileSync(new URL("./demo-identifiers.json", import.meta.url), "utf8"));
@@ -11,6 +12,9 @@ export const ports = Object.freeze({ database: 56432, storage: 16900, api: 3401,
 export const database = "jobguard_v2_local";
 export const bucket = "jobguard-v2-evidence";
 export const postgresData = "/var/lib/postgresql/data/pgdata-v2";
+const checkout = realpathSync(fileURLToPath(new URL("../../", import.meta.url)));
+export const state = join(checkout, ".jobguard", "v2");
+export const storageData = join(state, "objects");
 const postgresUrl = (login, password) => `postgresql://${login}:${password}@${host}:${ports.database}/${database}`;
 export const migrationUrl = postgresUrl("jobguard_v2_admin", "v2-local-admin-only");
 const runtimeUrl = postgresUrl("jobguard_runtime", "v2-local-runtime-only");
@@ -35,20 +39,28 @@ const defaults = Object.freeze({
 });
 
 const endpointKey = /(?:^|_)(?:URLS?|URIS?|ENDPOINTS?|DSN|ORIGINS?|HOSTS?|PROXIES|PROXY|BUCKET|HOSTING)(?:_|$)/iu;
-const targetOverride = /^(?:V2_|COMPOSE_|PG(?:HOST|PORT|DATABASE|DATA|SERVICE|OPTIONS))|(?:^|_)(?:STORAGE|S3|DATABASE|POSTGRES)(?:_.*)?_(?:DIR(?:ECTORY)?|PATH|VOLUME|PORT|NAME|DATA)$/iu;
+const targetOverride = /^(?:V2_|JOBGUARD_V2_(?:STORAGE|POSTGRES)_|COMPOSE_|PG(?:HOST|PORT|DATABASE|DATA|SERVICE|OPTIONS))|(?:^|_)(?:STORAGE|S3|DATABASE|POSTGRES)(?:_.*)?_(?:DIR(?:ECTORY)?|PATH|VOLUME|PORT|NAME|DATA)$/iu;
 const uri = /(?:[a-z][a-z0-9+.-]*:\/\/|(?:^|\s)\/\/)/iu;
 
 function phoneSettings(env, interfaces) {
   const address = env.JOBGUARD_V2_PHONE_HOST;
   const certFile = env.JOBGUARD_V2_PHONE_CERT;
   const keyFile = env.JOBGUARD_V2_PHONE_KEY;
-  if (!address && !certFile && !keyFile) return undefined;
+  const generate = env.JOBGUARD_V2_PHONE_SELF_SIGNED;
+  if (generate && generate !== "1") throw new Error("JOBGUARD_V2_PHONE_SELF_SIGNED must be 1");
+  if (!address && !certFile && !keyFile && !generate) return undefined;
   const privateV4 = /^(?:10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/u;
   if (!address || !privateV4.test(address) || !Object.values(interfaces).flat().some(entry =>
     entry.address === address && entry.family === "IPv4" && !entry.internal)) {
     throw new Error("JOBGUARD_V2_PHONE_HOST must be a private IPv4 address assigned to this computer");
   }
+  if (generate === "1" && !certFile && !keyFile) return { address, generate: true };
+  if (generate) throw new Error("Use either JOBGUARD_V2_PHONE_SELF_SIGNED or a local TLS certificate and key");
   if (!certFile || !keyFile) throw new Error("V2 phone access requires a local TLS certificate and key");
+  return validatePhoneCertificate(address, certFile, keyFile);
+}
+
+export function validatePhoneCertificate(address, certFile, keyFile) {
   const cert = readFileSync(certFile);
   const key = readFileSync(keyFile);
   const certificate = new X509Certificate(cert);
@@ -72,16 +84,24 @@ export function validateSettings(env, interfaces = networkInterfaces()) {
   }
   const phone = phoneSettings(env, interfaces);
   const webOrigin = phone ? `https://${phone.address}:${ports.web}` : `http://${host}:${ports.web}`;
-  const settings = { ...defaults, AUTH_ALLOWED_ORIGIN: webOrigin, JOBGUARD_ALLOWED_ORIGINS: webOrigin };
+  const backend = env.JOBGUARD_V2_BACKEND;
+  if (backend && !["embedded", "docker"].includes(backend)) throw new Error("JOBGUARD_V2_BACKEND must be embedded or docker");
+  if (env.JOBGUARD_V2_STORAGE_DIR !== undefined &&
+      (backend !== "embedded" || env.JOBGUARD_V2_STORAGE_DIR !== storageData)) {
+    throw new Error("JOBGUARD_V2_STORAGE_DIR must match the V2 embedded storage target");
+  }
+  const settings = { ...defaults, AUTH_ALLOWED_ORIGIN: webOrigin, JOBGUARD_ALLOWED_ORIGINS: webOrigin,
+    ...(phone ? { NEXT_PUBLIC_API_URL: "/api/v2-backend" } : {}) };
   for (const [name, value] of Object.entries(env)) {
-    if (!value || ["JOBGUARD_V2_PHONE_HOST", "NO_PROXY", "no_proxy", "__CFBundleIdentifier"].includes(name)) continue;
+    if (!value || ["JOBGUARD_V2_PHONE_HOST", "JOBGUARD_V2_PHONE_SELF_SIGNED", "JOBGUARD_V2_BACKEND",
+      "JOBGUARD_V2_STORAGE_DIR", "NO_PROXY", "no_proxy", "__CFBundleIdentifier"].includes(name)) continue;
     if (Object.hasOwn(settings, name)) {
       if (value !== settings[name]) throw new Error(`${name} must match the V2 local settings`);
     } else if (endpointKey.test(name) || targetOverride.test(name) || uri.test(value)) {
       throw new Error(`${name} is outside the V2 endpoint allowlist`);
     }
   }
-  return { settings, phone };
+  return { settings, phone, backend };
 }
 
 export function refuseDotenvFiles(root) {
@@ -94,19 +114,5 @@ export function refuseDotenvFiles(root) {
       validateSettings(parseEnv(readFileSync(path, "utf8")));
       throw new Error(`V2 requires a clean worktree without ${directory ? `${directory}/` : ""}${filename}`);
     }
-  }
-}
-
-export async function verifyDatabaseTarget(client, expectedSystemId) {
-  if (!/^\d+$/u.test(expectedSystemId ?? "")) {
-    throw new Error("V2 bootstrap requires the dedicated PostgreSQL server identity");
-  }
-  const { rows: [target] } = await client.query(`SELECT current_database() AS name,
-    current_setting('data_directory') AS directory, inet_server_port() AS port,
-    system_identifier::text AS id FROM pg_control_system()`);
-  // The expected identifier comes independently from Compose, never the subject URL.
-  if (target?.name !== database || target.directory !== postgresData || target.port !== 5432 ||
-      target.id !== expectedSystemId || new URL(migrationUrl).port !== String(ports.database)) {
-    throw new Error("V2 PostgreSQL server identity does not match");
   }
 }

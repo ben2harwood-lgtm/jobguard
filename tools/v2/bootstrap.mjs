@@ -1,15 +1,23 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { runMigrations } from "../../apps/api/node_modules/graphile-worker/dist/index.js";
 import { provisionSyntheticSchema } from "../../packages/db/dist/demo-bootstrap.js";
-import { database, migrationUrl, validateSettings, verifyDatabaseTarget } from "./settings.mjs";
+import { database, migrationUrl, validateSettings } from "./settings.mjs";
+import { authSecret, checkLocalTargets, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { printSeedLinks, seedV2 } from "./seed.mjs";
 
 const { NODE_OPTIONS, ...env } = process.env;
 const { settings } = validateSettings(env);
-const expectedSystemId = process.argv[2];
-if (!/^\d+$/u.test(expectedSystemId ?? "") || env.JOBGUARD_LOCAL_V2 !== "1" || env.JOBGUARD_ENV !== settings.JOBGUARD_ENV) {
+const [, , expectedSystemId, backend] = process.argv;
+const embedded = backend === "embedded";
+if (!/^\d+$/u.test(expectedSystemId ?? "") || process.env.JOBGUARD_ENV !== settings.JOBGUARD_ENV ||
+    env.JOBGUARD_LOCAL_V2 !== "1" || backend !== env.JOBGUARD_V2_BACKEND || !["docker", "embedded"].includes(backend)) {
   throw new Error("V2 bootstrap requires the dedicated PostgreSQL server identity");
+}
+
+if (embedded) {
+  if (process.env.JOBGUARD_V2_STORAGE_DIR !== storageData || !existsSync(storageData)) throw new Error("V2 storage target does not match");
+  checkLocalTargets();
 }
 
 const admin = new Pool({ connectionString: migrationUrl, max: 1 });
@@ -18,7 +26,8 @@ await using pools = {
 };
 const client = await admin.connect();
 try {
-  await verifyDatabaseTarget(client, expectedSystemId);
+  // The expected ID comes from Compose or the embedded cluster's control file.
+  await verifyDatabaseTarget(client, expectedSystemId, embedded);
 
   await client.query("SELECT pg_advisory_lock(hashtext('jobguard_v2_local_bootstrap'))");
   // The common schema bootstrap requires the shadow group to have no ordinary
@@ -51,6 +60,7 @@ try {
   } finally {
     await client.query(`REVOKE CREATE ON DATABASE "${database}" FROM jobguard_v2_queue`);
   }
+  process.env.AUTH_CODE_SECRET = authSecret();
   await client.query(readFileSync(new URL("./migrations/2001_practice_quote.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);

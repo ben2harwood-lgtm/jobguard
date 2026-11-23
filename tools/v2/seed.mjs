@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { validateSettings, verifyDatabaseTarget } from "./settings.mjs";
+import { checkLocalTargets, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
+import { validateSettings } from "./settings.mjs";
 
 const captureId = "e2020000-0000-4000-8000-000000000001";
 const owner = { email: "builder@jobguard-v2.invalid", name: "Fictional Bramble Button Builders" };
@@ -138,12 +139,17 @@ async function buildQuote(workspace, sessionId, saved, taxPolicy) {
 export async function seedV2(client, expectedSystemId) {
   if (process.env.JOBGUARD_LOCAL_V2 !== "1") throw new Error("V2 seed requires JOBGUARD_LOCAL_V2=1");
   const { NODE_OPTIONS, ...env } = process.env;
-  const { settings } = validateSettings(env);
+  const { settings, backend } = validateSettings(env);
+  const embedded = backend === "embedded";
+  const checkedStorage = embedded
+    ? env.JOBGUARD_V2_STORAGE_DIR === storageData
+    : backend === "docker" && env.S3_ENDPOINT === settings.S3_ENDPOINT && env.S3_BUCKET === settings.S3_BUCKET;
   if (env.DATABASE_URL !== settings.DATABASE_URL || env.IDENTITY_DATABASE_URL !== settings.IDENTITY_DATABASE_URL ||
-      env.S3_ENDPOINT !== settings.S3_ENDPOINT || env.S3_BUCKET !== settings.S3_BUCKET) {
+      !checkedStorage) {
     throw new Error("V2 seed requires the checked database and storage settings");
   }
-  await verifyDatabaseTarget(client, expectedSystemId);
+  if (embedded) checkLocalTargets();
+  await verifyDatabaseTarget(client, expectedSystemId, embedded);
   const { rows: [existing] } = await client.query(`SELECT j.id, j.accepted_quote_version_id
     FROM app.job_record_proposal p JOIN app.job j ON (j.tenant_id,j.id)=(p.tenant_id,p.job_id)
     WHERE p.capture_id=$1`, [captureId]);
