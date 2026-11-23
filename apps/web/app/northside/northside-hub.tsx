@@ -74,8 +74,8 @@ export function NorthsideHub({ designed = false }: { designed?: boolean } = {}) 
           <li>{journeyOrder
             ? <Link href={contractorHref(`/contractor/work-orders/${journeyOrder.workOrderId}`, designed)}>Finance: open work order {journeyOrder.reference} and its billing</Link>
             : <Link href={contractorHref("/contractor/work-orders", designed)}>Finance: find the work order and open billing</Link>}</li>
-          <li><Link href="/contractor/statements">Finance: monthly statement</Link></li>
-          <li><Link href="/contractor/dashboard">Contractor dashboard and sample baseline import</Link></li>
+          <li><Link href={contractorHref("/contractor/statements", designed)}>Finance: monthly statement</Link></li>
+          <li><Link href={contractorHref("/contractor/dashboard", designed)}>Contractor dashboard and sample baseline import</Link></li>
           <li><Link href={contractorHref("/site/extra", designed)}>Operative: log an extra (phone)</Link></li>
           <li><Link href={contractorHref("/approvals/extras", designed)}>Surveyor, supervisor and owner: price, approve, prepare a local client request</Link></li>
         </ul></section>

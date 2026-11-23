@@ -342,3 +342,83 @@ body:has(.jgd) .sandbox-banner{position:sticky;top:0}
   cursor: pointer;
   font-weight: 650;
 }
+
+/* Settlement cards and controls share the contractor shell and its design tokens. */
+.jgd .contractor-settlement :is(h1, h2, h3, p) { margin: 0; }
+.jgd .contractor-settlement h3 { font-size: 1rem; }
+.jgd .contractor-settlement .contractor-notice,
+.jgd .contractor-settlement [role="alert"] {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--pale);
+  border-inline-start: 4px solid var(--teal2);
+}
+.jgd .contractor-settlement [role="alert"] { background: #fdf0ec; border-color: #a34336; }
+.jgd .contractor-settlement > :is(form, fieldset) {
+  margin: 0;
+  padding: clamp(14px, 2vw, 22px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.jgd .contractor-settlement :is(form, section fieldset) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  align-items: end;
+  gap: 12px;
+}
+.jgd .contractor-settlement :is(form, section fieldset) > :is(p, textarea, label:has(textarea)) { grid-column: 1 / -1; }
+.jgd .contractor-settlement label:has(:is(input, select, textarea)) { display: grid; gap: 4px; }
+.jgd .contractor-settlement :is(input, select, textarea) { width: 100%; min-width: 0; }
+.jgd .contractor-settlement textarea { resize: vertical; }
+.jgd .contractor-settlement details {
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--pale);
+}
+.jgd .contractor-settlement details[open] { padding-bottom: 10px; }
+.jgd .contractor-settlement summary {
+  display: list-item;
+  min-height: 44px;
+  padding: 10px 0;
+  color: var(--navy);
+  font-weight: 650;
+  cursor: pointer;
+}
+.jgd .contractor-settlement .contractor-statement-total {
+  font-size: 1.5rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.jgd .contractor-settlement :is(.contractor-invoice, .contractor-batch) {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.jgd .contractor-settlement .contractor-invoice {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.jgd .contractor-settlement .contractor-download {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--teal2);
+  border-radius: 7px;
+  color: var(--teal2);
+  font-weight: 650;
+}
+.jgd .contractor-settlement table { width: 100%; border-collapse: collapse; }
+.jgd .contractor-settlement :is(th, td) { border-bottom: 1px solid var(--line); }
+.jgd .contractor-settlement td { font-variant-numeric: tabular-nums; }
+.jgd .contractor-settlement td:not(:first-child) { white-space: nowrap; }
+@media (max-width: 700px) {
+  .jgd .contractor-settlement :is(th, td) { padding: 8px 4px; font-size: .75rem; }
+}

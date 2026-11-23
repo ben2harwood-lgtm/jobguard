@@ -22,7 +22,7 @@ export function WorkOrderRevisions({ workOrderId, designed = false }: { workOrde
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (code) errorRef.current?.focus(); }, [code]);
   const newestFirst = view ? [...view.revisions].reverse() : [];
-  const billing = view && <Link href={`/contractor/jobs/${view.jobId}/billing`}>Billing and reconciliation</Link>;
+  const billing = view && <Link href={contractorHref(`/contractor/jobs/${view.jobId}/billing`, designed)}>Billing and reconciliation</Link>;
   const possibleExtras = view && <Link href={`/contractor/jobs/${view.jobId}/possible-extras`}>Possible extras</Link>;
   return <main className={designed ? `${styles.main} contractor-page` : styles.main}>
     <Link href={contractorHref("/contractor/work-orders", designed)}>Back to work orders</Link>

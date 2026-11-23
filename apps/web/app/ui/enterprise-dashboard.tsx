@@ -4,6 +4,7 @@ import { BASELINE_METHOD_V1, dashboardDimensions, type dashboardQueryV1 } from "
 import { z } from "zod";
 import type { EnterpriseDashboardApplication, EnterpriseBaselineApplication } from "@jobguard/api/workspace";
 import { exactPounds } from "./contractor-billing";
+import { contractorHref } from "../lib/contractor-href";
 import styles from "./work-orders.module.css";
 import northsideSample from "../../../../docs/fixtures/contractor-full-demo-package.v1.json";
 
@@ -75,7 +76,7 @@ export function practiceTeamBindings(teams: readonly PracticeTeam[]) {
   return pilot && rest ? `fictional-pilot=${pilot.id}\nfictional-rest=${rest.id}` : "";
 }
 
-export function EnterpriseDashboard() {
+export function EnterpriseDashboard({ designed = false }: { designed?: boolean }) {
   const [baselineContent, setBaselineContent] = useState("");
   const [bindings, setBindings] = useState(""), [practiceTeams, setPracticeTeams] = useState<PracticeTeam[]>([]);
   const [pilot, rest] = practiceTeams;
@@ -118,14 +119,19 @@ export function EnterpriseDashboard() {
       cohorts: { version: "baseline-cohorts.v1", pilotTeamIds: String(data.get("pilot")).split(",").map(s => s.trim()), restTeamIds: String(data.get("rest")).split(",").map(s => s.trim()) },
       methodVersion: BASELINE_METHOD_V1.version, outputFormat: data.get("outputFormat") })); });
   }
-  return <main className={styles.main}><h1>Contractor dashboard</h1><p>Synthetic practice only. Company session and current dashboard scope apply.</p>
-    <a href="/admin/contractor">Company administration</a> · <a href="/contractor/work-orders">Work orders</a>
+  const reports = activity && billing && <DashboardView activity={activity} billing={billing}/>;
+  return <main className={designed ? "contractor-page contractor-settlement" : styles.main}><h1>Contractor dashboard</h1><p className={designed ? "contractor-notice" : undefined}>Synthetic practice only. Company session and current dashboard scope apply.</p>
+    {designed ? <div className="contractor-related">
+      <a href="/admin/contractor">Company administration</a>
+      <a href={contractorHref("/contractor/work-orders", true)}>Work orders</a>
+    </div> : <><a href="/admin/contractor">Company administration</a> · <a href="/contractor/work-orders">Work orders</a></>}
     <fieldset disabled={busy}><legend>Dashboard selection</legend><form onSubmit={load}>
       <label>Captured from (UTC) <input name="from" type="date" required/></label><label>Until, exclusive (UTC) <input name="until" type="date" required/></label>
       <label>Group by <select name="dimension">{dashboardDimensions.map(d => <option key={d}>{d}</option>)}</select></label>
       <label>Filter dimension <select name="filterDimension">{dashboardDimensions.filter(d => d !== "period").map(d => <option key={d}>{d}</option>)}</select></label><label>Filter ID (optional) <input name="filterId"/></label>
-      <label>Group offset <input name="offset" type="number" min="0" max="100000" defaultValue="0" required/></label><button>Load dashboard</button>
+      <label>Group offset <input name="offset" type="number" min="0" max="100000" defaultValue="0" required/></label><button className={designed ? "contractor-primary" : undefined}>Load dashboard</button>
     </form></fieldset>
+    {designed && reports && <section aria-label="Dashboard reports">{reports}</section>}
     <fieldset disabled={busy}><legend>Import historical baseline (finance only)</legend><form onSubmit={importHistory}>
       <label>Format <select name="format"><option value="json">JSON</option><option value="csv">CSV</option></select></label>
       <label>Synthetic baseline-history.v1 (6–12 months) <textarea name="content" rows={6} required maxLength={8000000} value={baselineContent} onChange={e => setBaselineContent(e.target.value)}/></label>
@@ -141,6 +147,7 @@ export function EnterpriseDashboard() {
       <label htmlFor="baseline-output-format">Export format</label> <select id="baseline-output-format" name="outputFormat"><option value="json">JSON</option><option value="csv">CSV</option></select><button>Compare baseline</button>
     </form></fieldset>
     {busy && <p role="status">Loading…</p>}{message && <p role="status">{message}</p>}
-    {activity && billing && <DashboardView activity={activity} billing={billing}/>}{baseline && <BaselineView baseline={baseline}/>}
+    {!designed && reports}
+    {baseline && <BaselineView baseline={baseline}/>}
   </main>;
 }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { z } from "zod";
 import Link from "next/link";
 import { BILLING_SANDBOX_LABEL, billingExportMatchV1, billingStatusV1, exactPenceV1, parseExactPence, exactPence, sumExactPence, compareExactPence } from "@jobguard/core";
+import { contractorHref } from "../lib/contractor-href";
 import styles from "./work-orders.module.css";
 
 type Exact = z.infer<typeof exactPenceV1>;
@@ -105,7 +106,7 @@ function Drill({ title, total, rows, testId }: { title: string; total: Exact; ro
   </details>;
 }
 
-export function BillingView({ jobId, view, send, busy = false, practice = false }: { jobId: string; view: ContractorBillingRead; send?: (command: Command) => void; busy?: boolean; practice?: boolean }) {
+export function BillingView({ jobId, view, send, busy = false, practice = false, designed = false }: { designed?: boolean; jobId: string; view: ContractorBillingRead; send?: (command: Command) => void; busy?: boolean; practice?: boolean }) {
   const r = view.reconciliation;
   const [contract, setContract] = useState(""), [format, setFormat] = useState<"csv" | "json">("csv"), [text, setText] = useState(""), [importError, setImportError] = useState("");
   const [routes, setRoutes] = useState<Record<string, { channel: string; destination: string }>>({});
@@ -131,11 +132,11 @@ export function BillingView({ jobId, view, send, busy = false, practice = false 
       {send && <div data-testid="export-controls">
         {view.clientContractIds.length > 1 && <label>Client contract <select value={chosenContract} onChange={e => setContract(e.target.value)}>
           {view.clientContractIds.map(c => <option key={c} value={c}>{c}</option>)}</select></label>}
-        <button type="button" className={styles.primary} disabled={busy || !chosenContract} onClick={() => send(exportCommand(chosenContract, crypto.randomUUID()))}>Export approved extras</button>
+        <button type="button" className={designed ? "contractor-primary" : styles.primary} disabled={busy || !chosenContract} onClick={() => send(exportCommand(chosenContract, crypto.randomUUID()))}>Export approved extras</button>
         {!chosenContract && <p className={styles.muted}>This job has no client contract to export to.</p>}
       </div>}
       {view.exports.length ? view.exports.map(e => { const sent = view.deliveries.filter(d => d.batch_id === e.id);
-        return <div key={e.id} data-testid={`export-${e.id}`}>
+        return <div key={e.id} className={designed ? "contractor-batch" : undefined} data-testid={`export-${e.id}`}>
           <p>Batch {short(e.id)} · {e.lines.length} line{e.lines.length === 1 ? "" : "s"} · net {exactPounds({ numerator: String(e.totalNet.pence), denominator: "1" })}</p>
           <p>{sent.length ? sent.map(d => <span key={d.id}>{channel[d.adapter] ?? d.adapter}: {d.status}. </span>) : "Not delivered yet."}</p>
           {send && sent.map(d => { const next = advanceCommand(d); return next && <button key={d.id} type="button" disabled={busy} onClick={() => send(next)}>
@@ -146,7 +147,7 @@ export function BillingView({ jobId, view, send, busy = false, practice = false 
             <label>Destination <input value={route(e.id).destination} onChange={x => setRoutes({ ...routes, [e.id]: { ...route(e.id), destination: x.target.value } })}/></label>
             <button type="button" disabled={busy} onClick={() => send(deliveryCommand(e, route(e.id).channel, route(e.id).destination, crypto.randomUUID(), new Date()))}>Approve delivery</button>
           </fieldset>}
-          {sent.some(d => d.adapter === "fake_download" && d.status === "succeeded") && <a className={styles.action} href={`/api/contractor/jobs/${jobId}/billing/download?batchId=${e.id}`} download>Download CSV</a>}
+          {sent.some(d => d.adapter === "fake_download" && d.status === "succeeded") && <a className={designed ? "contractor-download" : styles.action} href={`/api/contractor/jobs/${jobId}/billing/download?batchId=${e.id}`} download>Download CSV</a>}
         </div>; }) : <p className={styles.muted}>No export batches yet.</p>}
     </section>
     <section aria-label="Invoices and payments">
@@ -163,9 +164,9 @@ export function BillingView({ jobId, view, send, busy = false, practice = false 
         {importError && <p role="alert">{importError}</p>}
         <p className={styles.muted}>Importing never creates, prices or approves an extra.</p>
       </fieldset>}
-      {view.invoices.length ? view.invoices.map(i => <div key={`${i.source}/${i.invoiceNumber}`} data-testid={`invoice-${i.invoiceNumber}`}>
+      {view.invoices.length ? view.invoices.map(i => <div key={`${i.source}/${i.invoiceNumber}`} className={designed ? "contractor-invoice" : undefined} data-testid={`invoice-${i.invoiceNumber}`}>
         <h3>Invoice {i.invoiceNumber} <small className={styles.muted}>from {i.source}</small></h3>
-        <div className={styles.scroll}><table><thead><tr><th>Line</th><th>Billed net</th><th>Credited</th><th>Paid net</th><th>State</th></tr></thead><tbody>
+        <div className={styles.scroll} role={designed ? "region" : undefined} aria-label={designed ? `Invoice ${i.invoiceNumber} balances` : undefined} tabIndex={designed ? 0 : undefined}><table><thead><tr><th>Line</th><th>Billed net</th><th>Credited</th><th>Paid net</th><th>State</th></tr></thead><tbody>
           {i.projection.lines.map(l => <tr key={l.lineId}><td>{l.lineId}</td><td>{exactPounds(l.billedNet)}</td><td>{exactPounds(l.creditedNet)}</td><td>{exactPounds(l.paidNet)}</td><td>{billingLineState(l)}</td></tr>)}
           <tr><th>Total</th><th>{exactPounds(i.projection.totals.billedNet)}</th><th>{exactPounds(i.projection.totals.creditedNet)}</th><th>{exactPounds(i.projection.totals.paidNet)}</th><th></th></tr>
         </tbody></table></div>
@@ -180,7 +181,7 @@ export function BillingView({ jobId, view, send, busy = false, practice = false 
   </>;
 }
 
-export function ContractorBilling({ jobId }: { jobId: string }) {
+export function ContractorBilling({ jobId, designed = false }: { jobId: string; designed?: boolean }) {
   const [view, setView] = useState<ContractorBillingRead | null>(null), [code, setCode] = useState(""), [status, setStatus] = useState("Loading billing…");
   const [busy, setBusy] = useState(false), [practice, setPractice] = useState(false);
   useEffect(() => {
@@ -210,12 +211,16 @@ export function ContractorBilling({ jobId }: { jobId: string }) {
     finally { setBusy(false); }
   }, [jobId, load]);
   useEffect(() => { if (code) errorRef.current?.focus(); }, [code]);
-  return <main className={styles.main}>
-    <Link href="/northside">Practice roles</Link>{" · "}<Link href="/contractor/statements">Monthly statement</Link>{" · "}<Link href="/contractor/dashboard">Dashboard</Link>
+  return <main className={designed ? "contractor-page contractor-settlement" : styles.main}>
+    {designed ? <div className="contractor-related">
+      <Link href={contractorHref("/northside", true)}>Practice roles</Link>
+      <Link href={contractorHref("/contractor/statements", true)}>Monthly statement</Link>
+      <Link href={contractorHref("/contractor/dashboard", true)}>Dashboard</Link>
+    </div> : <><Link href="/northside">Practice roles</Link>{" · "}<Link href="/contractor/statements">Monthly statement</Link>{" · "}<Link href="/contractor/dashboard">Dashboard</Link></>}
     <h1>Billing and reconciliation</h1>
-    <p className={styles.muted}>{BILLING_SANDBOX_LABEL}</p>
+    <p className={designed ? "contractor-notice" : styles.muted}>{BILLING_SANDBOX_LABEL}</p>
     <p role="status">{status}</p>
     {code && <p role="alert" tabIndex={-1} ref={errorRef}>{code === "BILLING_NOT_FOUND" ? "This job's billing is not available to you." : code === "BILLING_FORBIDDEN" ? "Only finance users can see or change billing." : code === "UNAUTHENTICATED" ? "Start the generated contractor practice first." : code === "BILLING_DUPLICATES_UNRESOLVED" ? "Resolve the possible duplicate extras before exporting." : code === "JOB_NOT_LIVE" ? "This job is not live." : `Billing request refused (${code}).`}</p>}
-    {view ? <BillingView jobId={jobId} view={view} busy={busy} practice={practice} send={command => void send(command)}/> : <button type="button" onClick={() => void load()}>Reload billing</button>}
+    {view ? <BillingView designed={designed} jobId={jobId} view={view} busy={busy} practice={practice} send={command => void send(command)}/> : <button type="button" onClick={() => void load()}>Reload billing</button>}
   </main>;
 }

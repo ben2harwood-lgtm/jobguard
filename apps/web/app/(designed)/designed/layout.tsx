@@ -6,6 +6,8 @@ const links = [
   ["/contractor/work-orders", "Work orders"],
   ["/site/extra", "Log an extra"],
   ["/approvals/extras", "Review queue"],
+  ["/contractor/statements", "Statements"],
+  ["/contractor/dashboard", "Settlement dashboard"],
 ] as const;
 
 export default function ContractorLayout({ children }: { children: React.ReactNode }) {

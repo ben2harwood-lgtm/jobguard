@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "lanes": {
+    "dui-6": {
+      "branches": [
+        "codex/sandbox/dui-6"
+      ],
+      "allow": [
+        "apps/web/app/(designed)/design-fit.css",
+        "apps/web/app/(designed)/designed/contractor/dashboard/page.tsx",
+        "apps/web/app/(designed)/designed/contractor/jobs/[id]/billing/page.tsx",
+        "apps/web/app/(designed)/designed/contractor/statements/page.tsx",
+        "apps/web/app/(designed)/designed/layout.tsx",
+        "apps/web/app/lib/contractor-href.ts",
+        "apps/web/app/northside/northside-hub.tsx",
+        "apps/web/app/ui/contractor-billing.tsx",
+        "apps/web/app/ui/enterprise-dashboard.tsx",
+        "apps/web/app/ui/enterprise-statement.tsx",
+        "apps/web/app/ui/work-order-revisions.tsx",
+        "apps/web/e2e/DUI-6-northside-presenter.spec.ts",
+        "apps/web/e2e/DUI-6-northside.spec.ts",
+        "apps/web/e2e/artifacts/dui-6/README.md",
+        "apps/web/e2e/artifacts/dui-6/desktop-billed.png",
+        "apps/web/e2e/artifacts/dui-6/desktop-dashboard.png",
+        "apps/web/e2e/artifacts/dui-6/desktop-export.png",
+        "apps/web/e2e/artifacts/dui-6/desktop-paid.png",
+        "apps/web/e2e/artifacts/dui-6/desktop-part-paid.png",
+        "apps/web/e2e/artifacts/dui-6/desktop-statement.png",
+        "apps/web/e2e/artifacts/dui-6/mobile-360-billed.png",
+        "apps/web/e2e/artifacts/dui-6/mobile-360-dashboard.png",
+        "apps/web/e2e/artifacts/dui-6/mobile-360-export.png",
+        "apps/web/e2e/artifacts/dui-6/mobile-360-paid.png",
+        "apps/web/e2e/artifacts/dui-6/mobile-360-part-paid.png",
+        "apps/web/e2e/artifacts/dui-6/mobile-360-statement.png",
+        "apps/web/next.config.mjs"
+      ],
+      "note": "Changed registration: config/lanes/dui-6.json (covered by the lane checker\u2019s own-file rule)."
+    }
+  }
+}

@@ -4,6 +4,7 @@ const nextConfig = {
     return {
       beforeFiles: [
         "/northside", "/contractor/work-orders", "/contractor/work-orders/:workOrderId", "/site/extra", "/approvals/extras",
+        "/contractor/jobs/:id/billing", "/contractor/statements", "/contractor/dashboard",
       ].map(source => ({
         source,
         has: [{ type: "query", key: "designed", value: "1" }],
