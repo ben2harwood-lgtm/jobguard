@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
-import { DEMO_TENANT_ID, authenticatePracticeSession, withTenant } from "../../packages/db/dist/index.js";
+import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
+import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
+import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, withTenant } from "../../packages/db/dist/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { migrationUrl, validateSettings } from "./settings.mjs";
+
+import { joineryTemplate } from "./fixtures/joinery-template.mjs";
 
 const { settings } = validateSettings({});
 const origin = settings.AUTH_ALLOWED_ORIGIN;
@@ -15,7 +20,7 @@ const embedded = backend === "embedded";
 const systemId = embedded ? embeddedSystemId() : process.env.JOBGUARD_V2_TEST_SYSTEM_ID;
 const authSecret = readFileSync(new URL("../../.jobguard/v2-auth-secret", import.meta.url), "utf8");
 const admin = new Pool({ connectionString: migrationUrl, max: 1 });
-const runtime = new Pool({ connectionString: settings.DATABASE_URL, max: 1 });
+const runtime = new Pool({ connectionString: settings.DATABASE_URL, max: 3 });
 const identity = createIdentityApplication({ ...settings, AUTH_CODE_SECRET: authSecret });
 
 async function request(path, { body, cookies, csrf } = {}) {
@@ -32,7 +37,14 @@ async function json(response, status = 200) {
   return body;
 }
 
-async function signIn(localPart) {
+// Reuse the signed-in sessions across this suite to stay within the real OTP limit.
+const sessions = new Map();
+function signIn(localPart) {
+  if (!sessions.has(localPart)) sessions.set(localPart, openSession(localPart));
+  return sessions.get(localPart);
+}
+
+async function openSession(localPart) {
   const input = { email: localPart + "@jobguard-v2.invalid", purpose: "signin" };
   const { fixtureCode } = await json(await request("/api/auth/request", {
     body: { version: "identity-request.v1", ...input },
@@ -167,4 +179,153 @@ test("the second firm's fresh session cannot list or open the job, and forced RL
       }
     });
   }
+});
+
+const planSource = (jobId, quoteRevisionId) => ({ version: "work-plan-source.v1", jobId, quoteRevisionId });
+const planTables = ["app.v2_work_plan", "app.v2_work_plan_task"];
+const planCounts = async quoteRevisionId => (await Promise.all(planTables.map(async table =>
+  (await admin.query(`SELECT count(*)::int AS count FROM ${table} WHERE quote_revision_id=$1`, [quoteRevisionId]))
+    .rows[0].count)));
+
+async function acceptedPlanSource() {
+  const { rows: [quote] } = await admin.query(`SELECT d.quote_revision_id FROM app.quote_acceptance a
+    JOIN app.quote_document_version d ON (d.tenant_id,d.job_id,d.id)=(a.tenant_id,a.job_id,a.document_id)
+    WHERE a.job_id=$1`, [jobId]);
+  return planSource(jobId, quote.quote_revision_id);
+}
+
+test("the V2 accepted quote produces one plan after concurrent generation, reopening and retrying", async () => {
+  const { sessionId } = await signIn("builder");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const source = await acceptedPlanSource();
+  const before = await counts();
+  const plans = new WorkPlanRepository(runtime);
+  assert.equal(await plans.read(context, source), null);
+  const [first, second] = await Promise.all([plans.generate(context, source), plans.generate(context, source)]);
+  assert.deepEqual(second, first);
+  const reopened = new Pool({ connectionString: settings.DATABASE_URL, max: 1 });
+  try {
+    const { context: reopenedContext } = await authenticatePracticeSession(reopened, sessionId);
+    assert.deepEqual(await new WorkPlanRepository(reopened).read(reopenedContext, source), first);
+  } finally {
+    await reopened.end();
+  }
+  assert.deepEqual(await plans.generate(context, source), first);
+  assert.deepEqual(await planCounts(source.quoteRevisionId), [1, 4]);
+
+  const { rows: scope } = await admin.query(
+    "SELECT scope_item_id, category FROM app.quote_line WHERE quote_revision_id=$1", [source.quoteRevisionId],
+  );
+  const tilingId = scope.find(line => line.category === "Tiling").scope_item_id;
+  const decoratingId = scope.find(line => line.category === "Decorating").scope_item_id;
+  assert.deepEqual(first.tasks.map(task => task.position), [1, 2, 3, 4]);
+  assert.deepEqual(first.tasks.filter(task => task.trade === "tiler").map(task => task.scopeItemId), [tilingId, tilingId]);
+  const hall = first.tasks.filter(task => task.trade === "decorator");
+  assert.deepEqual(hall.map(task => task.scopeItemId), [decoratingId, decoratingId]);
+  assert.deepEqual(hall.map(task => task.dependsOn), [
+    [], [{ scopeItemId: decoratingId, templateTaskKey: "prepare-hall" }],
+  ]);
+  assert.deepEqual(await counts(), before);
+});
+
+test("a draft from typed capture produces one plan using a second template data file", async () => {
+  const { sessionId } = await signIn("builder");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const { capture, quote } = createWorkspaceApplication({ pool: runtime, sessionId });
+  const saved = await capture.create({
+    contractVersion: "job_capture_v1", requested_tenant_id: DEMO_TENANT_ID, captureId: randomUUID(),
+    fixtureId: "v2-c1-typed-joinery",
+    source: { kind: "text", text: "JOB: Fit a shelf\nITEM: Fit a timber shelf | QTY: 1 | UNIT: item | RATE: £95.00" },
+  });
+  const review = await capture.save(saved.jobId, {
+    contractVersion: "proposal_review_command_v1", expectedRevision: 0,
+    review: {
+      version: "proposal_review_v1", jobId: saved.jobId, proposalId: saved.proposalId, reviewId: saved.reviewId,
+      revision: 0,
+      questions: saved.proposal.questions.map(({ question }) => ({
+        id: randomUUID(), question: question.value, blocking: true, disposition: "answered",
+        answer: "Builder will supply the shelf and clear the work area.",
+      })),
+      lines: saved.proposal.lines.map(line => ({
+        id: line.id, scopeItemId: line.scopeItemId, origin: "proposal", description: line.description.value,
+        room: "Utility", category: "Joinery", quantity: line.quantity.value, unit: line.unit.value,
+        unitPricePence: line.unitPricePence.value, disposition: "accepted",
+        dismissalReason: null, parentScopeItemIds: [], sourceExcerpt: line.sourceExcerpt,
+      })),
+    },
+  });
+  await capture.confirm(saved.jobId, {
+    contractVersion: "proposal_review_confirm_v1", commandId: randomUUID(), expectedRevision: review.review.revision,
+  });
+  const workspace = await quote.get(saved.jobId);
+  const draft = await quote.save(saved.jobId, {
+    contractVersion: "quote_draft_command_v1", draftId: randomUUID(), expectedRevision: 0,
+    currency: M1_QUOTE_POLICY.currency, taxPolicyVersion: M1_QUOTE_POLICY.taxPolicyVersion,
+    lines: workspace.scope.map(line => ({
+      ...line, id: randomUUID(), origin: "captured", included: true, exclusionReason: null,
+      discountPercent: "0", taxTreatment: M1_QUOTE_POLICY.taxTreatment, rateProvenance: "entered",
+      category: "Joinery", region: null,
+    })),
+  });
+  const source = planSource(saved.jobId, draft.draft.currentRevisionId);
+  const before = await counts();
+  const plans = new WorkPlanRepository(runtime, joineryTemplate);
+  const generated = await plans.generate(context, source);
+  assert.equal(generated.templateKey, joineryTemplate.key);
+  assert.deepEqual(generated.tasks, [{
+    key: "fit-shelf", title: "Fit the shelf", trade: "joiner", durationMinutes: 45, dependsOn: [],
+    materialNeeds: ["Shelf", "Brackets"], proofPoints: ["Photo of fitted shelf"], customerChoices: ["Shelf finish"],
+    position: 1, scopeItemId: saved.proposal.lines[0].scopeItemId,
+  }]);
+  assert.deepEqual(await plans.generate(context, source), generated);
+  assert.deepEqual(await planCounts(source.quoteRevisionId), [1, 1]);
+  assert.deepEqual(await counts(), before);
+  const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
+    FROM app.job_record_proposal WHERE model IS DISTINCT FROM 'fixture-capture-v1'`);
+  assert.equal(paid, 0);
+});
+
+test("forced work plan policies isolate the second firm's real and shared practice sessions", async () => {
+  const { sessionId, realContext } = await signIn("second-builder");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  assert.equal(context.tenantId, DEMO_TENANT_ID);
+  assert.notEqual(realContext.tenantId, context.tenantId);
+  const source = await acceptedPlanSource();
+  const { rows: [task] } = await admin.query(`SELECT scope_item_id, template_task_key
+    FROM app.v2_work_plan_task WHERE quote_revision_id=$1 ORDER BY position LIMIT 1`, [source.quoteRevisionId]);
+  const { rows } = await admin.query(`SELECT
+    relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+    has_table_privilege('jobguard_runtime',oid,'SELECT') AS can_read,
+    has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+    has_table_privilege('jobguard_identity',oid,'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+    has_table_privilege('jobguard_worker',oid,'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+    has_table_privilege('jobguard_infrastructure',oid,'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+    FROM pg_class WHERE oid=ANY($1::regclass[])`, [planTables]);
+  assert.deepEqual(rows, planTables.map(() => ({
+    forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+    identity_access: false, worker_access: false, infra_access: false,
+  })));
+
+  const plans = new WorkPlanRepository(runtime);
+  for (const outsider of [realContext, context]) {
+    assert.equal(await plans.read(outsider, source), null);
+    await assert.rejects(plans.generate(outsider, source), { code: "QUOTE_REVISION_NOT_FOUND" });
+    const key = [DEMO_TENANT_ID, jobId, source.quoteRevisionId];
+    for (const [table, column, insert, values] of [
+      [planTables[0], "template_key", "(tenant_id,job_id,quote_revision_id,template_key) VALUES($1,$2,$3,$4)",
+        [...key, "splashback-decorating.v1"]],
+      [planTables[1], "position", "(tenant_id,job_id,quote_revision_id,scope_item_id,template_task_key,position) VALUES($1,$2,$3,$4,$5,1)",
+        [...key, task.scope_item_id, task.template_task_key]],
+    ]) {
+      const query = (sql, params) => withTenant(runtime, outsider, db => db.$client.query(sql, params));
+      const where = "WHERE (tenant_id,job_id,quote_revision_id)=($1,$2,$3)";
+      assert.equal((await query(`SELECT * FROM ${table} ${where}`, key)).rowCount, 0);
+      await assert.rejects(query(`INSERT INTO ${table} ${insert}`, values),
+        { code: "42501", message: /row-level security policy/u });
+      await assert.rejects(query(`UPDATE ${table} SET ${column}=${column} ${where}`, key), { code: "42501" });
+      await assert.rejects(query(`DELETE FROM ${table} ${where}`, key), { code: "42501" });
+    }
+  }
+  assert.deepEqual(await planCounts(source.quoteRevisionId), [1, 4]);
 });
