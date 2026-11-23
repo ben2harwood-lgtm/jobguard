@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    environment:
+      POSTGRES_USER: ${V2_ADMIN_USER:?}
+      POSTGRES_PASSWORD: ${V2_ADMIN_PASSWORD:?}
+      POSTGRES_DB: ${V2_DATABASE:?}
+      PGDATA: ${V2_POSTGRES_DATA:?}
+    ports: ["127.0.0.1:${V2_DATABASE_PORT:?}:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "${V2_ADMIN_USER:?}", "-d", "${V2_DATABASE:?}"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  minio:
+    # Same upstream MinIO and mc release dates as the shared development Compose.
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r3
+    entrypoint: ["minio"]
+    command: server /bitnami/minio/data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${V2_STORAGE_USER:?}
+      MINIO_UPDATE: "off"
+      MINIO_ROOT_PASSWORD: ${V2_STORAGE_PASSWORD:?}
+    ports: ["127.0.0.1:${V2_STORAGE_PORT:?}:9000"]
+    volumes: ["objects:/bitnami/minio/data"]
+    healthcheck:
+      test: ["CMD", "curl", "--noproxy", "*", "-fsS", "http://127.0.0.1:9000/minio/health/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+volumes:
+  pgdata: {}
+  objects: {}

@@ -1,3 +1,4 @@
+import { assertV2Recipient } from "./v2-local-catcher.js";
 import { WorkerActionExecutor, reconcileWorkerAction } from "./worker-action-executor.js";
 import { outboundWorkerPool } from "./worker-pool.js";
 import { appendAuditBatch } from "./audit.js";
@@ -10,6 +11,7 @@ export const outboundActionV1Schema=z.object({version:z.literal("outbound-action
 export type OutboundAction=z.infer<typeof outboundActionV1Schema>;
 export async function appendOutboundAction(db: TenantTransaction, tenantId: string, raw: unknown) {
   const action = outboundActionV1Schema.parse(raw);
+  assertV2Recipient(action.recipient);
   if (createHash("sha256").update(action.immutableContent).digest("hex") !== action.contentHash) {
     throw new Error("CONTENT_HASH_MISMATCH");
   }

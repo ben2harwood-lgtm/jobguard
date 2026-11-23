@@ -1,3 +1,4 @@
+import { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";
 import { createHash } from "node:crypto";
 import { commercialOutboundClaimsEnabled } from "./commercial-outbound-pause.js";
 import type { Pool, PoolClient } from "pg";
@@ -66,6 +67,7 @@ export class WorkerActionExecutor {
         policyVersion: row.policy_version, authorizationExpiresAt: row.authorization_expires_at });
       if (action.id !== id) throw new Error("WORKER_ACTION_MISMATCH");
       beforeClaim?.(action.actionType);
+      assertV2Recipient(action.recipient);
       if (createHash("sha256").update(action.immutableContent).digest("hex") !== action.contentHash) throw new Error("CONTENT_HASH_MISMATCH");
       if (action.actionType === "customer_portal.signin.send") {
         if (action.adapter !== "fake_email" || action.policyVersion !== "customer-signin.synthetic.v1" || !this.customerSigninDigest) throw new Error("CUSTOMER_SIGNIN_DELIVERY_UNAVAILABLE");
@@ -84,6 +86,7 @@ export class WorkerActionExecutor {
     this.telemetry.emit("outbox.queue_age", { actionId: id, seconds: Math.max(0, (Date.now() - Date.parse(row.created_at)) / 1000) });
     // An exception leaves an executing claim. Lease expiry moves it to unknown,
     // preventing a second delivery when the first provider result was lost.
+    captureV2Delivery(action.actionType, action.recipient);
     const result = resultV1.parse(await (signinLink === undefined
       ? adapter.deliver(Object.freeze(action))
       : adapter.deliver(Object.freeze(action), signinLink)));

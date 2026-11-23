@@ -1,3 +1,4 @@
+import { assertV2Recipient, captureV2Delivery } from "@jobguard/db";
 import { z } from "zod";
 export const identityEmailV1 = z.object({
   version: z.literal("identity-email.v1"), category: z.literal("identity_challenge"),
@@ -8,12 +9,15 @@ export class IdentityRouteBlocked extends Error { readonly code = "IDENTITY_ROUT
 /** D04 is proposed. No live transport can be constructed, regardless of a supplied mode flag. */
 export class FixtureIdentityEmail {
   assertRecipient(email: string, environment: string): void {
+    try { assertV2Recipient(email.toLowerCase()); }
+    catch { throw new IdentityRouteBlocked("Recipient is outside the V2 catcher"); }
     if (environment !== "synthetic_demo" || !email.toLowerCase().endsWith(".invalid")) throw new IdentityRouteBlocked("D04 has not approved an identity email route");
   }
   async deliver(raw: unknown): Promise<{ environment: "synthetic_demo"; externalActions: 0 }> {
     const message = identityEmailV1.parse(raw);
     this.assertRecipient(message.email, message.environment);
-    // Local fixture transport. No SMTP/HTTP, logging, or commercial message body.
+    captureV2Delivery(message.category, message.email.toLowerCase());
+    // Local fixture transport. No SMTP/HTTP or commercial message body.
     return { environment: "synthetic_demo", externalActions: 0 };
   }
 }

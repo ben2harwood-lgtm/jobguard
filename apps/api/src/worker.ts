@@ -132,7 +132,8 @@ const readiness = readinessTasks(runtimePool, finalCheckEnvironment, (store, sco
  return {load: raw => store.load(context, raw), loadJobPlans: raw => store.loadJobPlans(context, raw), recordProposal: raw => store.recordProposal(context, raw)};
 });
 Object.assign(tasks, readiness.tasks);
-const extraEscalationCrontab=registerExtraEscalationTasks(tasks,finalCheckEnvironment,parsed=>
+// The discovery routine is restricted to the hosted demo database name.
+const extraEscalationCrontab=process.env.JOBGUARD_LOCAL_V2==="1"?"":registerExtraEscalationTasks(tasks,finalCheckEnvironment,parsed=>
  escalateOverdueExtrasTask(runtimePool,queueContext({tenantId:parsed.tenantId})));
 const extraEscalationTasks=extraEscalationCrontab?{discover_extra_escalations:tasks.discover_extra_escalations!,escalate_overdue_extras:tasks.escalate_overdue_extras!}:{};
 const workerPool=await outboundWorkerPool();

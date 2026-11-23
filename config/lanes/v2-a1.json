@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-a1": {
+      "branches": ["codex/sandbox/v2-a1"],
+      "note": "V2 local rehearsal environment on v2/main.",
+      "allow": [
+        "apps/api/src/auth/identity-email.ts",
+        "apps/api/src/main.ts",
+        "apps/api/src/worker.ts",
+        "packages/db/src/demo-bootstrap.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/outbox.ts",
+        "packages/db/src/v2-local-catcher.ts",
+        "packages/db/src/worker-action-executor.ts",
+        "tools/v2-local.test.mjs",
+        "tools/v2/README.md",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/compose.yml",
+        "tools/v2/demo-identifiers.json",
+        "tools/v2/network.mjs",
+        "tools/v2/seed.mjs",
+        "tools/v2/settings.mjs",
+        "tools/v2/start.mjs"
+      ]
+    }
+  }
+}
