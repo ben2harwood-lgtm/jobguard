@@ -130,7 +130,10 @@ export function WalkIt({tenantId,close,initialText,mode="example",reviewHref=(id
     } catch(error) {
       setMessage((error as Error).message==="CAPTURE_ID_REUSED"
         ? "These work details conflict with an earlier draft (CAPTURE_ID_REUSED). Your text is still here and the earlier draft is unchanged. Copy your text before returning to Jobs to start a new draft."
-        : `We could not make the draft (${(error as Error).message}). Your original text is still here; change it or try again.`);
+        : (error as Error).message==="INVALID_CAPTURE"
+        ? "We could not make the draft: add the work details first. Your original text is still here; change it or try again."
+        // TOMMY-DEMO: an overlong description (over 100 lines) is refused by the database layer; say what to do, not the code.
+        : "We could not make the draft. If the description is very long, shorten it to under 100 lines and try again. Your original text is still here; change it or try again.");
     } finally {
       submitting.current=false;setBusy(false);
     }

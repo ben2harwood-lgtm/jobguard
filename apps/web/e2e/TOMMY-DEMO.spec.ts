@@ -14,6 +14,11 @@ test("TOMMY-DEMO: half-typed quote numbers never crash the page, and a not-live 
   page.on("pageerror", error => pageErrors.push(error.message));
   await openCaptureDesigned(page);
   const click = (name: string) => page.getByRole("button", { name, exact: true }).click();
+  // Empty details are refused in plain words, without the internal code.
+  await page.getByLabel("Work details").fill("");
+  await click("Make my draft");
+  await expect(page.locator(".result-message")).toContainText("add the work details first");
+  await expect(page.locator(".result-message")).not.toContainText("INVALID_CAPTURE");
   await page.getByLabel("Work details").fill(capture);
   await click("Make my draft");
   await click("Check and edit my draft");
