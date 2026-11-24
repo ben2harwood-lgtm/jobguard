@@ -2,8 +2,13 @@
 
 Tier: T1 (screens), unless the builder needs a new table, which makes it RED. Repo: ben2harwood-lgtm/jobguard. Plan: rev 1.2 chunk D, piece v2-d5, and section 3 (what people see), on branch `coordinator/briefs-1120`. Start only after D3 and D4 pass Codex review.
 
+## Change, 24 Nov 21:40 UK (after Codex stopped on two blockers)
+- **Split.** This packet is now **D5B-M: product picker and Materials screen only**, and it can resume now from the kept local base merge. The **Briefs screen (D5B-B)** waits until D4A (audit append in `v2-crew-brief-repository.ts`) is pushed, which needs Ben's OK for a third round. Do not build or show brief generation until then.
+- **Mount-only edit allowed** in `apps/web/app/(designed)/jobs/[id]/work/page.tsx` (D5A's file): add the V2-only entry point for Materials (and later Briefs) beside Plan and Measurements, behind `JOBGUARD_LOCAL_V2 === "1"`. Nothing else in that file changes: no refactor, no restyle, no change to D5A's own sections. List it in your lane file with the note "mount only, owned by D5A". If #914 moves, merge it in again; this branch resolves any conflict (the later piece resolves).
+- **Rounds.** The stop was outside the packet, so resuming continues build round 1. Two repairs remain.
+
 ## Goal
-A builder can go from an accepted quote to a usable enquiry and both crew briefs using only the screens, on a phone and on a desktop. View and internal export only. Nothing is sent.
+A builder can go from an accepted quote to a usable enquiry using only the screens (both crew briefs come with D5B-B), on a phone and on a desktop. View and internal export only. Nothing is sent.
 
 ## Before you start
 Check GitHub for any `v2-d5` branch or PR. Compare against the merged clickable mock-ups (`v2-mock`, PR #895) and the section 3 text; the screen rule says the screen follows the checked mock.
@@ -17,13 +22,13 @@ Do not edit D3, D4 or D5A files; call their commands and queries. If product cho
 - (The Measurements screen is built in V2-D5A; reuse it, do not rebuild it.)
 - A simple way to pick each product, its pack size and the firm's wastage allowance.
 - Materials screen: edit supplier, needed-by date, who supplies each item, enquiry notes, and correct every input to the sums. Shows "out of date" and clashing edits from D3.
-- Briefs screen: one brief per trade from D4, with internal export.
+- (Briefs screen: D5B-B, after D4A. One brief per trade from D4, with internal export.)
 - Inside the job's Work tab next to c4's Plan view, V2 only (`JOBGUARD_LOCAL_V2 === "1"`); the non-V2 Work tab is unchanged.
 - Saved only after the server confirms; stale version refused plainly with a reload.
 - `config/lanes/<your lane>.json` lists exactly your files and branch.
 
 ## Done when
-- Playwright run on the fictional job at 360 px and 1280 px: confirm measurements, pick products, reach a usable enquiry and both briefs; edits survive reload.
+- Playwright run on the fictional job at 360 px and 1280 px: confirm measurements, pick products, reach a usable enquiry; edits survive reload. (Briefs in D5B-B.)
 - Zero paid AI calls. Generating creates zero outbox rows, orders or messages, and the local catcher receives nothing.
 - Screenshots beside the matching mock states.
 - The phone-mode run is recorded on Ben's Mac (the cloud has no home-network address).
