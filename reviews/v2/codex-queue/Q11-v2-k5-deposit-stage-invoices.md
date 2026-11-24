@@ -19,6 +19,9 @@ The builder picks a split on the accepted quote (for example 30/40/30, or a fixe
 - An approved variation changes only stages not yet issued; issued invoices are never rewritten. The final account still reconciles (existing final-account path).
 - Hidden financial findings never affect stage amounts or wording.
 
+## Acceptance cases added (Web Codex acceptance findings, frm-management-layer#3 comment 7145931890 (24 Nov 22:12 UK), folded in by the planner 22:25 UK)
+- **Extra approved after the last stage invoice.** Issued invoices never change; the extra goes to the existing final-account route. Name in the PR which existing transition owns it.
+
 ## Done when
 - 30/40/30 on the seed quote total adds up exactly; an approved extra moves only later stages; issued stages never change; the final account reconciles to the accepted total plus approved extras.
 - Replay, stale version, second-firm and audit tests per the rules. Nothing reaches the catcher unless the builder presses send. CI green apart from Vercel.

@@ -17,5 +17,9 @@ Once a week the builder previews and sends the customer a short update: what got
 - Content from the diary, plan tasks done and next, customer-visible photos only, open customer facts if E1 is available (skip that section cleanly if not), and customer-supplied items from D3 if available (skip cleanly if not).
 - **No prices, private notes, other customers' photos or hidden findings.** Never sent without the builder's press; sent **only to the local catcher**.
 
+## Acceptance cases added (Web Codex acceptance findings, frm-management-layer#3 comment 7145931890 (24 Nov 22:12 UK), folded in by the planner 22:25 UK)
+- **Test the saved and sent snapshot, not only the preview.** Prepare with one customer-visible photo, withdraw that photo's visibility, then send: the catcher message and every photo reference in it must leave the withdrawn photo out (re-check at send).
+- **Leak pair.** Two jobs identical except for one private diary entry or hidden finding must give identical updates, including section counts and empty-state wording.
+
 ## Done when
 - The seed job's update lists done and next work and holds no amounts or private notes; editing then sending puts exactly one message in the catcher; a re-send of the same version adds nothing; second-firm and audit tests per the rules. Playwright of the preview at 360/1280. CI green apart from Vercel.

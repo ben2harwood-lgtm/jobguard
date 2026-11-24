@@ -19,5 +19,10 @@ The builder switches chasing on once per firm; JobGuard sends polite reminders f
 - Message text: short, polite, fixed templates with the firm's name, the quote or invoice number and the amount; no other figures. Delivered **only to the local catcher**.
 - Builder view: what will be chased next and when, with "stop" per item.
 
+## Acceptance cases added (Web Codex acceptance findings, frm-management-layer#3 comment 7145931890 (24 Nov 22:12 UK), folded in by the planner 22:25 UK)
+- **Only items with positive proof they are due.** Quotes: sent and not accepted, declined or withdrawn. Invoices: issued, due date passed, the full amount outstanding. Statuses `unknown` and `part_paid` in `packages/core/src/core-loop-views.ts` are **never** chased.
+- **Missed runs.** Never more than the listed dates (quotes day 3 and 7; invoices due+3 and due+10). If a run is missed, send only the latest due nudge not yet sent, once, and only within 2 days of its date; otherwise skip it and show "chase skipped" to the builder. Never invent a third or extra nudge.
+- **Re-check just before delivery.** Test selection followed by payment, dispute, reply or the firm switching chasing off **before** the catcher delivery: each leaves zero delivered messages, including after a retry. Test the no-charge pilot case on its own.
+
 ## Done when
 - With a test clock: a quote gets chases on day 3 and 7 and no more; an invoice gets them at due+3 and due+10; a paid or disputed invoice gets none; a reply stops the chain; switching off stops everything queued; a re-run sends nothing twice; second-firm and audit tests per the rules; the catcher holds exactly the expected messages. CI green apart from Vercel.

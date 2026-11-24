@@ -18,5 +18,8 @@ Each customer choice (tiles, sanitaryware, worktop, paint) has an allowance (for
 - A late choice (past decide-by) is flagged to the builder and on the plan if a task depends on it.
 - Never changes the accepted quote or any committed price.
 
+## Acceptance cases added (Web Codex acceptance findings, frm-management-layer#3 comment 7145931890 (24 Nov 22:12 UK), folded in by the planner 22:25 UK)
+- **Back under allowance after a draft exists.** If a choice moves from over the allowance back to equal or under, the existing draft is cancelled or superseded through the existing draft transition (name it in the PR) and can never be approved for the old excess. Test it.
+
 ## Done when
 - Tiles chosen at £31/m² for 6 m² against £25/m² drafts one £36 (plus VAT as the existing rules apply) variation, uncommitted; a choice at or under allowance drafts nothing; changing the choice updates the same draft rather than adding another; a late choice is flagged; replay, stale version, second-firm and audit tests per the rules. CI green apart from Vercel.

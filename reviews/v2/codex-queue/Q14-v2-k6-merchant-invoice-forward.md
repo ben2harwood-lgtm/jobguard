@@ -18,5 +18,8 @@ Each firm gets one inbound address. A forwarded merchant email reaching it is ro
 - Filing: match a job by a job reference in the subject or body, or by a supplier already on the job; otherwise it waits in "needs a job" for the builder. Filing calls the existing `supplier-documents/intake` with `channel: "fixture_mail"` and that `fixtureId`. **Do not edit `supplier-documents.ts`, the intake schema or the repository.** If you need to, stop and report.
 - Unknown sender: always waits for the builder. Another firm's address never files into this firm.
 
+## Acceptance cases added (Web Codex acceptance findings, frm-management-layer#3 comment 7145931890 (24 Nov 22:12 UK), folded in by the planner 22:25 UK)
+- **Ambiguous supplier.** A known supplier who serves two of the firm's jobs, with no unique job reference in the message: exactly one held item, zero supplier documents and zero stock changes until the builder picks a job.
+
 ## Done when (K6A)
 - A practice forward with the job reference files to that job through the unchanged intake and reaches the three-way check; one without a match waits; an unknown sender waits; a message with a real attachment is held as "needs K6B" and nothing is filed; mail to another firm's address never appears here; a duplicate forward files once; second-firm and audit tests per the rules; `git diff` shows no change to `packages/core/src/supplier-documents.ts`. CI green apart from Vercel.

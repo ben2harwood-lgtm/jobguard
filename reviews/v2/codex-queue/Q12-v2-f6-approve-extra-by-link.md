@@ -18,6 +18,9 @@ For one variation version at a time, the builder makes a link; the customer open
 - On "I agree": apply the **existing** variation approval command with the link as the customer's evidence, bound to that version and amount. If the existing command can't take a customer-link approval without changing it, record the agreement only and show the builder a one-tap "Customer agreed by link at <time>: approve" using the existing command unchanged. Say which in the PR.
 - The link is "sent" only to the local catcher.
 
+## Acceptance cases added (Web Codex acceptance findings, frm-management-layer#3 comment 7145931890 (24 Nov 22:12 UK), folded in by the planner 22:25 UK)
+- **Price change between agreement and approval.** F6 records the customer's agreement only; commercial approval stays with the existing builder command. Test: customer agrees to version 1 at £X, builder changes the price (new version), then tries to approve. The old agreement must not approve the new amount; the new version needs its own agreement.
+
 ## Done when
 - Approving an old version's link is refused; a changed price needs a fresh link; a declined or unapproved change adds nothing to the committed price; another firm's link opens nothing; an expired or cancelled link is refused; a replayed agree applies once; the agreed quote and issued invoices are untouched.
 - Playwright of the customer page at 360/1280 + phone-mode run. CI green apart from Vercel.
