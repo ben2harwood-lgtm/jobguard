@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-f6": {
+      "branches": [
+        "codex/sandbox/v2-f6"
+      ],
+      "allow": [
+        "apps/api/src/v2-customer-extra-link.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/extra-links/route.ts",
+        "apps/web/app/api/v2/extra-links/[capability]/photos/[photoId]/route.ts",
+        "apps/web/app/api/v2/extra-links/[capability]/route.ts",
+        "apps/web/app/customer/change/[capability]/page.tsx",
+        "apps/web/app/customer/change/[capability]/view.tsx",
+        "apps/web/app/lib/v2-extra-link-server.ts",
+        "apps/web/app/v2/jobs/[id]/extra-links/page.tsx",
+        "apps/web/app/v2/jobs/[id]/extra-links/view.tsx",
+        "packages/db/migration-notes/2018_customer_extra_links.md",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-customer-extra-link-repository.test.ts",
+        "packages/db/src/v2-customer-extra-link-repository.ts",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/customer-extra-links.browser.test.mjs",
+        "tools/v2/migrations/2018_customer_extra_links.proof.json",
+        "tools/v2/migrations/2018_customer_extra_links.sql",
+        "tools/v2/seed.integration.test.mjs"
+      ],
+      "note": "Q12 V2-F6 RED: local customer agreement links; reserved migration 2018; existing approval path unchanged."
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "packet": "Q12 / V2-F6",
+  "migration": "2018_customer_extra_links.sql",
+  "database": "jobguard_v2_local",
+  "status": "written; real PostgreSQL execution pending CI",
+  "table": "app.v2_customer_extra_link",
+  "owner": "jobguard_migration",
+  "rls": {
+    "enabled": true,
+    "forced": true,
+    "runtime": "bound tenant, firm and visible job"
+  },
+  "runtimeGrants": [
+    "SELECT",
+    "INSERT",
+    "UPDATE"
+  ],
+  "runtimeDenied": [
+    "DELETE",
+    "TRUNCATE",
+    "REFERENCES",
+    "TRIGGER"
+  ],
+  "capabilityFunctions": [
+    "app.v2_f6_open",
+    "app.v2_f6_agree",
+    "app.v2_f6_photo"
+  ],
+  "privateHelpers": [
+    "app.v2_f6_scope",
+    "app.v2_f6_audit_scope"
+  ],
+  "audit": "appendAuditBatch in command transaction; exact replay appends nothing",
+  "agreementEffect": "claim only; existing builder approval command remains unchanged",
+  "tests": [
+    "tools/v2/seed.integration.test.mjs",
+    "tools/v2/customer-extra-links.browser.test.mjs",
+    "packages/db/src/v2-customer-extra-link-repository.test.ts"
+  ],
+  "sharedSchemaDeferral": "packages/db/test/purchase-order-audit.integration.test.ts",
+  "sha256": "f263766315819dc0f7521b2adc105ab94c326eca7195e50478ce4db629dcf39d"
+}

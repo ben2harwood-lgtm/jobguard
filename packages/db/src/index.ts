@@ -237,3 +237,6 @@ export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
 export { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";
 
 export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
+
+// V2-F6: local customer agreement capabilities.
+export * from "./v2-customer-extra-link-repository.js";

@@ -579,3 +579,10 @@ it("refuses direct manual attestations outside the demo database; dropping the g
   expect((await admin.query("SELECT actor_membership_id FROM app.purchase_order_manual_attestation WHERE id=$1", [fact.attestationId])).rows)
     .toEqual([{ actor_membership_id: f.auth.membershipId }]);
 });
+
+// V2-F6 deferral: this local rehearsal table is installed by tools/v2/bootstrap,
+// never by the shared purchase-order migration runner. Its real-DB audit and
+// second-firm CRUD proofs are the separate V2 seed integration block.
+it("V2-F6 approval links remain outside the shared purchase-order database", async () => {
+  expect((await admin.query("SELECT to_regclass('app.v2_customer_extra_link') relation")).rows).toEqual([{ relation: null }]);
+});
