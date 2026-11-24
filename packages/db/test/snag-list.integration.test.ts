@@ -131,7 +131,12 @@ describe("QW-4 snag photos", () => {
   it("links verified photos in order and refuses a seventh", async () => {
     const a = await seedFinalCheckJob(f), snagId = await addSnag(a);
     const ids: string[] = [];
+    // A begin recorded before the snag filled up still replays once it is full (Codex P2 4685913757); its finalize then meets the cap.
+    const earlyBegin = { version: "snag-photo.v1", action: "begin", commandId: randomUUID(), fixture: "completion-photo" } as const;
+    const early = await repo(a).photo(a.context, a.jobId, snagId, earlyBegin);
     for (let n = 0; n < 6; n++) ids.push((await photo(a, snagId)).evidenceId);
+    expect(await repo(a).photo(a.context, a.jobId, snagId, earlyBegin)).toEqual(early);
+    await refused(repo(a).photo(a.context, a.jobId, snagId, { version: "snag-photo.v1", action: "finalize", commandId: randomUUID(), uploadId: early.uploadId, objectVersionId: early.objectVersionId }), "PHOTO_LIMIT_REACHED");
     const [row] = await repo(a).read(a.context, a.jobId);
     expect(row!.photos.map(p => [p.evidenceId, p.position, p.withdrawn])).toEqual(ids.map((id, n) => [id, n + 1, false]));
     await refused(photo(a, snagId), "PHOTO_LIMIT_REACHED");
