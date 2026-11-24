@@ -109,8 +109,8 @@ test("the builder answers measurement questions at both widths and they survive 
   await expect(card(page).getByRole("article")).toHaveCount(2);
 
   const answers = [
-    { title: tiling, quantity: "6.4", unit: "m2", shown: "6.4 m2" },
-    { title: decorating, quantity: "24", unit: "m²", shown: "24 m²" },
+    { title: tiling, quantity: "6.4", unit: "m2", shown: "6.4 m2", quote: "Quote says 6 m2" },
+    { title: decorating, quantity: "24", unit: "m²", shown: "24 m²", quote: "Quote says 1 item" },
   ];
   for (const [index, width] of widths.entries()) {
     const answer = answers[index]!;
@@ -118,7 +118,8 @@ test("the builder answers measurement questions at both widths and they survive 
     const item = row(page, answer.title);
     await expect(item.getByText("Needs your answer")).toBeVisible();
     await expect(item).toContainText(`What did you measure for “${answer.title}”?`);
-    await expect(item).toContainText("No measurement yet · Quote says");
+    // The accepted quote revision's line, not the captured scope, is what the quote says.
+    await expect(item).toContainText(`No measurement yet · ${answer.quote}`);
     await capture(page, "question", width);
     await item.getByRole("button", { name: `Confirm measurement ${answer.title}` }).click();
     await item.getByLabel("Measured quantity").fill("06");

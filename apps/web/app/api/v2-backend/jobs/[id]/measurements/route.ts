@@ -1,4 +1,4 @@
-import { MeasurementError } from "@jobguard/db";
+import { MeasurementError, WorkPlanError } from "@jobguard/db";
 import { measurementCommandV1 } from "@jobguard/api/workspace";
 import { NextResponse } from "next/server";
 import { practiceFailure } from "../../../../../lib/synthetic-server";
@@ -25,15 +25,29 @@ export async function GET(_request: Request, { params }: Route) {
   if (process.env.JOBGUARD_LOCAL_V2 !== "1") return failure("NOT_FOUND", 404);
   try {
     const { id } = await params;
-    const { measurements, quote } = await workspaceApplication();
-    // d1's read authorises the job first; the quote only supplies the scope wording.
+    const { measurements, quote, workPlan } = await workspaceApplication();
+    // d1's read authorises the job first. The quote supplies the scope wording and quoted quantity.
     const items = await measurements.read(id, { version: "v2-measurement-query.v1" });
-    const scope = items.length === 0 ? [] : await quote.get(id).then(view => view.scope, (error: unknown) => {
-      if ((error as { code?: unknown })?.code === "NOT_FOUND") return [];
+    const view = items.length === 0 ? null : await quote.get(id).catch((error: unknown) => {
+      if ((error as { code?: unknown })?.code === "NOT_FOUND") return null;
       throw error;
     });
-    const quoted = new Map<string, Quoted>(scope.map(line =>
-      [line.scopeItemId, { description: line.description, quantity: line.quantity, unit: line.unit }]));
+    // Quote the plan's revision: the accepted baseline once accepted or live, else the current draft.
+    // Without a plan, fall back to the current draft revision's own lines.
+    const plan = view && await workPlan.read(id, { version: "work-plan-query.v1" }).catch((error: unknown) => {
+      if (error instanceof WorkPlanError) return null;
+      throw error;
+    });
+    const lines = plan?.scopeItems ??
+      view?.revisions.find(revision => revision.id === view.draft?.currentRevisionId)?.lines.filter(line => line.included) ?? [];
+    const quotedLines = new Map(lines.map(line => [line.scopeItemId, line]));
+    // Only confirmed scope can be measured; the quote revision only decides what it says.
+    const quoted = new Map<string, Quoted>((view?.scope ?? []).map(item => {
+      const line = quotedLines.get(item.scopeItemId);
+      return [item.scopeItemId, line
+        ? { description: line.description, quantity: line.quantity, unit: line.unit }
+        : { description: item.description, quantity: null, unit: null }];
+    }));
     const order = new Map([...quoted.keys()].map((scopeItemId, index) => [scopeItemId, index]));
     const rank = (scopeItemId: string) => order.get(scopeItemId) ?? order.size;
     // Scope still awaiting review has nothing to measure yet, unless d1 already holds a value for it.
