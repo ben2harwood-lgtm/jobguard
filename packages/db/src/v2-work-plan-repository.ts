@@ -52,7 +52,8 @@ type ApprovedVariation = {
   unit: string;
   signedDeltaPence: number;
 };
-type ExtraScopeRow = WorkPlanScopeRow & { revision_id: string };
+type ApprovedScopeRow = Omit<ApprovedVariation, "signedDeltaPence"> & { signedDeltaPence: string;
+  source: WorkPlanScopeRow["source"]; onQuote: boolean; createdAt: Date; variationId: string };
 type EditReceipt = { commandId: string; quoteRevisionId: string; version: number; actorMembershipId: string; recordedAt: Date };
 
 export class WorkPlanError extends Error {
@@ -120,8 +121,12 @@ export class WorkPlanRepository {
       const plan = await this.generatePlan(client, key, head);
       if (plan.version !== command.expectedVersion) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
       const existing = plan.tasks.some(task => task.scopeItemId === command.scopeItemId && task.key === command.taskKey);
-      // An approved extra's edit names the approved variation revision it was planned against.
-      const extra = plan.agreement ? (await this.extraScope(client, key)).revisions.get(command.scopeItemId) ?? null : null;
+      // An approved extra's edit names the approved revision the builder planned against, read in this
+      // same plan snapshot. A later approval makes that revision stale, so the edit is refused.
+      const extra = plan.scopeItems.find(item => item.scopeItemId === command.scopeItemId)?.variationRevisionId ?? null;
+      const named = command.variationRevisionId ?? null;
+      if (extra && named && named !== extra) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
+      if (named !== extra) throw new WorkPlanError("WORK_PLAN_INVALID_EDIT");
       const { position, trade, durationMinutes } = command.changes;
       const newCustom = command.taskKey === customWorkPlanTaskKey && position !== undefined &&
         trade !== undefined && durationMinutes !== undefined &&
@@ -166,10 +171,10 @@ export class WorkPlanRepository {
       SELECT command_id AS "commandId", quote_revision_id AS "quoteRevisionId",
         expected_version + 1 AS version, actor_membership_id AS "actorMembershipId", recorded_at AS "recordedAt",
         (quote_revision_id, scope_item_id, template_task_key, expected_version, changes, actor_membership_id)
-          = ($3, $5, $6, $7, $8, $9) AS matches
+          = ($3, $5, $6, $7, $8, $9) AND variation_revision_id IS NOT DISTINCT FROM $10::uuid AS matches
       FROM app.v2_work_plan_edit WHERE (tenant_id, job_id, command_id) = ($1, $2, $4)
     `, [...key, command.commandId, command.scopeItemId, command.taskKey, command.expectedVersion,
-      JSON.stringify(command.changes), actor]);
+      JSON.stringify(command.changes), actor, command.variationRevisionId ?? null]);
     if (!receipt) return null;
     const { matches, ...saved } = receipt;
     if (!matches) throw new WorkPlanError("WORK_PLAN_COMMAND_CONFLICT");
@@ -275,28 +280,19 @@ export class WorkPlanRepository {
     return { scope, tasks };
   }
 
-  private async approvedVariations(client: PoolClient, [tenantId, jobId]: PlanKey) {
-    const { rows } = await client.query<Omit<ApprovedVariation, "signedDeltaPence"> & { signedDeltaPence: string }>(`
-      SELECT DISTINCT ON (a.variation_id) r.scope_item_id AS "scopeItemId", r.id AS "revisionId", a.id AS "approvalId",
-        r.description, r.quantity_decimal AS quantity, r.unit, r.signed_delta_pence AS "signedDeltaPence"
-      FROM app.variation_approval a JOIN app.variation_revision r
-        ON (r.tenant_id, r.job_id, r.variation_id, r.id, r.revision, r.content_hash)
-         = (a.tenant_id, a.job_id, a.variation_id, a.revision_id, a.revision, a.content_hash)
-      WHERE (a.tenant_id, a.job_id) = ($1, $2)
-        AND r.signed_delta_pence = a.signed_delta_pence
-      ORDER BY a.variation_id, a.revision DESC
-    `, [tenantId, jobId]);
-    return rows.map(row => ({ ...row, signedDeltaPence: Number(row.signedDeltaPence) }));
-  }
-
-  // Each approved extra on its own scope item joins the frozen plan scope, after the quote lines.
-  // It reads the same approved revisions as the agreement and never recalculates money.
-  private async extraScope(client: PoolClient, key: PlanKey, after = 0) {
-    const { rows } = await client.query<ExtraScopeRow>(`
-      SELECT x.scope_item_id, x.revision_id, x.source, NULL::text AS template_task_key FROM (
-        SELECT DISTINCT ON (a.variation_id) r.scope_item_id, r.id AS revision_id, v.created_at, v.id AS variation_id,
+  // One statement, so the agreement and the extras on the plan come from one snapshot of the approvals.
+  // Each approved extra on its own scope item joins the frozen plan scope after the quote lines.
+  // The plan reads the same approved revisions as the agreement and never recalculates money.
+  private async approvedScope(client: PoolClient, key: PlanKey, after: number) {
+    const { rows } = await client.query<ApprovedScopeRow>(`
+      SELECT x.* FROM (
+        SELECT DISTINCT ON (a.variation_id) r.scope_item_id AS "scopeItemId", r.id AS "revisionId", a.id AS "approvalId",
+          r.description, r.quantity_decimal AS quantity, r.unit, r.signed_delta_pence AS "signedDeltaPence",
           jsonb_build_object('description', r.description, 'category', p.category,
-            'quantity', r.quantity_decimal, 'unit', r.unit) AS source
+            'quantity', r.quantity_decimal, 'unit', r.unit) AS source,
+          EXISTS (SELECT FROM app.quote_line q WHERE (q.tenant_id, q.job_id, q.quote_revision_id, q.scope_item_id)
+            = ($1, $2, $3, r.scope_item_id)) AS "onQuote",
+          v.created_at AS "createdAt", a.variation_id AS "variationId"
         FROM app.variation_approval a JOIN app.variation_revision r
           ON (r.tenant_id, r.job_id, r.variation_id, r.id, r.revision, r.content_hash)
            = (a.tenant_id, a.job_id, a.variation_id, a.revision_id, a.revision, a.content_hash)
@@ -307,18 +303,20 @@ export class WorkPlanRepository {
           AND r.signed_delta_pence = a.signed_delta_pence
         ORDER BY a.variation_id, a.revision DESC
       ) x
-      WHERE NOT EXISTS (SELECT FROM app.quote_line q WHERE (q.tenant_id, q.job_id, q.quote_revision_id, q.scope_item_id)
-        = ($1, $2, $3, x.scope_item_id))
-      ORDER BY x.created_at, x.variation_id
+      ORDER BY x."variationId"
     `, key);
+    const approvedVariations = rows.map(({ scopeItemId, revisionId, approvalId, description, quantity, unit, signedDeltaPence }) =>
+      ({ scopeItemId, revisionId, approvalId, description, quantity, unit, signedDeltaPence: Number(signedDeltaPence) }));
     const revisions = new Map<string, string>();
-    const scope = rows.filter(row => !revisions.has(row.scope_item_id) && revisions.set(row.scope_item_id, row.revision_id))
-      .map(({ revision_id: _revision, ...row }) => row);
+    const scope: WorkPlanScopeRow[] = rows.filter(row => !row.onQuote)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.variationId < b.variationId ? -1 : 1))
+      .filter(row => !revisions.has(row.scopeItemId) && revisions.set(row.scopeItemId, row.revisionId))
+      .map(row => ({ scope_item_id: row.scopeItemId, source: row.source, template_task_key: null }));
     const tasks = scope.flatMap(row => this.template.tasks.filter(task => task.category === row.source.category)
       .map(({ category: _category, ...task }) => ({ ...task, scopeItemId: row.scope_item_id, position: 0,
         dependsOn: task.dependsOn.map(templateTaskKey => ({ scopeItemId: row.scope_item_id, templateTaskKey })) })))
       .map((task, index) => ({ ...task, position: after + index + 1 }));
-    return { scope, tasks, revisions };
+    return { approvedVariations, scope, tasks, revisions };
   }
 
   private async readPlan(client: PoolClient, key: PlanKey, head: PlanHead) {
@@ -351,7 +349,7 @@ export class WorkPlanRepository {
     const inherited = edits.filter(edit => edit.quote_revision_id !== key[2]);
     const base = await this.loadTasks(client, key);
     // Approved extras exist only once the quote is accepted, so they never appear in a refresh comparison.
-    const extras = head.acceptedDocumentId ? await this.extraScope(client, key, base.tasks.length) : null;
+    const extras = head.acceptedDocumentId ? await this.approvedScope(client, key, base.tasks.length) : null;
     const current = applyWorkPlanEdits([...base.scope, ...extras?.scope ?? []], [...base.tasks, ...extras?.tasks ?? []], edits);
     let previous = null;
     if (plan.previous_plan_revision_id) {
@@ -363,13 +361,16 @@ export class WorkPlanRepository {
     const agreement = head.acceptedDocumentId ? {
       documentId: head.acceptedDocumentId,
       netPence: head.acceptedNetPence === null ? null : Number(head.acceptedNetPence),
-      approvedVariations: await this.approvedVariations(client, key),
+      approvedVariations: extras!.approvedVariations,
     } : null;
     const state = head.activationId ? "live" as const : agreement ? "accepted" as const : "draft" as const;
     return { jobId: key[1], quoteRevisionId: key[2], templateKey: plan.template_key, state, agreement,
       activationId: head.activationId,
       version: edits.length - inherited.length, tasks: current.tasks, unplanned: current.unplanned,
-      scopeItems: [...current.sources].map(([scopeItemId, details]) => ({ scopeItemId, ...details })),
+      scopeItems: [...current.sources].map(([scopeItemId, details]) => {
+        const variationRevisionId = extras?.revisions.get(scopeItemId);
+        return { scopeItemId, ...details, ...(variationRevisionId && { variationRevisionId }) };
+      }),
       changes: compareWorkPlanTasks(previous, refreshed) };
   }
 }

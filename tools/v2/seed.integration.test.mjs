@@ -700,7 +700,8 @@ test("existing Switch live activates a plan once and only approved variation rev
     description: "Add trim", quantity: "1", unit: "item", signedDeltaPence: 12500 }] };
   const extraItem = { scopeItemId, title: "Add trim", status: "Unplanned" };
   const withExtra = { ...live, agreement: expected, unplanned: [...live.unplanned, extraItem],
-    scopeItems: [...live.scopeItems, { scopeItemId, description: "Add trim", category: null, quantity: "1", unit: "item" }] };
+    scopeItems: [...live.scopeItems, { scopeItemId, description: "Add trim", category: null, quantity: "1", unit: "item",
+      variationRevisionId: revisionId }] };
   assert.deepEqual(await workPlan.read(jobId, planQuery), withExtra, "the approved extra joins the plan as Unplanned");
   await vary("approve", approve).catch(() => undefined);
   assert.deepEqual(await workPlan.read(jobId, planQuery), withExtra, "replaying the approval adds no second item");
@@ -722,13 +723,19 @@ test("existing Switch live activates a plan once and only approved variation rev
   assert.equal(receipt.version, 1);
 
   // The builder gives the extra a trade, duration and place, then a date and an assignee.
-  const placed = planEdit(await workPlan.read(jobId, planQuery), { scopeItemId, key: customTaskKey },
-    { position: 2, trade: "joiner", durationMinutes: 45 });
+  const placed = { ...planEdit(await workPlan.read(jobId, planQuery), { scopeItemId, key: customTaskKey },
+    { position: 2, trade: "joiner", durationMinutes: 45 }), variationRevisionId: revisionId };
   await assert.rejects(workPlan.edit(jobId, { ...placed, changes: { trade: "joiner" } }), { code: "WORK_PLAN_INVALID_EDIT" });
+  const { variationRevisionId: _named, ...unnamed } = placed;
+  await assert.rejects(workPlan.edit(jobId, unnamed), { code: "WORK_PLAN_INVALID_EDIT" }, "an extra's edit names its revision");
+  await assert.rejects(workPlan.edit(jobId, { ...placed, variationRevisionId: pendingId }), { code: "WORK_PLAN_VERSION_CONFLICT" },
+    "an edit naming another revision of the extra is refused");
+  await assert.rejects(workPlan.edit(jobId, { ...planEdit(await workPlan.read(jobId, planQuery), regenerated.tasks[0],
+    { durationMinutes: 61 }), variationRevisionId: revisionId }), { code: "WORK_PLAN_INVALID_EDIT" }, "a quote line names no revision");
   const placedReceipt = await workPlan.edit(jobId, placed);
   assert.deepEqual(await workPlan.edit(jobId, placed), placedReceipt);
-  const dated = planEdit(await workPlan.read(jobId, planQuery), { scopeItemId, key: customTaskKey },
-    { scheduledDate: "2026-12-10", assignee: "Fictional Jo Joiner" });
+  const dated = { ...planEdit(await workPlan.read(jobId, planQuery), { scopeItemId, key: customTaskKey },
+    { scheduledDate: "2026-12-10", assignee: "Fictional Jo Joiner" }), variationRevisionId: revisionId };
   await workPlan.edit(jobId, dated);
   const updated = await workPlan.read(jobId, planQuery);
   assert.equal(updated.version, 3);
@@ -782,7 +789,10 @@ test("existing Switch live activates a plan once and only approved variation rev
     [[scopeItemId, pendingId, 35000]]);
   assert.deepEqual(revised.tasks[1], { ...updated.tasks[1], title: "Unapproved replacement trim", needsReview: true });
   assert.deepEqual(revised.unplanned, live.unplanned);
-  await workPlan.edit(jobId, planEdit(revised, revised.tasks[1], { durationMinutes: 60 }));
+  assert.equal(revised.scopeItems.find(item => item.scopeItemId === scopeItemId).variationRevisionId, pendingId);
+  await assert.rejects(workPlan.edit(jobId, { ...planEdit(revised, revised.tasks[1], { durationMinutes: 60 }),
+    variationRevisionId: revisionId }), { code: "WORK_PLAN_VERSION_CONFLICT" }, "an edit planned against the old revision is stale");
+  await workPlan.edit(jobId, { ...planEdit(revised, revised.tasks[1], { durationMinutes: 60 }), variationRevisionId: pendingId });
   const { rows: [latest] } = await admin.query(`SELECT variation_revision_id FROM app.v2_work_plan_edit
     WHERE (job_id, scope_item_id) = ($1, $2) ORDER BY expected_version DESC LIMIT 1`, [jobId, scopeItemId]);
   assert.equal(latest.variation_revision_id, pendingId);
