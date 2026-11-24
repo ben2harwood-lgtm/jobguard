@@ -7,7 +7,7 @@ import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
-import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, withTenant } from "../../packages/db/dist/index.js";
+import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
@@ -386,7 +386,7 @@ async function draftForPlan() {
   await save(0);
   const read = () => workPlan.read(draftJob, planQuery);
   const edit = command => workPlan.edit(draftJob, command);
-  return { draftJob, realContext, lines, save, read, edit };
+  return { draftJob, realContext, sessionId, lines, save, read, edit };
 }
 
 function planEdit(plan, task, changes) {
@@ -704,4 +704,73 @@ test("existing Switch live activates a plan once and only approved variation rev
     expectedRevision, action: "close", reason: "cancelled_by_customer", note: "Fictional customer cancelled the work" });
   assert.equal(closed.events.at(-1).kind, "closed");
   assert.deepEqual(await workPlan.read(jobId, planQuery), updated);
+});
+
+const editEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
+  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_work_plan.edited' ORDER BY sequence`, [jobRef])).rows;
+
+async function verifyTenantChain(tenantId) {
+  const { rows } = await admin.query(`SELECT id, tenant_id AS "tenantId", sequence::int, version, actor_ref AS "actorRef",
+    event_type AS "eventType", subject_type AS "subjectType", subject_ref AS "subjectRef", occurred_at AS "occurredAt", payload,
+    trim(payload_hash) AS "payloadHash", trim(previous_hash) AS "previousHash", trim(event_hash) AS "eventHash"
+    FROM app.audit_event WHERE tenant_id = $1 ORDER BY sequence`, [tenantId]);
+  assert.ok(rows.length > 0);
+  assert.doesNotThrow(() => verifyAuditChain(rows));
+}
+
+test("each recorded plan edit appends one audit event in its transaction, and a replay appends none", async () => {
+  const { draftJob, sessionId, read, edit } = await draftForPlan();
+  const { context: practice } = await authenticatePracticeSession(runtime, sessionId);
+  const plan = await read();
+  const task = plan.tasks[0];
+  const command = planEdit(plan, task, { trade: "specialist tiler", durationMinutes: 77 });
+  const receipt = await edit(command);
+  const [event, ...extra] = await editEvents(draftJob);
+  assert.equal(extra.length, 0);
+  assert.equal(event.tenant_id, practice.tenantId);
+  assert.equal(event.actor_ref, `membership:${receipt.actorMembershipId}`);
+  assert.deepEqual(event.payload.references, {
+    ...event.payload.references, commandId: command.commandId, quoteRevisionId: plan.quoteRevisionId,
+    scopeItemId: task.scopeItemId, taskKey: task.key, expectedVersion: "0", planVersion: "1",
+    changedFields: "durationMinutes/trade",
+  });
+  assert.equal("version" in event.payload.references, false);
+  assert.match(event.payload.hashes.changes, /^[a-f0-9]{64}$/u);
+  assert.doesNotMatch(JSON.stringify(event.payload), /specialist tiler/u, "free-text trade stays out of the audit payload");
+
+  assert.deepEqual(await edit(command), receipt);
+  await Promise.all([edit(command), edit(command)]);
+  assert.equal((await editEvents(draftJob)).length, 1, "replays append nothing");
+
+  // Fail the audit append after the edit insert: the transaction must keep neither.
+  const failing = {
+    async connect() {
+      const client = await runtime.connect();
+      const query = client.query.bind(client);
+      client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+        ? Promise.reject(Object.assign(new Error("forced audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+      const release = client.release.bind(client);
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    },
+  };
+  const next = planEdit(await read(), task, { durationMinutes: 90 });
+  await assert.rejects(new WorkPlanRepository(failing).edit(practice, draftJob, sessionId, next), { code: "FORCED" });
+  const { rows: [{ count }] } = await admin.query(
+    "SELECT count(*)::int AS count FROM app.v2_work_plan_edit WHERE command_id = $1", [next.commandId]);
+  assert.equal(count, 0, "the edit rolled back with its audit event");
+  assert.equal((await editEvents(draftJob)).length, 1);
+  assert.equal((await read()).version, 1);
+
+  await edit(next);
+  assert.equal((await editEvents(draftJob)).length, 2);
+  await verifyTenantChain(practice.tenantId);
+
+  // The audit chain is tenant-scoped (0001_audit.sql), so the second firm's own tenant sees none of these events.
+  // Shared practice sessions share one practice tenant, as for every other practice audit event.
+  const outsider = await signIn("second-builder");
+  assert.notEqual(outsider.realContext.tenantId, practice.tenantId);
+  const { rowCount } = await withTenant(runtime, outsider.realContext, db => db.$client.query(
+    "SELECT 1 FROM app.audit_event WHERE subject_ref = $1", [draftJob]));
+  assert.equal(rowCount, 0, "the second firm cannot see the edit events");
 });
