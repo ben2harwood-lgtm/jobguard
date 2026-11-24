@@ -25,7 +25,8 @@
         "packages/core/src/watchdog.ts",
         "packages/db/src/index.ts",
         "packages/db/src/variation-photo.ts",
-        "packages/db/test/variation-photo-service.integration.test.ts"
+        "packages/db/test/variation-photo-service.integration.test.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts"
       ]
     }
   }
