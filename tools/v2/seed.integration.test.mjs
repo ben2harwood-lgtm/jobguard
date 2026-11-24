@@ -806,7 +806,7 @@ const k5Command = (view, triggers) => ({ version: "payment-schedule-set.v1", com
   stages: ["30", "40", "30"].map((value, index) => ({ label: `Fictional stage ${index + 1}`,
     split: { kind: "percentage", value }, trigger: triggers[index] })) });
 const k5Events = async commandId => (await admin.query(`SELECT actor_ref,payload FROM app.audit_event
-  WHERE event_type='v2.payment_schedule.set' AND payload->'references'->>'commandId'=$1`, [commandId])).rows;
+  WHERE event_type='v2.billing_schedule.set' AND payload->'references'->>'commandId'=$1`, [commandId])).rows;
 
 test("K5A saves 30/40/30, persists across reads, audits once, rejects replay changes and stale commands, sends nothing", async () => {
   const { app, draftJob, cookies, csrfToken } = await k5AcceptedJob();
@@ -941,7 +941,7 @@ test("K5A task confirmation turns the exact stage due, audits once, and rolls ba
   await assert.rejects(app.paymentSchedule.set(draftJob,{...command,taskKey:"wrong-task"}),{code:"SCHEDULE_REPLAY_CONFLICT"});
   await assert.rejects(app.paymentSchedule.set(draftJob,{...command,commandId:randomUUID()}),{code:"SCHEDULE_STALE"});
   const {rows:[event],rowCount}=await admin.query(`SELECT actor_ref,payload FROM app.audit_event
-    WHERE event_type='v2.payment_schedule.task_recorded' AND payload->'references'->>'commandId'=$1`,[command.commandId]);
+    WHERE event_type='v2.billing_schedule.task_recorded' AND payload->'references'->>'commandId'=$1`,[command.commandId]);
   assert.equal(rowCount,1);assert.ok(event.actor_ref.startsWith("membership:"));
   assert.equal("version" in event.payload.references,false);
   assert.deepEqual(await effectCounts(),effects);
@@ -969,4 +969,72 @@ test("K5A task-confirmation catalogue and rerunnable migration preserve existing
     relowner::regrole::text AS owner,has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS mutable
     FROM pg_class WHERE oid='app.v2_payment_schedule_task_done'::regclass`);
   assert.deepEqual(catalog,{forced:true,owner:"jobguard_migration",mutable:false});
+});
+
+// V2-K5A repair2: use real approval facts and SQL timestamp arithmetic for microsecond boundaries.
+async function k5ApproveExtra(app, jobId) {
+  const proposalId = randomUUID();
+  const proposed = await app.variation.command(jobId, {
+    version: "variation-command.v1", action: "propose", proposalId, scopeItemId: randomUUID(),
+    existingScopeItemId: null, lineageParentScopeItemId: null, description: "Fictional trim",
+    captureText: "Fictional trim requested", price: { quantity: "1", unit: "item", unitRatePence: 700, direction: "addition" },
+  });
+  const revisionId = proposed.variations.find(item => item.id === proposalId).currentRevisionId;
+  const approvalId = randomUUID();
+  await app.variation.command(jobId, { version: "variation-command.v1", action: "approve", variationId: proposalId,
+    revisionId, approvalId, attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  return approvalId;
+}
+
+test("K5A preserves database microseconds for both extra/task orders and both schedule-creation boundaries", async () => {
+  const { app, draftJob } = await k5AcceptedJob();
+  await app.quote.activate(draftJob, switchLive());
+  const view = await app.paymentSchedule.read(draftJob), task = view.tasks[0];
+  assert.ok(task);
+  const set = k5Command(view, [{ kind: "acceptance" },
+    { kind: "task", scopeItemId: task.scopeItemId, taskKey: task.taskKey }, { kind: "date", date: "2000-01-01" }]);
+  await app.paymentSchedule.set(draftJob, set);
+  const before = await app.paymentSchedule.read(draftJob);
+  const done = { version: "payment-schedule-task-done.v1", commandId: randomUUID(), jobId: draftJob,
+    quoteRevisionId: view.quoteRevisionId, expectedVersion: 1, scopeItemId: task.scopeItemId, taskKey: task.taskKey };
+  await app.paymentSchedule.set(draftJob, done);
+  const approvalId = await k5ApproveExtra(app, draftJob);
+  // Only the test administrator adjusts working-plan timestamps. Approval facts, grants and triggers stay intact.
+  await admin.query(`UPDATE app.v2_payment_schedule SET recorded_at =
+    (SELECT created_at - interval '1 second' FROM app.variation_approval WHERE id=$1) WHERE command_id=$2`, [approvalId, set.commandId]);
+  for (const extraFirst of [true, false]) {
+    await admin.query(`UPDATE app.v2_payment_schedule_task_done SET recorded_at =
+      (SELECT created_at + ($1::int * interval '1 microsecond') FROM app.variation_approval WHERE id=$2)
+      WHERE command_id=$3`, [extraFirst ? 1 : -1, approvalId, done.commandId]);
+    const after = await app.paymentSchedule.read(draftJob);
+    const pence = amount => BigInt(amount.replace(".", ""));
+    const expected = before.schedule.stages.map(stage => pence(stage.amount));
+    if (extraFirst) expected[1] += 700n;
+    assert.deepEqual(after.schedule.stages.map(stage => pence(stage.amount)), expected);
+    assert.equal(after.schedule.unscheduledExtras, extraFirst ? "0.00" : "7.00");
+  }
+  for (const approvalBeforeSchedule of [true, false]) {
+    await admin.query(`UPDATE app.v2_payment_schedule SET recorded_at =
+      (SELECT created_at + ($1::int * interval '1 microsecond') FROM app.variation_approval WHERE id=$2)
+      WHERE command_id=$3`, [approvalBeforeSchedule ? 1 : -1, approvalId, set.commandId]);
+    const after = await app.paymentSchedule.read(draftJob);
+    assert.equal(after.schedule.extrasBeforeSchedule, approvalBeforeSchedule ? "7.00" : "0.00");
+    assert.equal(after.schedule.extrasSinceSchedule, approvalBeforeSchedule ? "0.00" : "7.00");
+    assert.deepEqual((await app.paymentSchedule.read(draftJob)).schedule, after.schedule);
+  }
+});
+
+test("K5A extras approved before setting the schedule remain visible separately after reload", async () => {
+  const { app, draftJob } = await k5AcceptedJob();
+  await app.quote.activate(draftJob, switchLive());
+  await k5ApproveExtra(app, draftJob);
+  const view = await app.paymentSchedule.read(draftJob);
+  await app.paymentSchedule.set(draftJob, k5Command(view, Array.from({ length: 3 }, () => ({ kind: "acceptance" }))));
+  const saved = await app.paymentSchedule.read(draftJob);
+  assert.equal(saved.schedule.extrasBeforeSchedule, "7.00");
+  assert.equal(saved.schedule.extrasSinceSchedule, "0.00");
+  assert.equal(saved.schedule.unscheduledExtras, "0.00");
+  const pence = amount => BigInt(amount.replace(".", ""));
+  assert.equal(saved.schedule.stages.reduce((sum, stage) => sum + pence(stage.amount), 0n), pence(saved.acceptedTotal));
+  assert.deepEqual((await app.paymentSchedule.read(draftJob)).schedule, saved.schedule);
 });

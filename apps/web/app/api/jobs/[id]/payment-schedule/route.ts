@@ -12,7 +12,9 @@ async function invoke(run: () => Promise<unknown>) {
     const denied = practiceFailure(error);
     if (denied) return denied;
     const code = routeErrorCode(error, "DATABASE_UNAVAILABLE");
-    if (!code.startsWith("SCHEDULE_")) throw error;
+    if (!code.startsWith("SCHEDULE_")) {
+      return NextResponse.json({ code: "DATABASE_UNAVAILABLE" }, { status: 503, headers });
+    }
     return NextResponse.json({ code }, { status: code.includes("STALE") || code.includes("CONFLICT") ? 409 : 400, headers });
   }
 }

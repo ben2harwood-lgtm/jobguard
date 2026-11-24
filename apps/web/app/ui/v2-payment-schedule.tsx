@@ -83,6 +83,7 @@ export function V2PaymentSchedule({ jobId }: { jobId: string }) {
           Confirm task done for this schedule
         </button>}
       </li>)}</ol>
+      <p>Extras approved before the schedule was set: £{view.schedule.extrasBeforeSchedule} — for a later invoice or the final account.</p>
       <p>Extras since the schedule was set: £{view.schedule.extrasSinceSchedule}</p>
       <p>Extras outside the stages: £{view.schedule.unscheduledExtras} — for a later invoice or the final account.</p>
       <p>Stages already due stay fixed. Extras are shared across planned stages in proportion to their amounts; the last takes the remainder.</p>

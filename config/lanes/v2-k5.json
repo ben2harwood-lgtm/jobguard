@@ -15,6 +15,7 @@
         "apps/api/src/workspace/payment-schedule.application.ts",
         "apps/web/app/(designed)/jobs/[id]/money/page.tsx",
         "apps/web/app/api/jobs/[id]/payment-schedule/route.ts",
+        "apps/web/app/api/jobs/[id]/payment-schedule/route.test.ts",
         "apps/web/app/ui/v2-payment-schedule.test.tsx",
         "apps/web/app/ui/v2-payment-schedule.tsx",
         "packages/db/migration-notes/2012_v2_payment_schedule.md",

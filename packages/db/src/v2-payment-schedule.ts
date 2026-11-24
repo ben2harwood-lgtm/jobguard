@@ -56,19 +56,21 @@ export function initialStageAmounts(total: number, stages: PaymentStage[]): numb
   });
 }
 export type ScheduleFact = { at: string; kind: "due"; index: number } |
-  { at: string; kind: "extra"; variationId: string; pence: number };
+  { at: string; kind: "extra" | "prior_extra"; variationId: string; pence: number };
 
 /** Replay server facts in time order. Due stages are frozen even if nobody opened the page. */
 export function projectPaymentSchedule(total: number, stages: PaymentStage[], facts: ScheduleFact[], now: string) {
   const amounts = initialStageAmounts(total, stages);
   const due = stages.map(() => false);
   const variations = new Map<string, number>();
+  const priorVariations = new Map<string, number>();
   let extras = 0;
   let unallocated = 0;
   const ordered = facts.filter(fact => fact.at <= now).sort((a, b) =>
     a.at.localeCompare(b.at) || (a.kind === b.kind ? 0 : a.kind === "due" ? -1 : 1));
   for (const fact of ordered) {
     if (fact.kind === "due") { due[fact.index] = true; continue; }
+    if (fact.kind === "prior_extra") { priorVariations.set(fact.variationId, fact.pence); continue; }
     const delta = money(fact.pence).pence - (variations.get(fact.variationId) ?? 0);
     variations.set(fact.variationId, fact.pence);
     extras = money(extras + delta).pence;
@@ -89,5 +91,6 @@ export function projectPaymentSchedule(total: number, stages: PaymentStage[], fa
   }
   return { stages: stages.map((stage, index) => ({ ...stage, amount: pounds(amounts[index]!),
     status: due[index] ? "due" as const : "planned" as const })),
+  extrasBeforeSchedule: pounds([...priorVariations.values()].reduce((sum, pence) => money(sum + pence).pence, 0)),
   extrasSinceSchedule: pounds(extras), unscheduledExtras: pounds(unallocated) };
 }

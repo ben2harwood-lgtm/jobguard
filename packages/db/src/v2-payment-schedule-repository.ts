@@ -7,7 +7,7 @@ import { initialStageAmounts, paymentScheduleSetV1, paymentScheduleTaskDoneV1, P
   type PaymentStage, type ScheduleFact } from "./v2-payment-schedule.js";
 
 type Saved = { command_id: string; quote_revision_id: string; job_id: string; stages: PaymentStage[];
-  actor_membership_id: string; recorded_at: Date; expected_version: number };
+  actor_membership_id: string; recorded_at: Date; recorded_order: string; expected_version: number };
 
 export class PaymentScheduleRepository {
   constructor(private readonly pool: Pool) {}
@@ -22,7 +22,9 @@ export class PaymentScheduleRepository {
     this.fence();
     return withTenant(this.pool, context, async ({ $client: client }) => {
       const head = await this.head(client, context.tenantId, jobId);
-      const { rows: [saved] } = await client.query<Saved>(`SELECT * FROM app.v2_payment_schedule
+      const { rows: [saved] } = await client.query<Saved>(`SELECT *,
+        to_char(recorded_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS recorded_order
+        FROM app.v2_payment_schedule
         WHERE (tenant_id,job_id,quote_revision_id)=($1,$2,$3)`, [context.tenantId, jobId, head.revision]);
       const tasks = (await client.query<{scopeItemId: string; taskKey: string}>(`
         SELECT scope_item_id AS "scopeItemId", template_task_key AS "taskKey" FROM app.v2_work_plan_task
@@ -32,8 +34,9 @@ export class PaymentScheduleRepository {
         basis: "net" as const, environment: "synthetic_demo" as const, tasks, realExternalActions: 0 };
       if (!saved) return { ...base, schedule: null };
       const facts = await this.facts(client, context.tenantId, jobId, saved);
-      const { rows: [clock] } = await client.query<{now: Date}>("SELECT clock_timestamp() AS now");
-      return { ...base, schedule: { ...projectPaymentSchedule(Number(head.net), saved.stages, facts, clock!.now.toISOString()),
+      const { rows: [clock] } = await client.query<{now: string}>(`SELECT
+        to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS now`);
+      return { ...base, schedule: { ...projectPaymentSchedule(Number(head.net), saved.stages, facts, clock!.now),
         version: await this.currentVersion(client, context.tenantId, jobId, saved.quote_revision_id), commandId: saved.command_id, actorMembershipId: saved.actor_membership_id,
         recordedAt: saved.recorded_at.toISOString() } };
     });
@@ -81,7 +84,7 @@ export class PaymentScheduleRepository {
         VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`, [context.tenantId, jobId, head.revision,
         command.commandId, command.expectedVersion, JSON.stringify(command.stages), actor.id]);
       await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor.id}`,
-        eventType: "v2.payment_schedule.set", subjectType: "job", subjectRef: jobId,
+        eventType: "v2.billing_schedule.set", subjectType: "job", subjectRef: jobId,
         payload: { references: { commandId: command.commandId, quoteRevisionId: head.revision, scheduleVersion: "1" },
           classifications: { action: "operational" } } }]);
       return this.receipt(saved!);
@@ -137,7 +140,7 @@ export class PaymentScheduleRepository {
         (tenant_id,job_id,quote_revision_id,command_id,expected_version,scope_item_id,template_task_key,actor_membership_id)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING recorded_at AS "recordedAt"`,values);
       await appendAuditBatch(db,[{id:randomUUID(),version:"audit.v1",actorRef:`membership:${actor.id}`,
-        eventType:"v2.payment_schedule.task_recorded",subjectType:"job",subjectRef:jobId,
+        eventType:"v2.billing_schedule.task_recorded",subjectType:"job",subjectRef:jobId,
         payload:{references:{commandId:command.commandId,quoteRevisionId:head.revision,scopeItemId:command.scopeItemId,
           taskKey:command.taskKey,scheduleVersion:String(command.expectedVersion+1)},classifications:{action:"operational"}}}]);
       return {commandId:command.commandId,version:command.expectedVersion+1,recordedAt:saved!.recordedAt.toISOString()};
@@ -162,25 +165,31 @@ export class PaymentScheduleRepository {
   }
 
   private async facts(client: PoolClient, tenantId: string, jobId: string, saved: Saved) {
-    const start = saved.recorded_at.toISOString();
+    // Fixed-width UTC text preserves PostgreSQL microseconds for ordering and the schedule boundary.
+    const start = saved.recorded_order;
     const facts: ScheduleFact[] = [];
     for (const [index, stage] of saved.stages.entries()) {
       let at: string | undefined;
       if (stage.trigger.kind === "acceptance") at = start;
       if (stage.trigger.kind === "date") {
-        const row = (await client.query<{at:Date}>("SELECT $1::date::timestamp AT TIME ZONE 'Europe/London' AS at", [stage.trigger.date])).rows[0]!;
-        at = row.at.toISOString();
+        const row = (await client.query<{at:string}>(`SELECT to_char(
+          ($1::date::timestamp AT TIME ZONE 'Europe/London') AT TIME ZONE 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at`, [stage.trigger.date])).rows[0]!;
+        at = row.at;
       }
       if (stage.trigger.kind === "task") {
-        const row = (await client.query<{at:Date}>(`SELECT min(recorded_at) AS at FROM app.v2_payment_schedule_task_done
+        const row = (await client.query<{at:string}>(`SELECT
+          to_char(min(recorded_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at
+          FROM app.v2_payment_schedule_task_done
           WHERE (tenant_id,job_id,quote_revision_id,scope_item_id,template_task_key)=($1,$2,$3,$4,$5)`,
         [tenantId, jobId, saved.quote_revision_id, stage.trigger.scopeItemId, stage.trigger.taskKey])).rows[0];
-        if (row?.at) at = row.at.toISOString();
+        if (row?.at) at = row.at;
       }
       if (at) facts.push({ kind: "due", at: at < start ? start : at, index });
     }
-    const approvals = (await client.query<{id:string; variation_id:string; pence:string; at:Date}>(`
-      SELECT a.id,a.variation_id,a.signed_delta_pence AS pence,a.created_at AS at
+    const approvals = (await client.query<{id:string; variation_id:string; pence:string; at:string}>(`
+      SELECT a.id,a.variation_id,a.signed_delta_pence AS pence,
+        to_char(a.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at
       FROM app.variation_approval a JOIN app.variation_revision r
         ON (r.tenant_id,r.job_id,r.variation_id,r.id,r.revision,r.content_hash,r.signed_delta_pence)
          = (a.tenant_id,a.job_id,a.variation_id,a.revision_id,a.revision,a.content_hash,a.signed_delta_pence)
@@ -189,8 +198,11 @@ export class PaymentScheduleRepository {
       ORDER BY a.created_at,a.variation_id,a.revision,a.id`, [tenantId, jobId])).rows;
     const initial = new Map<string, number>();
     for (const approval of approvals) {
-      const at = approval.at.toISOString();
-      if (at < start) initial.set(approval.variation_id, Number(approval.pence));
+      const at = approval.at;
+      if (at < start) {
+        initial.set(approval.variation_id, Number(approval.pence));
+        facts.push({ kind: "prior_extra", at, variationId: approval.variation_id, pence: Number(approval.pence) });
+      }
       else facts.push({ kind: "extra", at, variationId: approval.variation_id,
         pence: Number(approval.pence) - (initial.get(approval.variation_id) ?? 0) });
     }

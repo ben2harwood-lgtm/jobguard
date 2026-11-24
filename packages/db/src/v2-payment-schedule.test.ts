@@ -39,3 +39,21 @@ describe("K5A payment schedule", () => {
     expect(paymentScheduleSetV1.safeParse({ version: "payment-schedule-set.v1", stages, expectedVersion: -1 }).success).toBe(false);
   });
 });
+
+it.each([true, false])("orders an extra and task within one millisecond (extra first: %s)", extraFirst => {
+  const early = "2026-11-24T13:00:00.123100Z", late = "2026-11-24T13:00:00.123900Z";
+  const result = projectPaymentSchedule(10000, stages, [due(0), due(2),
+    extra(700, extraFirst ? early : late), due(1, extraFirst ? late : early)], now);
+  expect(result.stages.map(stage => stage.amount)).toEqual(["30.00", extraFirst ? "47.00" : "40.00", "30.00"]);
+  expect(result.unscheduledExtras).toBe(extraFirst ? "0.00" : "7.00");
+});
+it("keeps extras from before the schedule separate without folding them into stages", () => {
+  const result = projectPaymentSchedule(10000, stages, [
+    { ...extra(700, "2026-11-24T11:00:00.123100Z"), kind: "prior_extra" },
+    { ...extra(800, "2026-11-24T11:00:00.123900Z"), kind: "prior_extra" },
+    extra(200),
+  ], now);
+  expect(result.extrasBeforeSchedule).toBe("8.00");
+  expect(result.extrasSinceSchedule).toBe("2.00");
+  expect(result.stages.map(stage => stage.amount)).toEqual(["30.60", "40.80", "30.60"]);
+});

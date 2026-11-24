@@ -45,7 +45,7 @@ for (const width of [360,1280]) {
       const invoices = [];
       page.on("request", request => { if(request.method() === "POST" && request.url().includes("customer-invoice"))invoices.push(request.url()); });
       await page.goto(`${origin}/jobs/${jobId}/money`);
-      const section = page.getByRole("region",{name:"Payment schedule"});
+      const section = page.getByRole("main").getByRole("region",{name:"Payment schedule"});
       await expect(section.getByText("Accepted quote total, before VAT:",{exact:false})).toBeVisible();
       const save = section.getByRole("button",{name:"Set payment schedule"});
       if(await save.count()) {
@@ -57,6 +57,7 @@ for (const width of [360,1280]) {
       await expect(section.getByText("Due now",{exact:false})).toHaveCount(1);
       const saved = await section.innerText();
       await page.reload();
+      await expect(section).toContainText("Extras approved before the schedule was set:");
       await expect(section).toContainText("Extras since the schedule was set:");
       assert.equal(await section.innerText(),saved);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
