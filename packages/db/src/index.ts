@@ -30,6 +30,7 @@ export * from "./activation-repository.js";
 
 export * from "./decision-repository.js";
 export * from "./variation-repository.js";
+export * from "./variation-register-repository.js";
 export * from "./proof-repository.js";
 export * from "./proof-application-repository.js";
 export * from "./final-account-repository.js";

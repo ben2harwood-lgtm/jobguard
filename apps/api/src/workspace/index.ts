@@ -132,3 +132,4 @@ export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
 export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";
+export * from "../variation-register.application.js";
