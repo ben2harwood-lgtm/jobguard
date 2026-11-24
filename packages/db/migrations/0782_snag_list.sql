@@ -137,6 +137,20 @@ END $$;
 ALTER FUNCTION app.snag_replay(uuid,uuid,uuid,text,text,uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.snag_replay(uuid,uuid,uuid,text,text,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
 
+-- Every fresh snag outcome appends to the tenant audit chain in the same transaction
+-- (AGENTS.md 5.7). The payload holds identifiers and hashes only, never the snag's text.
+CREATE FUNCTION app.snag_audit(t uuid,j uuid,s uuid,actor uuid,k text,refs jsonb,h text,result jsonb) RETURNS void
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ PERFORM app.lp4_seal_audit(jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'version','audit.v1','actorRef','membership:'||actor::text,
+  'eventType','snag.'||k,'subjectType','job','subjectRef',j::text,
+  'payload',jsonb_build_object('references',jsonb_build_object('snagId',s::text,'environment','synthetic_demo')||refs,
+   'hashes',jsonb_strip_nulls(jsonb_build_object('request',h,'result',app.final_lock_hash(result))),
+   'classifications',jsonb_build_object('action','operational')))),'checked_operation');
+END $$;
+ALTER FUNCTION app.snag_audit(uuid,uuid,uuid,uuid,text,jsonb,text,jsonb) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.snag_audit(uuid,uuid,uuid,uuid,text,jsonb,text,jsonb) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+
 CREATE FUNCTION app.snag_add(j uuid,c uuid,s uuid,p_title text,p_location text,p_assignee text,p_due date) RETURNS jsonb
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; actor uuid; h text; result jsonb;
@@ -151,6 +165,7 @@ BEGIN
  VALUES(t,j,s,p_title,p_location,p_assignee,p_due,actor);
  result:=jsonb_build_object('version','snag-command-result.v1','snagId',s,'revision',1);
  INSERT INTO app.snag_command(tenant_id,command_id,job_id,snag_id,kind,request_hash,result,actor_membership_id) VALUES(t,c,j,s,'add',h,result,actor);
+ PERFORM app.snag_audit(t,j,s,actor,'add',jsonb_build_object('commandId',c::text),h,result);
  RETURN result;
 END $$;
 
@@ -190,6 +205,7 @@ BEGIN
  VALUES(t,j,s,current+1,p_title,p_location,p_assignee,p_due,actor);
  result:=jsonb_build_object('version','snag-command-result.v1','snagId',s,'revision',current+1);
  INSERT INTO app.snag_command(tenant_id,command_id,job_id,snag_id,kind,request_hash,result,actor_membership_id) VALUES(t,c,j,s,'revise',h,result,actor);
+ PERFORM app.snag_audit(t,j,s,actor,'revise',jsonb_build_object('commandId',c::text),h,result);
  RETURN result;
 END $$;
 
@@ -223,6 +239,7 @@ BEGIN
  INSERT INTO app.snag_event(tenant_id,job_id,snag_id,sequence,kind,actor_membership_id) VALUES(t,j,s,next,p_kind,actor);
  result:=jsonb_build_object('version','snag-command-result.v1','snagId',s,'sequence',next,'kind',p_kind);
  INSERT INTO app.snag_command(tenant_id,command_id,job_id,snag_id,kind,request_hash,result,actor_membership_id) VALUES(t,c,j,s,p_kind,h,result,actor);
+ PERFORM app.snag_audit(t,j,s,actor,p_kind,jsonb_build_object('commandId',c::text),h,result);
  RETURN result;
 END $$;
 
@@ -250,6 +267,8 @@ BEGIN
  IF n>=6 THEN RAISE EXCEPTION 'PHOTO_LIMIT_REACHED' USING ERRCODE='22023'; END IF;
  INSERT INTO app.snag_photo(tenant_id,job_id,snag_id,evidence_id,position,sha256,received_at,actor_membership_id)
  VALUES(t,j,s,evidence,n+1,btrim(o.sha256),o.server_verified_at,actor);
+ PERFORM app.snag_audit(t,j,s,actor,'photo_attached',jsonb_build_object('evidenceId',evidence::text),NULL,
+  jsonb_build_object('version','snag-photo-result.v1','snagId',s,'evidenceId',evidence,'position',n+1));
  RETURN jsonb_build_object('version','snag-photo-result.v1','snagId',s,'evidenceId',evidence,'position',n+1);
 END $$;
 

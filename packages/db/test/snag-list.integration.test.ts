@@ -47,6 +47,24 @@ describe("QW-4 snag flow", () => {
     expect(buildSnagListV1(a.jobId, new Date("2026-12-03T12:00:00Z"), [row!]).snags[0]).toMatchObject({ state: "open", overdue: true });
   });
 
+  it("appends each fresh outcome to the tenant audit chain, with ids and hashes only (Codex P2 4685159928)", async () => {
+    const a = await seedFinalCheckJob(f), snagId = await addSnag(a), fix = randomUUID();
+    await event(a, snagId, "mark_fixed", fix);
+    await event(a, snagId, "mark_fixed", fix);
+    await photo(a, snagId);
+    const audit = (await finalCheckTenant(f.admin, a.tenantId, db => db.query<{ event_type: string; actor_ref: string; payload: { references: Record<string, string>; hashes: Record<string, string> } }>(
+      "SELECT event_type,actor_ref,payload FROM app.audit_event WHERE tenant_id=$1 AND subject_type='job' AND subject_ref=$2 AND event_type LIKE 'snag.%' ORDER BY sequence", [a.tenantId, a.jobId]))).rows;
+    // The replayed fix appends nothing.
+    expect(audit.map(e => e.event_type)).toEqual(["snag.add", "snag.fixed", "snag.photo_attached"]);
+    for (const e of audit) {
+      expect(e.actor_ref).toBe(`membership:${FINAL_CHECK_ACTOR}`);
+      expect(e.payload.references.snagId).toBe(snagId);
+      expect(e.payload.hashes.result).toMatch(/^[a-f0-9]{64}$/u);
+      expect(JSON.stringify(e.payload)).not.toContain("Fictional");
+    }
+    expect(audit[1]!.payload.references.commandId).toBe(fix);
+  });
+
   it("refuses checked before fixed, a second fix, and reopening an open snag", async () => {
     const a = await seedFinalCheckJob(f), snagId = await addSnag(a);
     await refused(event(a, snagId, "mark_checked"), "SNAG_TRANSITION_REFUSED");
@@ -108,6 +126,16 @@ describe("QW-4 snag photos", () => {
     await refused(r.photo(a.context, a.jobId, second, finalize), "SNAG_COMMAND_CONFLICT");
     await refused(r.photo(a.context, a.jobId, randomUUID(), finalize), "SNAG_COMMAND_CONFLICT");
     expect((await r.read(a.context, a.jobId)).map(s => [s.id, s.photos.length])).toEqual([[snagId, 1], [second, 0]]);
+    // Two concurrent first finalizes naming different snags: one links, the other conflicts (Codex P2 4685159915).
+    const third = await addSnag(a), raced = await r.photo(a.context, a.jobId, third, { version: "snag-photo.v1", action: "begin", commandId: randomUUID(), fixture: "completion-photo" });
+    const race = { version: "snag-photo.v1", action: "finalize", commandId: randomUUID(), uploadId: raced.uploadId, objectVersionId: raced.objectVersionId } as const;
+    const outcomes = await Promise.allSettled([r.photo(a.context, a.jobId, third, race), r.photo(a.context, a.jobId, second, race)]);
+    expect(outcomes.filter(o => o.status === "fulfilled")).toHaveLength(1);
+    const failure = outcomes.find(o => o.status === "rejected") as PromiseRejectedResult;
+    expect(failure.reason).toBeInstanceOf(SnagError);
+    expect((failure.reason as SnagError).code).toBe("SNAG_COMMAND_CONFLICT");
+    const linked = (await r.read(a.context, a.jobId)).filter(s => s.photos.some(p => p.evidenceId === raced.uploadId));
+    expect(linked).toHaveLength(1);
     // Another job's snag (owned by another practice session) is not found from this job.
     await refused(r.photo(a.context, a.jobId, otherSnag, { version: "snag-photo.v1", action: "begin", commandId: randomUUID(), fixture: "completion-photo" }), "SNAG_NOT_FOUND");
     // Job b's upload cannot be finalized as a photo on job a.
