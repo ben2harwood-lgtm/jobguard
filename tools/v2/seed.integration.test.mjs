@@ -825,3 +825,253 @@ test("forced measurement policies hide revisions and reject changes from the sec
   }
   assert.equal((await runtime.query(select, key)).rowCount, 0);
 });
+
+const materialsQuery = { version: "v2-materials-query.v1" };
+const tilesLine = { product: "Fictional white metro tile", packSize: { quantity: "1.2", unit: "m²" },
+  wastageMultiplier: "1.10", setAsidePacks: "0", supplier: "Fictional Merchant", neededBy: "2026-12-07" };
+
+async function materialsSetup() {
+  const owner = await signIn("builder");
+  const { materialsEnquiry: materials, measurements } = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const { quoteRevisionId } = await acceptedPlanSource();
+  const { rows } = await admin.query(`SELECT scope_item_id, category FROM app.quote_line
+    WHERE (tenant_id, job_id, quote_revision_id) = ($1, $2, $3) AND included`, [DEMO_TENANT_ID, jobId, quoteRevisionId]);
+  const tilingId = rows.find(row => row.category === "Tiling").scope_item_id;
+  const decoratingId = rows.find(row => row.category === "Decorating").scope_item_id;
+  const measure = async (scopeItemId, quantity, unit, confirmed = true) => {
+    const [{ version }] = await measurements.read(jobId, { ...measurementQuery, scopeItemId });
+    return measurements.save(jobId, { version: "v2-measurement-command.v1", scopeItemId, commandId: randomUUID(),
+      expectedVersion: version, quantity, unit, confirmed });
+  };
+  const line = async (scopeItemId, lineKey, changes) => {
+    const view = await materials.read(jobId, materialsQuery);
+    const current = view.lines.find(entry => entry.scopeItemId === scopeItemId && entry.lineKey === lineKey);
+    return materials.saveLine(jobId, { version: "v2-material-line-command.v1", commandId: randomUUID(),
+      scopeItemId, lineKey, expectedVersion: current?.version ?? 0, changes });
+  };
+  const generate = async (commandId = randomUUID()) => {
+    const { enquiry } = await materials.read(jobId, materialsQuery);
+    return materials.generate(jobId, { version: "v2-material-enquiry-generate.v1", commandId,
+      expectedVersion: enquiry?.version ?? 0 });
+  };
+  return { owner, materials, tilingId, decoratingId, measure, line, generate };
+}
+
+const enquiryLine = (view, lineKey) => view.enquiry.groups.flatMap(group => group.lines)
+  .find(entry => entry.lineKey === lineKey);
+
+async function capturedDeliveries(work) {
+  const original = console.info;
+  const captured = [];
+  console.info = (...args) => { if (String(args[0]).includes("v2.delivery.captured")) captured.push(args); else original(...args); };
+  try { return { result: await work(), captured }; } finally { console.info = original; }
+}
+
+test("the materials enquiry groups by supplier and needed-by date, leaves out customer-supplied items and generates once", async () => {
+  const { owner, materials, tilingId, decoratingId, measure, line } = await materialsSetup();
+  await measure(tilingId, "6", "m²");
+  await measure(decoratingId, "12", "m²");
+  await line(tilingId, "tiles", tilesLine);
+  await line(tilingId, "adhesive", { product: "Fictional tile adhesive", packSize: { quantity: "3", unit: "m²" },
+    wastageMultiplier: "1.10", supplier: "Fictional Merchant", neededBy: "2026-12-07" });
+  await line(tilingId, "grout", { product: "The customer's chosen grout", suppliedBy: "customer", neededBy: "2026-12-07" });
+  await line(decoratingId, "wall-paint", { product: "Fictional trade emulsion", packSize: { quantity: "25", unit: "m²" },
+    wastageMultiplier: "1.00", supplier: "Fictional Paint Supplier", neededBy: "2026-12-09", notes: "Matt finish" });
+  await line(decoratingId, "filler", { supplier: "Fictional Paint Supplier", neededBy: "2026-12-09" });
+  const before = await materials.read(jobId, materialsQuery);
+  assert.equal(before.enquiry, null);
+  assert.equal(before.lines.length, 5);
+
+  const effects = await effectCounts();
+  const command = { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(), expectedVersion: 0 };
+  const { result: [first, second], captured } = await capturedDeliveries(() => Promise.all([
+    materials.generate(jobId, command), materials.generate(jobId, { ...command, commandId: randomUUID() }),
+  ]));
+  assert.deepEqual(second.enquiry, first.enquiry);
+  assert.equal(first.enquiry.version, 1);
+  assert.equal(first.enquiry.current, true);
+  assert.deepEqual(first.enquiry.outOfDate, []);
+  assert.equal(first.enquiry.generatedByMembershipId, owner.membershipId);
+  assert.deepEqual(first.enquiry.groups.map(({ supplier, neededBy, lines }) => ({ supplier, neededBy,
+    lines: lines.map(entry => [entry.lineKey, entry.neededPacks]).sort() })), [
+    { supplier: "Fictional Merchant", neededBy: "2026-12-07", lines: [["adhesive", "3"], ["tiles", "6"]] },
+    { supplier: "Fictional Paint Supplier", neededBy: "2026-12-09", lines: [["wall-paint", "1"]] },
+  ]);
+  assert.equal(enquiryLine(first, "wall-paint").notes, "Matt finish");
+  assert.deepEqual(first.enquiry.questions, [{ scopeItemId: decoratingId, lineKey: "filler", product: null, reason: "product" }]);
+  assert.deepEqual(first.enquiry.customerSupplied, [{ scopeItemId: tilingId, lineKey: "grout",
+    product: "The customer's chosen grout", neededBy: "2026-12-07", notes: null }]);
+  assert.ok(!JSON.stringify(first.enquiry.groups).includes("grout"));
+  assert.ok(!first.enquiry.questions.some(question => question.lineKey === "grout"));
+
+  assert.deepEqual((await materials.generate(jobId, command)).enquiry, first.enquiry);
+  await assert.rejects(materials.generate(jobId, { ...command, expectedVersion: 1 }), { code: "MATERIALS_COMMAND_CONFLICT" });
+  const again = await materials.generate(jobId, { ...command, commandId: randomUUID(), expectedVersion: 1 });
+  assert.deepEqual(again.enquiry, first.enquiry);
+  const { rows: [{ enquiries }] } = await admin.query(
+    "SELECT count(*)::int AS enquiries FROM app.v2_material_enquiry WHERE job_id = $1", [jobId]);
+  assert.equal(enquiries, 1);
+  assert.deepEqual(captured, []);
+  assert.deepEqual(await effectCounts(), effects);
+  const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
+    FROM app.job_record_proposal WHERE model IS DISTINCT FROM 'fixture-capture-v1'`);
+  assert.equal(paid, 0);
+
+  const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
+  const { materialsEnquiry: reopened } = createWorkspaceApplication({ pool: runtime, sessionId: fresh.sessionId });
+  assert.deepEqual(await reopened.read(jobId, materialsQuery), first);
+});
+
+test("each sum input takes current off the enquiry and regenerating gives the corrected quantities once", async () => {
+  const { materials, tilingId, measure, line, generate } = await materialsSetup();
+  const effects = await effectCounts();
+  const steps = [
+    ["measurement", () => measure(tilingId, "7", "m²"), "7"],
+    ["confirmation", () => measure(tilingId, "7", "m²", false), null],
+    ["confirmation", () => measure(tilingId, "7", "m²"), "7"],
+    ["product", () => line(tilingId, "tiles", { product: "Fictional grey metro tile" }), "7"],
+    ["pack_size", () => line(tilingId, "tiles", { packSize: { quantity: "1", unit: "m²" } }), "8"],
+    ["wastage_multiplier", () => line(tilingId, "tiles", { wastageMultiplier: "1.20" }), "9"],
+    ["set_aside_packs", () => line(tilingId, "tiles", { setAsidePacks: "2" }), "7"],
+  ];
+  for (const [input, change, packs] of steps) {
+    const { enquiry: old } = await materials.read(jobId, materialsQuery);
+    assert.equal(old.current, true, input);
+    await change();
+    const stale = await materials.read(jobId, materialsQuery);
+    assert.equal(stale.enquiry.version, old.version, input);
+    assert.equal(stale.enquiry.current, false, input);
+    const tiles = stale.enquiry.outOfDate.find(entry => entry.lineKey === "tiles");
+    assert.ok(tiles.changed.includes(input), `${input}: ${JSON.stringify(tiles)}`);
+    assert.equal(tiles.quantities, true, input);
+
+    const [regenerated, retried] = await Promise.all([generate(), generate()]);
+    assert.equal(regenerated.enquiry.version, old.version + 1, input);
+    assert.deepEqual(retried.enquiry, regenerated.enquiry);
+    assert.equal(regenerated.enquiry.current, true, input);
+    assert.deepEqual(regenerated.enquiry.outOfDate, [], input);
+    if (packs === null) {
+      assert.equal(enquiryLine(regenerated, "tiles"), undefined);
+      assert.ok(regenerated.enquiry.questions.some(entry => entry.lineKey === "tiles" && entry.reason === "measurement"));
+    } else {
+      assert.equal(enquiryLine(regenerated, "tiles").neededPacks, packs, input);
+    }
+    assert.deepEqual((await generate()).enquiry, regenerated.enquiry);
+  }
+  assert.equal(enquiryLine(await materials.read(jobId, materialsQuery), "tiles").product, "Fictional grey metro tile");
+  assert.deepEqual(await effectCounts(), effects);
+});
+
+test("regenerating keeps the builder's edits where they still fit and flags a pack count that clashes", async () => {
+  const { materials, tilingId, measure, line, generate } = await materialsSetup();
+  const read = () => materials.read(jobId, materialsQuery);
+  assert.equal(enquiryLine(await read(), "tiles").calculatedPacks, "7");
+
+  await line(tilingId, "tiles", { packsOverride: "10" });
+  let view = await generate();
+  assert.deepEqual(Object.fromEntries(["neededPacks", "calculatedPacks", "builderPacks", "packsClash"]
+    .map(key => [key, enquiryLine(view, "tiles")[key]])), { neededPacks: "10", calculatedPacks: "7", builderPacks: "10", packsClash: false });
+
+  await line(tilingId, "tiles", { supplier: "Fictional Second Merchant", notes: "Ask about lead time" });
+  const stale = await read();
+  assert.equal(stale.enquiry.current, false);
+  assert.deepEqual(stale.enquiry.outOfDate, [{ scopeItemId: tilingId, lineKey: "tiles",
+    changed: ["supplier", "notes"], quantities: false }]);
+  view = await generate();
+  assert.equal(enquiryLine(view, "tiles").neededPacks, "10");
+  assert.equal(enquiryLine(view, "tiles").notes, "Ask about lead time");
+  assert.equal(view.enquiry.groups.find(group => group.lines.some(entry => entry.lineKey === "tiles")).supplier,
+    "Fictional Second Merchant");
+
+  await measure(tilingId, "8", "m²");
+  view = await generate();
+  assert.deepEqual(Object.fromEntries(["neededPacks", "calculatedPacks", "builderPacks", "packsClash"]
+    .map(key => [key, enquiryLine(view, "tiles")[key]])), { neededPacks: "8", calculatedPacks: "8", builderPacks: "10", packsClash: true });
+
+  await line(tilingId, "tiles", { packsOverride: "9" });
+  view = await generate();
+  assert.equal(enquiryLine(view, "tiles").neededPacks, "9");
+  assert.equal(enquiryLine(view, "tiles").packsClash, false);
+  await line(tilingId, "tiles", { packsOverride: null, neededBy: "2026-12-08" });
+  view = await generate();
+  assert.equal(enquiryLine(view, "tiles").neededPacks, "8");
+  assert.equal(enquiryLine(view, "tiles").builderPacks, null);
+  assert.ok(view.enquiry.groups.some(group => group.neededBy === "2026-12-08"));
+
+  await line(tilingId, "tiles", { suppliedBy: "customer" });
+  view = await generate();
+  assert.equal(enquiryLine(view, "tiles"), undefined);
+  assert.ok(view.enquiry.customerSupplied.some(entry => entry.lineKey === "tiles"));
+  await line(tilingId, "tiles", { suppliedBy: "builder" });
+  await line(tilingId, "adhesive", { removed: true });
+  view = await generate();
+  assert.equal(enquiryLine(view, "tiles").neededPacks, "8");
+  assert.equal(enquiryLine(view, "adhesive"), undefined);
+
+  const tiles = view.lines.find(entry => entry.lineKey === "tiles");
+  const command = { version: "v2-material-line-command.v1", commandId: randomUUID(), scopeItemId: tilingId,
+    lineKey: "tiles", expectedVersion: tiles.version, changes: { notes: "Confirm colour batch" } };
+  const [saved, replay] = await Promise.all([materials.saveLine(jobId, command), materials.saveLine(jobId, command)]);
+  assert.deepEqual(replay, saved);
+  assert.equal(saved.version, tiles.version + 1);
+  await assert.rejects(materials.saveLine(jobId, { ...command, changes: { notes: "Other" } }), { code: "MATERIALS_COMMAND_CONFLICT" });
+  await assert.rejects(materials.saveLine(jobId, { ...command, commandId: randomUUID() }), { code: "MATERIALS_VERSION_CONFLICT" });
+  for (const changes of [{}, { packsOverride: "0" }, { setAsidePacks: "-1" }, { wastageMultiplier: "0" },
+    { neededBy: "2026-02-30" }, { suppliedBy: "merchant" }, { packSize: { quantity: "1.2" } }, { price: 100 }]) {
+    await assert.rejects(materials.saveLine(jobId, { ...command, commandId: randomUUID(), changes }),
+      { code: "MATERIALS_INVALID_COMMAND" }, JSON.stringify(changes));
+  }
+  await assert.rejects(materials.saveLine(jobId, { ...command, commandId: randomUUID(), scopeItemId: randomUUID(),
+    expectedVersion: 0 }), { code: "NOT_FOUND" });
+  await assert.rejects(materials.generate(jobId, { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(),
+    expectedVersion: view.enquiry.version - 1 }), { code: "MATERIALS_VERSION_CONFLICT" });
+});
+
+test("forced materials policies hide lines and enquiries and reject changes from the second firm", async () => {
+  const { owner, tilingId } = await materialsSetup();
+  const outsider = await signIn("second-builder");
+  const { materialsEnquiry: materials } = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  await assert.rejects(materials.read(jobId, materialsQuery), { code: "NOT_FOUND" });
+  await assert.rejects(materials.saveLine(jobId, { version: "v2-material-line-command.v1", commandId: randomUUID(),
+    scopeItemId: tilingId, lineKey: "tiles", expectedVersion: 0, changes: { notes: "x" } }), { code: "NOT_FOUND" });
+  await assert.rejects(materials.generate(jobId, { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(),
+    expectedVersion: 0 }), { code: "NOT_FOUND" });
+
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+  const tables = {
+    "app.v2_material_line": {
+      insert: `INSERT INTO app.v2_material_line (tenant_id, job_id, scope_item_id, line_key, expected_version, command_id,
+        changes, actor_membership_id) VALUES ($1,$2,$3,'tiles',999,$4,'{"notes":"x"}',$5)`,
+      params: () => [DEMO_TENANT_ID, jobId, tilingId, randomUUID(), owner.membershipId],
+      set: "changes = '{\"notes\":\"y\"}'" },
+    "app.v2_material_enquiry": {
+      insert: `INSERT INTO app.v2_material_enquiry (tenant_id, job_id, version, command_id, basis_digest, basis, content,
+        actor_membership_id) VALUES ($1,$2,999,$3,repeat('0', 64),'[]','{}',$4)`,
+      params: () => [DEMO_TENANT_ID, jobId, randomUUID(), owner.membershipId],
+      set: "content = '{}'" },
+  };
+  for (const [table, { insert, params, set }] of Object.entries(tables)) {
+    const { rows: [acl] } = await admin.query(`SELECT
+      relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read,
+      has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
+      has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+      has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+      has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+      has_table_privilege('jobguard_infrastructure', oid, 'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+      FROM pg_class WHERE oid = $1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+      identity_access: false, worker_access: false, infra_access: false }, table);
+    const select = `SELECT * FROM ${table} WHERE (tenant_id, job_id) = ($1, $2)`;
+    assert.ok((await query(ownerContext, select, [DEMO_TENANT_ID, jobId])).rowCount > 0, table);
+    for (const scope of [outsider.realContext, context]) {
+      assert.equal((await query(scope, select, [DEMO_TENANT_ID, jobId])).rowCount, 0, table);
+      await assert.rejects(query(scope, insert, params()), { code: "42501", message: /row-level security policy/u }, table);
+      await assert.rejects(query(scope, `UPDATE ${table} SET ${set} WHERE job_id = $1`, [jobId]), { code: "42501" }, table);
+      await assert.rejects(query(scope, `DELETE FROM ${table} WHERE job_id = $1`, [jobId]), { code: "42501" }, table);
+    }
+    assert.equal((await runtime.query(select, [DEMO_TENANT_ID, jobId])).rowCount, 0, table);
+  }
+});
