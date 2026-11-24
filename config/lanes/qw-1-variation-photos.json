@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "lanes": {
+    "qw-1-variation-photos": {
+      "branches": [
+        "claude/project-thread-bblk56"
+      ],
+      "note": "QW-1: photos on variations (pilot builder upload, frozen on pricing, customer view and exact-photo approval). Migration 0781. RED: needs an independent check before merge.",
+      "allow": [
+        "apps/api/src/auth/customer-variation.ts",
+        "apps/api/src/auth/customer-variation-photo.test.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/pilot-job-continuation.ts",
+        "apps/web/app/api/customer-portal/variation-photo/route.ts",
+        "apps/web/app/api/jobs/[id]/variations/photos/route.ts",
+        "packages/core/src/customer-variation-approval.ts",
+        "packages/db/src/evidence.ts",
+        "packages/db/migrations/0781_variation_revision_photo.sql",
+        "packages/db/test/migration-proofs/0781_variation_revision_photo.proof.json",
+        "packages/db/test/variation-revision-photo.integration.test.ts"
+      ]
+    }
+  }
+}

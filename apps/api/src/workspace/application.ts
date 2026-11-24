@@ -208,7 +208,7 @@ export function pilotWorkspaceFailure(error: unknown): { code: string; status: n
       case "acceptance is not allowed": return { code: "STALE_ACCEPTANCE", status: 409 };
       case "JOB_NOT_LIVE": case "ACTIVATION_REQUIRED": case "IDEMPOTENCY_CONFLICT":
       case "REVIEW_REVISION_CONFLICT": case "QUOTE_REVISION_CONFLICT": case "COMMAND_CONFLICT":
-      case "REVISION_CONFLICT": case "QUOTE_CHANGED": case "STALE_QUOTE_APPROVAL":
+      case "REVISION_CONFLICT": case "QUOTE_CHANGED": case "STALE_QUOTE_APPROVAL": case "PHOTO_LIMIT_REACHED":
         return { code, status: 409 };
     }
   }
