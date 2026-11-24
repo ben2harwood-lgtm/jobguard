@@ -1,4 +1,4 @@
-import { MaterialsError, materialLineCommandV1, materialEnquiryCommandV1 } from "@jobguard/api/workspace";
+import { MaterialsError, QuoteApplicationError, materialLineCommandV1, materialEnquiryCommandV1 } from "@jobguard/api/workspace";
 import { NextResponse } from "next/server";
 import { practiceFailure } from "../../../../../lib/synthetic-server";
 import { workspaceApplication } from "../../../../../lib/workspace-server";
@@ -18,7 +18,10 @@ export async function GET(_request: Request, { params }: Route) {
     const { id } = await params;
     const { materialsEnquiry, quote } = await workspaceApplication();
     const view = await materialsEnquiry.read(id, { version: "v2-materials-query.v1" });
-    const { scope } = await quote.get(id);
+    const { scope } = await quote.get(id).catch((error: unknown) => {
+      if (error instanceof QuoteApplicationError && error.code === "NOT_FOUND") return { scope: [] };
+      throw error;
+    });
     return reply({ ...view, scope: scope.map(item => ({ scopeItemId: item.scopeItemId, description: item.description })) });
   } catch (error) { return failure(error); }
 }
