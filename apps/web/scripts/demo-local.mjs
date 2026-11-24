@@ -6,6 +6,7 @@
 //   DEMO_DEV=1 node scripts/demo-local.mjs (next dev)
 // Ctrl+C stops everything and deletes the throwaway database.
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { randomBytes } from "node:crypto";
 
 // The sign-in code secret is fresh for every start and never written to disk or logs, because the
@@ -13,10 +14,16 @@ import { randomBytes } from "node:crypto";
 process.env.AUTH_CODE_SECRET = randomBytes(48).toString("base64url");
 const { default: setup, E2E_RUNTIME_URL, E2E_AUTH_CODE_SECRET, E2E_WORKER_URL } = await import("../e2e/global-setup.ts");
 
+// A web server left over from an earlier run would serve stale code against the wrong database.
+const portFree = await new Promise(resolve => { const probe = createServer().once("error", () => resolve(false)).once("listening", () => probe.close(() => resolve(true))); probe.listen(3000, process.env.DEMO_HOST ?? "127.0.0.1"); });
+if (!portFree) { console.error("Port 3000 is already in use. Stop the old demo (or whatever holds port 3000) and start again."); process.exit(1); }
+
 const origin = process.env.DEMO_ORIGIN ?? "http://127.0.0.1:3000";
 const teardown = await setup();
 const web = spawn("pnpm", process.env.DEMO_DEV ? ["dev"] : ["exec", "next", "start", "--hostname", process.env.DEMO_HOST ?? "127.0.0.1", "--port", "3000"], {
   stdio: "inherit",
+  // Own process group, so stopping the demo also stops next-server under the pnpm wrapper.
+  detached: true,
   env: {
     ...process.env,
     JOBGUARD_ENV: "synthetic_demo",
@@ -30,7 +37,17 @@ const web = spawn("pnpm", process.env.DEMO_DEV ? ["dev"] : ["exec", "next", "sta
   },
 });
 let stopping = false;
-const stop = async () => { if (stopping) return; stopping = true; await teardown?.().catch(() => {}); web.kill("SIGTERM"); process.exit(0); };
+const killWeb = signal => { try { process.kill(-web.pid, signal); } catch { /* already stopped */ } };
+const webExited = new Promise(resolve => web.once("exit", resolve));
+// Stop the web app first (whole group, forced after 10 s), then the worker and database.
+const stop = async () => {
+  if (stopping) return; stopping = true;
+  killWeb("SIGTERM");
+  const forced = setTimeout(() => killWeb("SIGKILL"), 10_000);
+  await webExited; clearTimeout(forced);
+  await teardown?.().catch(() => {});
+  process.exit(0);
+};
 process.on("SIGINT", stop); process.on("SIGTERM", stop);
 web.on("exit", () => void stop());
 console.log(`\nJobGuard fictional demo starting on ${origin}\n`);
