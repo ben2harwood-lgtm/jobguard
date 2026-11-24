@@ -237,3 +237,7 @@ export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
 export { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";
 
 export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
+
+// V2-K4: fictional automatic chasing; never a production send capability.
+export { V2ChaseRepository } from "./v2-chase-repository.js";
+export { V2ChaseError, requireV2Chasing } from "./v2-chase-policy.js";

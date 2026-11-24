@@ -1,0 +1,18 @@
+{
+  "migration": "tools/v2/migrations/2019_automatic_chasing.sql",
+  "status": "awaiting_real_postgresql_execution",
+  "scope": "V2 bootstrap only; excluded from the production migration runner and LP-0 inventory",
+  "tables": ["app.v2_chase_setting", "app.v2_chase_log", "app.v2_chase_command"],
+  "required_catalog_assertions": {
+    "owner": "jobguard_migration", "rls": true, "force_rls": true,
+    "firm_binding": "app.current_firm_profile_key()", "tenant_binding": "app.current_tenant()",
+    "job_binding": "visible app.job; tenant and job qualified foreign keys",
+    "runtime": "SELECT and INSERT; setting-column UPDATE only; no DELETE, TRUNCATE or ownership",
+    "routine": "app.v2_chase_invoice_metadata(uuid); fixed search_path; PUBLIC revoked; bound read only"
+  },
+  "execution_test": "tools/v2/chasing.integration.test.mjs",
+  "fresh_and_upgrade": "Apply after 2001, repeat 2019 with retained settings/logs, assert catalog and retained counts",
+  "rollback_test": "Force failure on command receipt insert after setting/log insert; no row or audit event survives",
+  "second_firm_test": "Different linked practice firm cannot read, insert, update or delete first-firm state",
+  "audit_test": "One command event and one per captured message; replay adds nothing; no message, amount or hidden finding in payload"
+}

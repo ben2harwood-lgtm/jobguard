@@ -62,8 +62,12 @@ try {
   }
   process.env.AUTH_CODE_SECRET = authSecret();
   await client.query(readFileSync(new URL("./migrations/2001_practice_quote.sql", import.meta.url), "utf8"));
+  // V2-K4: local-only chasing tables, after the checked V2 boundary.
+  await client.query(readFileSync(new URL("./migrations/2019_automatic_chasing.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
+  // V2-K4: discover the local reminders view from the rehearsal launcher.
+  console.log(`Practice reminders: ${settings.AUTH_ALLOWED_ORIGIN}/jobs/${jobId}/chasing`);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
 } finally {
   client.release();
