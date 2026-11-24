@@ -14,6 +14,7 @@
         "apps/web/app/customer/change/[capability]/page.tsx",
         "apps/web/app/customer/change/[capability]/view.tsx",
         "apps/web/app/lib/v2-extra-link-server.ts",
+        "apps/web/app/lib/v2-extra-link-server.test.ts",
         "apps/web/app/v2/jobs/[id]/extra-links/page.tsx",
         "apps/web/app/v2/jobs/[id]/extra-links/view.tsx",
         "packages/db/migration-notes/2018_customer_extra_links.md",

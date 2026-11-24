@@ -40,6 +40,25 @@ END $$;
 REVOKE ALL ON app.v2_customer_extra_link FROM PUBLIC,jobguard_identity,jobguard_worker,jobguard_shadow;
 GRANT SELECT,INSERT,UPDATE ON app.v2_customer_extra_link TO jobguard_runtime;
 
+-- Runtime may only cancel a pending link. Agreement is written by the narrow
+-- migration-owner capability function; all saved commercial content is immutable.
+CREATE OR REPLACE FUNCTION app.v2_f6_guard_update() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF current_user='jobguard_runtime' AND (
+  OLD.cancelled_at IS NOT NULL OR OLD.agreed_at IS NOT NULL OR OLD.link_version<>1
+  OR NEW.cancelled_at IS NULL OR NEW.cancel_command_id IS NULL OR NEW.cancel_fingerprint IS NULL
+  OR NEW.link_version<>2
+  OR (to_jsonb(NEW)-ARRAY['cancelled_at','cancel_command_id','cancel_fingerprint','link_version'])
+    IS DISTINCT FROM (to_jsonb(OLD)-ARRAY['cancelled_at','cancel_command_id','cancel_fingerprint','link_version'])
+ ) THEN RAISE EXCEPTION 'LINK_UNAVAILABLE' USING ERRCODE='42501'; END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.v2_f6_guard_update() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.v2_f6_guard_update() FROM PUBLIC;
+CREATE OR REPLACE TRIGGER v2_f6_guard_update BEFORE UPDATE ON app.v2_customer_extra_link
+ FOR EACH ROW EXECUTE FUNCTION app.v2_f6_guard_update();
+
 -- LP-11 has removed GUC-only tenant authority. These policies give only the
 -- private migration-owner functions token-scoped reads; runtime gains no access
 -- to any existing business table. The capability hash is never a tenant selector.

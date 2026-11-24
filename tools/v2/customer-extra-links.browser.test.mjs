@@ -7,8 +7,15 @@ import { after, before, test } from "node:test";
 import { chromium, expect } from "../../apps/web/node_modules/@playwright/test/index.mjs";
 const origin = process.env.V2_TEST_ORIGIN;
 assert.ok(origin, "Set V2_TEST_ORIGIN to the V2 launcher's web or HTTPS phone origin");
-let browser;
-before(async () => { browser = await chromium.launch({ executablePath: process.env.V2_TEST_CHROMIUM }); });
+let browser, ownerState;
+before(async () => {
+  browser = await chromium.launch({ executablePath: process.env.V2_TEST_CHROMIUM });
+  const owner = await browser.newContext({ ignoreHTTPSErrors: true });
+  try {
+    await signIn(owner);
+    ownerState = await owner.storageState();
+  } finally { await owner.close(); }
+});
 after(async () => browser?.close());
 async function post(context, path, data, csrf) {
   const response = await context.request.post(origin + path, { data, headers: { origin, ...(csrf && { "x-csrf-token": csrf }) } });
@@ -16,17 +23,27 @@ async function post(context, path, data, csrf) {
   return response.json();
 }
 async function signIn(context) {
-  const input = { email: "builder@jobguard-v2.invalid", purpose: "signin" };
-  const { fixtureCode } = await post(context, "/api/auth/request", { version: "identity-request.v1", ...input });
-  const { csrfToken } = await post(context, "/api/auth/verify", { version: "identity-verify.v1", ...input, code: fixtureCode });
-  await post(context, "/api/auth/practice", { version: "linked-practice-company.v1", action: "enter" }, csrfToken);
+  // Use the browser's sign-in and practice-entry path, including secure-cookie
+  // handling. APIRequestContext does not send secure cookies over local HTTP.
+  const page = await context.newPage();
+  try {
+    await page.goto(origin + "/sign-in");
+    await page.getByLabel("Fictional email address").fill("builder@jobguard-v2.invalid");
+    await page.getByLabel("What do you want to do?").selectOption("signin");
+    await page.getByRole("button", { name: "Request code", exact: true }).click();
+    const code = page.getByTestId("fixture-code");
+    await expect(code).toHaveText(/^[0-9]{8}$/u);
+    await page.getByLabel("Eight-digit code").fill(await code.textContent());
+    await page.getByRole("button", { name: "Verify code", exact: true }).click();
+    await expect(page).toHaveURL(origin + "/practice-company");
+    assert.ok((await context.cookies()).some(cookie => cookie.name === "jg_session"));
+  } finally { await page.close(); }
 }
 for (const width of [360, 1280]) {
   test(`V2-F6 customer agreement at ${width}px, including local catcher and builder approval`, { timeout: 120000 }, async () => {
-    const owner = await browser.newContext({ viewport: { width, height: 800 }, ignoreHTTPSErrors: true });
+    const owner = await browser.newContext({ viewport: { width, height: 800 }, ignoreHTTPSErrors: true, storageState: ownerState });
     const customer = await browser.newContext({ viewport: { width, height: 800 }, ignoreHTTPSErrors: true });
     try {
-      await signIn(owner);
       const response = await owner.request.get(origin + "/api/jobs?tenantId=11111111-1111-4111-8111-111111111111");
       const jobId = (await response.json()).jobs[0].id;
       await post(owner, `/api/jobs/${jobId}/quotes/activation`, { version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" });

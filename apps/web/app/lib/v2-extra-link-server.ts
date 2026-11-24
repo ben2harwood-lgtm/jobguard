@@ -14,5 +14,8 @@ export function extraLinkFailure() {
   return Response.json({ code: "LINK_UNAVAILABLE" }, { status: 404, headers: extraLinkHeaders });
 }
 export function extraLinkOrigin(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin) throw new Error("LINK_UNAVAILABLE");
+  // The launcher configures the external HTTP/HTTPS origin. Next's dev HTTPS
+  // proxy may expose an internal URL; never derive authority from forwarded headers.
+  const origin = process.env.AUTH_ALLOWED_ORIGIN;
+  if (!origin || request.headers.get("origin") !== origin) throw new Error("LINK_UNAVAILABLE");
 }

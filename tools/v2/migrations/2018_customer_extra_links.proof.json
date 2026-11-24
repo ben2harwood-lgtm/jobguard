@@ -28,7 +28,8 @@
   ],
   "privateHelpers": [
     "app.v2_f6_scope",
-    "app.v2_f6_audit_scope"
+    "app.v2_f6_audit_scope",
+    "app.v2_f6_guard_update"
   ],
   "audit": "appendAuditBatch in command transaction; exact replay appends nothing",
   "agreementEffect": "claim only; existing builder approval command remains unchanged",
@@ -38,5 +39,6 @@
     "packages/db/src/v2-customer-extra-link-repository.test.ts"
   ],
   "sharedSchemaDeferral": "packages/db/test/purchase-order-audit.integration.test.ts",
-  "sha256": "f263766315819dc0f7521b2adc105ab94c326eca7195e50478ce4db629dcf39d"
+  "sha256": "563e7fc9ce27c741b574827bef2df55465cb72682843bd637ef2be4910c85e9d",
+  "runtimeUpdate": "trigger permits only pending-to-cancelled transition; agreed rows and saved commercial fields cannot be rewritten"
 }

@@ -11,6 +11,7 @@ const uuid = z.uuid();
 const common = { version: z.literal("v2-extra-link.v1"), commandId: uuid,
   expectedVersion: z.number().int().min(0).max(2), occurredAt: z.iso.datetime() };
 export const extraLinkCreateV1 = z.strictObject({ ...common, action: z.literal("create"),
+  expectedVersion: z.number().int().min(1).max(2_147_483_647),
   variationId: uuid, revisionId: uuid, token: z.string().regex(/^[a-f0-9]{64}$/u),
   expiresAt: z.iso.datetime(), photoIds: z.array(uuid).max(12) });
 export const extraLinkCancelV1 = z.strictObject({ ...common, action: z.literal("cancel"), linkId: uuid });

@@ -34,6 +34,16 @@ describe("V2-F6 customer agreement boundaries", () => {
     expect(extraLinkAgreeV1.safeParse({ ...input, tenantId: randomUUID() }).success).toBe(false);
     expect(extraLinkCreateV1.safeParse(input).success).toBe(false);
   });
+  it("accepts variation revision 3 for create while keeping agreement link versions bounded", () => {
+    const input = { version: "v2-extra-link.v1", action: "create", commandId: randomUUID(),
+      occurredAt: new Date().toISOString(), expectedVersion: 3, variationId: randomUUID(), revisionId: randomUUID(),
+      token: "a".repeat(64), expiresAt: new Date().toISOString(), photoIds: [] };
+    expect(extraLinkCreateV1.safeParse(input).success).toBe(true);
+    expect(extraLinkCreateV1.safeParse({ ...input, expectedVersion: 2_147_483_648 }).success).toBe(false);
+    expect(extraLinkAgreeV1.safeParse({ version: input.version, action: "agree", commandId: input.commandId,
+      occurredAt: input.occurredAt, expectedVersion: 3, jobId: randomUUID(), revisionId: input.revisionId,
+      amount: "125.00", name: "Practice customer" }).success).toBe(false);
+  });
   it("returns only the customer allowlist", () => {
     const view = extraLinkCustomerView({ job_id: "job", revision_id: "revision", variation_version: 3,
       amount: "125.00", description: "Splashback extension", photos: [{ id: "photo", objectKey: "private", objectVersionId: "private" }],

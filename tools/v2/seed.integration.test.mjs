@@ -72,7 +72,7 @@ const counts = async () => (await admin.query(`SELECT
   (SELECT count(*)::int FROM app.quote_acceptance) AS acceptances,
   (SELECT count(*)::int FROM app.action_outbox) AS sends`)).rows[0];
 
-let jobId;
+let jobId, owner, other;
 before(async () => {
   await verifyDatabaseTarget(admin, systemId, embedded);
   const proposals = await admin.query(`SELECT job_id, model FROM app.job_record_proposal`);
@@ -83,7 +83,8 @@ before(async () => {
 after(async () => Promise.all([admin.end(), runtime.end(), identity.provider.repository.pool.end()]));
 
 test("a fresh owner session reloads the fictional job, both work areas and the exact acceptance", async () => {
-  const { cookies } = await signIn("builder");
+  owner = await signIn("builder");
+  const { cookies } = owner;
   const first = await json(await request(jobsPath, { cookies }));
   const second = await json(await request(jobsPath, { cookies }));
   assert.deepEqual(second, first);
@@ -133,7 +134,8 @@ test("the checked bootstrap reruns without duplicating or delivering anything", 
 });
 
 test("the second firm's fresh session cannot list or open the job, and forced RLS hides its rows", async () => {
-  const { cookies, realContext, sessionId } = await signIn("second-builder");
+  other = await signIn("second-builder");
+  const { cookies, realContext, sessionId } = other;
   assert.deepEqual((await json(await request(jobsPath, { cookies }))).jobs, []);
   for (const suffix of ["proposal", "quotes", "quotes/acceptance"]) {
     assert.deepEqual(await json(await request(`/api/jobs/${jobId}/${suffix}`, { cookies }), 404),
@@ -175,7 +177,7 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
   const { V2CustomerExtraLinkRepository } = await import("../../packages/db/dist/index.js");
   const { VariationApplication } = await import("../../apps/api/dist/variation/variation.application.js");
   const { V2CustomerExtraLinkApplication } = await import("../../apps/api/dist/v2-customer-extra-link.application.js");
-  const owner = await signIn("builder"), other = await signIn("second-builder");
+  assert.ok(owner && other, "reuse the suite's authenticated owner and second-firm sessions");
   const auth = await authenticatePracticeSession(runtime, owner.sessionId);
   const second = await authenticatePracticeSession(runtime, other.sessionId);
   await json(await request(`/api/jobs/${jobId}/quotes/activation`, { cookies: owner.cookies,
@@ -243,6 +245,17 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
   assert.equal((await repository.open(first.capability)).agreedAt, null);
   assert.deepEqual(await events(), afterCreate);
   const agreed = await repository.agree(first.capability, agree), afterAgree = await events();
+  // Same-firm runtime cannot rewrite even one field of an agreed claim.
+  for (const assignment of ["amount='999.00'", "description='Rewritten'", "agreed_by='Someone else'",
+    "agreed_at=clock_timestamp()", "token_hash=repeat('a',64)", "expires_at=clock_timestamp()+interval '1 day'"]) {
+    await assert.rejects(withTenant(runtime, auth.context, db => db.$client.query(
+      `UPDATE app.v2_customer_extra_link SET ${assignment} WHERE id=$1`, [first.linkId])),
+    error => error.code === "42501");
+  }
+  assert.deepEqual(await repository.open(first.capability), agreed);
+  const savedAgreement = (await repository.list(auth.context, jobId)).find(link => link.id === first.linkId);
+  assert.equal(savedAgreement.amount, "125.00");
+  assert.equal(savedAgreement.agreedBy, "Fictional customer");
   assert.ok(agreed.agreedAt); assert.equal(afterAgree.length, afterCreate.length + 1);
   assert.equal(afterAgree.at(-1).event_type, "v2.customer_extra_link.agreed");
   assert.doesNotMatch(JSON.stringify(afterAgree), /Fictional customer/u);
@@ -273,8 +286,18 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
   const repriced = await repository.create(auth.context, jobId, auth.membershipId, { ...create(), expectedVersion: 2, revisionId: revisedId });
   assert.equal((await repository.open(repriced.capability)).amount, "175.00");
   await assert.rejects(repository.agree(repriced.capability, { ...agree, commandId: randomUUID(), revisionId: revisedId }));
+  const thirdId = randomUUID();
+  await variations.command(jobId, { version: "variation-command.v1", action: "revise", variationId: proposalId,
+    revisionId: thirdId, expectedRevisionId: revisedId, description: "Third revision extension",
+    price: { quantity: "1", unit: "item", unitRatePence: 22500, direction: "addition" } });
+  const third = await repository.create(auth.context, jobId, auth.membershipId,
+    { ...create(), expectedVersion: 3, revisionId: thirdId });
+  assert.equal((await repository.open(third.capability)).variationVersion, 3);
+  assert.equal((await repository.open(third.capability)).amount, "225.00");
   await variations.command(jobId, { version: "variation-command.v1", action: "reject", variationId: proposalId,
-    revisionId: revisedId, rejectionId: randomUUID() });
+    revisionId: thirdId, rejectionId: randomUUID() });
+  await assert.rejects(repository.agree(third.capability,
+    { ...agree, commandId: randomUUID(), revisionId: thirdId, amount: "225.00" }));
   await assert.rejects(repository.agree(repriced.capability, { ...agree, commandId: randomUUID(), revisionId: revisedId, amount: "175.00" }));
   assert.equal((await variations.get(jobId)).approvedAdditionsPence, baseline);
   assert.deepEqual(await protectedFacts(), untouched);
