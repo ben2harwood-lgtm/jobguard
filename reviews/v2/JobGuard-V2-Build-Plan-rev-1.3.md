@@ -246,11 +246,11 @@ From the second pass of the same review (24 November, evening), which came after
 
 Each step starts when what it names is built, under the safety rule in "In plain words". RED and first-cut pieces get Astra's plan check before building. Every send goes only to the local catcher. Only Ben merges RED pieces.
 
-**Step 1, milestone one (A, C, D).** a1, a1-mac, a2, mock, d2 merged. Then c1 → c2 and c3 (repair R1) → c4 and d1 → d3 and d4 → d5a → d5b. Done when d5's done-when passes.
+**Step 1, milestone one (A, C, D).** Repairs found on 24 Nov: R1 (integrity guard, c2/c3), R2 (audit append on plan edits, c2/c3, AGENTS §5.7), d1r1 (audit append on measurement saves). a1, a1-mac, a2, mock, d2 merged. Then c1 → c2 and c3 (repair R1) → c4 and d1 → d3 and d4 → d5a → d5b. Done when d5's done-when passes.
 
 **Step 2, started early alongside step 1.** b1 mock-ups, b1a walk record, b2b1 encrypted photos (practice), e1 open facts, c5 don't-forget prompts (data only, beside c1's template). Outside V2: QW-7 accountant export on main.
 
-**Step 3, once c3 and d1 are merged.** **c3b approved extras become plan tasks** (follow-up from the #901 review, 24 Nov). **ci1 V2 seed suite in CI** (from the #904 review; it can start now, on v2/main). k2 calendar link, k5 deposit and stage invoices, k8 off-hire reminders, k9 RAMS draft, same-firm double-booking warning (first part of e5), g0 certificates checklist (needs e1). b1b walk screen and b1c check-and-correct (need b1a). b2b2 photos linked to rooms (needs b1a), b2c kill and resume (needs b2b1).
+**Step 3, once c3 and d1 are merged.** **c3b approved extras become plan tasks** (follow-up from the #901 review, 24 Nov). **ci1 V2 seed suite in CI** (from the #904 review; it can start now, on v2/main). k2 calendar link, k5 deposit and stage invoices, k8 off-hire reminders, k9 RAMS draft, same-firm double-booking warning (first part of e5), g0 certificates checklist (needs e1). b1b walk screen and b1c check-and-correct (need b1a). **b1e walk photos upload before the job is live** (after b1a; RED, V2 only; the existing upload accepts live jobs only). b2b2 photos linked to rooms (needs b1a), b2c kill and resume (needs b2b1).
 
 **Step 4, once d3 and d4 are merged.** e2 replies, e3 stock position, e7 reminders with delivery chase, k1 share to WhatsApp (after d5b), d4b translated briefs (after its cost decision), k6 merchant email forward (after e3), f1 Done/Blocked/Changed with one-tap photos, f2 proof holds the stage, f8 who was on site, k4 automatic chasing (after e7).
 
