@@ -1,6 +1,8 @@
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { appendAuditBatch } from "./audit.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { splashbackDecoratingTemplate } from "./v2-splashback-decorating-template.js";
 
 interface TemplateTask {
@@ -43,7 +45,8 @@ export class WorkPlanRepository {
   async generate(context: VerifiedTenantContext, source: PlanSource) {
     const { jobId, quoteRevisionId } = planSource.parse(source);
     const key: PlanKey = [context.tenantId, jobId, quoteRevisionId];
-    return withTenant(this.pool, context, async ({ $client }) => {
+    return withTenant(this.pool, context, async database => {
+      const { $client } = database;
       // A concurrent insert waits for the winner's complete transaction.
       // Only the transaction that creates the plan populates its task rows.
       const created = await $client.query(`
@@ -52,7 +55,7 @@ export class WorkPlanRepository {
         WHERE (tenant_id, job_id, id) = ($1, $2, $3)
         ON CONFLICT (tenant_id, job_id, quote_revision_id) DO NOTHING
       `, [...key, this.template.key]);
-      if (created.rowCount) await this.insertTasks($client, key);
+      if (created.rowCount) await this.recordGenerated(database, key, await this.insertTasks($client, key));
       const plan = await this.readPlan($client, key);
       if (!plan) throw new WorkPlanError("QUOTE_REVISION_NOT_FOUND");
       return plan;
@@ -62,6 +65,19 @@ export class WorkPlanRepository {
   async read(context: VerifiedTenantContext, source: PlanSource) {
     const { jobId, quoteRevisionId } = planSource.parse(source);
     return withTenant(this.pool, context, ({ $client }) => this.readPlan($client, [context.tenantId, jobId, quoteRevisionId]));
+  }
+
+  // The plan is derived by rule from the quote revision, so the system rule is the actor.
+  // A replay inserts nothing above and appends nothing here.
+  private recordGenerated(database: TenantTransaction, [, jobId, quoteRevisionId]: PlanKey,
+    tasks: readonly { scope_item_id: string; template_task_key: string }[]) {
+    return appendAuditBatch(database, [{ id: randomUUID(), version: "audit.v1", actorRef: "system:v2-work-plan",
+      eventType: "v2_work_plan.generated", subjectType: "job", subjectRef: jobId,
+      payload: {
+        references: { quoteRevisionId, templateKey: this.template.key, taskCount: String(tasks.length) },
+        hashes: { tasks: createHash("sha256").update(JSON.stringify(tasks)).digest("hex") },
+        classifications: { action: "operational" },
+      } }]);
   }
 
   private async insertTasks(client: PoolClient, key: PlanKey) {
@@ -79,6 +95,7 @@ export class WorkPlanRepository {
       FROM ROWS FROM (jsonb_to_recordset($4) AS (scope_item_id uuid, template_task_key text))
         WITH ORDINALITY AS task(scope_item_id, template_task_key, position)
     `, [...key, JSON.stringify(tasks)]);
+    return tasks;
   }
 
   private async readPlan(client: PoolClient, key: PlanKey) {
