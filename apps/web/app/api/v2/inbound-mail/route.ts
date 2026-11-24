@@ -26,7 +26,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     // The practice catcher accepts same-origin authenticated local requests only.
-    if (request.headers.get("origin") !== new URL(request.url).origin) return NextResponse.json({ code:"ORIGIN_FORBIDDEN" },{status:403,headers});
+    if (!process.env.AUTH_ALLOWED_ORIGIN || request.headers.get("origin") !== process.env.AUTH_ALLOWED_ORIGIN) return NextResponse.json({ code:"ORIGIN_FORBIDDEN" },{status:403,headers});
     const body: unknown = await request.json();
     if (!body || typeof body !== "object" || !("action" in body) || !("command" in body)) throw new Error("INVALID_COMMAND");
     const app = await application();

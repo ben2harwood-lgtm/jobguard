@@ -72,7 +72,7 @@ const counts = async () => (await admin.query(`SELECT
   (SELECT count(*)::int FROM app.quote_acceptance) AS acceptances,
   (SELECT count(*)::int FROM app.action_outbox) AS sends`)).rows[0];
 
-let jobId;
+let jobId, owner, other;
 before(async () => {
   await verifyDatabaseTarget(admin, systemId, embedded);
   const proposals = await admin.query(`SELECT job_id, model FROM app.job_record_proposal`);
@@ -83,7 +83,8 @@ before(async () => {
 after(async () => Promise.all([admin.end(), runtime.end(), identity.provider.repository.pool.end()]));
 
 test("a fresh owner session reloads the fictional job, both work areas and the exact acceptance", async () => {
-  const { cookies } = await signIn("builder");
+  owner = await signIn("builder");
+  const { cookies } = owner;
   const first = await json(await request(jobsPath, { cookies }));
   const second = await json(await request(jobsPath, { cookies }));
   assert.deepEqual(second, first);
@@ -133,7 +134,8 @@ test("the checked bootstrap reruns without duplicating or delivering anything", 
 });
 
 test("the second firm's fresh session cannot list or open the job, and forced RLS hides its rows", async () => {
-  const { cookies, realContext, sessionId } = await signIn("second-builder");
+  other = await signIn("second-builder");
+  const { cookies, realContext, sessionId } = other;
   assert.deepEqual((await json(await request(jobsPath, { cookies }))).jobs, []);
   for (const suffix of ["proposal", "quotes", "quotes/acceptance"]) {
     assert.deepEqual(await json(await request(`/api/jobs/${jobId}/${suffix}`, { cookies }), 404),
@@ -170,7 +172,7 @@ test("the second firm's fresh session cannot list or open the job, and forced RL
 });
 
 // V2-K6A: routing, atomic intake/audit and firm isolation on the real V2 seed.
-// One owner session and one second-firm session for this entire block.
+// Reuse the full suite's owner and second-firm sessions; do not request more codes.
 test("K6A forwards fixtures, holds real files, replays once and isolates both firms", async t => {
   const previousV2=process.env.JOBGUARD_LOCAL_V2;
   process.env.JOBGUARD_LOCAL_V2="1";
@@ -178,9 +180,9 @@ test("K6A forwards fixtures, holds real files, replays once and isolates both fi
   const { randomUUID } = await import("node:crypto");
   const { V2InboundMailRepository } = await import("../../packages/db/dist/index.js");
   const { createWorkspaceApplication } = await import("../../apps/api/dist/workspace/index.js");
-  const owner = await signIn("builder"), second = await signIn("second-builder");
+  assert.ok(owner && other, "reuse the suite's authenticated owner and second-firm sessions");
   const auth = await authenticatePracticeSession(runtime,owner.sessionId);
-  const other = await authenticatePracticeSession(runtime,second.sessionId);
+  const second = await authenticatePracticeSession(runtime,other.sessionId);
   const repo = new V2InboundMailRepository(runtime);
   const workspace = createWorkspaceApplication({pool:runtime,sessionId:owner.sessionId});
   await workspace.quote.activate(jobId,{version:"practice-activation-command.v1",commandId:randomUUID(),scenario:"no_charge"});
@@ -208,7 +210,7 @@ test("K6A forwards fixtures, holds real files, replays once and isolates both fi
   const { address } = await repo.address(auth,addressCommand);
   assert.deepEqual(await repo.address(auth,addressCommand),{address});
   assert.equal((await events(addressCommand.commandId)).length,1);
-  const { address: otherAddress } = await repo.address(other,command({}));
+  const { address: otherAddress } = await repo.address(second,command({}));
   assert.notEqual(otherAddress,address);
   const receive = fields => command({recipient:address,messageId:randomUUID(),sender:"merchant@jobguard-v2.invalid",
     subject:`Invoice ${jobId}`,body:"",fixtureId:"materials-B-invoice",...fields});
@@ -253,12 +255,12 @@ test("K6A forwards fixtures, holds real files, replays once and isolates both fi
   });
   await repo.command(auth,dismiss);await repo.command(auth,dismiss);
   assert.equal((await events(dismiss.commandId)).length,1);
-  await assert.rejects(repo.receive(other,receive({})),/NOT_FOUND/);
+  await assert.rejects(repo.receive(second,receive({})),/NOT_FOUND/);
   await assert.rejects(repo.receive(auth,receive({recipient:otherAddress})),/NOT_FOUND/);
-  assert.deepEqual((await repo.view(other)).items,[]);
-  await assert.rejects(repo.command(other,command({action:"file",itemId:waiting.itemId,jobId})),/NOT_FOUND/);
+  assert.deepEqual((await repo.view(second)).items,[]);
+  await assert.rejects(repo.command(second,command({action:"file",itemId:waiting.itemId,jobId})),/NOT_FOUND/);
   const firm=(await admin.query("SELECT firm_key FROM app.v2_inbound_address WHERE address=$1",[address])).rows[0].firm_key;
-  await withTenant(runtime,other.context,async db=>{
+  await withTenant(runtime,second.context,async db=>{
     for(const table of ["v2_inbound_address","v2_inbound_item","v2_inbound_command"]){
       assert.equal((await db.$client.query(`SELECT * FROM app.${table} WHERE firm_key=$1`,[firm])).rowCount,0);
       assert.equal((await db.$client.query(`SELECT relrowsecurity AND relforcerowsecurity forced FROM pg_class WHERE oid=$1::regclass`,[`app.${table}`])).rows[0].forced,true);
@@ -306,6 +308,52 @@ test("K6A forwards fixtures, holds real files, replays once and isolates both fi
   } finally {
     await admin.query("DROP TRIGGER k6_fail_receipt ON app.v2_inbound_command; DROP FUNCTION app.k6_fail_receipt()");
   }
+  await t.test("an ambiguous known supplier waits without documents or stock changes", async () => {
+    const secondJob = randomUUID(), bindingId = randomUUID(), scopeId = randomUUID();
+    // Owner-connected fictional prerequisites only; the receive below uses the runtime role.
+    await withTenant(admin,auth.context,async db=>{
+      await db.$client.query(`INSERT INTO app.job(tenant_id,id,title,practice_session_digest,practice_scenario)
+        SELECT tenant_id,$2,'ZZ K6A second merchant job',practice_session_digest,'capture'
+        FROM app.job WHERE tenant_id=$1 AND id=$3`,[auth.context.tenantId,secondJob,jobId]);
+      await db.$client.query(`INSERT INTO app.job_party_binding(tenant_id,id,job_id,revision,customer_id,
+        customer_revision_id,paying_party_id,paying_party_revision_id,site_id,site_revision_id,provenance)
+        SELECT b.tenant_id,$2,$3,0,b.customer_id,b.customer_revision_id,b.paying_party_id,
+          b.paying_party_revision_id,b.site_id,b.site_revision_id,'backfilled_synthetic_fixture'
+        FROM app.job_party_current c JOIN app.job_party_binding b ON(b.tenant_id,b.id)=(c.tenant_id,c.binding_id)
+        WHERE c.tenant_id=$1 AND c.job_id=$4`,[auth.context.tenantId,bindingId,secondJob,jobId]);
+      await db.$client.query("INSERT INTO app.job_party_current(tenant_id,job_id,binding_id) VALUES($1,$2,$3)",
+        [auth.context.tenantId,secondJob,bindingId]);
+      await db.$client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2",[auth.context.tenantId,secondJob]);
+      await db.$client.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')",
+        [auth.context.tenantId,scopeId,secondJob]);
+      await db.$client.query("SELECT set_config('app.practice_material_digest',practice_session_digest,true) FROM app.job WHERE tenant_id=$1 AND id=$2",
+        [auth.context.tenantId,jobId]);
+      const requirement = await db.$client.query(`INSERT INTO app.material_requirement(tenant_id,id,job_id,scope_item_id,sku_id,quantity_decimal,unit,revision)
+        SELECT r.tenant_id,$2,$3,$4,r.sku_id,'1',r.unit,1
+        FROM app.material_requirement r JOIN app.merchant_sku s ON(s.tenant_id,s.id)=(r.tenant_id,r.sku_id)
+        JOIN app.merchant m ON(m.tenant_id,m.id)=(s.tenant_id,s.merchant_id)
+        WHERE r.tenant_id=$1 AND r.job_id=$5 AND m.name='Fictional Teacup Tile Merchant' LIMIT 1`,
+        [auth.context.tenantId,randomUUID(),secondJob,scopeId,jobId]);
+      assert.equal(requirement.rowCount,1);
+    });
+    const beforeView = await repo.view(auth);
+    assert.ok([jobId,secondJob].every(id=>beforeView.jobs.some(job=>job.id===id)));
+    const documentCounts = async () => (await admin.query(`SELECT
+      (SELECT count(*)::int FROM app.supplier_document WHERE tenant_id=$1) AS documents,
+      (SELECT count(*)::int FROM app.supplier_document_intake WHERE tenant_id=$1) AS intakes,
+      (SELECT count(*)::int FROM app.goods_receipt WHERE tenant_id=$1) AS receipts`,[auth.context.tenantId])).rows[0];
+    const beforeDocuments = await documentCounts();
+    const ambiguous = receive({subject:"Merchant invoice without a job reference",body:"",fixtureId:"materials-B-delivery"});
+    const result = await repo.receive(auth,ambiguous);
+    assert.equal(result.state,"needs_job");
+    assert.equal(result.documentId,null);
+    const afterView = await repo.view(auth);
+    assert.equal(afterView.items.length,beforeView.items.length+1);
+    const stored = (await admin.query("SELECT id,state,job_id,document_id FROM app.v2_inbound_item WHERE firm_key=$1 AND message_id=$2",
+      [firm,ambiguous.messageId])).rows;
+    assert.deepEqual(stored,[{id:result.itemId,state:"needs_job",job_id:null,document_id:null}]);
+    assert.deepEqual(await documentCounts(),beforeDocuments);
+  });
   const http = await request("/api/v2/inbound-mail",{cookies:owner.cookies});
   assert.equal(http.status,200);
   assert.equal((await http.json()).address,address);
