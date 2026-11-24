@@ -868,7 +868,7 @@ async function capturedDeliveries(work) {
 }
 
 test("the materials enquiry groups by supplier and needed-by date, leaves out customer-supplied items and generates once", async () => {
-  const { owner, materials, tilingId, decoratingId, measure, line } = await materialsSetup();
+  const { owner, materials, tilingId, decoratingId, measure, line, generate } = await materialsSetup();
   await measure(tilingId, "6", "m²");
   await measure(decoratingId, "12", "m²");
   await line(tilingId, "tiles", tilesLine);
@@ -883,11 +883,20 @@ test("the materials enquiry groups by supplier and needed-by date, leaves out cu
   assert.equal(before.lines.length, 5);
 
   const effects = await effectCounts();
-  const command = { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(), expectedVersion: 0 };
-  const { result: [first, second], captured } = await capturedDeliveries(() => Promise.all([
-    materials.generate(jobId, command), materials.generate(jobId, { ...command, commandId: randomUUID() }),
+  const attempt = { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(), expectedVersion: 0 };
+  const rival = { ...attempt, commandId: randomUUID() };
+  // An exact retry shares the outcome; a different command racing from the same version is refused.
+  const { result: results, captured } = await capturedDeliveries(() => Promise.allSettled([
+    materials.generate(jobId, attempt), materials.generate(jobId, attempt), materials.generate(jobId, rival),
   ]));
-  assert.deepEqual(second.enquiry, first.enquiry);
+  const won = results.filter(result => result.status === "fulfilled").map(result => result.value);
+  const lost = results.filter(result => result.status === "rejected").map(result => result.reason.code);
+  assert.deepEqual(new Set(lost), new Set(["MATERIALS_VERSION_CONFLICT"]));
+  assert.equal(new Set(won.map(view => view.enquiry.commandId)).size, 1);
+  const [first] = won;
+  for (const view of won) assert.deepEqual(view.enquiry, first.enquiry);
+  const command = first.enquiry.commandId === attempt.commandId ? attempt : rival;
+  assert.equal(won.length, command === attempt ? 2 : 1);
   assert.equal(first.enquiry.version, 1);
   assert.equal(first.enquiry.current, true);
   assert.deepEqual(first.enquiry.outOfDate, []);
@@ -906,7 +915,12 @@ test("the materials enquiry groups by supplier and needed-by date, leaves out cu
 
   assert.deepEqual((await materials.generate(jobId, command)).enquiry, first.enquiry);
   await assert.rejects(materials.generate(jobId, { ...command, expectedVersion: 1 }), { code: "MATERIALS_COMMAND_CONFLICT" });
-  const again = await materials.generate(jobId, { ...command, commandId: randomUUID(), expectedVersion: 1 });
+  for (const expectedVersion of [0, 2]) {
+    await assert.rejects(materials.generate(jobId, { ...command, commandId: randomUUID(), expectedVersion }),
+      { code: "MATERIALS_VERSION_CONFLICT" }, String(expectedVersion));
+  }
+  const unchanged = { ...command, commandId: randomUUID(), expectedVersion: 1 };
+  const again = await materials.generate(jobId, unchanged);
   assert.deepEqual(again.enquiry, first.enquiry);
   const { rows: [{ enquiries }] } = await admin.query(
     "SELECT count(*)::int AS enquiries FROM app.v2_material_enquiry WHERE job_id = $1", [jobId]);
@@ -920,6 +934,17 @@ test("the materials enquiry groups by supplier and needed-by date, leaves out cu
   const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
   const { materialsEnquiry: reopened } = createWorkspaceApplication({ pool: runtime, sessionId: fresh.sessionId });
   assert.deepEqual(await reopened.read(jobId, materialsQuery), first);
+
+  // A command that returned the already-current enquiry replays that result after the inputs change.
+  await line(decoratingId, "filler", { notes: "Two-part filler" });
+  const replayed = await materials.generate(jobId, unchanged);
+  assert.equal(replayed.enquiry.version, 1);
+  assert.equal(replayed.enquiry.current, false);
+  await assert.rejects(materials.generate(jobId, { ...unchanged, expectedVersion: 0 }), { code: "MATERIALS_COMMAND_CONFLICT" });
+  const { rows: [{ total }] } = await admin.query(
+    "SELECT count(*)::int AS total FROM app.v2_material_enquiry WHERE job_id = $1", [jobId]);
+  assert.equal(total, 1);
+  assert.equal((await generate()).enquiry.version, 2);
 });
 
 test("each sum input takes current off the enquiry and regenerating gives the corrected quantities once", async () => {
@@ -945,7 +970,8 @@ test("each sum input takes current off the enquiry and regenerating gives the co
     assert.ok(tiles.changed.includes(input), `${input}: ${JSON.stringify(tiles)}`);
     assert.equal(tiles.quantities, true, input);
 
-    const [regenerated, retried] = await Promise.all([generate(), generate()]);
+    const commandId = randomUUID();
+    const [regenerated, retried] = await Promise.all([generate(commandId), generate(commandId)]);
     assert.equal(regenerated.enquiry.version, old.version + 1, input);
     assert.deepEqual(retried.enquiry, regenerated.enquiry);
     assert.equal(regenerated.enquiry.current, true, input);
@@ -1051,6 +1077,11 @@ test("forced materials policies hide lines and enquiries and reject changes from
         actor_membership_id) VALUES ($1,$2,999,$3,repeat('0', 64),'[]','{}',$4)`,
       params: () => [DEMO_TENANT_ID, jobId, randomUUID(), owner.membershipId],
       set: "content = '{}'" },
+    "app.v2_material_enquiry_command": {
+      insert: `INSERT INTO app.v2_material_enquiry_command (tenant_id, job_id, command_id, expected_version,
+        enquiry_version, actor_membership_id) VALUES ($1,$2,$3,0,1,$4)`,
+      params: () => [DEMO_TENANT_ID, jobId, randomUUID(), owner.membershipId],
+      set: "expected_version = 5" },
   };
   for (const [table, { insert, params, set }] of Object.entries(tables)) {
     const { rows: [acl] } = await admin.query(`SELECT

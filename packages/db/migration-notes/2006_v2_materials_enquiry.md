@@ -20,6 +20,14 @@ ever updated. Customer-supplied lines are listed apart and never enter an
 enquiry group. Generating writes only these rows: no order, outbox row or
 message.
 
+`app.v2_material_enquiry_command` records every accepted generate command
+with its expected version and the enquiry it returned, including a command
+that returned an enquiry that was already current. An exact retry replays
+that result even after the inputs change; the same id with a different
+expected version is refused. A generate whose expected version is not the
+latest is refused, so a race between two different commands leaves one
+winner.
+
 Runtime can only read and append to visible jobs. Composite foreign keys bind
 every line to its firm, job and scope item, and every enquiry to its firm and
 job.

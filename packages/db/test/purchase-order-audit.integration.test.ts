@@ -62,7 +62,7 @@ beforeAll(async () => {
   upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
   await migrate(admin);
   expect((await admin.query("SELECT to_regclass('app.v2_measurement') AS measurement")).rows[0].measurement).toBeNull();
-  expect((await admin.query("SELECT to_regclass('app.v2_material_line') AS line, to_regclass('app.v2_material_enquiry') AS enquiry")).rows[0]).toEqual({ line: null, enquiry: null });
+  expect((await admin.query("SELECT to_regclass('app.v2_material_line') AS line, to_regclass('app.v2_material_enquiry') AS enquiry, to_regclass('app.v2_material_enquiry_command') AS command")).rows[0]).toEqual({ line: null, enquiry: null, command: null });
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();

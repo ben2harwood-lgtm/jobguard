@@ -223,36 +223,53 @@ export class MaterialsEnquiryRepository {
     const command = parsed.data;
     return withTenant(this.pool, context, async ({ $client }) => {
       const actor = await this.editor($client, sessionId);
-      const replayed = await this.enquiry($client, context.tenantId, jobId, { commandId: command.commandId });
       const live = await this.live($client, context.tenantId, jobId);
-      if (replayed) {
-        if (replayed.version !== command.expectedVersion + 1 || replayed.actorMembershipId !== actor) {
-          throw new MaterialsError("MATERIALS_COMMAND_CONFLICT");
-        }
-        return this.view(jobId, live, replayed);
-      }
+      const replayed = await this.replay($client, context.tenantId, jobId, actor, command);
+      if (replayed) return this.view(jobId, live, replayed);
 
       const latest = await this.enquiry($client, context.tenantId, jobId);
-      // Generating from unchanged inputs returns the enquiry that is already current.
-      if (latest?.basisDigest === live.digest) return this.view(jobId, live, latest);
       if ((latest?.version ?? 0) !== command.expectedVersion) throw new MaterialsError("MATERIALS_VERSION_CONFLICT");
-      const inserted = await $client.query(`
-        INSERT INTO app.v2_material_enquiry (tenant_id, job_id, version, command_id, basis_digest, basis, content,
-          actor_membership_id)
-        SELECT tenant_id, id, $3, $4, $5, $6, $7, $8 FROM app.job WHERE (tenant_id, id) = ($1, $2)
-        ON CONFLICT DO NOTHING
-      `, [context.tenantId, jobId, command.expectedVersion + 1, command.commandId, live.digest,
-        JSON.stringify(live.basis), JSON.stringify(live.content), actor]);
-      if (!inserted.rowCount) {
-        // A concurrent generate or an exact retry won the same version.
-        const winner = await this.enquiry($client, context.tenantId, jobId, { version: command.expectedVersion + 1 });
-        if (winner?.commandId === command.commandId && winner.actorMembershipId === actor) return this.view(jobId, live, winner);
-        if (winner?.basisDigest === live.digest) return this.view(jobId, live, winner);
-        throw new MaterialsError("MATERIALS_VERSION_CONFLICT");
+      let result = latest;
+      // Generating from unchanged inputs returns the enquiry that is already current.
+      if (latest?.basisDigest !== live.digest) {
+        const inserted = await $client.query(`
+          INSERT INTO app.v2_material_enquiry (tenant_id, job_id, version, command_id, basis_digest, basis, content,
+            actor_membership_id)
+          SELECT tenant_id, id, $3, $4, $5, $6, $7, $8 FROM app.job WHERE (tenant_id, id) = ($1, $2)
+          ON CONFLICT DO NOTHING
+        `, [context.tenantId, jobId, command.expectedVersion + 1, command.commandId, live.digest,
+          JSON.stringify(live.basis), JSON.stringify(live.content), actor]);
+        if (!inserted.rowCount) return this.lostRace($client, context.tenantId, jobId, actor, command, live);
+        result = await this.enquiry($client, context.tenantId, jobId, { version: command.expectedVersion + 1 });
       }
-      const saved = await this.enquiry($client, context.tenantId, jobId, { commandId: command.commandId });
-      return this.view(jobId, live, saved!);
+      const recorded = await $client.query(`
+        INSERT INTO app.v2_material_enquiry_command (tenant_id, job_id, command_id, expected_version, enquiry_version,
+          actor_membership_id)
+        VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING
+      `, [context.tenantId, jobId, command.commandId, command.expectedVersion, result!.version, actor]);
+      if (!recorded.rowCount) return this.lostRace($client, context.tenantId, jobId, actor, command, live);
+      return this.view(jobId, live, result);
     });
+  }
+
+  // Only an exact retry of the same command, committed concurrently, may share the outcome.
+  private async lostRace(client: PoolClient, tenantId: string, jobId: string, actor: string,
+    command: MaterialEnquiryCommand, live: Awaited<ReturnType<MaterialsEnquiryRepository["live"]>>) {
+    const replayed = await this.replay(client, tenantId, jobId, actor, command);
+    if (!replayed) throw new MaterialsError("MATERIALS_VERSION_CONFLICT");
+    return this.view(jobId, live, replayed);
+  }
+
+  private async replay(client: PoolClient, tenantId: string, jobId: string, actor: string, command: MaterialEnquiryCommand) {
+    const { rows: [receipt] } = await client.query<{ expectedVersion: number; enquiryVersion: number; actorMembershipId: string }>(`
+      SELECT expected_version AS "expectedVersion", enquiry_version AS "enquiryVersion", actor_membership_id AS "actorMembershipId"
+      FROM app.v2_material_enquiry_command WHERE (tenant_id, job_id, command_id) = ($1, $2, $3)
+    `, [tenantId, jobId, command.commandId]);
+    if (!receipt) return undefined;
+    if (receipt.expectedVersion !== command.expectedVersion || receipt.actorMembershipId !== actor) {
+      throw new MaterialsError("MATERIALS_COMMAND_CONFLICT");
+    }
+    return this.enquiry(client, tenantId, jobId, { version: receipt.enquiryVersion });
   }
 
   private async editor(client: PoolClient, sessionId: string) {

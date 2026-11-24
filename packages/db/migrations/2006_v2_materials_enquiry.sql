@@ -46,10 +46,27 @@ BEGIN
     FOREIGN KEY (tenant_id, job_id) REFERENCES app.job (tenant_id, id)
   );
 
+  -- Every accepted generate command, including one that returned an enquiry
+  -- that was already current, so an exact retry replays the same result.
+  CREATE TABLE IF NOT EXISTS app.v2_material_enquiry_command (
+    tenant_id uuid NOT NULL,
+    job_id uuid NOT NULL,
+    command_id uuid NOT NULL,
+    expected_version integer NOT NULL CHECK (expected_version BETWEEN 0 AND 2147483646),
+    enquiry_version integer NOT NULL,
+    actor_membership_id uuid NOT NULL,
+    recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (tenant_id, job_id, command_id),
+    FOREIGN KEY (tenant_id, job_id, enquiry_version)
+      REFERENCES app.v2_material_enquiry (tenant_id, job_id, version)
+  );
+
   ALTER TABLE app.v2_material_line ENABLE ROW LEVEL SECURITY;
   ALTER TABLE app.v2_material_line FORCE ROW LEVEL SECURITY;
   ALTER TABLE app.v2_material_enquiry ENABLE ROW LEVEL SECURITY;
   ALTER TABLE app.v2_material_enquiry FORCE ROW LEVEL SECURITY;
+  ALTER TABLE app.v2_material_enquiry_command ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE app.v2_material_enquiry_command FORCE ROW LEVEL SECURITY;
 
   DROP POLICY IF EXISTS v2_material_line_runtime ON app.v2_material_line;
   CREATE POLICY v2_material_line_runtime ON app.v2_material_line TO jobguard_runtime
@@ -63,8 +80,16 @@ BEGIN
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_material_enquiry.tenant_id, v2_material_enquiry.job_id)
     ));
 
-  REVOKE ALL ON app.v2_material_line, app.v2_material_enquiry FROM PUBLIC;
-  GRANT SELECT, INSERT ON app.v2_material_line, app.v2_material_enquiry TO jobguard_runtime;
+  DROP POLICY IF EXISTS v2_material_enquiry_command_runtime ON app.v2_material_enquiry_command;
+  CREATE POLICY v2_material_enquiry_command_runtime ON app.v2_material_enquiry_command TO jobguard_runtime
+    USING (tenant_id = (SELECT app.lp11_policy_tenant()) AND EXISTS (
+      SELECT FROM app.job j
+      WHERE (j.tenant_id, j.id) = (v2_material_enquiry_command.tenant_id, v2_material_enquiry_command.job_id)
+    ));
+
+  REVOKE ALL ON app.v2_material_line, app.v2_material_enquiry, app.v2_material_enquiry_command FROM PUBLIC;
+  GRANT SELECT, INSERT ON app.v2_material_line, app.v2_material_enquiry, app.v2_material_enquiry_command
+    TO jobguard_runtime;
 END
 $v2$;
 COMMIT;
