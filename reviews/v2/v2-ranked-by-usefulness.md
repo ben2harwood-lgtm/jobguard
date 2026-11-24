@@ -33,6 +33,7 @@ Don't-forget prompts (C5, #921), V2 tests in CI (CI1, #917), the R2 audit repair
 
 ## Next after the queue
 0. Reload button after a refused stale agreement on the approval page (F6-R) ★ S, after F6 #923.
+0. Photo tick-boxes reset for each new approval link (F6-T2) ★ S, after F6 #923.
 1. Share a brief or update to WhatsApp (K1) ★★★ S, after D5B.
 2. Add a line to a priced quote (C6) ★★ M.
 3. Walk photo upload (B1E) ★★ S.
