@@ -3,7 +3,7 @@ import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { splashbackDecoratingTemplate } from "./v2-splashback-decorating-template.js";
-import { applyWorkPlanEdits, compareWorkPlanTasks, customWorkPlanTaskKey, workPlanEditV1, workPlanScopeSource,
+import { applyWorkPlanEdits, compareWorkPlanTasks, customWorkPlanTaskKey, workPlanEditV1,
   type WorkPlanEdit, type WorkPlanEditRow, type WorkPlanScopeRow } from "./v2-work-plan-edits.js";
 
 export { customWorkPlanTaskKey, workPlanEditV1, workPlanQueryV1, type WorkPlanEdit } from "./v2-work-plan-edits.js";
@@ -189,7 +189,8 @@ export class WorkPlanRepository {
 
   private async loadTasks(client: PoolClient, key: PlanKey) {
     const { rows: scope } = await client.query<WorkPlanScopeRow>(`
-      SELECT l.scope_item_id, ${workPlanScopeSource("l")} AS source, t.template_task_key
+      SELECT l.scope_item_id, jsonb_build_object('description', l.description, 'category', l.category,
+        'quantity', l.quantity_decimal, 'unit', l.unit) AS source, t.template_task_key
       FROM app.quote_line l LEFT JOIN app.v2_work_plan_task t
         USING (tenant_id, job_id, quote_revision_id, scope_item_id)
       WHERE (l.tenant_id, l.job_id, l.quote_revision_id) = ($1, $2, $3) AND l.included
@@ -219,7 +220,8 @@ export class WorkPlanRepository {
         FROM history h JOIN app.v2_work_plan p ON (p.tenant_id, p.job_id, p.quote_revision_id)
           = ($1, $2, h.previous_plan_revision_id)
       )
-      SELECT e.scope_item_id, e.template_task_key, e.quote_revision_id, e.changes, ${workPlanScopeSource("l")} AS source
+      SELECT e.scope_item_id, e.template_task_key, e.quote_revision_id, e.changes, jsonb_build_object('description', l.description, 'category', l.category,
+        'quantity', l.quantity_decimal, 'unit', l.unit) AS source
       FROM history h JOIN app.v2_work_plan_edit e ON (e.tenant_id, e.job_id, e.quote_revision_id) = ($1, $2, h.quote_revision_id)
       JOIN app.quote_line l ON (l.tenant_id, l.job_id, l.quote_revision_id, l.scope_item_id)
         = (e.tenant_id, e.job_id, e.quote_revision_id, e.scope_item_id)
