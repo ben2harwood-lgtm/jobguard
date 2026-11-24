@@ -103,6 +103,11 @@ describe("QW-4 snag photos", () => {
     const finalize = { version: "snag-photo.v1", action: "finalize", commandId: randomUUID(), uploadId: begun.uploadId, objectVersionId: begun.objectVersionId } as const;
     expect(await r.photo(a.context, a.jobId, snagId, finalize)).toEqual(await r.photo(a.context, a.jobId, snagId, finalize));
     expect((await r.read(a.context, a.jobId))[0]!.photos).toHaveLength(1);
+    // The same finalize sent to another snag (or a made-up one) conflicts rather than claiming an attachment (Codex P2 4685119174).
+    const second = await addSnag(a);
+    await refused(r.photo(a.context, a.jobId, second, finalize), "SNAG_COMMAND_CONFLICT");
+    await refused(r.photo(a.context, a.jobId, randomUUID(), finalize), "SNAG_COMMAND_CONFLICT");
+    expect((await r.read(a.context, a.jobId)).map(s => [s.id, s.photos.length])).toEqual([[snagId, 1], [second, 0]]);
     // Another job's snag (owned by another practice session) is not found from this job.
     await refused(r.photo(a.context, a.jobId, otherSnag, { version: "snag-photo.v1", action: "begin", commandId: randomUUID(), fixture: "completion-photo" }), "SNAG_NOT_FOUND");
     // Job b's upload cannot be finalized as a photo on job a.

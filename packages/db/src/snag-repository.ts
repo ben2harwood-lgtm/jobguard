@@ -73,10 +73,15 @@ export class SnagRepository {
           maximumBytes: bytes.length, retentionClass: "standard_evidence", expiresAt: new Date(Date.now() + 3600_000) }, openSnag);
         return { uploadId: upload.id, objectVersionId: fixtureVersion(input.fixture) };
       }
-      // Only this job's unscoped uploads become snag photos, so a proof upload cannot be finalized here.
-      const pending = await withTenant(this.pool, context, async db => (await db.$client.query(
-        "SELECT 1 FROM app.evidence_upload WHERE (tenant_id,job_id,id)=($1,$2,$3) AND scope_item_id IS NULL", [context.tenantId, jobId, input.uploadId])).rowCount);
+      // Only this job's unscoped uploads become snag photos, so a proof upload cannot be finalized here. Once finalized, the
+      // upload belongs to the snag it was linked to: a retry naming another snag conflicts, because a stored finalize replays
+      // without linking again (Codex P2 4685119174).
+      const pending = await withTenant(this.pool, context, async db => (await db.$client.query<{ finalized: boolean; linkedHere: boolean }>(
+        `SELECT EXISTS(SELECT 1 FROM app.evidence_object e WHERE (e.tenant_id,e.upload_id)=(u.tenant_id,u.id)) finalized,
+          EXISTS(SELECT 1 FROM app.snag_photo p WHERE (p.tenant_id,p.job_id,p.evidence_id,p.snag_id)=(u.tenant_id,u.job_id,u.id,$4)) "linkedHere"
+         FROM app.evidence_upload u WHERE (u.tenant_id,u.job_id,u.id)=($1,$2,$3) AND u.scope_item_id IS NULL`, [context.tenantId, jobId, input.uploadId, snagId])).rows[0]);
       if (!pending) throw new SnagError("SNAG_PHOTO_REFUSED");
+      if (pending.finalized && !pending.linkedHere) throw new SnagError("SNAG_COMMAND_CONFLICT");
       const verified = await evidence.finalize(context, { commandId: input.commandId, uploadId: input.uploadId, objectVersionId: input.objectVersionId, evidenceType: "snag_photo" },
         async db => { await db.$client.query("SELECT app.snag_attach_photo($1,$2,$3)", [jobId, snagId, input.uploadId]); });
       return { evidenceId: verified.id as string };
