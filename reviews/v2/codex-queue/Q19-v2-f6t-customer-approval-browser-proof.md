@@ -11,7 +11,7 @@ Tier: T1 (test files only), but it proves a RED customer page. Migration: **none
 ## Scope
 1. **Fix the test's setup.** Find out why `select_generated` / `completion-photo` is refused: wrong fixture ID, wrong state, or a command the base doesn't accept. Then set up the variation photo through a path the base already accepts, such as an existing seed fixture or an existing command with valid input. Change only the test and its helpers.
 2. **Get the customer approval page passing at 360 px and 1280 px**, plus the phone-mode run on Ben's Mac. The run opens the link, sees exactly one variation version (description, price, photos), types a name, presses "I agree", and sees a confirmation. It also checks that no other price, margin, note, job or hidden finding appears on the page.
-3. **Add a stale-page test.** Open the link, have the builder change the price (a new version) in a second context, then press "I agree" on the old page. The page must refuse plainly, offer a reload, and record no agreement for the new amount. The old version is not agreed either if it was superseded, so state which behaviour F6 has and test it.
+3. **Add a stale-page test.** Open the link, have the builder change the price (a new version) in a second context, then press "I agree" on the old page. The page must refuse plainly (F6 shows "Agreement refused. Ask the builder for a fresh link."), and nothing is recorded as agreed for the new amount. F6 has no reload button and this piece may not add one; that is logged as later item F6-R. The old version is not agreed either if it was superseded, so state which behaviour F6 has and test it.
 4. Screenshots at both widths next to the matching mock state.
 
 ## Done when

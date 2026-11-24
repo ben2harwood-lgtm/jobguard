@@ -32,6 +32,7 @@ Use: ★★★ very high, ★★ high, ★ useful. Effort: S small, M medium, L 
 Don't-forget prompts (C5, #921), V2 tests in CI (CI1, #917), the R2 audit repair on the c-chain. Approved extras become plan tasks (C3B) starts right after R2.
 
 ## Next after the queue
+0. Reload button after a refused stale agreement on the approval page (F6-R) ★ S, after F6 #923.
 1. Share a brief or update to WhatsApp (K1) ★★★ S, after D5B.
 2. Add a line to a priced quote (C6) ★★ M.
 3. Walk photo upload (B1E) ★★ S.
