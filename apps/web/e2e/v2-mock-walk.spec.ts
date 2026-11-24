@@ -96,7 +96,17 @@ test("V2 Walk and Check the walk screens and states are clickable", async ({ pag
   await page.getByLabel("Note for Hall").fill("Hall draft.");
   await page.getByLabel("Current room").selectOption("Kitchen");
   await expect(page.getByLabel("Note for Kitchen")).toHaveValue("Kitchen draft not added yet.");
+  // Unsent drafts block Finish walk and survive a state change.
+  await expect(page.getByRole("button", { name: "Finish walk" })).toBeDisabled();
+  await expect(page.getByText("Add or clear the unsent note in Kitchen and Hall before you finish.")).toBeVisible();
+  await state.selectOption("Problem");
+  await state.selectOption("Example");
+  await expect(page.getByLabel("Note for Kitchen")).toHaveValue("Kitchen draft not added yet.");
   await page.getByLabel("Note for Kitchen").fill("");
+  await page.getByLabel("Current room").selectOption("Hall");
+  await page.getByLabel("Note for Hall").fill("");
+  await page.getByLabel("Current room").selectOption("Kitchen");
+  await expect(page.getByRole("button", { name: "Finish walk" })).toBeEnabled();
 
   // Microphone refused: typed notes still work.
   await state.selectOption("Microphone refused");

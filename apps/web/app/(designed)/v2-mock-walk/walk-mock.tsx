@@ -32,12 +32,15 @@ function PhotoCard({ photo, children }: { photo: Photo; children?: ReactNode }) 
   </article>;
 }
 
-function Walk({ notes, photos, room, setRoom, offline, micRefused, cameraRefused, addNote, takePhoto, finish }: {
+type Drafts = Partial<Record<Room, string>>;
+
+function Walk({ notes, photos, room, setRoom, offline, micRefused, cameraRefused, addNote, takePhoto, finish, drafts, setDrafts }: {
   notes: WalkNote[]; photos: Photo[]; room: Room; setRoom: (room: Room) => void; offline: boolean; micRefused: boolean; cameraRefused: boolean;
   addNote: (text: string) => void; takePhoto: () => void; finish: () => void;
+  drafts: Drafts; setDrafts: (update: (rows: Drafts) => Drafts) => void;
 }) {
-  // Each room keeps its own unsent draft, so switching room never refiles typed or dictated words.
-  const [drafts, setDrafts] = useState<Partial<Record<Room, string>>>({});
+  // Each room keeps its own unsent draft, held above this screen so switching room, state or screen
+  // never refiles or drops typed or dictated words.
   const [dictatedIn, setDictatedIn] = useState<Partial<Record<Room, boolean>>>({});
   const draft = drafts[room] ?? "";
   const fromDictation = dictatedIn[room] ?? false;
@@ -47,6 +50,7 @@ function Walk({ notes, photos, room, setRoom, offline, micRefused, cameraRefused
   const roomNotes = notes.filter(note => note.room === room);
   const roomPhotos = photos.filter(photo => photo.room === room && photo.order !== null).sort((a, b) => a.order! - b.order!);
   const pending = notes.filter(note => note.status === "pending").length + photos.filter(photo => photo.status === "pending").length;
+  const unsent = rooms.filter(name => drafts[name]?.trim());
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -89,9 +93,10 @@ function Walk({ notes, photos, room, setRoom, offline, micRefused, cameraRefused
     <div className="card-body form">
       <div className="form-actions">
         <button type="button" className="btn" disabled={index === rooms.length - 1} onClick={() => setRoom(rooms[index + 1]!)}>Next room</button>
-        <button type="button" className="btn primary" disabled={pending > 0} onClick={finish}>Finish walk</button>
+        <button type="button" className="btn primary" disabled={pending > 0 || unsent.length > 0} onClick={finish}>Finish walk</button>
       </div>
       {pending > 0 && <p>Finish the walk once every item is saved.</p>}
+      {unsent.length > 0 && <p>Add or clear the unsent note in {unsent.join(" and ")} before you finish.</p>}
     </div>
   </div>;
 }
@@ -184,6 +189,7 @@ export function WalkMock() {
   const [photos, setPhotos] = useState<Photo[]>(() => fixturePhotos.map(photo => ({ ...photo, moves: [] })));
   const [count, setCount] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
+  const [drafts, setDrafts] = useState<Drafts>({});
   const offline = screen === "Walk" && view === "No signal";
   const status: ItemStatus = offline ? "pending" : "saved";
 
@@ -239,7 +245,7 @@ export function WalkMock() {
           ? <Walk notes={notes} photos={photos} room={room} setRoom={setRoom} offline={offline}
               micRefused={view === "Microphone refused"} cameraRefused={view === "Camera refused"}
               addNote={text => setNotes(rows => [...rows, { id: `note-${rows.length + 1}`, room, text, status }])}
-              takePhoto={takePhoto} finish={() => choose("Check the walk", "Example")}/>
+              takePhoto={takePhoto} finish={() => choose("Check the walk", "Example")} drafts={drafts} setDrafts={setDrafts}/>
           : <CheckWalk notes={notes} photos={photos} move={movePhoto} confirmed={confirmed} confirm={() => setConfirmed(true)}
               keep={id => setPhotos(rows => rows.map(photo => photo.id === id ? { ...photo, unclear: undefined } : photo))}/>}
   </Shell>;
