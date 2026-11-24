@@ -1,5 +1,7 @@
 # Q15 · V2-K3: Friday customer update
 
+> **Rules this piece must meet (read before writing code).** AGENTS.md rev 3.0 and BUILD_PLAN.md on `main`, plus `codex-queue/01-RULES.md`. Ben's professional coding-rules checklist will be in `/mnt/project-files/audits/` once it lands; when it does, it applies too. The rule missed most on 24 Nov is the **audit chain (AGENTS.md §5.7)**: every command that changes data appends exactly one event with `appendAuditBatch` (`packages/db/src/audit.ts`) in the same transaction (`audit.v1`, actor `membership:<id>`, event type `v2.<thing>.<verb>`, no payload key `version`, a replay appends nothing), with a test that a forced failure after the insert leaves neither row nor event. Also: RLS forced and a second-firm test for any new table; exact decimal strings for money; sends only to the local catcher; hidden financial findings never reach a crew, customer or audit payload. The checker rejects the PR if any is missing.
+
 Tier: **RED** (customer-facing; must not leak private data). Migration **2021**. Astra: yes. Usefulness **high**, effort **S**. Rework risk: **medium**.
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-k3, section 2A item 5, plus plan section 9 point 4 (customer-supplied items).
 **Starts when:** R2 has pushed c3. **Base:** that c3 head. It uses the job diary already on v2/main's base and the c3 plan; the QW-2 summary and F1 buttons will feed it later, so it does not wait for the main sync.

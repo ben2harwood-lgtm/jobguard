@@ -1,5 +1,7 @@
 # Q17 · V2-E9: customer choices and PC sums tracker
 
+> **Rules this piece must meet (read before writing code).** AGENTS.md rev 3.0 and BUILD_PLAN.md on `main`, plus `codex-queue/01-RULES.md`. Ben's professional coding-rules checklist will be in `/mnt/project-files/audits/` once it lands; when it does, it applies too. The rule missed most on 24 Nov is the **audit chain (AGENTS.md §5.7)**: every command that changes data appends exactly one event with `appendAuditBatch` (`packages/db/src/audit.ts`) in the same transaction (`audit.v1`, actor `membership:<id>`, event type `v2.<thing>.<verb>`, no payload key `version`, a replay appends nothing), with a test that a forced failure after the insert leaves neither row nor event. Also: RLS forced and a second-firm test for any new table; exact decimal strings for money; sends only to the local catcher; hidden financial findings never reach a crew, customer or audit payload. The checker rejects the PR if any is missing.
+
 Tier: **RED** (money). Migration **2022**. Astra: yes. Usefulness **very high**, effort **M**. Rework risk: **high** (E1 is in review).
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-e9, section 2B item 17.
 **Starts:** now. **Base:** E1's branch `claude/project-thread-vur4ba` (#919). Draft PR against it. It drafts extras through the variation path already on the base, so it does not wait for F3.

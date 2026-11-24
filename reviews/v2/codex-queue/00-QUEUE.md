@@ -15,6 +15,7 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | Order | Packet | Piece | Use | Effort | Starts when | Base | Migration | Tier | Rework risk |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | Q03 | V2-D5B-M product picker and Materials screen (resume from the kept base merge; Briefs half D5B-B waits for D4A) | ★★ | M | now | merge of D3 #912 + D4 #916 + D5A #914 | none | T1 | high |
+| 1b | Q18 | V2-CI2 automatic guard for the audit-chain rule (safety, protects every piece below) | ★★ | S | now | `v2/main` | none | T1 | low |
 | 2 | Q12 | V2-F6 customer approves an extra by link | ★★★ | M | now | `v2/main` | 2018 | RED | low |
 | 3 | Q13 | V2-K4 automatic chasing of quotes and invoices | ★★★ | S–M | now | `v2/main` | 2019 | RED | low |
 | 4 | Q14 | V2-K6 forward a merchant invoice to the job | ★★ | M | now | `v2/main` | 2020 | RED | low |

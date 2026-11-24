@@ -1,5 +1,7 @@
 # Q09 · V2-F1: Done, Blocked and Changed on a trade's brief
 
+> **Rules this piece must meet (read before writing code).** AGENTS.md rev 3.0 and BUILD_PLAN.md on `main`, plus `codex-queue/01-RULES.md`. Ben's professional coding-rules checklist will be in `/mnt/project-files/audits/` once it lands; when it does, it applies too. The rule missed most on 24 Nov is the **audit chain (AGENTS.md §5.7)**: every command that changes data appends exactly one event with `appendAuditBatch` (`packages/db/src/audit.ts`) in the same transaction (`audit.v1`, actor `membership:<id>`, event type `v2.<thing>.<verb>`, no payload key `version`, a replay appends nothing), with a test that a forced failure after the insert leaves neither row nor event. Also: RLS forced and a second-firm test for any new table; exact decimal strings for money; sends only to the local catcher; hidden financial findings never reach a crew, customer or audit payload. The checker rejects the PR if any is missing.
+
 Tier: **RED** (new table; proof for the Final Check). Migration **2015**. Astra: yes. Rework risk: **high** (D4 is in review and has a pending audit fix).
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-f1, plus section 2B item 20 (one-tap photo).
 **Starts:** now. **Base:** D4's branch `claude/project-thread-btt9d2` (#916). Draft PR against it. Merge D4 again when it moves (its audit fix D4A may land later). Do not edit D4's files.

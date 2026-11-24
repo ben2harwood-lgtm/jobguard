@@ -1,0 +1,20 @@
+# Q18 · V2-CI2: automatic guard for the audit-chain rule
+
+Tier: T1 (tooling and CI only, no app behaviour). Migration: none. Astra: no. Usefulness **high** (stops the most-missed rule of 24 Nov reaching review), effort **S**. Rework risk: **low**.
+**Starts:** now. **Base:** `v2/main`. Draft PR against `v2/main`. Plan: Ben, 24 Nov 21:36 UK ("make sure every future piece is built [to the rules]... see if we can strengthen it").
+
+> **Rules this piece must meet.** AGENTS.md rev 3.0, BUILD_PLAN.md and `01-RULES.md`; Ben's coding-rules checklist in `/mnt/project-files/audits/` once it lands.
+
+## Goal
+CI fails a V2 PR when a repository method writes data (INSERT, UPDATE or DELETE on a firm table) but its transaction has no `appendAuditBatch` call, so the audit-chain rule (AGENTS.md §5.7) is checked by a machine, not only by a reviewer.
+
+## Scope
+- `tools/v2/audit-chain-guard.mjs`: scan changed files under `packages/db/src/**` and `apps/api/src/**` (diff against `LANE_BASE_REF`, same pattern as `tools/agent-lane-boundary-lint.mjs`). For each function that issues a write, require `appendAuditBatch(` in the same function, or an explicit `// audit-chain: exempt <reason>` comment the reviewer must accept. Also flag a payload-references object with a `version` key.
+- A unit test with three fixtures: write with audit (pass), write without audit (fail), exempt with reason (pass).
+- Wire it into the existing V2 CI job (beside CI1's seed suite, #917) for PRs into `v2/main` and `codex/sandbox/v2-*` only. Do not change main's CI.
+- Run it against today's branches and list what it flags in the PR body: it must flag `v2-crew-brief-repository.ts` on D4 #916 (the known gap) and nothing on D3 #912. Report, don't fix, what it finds.
+- Lane file lists exactly your files.
+
+## Done when
+- The three fixture tests pass; the guard flags #916's gap and passes #912.
+- CI green apart from the known Vercel check. A Claude session checks it. One build plus up to two repairs.
