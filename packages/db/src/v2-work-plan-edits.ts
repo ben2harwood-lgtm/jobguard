@@ -57,10 +57,6 @@ export type WorkPlanEditRow = {
 
 export const taskId = (scopeItemId: string, key: string) => `${scopeItemId}/${key}`;
 
-export const workPlanScopeSource = (alias: string) =>
-  `jsonb_build_object('description', ${alias}.description, 'category', ${alias}.category,
-    'quantity', ${alias}.quantity_decimal, 'unit', ${alias}.unit)`;
-
 const scopeChanged = (before: ScopeDetails | undefined, after: ScopeDetails | undefined) =>
   JSON.stringify(before) !== JSON.stringify(after);
 

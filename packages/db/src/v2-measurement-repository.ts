@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { materialQuantityV1 } from "@jobguard/core";
 import type { Pool } from "pg";
 import { z } from "zod";
+import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 
@@ -81,7 +82,8 @@ export class MeasurementRepository {
     if (!parsed.success) throw new MeasurementError("MEASUREMENT_INVALID_COMMAND");
     const command = parsed.data;
     const key = [context.tenantId, jobId, command.scopeItemId];
-    return withTenant(this.pool, context, async ({ $client }) => {
+    return withTenant(this.pool, context, async (database) => {
+      const { $client } = database;
       const digest = createHash("sha256").update(sessionId).digest("hex");
       const { rows: [actor] } = await $client.query<{ id: string | null }>(
         "SELECT app.v2_work_plan_editor($1) AS id", [digest],
@@ -107,7 +109,22 @@ export class MeasurementRepository {
           VALUES ($1,$2,$3,$4,$5,$6,$7,'builder_typed',$8,$9)
           ON CONFLICT DO NOTHING RETURNING ${projection}
         `, [...key, command.commandId, command.expectedVersion, command.quantity, command.unit, command.confirmed, actor.id]);
-        if (saved) return saved;
+        if (saved) {
+          await appendAuditBatch(database, [{
+            id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor.id}`,
+            eventType: saved.confirmed ? "v2.measurement.confirmed" : "v2.measurement.saved",
+            subjectType: "scope_item", subjectRef: saved.scopeItemId,
+            payload: {
+              references: { commandId: saved.commandId, jobId, scopeItemId: saved.scopeItemId,
+                expectedVersion: String(saved.expectedVersion), measurementVersion: String(saved.version),
+                quantity: saved.quantity, source: saved.source, confirmed: String(saved.confirmed) },
+              // Units are free text (including m²), so bind them by hash rather than exposing text.
+              hashes: { unit: createHash("sha256").update(saved.unit).digest("hex") },
+              classifications: { action: "operational" },
+            },
+          }]);
+          return saved;
+        }
       }
 
       const { rows: [prior] } = await $client.query<Measurement>(`
