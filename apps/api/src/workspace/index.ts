@@ -132,3 +132,6 @@ export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
 export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";
+
+// V2-K6A: request-scoped practice inbound catcher.
+export { V2InboundMailApplication } from "../v2-inbound-mail.application.js";

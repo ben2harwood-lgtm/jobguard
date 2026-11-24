@@ -62,6 +62,8 @@ try {
   }
   process.env.AUTH_CODE_SECRET = authSecret();
   await client.query(readFileSync(new URL("./migrations/2001_practice_quote.sql", import.meta.url), "utf8"));
+  // V2-K6A: dedicated local inbound fixture routing.
+  await client.query(readFileSync(new URL("./migrations/2023_v2_inbound_mail.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
