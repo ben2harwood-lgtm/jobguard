@@ -5,13 +5,15 @@
       "branches": [
         "claude/project-thread-bblk56"
       ],
-      "note": "QW-1: photos on variations (pilot builder upload, frozen on pricing, customer view and exact-photo approval). Migration 0781. RED: needs an independent check before merge.",
+      "note": "QW-1: photos on variations (pilot builder upload, frozen on pricing, customer view and exact-photo approval). Migration 0781. QW-1b: customer extras screen shows and approves the frozen photos. RED: needs an independent check before merge.",
       "allow": [
         "apps/api/src/auth/customer-variation-photo.test.ts",
         "apps/api/src/auth/customer-variation.ts",
         "apps/api/src/workspace/pilot-job-continuation.ts",
         "apps/web/app/api/customer-portal/variation-photo/route.ts",
         "apps/web/app/api/jobs/[id]/variations/photos/route.ts",
+        "apps/web/app/customer/extras/extras.test.tsx",
+        "apps/web/app/customer/extras/extras.tsx",
         "apps/web/proxy.test.ts",
         "apps/web/proxy.ts",
         "packages/core/src/customer-variation-approval.ts",

@@ -30,6 +30,4 @@ export const customerVariationViewV2 = z.object({
     photos: z.array(customerVariationPhotoV1).max(6),
   })),
 });
-/** @deprecated Old name kept so the held customer screens compile unchanged; it parses v2. Rename with the photo screens. */
-export const customerVariationViewV1 = customerVariationViewV2;
 export type CustomerVariationView = z.infer<typeof customerVariationViewV2>;
