@@ -1,8 +1,9 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
+import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 const uuid = z.uuid().transform(value => value.toLowerCase());
 const text = (max: number) => z.string().trim().min(1).max(max).refine(value => !value.includes("\0"));
@@ -198,7 +199,8 @@ export class OpenFactRepository {
     if (!parsed.success) throw new OpenFactError("OPEN_FACT_INVALID_COMMAND");
     const command = parsed.data;
     const digest = digestOf(jobId, command);
-    return withTenant(this.pool, context, async ({ $client }) => {
+    return withTenant(this.pool, context, async database => {
+      const { $client } = database;
       const credential = createHash("sha256").update(sessionId).digest("hex");
       const { rows: [actor] } = await $client.query<{ id: string | null }>(
         "SELECT app.v2_work_plan_editor($1) AS id", [credential],
@@ -211,12 +213,25 @@ export class OpenFactRepository {
       const saved = command.action === "log"
         ? await this.log($client, context.tenantId, jobId, command, actor.id, digest)
         : await this.change($client, context.tenantId, jobId, command, actor.id, digest);
-      if (saved) return receipt(saved);
+      if (saved) {
+        // Only a new change reaches the chain; replays return above or below without a second event.
+        await this.audit(database, jobId, saved, command.action === "log" ? command.detail.kind : null);
+        return receipt(saved);
+      }
       // Uniqueness arbitrated a race: an exact concurrent retry replays, anything else lost.
       const raced = await this.replay($client, context.tenantId, jobId, command.commandId, actor.id, digest);
       if (raced) return raced;
       throw new OpenFactError("OPEN_FACT_VERSION_CONFLICT");
     });
+  }
+
+  // References and hashes only: no question, answer, owner name or other free text enters the chain.
+  private audit(database: TenantTransaction, jobId: string, saved: ChangeRow, kind: OpenFactKind | null) {
+    return appendAuditBatch(database, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${saved.actorMembershipId}`,
+      eventType: `v2_open_fact.${saved.action}`, subjectType: "job", subjectRef: jobId,
+      payload: { references: { commandId: saved.commandId, factId: saved.factId, factVersion: String(saved.expectedVersion + 1),
+        status: saved.status, ...(kind && { kind }) }, hashes: { request: saved.requestDigest },
+      classifications: { action: "operational" } } }]);
   }
 
   private async replay(client: PoolClient, tenantId: string, jobId: string, commandId: string, actorId: string, digest: string) {

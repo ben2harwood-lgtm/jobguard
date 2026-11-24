@@ -977,6 +977,24 @@ test("the builder logs each kind of open fact, answers and cancels them, and the
     (SELECT count(*)::int FROM app.v2_open_fact WHERE job_id = $1) AS facts,
     (SELECT count(*)::int FROM app.v2_open_fact_change WHERE job_id = $1) AS changes`, [jobId]);
   assert.deepEqual(stored, { facts: 4, changes: 8 });
+  // Each new change appends one audit event in its own transaction; replays and refusals append none.
+  const { rows: events } = await admin.query(`SELECT event_type AS "eventType", actor_ref AS "actorRef", payload
+    FROM app.audit_event WHERE subject_type = 'job' AND subject_ref = $1 AND event_type LIKE 'v2_open_fact.%'
+    ORDER BY sequence`, [jobId]);
+  assert.deepEqual(events.map(event => event.eventType), ["log", "log", "log", "log", "answer", "cancel",
+    "mark_out_of_date", "answer"].map(action => `v2_open_fact.${action}`));
+  assert.ok(events.every(event => event.actorRef === `membership:${owner.membershipId}`));
+  const { rows: changeRows } = await admin.query(`SELECT command_id, fact_id, expected_version, status, request_digest
+    FROM app.v2_open_fact_change WHERE job_id = $1`, [jobId]);
+  for (const event of events) {
+    const row = changeRows.find(change => change.command_id === event.payload.references.commandId);
+    assert.ok(row, event.payload.references.commandId);
+    assert.deepEqual([event.payload.references.factId, event.payload.references.factVersion, event.payload.references.status,
+      event.payload.hashes.request], [row.fact_id, String(row.expected_version + 1), row.status, row.request_digest]);
+  }
+  assert.deepEqual(events.filter(event => event.eventType === "v2_open_fact.log").map(event => event.payload.references.kind),
+    ["customer_choice", "merchant_delivery_date", "crew_availability", "access"]);
+  for (const words of ["grout", "Teacup", "Decorator", "crew in", "Splashback"]) assert.ok(!JSON.stringify(events).includes(words), words);
   assert.deepEqual(await effectCounts(), before);
   const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
     FROM app.job_record_proposal WHERE model IS DISTINCT FROM 'fixture-capture-v1'`);
