@@ -12,7 +12,7 @@ On a trade's current brief, three actions: Done, Blocked (with a reason) and Cha
 ## Scope
 - Table of progress updates: job, brief (D4), task, kind (done, blocked, changed), note, photo references, actor, time. Commands with expected version, replay identity and one audit event each.
 - Diary: reuse the existing job diary on v2/main's base (find it; do not build a new one). If writing to it needs editing its files, stop and report.
-- Photos: reference media IDs only. The camera stays held (B2B1); in tests use the existing fixture media path. "One tap" means the Done button goes straight to photo capture when capture is available.
+- Photos: reference media IDs only. The camera stays held (B2B1); in tests use the existing fixture media path. The one-tap camera is a later piece (f1-cam, after B2B1-device), per Astra 21:44 UK; do not build a camera path here.
 - "Changed" never changes scope or price; it is only recorded (F3 later turns it into a change draft).
 - Screen: buttons on the brief view, V2 only.
 

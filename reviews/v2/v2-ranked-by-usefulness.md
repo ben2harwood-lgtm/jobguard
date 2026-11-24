@@ -9,6 +9,7 @@ Use: ★★★ very high, ★★ high, ★ useful. Effort: S small, M medium, L 
 | Rank | Piece | Use | Effort | Waits on |
 |---|---|---|---|---|
 | 1 | Product picker, Materials and Briefs screens (D5B) | ★★ | M | nothing, already running |
+| 1b | Automatic guard that fails CI when a change skips the audit rule (CI2, safety) | ★★ | S | nothing |
 | 2 | Customer approves an extra by link (F6) | ★★★ | M | nothing |
 | 3 | Automatic chasing of quotes and unpaid invoices (K4) | ★★★ | S–M | nothing |
 | 4 | Forward a merchant invoice to the job (K6) | ★★ | M | nothing |

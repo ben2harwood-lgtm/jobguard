@@ -7,7 +7,7 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 **Starts:** now. **Base:** `v2/main`. Stock effects (E3) are left out, so it does not wait for E3.
 
 ## Goal
-Each firm gets one inbound address. A merchant invoice email forwarded there, or a photo of a delivery note, lands on the right job as a supplier document, ready for the existing three-way check (M2-4-S), without retyping.
+Each firm gets one inbound address. A merchant invoice email forwarded there (with its attached PDF or image file) lands on the right job as a supplier document, ready for the existing three-way check (M2-4-S), without retyping.
 
 ## Scope
 - Table: firm inbound address (random local-part, stored), and inbound items (received at, sender, subject, attachment references, matched job or "needs a job", filed by). One audit event per filing command.
