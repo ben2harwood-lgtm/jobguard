@@ -6,6 +6,9 @@ Tier: **RED** (customer approval of money). Migration **2018**. Astra: yes. Usef
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-f6, section 2A item 1. Practice slice of BUILD_PLAN.md MON-5 (Ben's decision 1); MON-5 stays the plan of record.
 **Starts:** now. **Base:** `v2/main`. Draft PR against `v2/main`. It uses the variation path already on v2/main's base, so it does **not** wait for F3.
 
+
+> **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
+
 ## Goal
 For one variation version at a time, the builder makes a link; the customer opens it and sees the description, price and any photos of that exact version, with one "I agree" button.
 

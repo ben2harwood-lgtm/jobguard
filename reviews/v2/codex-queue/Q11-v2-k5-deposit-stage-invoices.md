@@ -6,6 +6,9 @@ Tier: **RED (money)**. Migration **2012**. Astra: yes. Rework risk: **medium**. 
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-k5, section 2A item 3.
 **Starts when:** R2 has pushed c3. **Base:** that c3 head. Draft PR against `codex/sandbox/v2-c3`.
 
+
+> **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
+
 ## Goal
 The builder picks a split on the accepted quote (for example 30/40/30, or a fixed deposit then stages), and JobGuard drafts each stage invoice through the **existing invoice path**, with bank details and a due-date reminder for the builder.
 

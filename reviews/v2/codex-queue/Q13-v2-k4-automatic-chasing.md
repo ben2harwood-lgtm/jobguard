@@ -6,6 +6,9 @@ Tier: **RED** (customer messages about money). Migration **2019**. Astra: yes. U
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-k4, section 2A item 2, Ben's decision 3 (defaults). Follows BUILD_PLAN.md M4-16's rules for customer messages.
 **Starts:** now. **Base:** `v2/main`. It reads quote and invoice states already on v2/main's base, so it does **not** wait for E7.
 
+
+> **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
+
 ## Goal
 The builder switches chasing on once per firm; JobGuard sends polite reminders for quotes not answered and invoices not paid, and stops by itself.
 

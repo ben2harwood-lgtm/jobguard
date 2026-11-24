@@ -6,6 +6,9 @@ Tier: **RED** (customer-facing; must not leak private data). Migration **2021**.
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-k3, section 2A item 5, plus plan section 9 point 4 (customer-supplied items).
 **Starts when:** R2 has pushed c3. **Base:** that c3 head. It uses the job diary already on v2/main's base and the c3 plan; the QW-2 summary and F1 buttons will feed it later, so it does not wait for the main sync.
 
+
+> **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
+
 ## Goal
 Once a week the builder previews and sends the customer a short update: what got done, photos marked customer-visible, what's next, decisions needed, and anything the customer must buy and by when.
 

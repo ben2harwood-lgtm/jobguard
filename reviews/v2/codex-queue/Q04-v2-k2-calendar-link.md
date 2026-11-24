@@ -6,6 +6,9 @@ Tier: **RED** (who can read; new table). Migration **2017**. Astra: yes (build w
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-k2, section 2A item 7.
 **Starts when:** R2 has pushed `codex/sandbox/v2-c3`. **Base:** `codex/sandbox/v2-c4` (#903) with the new c3 merged in. Draft PR against `codex/sandbox/v2-c4`.
 
+
+> **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
+
 ## Goal
 A private calendar feed of the work plan: the builder sees every task, a crew member only their own tasks, the customer only the days work happens at their home. No prices.
 

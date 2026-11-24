@@ -6,6 +6,9 @@ Tier: **RED** (money). Migration **2022**. Astra: yes. Usefulness **very high**,
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-e9, section 2B item 17.
 **Starts:** now. **Base:** E1's branch `claude/project-thread-vur4ba` (#919). Draft PR against it. It drafts extras through the variation path already on the base, so it does not wait for F3.
 
+
+> **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
+
 ## Goal
 Each customer choice (tiles, sanitaryware, worktop, paint) has an allowance (for example tiles at £25/m²) and a "decide by" date. If the choice goes over the allowance, a variation is **drafted** for the difference, never committed.
 
