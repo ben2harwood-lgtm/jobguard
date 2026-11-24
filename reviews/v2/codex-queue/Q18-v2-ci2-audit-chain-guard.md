@@ -3,7 +3,7 @@
 Tier: T1 (tooling and CI only, no app behaviour). Migration: none. Astra: no. Usefulness **high** (stops the most-missed rule of 24 Nov reaching review), effort **S**. Rework risk: **low**.
 **Starts:** now. **Base:** `v2/main`. Draft PR against `v2/main`. Plan: Ben, 24 Nov 21:36 UK ("make sure every future piece is built [to the rules]... see if we can strengthen it").
 
-> **Rules this piece must meet.** AGENTS.md rev 3.0, BUILD_PLAN.md and `01-RULES.md`; Ben's build rules checklist `/mnt/project-files/audits/build-rules-checklist.md` (version 1).
+> **Rules this piece must meet.** AGENTS.md rev 3.0, BUILD_PLAN.md and `01-RULES.md`; Ben's build rules checklist `reviews/v2/codex-queue/02-BUILD-RULES-CHECKLIST.md` (version 1.1, in this repo on branch `claude/project-thread-cw5qv5`).
 
 ## Goal
 CI fails a V2 PR when a repository method writes data (INSERT, UPDATE or DELETE on a firm table) but its transaction has no `appendAuditBatch` call, so the audit-chain rule (AGENTS.md §5.7) is checked by a machine, not only by a reviewer.

@@ -4,7 +4,7 @@ Ben, 24 Nov 21:25 UK: "Keep jobguard v2 building on codex desktop all night." Bu
 
 Plan of record: V2 build plan rev 1.3, `reviews/v2/JobGuard-V2-Build-Plan-rev-1.3.md` on branch `claude/project-thread-cw5qv5` (PR #915). These packets are also on that branch under `reviews/v2/codex-queue/`.
 
-**Read `01-RULES.md` first. It applies to every packet.**
+**Read `01-RULES.md` and `02-BUILD-RULES-CHECKLIST.md` first (both in this folder). They apply to every packet. Everything a builder must read is in this repo; nothing lives only in the project folder.**
 
 ## Order (re-ranked 24 Nov 21:45 UK: most useful for least effort first)
 

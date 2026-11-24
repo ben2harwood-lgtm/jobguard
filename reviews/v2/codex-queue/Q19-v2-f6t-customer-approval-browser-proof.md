@@ -2,7 +2,7 @@
 
 Tier: T1 (test files only), but it proves a RED customer page. Migration: **none**. Astra: no. Usefulness **high**: F6 #923 can't merge without it. Effort **S**. Rework risk: **low**.
 
-> **Rules this piece must meet (read before writing code).** AGENTS.md rev 3.0 and BUILD_PLAN.md on `main`, plus `01-RULES.md` (rules 11 to 16 especially). Ben's build rules checklist `/mnt/project-files/audits/build-rules-checklist.md` (version 1) applies. **Test files only:** no app code, no migration, no change to F6's source files. If a test can only pass by changing app code, stop and report; that becomes a decision for Ben.
+> **Rules this piece must meet (read before writing code).** AGENTS.md rev 3.0 and BUILD_PLAN.md on `main`, plus `01-RULES.md` (rules 11 to 16 especially). Ben's build rules checklist `reviews/v2/codex-queue/02-BUILD-RULES-CHECKLIST.md` (version 1.1, in this repo on branch `claude/project-thread-cw5qv5`) applies. **Test files only:** no app code, no migration, no change to F6's source files. If a test can only pass by changing app code, stop and report; that becomes a decision for Ben.
 
 **Why this exists:** F6 (#923, head `d7fabdf6`) has used its one build and two repairs. The Claude re-check (jobguard#923 comment 7146268070) says the code is right and the late price change is handled. But nothing has yet rendered the customer page: the Playwright test fails in its own setup. It posts the proof action `select_generated` with fixture `completion-photo` and gets `400 INVALID_COMMAND`. Customer pages need rendered evidence before merge. This is a separate follow-up beyond F6's repair cap, and Ben is told about it in the morning.
 
