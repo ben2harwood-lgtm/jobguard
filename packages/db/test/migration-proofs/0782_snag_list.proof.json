@@ -84,6 +84,14 @@
       "section": "entries",
       "before": null,
       "after": {
+        "key": "acl|rel|table|app.snag_photo_upload|jobguard_runtime|SELECT|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
         "key": "acl|rel|table|app.snag_photo|jobguard_runtime|SELECT|-",
         "group": "a-snag-list"
       }
@@ -124,6 +132,14 @@
       "section": "entries",
       "before": null,
       "after": {
+        "key": "acl|routine|function:app.snag_bind_photo_upload(uuid,uuid,uuid)|jobguard_runtime|EXECUTE|-",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
         "key": "acl|routine|function:app.snag_record_event(uuid,uuid,uuid,text)|jobguard_runtime|EXECUTE|-",
         "group": "a-snag-list"
       }
@@ -149,6 +165,14 @@
       "before": null,
       "after": {
         "key": "owner|rel:table|app.snag_event|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.snag_photo_upload|jobguard_migration",
         "group": "a-snag-list"
       }
     },
@@ -189,6 +213,14 @@
       "before": null,
       "after": {
         "key": "owner|routine|function:app.snag_attach_photo(uuid,uuid,uuid)|jobguard_migration",
+        "group": "a-snag-list"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.snag_bind_photo_upload(uuid,uuid,uuid)|jobguard_migration",
         "group": "a-snag-list"
       }
     },
@@ -256,6 +288,30 @@
         "staticCalls": [
           "app.require_watchdog_live",
           "app.snag_audit",
+          "app.snag_practice_actor"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.snag_bind_photo_upload(uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": true,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.snag_photo_upload"
+        ],
+        "staticCalls": [
+          "app.require_watchdog_live",
           "app.snag_practice_actor"
         ]
       }
@@ -465,6 +521,11 @@
       "after": "app.snag_revision|rls=t|forced=t"
     },
     {
+      "section": "rls",
+      "before": null,
+      "after": "app.snag_photo_upload|rls=t|forced=t"
+    },
+    {
       "section": "policies",
       "before": null,
       "after": "app.snag|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|1dee645b6478adf6"
@@ -488,6 +549,11 @@
       "section": "policies",
       "before": null,
       "after": "app.snag_revision|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|1dee645b6478adf6"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.snag_photo_upload|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|1dee645b6478adf6"
     },
     {
       "section": "triggers",
@@ -543,6 +609,16 @@
       "section": "triggers",
       "before": null,
       "after": "app.watchdog_command_identity|c_snag_command_id_before_insert|app.snag_reserved_command_id|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_photo_upload|snag_photo_upload_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.snag_photo_upload|snag_photo_upload_no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
     }
   ],
   "upgrade": [
@@ -703,6 +779,30 @@
       }
     },
     {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_photo_upload",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "snag_photo_upload_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
       "section": "routines",
       "before": null,
       "after": {
@@ -724,6 +824,21 @@
         "nspname": "app",
         "proname": "snag_attach_photo",
         "args": "j uuid, s uuid, evidence uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_bind_photo_upload",
+        "args": "j uuid, s uuid, u uuid",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_runtime=X/jobguard_migration}",
         "prosecdef": true,
@@ -921,6 +1036,20 @@
         "qual": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
         "with_check": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)"
       }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "snag_photo_upload",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)"
+      }
     }
   ],
   "tenancy": [
@@ -966,6 +1095,16 @@
     },
     {
       "relname": "snag_revision",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    },
+    {
+      "relname": "snag_photo_upload",
       "before": null,
       "after": {
         "relrowsecurity": true,

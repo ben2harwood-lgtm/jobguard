@@ -71,7 +71,9 @@ export class SnagRepository {
       if (input.action === "begin") {
         const bytes = generatePracticePng(input.fixture), digest = createHash("sha256").update(bytes).digest("hex");
         const upload = await evidence.beginUpload(context, { id: input.commandId, jobId, scopeItemId: null, expectedSha256: digest, contentType: "image/png",
-          maximumBytes: bytes.length, retentionClass: "standard_evidence", expiresAt: new Date(Date.now() + 3600_000) }, openSnag);
+          maximumBytes: bytes.length, retentionClass: "standard_evidence", expiresAt: new Date(Date.now() + 3600_000) },
+          // The upload belongs to this snag from the start: a retry of the same begin naming another snag conflicts (Codex P2 4685550045).
+          async (db, upload) => { await openSnag(db); await db.$client.query("SELECT app.snag_bind_photo_upload($1,$2,$3)", [jobId, snagId, upload.id]); });
         return { uploadId: upload.id, objectVersionId: fixtureVersion(input.fixture) };
       }
       // Only this job's unscoped uploads become snag photos, so a proof upload cannot be finalized here.

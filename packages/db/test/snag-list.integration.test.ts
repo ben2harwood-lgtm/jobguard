@@ -116,9 +116,16 @@ describe("QW-4 snag photos", () => {
     const begun = await r.photo(a.context, a.jobId, snagId, { version: "snag-photo.v1", action: "begin", commandId: randomUUID(), fixture: "completion-photo" });
     await refused(event(a, snagId, "reopen", begun.uploadId), "SNAG_COMMAND_CONFLICT");
     await refused(r.add(a.context, a.jobId, { version: "snag.v1", action: "add", commandId: begun.uploadId, snagId: randomUUID(), ...details }), "SNAG_COMMAND_CONFLICT");
-    const [row] = await r.read(a.context, a.jobId);
+    // A begin retry naming another snag conflicts, and its upload finalizes only onto the snag it was begun for (Codex P2 4685550045).
+    const other = await addSnag(a), retried = { version: "snag-photo.v1", action: "begin", commandId: begun.uploadId, fixture: "completion-photo" } as const;
+    expect((await r.photo(a.context, a.jobId, snagId, retried)).uploadId).toBe(begun.uploadId);
+    await refused(r.photo(a.context, a.jobId, other, retried), "SNAG_COMMAND_CONFLICT");
+    await refused(r.photo(a.context, a.jobId, other, { version: "snag-photo.v1", action: "finalize", commandId: randomUUID(), uploadId: begun.uploadId, objectVersionId: begun.objectVersionId }), "SNAG_COMMAND_CONFLICT");
+    await r.photo(a.context, a.jobId, snagId, { version: "snag-photo.v1", action: "finalize", commandId: randomUUID(), uploadId: begun.uploadId, objectVersionId: begun.objectVersionId });
+    const [row] = (await r.read(a.context, a.jobId)).filter(s => s.id === snagId);
+    expect(row!.photos).toHaveLength(1);
     expect(row!.events.map(e => e.kind)).toEqual(["fixed"]);
-    expect((await r.read(a.context, a.jobId))).toHaveLength(1);
+    expect((await r.read(a.context, a.jobId)).find(s => s.id === other)!.photos).toHaveLength(0);
   });
 
   it("links verified photos in order and refuses a seventh", async () => {
@@ -211,7 +218,7 @@ describe("QW-4 isolation and refusals", () => {
   it("is append-only and the runtime cannot write the tables directly", async () => {
     const a = await seedFinalCheckJob(f), snagId = await addSnag(a);
     await event(a, snagId, "mark_fixed"); await photo(a, snagId);
-    for (const table of ["snag", "snag_revision", "snag_event", "snag_photo", "snag_command"]) {
+    for (const table of ["snag", "snag_revision", "snag_event", "snag_photo", "snag_photo_upload", "snag_command"]) {
       await expect(f.admin.query(`UPDATE app.${table} SET tenant_id=tenant_id`)).rejects.toThrow();
       await expect(f.admin.query(`DELETE FROM app.${table}`)).rejects.toThrow();
       await expect(f.admin.query(`TRUNCATE app.${table} CASCADE`)).rejects.toThrow();
@@ -219,7 +226,7 @@ describe("QW-4 isolation and refusals", () => {
     }
     await expect(finalCheckTenant(f.runtime, a.tenantId, db => db.query("INSERT INTO app.snag(tenant_id,job_id,id,title,created_by_membership_id) VALUES($1,$2,$3,'Fictional',$4)", [a.tenantId, a.jobId, randomUUID(), FINAL_CHECK_ACTOR]), { practiceDigest: a.digest })).rejects.toThrow(/permission denied/u);
     const grants = (await f.admin.query(`SELECT table_name,privilege_type FROM information_schema.role_table_grants WHERE grantee='jobguard_runtime' AND table_schema='app' AND table_name LIKE 'snag%' ORDER BY 1,2`)).rows;
-    expect(grants).toEqual(["snag", "snag_command", "snag_event", "snag_photo", "snag_revision"].map(table_name => ({ table_name, privilege_type: "SELECT" })));
+    expect(grants).toEqual(["snag", "snag_command", "snag_event", "snag_photo", "snag_photo_upload", "snag_revision"].map(table_name => ({ table_name, privilege_type: "SELECT" })));
   });
 
   it("refuses outside the practice database", async () => {

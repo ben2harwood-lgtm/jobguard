@@ -85,8 +85,21 @@ CREATE TABLE app.snag_photo (
  FOREIGN KEY(tenant_id,actor_membership_id) REFERENCES app.membership(tenant_id,id)
 );
 
+-- Which snag a practice photo upload was begun for, fixed at begin. A begin retry naming another snag,
+-- and a finalize naming another snag, conflict (Codex P2 4685550045).
+CREATE TABLE app.snag_photo_upload (
+ tenant_id uuid NOT NULL,
+ job_id uuid NOT NULL,
+ upload_id uuid NOT NULL,
+ snag_id uuid NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+ PRIMARY KEY(tenant_id,upload_id),
+ FOREIGN KEY(tenant_id,job_id,snag_id) REFERENCES app.snag(tenant_id,job_id,id),
+ FOREIGN KEY(tenant_id,upload_id) REFERENCES app.evidence_upload(tenant_id,id)
+);
+
 DO $$ DECLARE n text; BEGIN
- FOREACH n IN ARRAY ARRAY['snag_command','snag','snag_revision','snag_event','snag_photo'] LOOP
+ FOREACH n IN ARRAY ARRAY['snag_command','snag','snag_revision','snag_event','snag_photo','snag_photo_upload'] LOOP
   EXECUTE format('ALTER TABLE app.%I OWNER TO jobguard_migration',n);
   EXECUTE format('ALTER TABLE app.%I ENABLE ROW LEVEL SECURITY',n);
   EXECUTE format('ALTER TABLE app.%I FORCE ROW LEVEL SECURITY',n);
@@ -262,6 +275,23 @@ BEGIN
  RETURN result;
 END $$;
 
+-- Records, inside the begin transaction, the snag a photo upload is for. The same snag is a no-op (a retry);
+-- another snag conflicts.
+CREATE FUNCTION app.snag_bind_photo_upload(j uuid,s uuid,u uuid) RETURNS void
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE t uuid:=nullif(current_setting('app.tenant_id',true),'')::uuid; bound uuid;
+BEGIN
+ PERFORM app.snag_practice_actor(t,j);
+ PERFORM app.require_watchdog_live(j);
+ IF NOT EXISTS(SELECT 1 FROM app.evidence_upload x WHERE x.tenant_id=t AND x.job_id=j AND x.id=u AND x.scope_item_id IS NULL)
+ THEN RAISE EXCEPTION 'SNAG_PHOTO_REFUSED' USING ERRCODE='42501'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM app.snag x WHERE x.tenant_id=t AND x.job_id=j AND x.id=s)
+ THEN RAISE EXCEPTION 'SNAG_NOT_FOUND' USING ERRCODE='42501'; END IF;
+ INSERT INTO app.snag_photo_upload(tenant_id,job_id,upload_id,snag_id) VALUES(t,j,u,s) ON CONFLICT DO NOTHING;
+ SELECT snag_id INTO bound FROM app.snag_photo_upload WHERE tenant_id=t AND upload_id=u;
+ IF bound IS DISTINCT FROM s THEN RAISE EXCEPTION 'SNAG_COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
+END $$;
+
 -- Links one freshly verified snag photo of this job, inside the evidence finalize
 -- transaction. The same photo on the same snag is a no-op; anything else is refused.
 CREATE FUNCTION app.snag_attach_photo(j uuid,s uuid,evidence uuid) RETURNS jsonb
@@ -282,6 +312,8 @@ BEGIN
   AND u.state='verified' AND u.object_version_id=e.object_version_id
   AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE (i.tenant_id,i.evidence_id)=(e.tenant_id,e.id));
  IF o.id IS NULL THEN RAISE EXCEPTION 'SNAG_PHOTO_REFUSED' USING ERRCODE='42501'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM app.snag_photo_upload b WHERE b.tenant_id=t AND b.upload_id=o.upload_id AND b.snag_id=s AND b.job_id=j)
+ THEN RAISE EXCEPTION 'SNAG_COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
  SELECT count(*) INTO n FROM app.snag_photo WHERE tenant_id=t AND snag_id=s;
  IF n>=6 THEN RAISE EXCEPTION 'PHOTO_LIMIT_REACHED' USING ERRCODE='22023'; END IF;
  INSERT INTO app.snag_photo(tenant_id,job_id,snag_id,evidence_id,position,sha256,received_at,actor_membership_id)
@@ -295,6 +327,9 @@ ALTER FUNCTION app.snag_add(uuid,uuid,uuid,text,text,text,date) OWNER TO jobguar
 ALTER FUNCTION app.snag_revise(uuid,uuid,uuid,integer,text,text,text,date) OWNER TO jobguard_migration;
 ALTER FUNCTION app.snag_record_event(uuid,uuid,uuid,text) OWNER TO jobguard_migration;
 ALTER FUNCTION app.snag_attach_photo(uuid,uuid,uuid) OWNER TO jobguard_migration;
+ALTER FUNCTION app.snag_bind_photo_upload(uuid,uuid,uuid) OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.snag_bind_photo_upload(uuid,uuid,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+GRANT EXECUTE ON FUNCTION app.snag_bind_photo_upload(uuid,uuid,uuid) TO jobguard_runtime;
 REVOKE ALL ON FUNCTION app.snag_add(uuid,uuid,uuid,text,text,text,date),app.snag_revise(uuid,uuid,uuid,integer,text,text,text,date),
  app.snag_record_event(uuid,uuid,uuid,text),app.snag_attach_photo(uuid,uuid,uuid) FROM PUBLIC,jobguard_identity,jobguard_infrastructure;
 GRANT EXECUTE ON FUNCTION app.snag_add(uuid,uuid,uuid,text,text,text,date),app.snag_revise(uuid,uuid,uuid,integer,text,text,text,date),
