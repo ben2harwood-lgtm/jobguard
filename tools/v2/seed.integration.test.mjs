@@ -309,6 +309,7 @@ test("walk entries out of order with identical device times keep each photo with
   assert.deepEqual(retried[0], retried[1]);
   assert.equal(retried[0].commandId, commands[1].commandId);
   assert.equal(await count(), 6);
+  assert.equal((await walkAudit("v2_walk.entry_recorded", sessionId)).length, 6);
   assert.deepEqual(await walk.read(jobId, { ...walkQuery, sessionId }), first);
 });
 
@@ -384,13 +385,20 @@ test("walk device claim, server receipt and photo verification stay distinct in 
     .map(value => value.getTime())).size, 4);
 });
 
+const walkAudit = async (eventType, sessionId) => (await admin.query(`SELECT actor_ref AS "actorRef", payload
+  FROM app.audit_event WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = $2
+    AND payload->'references'->>'sessionId' = $3 ORDER BY sequence`, [jobId, eventType, sessionId])).rows;
+
 test("a replayed walk entry is recorded once, and a stale version or changed retry is refused", async () => {
-  const { walk } = await walkSetup();
+  const { walk, owner } = await walkSetup();
   const now = new Date();
   const sessionId = walkId();
   const start = { version: "v2-walk-session-command.v1", sessionId, deviceStartedAt: now.toISOString() };
   const session = await walk.start(jobId, start);
   assert.deepEqual(await walk.start(jobId, start), session);
+  const started = await walkAudit("v2_walk.session_started", sessionId);
+  assert.equal(started.length, 1);
+  assert.equal(started[0].actorRef, `membership:${owner.membershipId}`);
   await assert.rejects(walk.start(jobId, { ...start, deviceStartedAt: new Date(now.getTime() + 1000).toISOString() }),
     { code: "WALK_SESSION_CONFLICT" });
 
@@ -409,6 +417,16 @@ test("a replayed walk entry is recorded once, and a stale version or changed ret
   await assert.rejects(walk.record(jobId, { ...note, commandId: walkId(), expectedVersion: 1 }), { code: "WALK_VERSION_CONFLICT" });
   await assert.rejects(walk.record(jobId, { ...note, commandId: walkId(), expectedVersion: 2, entry: { kind: "room", room: "Hall" } }),
     { code: "WALK_ENTRY_KIND_FIXED" });
+
+  // One audit event per stored revision, none for replays or refusals, and no note words in the chain.
+  const recorded = await walkAudit("v2_walk.entry_recorded", sessionId);
+  assert.equal(recorded.length, 2);
+  assert.deepEqual(recorded.map(event => [event.payload.references.commandId, event.payload.references.entryVersion,
+    event.payload.references.captureOrder, event.payload.references.kind]),
+  [[note.commandId, "1", "1", "note"], [raced.find(result => result.status === "fulfilled").value.commandId, "2", "1", "note"]]);
+  assert.ok(recorded.every(event => event.actorRef === `membership:${owner.membershipId}`));
+  assert.ok(!JSON.stringify(recorded).includes("boiler"));
+  assert.equal((await walkAudit("v2_walk.session_started", sessionId)).length, 1);
 
   const [read] = await walk.read(jobId, { ...walkQuery, sessionId });
   assert.equal(read.entries.length, 1);

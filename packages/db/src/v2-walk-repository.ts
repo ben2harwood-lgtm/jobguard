@@ -1,8 +1,9 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
+import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 const uuid = z.uuid().transform(value => value.toLowerCase());
 const instant = z.iso.datetime({ offset: true }).transform(value => new Date(value));
@@ -95,6 +96,8 @@ export class WalkError extends Error {
   }
 }
 
+const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
+
 const sessionProjection = `id AS "sessionId", actor_membership_id AS "actorMembershipId",
   device_started_at AS "deviceStartedAt", server_received_at AS "serverReceivedAt"`;
 const entryProjection = `session_id AS "sessionId", capture_order AS "captureOrder", command_id AS "commandId",
@@ -174,7 +177,8 @@ export class WalkRepository {
     const parsed = walkSessionCommandV1.safeParse(input);
     if (!parsed.success) throw new WalkError("WALK_INVALID_COMMAND");
     const command = parsed.data;
-    return withTenant(this.pool, context, async ({ $client }) => {
+    return withTenant(this.pool, context, async database => {
+      const { $client } = database;
       const actor = await this.editor($client, credential);
       const { rows: [job] } = await $client.query("SELECT 1 FROM app.job WHERE (tenant_id, id) = ($1, $2)",
         [context.tenantId, jobId]);
@@ -183,7 +187,12 @@ export class WalkRepository {
         INSERT INTO app.v2_walk_session (tenant_id, job_id, id, actor_membership_id, device_started_at)
         VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING RETURNING ${sessionProjection}
       `, [context.tenantId, jobId, command.sessionId, actor, command.deviceStartedAt]);
-      if (created) return created;
+      if (created) {
+        // A replay returns below without a second event.
+        await this.audit(database, actor, jobId, "v2_walk.session_started", { sessionId: created.sessionId },
+          { deviceStartedAt: sha256(created.deviceStartedAt.toISOString()) });
+        return created;
+      }
       const { rows: [prior] } = await $client.query<WalkSession>(`
         SELECT ${sessionProjection} FROM app.v2_walk_session WHERE (tenant_id, job_id, id) = ($1, $2, $3)
       `, [context.tenantId, jobId, command.sessionId]);
@@ -202,7 +211,8 @@ export class WalkRepository {
     const command = parsed.data;
     const entry = fields(command);
     const slot = [context.tenantId, jobId, command.sessionId, command.captureOrder];
-    return withTenant(this.pool, context, async ({ $client }) => {
+    return withTenant(this.pool, context, async database => {
+      const { $client } = database;
       const actor = await this.editor($client, credential);
       const { rows: [session] } = await $client.query<{ version: number }>(`
         SELECT COALESCE((
@@ -254,7 +264,15 @@ export class WalkRepository {
           ON CONFLICT ON CONSTRAINT v2_walk_entry_pkey DO NOTHING RETURNING ${entryProjection}
         `, [...slot, command.expectedVersion, command.commandId, entry.kind, entry.room, entry.text,
           entry.quantity, entry.unit, entry.photoId, command.deviceCapturedAt, actor]);
-        if (saved) return saved;
+        if (saved) {
+          // Exact retries replay without a second event. Note and room words stay out of the chain; only their hash.
+          await this.audit(database, actor, jobId, "v2_walk.entry_recorded", {
+            commandId: saved.commandId, sessionId: saved.sessionId, captureOrder: String(saved.captureOrder),
+            entryVersion: String(saved.version), kind: saved.kind, ...(saved.photoId && { photoId: saved.photoId }),
+          }, { entry: sha256(JSON.stringify([entry.room, entry.text, entry.quantity, entry.unit])),
+            deviceCapturedAt: sha256(saved.deviceCapturedAt.toISOString()) });
+          return saved;
+        }
         const raced = await this.byCommand($client, context.tenantId, jobId, command.commandId);
         if (raced) return this.replay(raced, command, entry, actor);
       }
@@ -268,6 +286,13 @@ export class WalkRepository {
       }
       throw error;
     });
+  }
+
+  private audit(database: TenantTransaction, actor: string, jobId: string, eventType: string,
+    references: Record<string, string>, hashes: Record<string, string>) {
+    return appendAuditBatch(database, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor}`,
+      eventType, subjectType: "job", subjectRef: jobId,
+      payload: { references, hashes, classifications: { action: "operational" } } }]);
   }
 
   private async editor(client: { query: Pool["query"] }, credential: string) {
