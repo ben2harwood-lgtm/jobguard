@@ -43,10 +43,29 @@ BEGIN
       REFERENCES app.evidence_object (tenant_id, job_id, id)
   );
 
+  -- One receipt per generate command, including one that found the current brief unchanged.
+  CREATE TABLE IF NOT EXISTS app.v2_crew_brief_command (
+    tenant_id uuid NOT NULL,
+    job_id uuid NOT NULL,
+    command_id uuid NOT NULL,
+    trade varchar(100) NOT NULL,
+    expected_version integer NOT NULL CHECK (expected_version BETWEEN 0 AND 2147483646),
+    access_window varchar(200) NOT NULL,
+    photo_ids uuid[] NOT NULL CHECK (cardinality(photo_ids) <= 20),
+    brief_version integer NOT NULL,
+    actor_membership_id uuid NOT NULL,
+    recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (tenant_id, job_id, command_id),
+    FOREIGN KEY (tenant_id, job_id, trade, brief_version)
+      REFERENCES app.v2_crew_brief (tenant_id, job_id, trade, expected_version)
+  );
+
   ALTER TABLE app.v2_crew_brief ENABLE ROW LEVEL SECURITY;
   ALTER TABLE app.v2_crew_brief FORCE ROW LEVEL SECURITY;
   ALTER TABLE app.v2_crew_brief_photo ENABLE ROW LEVEL SECURITY;
   ALTER TABLE app.v2_crew_brief_photo FORCE ROW LEVEL SECURITY;
+  ALTER TABLE app.v2_crew_brief_command ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE app.v2_crew_brief_command FORCE ROW LEVEL SECURITY;
 
   DROP POLICY IF EXISTS v2_crew_brief_runtime ON app.v2_crew_brief;
   CREATE POLICY v2_crew_brief_runtime ON app.v2_crew_brief TO jobguard_runtime
@@ -60,8 +79,14 @@ BEGIN
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_crew_brief_photo.tenant_id, v2_crew_brief_photo.job_id)
     ));
 
-  REVOKE ALL ON app.v2_crew_brief, app.v2_crew_brief_photo FROM PUBLIC;
-  GRANT SELECT, INSERT ON app.v2_crew_brief, app.v2_crew_brief_photo TO jobguard_runtime;
+  DROP POLICY IF EXISTS v2_crew_brief_command_runtime ON app.v2_crew_brief_command;
+  CREATE POLICY v2_crew_brief_command_runtime ON app.v2_crew_brief_command TO jobguard_runtime
+    USING (tenant_id = (SELECT app.lp11_policy_tenant()) AND EXISTS (
+      SELECT FROM app.job j WHERE (j.tenant_id, j.id) = (v2_crew_brief_command.tenant_id, v2_crew_brief_command.job_id)
+    ));
+
+  REVOKE ALL ON app.v2_crew_brief, app.v2_crew_brief_photo, app.v2_crew_brief_command FROM PUBLIC;
+  GRANT SELECT, INSERT ON app.v2_crew_brief, app.v2_crew_brief_photo, app.v2_crew_brief_command TO jobguard_runtime;
 END
 $v2$;
 COMMIT;

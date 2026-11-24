@@ -869,7 +869,8 @@ async function briefSetup() {
 
 const briefRows = async () => (await admin.query(`SELECT
   (SELECT count(*)::int FROM app.v2_crew_brief WHERE job_id = $1) AS briefs,
-  (SELECT count(*)::int FROM app.v2_crew_brief_photo WHERE job_id = $1) AS photos`, [jobId])).rows[0];
+  (SELECT count(*)::int FROM app.v2_crew_brief_photo WHERE job_id = $1) AS photos,
+  (SELECT count(*)::int FROM app.v2_crew_brief_command WHERE job_id = $1) AS receipts`, [jobId])).rows[0];
 
 test("each trade's unpriced brief has only its own tasks and picked photos, and generating twice keeps one current brief", async () => {
   const { owner, crewBriefs, workPlan, quoteRevisionId, tilingId, decoratingId, command } = await briefSetup();
@@ -894,16 +895,23 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
   assert.deepEqual(replay, first);
   assert.equal(first.version, 1);
   assert.equal(first.actorMembershipId, owner.membershipId);
+  // Visit and owner come from the plan; the Switch live test edited whichever task the seed put first.
+  const livePlan = await workPlan.read(jobId, planQuery);
+  const planned = key => livePlan.tasks.find(task => task.key === key);
+  const visit = key => planned(key).scheduledDate ?? null;
+  const assignee = key => planned(key).assignee ?? null;
   assert.deepEqual(first.content, {
     version: "v2-crew-brief.v1", trade: "tiler", quoteRevisionId,
     accessWindow: "Weekdays 08:30 to 16:00, key from the fictional neighbour",
     tasks: [
       { position: 1, title: "Prepare the splashback surface",
         scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
-        durationMinutes: 60, visit: "2026-12-09", owner: "Fictional Tiler", proofNeeded: ["Photo of the prepared surface"] },
+        durationMinutes: 60, visit: visit("prepare-splashback"), owner: assignee("prepare-splashback"),
+        proofNeeded: ["Photo of the prepared surface"] },
       { position: 2, title: "Fit and grout the splashback",
         scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
-        durationMinutes: 240, visit: null, owner: null, proofNeeded: ["Photo of the finished splashback"] },
+        durationMinutes: 240, visit: visit("tile-splashback"), owner: assignee("tile-splashback"),
+        proofNeeded: ["Photo of the finished splashback"] },
     ],
     photos: [{ evidenceId: tilerPhoto, scopeItemId: tilingId, contentType: "image/jpeg" }],
     proofNeeded: ["Photo of the prepared surface", "Photo of the finished splashback"],
@@ -912,6 +920,8 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
   assert.deepEqual(decorator.content.tasks.map(task => task.title),
     ["Protect and prepare the hall", "Paint the hall walls and trim"]);
   assert.deepEqual(decorator.content.photos.map(photo => photo.evidenceId), [hallPhoto]);
+  assert.deepEqual([...first.content.tasks, ...decorator.content.tasks].filter(task => task.owner)
+    .map(({ visit: date, owner: name }) => [date, name]), [["2026-12-09", "Fictional Tiler"]]);
   const { rows: rates } = await admin.query("SELECT unit_rate_pence::text AS rate FROM app.quote_line WHERE quote_revision_id = $1",
     [quoteRevisionId]);
   for (const brief of [first, decorator]) {
@@ -921,9 +931,11 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
   }
 
   // Same inputs again: still one current brief. Stale or altered commands are refused.
-  const again = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: 1, photoIds: [tilerPhoto] }));
-  assert.deepEqual(again, first);
-  assert.deepEqual(await briefRows(), { briefs: 2, photos: 2 });
+  const repeat = command("tiler", { expectedVersion: 1, photoIds: [tilerPhoto] });
+  assert.deepEqual(await crewBriefs.generate(jobId, repeat), first);
+  assert.deepEqual(await briefRows(), { briefs: 2, photos: 2, receipts: 3 });
+  // The unchanged generation keeps its own receipt: a changed replay is refused, not applied.
+  await assert.rejects(crewBriefs.generate(jobId, { ...repeat, accessWindow: "Weekends" }), { code: "CREW_BRIEF_COMMAND_CONFLICT" });
   await assert.rejects(crewBriefs.generate(jobId, { ...tiler, accessWindow: "Weekends" }), { code: "CREW_BRIEF_COMMAND_CONFLICT" });
   await assert.rejects(crewBriefs.generate(jobId, command("tiler", { photoIds: [] })), { code: "CREW_BRIEF_VERSION_CONFLICT" });
   const revised = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: 1, photoIds: [], accessWindow: "Mornings only" }));
@@ -947,6 +959,9 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
   const refreshed = await reopened.generate(jobId, command("tiler", { expectedVersion: 2, accessWindow: "Mornings only" }));
   assert.equal(refreshed.version, 3);
   assert.equal(refreshed.content.tasks[1].visit, "2026-12-10");
+  // Exact replays after the plan change still return their original results.
+  assert.deepEqual(await reopened.generate(jobId, repeat), first);
+  assert.deepEqual(await reopened.generate(jobId, tiler), first);
 
   assert.deepEqual(await effectCounts(), before);
   const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
@@ -964,6 +979,7 @@ test("a planted hidden financial finding leaves the exported briefs byte-identic
     photoIds: brief.content.photos.map(photo => photo.evidenceId) }))));
   const cleanRebuild = await rebuild();
   const rows = await briefRows();
+  rows.receipts += 2;
   const findings = await admin.query(`SELECT
     (SELECT count(*)::int FROM app.commercial_integrity_value_fact) AS values,
     (SELECT count(*)::int FROM app.commercial_integrity_activity_fact) AS activities`);
@@ -1000,7 +1016,7 @@ test("forced crew brief policies hide briefs and photos and reject changes from 
   const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
   const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
   const { rows: [photo] } = await admin.query("SELECT * FROM app.v2_crew_brief_photo WHERE job_id = $1 LIMIT 1", [jobId]);
-  for (const table of ["app.v2_crew_brief", "app.v2_crew_brief_photo"]) {
+  for (const table of ["app.v2_crew_brief", "app.v2_crew_brief_photo", "app.v2_crew_brief_command"]) {
     const { rows: [acl] } = await admin.query(`SELECT
       relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
       has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read,
@@ -1030,6 +1046,11 @@ test("forced crew brief policies hide briefs and photos and reject changes from 
     await assert.rejects(query(scope, `INSERT INTO app.v2_crew_brief_photo
       (tenant_id, job_id, trade, expected_version, position, evidence_id) VALUES ($1, $2, $3, $4, 20, $5)`,
     [DEMO_TENANT_ID, jobId, photo.trade, photo.expected_version, photo.evidence_id]),
+    { code: "42501", message: /row-level security policy/u });
+    await assert.rejects(query(scope, `INSERT INTO app.v2_crew_brief_command (tenant_id, job_id, command_id, trade,
+      expected_version, access_window, photo_ids, brief_version, actor_membership_id)
+      VALUES ($1, $2, $3, $4, $5, 'Any time', '{}', $5, $6)`,
+    [DEMO_TENANT_ID, jobId, randomUUID(), photo.trade, photo.expected_version, owner.membershipId]),
     { code: "42501", message: /row-level security policy/u });
   }
 });

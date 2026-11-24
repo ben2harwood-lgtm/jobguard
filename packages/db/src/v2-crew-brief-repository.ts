@@ -65,6 +65,8 @@ export class CrewBriefError extends Error {
 type PlanKey = [tenantId: string, jobId: string, quoteRevisionId: string];
 type BriefRow = Omit<CrewBrief, "content"> & { content: CrewBriefContent; accessWindow: string; photoIds: string[];
   expectedVersion: number };
+type Receipt = { trade: string; expectedVersion: number; accessWindow: string; photoIds: string[];
+  actorMembershipId: string; briefVersion: number };
 
 const briefColumns = `trade, expected_version + 1 AS version, expected_version AS "expectedVersion",
   command_id AS "commandId", actor_membership_id AS "actorMembershipId", recorded_at AS "recordedAt",
@@ -115,14 +117,18 @@ export class CrewBriefRepository {
       // Serialise with plan edits and quote saves on the same job.
       await this.requireJob($client, context.tenantId, jobId, true);
 
-      const prior = await this.byCommand($client, context.tenantId, jobId, command.commandId);
+      const { rows: [prior] } = await $client.query<Receipt>(`
+        SELECT trade, expected_version AS "expectedVersion", access_window AS "accessWindow",
+          photo_ids::text[] AS "photoIds", actor_membership_id AS "actorMembershipId", brief_version AS "briefVersion"
+        FROM app.v2_crew_brief_command WHERE (tenant_id, job_id, command_id) = ($1, $2, $3)
+      `, [context.tenantId, jobId, command.commandId]);
       if (prior) {
         if (prior.actorMembershipId !== actor.id || prior.trade !== command.trade ||
           prior.expectedVersion !== command.expectedVersion || prior.accessWindow !== command.accessWindow ||
           JSON.stringify(prior.photoIds) !== JSON.stringify(command.photoIds)) {
           throw new CrewBriefError("CREW_BRIEF_COMMAND_CONFLICT");
         }
-        return publicBrief(prior);
+        return publicBrief((await this.revision($client, context.tenantId, jobId, prior.trade, prior.briefVersion))!);
       }
 
       const { rows: [latest] } = await $client.query<BriefRow>(`
@@ -133,23 +139,30 @@ export class CrewBriefRepository {
 
       const tasks = await this.planTasks($client, context.tenantId, jobId);
       const content = await this.compose($client, tasks, command.trade, command.accessWindow, command.photoIds);
-      // Generating the same brief again keeps the one current brief.
-      if (latest && canonical(latest.content) === canonical(content)) return publicBrief(latest);
-
       const key = [context.tenantId, jobId, command.trade, command.expectedVersion];
-      const { rowCount } = await $client.query(`
-        INSERT INTO app.v2_crew_brief (tenant_id, job_id, trade, expected_version, command_id, quote_revision_id,
-          access_window, content, actor_membership_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT DO NOTHING
-      `, [...key, command.commandId, content.quoteRevisionId, command.accessWindow, JSON.stringify(content), actor.id]);
-      if (!rowCount) throw new CrewBriefError("CREW_BRIEF_VERSION_CONFLICT");
+      // Generating the same brief again keeps the one current brief.
+      const unchanged = latest && canonical(latest.content) === canonical(content);
+      if (!unchanged) {
+        const { rowCount } = await $client.query(`
+          INSERT INTO app.v2_crew_brief (tenant_id, job_id, trade, expected_version, command_id, quote_revision_id,
+            access_window, content, actor_membership_id)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT DO NOTHING
+        `, [...key, command.commandId, content.quoteRevisionId, command.accessWindow, JSON.stringify(content), actor.id]);
+        if (!rowCount) throw new CrewBriefError("CREW_BRIEF_VERSION_CONFLICT");
+        await $client.query(`
+          INSERT INTO app.v2_crew_brief_photo (tenant_id, job_id, trade, expected_version, position, evidence_id)
+          SELECT $1, $2, $3, $4, photo.position, photo.id
+          FROM unnest($5::uuid[]) WITH ORDINALITY AS photo(id, position)
+        `, [...key, command.photoIds]);
+      }
+      const briefVersion = unchanged ? latest!.expectedVersion : command.expectedVersion;
       await $client.query(`
-        INSERT INTO app.v2_crew_brief_photo (tenant_id, job_id, trade, expected_version, position, evidence_id)
-        SELECT $1, $2, $3, $4, photo.position, photo.id
-        FROM unnest($5::uuid[]) WITH ORDINALITY AS photo(id, position)
-      `, [...key, command.photoIds]);
-      const saved = await this.byCommand($client, context.tenantId, jobId, command.commandId);
-      return publicBrief(saved!);
+        INSERT INTO app.v2_crew_brief_command (tenant_id, job_id, command_id, trade, expected_version, access_window,
+          photo_ids, brief_version, actor_membership_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `, [context.tenantId, jobId, command.commandId, command.trade, command.expectedVersion, command.accessWindow,
+        command.photoIds, briefVersion, actor.id]);
+      return publicBrief((await this.revision($client, context.tenantId, jobId, command.trade, briefVersion))!);
     });
   }
 
@@ -159,10 +172,10 @@ export class CrewBriefRepository {
     if (!rowCount) throw new PracticeAccessError("NOT_FOUND");
   }
 
-  private async byCommand(client: PoolClient, tenantId: string, jobId: string, commandId: string) {
+  private async revision(client: PoolClient, tenantId: string, jobId: string, trade: string, version: number) {
     const { rows: [row] } = await client.query<BriefRow>(`
-      SELECT ${briefColumns} FROM app.v2_crew_brief b WHERE (tenant_id, job_id, command_id) = ($1, $2, $3)
-    `, [tenantId, jobId, commandId]);
+      SELECT ${briefColumns} FROM app.v2_crew_brief b WHERE (tenant_id, job_id, trade, expected_version) = ($1, $2, $3, $4)
+    `, [tenantId, jobId, trade, version]);
     return row;
   }
 
