@@ -9,7 +9,7 @@ import{RecoveryGuard}from"./recovery-guard";
 import {useEffect,useMemo,useRef,useState,type ReactNode}from"react";import{acceptanceLabel,evaluateDraftQuote,M1_QUOTE_POLICY,type QuoteLine}from"@jobguard/core";import{practiceActivationResponseV1,quoteWorkspaceResponseV1}from"@jobguard/api/quote-contracts";
 import { JobFinalAccount } from "./job-final-account";
 import { CustomerPaymentStatus } from "./customer-payment-status";
-import { NumberField, parseDiscountText, parseQuantityText, parseRateText, penceText } from "./quote-number-input";
+import { NumberField, parseDiscountText, parseQuantityText, parseRateText, penceText, quoteSignature } from "./quote-number-input";
 import { confirmsAcceptance, quoteAcceptanceReadV1, type PendingAcceptance, type QuoteAcceptanceRead } from "./quote-acceptance-read";
 type Source={id:string;scopeItemId:string;description:string;quantity:string;unit:string;rate:number|null;origin:"proposal"|"human";status:string;reason:string;category:string};
 const revisionId=(id:string)=>id;
@@ -192,7 +192,7 @@ async function save(){
  }catch{if(!currentJob())return;setNotice("The save result could not be confirmed. Your prices are still here; reload the saved revision before issuing.");}
  finally{if(currentJob()){savingRef.current=false;setSaving(false);}}
 }
-const signature=JSON.stringify({lines,recipient,total:result.totals.total.pence});useEffect(()=>{setPracticeLink("");},[signature,bindingId,jobId]);// Standalone demonstration formatter only; server-created artifacts supply their own references.
+const signature=quoteSignature({lines,recipient,totalPence:result.totals.total.pence,badFields});useEffect(()=>{setPracticeLink("");},[signature,bindingId,jobId]);// Standalone demonstration formatter only; server-created artifacts supply their own references.
 function makeDocument(version:number){return{schemaVersion:"quote-document.v1" as const,documentVersion:version,reference:`Q-${String(version).padStart(4,"0")}`,quoteRevisionId:lines[0]!.scopeRevisionId,currency:"GBP" as const,issuer:{name:"A Builder Ltd",address:["1 Trade Road","London"],email:"builder@example.test"},customer:{name:"Synthetic Customer",address:["14 King Street","London"],email:recipient},lines:lines.filter(x=>x.included&&x.quantity&&x.unit&&x.unitRatePence!==null).map(x=>({scopeItemId:x.scopeItemId,description:x.description,quantity:x.quantity!,unit:x.unit!,netPence:x.unitRatePence!})),exclusions:lines.filter(x=>!x.included).map(x=>`${x.description}: ${x.exclusionReason}`),qualifications:["Synthetic fixture only; subject to clear site access"],subtotalPence:result.totals.subtotal.pence,discountPence:result.totals.discount.pence,netPence:result.totals.net.pence,taxPence:result.totals.tax.pence,totalPence:result.totals.total.pence};}async function createPreview(){
  if(savingRef.current||previewingRef.current)return;
  if (pilotFetch && (!savedForm.current || JSON.stringify(JSON.parse(savedForm.current).lines) !== JSON.stringify(lines))) {

@@ -55,3 +55,12 @@ export function NumberField<T>({ label, value, show, parse, commit, onValidity, 
       else { setMessage(parsed.message); onValidity(false); }
     }}/>{message && <small role="alert" className="field-error">{message}</small>}</>;
 }
+
+/**
+ * What the preview, send, download and customer link compare against. A field that shows an
+ * invalid replacement is not the quote that was previewed, so every outbound action stays
+ * blocked until the field is fixed (the committed value alone would still match).
+ */
+export function quoteSignature({ lines, recipient, totalPence, badFields }: { lines: unknown; recipient: string; totalPence: number; badFields: readonly string[] }): string {
+  return JSON.stringify({ lines, recipient, total: totalPence, ...(badFields.length ? { unfinishedFields: [...badFields].sort() } : {}) });
+}

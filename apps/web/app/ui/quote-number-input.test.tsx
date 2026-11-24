@@ -1,6 +1,6 @@
 import * as React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NumberField, parseDiscountText, parseQuantityText, parseRateText, penceText } from "./quote-number-input";
+import { NumberField, parseDiscountText, parseQuantityText, parseRateText, penceText, quoteSignature } from "./quote-number-input";
 
 const hooks = vi.hoisted(() => {
   let cursor = 0;
@@ -60,5 +60,20 @@ describe("TOMMY-DEMO NumberField", () => {
     const f = field();
     for (const value of ["abc", "-", "-3"]) f.input().props.onChange({ target: { value } });
     expect(f.commits).toEqual([]);
+  });
+});
+
+describe("quoteSignature", () => {
+  const base = { lines: [{ id: "a", quantity: "2" }], recipient: "c@example.invalid", totalPence: 60000 };
+  it("matches the previewed quote while every field is valid", () => {
+    expect(quoteSignature({ ...base, badFields: [] })).toBe(quoteSignature({ ...base, badFields: [] }));
+  });
+  it("stops matching the preview while a field shows an invalid replacement, so send, download and the customer link are blocked", () => {
+    const previewed = quoteSignature({ ...base, badFields: [] });
+    expect(quoteSignature({ ...base, badFields: ["a:quantity"] })).not.toBe(previewed);
+    expect(quoteSignature({ ...base, badFields: [] })).toBe(previewed);
+  });
+  it("ignores the order fields went invalid in", () => {
+    expect(quoteSignature({ ...base, badFields: ["x", "y"] })).toBe(quoteSignature({ ...base, badFields: ["y", "x"] }));
   });
 });

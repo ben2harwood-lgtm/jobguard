@@ -2,6 +2,7 @@
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LINKED_JOB_COPY, customerMessageInputV1, customerMessageReadV1, diaryInputV1, diaryReadV1, type CustomerMessageRead, type DiaryRead } from "@jobguard/core";
+import { jobWorkspaceResponseV1 } from "@jobguard/api/workspace-contracts";
 import styles from "./practice-receipts.module.css";
 
 const when = (value: string) => new Date(value).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" });
@@ -15,6 +16,17 @@ const refusal = (status: number, code: string | undefined) =>
  status === 409 ? "That save conflicted with an earlier one. The saved list has been reloaded." :
  "It was not saved. Nothing was changed.";
 
+const PRE_LIVE = new Set(["draft", "quoting", "accepted"]);
+/** A source 404 also covers refusals, so only the job's own status proves it is not live yet. */
+async function confirmedPreLive(jobId: string): Promise<boolean> {
+ try {
+  const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+  if (!response.ok) return false;
+  const { job } = jobWorkspaceResponseV1.parse(await response.json());
+  return job.id === jobId && PRE_LIVE.has(job.status);
+ } catch { return false; }
+}
+
 export const NOT_LIVE_YET = "Notes and customer messages open once the job is live: after the customer accepts the quote and you start the job.";
 
 /** Shared load/save for one source list; the server picks actor, tenant, time and hashes. */
@@ -26,8 +38,9 @@ function useSource<T>(jobId: string, kind: Kind, parse: (raw: unknown) => T) {
   const requestEpoch = ++epoch.current; setBusy(true);
   try {
    const response = await fetch(`/api/jobs/${jobId}/${kind}`, { cache: "no-store" });
-   // The source read refuses jobs that are not live yet with the same 404 as another firm's job.
-   if (response.status === 404) { if (currentJob.current === jobId && epoch.current === requestEpoch) { setView(null); setError(""); setNotLive(true); } return; }
+   // The source read refuses jobs that are not live yet with the same 404 as another firm's job,
+   // so the calm notice needs the job itself to confirm it has not started.
+   if (response.status === 404 && await confirmedPreLive(jobId)) { if (currentJob.current === jobId && epoch.current === requestEpoch) { setView(null); setError(""); setNotLive(true); } return; }
    if (!response.ok) throw new Error("Could not load. Try again.");
    if (currentJob.current === jobId && epoch.current === requestEpoch) setNotLive(false);
    const saved = parse(await response.json());

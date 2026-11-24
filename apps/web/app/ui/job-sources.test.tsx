@@ -138,10 +138,14 @@ describe("REAL-DIARY-EXTRA-LINK standing notice", () => {
 });
 
 describe("TOMMY-DEMO: a job that is not live yet", () => {
+  // The source read 404s; the job read decides whether that means "not live yet".
+  const sourceMissing = (status: string | null) => vi.fn(async (url: string) => url === `/api/jobs/${jobId}`
+    ? status === null ? { ok: false, status: 404, json: async () => ({}) }
+      : { ok: true, status: 200, json: async () => ({ version: 1, environment: "synthetic_demo", job: { id: jobId, tenantId: "22222222-2222-4222-8222-222222222222", title: "Practice job", status, revision: 1, updatedAt: "2026-11-24T10:00:00.000Z", scopeIdentityIds: [] } }) }
+    : { ok: false, status: 404, json: async () => ({ code: "NOT_FOUND" }) });
   it.each([["diary", JobDiary], ["customer messages", CustomerMessages]] as const)("shows a calm not-live notice for %s instead of a load error, and no save form", async (_name, Panel) => {
     hooks.reset(); vi.stubGlobal("React", React);
-    const fetchMock = vi.fn(async () => ({ ok: false, status: 404, json: async () => ({ code: "NOT_FOUND" }) }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", sourceMissing("quoting"));
     const render = () => { hooks.render(); const tree = Panel({ jobId, designed: true }); hooks.effects(); return tree; };
     render(); await new Promise<void>(resolve => setImmediate(resolve));
     const tree = render();
@@ -149,6 +153,14 @@ describe("TOMMY-DEMO: a job that is not live yet", () => {
     expect(find(tree, n => n.props.role === "alert")).toBeUndefined();
     expect(find(tree, n => n.type === "textarea")).toBeUndefined();
     expect(find(tree, n => n.type === "button")).toBeUndefined();
+  });
+  it.each([["a live job", "live"], ["a job this session cannot read", null]] as const)("keeps the load error when the source 404s for %s", async (_name, status) => {
+    hooks.reset(); vi.stubGlobal("React", React);
+    vi.stubGlobal("fetch", sourceMissing(status));
+    const render = () => { hooks.render(); const tree = CustomerMessages({ jobId }); hooks.effects(); return tree; };
+    render(); await new Promise<void>(resolve => setImmediate(resolve)); await new Promise<void>(resolve => setImmediate(resolve));
+    expect(find(render(), n => n.props.role === "alert")!.props.children).toBe("Could not load. Try again.");
+    expect(find(render(), n => n.props["data-testid"] === "job-sources-not-live")).toBeUndefined();
   });
   it("still shows the load error for other failures", async () => {
     hooks.reset(); vi.stubGlobal("React", React);
