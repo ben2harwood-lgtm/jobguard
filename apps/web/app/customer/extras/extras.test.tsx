@@ -52,7 +52,7 @@ it("still approves an extra with no photos", async () => {
   const v = view(extra([]));
   const sent: Array<{ target: { photos?: string[] } }> = [];
   const notice = await submitExtraApproval(async body => { sent.push(body as never); return new Response("{}", { status: 200 }); }, async () => {}, v, v.variations[0]!, commandId);
-  expect(sent[0]!.target.photos).toEqual([]);
+  expect(sent[0]!.target).not.toHaveProperty("photos");
   expect(customerVariationApprovalCommandV1.safeParse(sent[0]).success).toBe(true);
   expect(notice).toBe("Your approval has been recorded for that exact revision.");
 });
