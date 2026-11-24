@@ -44,6 +44,11 @@ test("TOMMY-DEMO: half-typed quote numbers never crash the page, and a not-live 
   const editor = page.locator(".designed-quote");
   await expect(editor).toHaveAttribute("data-quote-ready", "true");
   await expect(editor.getByTestId("quote-net")).toHaveText("GBP 300.00");
+  // A reload on the quote step comes back to the quote step, not the scope summary.
+  await expect(page).toHaveURL(/#quote$/u);
+  await page.reload();
+  await expect(editor).toHaveAttribute("data-quote-ready", "true");
+  await expect(editor.getByTestId("quote-net")).toHaveText("GBP 300.00");
 
   // Typed key by key, as a person does: "2." used to throw inside the totals and blank the page.
   const quantity = editor.getByLabel("Quantity Paint walls", { exact: true });
