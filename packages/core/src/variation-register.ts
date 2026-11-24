@@ -153,7 +153,8 @@ export function variationRegisterPdfBlocks(register: VariationRegister): string[
   const jobs = r.jobs.map(job => {
     const lines = [...wrap(`JOB: ${job.title}`, WIDTH), `Job ${job.jobId}`, ""];
     for (const extra of job.extras) {
-      const text = wrap(`${extra.thisWeek ? "* " : "  "}${extra.description}`, WIDTH - AMOUNT - 1);
+      // Wrap 2 narrower than the amount column so the indented continuation lines are never cut.
+      const text = wrap(`${extra.thisWeek ? "* " : "  "}${extra.description}`, WIDTH - AMOUNT - 3);
       lines.push(row(text[0]!, extra.signedDeltaPence === null ? "-" : formatRegisterPence(extra.signedDeltaPence)), ...text.slice(1).map(line => row(`  ${line}`)));
       const when = extra.decidedAt ? ` ${extra.decidedAt.slice(0, 10)}` : extra.pricedAt ? `, priced ${extra.pricedAt.slice(0, 10)}` : "";
       lines.push(row(`    ${stateLabel[extra.state]}${when}${extra.revision ? ` | revision ${extra.revision}` : ""}`));

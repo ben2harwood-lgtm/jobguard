@@ -99,6 +99,13 @@ describe("register PDF", () => {
     expect(pdf).toContain("* Fix \\(left\\) wall \\\\ beam ? cafe");
     expect(/[^\x09\x0a\x0d\x20-\x7e]/u.test(pdf)).toBe(false);
   });
+  it("keeps every character of a long description across wrapped lines", () => {
+    const long = Array.from({ length: 40 }, (_, i) => `word${i}abcdefghijklmnop`.slice(0, 8 + (i % 9))).join(" ");
+    const blocks = variationRegisterPdfBlocks(buildVariationRegisterV1(friday, after, [extra(1, { revision: { id: id(101), number: 1, description: long, signedDeltaPence: "1", createdAt: "2026-11-01T10:00:00.000Z" } })]));
+    const lines = blocks[1]!.slice(3, blocks[1]!.findIndex(line => line.trim().startsWith("Waiting for customer")));
+    expect(lines.every(line => line.length <= 88)).toBe(true);
+    expect(lines.map(line => line.slice(0, 70).trim()).join(" ")).toBe(long);
+  });
   it("right-aligns amounts and paginates long jobs, one job per page start", () => {
     const many = buildVariationRegisterV1(friday, after, [
       ...Array.from({ length: 30 }, (_, i) => extra(i + 1)), extra(99, { jobId: jobB, jobTitle: "Fictional bathroom" })]);
