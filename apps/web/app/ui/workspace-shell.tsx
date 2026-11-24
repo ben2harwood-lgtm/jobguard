@@ -8,6 +8,7 @@ import { captureWorkspaceResponseV1, type CaptureWorkspaceResponse } from "@jobg
 import { ReviewProposal } from "./review-proposal";
 import { hasStartedWork, jobStatusLabels, mayOpenSavedQuote, requestedWorkspaceSection } from "./workspace-lifecycle";
 import { PracticeJourney } from "./practice-journey";
+import { QuoteStatusLabel } from "./quote-sent";
 import { Materials } from "./materials";
 import { PurchaseOrder } from "./purchase-order";
 import { SupplierDocuments } from "./supplier-documents";
@@ -110,7 +111,7 @@ export function WorkspaceShell({jobId,initialPricing=false,designed=false}:{jobI
  if(error)return legacyWorkspace(<main className="workspace-page"><section className="workspace-error" role="alert"><h1 ref={errorRef} tabIndex={-1}>{error==="forbidden"?"You cannot open this job":"Your job could not load"}</h1><p>{error==="forbidden"?"Use a job available to this practice session.":"Nothing was changed. Try loading the saved job again."}</p>{error==="unavailable"&&<button className="primary" onClick={()=>void load()}>Try again</button>}<Link href={designed?"/jobs":"/classic"}>Back to Jobs</Link></section></main>);
  if(capture)return <WatchdogStatusProvider jobId={jobId} initialStatus={capture.status}>
   <main className={designed ? "workspace-page designed-workspace" : "workspace-page"} id="captured-job-workspace" data-testid="workspace-job-id" data-job-id={jobId}>
-   <header className={designed ? "work-status" : undefined}><h1>{capture.proposal.title}</h1><p className={designed ? "tag blue" : "status"}>{completionLabel??jobStatusLabels[capture.status]}</p></header>
+   <header className={designed ? "work-status" : undefined}><h1>{capture.proposal.title}</h1><p className={designed ? "tag blue" : "status"}>{completionLabel??<QuoteStatusLabel jobId={jobId} status={capture.status} label={jobStatusLabels[capture.status]}/>}</p></header>
    {!hasStartedWork(capture.status)&&<WatchdogPanel disableControls={false}><ProofStage designed={designed} beforeLive jobId={jobId}/></WatchdogPanel>}
    {/* Put stable section links before panels that load asynchronously. */}
    <nav className={designed ? "designed-work-links" : "workspace-stages"} aria-label="Saved job sections"><a href="#scope" onClick={event=>{event.preventDefault();navigateSection("#scope");}}>Scope</a>{mayOpenSavedQuote(capture.status)&&<a href="#quote" onClick={event=>{event.preventDefault();navigateSection("#quote");}}>Quote</a>}{hasStartedWork(capture.status)&&<><a href="#work-proof" onClick={event=>{event.preventDefault();navigateSection("#work-proof");}}>Work and proof</a>{designed&&<a href="#variations-title" onClick={event=>{event.preventDefault();navigateSection("#variations-title");}}>Extras</a>}<a href="#final-account-title" onClick={event=>{event.preventDefault();navigateSection("#final-account-title");}}>Final account and invoices</a></>}</nav>
