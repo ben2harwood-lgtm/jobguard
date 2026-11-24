@@ -25,16 +25,21 @@ test("TOMMY-DEMO: half-typed quote numbers never crash the page, and a not-live 
   await expect(page).toHaveURL(/\/jobs\/[a-f0-9-]+\/work$/u);
   const jobId = new URL(page.url()).pathname.split("/")[2]!;
 
-  // A job that is not live yet shows a plain notice for its diary and messages, not a load error.
-  const diary = page.getByTestId("job-diary");
-  await expect(diary.getByTestId("job-sources-not-live")).toBeVisible();
-  await expect(diary.getByText("Could not load. Try again.")).toHaveCount(0);
   // Before the scope is confirmed there is no proof record yet; that is said plainly, not as an error.
   await expect(page.getByText("Proof opens once the scope is confirmed and the job is under way.")).toBeVisible();
   await expect(page.getByText("This proof record could not load. Try again.")).toHaveCount(0);
 
+  // A job that is not live yet shows a plain notice for its diary and messages on Records, not a load error.
+  await page.goto(`/jobs/${jobId}/records`);
+  for (const testId of ["job-diary", "customer-messages"]) {
+    await expect(page.getByTestId(testId).getByTestId("job-sources-not-live")).toBeVisible();
+    await expect(page.getByTestId(testId).getByText("Could not load. Try again.")).toHaveCount(0);
+  }
+  await page.goto(`/jobs/${jobId}/work`);
+
   await click("Accept Paint walls");
   await click("Accept Clean site");
+  await page.getByLabel(/Answer Confirm disposal/u).fill("Builder removes fictional waste");
   await click("Confirm scope");
   await expect(page.getByRole("heading", { name: "Scope confirmed", exact: true })).toBeVisible();
   await page.getByLabel("Customer name", { exact: true }).fill("Tommy Demo Customer");
