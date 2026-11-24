@@ -18,7 +18,7 @@ export function useQuoteSent(jobId: string, status: string | undefined): boolean
       controller?.abort(); const mine = new AbortController(); controller = mine;
       globalThis.fetch(`/api/jobs/${encodeURIComponent(jobId)}/quotes/delivery`, { cache: "no-store", signal: mine.signal })
         .then(async response => { const delivered = response.ok && quoteDeliveredFrom(await response.json()); if (current && !mine.signal.aborted) setSent(delivered); })
-        .catch(() => { /* a failed read keeps the plain status */ });
+        .catch(() => { if (current && !mine.signal.aborted) setSent(false); /* a failed read falls back to the plain status */ });
     };
     const changed = (event: Event) => { const id = (event as CustomEvent<{ jobId?: string }>).detail?.jobId; if (!id || id === jobId) check(); };
     check();
