@@ -11,6 +11,7 @@ Use: ★★★ very high, ★★ high, ★ useful. Effort: S small, M medium, L 
 | 1 | Product picker, Materials and Briefs screens (D5B) | ★★ | M | nothing, already running |
 | 1b | Automatic guard that fails CI when a change skips the audit rule (CI2, safety) | ★★ | S | nothing |
 | 2 | Customer approves an extra by link (F6) | ★★★ | M | nothing |
+| 2b | Browser and phone proof for approval by link (F6T, test files only) | ★★ | S | F6 #923 |
 | 3 | Automatic chasing of quotes and unpaid invoices (K4) | ★★★ | S–M | nothing |
 | 4 | Merchant invoice forward, routing only (K6A; real attached files are K6B, later) | ★★ | S | nothing |
 | 5 | Deposit and stage invoices (K5) | ★★★ | M | R2 repair |
