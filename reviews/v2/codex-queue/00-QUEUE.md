@@ -18,7 +18,7 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | 1b | Q18 | V2-CI2 automatic guard for the audit-chain rule (safety, protects every piece below) | ★★ | S | now | `v2/main` | none | T1 | low |
 | 2 | Q12 | V2-F6 customer approves an extra by link | ★★★ | M | now | `v2/main` | 2018 | RED | low |
 | 3 | Q13 | V2-K4 automatic chasing of quotes and invoices | ★★★ | S–M | now | `v2/main` | 2019 | RED | low |
-| 4 | Q14 | V2-K6A merchant invoice forward, routing only on the unchanged intake (real files = K6B, later, Astra first) | ★★ | S | now | `v2/main` | 2020 | RED | low |
+| 4 | Q14 | V2-K6A merchant invoice forward, routing only on the unchanged intake (real files = K6B, later, Astra first) | ★★ | S | now | `v2/main` | 2023 | RED | low |
 | 5 | Q11 | V2-K5 deposit and stage invoices | ★★★ | M | R2 has pushed c3 | new c3 | 2012 | RED money | medium |
 | 6 | Q15 | V2-K3 Friday customer update | ★★ | S | R2 has pushed c3 | new c3 | 2021 | RED | medium |
 | 7 | Q04 | V2-K2 calendar link | ★★ | S | R2 has pushed c3 | `codex/sandbox/v2-c4` merged with new c3 | 2017 | RED | medium |
@@ -38,6 +38,9 @@ Every RED packet also needs Astra's plan check before the PR is called ready (ru
 Why this order: the three "now" pieces at the top (F6, K4, K6) are the review's biggest time savers and sit on merged code, so they can't be wasted by a later repair. Money and customer pieces on the new c3 come next as soon as R2 lands. Pieces stacked on unchecked branches (E9, F1, E2, E3) go after, because they carry the most redo risk. Multi-crew planning (E5A, and E4 to E6 outside this queue) goes last.
 
 V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
+
+## Migration numbers (one list; checked against every branch 24 Nov 22:15 UK)
+2001 practice quote (main) · 2002 to 2005 c-chain and d1 · 2006 D3 #912 · 2007 D4 #916 · 2008 B1A #920 · 2009 E1 #919 · 2010 K8 · 2011 K9 · 2012 K5 · 2013 E2 · 2014 E3 · 2015 F1 · 2016 F8 · 2017 K2 · 2018 F6 #923 · 2019 K4 · **2020 C3B #922** · 2021 K3 · 2022 E9 · **2023 K6A** (moved from 2020) · next free: **2024**. A builder that needs a number not listed here stops and asks; it never takes the next one itself.
 
 ## Not in this queue, and why
 - **New piece found by the C5 builder:** once scope is confirmed the app can't add a line to a priced quote, so prompts can only remind or be dismissed. "Add a line to a priced quote" (v2-c6) is its own later piece, on the quote track; not tonight.
