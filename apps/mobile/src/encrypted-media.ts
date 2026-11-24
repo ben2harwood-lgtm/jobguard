@@ -225,7 +225,7 @@ export class EncryptedMediaStore {
     const record = data.media.find(m => m.mediaId === mediaId);
     if (!record || record.state !== "stored" || record.discardRequestId === null || record.discardRequestId !== discardRequestId)
      throw new MediaRefusal("DISCARD_NOT_CONFIRMED");
-    return { data: settleUnsynced({ ...data, media: data.media.filter(m => m !== record),
+    return { data: ({ ...data, media: data.media.filter(m => m !== record),
      mediaCleanup: [...data.mediaCleanup, { mediaId, chunkCount: record.chunks.chunkCount }],
      captures: data.captures.filter(c => c.item.uploadId !== mediaId) }), result: undefined };
    }).catch(error => { throw error instanceof MediaRefusal ? error : new MediaRefusal("DISCARD_NOT_CONFIRMED"); });
@@ -252,7 +252,9 @@ export class EncryptedMediaStore {
   }
   // A discard tombstone is dropped only after its chunks AND key were removed above without error.
   const done = new Set(tombstones.map(t => t.mediaId));
-  if (done.size) await this.document.transaction(async data => ({ data: { ...data, mediaCleanup: data.mediaCleanup.filter(t => !done.has(t.mediaId)) }, result: undefined }));
+  // The hold may clear only here, after every receipt and discard target lost its bytes AND key without error, so a
+  // logout or firm switch can never erase the partition while a media key or chunk is still waiting to be removed.
+  await this.document.transaction(async data => ({ data: settleUnsynced({ ...data, mediaCleanup: data.mediaCleanup.filter(t => !done.has(t.mediaId)) }), result: undefined }));
  }
 
  /** Screen rows: capture order, retention warning and whether the server verified it. No bytes. */
@@ -270,5 +272,5 @@ export function receiptFor(data: LocalData, mediaId: string): LocalData {
  if (!capture || !record || record.state !== "stored" || capture.item.status !== "verified" || !capture.item.serverVerification) return data;
  const receipt: MediaRecord = { state: "verified_receipt", mediaId, jobId: record.jobId, captureOrder: record.captureOrder,
   chunks: record.chunks, serverVerification: capture.item.serverVerification };
- return settleUnsynced({ ...data, media: data.media.map(m => m === record ? receipt : m) });
+ return { ...data, media: data.media.map(m => m === record ? receipt : m) }; // hold settles in sweep() after deletion
 }

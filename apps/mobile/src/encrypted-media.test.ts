@@ -153,12 +153,14 @@ describe("V2-B2B1 encrypted media store (synthetic adapter, practice only)", () 
    expect(rows[0]).toMatchObject({ status: "verified" });
    expect(r.data().media.filter(m => m.mediaId === mediaId).map(m => m.state)).toEqual(["verified_receipt"]);
    expect(r.files.disk.size).toBe(4 - crashAfter); expect(r.vault.keys.size).toBe(1);
+   expect(r.data().unsyncedWork).toBe("present"); // not settled while bytes or key remain
    r.files.crashDeletesAfter(Infinity);
    const restarted = rig({ saved: r.saved, files: r.files, vault: r.vault });
    await restarted.media.cleanup(); await restarted.media.cleanup();
    expect(r.files.disk.size).toBe(0); expect(r.vault.keys.size).toBe(0);
    expect(restarted.data().media.filter(m => m.mediaId === mediaId)).toHaveLength(1);
    expect(restarted.data().media[0]!.state).toBe("verified_receipt");
+   expect(restarted.data().unsyncedWork).toBe("none");
   }
  });
 
@@ -268,9 +270,11 @@ describe("V2-B2B1 encrypted media store (synthetic adapter, practice only)", () 
   k.vault.vault.remove = async key => { if (failKey) { failKey = false; throw new Error("fictional key store failure"); } return remove(key); };
   await k.media.confirmDiscard(kept.mediaId, await k.media.requestDiscard(kept.mediaId));
   expect(k.vault.keys.size).toBe(1); expect(k.data().mediaCleanup).toEqual([{ mediaId: kept.mediaId, chunkCount: 2 }]);
+  expect(k.data().unsyncedWork).toBe("present"); // Codex P2 (repair 2): hold stays on until the key is really gone
   const again = rig({ saved: k.saved, files: k.files, vault: k.vault });
   await again.media.cleanup();
   expect(k.vault.keys.size).toBe(0); expect(k.files.disk.size).toBe(0); expect(again.data().mediaCleanup).toEqual([]);
+  expect(again.data().unsyncedWork).toBe("none");
   const v = rig(); v.signIn(); const shot = await v.shoot(photo(10)); await v.upload.transfer(shot.mediaId);
   await expect(v.media.requestDiscard(shot.mediaId)).rejects.toThrow();
  });
