@@ -238,3 +238,7 @@ export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
 export { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";
 
 export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
+
+// V2-K5A: working payment schedules, with no invoice or payment authority.
+export { PaymentScheduleRepository, type PaymentScheduleView } from "./v2-payment-schedule-repository.js";
+export { PaymentScheduleError, paymentScheduleSetV1 } from "./v2-payment-schedule.js";

@@ -774,3 +774,199 @@ test("each recorded plan edit appends one audit event in its transaction, and a 
     "SELECT 1 FROM app.audit_event WHERE subject_ref = $1", [draftJob]));
   assert.equal(rowCount, 0, "the second firm cannot see the edit events");
 });
+
+// V2-K5A: payment schedules only. Reuse suite sessions and existing quote helpers.
+async function k5AcceptedJob() {
+  const fixture = await draftForPlan();
+  const { cookies, csrfToken } = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: fixture.sessionId });
+  const partyView = await app.parties.view({ sessionId: fixture.sessionId }, fixture.draftJob);
+  await app.parties.command({ sessionId: fixture.sessionId }, fixture.draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: partyView.jobRevision, expectedBindingId: null,
+    customer: { version: "customer.v1", type: "person", name: "Fictional Schedule Customer",
+      email: "customer@jobguard-v2.invalid", phone: "+447700900042" }, customerRef: null,
+    site: { version: "site.v1", addressLines: ["45 Make-Believe Mews"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const { view } = await app.quote.preview(fixture.draftJob, { version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid" });
+  await app.quote.issue(fixture.draftJob, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId: view.documentId, contentHash: view.contentHash, recipient: "customer@jobguard-v2.invalid" });
+  await json(await request(`/api/jobs/${fixture.draftJob}/quotes/delivery/execute`, { cookies,
+    body: { version: "quote-execute-command.v1", documentId: view.documentId, mode: "success" } }));
+  await app.quote.accept(fixture.draftJob, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
+    documentId: view.documentId, documentVersion: view.documentVersion, documentHash: view.contentHash,
+    statedCustomerName: "Fictional Schedule Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  await fixture.read();
+  return { ...fixture, app, cookies, csrfToken };
+}
+const k5Command = (view, triggers) => ({ version: "payment-schedule-set.v1", commandId: randomUUID(),
+  jobId: view.jobId, quoteRevisionId: view.quoteRevisionId, expectedVersion: 0,
+  stages: ["30", "40", "30"].map((value, index) => ({ label: `Fictional stage ${index + 1}`,
+    split: { kind: "percentage", value }, trigger: triggers[index] })) });
+const k5Events = async commandId => (await admin.query(`SELECT actor_ref,payload FROM app.audit_event
+  WHERE event_type='v2.payment_schedule.set' AND payload->'references'->>'commandId'=$1`, [commandId])).rows;
+
+test("K5A saves 30/40/30, persists across reads, audits once, rejects replay changes and stale commands, sends nothing", async () => {
+  const { app, draftJob, cookies, csrfToken } = await k5AcceptedJob();
+  const view = await app.paymentSchedule.read(draftJob);
+  const command = k5Command(view, [{ kind: "acceptance" }, { kind: "date", date: "2099-01-01" }, { kind: "date", date: "2099-02-01" }]);
+  const before = await effectCounts();
+  const path = `/api/jobs/${draftJob}/payment-schedule`;
+  const receipt = await json(await request(path, { cookies, csrf: csrfToken, body: command }));
+  assert.deepEqual(await app.paymentSchedule.set(draftJob, command), receipt);
+  assert.deepEqual(await Promise.all([app.paymentSchedule.set(draftJob, command), app.paymentSchedule.set(draftJob, command)]), [receipt, receipt]);
+  const [event] = await k5Events(command.commandId);
+  assert.equal((await k5Events(command.commandId)).length, 1);
+  assert.equal(event.actor_ref, `membership:${receipt.actorMembershipId}`);
+  assert.equal(event.payload.references.commandId, command.commandId);
+  assert.equal("version" in event.payload.references, false);
+  assert.doesNotMatch(JSON.stringify(event.payload), /Fictional stage/u);
+  const saved = await json(await request(path, { cookies }));
+  assert.deepEqual(saved, await app.paymentSchedule.read(draftJob));
+  const pence = amount => BigInt(amount.replace(".", ""));
+  assert.equal(saved.schedule.stages.reduce((sum, stage) => sum + pence(stage.amount), 0n), pence(saved.acceptedTotal));
+  assert.deepEqual(saved.schedule.stages.map(stage => stage.status), ["due", "planned", "planned"]);
+  await assert.rejects(app.paymentSchedule.set(draftJob, { ...command, stages: command.stages.map(stage => ({ ...stage, label: "Changed" })) }), { code: "SCHEDULE_REPLAY_CONFLICT" });
+  await assert.rejects(app.paymentSchedule.set(draftJob, { ...command, commandId: randomUUID(), expectedVersion: 1 }), { code: "SCHEDULE_STALE" });
+  await assert.rejects(app.paymentSchedule.set(draftJob, { ...command, commandId: randomUUID() }), { code: "SCHEDULE_STALE" });
+  assert.deepEqual(await effectCounts(), before, "schedule creates no catcher, invoice, payment, queue or fee effects");
+  await verifyTenantChain(DEMO_TENANT_ID);
+});
+
+test("K5A audit failure after insert rolls back both schedule and event", async () => {
+  const { app, draftJob, sessionId } = await k5AcceptedJob();
+  const view = await app.paymentSchedule.read(draftJob);
+  const command = k5Command(view, Array.from({length:3}, () => ({kind:"acceptance"})));
+  const failing = { async connect() {
+    const client = await runtime.connect();
+    const query = client.query.bind(client), release = client.release.bind(client);
+    client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+      ? Promise.reject(Object.assign(new Error("forced audit failure"), {code:"FORCED"})) : query(sql, ...rest);
+    client.release = (...args) => { client.query = query; return release(...args); };
+    return client;
+  } };
+  const { PaymentScheduleRepository } = await import("../../packages/db/dist/index.js");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  await assert.rejects(new PaymentScheduleRepository(failing).set(context, draftJob, sessionId, command), {code:"FORCED"});
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_payment_schedule WHERE command_id=$1", [command.commandId])).rowCount, 0);
+  assert.equal((await k5Events(command.commandId)).length, 0);
+  await app.paymentSchedule.set(draftJob, command);
+  assert.equal((await k5Events(command.commandId)).length, 1);
+});
+
+test("K5A forced RLS hides the schedule from both second-firm contexts and denies insert/update/delete", async () => {
+  const { app, draftJob } = await k5AcceptedJob();
+  const view = await app.paymentSchedule.read(draftJob);
+  const command = k5Command(view, Array.from({length:3}, () => ({kind:"acceptance"})));
+  const receipt = await app.paymentSchedule.set(draftJob, command);
+  const outsider = await signIn("second-builder");
+  const otherApp = createWorkspaceApplication({pool:runtime,sessionId:outsider.sessionId});
+  await assert.rejects(otherApp.paymentSchedule.read(draftJob), {code:"NOT_FOUND"});
+  await assert.rejects(otherApp.paymentSchedule.set(draftJob, command), {code:"NOT_FOUND"});
+  const {context: otherPractice} = await authenticatePracticeSession(runtime, outsider.sessionId);
+  for (const context of [otherPractice, outsider.realContext]) {
+    const query = (sql, values) => withTenant(runtime,context,db => db.$client.query(sql,values));
+    assert.equal((await query("SELECT * FROM app.v2_payment_schedule WHERE job_id=$1",[draftJob])).rowCount,0);
+    await assert.rejects(query(`INSERT INTO app.v2_payment_schedule
+      (tenant_id,job_id,quote_revision_id,command_id,expected_version,stages,actor_membership_id)
+      VALUES($1,$2,$3,$4,0,$5,$6)`, [DEMO_TENANT_ID,draftJob,command.quoteRevisionId,randomUUID(),JSON.stringify(command.stages),receipt.actorMembershipId]),{code:"42501"});
+    await assert.rejects(query("UPDATE app.v2_payment_schedule SET expected_version=0 WHERE job_id=$1",[draftJob]),{code:"42501"});
+    await assert.rejects(query("DELETE FROM app.v2_payment_schedule WHERE job_id=$1",[draftJob]),{code:"42501"});
+  }
+  const {rows:[catalog]} = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced,
+    relowner::regrole::text AS owner,has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS mutable
+    FROM pg_class WHERE oid='app.v2_payment_schedule'::regclass`);
+  assert.deepEqual(catalog,{forced:true,owner:"jobguard_migration",mutable:false});
+});
+
+test("K5A an approved extra changes only planned stages; after all stages are due extras stay separate", async () => {
+  for (const allDue of [false,true]) {
+    const {app,draftJob} = await k5AcceptedJob();
+    await app.quote.activate(draftJob,switchLive());
+    const view = await app.paymentSchedule.read(draftJob);
+    const triggers = [{kind:"acceptance"},...Array.from({length:2},()=>allDue ? {kind:"acceptance"} : {kind:"date",date:"2099-01-01"})];
+    await app.paymentSchedule.set(draftJob,k5Command(view,triggers));
+    const before = await app.paymentSchedule.read(draftJob);
+    const proposalId=randomUUID(),scopeItemId=randomUUID();
+    const proposed=await app.variation.command(draftJob,{version:"variation-command.v1",action:"propose",proposalId,scopeItemId,
+      existingScopeItemId:null,lineageParentScopeItemId:null,description:"Fictional trim",captureText:"Fictional trim requested",
+      price:{quantity:"1",unit:"item",unitRatePence:700,direction:"addition"}});
+    const revisionId=proposed.variations.find(item=>item.id===proposalId).currentRevisionId;
+    assert.deepEqual((await app.paymentSchedule.read(draftJob)).schedule,before.schedule,"unapproved proposal has no effect");
+    await app.variation.command(draftJob,{version:"variation-command.v1",action:"approve",variationId:proposalId,revisionId,
+      approvalId:randomUUID(),attestation:"Builder-recorded practice acceptance — not an authenticated customer signature"});
+    const after=await app.paymentSchedule.read(draftJob);
+    assert.equal(after.schedule.stages[0].amount,before.schedule.stages[0].amount);
+    assert.equal(after.schedule.extrasSinceSchedule,"7.00");
+    assert.equal(after.schedule.unscheduledExtras,allDue ? "7.00" : "0.00");
+    if(allDue)assert.deepEqual(after.schedule.stages,before.schedule.stages);
+    else assert.notEqual(after.schedule.stages[1].amount,before.schedule.stages[1].amount);
+  }
+});
+
+test("K5A task confirmation turns the exact stage due, audits once, and rolls back atomically", async () => {
+  const { app, draftJob, sessionId } = await k5AcceptedJob();
+  const view=await app.paymentSchedule.read(draftJob), task=view.tasks[0];
+  assert.ok(task);
+  const taskTrigger={kind:"task",scopeItemId:task.scopeItemId,taskKey:task.taskKey};
+  const set=k5Command(view,[{kind:"acceptance"},taskTrigger,{kind:"date",date:"2000-01-01"}]);
+  const invalid={...set,stages:set.stages.map((stage,index)=>index===1 ? {...stage,trigger:{...taskTrigger,scopeItemId:randomUUID()}} : stage)};
+  await assert.rejects(app.paymentSchedule.set(draftJob,invalid),{code:"SCHEDULE_INVALID"});
+  assert.equal((await k5Events(set.commandId)).length,0);
+  await app.paymentSchedule.set(draftJob,set);
+  const before=await app.paymentSchedule.read(draftJob);
+  assert.deepEqual(before.schedule.stages.map(stage=>stage.status),["due","planned","due"]);
+  const command={version:"payment-schedule-task-done.v1",commandId:randomUUID(),jobId:draftJob,
+    quoteRevisionId:view.quoteRevisionId,expectedVersion:1,scopeItemId:task.scopeItemId,taskKey:task.taskKey};
+  const failing={async connect(){
+    const client=await runtime.connect(),query=client.query.bind(client),release=client.release.bind(client);
+    client.query=(sql,...rest)=>typeof sql==="string"&&sql.includes("app.append_audit(")
+      ?Promise.reject(Object.assign(new Error("forced audit failure"),{code:"FORCED"})):query(sql,...rest);
+    client.release=(...args)=>{client.query=query;return release(...args);};return client;
+  }};
+  const {PaymentScheduleRepository}=await import("../../packages/db/dist/index.js");
+  const {context}=await authenticatePracticeSession(runtime,sessionId);
+  await assert.rejects(new PaymentScheduleRepository(failing).recordTaskDone(context,draftJob,sessionId,command),{code:"FORCED"});
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_payment_schedule_task_done WHERE command_id=$1",[command.commandId])).rowCount,0);
+  assert.equal((await admin.query("SELECT 1 FROM app.audit_event WHERE payload->'references'->>'commandId'=$1",[command.commandId])).rowCount,0);
+  const effects=await effectCounts();
+  const receipt=await app.paymentSchedule.set(draftJob,command);
+  assert.deepEqual(await app.paymentSchedule.set(draftJob,command),receipt);
+  const after=await app.paymentSchedule.read(draftJob);
+  assert.equal(after.schedule.version,2);
+  assert.deepEqual(after.schedule.stages.map(stage=>stage.status),["due","due","due"]);
+  assert.deepEqual(after.schedule.stages.map(stage=>stage.amount),before.schedule.stages.map(stage=>stage.amount));
+  await assert.rejects(app.paymentSchedule.set(draftJob,{...command,taskKey:"wrong-task"}),{code:"SCHEDULE_REPLAY_CONFLICT"});
+  await assert.rejects(app.paymentSchedule.set(draftJob,{...command,commandId:randomUUID()}),{code:"SCHEDULE_STALE"});
+  const {rows:[event],rowCount}=await admin.query(`SELECT actor_ref,payload FROM app.audit_event
+    WHERE event_type='v2.payment_schedule.task_recorded' AND payload->'references'->>'commandId'=$1`,[command.commandId]);
+  assert.equal(rowCount,1);assert.ok(event.actor_ref.startsWith("membership:"));
+  assert.equal("version" in event.payload.references,false);
+  assert.deepEqual(await effectCounts(),effects);
+  await verifyTenantChain(DEMO_TENANT_ID);
+  const outsider=await signIn("second-builder");
+  const {context:other}=await authenticatePracticeSession(runtime,outsider.sessionId);
+  for(const ctx of [other,outsider.realContext]) {
+    const query=(sql,values)=>withTenant(runtime,ctx,db=>db.$client.query(sql,values));
+    assert.equal((await query("SELECT * FROM app.v2_payment_schedule_task_done WHERE job_id=$1",[draftJob])).rowCount,0);
+    await assert.rejects(query(`INSERT INTO app.v2_payment_schedule_task_done
+      (tenant_id,job_id,quote_revision_id,command_id,expected_version,scope_item_id,template_task_key,actor_membership_id)
+      VALUES($1,$2,$3,$4,2,$5,$6,$7)`,[DEMO_TENANT_ID,draftJob,view.quoteRevisionId,randomUUID(),task.scopeItemId,task.taskKey,
+      (await app.paymentSchedule.read(draftJob)).schedule.actorMembershipId]),{code:"42501"});
+    await assert.rejects(query("UPDATE app.v2_payment_schedule_task_done SET expected_version=2 WHERE job_id=$1",[draftJob]),{code:"42501"});
+    await assert.rejects(query("DELETE FROM app.v2_payment_schedule_task_done WHERE job_id=$1",[draftJob]),{code:"42501"});
+  }
+});
+
+// V2-K5A: both working tables have the same forced firm boundary and immutable grants.
+test("K5A task-confirmation catalogue and rerunnable migration preserve existing schedules",async()=>{
+  const before=(await admin.query("SELECT count(*)::int AS n FROM app.v2_payment_schedule")).rows[0].n;
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2012_v2_payment_schedule.sql",import.meta.url),"utf8"));
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_payment_schedule")).rows[0].n,before);
+  const {rows:[catalog]}=await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced,
+    relowner::regrole::text AS owner,has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS mutable
+    FROM pg_class WHERE oid='app.v2_payment_schedule_task_done'::regclass`);
+  assert.deepEqual(catalog,{forced:true,owner:"jobguard_migration",mutable:false});
+});

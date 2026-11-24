@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-k5": {
+      "branches": [
+        "codex/sandbox/v2-k5"
+      ],
+      "note": "RED money: K5A practice payment schedule only. No invoices, final-account changes or sends. The lane file grants itself implicitly.",
+      "allow": [
+        "apps/api/openapi.json",
+        "apps/api/src/app.module.ts",
+        "apps/api/src/payment-schedule.controller.ts",
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/payment-schedule.application.test.ts",
+        "apps/api/src/workspace/payment-schedule.application.ts",
+        "apps/web/app/(designed)/jobs/[id]/money/page.tsx",
+        "apps/web/app/api/jobs/[id]/payment-schedule/route.ts",
+        "apps/web/app/ui/v2-payment-schedule.test.tsx",
+        "apps/web/app/ui/v2-payment-schedule.tsx",
+        "packages/db/migration-notes/2012_v2_payment_schedule.md",
+        "packages/db/migrations/2012_v2_payment_schedule.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-payment-schedule-repository.ts",
+        "packages/db/src/v2-payment-schedule.test.ts",
+        "packages/db/src/v2-payment-schedule.ts",
+        "packages/db/test/migration-proofs/2012_v2_payment_schedule.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/payment-schedule.browser.test.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
