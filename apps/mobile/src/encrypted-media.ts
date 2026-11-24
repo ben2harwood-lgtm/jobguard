@@ -98,16 +98,18 @@ export function settleUnsynced(data: LocalData): LocalData {
  return data.unsyncedWork === "present" && nothingUnsynced(data) ? { ...data, unsyncedWork: "none" } : data;
 }
 
+// One writer queue per workspace document, shared by every store instance over it, so a sweep can never
+// remove chunks that another instance has written but not yet recorded.
+const queues = new WeakMap<WorkspaceDocument, Promise<unknown>>();
 export class EncryptedMediaStore {
- #tail: Promise<unknown> = Promise.resolve();
  constructor(private readonly document: WorkspaceDocument, private readonly vault: SecureVault,
   private readonly files: MediaFilePort, private readonly cipher: MediaCipherPort, private readonly lease: OfflineCaptureLease,
   private readonly uuid: () => string, private readonly sha256: (bytes: Uint8Array<ArrayBuffer>) => Promise<string>) {}
 
- /** One writer at a time per store, so concurrent captures queue instead of racing for a sequence number. */
+ /** One writer at a time per document, so concurrent captures queue instead of racing for a sequence number. */
  private exclusive<T>(work: () => Promise<T>): Promise<T> {
-  const run = this.#tail.then(work, work);
-  this.#tail = run.catch(() => undefined);
+  const run = (queues.get(this.document) ?? Promise.resolve()).then(work, work);
+  queues.set(this.document, run.catch(() => undefined));
   return run;
  }
 
@@ -221,7 +223,7 @@ export class EncryptedMediaStore {
     return { data: settleUnsynced({ ...data, media: data.media.filter(m => m !== record),
      captures: data.captures.filter(c => c.item.uploadId !== mediaId) }), result: undefined };
    }).catch(error => { throw error instanceof MediaRefusal ? error : new MediaRefusal("DISCARD_NOT_CONFIRMED"); });
-   await this.sweep();
+   await this.sweep().catch(() => undefined); // The record is gone; leftover chunks and key are retried by cleanup().
   });
  }
 

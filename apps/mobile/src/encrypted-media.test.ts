@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EncryptedMediaStore, MediaRefusal, OfflineCaptureLease, OFFLINE_CAPTURE_WINDOW_MS, webCryptoMediaCipher,
+import { EncryptedMediaStore, OfflineCaptureLease, OFFLINE_CAPTURE_WINDOW_MS, webCryptoMediaCipher,
  type MediaCipherPort, type MediaFilePort } from "./encrypted-media";
 import { NativeCaptureUpload } from "./capture-upload";
 import { NativeCaptures } from "./capture";
@@ -188,14 +188,15 @@ describe("V2-B2B1 encrypted media store (synthetic adapter, practice only)", () 
   const r = rig(); r.signIn();
   const first = await Promise.all([1, 2, 3, 4, 5].map(() => r.shoot(photo(64))));
   expect(first.map(c => c.captureOrder.sequence).sort()).toEqual([1, 2, 3, 4, 5]);
-  // A second store on the same document while the first is mid-write is refused, never given the same number.
+  // A second store instance on the same document shares the writer queue: both captures land, never with the same number.
   const other = new EncryptedMediaStore(r.document, r.vault.vault, r.files.port, webCryptoMediaCipher(crypto.subtle, a => crypto.getRandomValues(a)),
    r.lease, () => crypto.randomUUID(), digest);
   const raced = await Promise.allSettled([r.shoot(photo(64)), other.capture({ version: "encrypted-photo-capture.v1", environment: "synthetic_demo",
    jobId: r.jobId, sessionId: r.sessionId, contentType: "image/png", scopeItemId: null, requestedExpiresAtMs: 1, deviceCapturedAtMs: 1, bytes: photo(64) })]);
   const numbers = r.data().media.map(m => m.captureOrder.sequence);
   expect(new Set(numbers).size).toBe(numbers.length);
-  expect(raced.filter(x => x.status === "rejected").every(x => (x as PromiseRejectedResult).reason instanceof MediaRefusal)).toBe(true);
+  expect(raced.map(x => x.status)).toEqual(["fulfilled", "fulfilled"]);
+  expect(numbers.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   // Offline restart: new process, new lease. Capture refused until a sign-in check; then the counter continues.
   const restarted = rig({ saved: r.saved, files: r.files, vault: r.vault });
   await expect(restarted.shoot(photo(64))).rejects.toMatchObject({ code: "SIGN_IN_CHECK_REQUIRED" });
