@@ -43,8 +43,12 @@ export default async function setup() {
   await identityAdmin.end();
   return async () => {
     if (worker.pid) { try { process.kill(-worker.pid, "SIGTERM"); } catch { /* already stopped */ } }
-    await fetch("http://127.0.0.1:3000/api/test-support/drain", { method: "POST", headers: { authorization: `Bearer ${shutdownToken}` } });
-    await postgres.stop();
-    await rm(directory, { recursive: true, force: true });
+    try {
+      // The demo start script stops the web app first, so a refused drain must not skip database cleanup.
+      await fetch("http://127.0.0.1:3000/api/test-support/drain", { method: "POST", headers: { authorization: `Bearer ${shutdownToken}` } }).catch(() => undefined);
+    } finally {
+      await postgres.stop();
+      await rm(directory, { recursive: true, force: true });
+    }
   };
 }
