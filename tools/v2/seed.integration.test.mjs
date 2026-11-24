@@ -650,6 +650,18 @@ test("exact acceptance freezes the issued revision without scheduling, sending, 
   assert.deepEqual(await effectCounts(), effectsBeforeAcceptance);
 });
 
+const editEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
+  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_work_plan.edited' ORDER BY sequence`, [jobRef])).rows;
+
+async function verifyTenantChain(tenantId) {
+  const { rows } = await admin.query(`SELECT id, tenant_id AS "tenantId", sequence::int, version, actor_ref AS "actorRef",
+    event_type AS "eventType", subject_type AS "subjectType", subject_ref AS "subjectRef", occurred_at AS "occurredAt", payload,
+    trim(payload_hash) AS "payloadHash", trim(previous_hash) AS "previousHash", trim(event_hash) AS "eventHash"
+    FROM app.audit_event WHERE tenant_id = $1 ORDER BY sequence`, [tenantId]);
+  assert.ok(rows.length > 0);
+  assert.doesNotThrow(() => verifyAuditChain(rows));
+}
+
 test("existing Switch live activates a plan once and only approved variation revisions regenerate money scope", async () => {
   const { cookies, sessionId, csrfToken } = await signIn("builder");
   const { workPlan, variation, workState } = createWorkspaceApplication({ pool: runtime, sessionId });
@@ -676,27 +688,92 @@ test("existing Switch live activates a plan once and only approved variation rev
   const vary = (action, fields) => variation.command(jobId, { version: "variation-command.v1", action, ...fields });
   const proposed = await vary("propose", { proposalId, scopeItemId, existingScopeItemId: null, lineageParentScopeItemId: null,
     description: "Add trim", captureText: "Customer asks about trim", price });
-  assert.deepEqual((await workPlan.read(jobId, planQuery)).agreement, live.agreement);
+  assert.deepEqual(await workPlan.read(jobId, planQuery), live, "a pending extra adds nothing to the plan");
   const revisionId = proposed.variations.find(item => item.id === proposalId).currentRevisionId;
   const approvalId = randomUUID();
-  await vary("approve", { variationId: proposalId, revisionId, approvalId,
-    attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  const approve = { variationId: proposalId, revisionId, approvalId,
+    attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" };
+  const beforeApproval = await effectCounts();
+  await vary("approve", approve);
+  assert.deepEqual(await effectCounts(), beforeApproval, "approval schedules, sends, books, orders and charges nothing");
   const expected = { ...live.agreement, approvedVariations: [{ scopeItemId, revisionId, approvalId,
     description: "Add trim", quantity: "1", unit: "item", signedDeltaPence: 12500 }] };
-  assert.deepEqual((await workPlan.read(jobId, planQuery)).agreement, expected);
+  const extraItem = { scopeItemId, title: "Add trim", status: "Unplanned" };
+  const withExtra = { ...live, agreement: expected, unplanned: [...live.unplanned, extraItem],
+    scopeItems: [...live.scopeItems, { scopeItemId, description: "Add trim", category: null, quantity: "1", unit: "item" }] };
+  assert.deepEqual(await workPlan.read(jobId, planQuery), withExtra, "the approved extra joins the plan as Unplanned");
+  await vary("approve", approve).catch(() => undefined);
+  assert.deepEqual(await workPlan.read(jobId, planQuery), withExtra, "replaying the approval adds no second item");
+
+  const declinedId = randomUUID();
+  const declined = await vary("propose", { proposalId: declinedId, scopeItemId: randomUUID(), existingScopeItemId: null,
+    lineageParentScopeItemId: null, description: "Declined extra shelf", captureText: "Customer asks about a shelf", price });
+  await vary("reject", { variationId: declinedId, revisionId: declined.variations.find(item => item.id === declinedId).currentRevisionId,
+    rejectionId: randomUUID() });
+  assert.deepEqual(await workPlan.read(jobId, planQuery), withExtra, "a declined extra adds nothing");
   const pendingId = randomUUID();
   await vary("revise", { variationId: proposalId, expectedRevisionId: revisionId, revisionId: pendingId,
     description: "Unapproved replacement trim", price: { ...price, unitRatePence: 35000 } });
   const { context } = await authenticatePracticeSession(runtime, sessionId);
   const regenerated = await new WorkPlanRepository(runtime).generate(context, planSource(jobId, live.quoteRevisionId));
-  assert.deepEqual(regenerated, { ...live, agreement: expected });
+  assert.deepEqual(regenerated, withExtra, "an unapproved later revision changes neither the plan nor the money");
   const liveEdit = planEdit(regenerated, regenerated.tasks[0], { scheduledDate: "2026-12-09", assignee: "Fictional Tiler" });
   const receipt = await workPlan.edit(jobId, liveEdit);
   assert.equal(receipt.version, 1);
+
+  // The builder gives the extra a trade, duration and place, then a date and an assignee.
+  const placed = planEdit(await workPlan.read(jobId, planQuery), { scopeItemId, key: customTaskKey },
+    { position: 2, trade: "joiner", durationMinutes: 45 });
+  await assert.rejects(workPlan.edit(jobId, { ...placed, changes: { trade: "joiner" } }), { code: "WORK_PLAN_INVALID_EDIT" });
+  const placedReceipt = await workPlan.edit(jobId, placed);
+  assert.deepEqual(await workPlan.edit(jobId, placed), placedReceipt);
+  const dated = planEdit(await workPlan.read(jobId, planQuery), { scopeItemId, key: customTaskKey },
+    { scheduledDate: "2026-12-10", assignee: "Fictional Jo Joiner" });
+  await workPlan.edit(jobId, dated);
   const updated = await workPlan.read(jobId, planQuery);
+  assert.equal(updated.version, 3);
   assert.equal(updated.tasks[0].scheduledDate, "2026-12-09");
   assert.equal(updated.tasks[0].assignee, "Fictional Tiler");
+  assert.deepEqual(updated.tasks[1], { key: customTaskKey, scopeItemId, title: "Add trim", position: 2, trade: "joiner",
+    durationMinutes: 45, dependsOn: [], materialNeeds: [], proofPoints: [], customerChoices: [],
+    scheduledDate: "2026-12-10", assignee: "Fictional Jo Joiner" });
+  assert.deepEqual(updated.unplanned, live.unplanned);
   assert.deepEqual(updated.agreement, expected);
+  const { rows: saved } = await admin.query(`SELECT variation_revision_id FROM app.v2_work_plan_edit
+    WHERE (job_id, scope_item_id) = ($1, $2)`, [jobId, scopeItemId]);
+  assert.deepEqual(saved, [{ variation_revision_id: revisionId }, { variation_revision_id: revisionId }]);
+  const [extraEvent] = (await editEvents(jobId)).filter(event => event.payload.references.commandId === placed.commandId);
+  assert.equal(extraEvent.payload.references.variationRevisionId, revisionId);
+  assert.equal(extraEvent.payload.references.scopeItemId, scopeItemId);
+  assert.equal("version" in extraEvent.payload.references, false);
+  await verifyTenantChain(context.tenantId);
+  assert.deepEqual(await effectCounts(), beforeApproval, "planning the extra schedules, sends, books, orders and charges nothing");
+
+  // The database refuses an extra's edit that names no approved revision of its scope item.
+  const { rows: [actor] } = await admin.query("SELECT actor_membership_id AS id FROM app.v2_work_plan_edit WHERE command_id = $1",
+    [placed.commandId]);
+  const rawEdit = (variationRevisionId, scope) => withTenant(runtime, context, db => db.$client.query(`INSERT INTO app.v2_work_plan_edit
+    (tenant_id,job_id,quote_revision_id,command_id,scope_item_id,template_task_key,expected_version,changes,actor_membership_id,variation_revision_id)
+    VALUES ($1,$2,$3,$4,$5,$6,99,'{"durationMinutes":88}',$7,$8)`,
+  [context.tenantId, jobId, live.quoteRevisionId, randomUUID(), scope, customTaskKey, actor.id, variationRevisionId]));
+  await assert.rejects(rawEdit(pendingId, scopeItemId), { code: "23503" });
+  await assert.rejects(rawEdit(null, scopeItemId), { code: "23503" });
+
+  // A fresh signed-in session reads the same planned extra; the second firm sees and changes nothing.
+  const owner = await signIn("builder");
+  const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
+  const reopened = new Pool({ connectionString: settings.DATABASE_URL, max: 1 });
+  try {
+    assert.deepEqual(await createWorkspaceApplication({ pool: reopened, sessionId: fresh.sessionId }).workPlan
+      .read(jobId, planQuery), updated);
+  } finally {
+    await reopened.end();
+  }
+  const outsider = await signIn("second-builder");
+  const otherPlan = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).workPlan;
+  await assert.rejects(otherPlan.read(jobId, planQuery), { code: "NOT_FOUND" });
+  await assert.rejects(otherPlan.edit(jobId, { ...dated, commandId: randomUUID(), expectedVersion: 3 }), { code: "NOT_FOUND" });
+  assert.deepEqual(await workPlan.read(jobId, planQuery), updated);
 
   const state = await workState.get(jobId);
   const expectedRevision = (state.events.at(-1)?.sequence ?? 0) + state.links.length;
@@ -705,18 +782,6 @@ test("existing Switch live activates a plan once and only approved variation rev
   assert.equal(closed.events.at(-1).kind, "closed");
   assert.deepEqual(await workPlan.read(jobId, planQuery), updated);
 });
-
-const editEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
-  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_work_plan.edited' ORDER BY sequence`, [jobRef])).rows;
-
-async function verifyTenantChain(tenantId) {
-  const { rows } = await admin.query(`SELECT id, tenant_id AS "tenantId", sequence::int, version, actor_ref AS "actorRef",
-    event_type AS "eventType", subject_type AS "subjectType", subject_ref AS "subjectRef", occurred_at AS "occurredAt", payload,
-    trim(payload_hash) AS "payloadHash", trim(previous_hash) AS "previousHash", trim(event_hash) AS "eventHash"
-    FROM app.audit_event WHERE tenant_id = $1 ORDER BY sequence`, [tenantId]);
-  assert.ok(rows.length > 0);
-  assert.doesNotThrow(() => verifyAuditChain(rows));
-}
 
 test("each recorded plan edit appends one audit event in its transaction, and a replay appends none", async () => {
   const { draftJob, sessionId, read, edit } = await draftForPlan();
