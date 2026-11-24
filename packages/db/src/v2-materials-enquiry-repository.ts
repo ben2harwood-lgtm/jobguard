@@ -351,7 +351,9 @@ export class MaterialsEnquiryRepository {
       scopeItemId, lineKey, lineVersion, measurement,
       inputs: Object.fromEntries(Object.keys(emptyLine).map(key => [key, line[key as keyof LineInputs]])) as LineInputs,
     }));
-    const digest = createHash("sha256").update(canonical(basis)).digest("hex");
+    // Currency compares inputs only, as outOfDate does: a revision that changes nothing keeps the enquiry current.
+    const digest = sha256(canonical(basis.map(({ lineVersion: _version, measurement, ...entry }) => ({ ...entry,
+      measurement: measurement && { quantity: measurement.quantity, unit: measurement.unit, confirmed: measurement.confirmed } }))));
 
     const content: EnquiryContent = { groups: [], questions: [], customerSupplied: [] };
     const groups = new Map<string, EnquiryContent["groups"][number]>();

@@ -968,6 +968,14 @@ test("the materials enquiry groups by supplier and needed-by date, leaves out cu
 test("each sum input takes current off the enquiry and regenerating gives the corrected quantities once", async () => {
   const { materials, tilingId, measure, line, generate } = await materialsSetup();
   const effects = await effectCounts();
+  // Saving the same values again bumps revisions but changes no input, so the enquiry stays current.
+  const { enquiry: settled } = await materials.read(jobId, materialsQuery);
+  await measure(tilingId, "6", "m²");
+  await line(tilingId, "tiles", { product: tilesLine.product, supplier: tilesLine.supplier });
+  const resaved = await materials.read(jobId, materialsQuery);
+  assert.equal(resaved.enquiry.current, true);
+  assert.deepEqual(resaved.enquiry.outOfDate, []);
+  assert.equal((await generate()).enquiry.version, settled.version);
   const steps = [
     ["measurement", () => measure(tilingId, "7", "m²"), "7"],
     ["confirmation", () => measure(tilingId, "7", "m²", false), null],
