@@ -80,7 +80,7 @@ export type WalkEntryView = WalkEntryRevision & {
   roomCaptureOrder: number | null;
   linkedRoom: string | null;
   /** linked: filed under a room; no_room: nothing before it names one;
-   * waiting: an earlier numbered entry has not arrived, so the room may still change. */
+   * waiting: a number between it and the room entry before it has not arrived, so the room may still change. */
   link: "room" | "linked" | "no_room" | "waiting";
   clock: { differenceSeconds: number; flagged: boolean };
   /** Final verification of the photo's bytes, read live from the evidence upload with the same ID
@@ -141,7 +141,8 @@ export function foldWalkEntries(
           verifiedAt: photoState === "verified" ? photoVerifiedAt : null }
         : null,
     };
-    if (entry.kind === "room") room = entry;
+    // A room entry decides the room for everything after it, so a gap before it no longer matters.
+    if (entry.kind === "room") { room = entry; gap = false; }
     return view;
   });
 }

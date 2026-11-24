@@ -295,7 +295,12 @@ test("walk entries out of order with identical device times keep each photo with
   const { sessionId, commands, kitchenPhoto, hallPhoto } = await walkScript(walk, 0, { order: [6, 2, 5], sameTime: true });
   const [early] = await walk.read(jobId, { ...walkQuery, sessionId });
   assert.deepEqual(links(early), [[2, "photo", null, "waiting"], [5, "measurement", null, "waiting"], [6, "photo", null, "waiting"]]);
-  for (const position of [1, 4, 3]) await walk.record(jobId, commands[position - 1]);
+  // Once the Hall marker arrives, entries after it are settled even though earlier numbers are still missing.
+  await walk.record(jobId, commands[3]);
+  const [hall] = await walk.read(jobId, { ...walkQuery, sessionId });
+  assert.deepEqual(links(hall), [[2, "photo", null, "waiting"], [4, "room", "Hall", "room"],
+    [5, "measurement", "Hall", "linked"], [6, "photo", "Hall", "linked"]]);
+  for (const position of [1, 3]) await walk.record(jobId, commands[position - 1]);
   const count = async () => (await admin.query("SELECT count(*)::int AS n FROM app.v2_walk_entry WHERE session_id = $1",
     [sessionId])).rows[0].n;
   assert.equal(await count(), 6);
