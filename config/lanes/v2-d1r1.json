@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-d1r1": {
+      "branches": ["codex/sandbox/v2-d1r1"],
+      "note": "RED. V2-D1R1 measurement audit repair. C3 source changes belong to the router's pending base merge, not this repair. Own lane file is implicit.",
+      "allow": [
+        "packages/db/src/v2-measurement-repository.ts",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
