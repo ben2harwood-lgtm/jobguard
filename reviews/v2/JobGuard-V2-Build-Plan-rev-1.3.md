@@ -244,6 +244,8 @@ From the second pass of the same review (24 November, evening), which came after
 
 ## 2C. Full build order from here to the end of V2 (new in 1.3)
 
+**Usefulness order (Ben, 24 Nov 21:28 UK: "features planned according to usefulness/easyiness").** Within the steps below, the most useful piece for the least effort goes first, as long as its dependencies are built and the safety rule holds. The review's automation pieces were cut so they no longer wait on later steps: **f6** approval by link and **k4** chasing build on v2/main's base now (k4 no longer waits for e7; f6 no longer waits for f3); **k6** merchant invoice forward builds now without stock effects (no longer waits for e3); **k3** Friday update and **k10** job profit build on the repaired c3 (no longer wait for the main sync); **e9** choices tracker builds on e1 now (drafts through the existing variation path, no longer waits for f3). Multi-crew planning (e4 to e6 and the same-firm double-booking warning) moves to the end of its step. The ranked list is `reviews/v2/v2-ranked-by-usefulness.md` and the Codex queue order is `reviews/v2/codex-queue/00-QUEUE.md`.
+
 Each step starts when what it names is built, under the safety rule in "In plain words". RED and first-cut pieces get Astra's plan check before building. Every send goes only to the local catcher. Only Ben merges RED pieces.
 
 **Step 1, milestone one (A, C, D).** Repairs found on 24 Nov: R1 (integrity guard, c2/c3), R2 (audit append on plan edits, c2/c3, AGENTS §5.7), d1r1 (audit append on measurement saves). a1, a1-mac, a2, mock, d2 merged. Then c1 → c2 and c3 (repair R1) → c4 and d1 → d3 and d4 → d5a → d5b. Done when d5's done-when passes.
