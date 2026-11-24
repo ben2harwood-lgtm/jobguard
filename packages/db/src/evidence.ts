@@ -88,8 +88,11 @@ export function pilotEvidenceStorage(): PrivateVersionedStorage {
 
 export class EvidenceService {
   constructor(private readonly pool: Pool, private readonly storage: PrivateVersionedStorage,
-    private readonly syntheticAudio = false, private readonly pilotJobId?: string) {}
+    private readonly syntheticAudio = false, private readonly pilotJobId?: string,
+    /** "extra": only a logged extra's own scope item (QW-1 photos), so the proof and photo flows cannot begin or finalize each other's uploads. */
+    private readonly pilotScope: "baseline" | "extra" = "baseline") {}
 
+  /** Completion proof: baseline scope items only. */
   static forPilot(pool: Pool, jobId: string) {
     return new EvidenceService(pool, pilotEvidenceStorage(), false, jobId);
   }
@@ -98,10 +101,9 @@ export class EvidenceService {
     if (!this.pilotJobId) return;
     if (this.pilotJobId !== jobId || !scopeItemId) throw new EvidenceError("UPLOAD_NOT_FOUND");
     await requirePilotCommandOwner(db);
-    // QW-1: a logged extra's own scope item also takes photos; anything else must be baseline scope.
-    if ((await db.$client.query("SELECT 1 FROM app.variation WHERE (tenant_id,job_id,scope_item_id)=($1,$2,$3) AND existing_scope_item_id IS NULL",
-      [tenantId, jobId, scopeItemId])).rowCount) return;
-    await requirePilotBaselineScope(db, tenantId, jobId, scopeItemId);
+    if (this.pilotScope === "baseline") return requirePilotBaselineScope(db, tenantId, jobId, scopeItemId);
+    if (!(await db.$client.query("SELECT 1 FROM app.variation WHERE (tenant_id,job_id,scope_item_id)=($1,$2,$3) AND existing_scope_item_id IS NULL",
+      [tenantId, jobId, scopeItemId])).rowCount) throw new EvidenceError("UPLOAD_NOT_FOUND");
   }
 
   private async finalizationTarget(db: TenantTransaction, tenantId: string, uploadId: string) {

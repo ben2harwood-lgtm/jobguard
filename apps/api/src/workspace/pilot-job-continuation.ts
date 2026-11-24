@@ -1,5 +1,5 @@
 import { requirePilotG1 } from "@jobguard/config";
-import { EvidenceService, pilotEvidenceStorage, PilotJobRepository, ProofCommandService, VariationRepository, withTenant, type VerifiedTenantContext } from "@jobguard/db";
+import { EvidenceService, extraPhotoCommandV1, pilotEvidenceStorage, PilotJobRepository, ProofCommandService, VariationPhotoService, VariationRepository, withTenant, type VerifiedTenantContext } from "@jobguard/db";
 import type { Pool } from "pg";
 import { z } from "zod";
 import type { PilotJobAccess } from "./pilot-job-access.js";
@@ -30,16 +30,6 @@ const proofCommand = z.discriminatedUnion("action", [
     contentType: photoTypes, byteLength: z.number().int().positive().max(5_000_000) }),
   z.strictObject({ ...proofBase, action: z.literal("finalize"), uploadId: id, objectVersionId: z.string().min(1).max(1024).refine(version => version !== "null") }),
 ]);
-
-const extraPhotoBase = { version: z.literal("pilot-extra-photo.v1"), commandId: id };
-const extraPhotoCommand = z.discriminatedUnion("action", [
-  z.strictObject({ ...extraPhotoBase, action: z.literal("begin"), variationId: id, expectedSha256: digest,
-    contentType: photoTypes, byteLength: z.number().int().positive().max(5_000_000) }),
-  z.strictObject({ ...extraPhotoBase, action: z.literal("finalize"), uploadId: id, objectVersionId: z.string().min(1).max(1024).refine(version => version !== "null") }),
-]);
-/** QW-1: at most six photos per extra; the same cap freezes onto a priced revision. */
-export const MAX_EXTRA_PHOTOS = 6;
-type ExtraPhotoRow = { variationId: string; evidenceId: string; sha256: string; receivedAt: Date; revisionIds: string[] | null };
 
 function parse<S extends z.ZodType>(schema: S, raw: unknown): z.output<S> {
   const parsed = schema.safeParse(raw);
@@ -82,46 +72,14 @@ export function pilotJobContinuation(pool: Pool, context: VerifiedTenantContext,
     extras: async (jobId: string) => {
       await access(jobId);
       const rows = (await variations.read(context, jobId)).variations;
-      const photos = await withTenant(pool, context, async db => (await db.$client.query<ExtraPhotoRow>(`
-        SELECT v.id AS "variationId",e.id AS "evidenceId",btrim(e.sha256) AS sha256,e.server_verified_at AS "receivedAt",
-          (SELECT array_agg(p.revision_id ORDER BY p.revision_id) FROM app.variation_revision_photo p
-            WHERE (p.tenant_id,p.job_id,p.evidence_id)=(e.tenant_id,e.job_id,e.id)) AS "revisionIds"
-        FROM app.variation v
-        JOIN app.evidence_object e ON (e.tenant_id,e.job_id,e.scope_item_id)=(v.tenant_id,v.job_id,v.scope_item_id)
-        JOIN app.evidence_upload u ON (u.tenant_id,u.job_id,u.id)=(e.tenant_id,e.job_id,e.upload_id)
-        WHERE (v.tenant_id,v.job_id)=($1,$2) AND v.existing_scope_item_id IS NULL
-          AND e.kind='original' AND e.evidence_type='variation_photo'
-          AND u.state='verified' AND u.object_version_id=e.object_version_id
-          AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE (i.tenant_id,i.evidence_id)=(e.tenant_id,e.id))
-        ORDER BY e.server_verified_at,e.id`, [context.tenantId, jobId])).rows);
+      const photos = await VariationPhotoService.forPilot(pool, jobId).list(context);
       return { version: 1 as const, jobId, variations: rows.map(row => ({ ...row, photos: photos
         .filter(photo => photo.variationId === row.id)
-        .map(photo => ({ evidenceId: photo.evidenceId, sha256: photo.sha256, receivedAt: photo.receivedAt.toISOString(), revisionIds: photo.revisionIds ?? [] })) })) };
+        .map(({ variationId: _variation, ...photo }) => photo) })) };
     },
     saveExtraPhoto: async (jobId: string, raw: unknown) => {
       await access(jobId, true);
-      const input = parse(extraPhotoCommand, raw);
-      const evidence = EvidenceService.forPilot(pool, jobId);
-      if (input.action === "begin") {
-        const target = await withTenant(pool, context, async db => (await db.$client.query<{ scopeItemId: string; photos: number }>(`
-          SELECT v.scope_item_id AS "scopeItemId",(SELECT count(*)::int FROM app.evidence_object e
-            JOIN app.evidence_upload u ON (u.tenant_id,u.job_id,u.id)=(e.tenant_id,e.job_id,e.upload_id)
-            WHERE (e.tenant_id,e.job_id,e.scope_item_id)=(v.tenant_id,v.job_id,v.scope_item_id) AND e.kind='original'
-              AND e.evidence_type='variation_photo' AND u.state='verified'
-              AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE (i.tenant_id,i.evidence_id)=(e.tenant_id,e.id))) AS photos
-          FROM app.variation v WHERE (v.tenant_id,v.job_id,v.id)=($1,$2,$3) AND v.existing_scope_item_id IS NULL AND v.state IN('draft','priced')`,
-          [context.tenantId, jobId, input.variationId])).rows[0]);
-        if (!target) throw new Error("NOT_FOUND");
-        if (target.photos >= MAX_EXTRA_PHOTOS) throw new Error("PHOTO_LIMIT_REACHED");
-        const upload = await evidence.beginUpload(context, {
-          id: input.commandId, jobId, scopeItemId: target.scopeItemId, expectedSha256: input.expectedSha256,
-          maximumBytes: input.byteLength, contentType: input.contentType, expiresAt: new Date(Date.now() + 3600_000),
-        });
-        return { uploadId: upload.id, uploadUrl: upload.uploadUrl };
-      }
-      const verified = await evidence.finalize(context, { commandId: input.commandId, uploadId: input.uploadId,
-        objectVersionId: input.objectVersionId, evidenceType: "variation_photo" });
-      return { evidenceId: verified.id };
+      return VariationPhotoService.forPilot(pool, jobId).save(context, parse(extraPhotoCommandV1, raw));
     },
     logExtra: async (jobId: string, raw: unknown) => {
       const actor = await access(jobId, true);

@@ -6,6 +6,7 @@ import { createFinalCheckFixture, closeFinalCheckFixture, seedFinalCheckJob, FIN
 import { insertPricedVariation, insertVariationProposal } from "../src/variation-repository.js";
 import { withTenant } from "../src/tenant-context.js";
 import { workTenant } from "./job-work-state-fixtures.js";
+import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 let f: FinalCheckFixture;
 beforeAll(async()=>{vi.stubEnv("JOBGUARD_ENV","synthetic_demo");f=await createFinalCheckFixture();},120000);
 afterAll(async()=>{await closeFinalCheckFixture(f);vi.unstubAllEnvs();});
@@ -63,7 +64,8 @@ it("pricing freezes the extra's verified photos in order; the customer sees them
  expect(linked.every(row=>row.revision_id===a.priced.id)).toBe(true);
  const read=(await run(a,null)).rows[0].result;
  expect(read.variations[0].photos.map((p:{sha256:string})=>p.sha256)).toEqual(linked.map(row=>row.sha256));
- expect(read.variations[0].photos[0]).toEqual({evidenceId:linked[0].evidence_id,sha256:linked[0].sha256,receivedAt:expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/u)});
+ expect(read.variations[0].photos[0]).toEqual({evidenceId:linked[0].evidence_id,sha256:linked[0].sha256,receivedAt:expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/u),withdrawn:false});
+ expect(read.version).toBe("customer-variations.v2");
  await expect(run(a)).rejects.toMatchObject({code:"42501",message:"PHOTOS_CHANGED"});
  await expect(run(a,withPhotos(a,[linked[0].sha256]))).rejects.toMatchObject({code:"42501",message:"PHOTOS_CHANGED"});
  await expect(run(a,withPhotos(a,[linked[1].sha256,linked[0].sha256]))).rejects.toMatchObject({code:"42501",message:"PHOTOS_CHANGED"});
@@ -90,16 +92,66 @@ it("links at most six photos, ignores invalidated, unverified and other evidence
  await withTenant(f.runtime,b.context,db=>insertPricedVariation(db,b.tenantId,next));
  expect((await links(b)).map(row=>row.evidence_id)).toEqual([good.evidenceId]);void other;
 });
-it("links are immutable and the runtime cannot read another tenant's links",async()=>{
- const a=await fixture(50000,1),b=await fixture(50000,1);
+it("links are immutable and only the pricing trigger writes them",async()=>{
+ const a=await fixture(50000,1),[linked]=await links(a);
  await expect(withTenant(f.runtime,a.context,db=>db.$client.query("UPDATE app.variation_revision_photo SET position=2 WHERE tenant_id=$1",[a.tenantId]))).rejects.toThrow();
  await expect(withTenant(f.runtime,a.context,db=>db.$client.query("DELETE FROM app.variation_revision_photo WHERE tenant_id=$1",[a.tenantId]))).rejects.toThrow();
- const seen=await withTenant(f.runtime,a.context,async db=>(await db.$client.query("SELECT tenant_id FROM app.variation_revision_photo")).rows);
- expect(seen.length).toBeGreaterThan(0);expect(seen.every(row=>row.tenant_id===a.tenantId)).toBe(true);void b;
+ const other=await photo(a.tenantId,a.jobId,await scopeOf(a),"completion_photo");
+ await expect(withTenant(f.runtime,a.context,db=>db.$client.query("INSERT INTO app.variation_revision_photo(tenant_id,job_id,variation_id,revision_id,scope_item_id,evidence_id,position,sha256,received_at) SELECT tenant_id,job_id,variation_id,revision_id,scope_item_id,$2,6,$3,received_at FROM app.variation_revision_photo WHERE tenant_id=$1 AND evidence_id=$4",[a.tenantId,other.evidenceId,other.sha256,linked.evidence_id]))).rejects.toMatchObject({code:"42501"});
+ for(const privilege of ["INSERT","UPDATE","DELETE","TRUNCATE"])expect((await f.admin.query("SELECT has_table_privilege('jobguard_runtime','app.variation_revision_photo',$1) allowed",[privilege])).rows[0].allowed).toBe(false);
  const policy=(await f.admin.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='app.variation_revision_photo'::regclass")).rows[0];
  expect(policy).toEqual({relrowsecurity:true,relforcerowsecurity:true});
  for(const role of ["jobguard_runtime","jobguard_infrastructure"])expect((await f.admin.query("SELECT has_function_privilege($1,'identity.customer_variation_photo(uuid,uuid,uuid,text,uuid)','EXECUTE') allowed",[role])).rows[0].allowed).toBe(false);
  expect((await f.admin.query("SELECT has_table_privilege('jobguard_identity','app.variation_revision_photo','SELECT,INSERT,UPDATE,DELETE') allowed")).rows[0].allowed).toBe(false);
+});
+it("a link cannot cross jobs, variations or scope items, even for the table owner",async()=>{
+ const a=await fixture(50000,1),b=await fixture(50000,1),[linked]=await links(a),[foreign]=await links(b);
+ const insert=(row:Record<string,unknown>)=>workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.variation_revision_photo(tenant_id,job_id,variation_id,revision_id,scope_item_id,evidence_id,position,sha256,received_at) VALUES($1,$2,$3,$4,$5,$6,6,$7,clock_timestamp())",
+  [a.tenantId,row.job_id,row.variation_id,row.revision_id,row.scope_item_id,row.evidence_id,"c".repeat(64)]));
+ const base=(await f.admin.query("SELECT job_id,variation_id,revision_id,scope_item_id FROM app.variation_revision_photo WHERE tenant_id=$1 AND evidence_id=$2",[a.tenantId,linked.evidence_id])).rows[0];
+ const bBase=(await f.admin.query("SELECT job_id,variation_id,revision_id,scope_item_id FROM app.variation_revision_photo WHERE tenant_id=$1 AND evidence_id=$2",[b.tenantId,foreign.evidence_id])).rows[0];
+ // Job A's revision with job B's evidence.
+ await expect(insert({...base,evidence_id:foreign.evidence_id})).rejects.toMatchObject({code:"23503"});
+ // Job A's variation with a revision of job B's variation.
+ await expect(insert({...base,revision_id:bBase.revision_id,evidence_id:(await photo(a.tenantId,a.jobId,base.scope_item_id)).evidenceId})).rejects.toMatchObject({code:"23503"});
+ // Same job, but evidence on a different scope item (the job's baseline scope).
+ await expect(insert({...base,evidence_id:(await photo(a.tenantId,a.jobId,a.scopeItemId)).evidenceId})).rejects.toMatchObject({code:"23503"});
+ // Same job, a different scope item claimed for the revision.
+ await expect(insert({...base,scope_item_id:a.scopeItemId,evidence_id:(await photo(a.tenantId,a.jobId,a.scopeItemId)).evidenceId})).rejects.toMatchObject({code:"23503"});
+});
+it("the customer never downloads evidence that is not a variation photo, even if it is linked",async()=>{
+ const a=await fixture(50000,1),[linked]=await links(a);
+ const base=(await f.admin.query("SELECT job_id,variation_id,revision_id,scope_item_id FROM app.variation_revision_photo WHERE tenant_id=$1 AND evidence_id=$2",[a.tenantId,linked.evidence_id])).rows[0];
+ const completion=await photo(a.tenantId,a.jobId,base.scope_item_id,"completion_photo");
+ // Only possible for the table owner; proves the routine's own type check.
+ await workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.variation_revision_photo(tenant_id,job_id,variation_id,revision_id,scope_item_id,evidence_id,position,sha256,received_at) VALUES($1,$2,$3,$4,$5,$6,6,$7,clock_timestamp())",
+  [a.tenantId,base.job_id,base.variation_id,base.revision_id,base.scope_item_id,completion.evidenceId,completion.sha256]));
+ await expect(download(a,completion.evidenceId)).rejects.toMatchObject(refused);
+ expect((await download(a,linked.evidence_id)).rows[0].result.objectKey).toBe(linked.evidence_id);
+});
+it("an invalidated frozen photo stays in the approved set, is marked withdrawn and is never downloadable",async()=>{
+ const a=await fixture(50000,2),linked=await links(a);
+ await workTenant(f.admin,a.tenantId,db=>db.query("INSERT INTO app.evidence_invalidation(tenant_id,id,evidence_id,actor_membership_id,reason_code) VALUES($1,$2,$3,$4,'verification_invalid')",[a.tenantId,randomUUID(),linked[0].evidence_id,FINAL_CHECK_ACTOR]));
+ const read=(await run(a,null)).rows[0].result;
+ expect(read.variations[0].photos.map((p:{withdrawn:boolean})=>p.withdrawn)).toEqual([true,false]);
+ await expect(download(a,linked[0].evidence_id)).rejects.toMatchObject(refused);
+ expect((await download(a,linked[1].evidence_id)).rows[0].result.objectKey).toBe(linked[1].evidence_id);
+ await run(a,withPhotos(a,linked.map(row=>row.sha256)));expect(await approvals(a)).toHaveLength(1);
+});
+it("another tenant sees none of the links or their evidence and cannot download them",async()=>{
+ const a=await fixture(50000,1),[linked]=await links(a);
+ const tenant=randomUUID(),user=randomUUID(),account=randomUUID(),member=randomUUID();
+ await f.admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)",[tenant]);
+ await f.admin.query("INSERT INTO identity.identity_user(id) VALUES($1)",[user]);
+ await f.admin.query("INSERT INTO app.account(id,tenant_id,name) VALUES($1,$2,'Fictional other builder')",[account,tenant]);
+ await f.admin.query("INSERT INTO app.membership(id,tenant_id,account_id,identity_user_id,role) VALUES($1,$2,$3,$4,'owner')",[member,tenant,account,user]);
+ const other=await testBoundTenantContext(f.admin,tenant,member);
+ const seen=await withTenant(f.runtime,other,async db=>({links:(await db.$client.query("SELECT 1 FROM app.variation_revision_photo")).rowCount,
+  evidence:(await db.$client.query("SELECT 1 FROM app.evidence_object WHERE id=$1",[linked.evidence_id])).rowCount,
+  named:(await db.$client.query("SELECT 1 FROM app.variation_revision_photo WHERE tenant_id=$1",[a.tenantId])).rowCount}));
+ expect(seen).toEqual({links:0,evidence:0,named:0});
+ expect((await withTenant(f.runtime,a.context,async db=>(await db.$client.query("SELECT 1 FROM app.variation_revision_photo")).rowCount))).toBeGreaterThan(0);
+ await expect(download(a,linked.evidence_id,{tenantId:tenant})).rejects.toMatchObject(refused);
 });
 it("the customer download returns only a linked photo on its own job",async()=>{
  const a=await fixture(50000,1),b=await fixture(50000,1),[linked]=await links(a),[foreign]=await links(b);

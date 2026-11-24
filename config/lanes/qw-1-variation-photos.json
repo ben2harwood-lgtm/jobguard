@@ -9,7 +9,6 @@
       "allow": [
         "apps/api/src/auth/customer-variation.ts",
         "apps/api/src/auth/customer-variation-photo.test.ts",
-        "apps/api/src/workspace/application.ts",
         "apps/api/src/workspace/pilot-job-continuation.ts",
         "apps/web/app/api/customer-portal/variation-photo/route.ts",
         "apps/web/app/api/jobs/[id]/variations/photos/route.ts",
@@ -20,7 +19,13 @@
         "packages/db/test/variation-revision-photo.integration.test.ts",
         "packages/db/test/later-empty-tables.ts",
         "packages/db/test/migfix-7-upgrade.integration.test.ts",
-        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts",
+        "apps/web/proxy.ts",
+        "apps/web/proxy.test.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/variation-photo.ts",
+        "packages/db/test/variation-photo-service.integration.test.ts"
       ]
     }
   }

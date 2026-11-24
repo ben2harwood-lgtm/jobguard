@@ -7,7 +7,7 @@
       "after": {
         "id": "ap-variation-photos",
         "title": "Photos on variations",
-        "description": "Pricing a variation revision freezes up to six verified, uninvalidated photos of that extra into immutable links. The checked customer routine shows only those photos, refuses an approval whose photo list differs, and returns one linked photo's stored object for a 60-second signed download. The runtime may read and insert links under tenant RLS; no role may update or delete them. A forward migration can drop the routine and policy while keeping the links as evidence history.",
+        "description": "Pricing a variation revision freezes up to six verified, uninvalidated photos of that extra into immutable links. The checked customer routine shows only those photos, refuses an approval whose photo list differs, and returns one linked photo's stored object for a 60-second signed download. The runtime may only read links under tenant RLS; only the pricing trigger writes them, and no role may update or delete them. A link ties one revision, its variation, its scope item and a photo on that same job and scope item. The customer download refuses any linked object that is not a variation photo or has been invalidated. A forward migration can drop the routine and policy while keeping the links as evidence history.",
         "cards": [
           "LP-11",
           "LP-12"
@@ -19,10 +19,12 @@
         "sources": [
           "packages/db/migrations/0781_variation_revision_photo.sql",
           "apps/api/src/auth/customer-variation.ts",
-          "apps/api/src/workspace/pilot-job-continuation.ts"
+          "apps/api/src/workspace/pilot-job-continuation.ts",
+          "packages/db/src/variation-photo.ts"
         ],
         "tests": [
-          "packages/db/test/variation-revision-photo.integration.test.ts"
+          "packages/db/test/variation-revision-photo.integration.test.ts",
+          "packages/db/test/variation-photo-service.integration.test.ts"
         ],
         "gaps": []
       }
@@ -47,25 +49,19 @@
           "LP-11": "Keep customer photo reads bound to the checked portal session, its exact job and photos frozen on a priced revision of that job.",
           "LP-12": "Keep the photo links immutable, written only by the pricing trigger, and bind customer approval to the exact frozen photo list."
         },
-        "downstream": "Pricing a variation revision freezes up to six verified, uninvalidated photos of that extra into immutable links. The checked customer routine shows only those photos, refuses an approval whose photo list differs, and returns one linked photo's stored object for a 60-second signed download. The runtime may read and insert links under tenant RLS; no role may update or delete them. A forward migration can drop the routine and policy while keeping the links as evidence history.",
+        "downstream": "Pricing a variation revision freezes up to six verified, uninvalidated photos of that extra into immutable links. The checked customer routine shows only those photos, refuses an approval whose photo list differs, and returns one linked photo's stored object for a 60-second signed download. The runtime may only read links under tenant RLS; only the pricing trigger writes them, and no role may update or delete them. A link ties one revision, its variation, its scope item and a photo on that same job and scope item. The customer download refuses any linked object that is not a variation photo or has been invalidated. A forward migration can drop the routine and policy while keeping the links as evidence history.",
         "path": "ap-variation-photos",
         "sources": [
           "packages/db/migrations/0781_variation_revision_photo.sql",
           "apps/api/src/auth/customer-variation.ts",
-          "apps/api/src/workspace/pilot-job-continuation.ts"
+          "apps/api/src/workspace/pilot-job-continuation.ts",
+          "packages/db/src/variation-photo.ts"
         ],
         "tests": [
-          "packages/db/test/variation-revision-photo.integration.test.ts"
+          "packages/db/test/variation-revision-photo.integration.test.ts",
+          "packages/db/test/variation-photo-service.integration.test.ts"
         ],
         "gaps": []
-      }
-    },
-    {
-      "section": "entries",
-      "before": null,
-      "after": {
-        "key": "acl|rel|table|app.variation_revision_photo|jobguard_runtime|INSERT|-",
-        "group": "a-variation-photos"
       }
     },
     {
@@ -168,7 +164,7 @@
         "otherExecute": [
           "jobguard_identity"
         ],
-        "definitionSha256": "3a304277e92da9589e27883a73bf02aa79f0222a00ddd58078bd529d4689b0f5",
+        "definitionSha256": "fe6984cb9d99e5b0187efe48894a9824dbd60c009b2dc6f51d03b6b18dbe9fa0",
         "staticWrites": [
           "app.customer_variation_approval",
           "app.scope_progress",
@@ -222,6 +218,11 @@
     {
       "section": "policies",
       "before": null,
+      "after": "app.evidence_invalidation|lp11_customer_variation_photo_invalidation|PERMISSIVE|SELECT|jobguard_migration|c655da8582b048c2"
+    },
+    {
+      "section": "policies",
+      "before": null,
       "after": "app.evidence_object|lp11_customer_variation_photo_read|PERMISSIVE|SELECT|jobguard_migration|ee53b6f5b1519557"
     },
     {
@@ -258,9 +259,21 @@
         "nspname": "app",
         "relname": "variation_revision_photo",
         "relowner": "jobguard_migration",
-        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=ar/jobguard_migration}",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
         "relrowsecurity": true,
         "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "variation_revision_photo_identity_uq",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
       }
     },
     {
@@ -315,6 +328,20 @@
         "proconfig": [
           "search_path=pg_catalog"
         ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_invalidation",
+        "policyname": "lp11_customer_variation_photo_invalidation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(EXISTS ( SELECT 1\n   FROM app.variation_revision_photo p\n  WHERE (((p.tenant_id = evidence_invalidation.tenant_id) AND (p.evidence_id = evidence_invalidation.evidence_id)) AND (p.tenant_id = app.lp11_customer_tenant('variation_job'::text, p.job_id)))))",
+        "with_check": null
       }
     },
     {

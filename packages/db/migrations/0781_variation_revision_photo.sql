@@ -2,20 +2,25 @@
 -- photos; the customer sees and approves exactly that set.
 BEGIN;
 
+-- Lets a link name one revision of one variation on one scope item, all at once.
+ALTER TABLE app.variation_revision ADD CONSTRAINT variation_revision_photo_identity_uq UNIQUE(tenant_id,job_id,variation_id,id,scope_item_id);
+
 CREATE TABLE app.variation_revision_photo (
  tenant_id uuid NOT NULL,
  job_id uuid NOT NULL,
  variation_id uuid NOT NULL,
  revision_id uuid NOT NULL,
+ scope_item_id uuid NOT NULL,
  evidence_id uuid NOT NULL,
  position smallint NOT NULL CHECK(position BETWEEN 1 AND 6),
  sha256 text NOT NULL CHECK(sha256 ~ '^[a-f0-9]{64}$'),
  received_at timestamptz NOT NULL,
  PRIMARY KEY(tenant_id,revision_id,evidence_id),
  UNIQUE(tenant_id,revision_id,position),
- FOREIGN KEY(tenant_id,job_id,revision_id) REFERENCES app.variation_revision(tenant_id,job_id,id),
- FOREIGN KEY(tenant_id,job_id,variation_id) REFERENCES app.variation(tenant_id,job_id,id),
- FOREIGN KEY(tenant_id,evidence_id) REFERENCES app.evidence_object(tenant_id,id)
+ -- The revision, its variation and its scope item travel together; the photo must sit on the same job and scope item.
+ FOREIGN KEY(tenant_id,job_id,variation_id,revision_id,scope_item_id)
+  REFERENCES app.variation_revision(tenant_id,job_id,variation_id,id,scope_item_id),
+ FOREIGN KEY(tenant_id,evidence_id,job_id,scope_item_id) REFERENCES app.evidence_object(tenant_id,id,job_id,scope_item_id)
 );
 ALTER TABLE app.variation_revision_photo OWNER TO jobguard_migration;
 ALTER TABLE app.variation_revision_photo ENABLE ROW LEVEL SECURITY;
@@ -27,7 +32,8 @@ CREATE POLICY tenant_isolation ON app.variation_revision_photo FOR ALL TO jobgua
 CREATE POLICY lp11_customer_variation_read ON app.variation_revision_photo FOR SELECT TO jobguard_migration
  USING (tenant_id=app.lp11_customer_tenant('variation_job',job_id));
 REVOKE ALL ON app.variation_revision_photo FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
-GRANT SELECT,INSERT ON app.variation_revision_photo TO jobguard_runtime;
+-- Only the pricing trigger (SECURITY DEFINER, migration-owned) writes links.
+GRANT SELECT ON app.variation_revision_photo TO jobguard_runtime;
 CREATE TRIGGER variation_revision_photo_immutable BEFORE UPDATE OR DELETE ON app.variation_revision_photo
  FOR EACH ROW EXECUTE FUNCTION app.reject_immutable_commercial_mutation();
 CREATE TRIGGER variation_revision_photo_no_truncate BEFORE TRUNCATE ON app.variation_revision_photo
@@ -39,14 +45,20 @@ CREATE POLICY lp11_customer_variation_photo_read ON app.evidence_object FOR SELE
  USING (tenant_id=app.lp11_customer_tenant('variation_job',job_id) AND EXISTS(
   SELECT 1 FROM app.variation_revision_photo p
   WHERE (p.tenant_id,p.job_id,p.evidence_id)=(evidence_object.tenant_id,evidence_object.job_id,evidence_object.id)));
+-- ...and whether that linked photo has since been invalidated, so a withdrawn
+-- photo is marked in the view and refused for download.
+CREATE POLICY lp11_customer_variation_photo_invalidation ON app.evidence_invalidation FOR SELECT TO jobguard_migration
+ USING (EXISTS(SELECT 1 FROM app.variation_revision_photo p
+  WHERE (p.tenant_id,p.evidence_id)=(evidence_invalidation.tenant_id,evidence_invalidation.evidence_id)
+   AND p.tenant_id=app.lp11_customer_tenant('variation_job',p.job_id)));
 
--- Runs as the pricing writer. Links the extra's verified, uninvalidated photos
+-- Runs as the migration owner on every priced revision. Links the extra's verified, uninvalidated photos
 -- in received order, at most six. Later photos appear only on a later revision.
 CREATE FUNCTION app.link_variation_revision_photos() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
- INSERT INTO app.variation_revision_photo(tenant_id,job_id,variation_id,revision_id,evidence_id,position,sha256,received_at)
- SELECT NEW.tenant_id,NEW.job_id,NEW.variation_id,NEW.id,x.id,x.n,x.sha256,x.server_verified_at FROM (
+ INSERT INTO app.variation_revision_photo(tenant_id,job_id,variation_id,revision_id,scope_item_id,evidence_id,position,sha256,received_at)
+ SELECT NEW.tenant_id,NEW.job_id,NEW.variation_id,NEW.id,NEW.scope_item_id,x.id,x.n,x.sha256,x.server_verified_at FROM (
   SELECT e.id,btrim(e.sha256) sha256,e.server_verified_at,row_number() OVER(ORDER BY e.server_verified_at,e.id)::smallint n
   FROM app.evidence_object e
   JOIN app.evidence_upload u ON (u.tenant_id,u.job_id,u.id)=(e.tenant_id,e.job_id,e.upload_id)
@@ -62,7 +74,9 @@ REVOKE ALL ON FUNCTION app.link_variation_revision_photos() FROM PUBLIC;
 CREATE TRIGGER variation_revision_photo_link AFTER INSERT ON app.variation_revision
  FOR EACH ROW EXECUTE FUNCTION app.link_variation_revision_photos();
 
--- Customer download target: the same checked portal session as the read.
+-- Customer download target: the same checked portal session as the read. Only a
+-- variation photo of that variation's scope item, frozen on its current revision,
+-- and never one that has since been invalidated.
 CREATE FUNCTION identity.customer_variation_photo(t uuid,j uuid,c uuid,digest text,evidence uuid) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE o app.evidence_object;
@@ -73,10 +87,11 @@ BEGIN
  PERFORM identity.customer_portal_use(t,j,c,digest,NULL,'resolve');
  PERFORM app.lp11_customer_operation('variation');
  SELECT e.* INTO o FROM app.evidence_object e
- WHERE (e.tenant_id,e.job_id,e.id)=(t,j,evidence) AND e.kind='original' AND EXISTS(
-  SELECT 1 FROM app.variation_revision_photo p
-  JOIN app.variation v ON (v.tenant_id,v.job_id,v.id,v.current_revision_id)=(p.tenant_id,p.job_id,p.variation_id,p.revision_id)
-  WHERE (p.tenant_id,p.job_id,p.evidence_id)=(e.tenant_id,e.job_id,e.id) AND v.state IN('priced','approved'));
+ WHERE (e.tenant_id,e.job_id,e.id)=(t,j,evidence) AND e.kind='original' AND e.evidence_type='variation_photo'
+  AND NOT EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE (i.tenant_id,i.evidence_id)=(e.tenant_id,e.id))
+  AND EXISTS(SELECT 1 FROM app.variation_revision_photo p
+  JOIN app.variation v ON (v.tenant_id,v.job_id,v.id,v.current_revision_id,v.scope_item_id)=(p.tenant_id,p.job_id,p.variation_id,p.revision_id,p.scope_item_id)
+  WHERE (p.tenant_id,p.job_id,p.evidence_id,p.scope_item_id)=(e.tenant_id,e.job_id,e.id,e.scope_item_id) AND v.state IN('priced','approved'));
  IF o.id IS NULL THEN RAISE EXCEPTION 'CUSTOMER_REFUSED' USING ERRCODE='42501'; END IF;
  PERFORM app.lp11_close_customer_scope();
  RETURN jsonb_build_object('version','customer-variation-photo.v1','objectKey',o.object_key,'objectVersionId',o.object_version_id,'contentType',o.content_type);
@@ -99,13 +114,14 @@ BEGIN
  IF command IS NULL THEN
   SELECT coalesce(jsonb_agg(jsonb_build_object('id',var.id,'revision',rev.revision,'hash',rev.content_hash,'description',rev.description,
    'amount',jsonb_build_object('pence',rev.signed_delta_pence,'currency','GBP'),'approved',approval.id IS NOT NULL,'method',approval.method,
-   'photos',(SELECT coalesce(jsonb_agg(jsonb_build_object('evidenceId',p.evidence_id,'sha256',p.sha256,'receivedAt',to_char(p.received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')) ORDER BY p.position),'[]'::jsonb)
+   'photos',(SELECT coalesce(jsonb_agg(jsonb_build_object('evidenceId',p.evidence_id,'sha256',p.sha256,'receivedAt',to_char(p.received_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+     'withdrawn',EXISTS(SELECT 1 FROM app.evidence_invalidation i WHERE (i.tenant_id,i.evidence_id)=(p.tenant_id,p.evidence_id))) ORDER BY p.position),'[]'::jsonb)
     FROM app.variation_revision_photo p WHERE (p.tenant_id,p.job_id,p.revision_id)=(rev.tenant_id,rev.job_id,rev.id))) ORDER BY var.id),'[]'::jsonb) INTO result
   FROM app.variation var JOIN app.variation_revision rev ON(rev.tenant_id,rev.job_id,rev.variation_id,rev.id)=(var.tenant_id,var.job_id,var.id,var.current_revision_id)
   LEFT JOIN app.variation_approval approval ON(approval.tenant_id,approval.revision_id)=(rev.tenant_id,rev.id)
   WHERE var.tenant_id=t AND var.job_id=j AND var.state IN('priced','approved');
   PERFORM app.lp11_close_customer_scope();
-  RETURN jsonb_build_object('version','customer-variations.v1','jobId',j,'jobRevision',job.revision,'variations',result);
+  RETURN jsonb_build_object('version','customer-variations.v2','jobId',j,'jobRevision',job.revision,'variations',result);
  END IF;
  target:=(command->'target');
  -- Revalidate the strict envelope at the SQL boundary; the identity role cannot bypass HTTP validation.

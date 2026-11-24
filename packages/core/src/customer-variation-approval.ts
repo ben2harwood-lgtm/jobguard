@@ -18,13 +18,18 @@ export const customerVariationPhotoReadV1 = z.object({
 }).strict();
 export const customerVariationPhotoV1 = z.object({
   evidenceId: uuid, sha256: z.string().regex(/^[a-f0-9]{64}$/u), receivedAt: z.iso.datetime({ precision: 3 }),
+  // Invalidated after it was frozen: still part of the approved set, never downloadable.
+  withdrawn: z.boolean(),
 });
-export const customerVariationViewV1 = z.object({
-  version: z.literal("customer-variations.v1"), jobId: uuid, jobRevision: z.number().int(),
+/** QW-1: v2 adds each variation's frozen photos. */
+export const customerVariationViewV2 = z.object({
+  version: z.literal("customer-variations.v2"), jobId: uuid, jobRevision: z.number().int(),
   variations: z.array(z.object({ id: uuid, revision: z.number().int(), hash: z.string(), description: z.string(),
     amount: z.object({ pence: z.number().int(), currency: z.literal("GBP") }), approved: z.boolean(),
     method: z.enum(["builder_attestation", "customer_evidence", "customer_authenticated"]).nullable(),
-    photos: z.array(customerVariationPhotoV1).max(6).default([]),
+    photos: z.array(customerVariationPhotoV1).max(6),
   })),
 });
-export type CustomerVariationView = z.infer<typeof customerVariationViewV1>;
+/** @deprecated Old name kept so the held customer screens compile unchanged; it parses v2. Rename with the photo screens. */
+export const customerVariationViewV1 = customerVariationViewV2;
+export type CustomerVariationView = z.infer<typeof customerVariationViewV2>;
