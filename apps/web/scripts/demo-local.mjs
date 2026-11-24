@@ -2,8 +2,8 @@
 // the practice background worker and the built web app on http://127.0.0.1:3000.
 // Same setup as the e2e harness (e2e/global-setup.ts). Fictional data only.
 // Run from apps/web after `pnpm turbo run build --filter=@jobguard/web...`:
-//   node scripts/demo-local.mts            (production build, next start)
-//   DEMO_DEV=1 node scripts/demo-local.mts (next dev)
+//   node scripts/demo-local.mjs            (production build, next start)
+//   DEMO_DEV=1 node scripts/demo-local.mjs (next dev)
 // Ctrl+C stops everything and deletes the throwaway database.
 import { spawn } from "node:child_process";
 import setup, { E2E_RUNTIME_URL, E2E_AUTH_CODE_SECRET, E2E_WORKER_URL } from "../e2e/global-setup.ts";
