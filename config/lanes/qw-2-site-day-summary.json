@@ -13,7 +13,6 @@
         "apps/api/src/workspace/index.ts",
         "apps/web/app/api/jobs/[id]/day-summary/route.ts",
         "apps/web/app/api/jobs/[id]/day-summary/route.test.ts",
-        "config/lanes/qw-2-site-day-summary.json",
         "packages/core/src/index.ts",
         "packages/core/src/site-day-summary.ts",
         "packages/core/src/site-day-summary.test.ts",
