@@ -24,6 +24,9 @@ test("TOMMY-DEMO: half-typed quote numbers never crash the page, and a not-live 
   const diary = page.getByTestId("job-diary");
   await expect(diary.getByTestId("job-sources-not-live")).toBeVisible();
   await expect(diary.getByText("Could not load. Try again.")).toHaveCount(0);
+  // Before the scope is confirmed there is no proof record yet; that is said plainly, not as an error.
+  await expect(page.getByText("Proof opens once the scope is confirmed and the job is under way.")).toBeVisible();
+  await expect(page.getByText("This proof record could not load. Try again.")).toHaveCount(0);
 
   await click("Accept Paint walls");
   await click("Accept Clean site");
