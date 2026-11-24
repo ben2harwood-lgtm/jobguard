@@ -89,6 +89,15 @@ test("V2 Walk and Check the walk screens and states are clickable", async ({ pag
   await page.getByLabel("Current room").selectOption("Kitchen");
   await expect(page.getByRole("heading", { name: "So far in Kitchen" })).toBeVisible();
 
+  // An unsent draft stays with its own room when the room changes.
+  await page.getByLabel("Note for Kitchen").fill("Kitchen draft not added yet.");
+  await page.getByRole("button", { name: "Next room" }).click();
+  await expect(page.getByLabel("Note for Hall")).toHaveValue("");
+  await page.getByLabel("Note for Hall").fill("Hall draft.");
+  await page.getByLabel("Current room").selectOption("Kitchen");
+  await expect(page.getByLabel("Note for Kitchen")).toHaveValue("Kitchen draft not added yet.");
+  await page.getByLabel("Note for Kitchen").fill("");
+
   // Microphone refused: typed notes still work.
   await state.selectOption("Microphone refused");
   await expect(page.getByText("Microphone not allowed.")).toBeVisible();

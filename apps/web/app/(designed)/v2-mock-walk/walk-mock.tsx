@@ -36,8 +36,13 @@ function Walk({ notes, photos, room, setRoom, offline, micRefused, cameraRefused
   notes: WalkNote[]; photos: Photo[]; room: Room; setRoom: (room: Room) => void; offline: boolean; micRefused: boolean; cameraRefused: boolean;
   addNote: (text: string) => void; takePhoto: () => void; finish: () => void;
 }) {
-  const [draft, setDraft] = useState("");
-  const [fromDictation, setFromDictation] = useState(false);
+  // Each room keeps its own unsent draft, so switching room never refiles typed or dictated words.
+  const [drafts, setDrafts] = useState<Partial<Record<Room, string>>>({});
+  const [dictatedIn, setDictatedIn] = useState<Partial<Record<Room, boolean>>>({});
+  const draft = drafts[room] ?? "";
+  const fromDictation = dictatedIn[room] ?? false;
+  const setDraft = (text: string) => setDrafts(rows => ({ ...rows, [room]: text }));
+  const setFromDictation = (value: boolean) => setDictatedIn(rows => ({ ...rows, [room]: value }));
   const index = rooms.indexOf(room);
   const roomNotes = notes.filter(note => note.room === room);
   const roomPhotos = photos.filter(photo => photo.room === room && photo.order !== null).sort((a, b) => a.order! - b.order!);
@@ -57,7 +62,7 @@ function Walk({ notes, photos, room, setRoom, offline, micRefused, cameraRefused
       <div className="card-body form">
         {offline && <div role="status"><Note tone="warning"><strong>No signal.</strong> New notes and photos are not saved yet and wait on this phone. Everything marked Saved is safe on the server.</Note></div>}
         {micRefused && <div role="status"><Note tone="warning"><strong>Microphone not allowed.</strong> Type your notes instead. Nothing else changes.</Note></div>}
-        {cameraRefused && <div role="status"><Note tone="warning"><strong>Camera not allowed.</strong> Notes still work. You can add photos from your library later in Check the walk.</Note></div>}
+        {cameraRefused && <div role="status"><Note tone="warning"><strong>Camera not allowed.</strong> Notes still work. To take photos, allow the camera in your phone settings.</Note></div>}
         <label>Current room<select value={room} onChange={event => { if (isRoom(event.target.value)) setRoom(event.target.value); }}>
           {rooms.map(name => <option key={name}>{name}</option>)}
         </select></label>
@@ -226,7 +231,7 @@ export function WalkMock() {
     <div className="divider"/>
     {view === "Empty"
       ? <Card title={screen}>{screen === "Walk"
-        ? <Empty title="No rooms yet" text="Add the first room, then take photos or type notes."/>
+        ? <Empty title="No rooms yet" text="Rooms appear here once the walk starts. Nothing has been recorded for this job."/>
         : <Empty title="No walk to check yet" text="Do the walk first. Imported photos will wait here for a room."/>}</Card>
       : view === "Problem"
         ? <div role="alert"><Note tone="warning"><strong>{screen} could not open.</strong> Nothing you saved has changed. Choose Example to try again.</Note></div>
