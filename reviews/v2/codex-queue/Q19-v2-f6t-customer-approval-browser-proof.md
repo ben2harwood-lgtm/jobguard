@@ -8,6 +8,9 @@ Tier: T1 (test files only), but it proves a RED customer page. Migration: **none
 
 **Starts:** now. **Base:** `codex/sandbox/v2-f6` at `d7fabdf6`. Branch `codex/sandbox/v2-f6t`; draft PR against `codex/sandbox/v2-f6`. Do not push to F6's branch.
 
+## Change, 24 Nov 22:55 UK (planner decision)
+The 400 or 500 in setup is main's practice proof boundary (0734: practice binding and `current_database() = 'jobguard_synthetic_demo'`). It can't run on the V2 database, and that's deliberate. **Use the last repair now to prove everything except photos:** a variation version with no photo at 360 and 1280 px plus phone mode, the leak checks, and the stale-page refusal. Don't call the main proof API. In the PR body, mark the photo display as "not yet proven; waits for V2-PX". Photo proof comes with V2-PX (seeded proof photos, RED, Astra first).
+
 ## Scope
 1. **Fix the test's setup.** Find out why `select_generated` / `completion-photo` is refused: wrong fixture ID, wrong state, or a command the base doesn't accept. Then set up the variation photo through a path the base already accepts, such as an existing seed fixture or an existing command with valid input. Change only the test and its helpers.
 2. **Get the customer approval page passing at 360 px and 1280 px**, plus the phone-mode run on Ben's Mac. The run opens the link, sees exactly one variation version (description, price, photos), types a name, presses "I agree", and sees a confirmation. It also checks that no other price, margin, note, job or hidden finding appears on the page.
