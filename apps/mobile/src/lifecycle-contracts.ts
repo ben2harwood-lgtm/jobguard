@@ -61,6 +61,10 @@ export const localData = z.object({ version: z.literal("mobile-cache.v1"), metad
  files: z.array(inlineAttachmentV1).max(8),
  media: z.array(mediaRecordV1).max(100).prefault([]),
  mediaSequences: z.array(z.object({ sessionId: z.guid(), last: z.number().int().positive().max(1_000_000) }).strict()).max(100).prefault([]),
+ // Discarded photos whose encrypted chunks or key may still exist; removed only once both are gone (retryable).
+ mediaCleanup: z.array(z.object({ mediaId: z.guid(), chunkCount: z.number().int().positive().max(Math.ceil(MEDIA_MAX_BYTES / MEDIA_CHUNK_BYTES)) }).strict()).max(100).prefault([]),
+ // True only when encrypted media itself turned the hold on (none -> present). Any other marker is never cleared here.
+ mediaOwnsUnsyncedHold: z.boolean().prefault(false),
  unsyncedWork: z.enum(["none", "present", "unknown"]),
 }).strict().refine(data => data.captures.every(({ item, upload }) => !upload ||
  data.files.filter(f => f.id === item.uploadId).length + data.media.filter(m => m.mediaId === item.uploadId).length === 1), "Capture attachment missing or ambiguous")

@@ -93,9 +93,13 @@ const PATH = /^media\/([0-9a-f-]{36})\/\d+\.enc$/u;
 const aad = (mediaId: string, index: number, chunkCount: number, byteLength: number) =>
  new TextEncoder().encode(`jobguard-media.v1:${mediaId}:${index}:${chunkCount}:${byteLength}`);
 
-/** Settles `unsyncedWork` to none only from "present" and only when the hold rule itself allows it. */
+/**
+ * Settles `unsyncedWork` to none only when encrypted media set the hold itself, no other local notes or inline files
+ * exist, and the hold rule allows it. A hold set by anything else (for example `MobileClient.save`) is never cleared.
+ */
 export function settleUnsynced(data: LocalData): LocalData {
- return data.unsyncedWork === "present" && nothingUnsynced(data) ? { ...data, unsyncedWork: "none" } : data;
+ return data.unsyncedWork === "present" && data.mediaOwnsUnsyncedHold && data.notes.length === 0 && data.files.length === 0
+  && nothingUnsynced(data) ? { ...data, unsyncedWork: "none", mediaOwnsUnsyncedHold: false } : data;
 }
 
 // One writer queue per workspace document, shared by every store instance over it, so a sweep can never
@@ -160,7 +164,8 @@ export class EncryptedMediaStore {
       discardRequestId: null });
      const mediaSequences = counter ? data.mediaSequences.map(s => s === counter ? { ...s, last: sequence } : s)
       : [...data.mediaSequences, { sessionId: value.sessionId, last: sequence }];
-     return { data: { ...data, unsyncedWork: data.unsyncedWork === "none" ? "present" as const : data.unsyncedWork, mediaSequences,
+     return { data: { ...data, unsyncedWork: data.unsyncedWork === "none" ? "present" as const : data.unsyncedWork,
+      mediaOwnsUnsyncedHold: data.unsyncedWork === "none" ? true : data.mediaOwnsUnsyncedHold, mediaSequences,
       media: [...data.media, record], captures: [...data.captures, { item, upload: { finalizeCommandId,
        requestedExpiresAtMs: value.requestedExpiresAtMs, serverExpiresAtMs: null, nextOffset: 0 } }] },
       result: { mediaId, captureOrder: record.captureOrder } };
@@ -221,6 +226,7 @@ export class EncryptedMediaStore {
     if (!record || record.state !== "stored" || record.discardRequestId === null || record.discardRequestId !== discardRequestId)
      throw new MediaRefusal("DISCARD_NOT_CONFIRMED");
     return { data: settleUnsynced({ ...data, media: data.media.filter(m => m !== record),
+     mediaCleanup: [...data.mediaCleanup, { mediaId, chunkCount: record.chunks.chunkCount }],
      captures: data.captures.filter(c => c.item.uploadId !== mediaId) }), result: undefined };
    }).catch(error => { throw error instanceof MediaRefusal ? error : new MediaRefusal("DISCARD_NOT_CONFIRMED"); });
    await this.sweep().catch(() => undefined); // The record is gone; leftover chunks and key are retried by cleanup().
@@ -230,20 +236,23 @@ export class EncryptedMediaStore {
  /** Retryable cleanup: deletes bytes and keys of verified receipts and of chunks no record owns. Never touches stored media. */
  cleanup() { return this.exclusive(() => this.sweep()); }
  private async sweep() {
-  const records = await this.document.transaction(async data => ({ data, result: data.media }));
+  const { records, tombstones } = await this.document.transaction(async data => ({ data, result: { records: data.media, tombstones: data.mediaCleanup } }));
   const stored = new Set(records.filter(m => m.state === "stored").map(m => m.mediaId));
-  const targets = new Set(records.filter(m => m.state === "verified_receipt").map(m => m.mediaId));
+  const targets = new Set([...records.filter(m => m.state === "verified_receipt").map(m => m.mediaId), ...tombstones.map(t => t.mediaId)]);
   for (const path of await this.files.list("media/")) {
    const owner = PATH.exec(path)?.[1];
    if (owner && !stored.has(owner)) targets.add(owner);
   }
   for (const mediaId of targets) {
-   const receipt = records.find(m => m.mediaId === mediaId);
+   const chunkCount = records.find(m => m.mediaId === mediaId)?.chunks.chunkCount ?? tombstones.find(t => t.mediaId === mediaId)?.chunkCount ?? 0;
    const paths = new Set((await this.files.list(`media/${mediaId}/`)));
-   if (receipt) for (let i = 0; i < receipt.chunks.chunkCount; i++) paths.add(chunkPath(mediaId, i));
+   for (let i = 0; i < chunkCount; i++) paths.add(chunkPath(mediaId, i));
    for (const path of paths) await this.files.remove(path);
    await this.vault.remove(keyName(mediaId));
   }
+  // A discard tombstone is dropped only after its chunks AND key were removed above without error.
+  const done = new Set(tombstones.map(t => t.mediaId));
+  if (done.size) await this.document.transaction(async data => ({ data: { ...data, mediaCleanup: data.mediaCleanup.filter(t => !done.has(t.mediaId)) }, result: undefined }));
  }
 
  /** Screen rows: capture order, retention warning and whether the server verified it. No bytes. */

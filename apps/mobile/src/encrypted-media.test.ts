@@ -261,6 +261,16 @@ describe("V2-B2B1 encrypted media store (synthetic adapter, practice only)", () 
   expect(r.files.disk.size).toBe(0); expect(r.vault.keys.size).toBe(0);
   expect(r.data().unsyncedWork).toBe("none");
   // A verified receipt is not unsent work and cannot be "discarded".
+  // Codex P2 (repair 1): key deletion fails after the record is gone; the tombstone keeps it discoverable until removed.
+  const k = rig(); k.signIn();
+  const kept = await k.shoot(photo(MEDIA_CHUNK_BYTES + 1));
+  const remove = k.vault.vault.remove; let failKey = true;
+  k.vault.vault.remove = async key => { if (failKey) { failKey = false; throw new Error("fictional key store failure"); } return remove(key); };
+  await k.media.confirmDiscard(kept.mediaId, await k.media.requestDiscard(kept.mediaId));
+  expect(k.vault.keys.size).toBe(1); expect(k.data().mediaCleanup).toEqual([{ mediaId: kept.mediaId, chunkCount: 2 }]);
+  const again = rig({ saved: k.saved, files: k.files, vault: k.vault });
+  await again.media.cleanup();
+  expect(k.vault.keys.size).toBe(0); expect(k.files.disk.size).toBe(0); expect(again.data().mediaCleanup).toEqual([]);
   const v = rig(); v.signIn(); const shot = await v.shoot(photo(10)); await v.upload.transfer(shot.mediaId);
   await expect(v.media.requestDiscard(shot.mediaId)).rejects.toThrow();
  });
@@ -272,6 +282,25 @@ describe("V2-B2B1 encrypted media store (synthetic adapter, practice only)", () 
    expect(captures.media("photo", permission)).toMatchObject({ state: "held", realExternalActions: 0 });
   expect(captures.media("photo", "granted").reason).toBe("D08_ENCRYPTED_MEDIA_REQUIRED");
  });
+});
+
+it("Codex P1 (repair 1): a hold set by other local work is never cleared by settling media", async () => {
+ for (const other of ["note", "marker"] as const) {
+  const r = rig(); r.signIn();
+  const base = localData.parse(JSON.parse(r.saved.value));
+  // Another part of the app (MobileClient.save) marked unsent work before or after the photo.
+  r.saved.value = JSON.stringify({ ...base, unsyncedWork: "present", notes: other === "note" ? [{ id: id(90), text: "Fictional unsent note" }] : [] });
+  const shot = await r.shoot(photo(10)); await r.upload.transfer(shot.mediaId);
+  expect(r.data().unsyncedWork).toBe("present");
+  const d = await r.shoot(photo(10)); await r.media.confirmDiscard(d.mediaId, await r.media.requestDiscard(d.mediaId));
+  expect(r.data().unsyncedWork).toBe("present");
+ }
+ // Media turned the hold on, then a note was saved: settling the photo keeps the hold.
+ const m = rig(); m.signIn();
+ const first = await m.shoot(photo(10));
+ m.saved.value = JSON.stringify({ ...m.data(), notes: [{ id: id(91), text: "Fictional unsent note" }] });
+ await m.upload.transfer(first.mediaId);
+ expect(m.data().unsyncedWork).toBe("present");
 });
 
 describe("A: logout and firm switch with verified receipts and pending items on the same device", () => {
