@@ -21,16 +21,16 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | 3 | Q13 | V2-K4 automatic chasing of quotes and invoices | ★★★ | S–M | now | `v2/main` | 2019 | RED | low |
 | 4 | Q14 | V2-K6A merchant invoice forward, routing only on the unchanged intake (real files = K6B, later, Astra first) | ★★ | S | now | `v2/main` | 2023 | RED | low |
 | 5 | Q11 | V2-K5A payment schedule, no invoices (drafting and issuing = K5B, later, Astra first) | ★★ | S | R2 has pushed c3 | new c3 | 2012 | RED money | medium |
-| 6 | Q15 | V2-K3 Friday customer update | ★★ | S | R2 has pushed c3 | new c3 | 2021 | RED | medium |
+| 6 | Q15 | V2-K3 Friday customer update | ★★ | S | V2-M2 mock-up checked (photo case waits for V2-PX) | new c3 | 2021 | RED | medium |
 | 7 | Q04 | V2-K2 calendar link | ★★ | S | R2 has pushed c3 | `codex/sandbox/v2-c4` merged with new c3 | 2017 | RED | medium |
 | 8 | Q16 | V2-K10 job profit so far | ★★ | S | R2 has pushed c3 | new c3 | none | RED | medium |
 | 9 | Q01 | V2-D1R1 audit append on measurement saves (safety fix) | ★ | S | R2 has pushed c3 | `codex/sandbox/v2-d1` | none | RED | low |
 | 10 | Q05 | V2-K8 off-hire reminders | ★★ | S | R2 has pushed c3 | new c3 | 2010 | RED | medium |
 | 11 | Q17 | V2-E9 customer choices and PC sums tracker | ★★★ | M | now | E1 #919 | 2022 | RED | high |
-| 12 | Q09 | V2-F1 Done, Blocked, Changed on a brief | ★★ | M | now | D4 #916 | 2015 | RED | high |
+| 12 | Q09 | V2-F1 Done, Blocked, Changed on a brief | ★★ | M | V2-M2 mock-up checked (photo refs only) | D4 #916 | 2015 | RED | high |
 | 13 | Q10 | V2-F8 who was on site today | ★ | S | V2-F1 pushed | V2-F1 branch | 2016 | RED | high |
-| 14 | Q06 | V2-K9 RAMS and construction phase plan draft | ★★ | M | R2 has pushed c3 | new c3 | 2011 | RED | medium |
-| 15 | Q08 | V2-E2 replies to open facts | ★ | M | now | E1 #919 | 2013 | RED | high |
+| 14 | Q06 | V2-K9 RAMS and construction phase plan draft | ★★ | M | V2-M2 mock-up checked | new c3 | 2011 | RED | medium |
+| 15 | Q08 | V2-E2 replies to open facts | ★ | M | V2-M2 mock-up checked | E1 #919 | 2013 | RED | high |
 | 16 | Q07 | V2-E3 stock position | ★ | M | now | D3 #912 | 2014 | RED | high |
 | 17 | Q02 | V2-E5A same-firm double-booking warning (multi-crew, later) | ★ | S | R2 has pushed c3 | `codex/sandbox/v2-c3` | none | T1 | medium |
 
