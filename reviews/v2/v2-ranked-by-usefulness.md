@@ -14,7 +14,7 @@ Use: ★★★ very high, ★★ high, ★ useful. Effort: S small, M medium, L 
 | 2b | Browser and phone proof for approval by link (F6T, test files only) | ★★ | S | F6 #923 |
 | 3 | Automatic chasing of quotes and unpaid invoices (K4) | ★★★ | S–M | nothing |
 | 4 | Merchant invoice forward, routing only (K6A; real attached files are K6B, later) | ★★ | S | nothing |
-| 5 | Deposit and stage invoices (K5) | ★★★ | M | R2 repair |
+| 5 | Payment schedule, deposit and stages, no invoices yet (K5A; invoices are K5B, later) | ★★ | S | R2 repair (done) |
 | 6 | Friday customer update (K3) | ★★ | S | R2 repair |
 | 7 | Calendar link for the customer (K2) | ★★ | S | R2 repair |
 | 8 | Job profit so far (K10) | ★★ | S | R2 repair |

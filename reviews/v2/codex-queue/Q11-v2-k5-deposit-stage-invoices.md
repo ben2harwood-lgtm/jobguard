@@ -9,19 +9,23 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 
 > **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
 
-## Goal
-The builder picks a split on the accepted quote (for example 30/40/30, or a fixed deposit then stages), and JobGuard drafts each stage invoice through the **existing invoice path**, with bank details and a due-date reminder for the builder.
+## Change, 24 Nov 23:25 UK: cut to K5A (payment schedule only)
+Codex stopped correctly. On c3, `apps/api/src/customer-invoice.controller.ts` has no draft route: `POST jobs/:id/customer-invoices` only **issues**, and the practice issue path needs a final-account revision, the Final Check and the full final-account amount. So a deposit or stage invoice can't go through it unchanged. This packet is now **K5A: the payment schedule, with no invoices**. **K5B** (drafting and issuing a stage or deposit invoice) needs a new, properly scoped invoice route on the money path. That's a separate RED packet, it goes to Astra before anyone builds it, and it isn't in tonight's queue.
 
-## Scope
-- Table: stage schedule per accepted quote revision: stages with label, percentage or fixed amount, trigger (on acceptance, on a plan task done, on a date), status (planned, drafted, issued). Commands with expected version, replay identity and one audit event each.
-- Amounts: exact decimal strings using the existing money helpers and rounding rules; **the stages always add up exactly to the accepted total** (the last stage takes the remainder). No new rounding code.
-- Drafting a stage invoice calls the existing invoice-draft route; **nothing is issued without the builder's press**, and issuing uses the existing route unchanged. No card payments (MON-6), no sends except to the local catcher.
-- An approved variation changes only stages not yet issued; issued invoices are never rewritten. The final account still reconciles (existing final-account path).
-- Hidden financial findings never affect stage amounts or wording.
+## Goal (K5A)
+The builder sets a payment split on the accepted quote (for example 30/40/30, or a fixed deposit then stages). JobGuard shows what is due, when and for how much, and flags a stage as "due now" when its trigger happens. Nothing is drafted, issued or sent.
+
+## Scope (K5A)
+- Table: one stage schedule per accepted quote revision. Each stage has a label, a percentage or fixed amount, a trigger (on acceptance, on a plan task done, on a date) and a status (planned, due). Commands carry expected version and replay identity, with one audit event each.
+- Amounts: exact decimal strings using the existing money helpers and rounding rules. **The stages always add up exactly to the accepted total**; the last stage takes the remainder. No new rounding code.
+- **No call to any customer-invoice route.** Don't edit `customer-invoice.controller.ts`, the invoice application or the final-account path. If you think you need to, stop and report.
+- An approved variation re-splits only stages that aren't due yet, following the same rule. The builder sees "extras since the schedule was set" as its own line, ready for K5B or the final account.
+- Builder only. Hidden financial findings never affect stage amounts or wording. No sends.
+- Screen: one plain "Payment schedule" section on the job's Money tab, V2 only, behind the V2 flag.
 
 ## Acceptance cases added (Web Codex acceptance findings, frm-management-layer#3 comment 7145931890 (24 Nov 22:12 UK), folded in by the planner 22:25 UK)
-- **Extra approved after the last stage invoice.** Issued invoices never change; the extra goes to the existing final-account route. Name in the PR which existing transition owns it.
+- **Extra approved after the last stage is due.** Stages already due never change. The extra shows as its own "extras since the schedule" line for K5B or the final account. (Issued invoices are K5B.)
 
 ## Done when
-- 30/40/30 on the seed quote total adds up exactly; an approved extra moves only later stages; issued stages never change; the final account reconciles to the accepted total plus approved extras.
-- Replay, stale version, second-firm and audit tests per the rules. Nothing reaches the catcher unless the builder presses send. CI green apart from Vercel.
+- 30/40/30 on the seed quote total adds up exactly. An approved extra moves only stages not yet due. A stage turns "due" when its trigger happens. `git diff` shows no change to any customer-invoice or final-account file.
+- Replay, stale version, second-firm and audit tests per the rules. Nothing reaches the catcher. CI green apart from Vercel.

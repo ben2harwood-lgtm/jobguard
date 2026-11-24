@@ -20,7 +20,7 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | 2b | Q19 | V2-F6T browser and phone proof for F6 (test files only; #923 waits for it) | ★★ | S | now | `codex/sandbox/v2-f6` @ d7fabdf6 | none | T1 | low |
 | 3 | Q13 | V2-K4 automatic chasing of quotes and invoices | ★★★ | S–M | now | `v2/main` | 2019 | RED | low |
 | 4 | Q14 | V2-K6A merchant invoice forward, routing only on the unchanged intake (real files = K6B, later, Astra first) | ★★ | S | now | `v2/main` | 2023 | RED | low |
-| 5 | Q11 | V2-K5 deposit and stage invoices | ★★★ | M | R2 has pushed c3 | new c3 | 2012 | RED money | medium |
+| 5 | Q11 | V2-K5A payment schedule, no invoices (drafting and issuing = K5B, later, Astra first) | ★★ | S | R2 has pushed c3 | new c3 | 2012 | RED money | medium |
 | 6 | Q15 | V2-K3 Friday customer update | ★★ | S | R2 has pushed c3 | new c3 | 2021 | RED | medium |
 | 7 | Q04 | V2-K2 calendar link | ★★ | S | R2 has pushed c3 | `codex/sandbox/v2-c4` merged with new c3 | 2017 | RED | medium |
 | 8 | Q16 | V2-K10 job profit so far | ★★ | S | R2 has pushed c3 | new c3 | none | RED | medium |
