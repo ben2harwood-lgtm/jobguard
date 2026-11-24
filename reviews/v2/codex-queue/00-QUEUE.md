@@ -24,9 +24,10 @@ Take the next piece whose "Starts when" is true. Rework risk: **low** = base is 
 | 10 | V2-F8 who was on site today | V2-F1 pushed | V2-F1 branch | 2016 | RED | yes | high |
 | 11 | V2-K5 deposit and stage invoices | R2 has pushed c3 | new c3 | 2012 | RED money | yes | medium |
 
-V2-C5 (don't-forget prompts, on c1) is in the earlier Claude list; take it as #12 only if the coordinator confirms no Claude builder has it.
+V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 
 ## Not in this queue, and why
+- **New piece found by the C5 builder:** once scope is confirmed the app can't add a line to a priced quote, so prompts can only remind or be dismissed. "Add a line to a priced quote" (v2-c6) is its own later piece, on the quote track; not tonight.
 - **Wait for the main sync into v2/main** (after milestone one merges): G1 to G4 snags and handover (would duplicate QW-4 #911 and QW-5), K3 Friday update, K10 job profit.
 - **Need unbuilt pieces first:** K1 share (after D5B), K4 chasing (after E7), K6 merchant email (after E3), E4, E6 to E9, F2 to F7, G0 (after E1 settles), H.
 - **Better left for Claude builders:** C3B (edits the file R2 is finishing; start right after R2), D4A (needs Ben's OK for a third round), B1E (changes the shared live-job upload rule), B2B1 (offline security, waiting for Astra), QW-7 (on main, firm money data, waiting for Astra), CI1 (#917, in flight).

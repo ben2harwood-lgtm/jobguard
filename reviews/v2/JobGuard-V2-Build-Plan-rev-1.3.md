@@ -248,7 +248,7 @@ Each step starts when what it names is built, under the safety rule in "In plain
 
 **Step 1, milestone one (A, C, D).** Repairs found on 24 Nov: R1 (integrity guard, c2/c3), R2 (audit append on plan edits, c2/c3, AGENTS §5.7), d1r1 (audit append on measurement saves). a1, a1-mac, a2, mock, d2 merged. Then c1 → c2 and c3 (repair R1) → c4 and d1 → d3 and d4 → d5a → d5b. Done when d5's done-when passes.
 
-**Step 2, started early alongside step 1.** b1 mock-ups, b1a walk record, b2b1 encrypted photos (practice), e1 open facts, c5 don't-forget prompts (data only, beside c1's template). Outside V2: QW-7 accountant export on main.
+**Step 2, started early alongside step 1.** **c6 add a line to a priced quote** is a later quote-track piece (found by the c5 builder, 24 Nov: once scope is confirmed a line can't be added, so c5 prompts only remind or dismiss). b1 mock-ups, b1a walk record, b2b1 encrypted photos (practice), e1 open facts, c5 don't-forget prompts (data only, beside c1's template). Outside V2: QW-7 accountant export on main.
 
 **Step 3, once c3 and d1 are merged.** **c3b approved extras become plan tasks** (follow-up from the #901 review, 24 Nov). **ci1 V2 seed suite in CI** (from the #904 review; it can start now, on v2/main). k2 calendar link, k5 deposit and stage invoices, k8 off-hire reminders, k9 RAMS draft, same-firm double-booking warning (first part of e5), g0 certificates checklist (needs e1). b1b walk screen and b1c check-and-correct (need b1a). **b1e walk photos upload before the job is live** (after b1a; RED, V2 only; the existing upload accepts live jobs only). b2b2 photos linked to rooms (needs b1a), b2c kill and resume (needs b2b1).
 

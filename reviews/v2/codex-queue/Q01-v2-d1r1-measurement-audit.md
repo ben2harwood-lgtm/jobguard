@@ -1,6 +1,6 @@
 # Packet V2-D1R1: append audit events for measurement saves (d1, repair 1)
 
-Tier: RED. Repo: ben2harwood-lgtm/jobguard. Branch `codex/sandbox/v2-d1` (PR #904). **Starts when** R2 has pushed `codex/sandbox/v2-c3` (an audit commit after `2d92684`). Merge the new c3 into d1 first (no rebase). Rules: `01-RULES.md`.
+Rework risk: **low**. Tier: RED. Repo: ben2harwood-lgtm/jobguard. Branch `codex/sandbox/v2-d1` (PR #904). **Starts when** R2 has pushed `codex/sandbox/v2-c3` (an audit commit after `2d92684`). Merge the new c3 into d1 first (no rebase). Rules: `01-RULES.md`.
 
 ## The gap (verified 24 Nov 21:15 UK)
 At d1's head `20d66ad`, `MeasurementRepository.save()` in `packages/db/src/v2-measurement-repository.ts` inserts into `app.v2_measurement` with no `appendAuditBatch` call (AGENTS.md §5.7).
