@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 import { openPrompts, readDismissed, writeDismissed, type PromptLine, type QuotePrompt } from "./v2-quote-prompts";
 
-// V2 only: the route answers 404 outside the local V2 rehearsal, and this
-// panel then renders nothing. It never blocks sending and never saves a line.
+// V2 only: outside the local V2 rehearsal the panel makes no request and
+// renders nothing (the route also answers 404 there). It never blocks sending and never saves a line.
 // In Scope review, onAdd uses the existing "Add omitted line" action: the new
 // line has no price and is saved only when the builder confirms the scope.
 // On the quote there is no add-line route once the scope is confirmed, so the
@@ -15,6 +15,8 @@ export function V2QuotePrompts({ jobId, lines, onAdd }: { jobId: string; lines: 
   useEffect(() => {
     let current = true;
     setTemplateKey(null);
+    // Inlined at build time only by the V2 launcher (next.config.mjs): no request outside V2.
+    if (process.env.NEXT_PUBLIC_JOBGUARD_V2_QUOTE_PROMPTS !== "1") return;
     void fetch(`/api/v2-backend/jobs/${jobId}/quote-prompts`, { cache: "no-store" })
       .then(async response => {
         if (!response.ok) return;

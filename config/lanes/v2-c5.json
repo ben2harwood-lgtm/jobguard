@@ -23,6 +23,7 @@
         "apps/web/e2e/artifacts/v2-c5/scope-review-added-1280.png",
         "apps/web/e2e/artifacts/v2-c5/scope-review-added-360.png",
         "apps/web/e2e/v2-c5.spec.mts",
+        "apps/web/next.config.mjs",
         "apps/web/playwright.v2-c5.config.ts"
       ]
     }
