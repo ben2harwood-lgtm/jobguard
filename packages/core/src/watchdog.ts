@@ -166,6 +166,10 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/proof": "watchdog_live_only",
   // QW-1: a photo on a logged extra is new site evidence.
   "/api/jobs/[id]/variations/photos": "watchdog_live_only",
+  // QW-4: the snag list is new site work on a live job; reads stay unclassified like the diary.
+  "/api/jobs/[id]/snags": "watchdog_live_only",
+  "/api/jobs/[id]/snags/[snagId]/events": "watchdog_live_only",
+  "/api/jobs/[id]/snags/[snagId]/photos": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/merchant-order": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",

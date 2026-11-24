@@ -242,3 +242,4 @@ export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
 export { assertPilotConnection } from "./pilot-connection.js";
 
 export { PilotJobRepository } from "./pilot-job-repository.js";
+export * from "./snag-repository.js";

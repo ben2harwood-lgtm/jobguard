@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "lanes": {
+    "qw-4-snag-list": {
+      "branches": [
+        "claude/project-thread-eh72up"
+      ],
+      "note": "QW-4: the job's snag list (practice mode): add, revise, mark fixed, mark checked by a second person, reopen, and up to six photos per snag. Migration 0782. RED: needs an independent check before merge.",
+      "allow": [
+        "apps/api/src/snag.application.ts",
+        "apps/api/src/snag.application.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/snags/route.ts",
+        "apps/web/app/api/jobs/[id]/snags/route.test.ts",
+        "apps/web/app/api/jobs/[id]/snags/[snagId]/events/route.ts",
+        "apps/web/app/api/jobs/[id]/snags/[snagId]/photos/route.ts",
+        "apps/web/proxy.test.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/snag.ts",
+        "packages/core/src/snag.test.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migrations/0782_snag_list.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/snag-repository.ts",
+        "packages/db/test/command-replay-contract.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migration-proofs/0782_snag_list.proof.json",
+        "packages/db/test/snag-list.integration.test.ts"
+      ]
+    }
+  }
+}
