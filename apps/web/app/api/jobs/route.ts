@@ -39,10 +39,21 @@ export async function GET(request: NextRequest) {
           }
         } catch(error){const denied=practiceFailure(error);if(denied)return denied;}
       }
+      // TOMMY-DEMO: own jobs carry their saved quote delivery, so Overview and Today stop saying
+      // "Quote being prepared" after the quote has gone. A failed read keeps the honest "unknown".
+      const documents=new Map<string,JobSummary["document"]>();
+      await Promise.all(projected.jobs.filter(job=>ownIds.includes(job.id)&&(job.status==="quoting"||job.status==="accepted")).map(async job=>{
+        try {
+          const view=await application.quote.deliveryView(job.id) as {reference?:string;status?:string}|null;
+          if(view===null){documents.set(job.id,{kind:"none",reference:null,delivery:"not_sent"});return;}
+          const delivery=view.status==="simulated_delivery"?"delivered":view.status==="queued"?"queued":view.status==="outcome_unknown"?"outcome_unknown":view.status==="previewed"||view.status==="cancelled"?"not_sent":null;
+          if(delivery)documents.set(job.id,{kind:"quote",reference:view.reference??null,delivery});
+        } catch { /* keep unknown */ }
+      }));
       workspace.jobs=projected.jobs.map(job=>{
         const existing=workspace.jobs.find(value=>value.id===job.id);
         return {id:job.id,tenantId:parsed.data,title:job.title,status:job.status,customerLabel:job.customerLabel,siteLabel:job.siteLabel,updatedLabel:"",
-          document:existing?.document??{kind:"unknown",reference:null,delivery:"unknown"},customerPayment:existing?.customerPayment??payments.get(job.id)??"unknown",pilotNoCharge:existing?.pilotNoCharge??false};
+          document:existing?.document??documents.get(job.id)??{kind:"unknown",reference:null,delivery:"unknown"},customerPayment:existing?.customerPayment??payments.get(job.id)??"unknown",pilotNoCharge:existing?.pilotNoCharge??false};
       });
     }
     catch(error){const denied=practiceFailure(error);if(denied)return denied;return NextResponse.json({code:"DATABASE_UNAVAILABLE",recoverable:true},{status:503});}

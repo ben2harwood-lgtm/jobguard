@@ -5,13 +5,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { JobSummary } from "../lib/contracts";
-import { jobStatusLabels } from "../ui/workspace-lifecycle";
 import { DecisionInbox } from "../ui/decision-inbox";
 import { VariationFlow } from "../ui/variation-flow";
 import { ProofCapture } from "../ui/proof-capture";
 import { FinalAccount } from "../ui/final-account";
 import { FeeStatement } from "../ui/fee-statement";
-import { Card, Empty, Head, Legacy, Note, PHOTOS, RailIcon, Screen, Shell, Tag, agreedLine, useJobFacts, useAttention, quoteLine, documentLine, known, money, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
+import { Card, Empty, Head, Legacy, Note, PHOTOS, RailIcon, Screen, Shell, Tag, agreedLine, useJobFacts, useAttention, quoteLine, documentLine, known, money, statusTag, statusLabel, useJobs, type JobValue, type Workspace } from "./designed-ui";
 
 const INNER_SUBTITLE = "One place to manage the job, spot problems early and know what comes next.";
 
@@ -56,7 +55,7 @@ export function Today({ workspace }: { workspace: Workspace }) {
           </article>) : attention.complete ? <div className="rr-clear"><h3>No immediate action</h3><p>Nothing needs a decision right now. Your job records are below.</p></div> : null}{attention.failed && <p role="status">Some job checks could not be loaded</p>}{attention.loading && <p role="status">Loading job checks…</p>}</div>
         </section>
         {featured ? <section className="rr-feature rr-glass" style={{ height: "auto" }} aria-label={`Featured job: ${featured.title}`}>
-          <div className="rr-feature-art"><div className="rr-feature-heading"><span className="rr-status green"><i></i>{jobStatusLabels[featured.status].toUpperCase()}</span><h2>{featured.title}</h2><p>{known(featured.customerLabel) || "Customer details needed"}</p><div className="rr-location"><RailIcon name="pin"/><span>{known(featured.siteLabel) || "Site details needed"}</span><b></b><RailIcon name="calendar"/><span>{featured.updatedLabel}</span><button type="button" className="rr-icon-button" aria-label={`Open ${featured.title}`} onClick={() => router.push(`/jobs/${featured.id}/overview`)}><RailIcon name="chevron"/></button></div></div>
+          <div className="rr-feature-art"><div className="rr-feature-heading"><span className="rr-status green"><i></i>{statusLabel(featured.status, featured.document).toUpperCase()}</span><h2>{featured.title}</h2><p>{known(featured.customerLabel) || "Customer details needed"}</p><div className="rr-location"><RailIcon name="pin"/><span>{known(featured.siteLabel) || "Site details needed"}</span><b></b><RailIcon name="calendar"/><span>{featured.updatedLabel}</span><button type="button" className="rr-icon-button" aria-label={`Open ${featured.title}`} onClick={() => router.push(`/jobs/${featured.id}/overview`)}><RailIcon name="chevron"/></button></div></div>
             <div className="rr-paper"><div className="rr-paper-top"><span>{featured.document.reference ?? "Job record"}</span><button type="button" className="rr-paper-menu" aria-label="Open job records" onClick={() => router.push(`/jobs/${featured.id}/records`)}>•••</button></div><p>{featured.title}<br/>{known(featured.siteLabel) || "Site details needed"}</p><ul>{STAGES.slice(1).map(([label], index) => <li key={label}>{index + 1 < stage ? <RailIcon name="check"/> : <span></span>}{label}</li>)}</ul></div>
           </div>
           <div className="rr-feature-bottom">
@@ -68,7 +67,7 @@ export function Today({ workspace }: { workspace: Workspace }) {
       <section className="rr-your-jobs rr-glass"><div className="rr-section-head"><h2>Your jobs</h2><div><button type="button" className="rr-text-button" onClick={() => router.push("/jobs")}>View all jobs <RailIcon name="arrow"/></button><button type="button" className="rr-button" onClick={() => router.push("/jobs/new")}><RailIcon name="plus"/> New quote</button></div></div>
         <div className="rr-job-grid">{(jobs ?? []).slice(0, 3).map((job, index) => <article className="rr-mini-job" key={job.id}>
           <button type="button" className="rr-mini-photo" aria-label={`Open ${job.title}`} onClick={() => router.push(`/jobs/${job.id}/overview`)}><span className={`rr-photo rr-photo-${["job-martin", "job-harper", "job-ocean"][index % 3]}`} role="img" aria-label="Illustrative image"></span></button>
-          <div className="rr-mini-copy"><div className="rr-mini-top"><span className={`rr-status ${attention.items.some(item => item.id === job.id) ? "amber" : job.status === "live" ? "green" : "grey"}`}><i></i>{(attention.items.some(item => item.id === job.id) ? "Needs attention" : jobStatusLabels[job.status]).toUpperCase()}</span><button type="button" className="rr-mini-menu" aria-label="Open job records" onClick={() => router.push(`/jobs/${job.id}/records`)}>•••</button></div>
+          <div className="rr-mini-copy"><div className="rr-mini-top"><span className={`rr-status ${attention.items.some(item => item.id === job.id) ? "amber" : job.status === "live" ? "green" : "grey"}`}><i></i>{(attention.items.some(item => item.id === job.id) ? "Needs attention" : statusLabel(job.status, job.document)).toUpperCase()}</span><button type="button" className="rr-mini-menu" aria-label="Open job records" onClick={() => router.push(`/jobs/${job.id}/records`)}>•••</button></div>
             <button type="button" className="rr-job-title" onClick={() => router.push(`/jobs/${job.id}/overview`)}>{job.title}</button><p>{known(job.siteLabel) || known(job.customerLabel) || "Details needed"}</p>
             <div className="rr-mini-footer"><strong>{quoteLine(job)} · {agreedLine(facts?.[job.id])}</strong><div><small>Payment</small><span>{facts?.[job.id]?.payment?.paymentStatus ?? "Payment status unavailable"}</span><small>Recorded by you, not bank-confirmed</small></div></div></div>
         </article>)}</div>

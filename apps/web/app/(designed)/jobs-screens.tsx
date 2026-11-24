@@ -7,9 +7,8 @@ import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { jobsResponseV1, type JobSummary } from "../lib/contracts";
 import { jobWorkspaceResponseV1, type JobWorkspaceResponse } from "@jobguard/api/workspace-contracts";
-import { jobStatusLabels } from "../ui/workspace-lifecycle";
 import { WalkIt } from "../ui/jobguard-app";
-import { Card, Empty, Head, Icon, Note, PHOTOS, Screen, Shell, Tag, agreedLine, useJobFacts, useAttention, onJobRefresh, type AttentionLink, catchLabel, type JobFacts, quoteLine, documentLine, known, money, readJson, shortDate, statusTag, useJobs, type JobValue, type Workspace } from "./designed-ui";
+import { Card, Empty, Head, Icon, Note, PHOTOS, Screen, Shell, Tag, agreedLine, useJobFacts, useAttention, onJobRefresh, type AttentionLink, catchLabel, type JobFacts, quoteLine, documentLine, known, money, readJson, shortDate, statusTag, statusLabel, useJobs, type JobValue, type Workspace } from "./designed-ui";
 
 const LIST_SUBTITLE = "One place to manage the job, spot problems early and know what comes next.";
 
@@ -42,7 +41,7 @@ export function JobsList({ workspace }: { workspace: Workspace }) {
           : visible.map(job => <article className="job-row" key={job.id}>
             <img className="job-photo" src={jobPhoto(job.id)} alt="Illustrative building"/>
             <div className="job-name"><strong>{job.title}</strong><small>{[known(job.siteLabel) || "Site details needed", known(job.customerLabel) || "Customer details needed", job.updatedLabel].filter(Boolean).join(" · ")}</small><p>{quoteLine(job)} · {agreedLine(facts?.[job.id])} · {facts?.[job.id]?.payment?.paymentStatus ?? "Payment status unavailable"} · recorded by you, not bank-confirmed</p></div>
-            <div className="job-side"><strong>{jobStatusLabels[job.status]}</strong>{attention.items.some(item => item.id === job.id) ? <Tag tone="amber">1 to check</Tag> : statusTag(job.status)}<button type="button" className="btn small" onClick={() => router.push(`/jobs/${job.id}/overview`)}>Open job →</button></div>
+            <div className="job-side"><strong>{statusLabel(job.status, job.document)}</strong>{attention.items.some(item => item.id === job.id) ? <Tag tone="amber">1 to check</Tag> : statusTag(job.status, job.document)}<button type="button" className="btn small" onClick={() => router.push(`/jobs/${job.id}/overview`)}>Open job →</button></div>
           </article>)}
       </div>
     </Card>
@@ -111,7 +110,7 @@ function JobFrame({ workspace, jobId, tab, children }: { workspace: Workspace; j
   const tabs: [JobTab, string][] = [["overview", "Overview"], ["work", "Work"], ["money", "Money"], ["records", "Records"]];
   return <Shell workspace={workspace} title={job.title} subtitle={[site, customer].filter(Boolean).join(" · ") || "Site and customer details still needed"} active="jobs">
     <div className="job-header"><Head kicker={`JOB ${job.id.slice(0, 8).toUpperCase()}`} title={job.title} text={[site || "Site details needed", customer || "Customer details needed"].join(" · ")}/></div>
-    <div className="job-caption" style={{ margin: "-12px 0 19px" }} data-testid={`designed-job-${tab}`} data-job-id={job.id}>{statusTag(job.status)} {detail.attentionReasons.length ? <Tag tone="amber">Needs attention</Tag> : detail.attentionComplete ? <Tag tone="green">No current alerts</Tag> : <Tag>{detail.attentionFailed ? "Some job checks could not be loaded" : "Loading job checks…"}</Tag>} <span>Updated {shortDate(job.updatedAt)}</span></div>
+    <div className="job-caption" style={{ margin: "-12px 0 19px" }} data-testid={`designed-job-${tab}`} data-job-id={job.id}>{statusTag(job.status, summary?.document)} {detail.attentionReasons.length ? <Tag tone="amber">Needs attention</Tag> : detail.attentionComplete ? <Tag tone="green">No current alerts</Tag> : <Tag>{detail.attentionFailed ? "Some job checks could not be loaded" : "Loading job checks…"}</Tag>} <span>Updated {shortDate(job.updatedAt)}</span></div>
     <nav className="job-tabs" aria-label="Job sections">{tabs.map(([id, label]) => <button key={id} type="button" className={id === tab ? "active" : ""} aria-current={id === tab ? "page" : undefined} onClick={() => router.push(`/jobs/${job.id}/${id}`)}>{label}</button>)}</nav>
     {tab === "overview" ? <Overview detail={detail} site={site}/> : tab === "work" ? <WorkTab>{children}</WorkTab> : tab === "money" ? <MoneyTab value={detail.value} status={job.status} facts={detail.facts}>{children}</MoneyTab> : <RecordsTab jobId={job.id}>{children}</RecordsTab>}
   </Shell>;
@@ -122,7 +121,8 @@ function nextAction(job: Detail["job"], summary: JobSummary | null, facts?: JobF
   if (summary && (summary.document.delivery === "queued" || summary.document.delivery === "outcome_unknown")) return { title: "Check whether the quote was sent", body: documentLine(summary) + ".", label: "Check the quote", tab: "work", fragment: "#quote" };
   switch (job.status) {
     case "draft": return { title: "Finish describing the work", body: "Check the draft before a quote is prepared. Nothing is sent yet.", label: "Open the draft", tab: "work" };
-    case "quoting": return { title: "Price and send the quote", body: "Price the checked work, preview the quote, then choose to send it.", label: "Price the work", tab: "work", fragment: "#quote" };
+    case "quoting": if (summary?.document.kind === "quote" && summary.document.delivery === "delivered") return { title: "Waiting for the customer’s answer", body: "The quote has gone to the customer (practice: nothing real is sent). Record their answer when they reply.", label: "Record their answer", tab: "work", fragment: "#quote" };
+      return { title: "Price and send the quote", body: "Price the checked work, preview the quote, then choose to send it.", label: "Price the work", tab: "work", fragment: "#quote" };
     case "accepted": return { title: "Start the work", body: "The customer said yes. Switch the job on when the work begins.", label: "Start the job", tab: "work", fragment: "#quote" };
     case "live": return { title: "Keep the job record up to date", body: "Add proof photos and log any extra work as it happens, so nothing is forgotten.", label: "Record the work", tab: "work", fragment: "#work-proof" };
     case "invoiced": return { title: "Watch for the customer’s payment", body: "The invoice is recorded. A payment you enter by hand is not a bank-confirmed receipt.", label: "Check the money", tab: "money" };
@@ -208,7 +208,7 @@ export function Overview({ detail, site }: { detail: Detail; site: string }) {
       </div></Card></div>
     </div>
     <div style={{ marginTop: 18 }}><Card title="Coming up"><div className="mini-calendar">
-      <div className="date-row"><strong>Status</strong><span>{jobStatusLabels[job.status]}</span></div>
+      <div className="date-row"><strong>Status</strong><span>{statusLabel(job.status, summary?.document)}</span></div>
       <div className="date-row"><strong>Quote or invoice</strong><span>{summary ? documentLine(summary) : "Not checked yet"}</span></div>
       <div className="date-row"><strong>Customer payment</strong><span>{detail.facts?.payment?.paymentStatus ?? "Payment status unavailable"} · recorded by you, not bank-confirmed</span></div>
       <div className="date-row"><strong>Last updated</strong><span>{shortDate(job.updatedAt)}</span></div>

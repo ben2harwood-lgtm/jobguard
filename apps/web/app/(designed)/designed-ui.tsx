@@ -85,9 +85,13 @@ export function documentLine(job: JobSummary) {
   return delivery === "delivered" ? `${name} sent` : delivery === "queued" ? `${name} waiting to send — not sent yet` : delivery === "outcome_unknown" ? `${name} — we need to check whether it sent` : `${name} not sent`;
 }
 export const paymentLabels: Record<JobSummary["customerPayment"], string> = { not_due: "Customer payment not due yet", due: "Customer payment due", part_paid: "Customer has paid part", settled: "Customer has paid", unknown: "Payment not checked yet" };
-export function statusTag(status: JobSummary["status"]) {
+/** TOMMY-DEMO: a quoting job whose quote has gone out reads "Quote sent", not "Quote being prepared". */
+export function statusLabel(status: JobSummary["status"], document?: JobSummary["document"] | null) {
+  return status === "quoting" && document?.kind === "quote" && document.delivery === "delivered" ? "Quote sent" : jobStatusLabels[status];
+}
+export function statusTag(status: JobSummary["status"], document?: JobSummary["document"] | null) {
   const tone = status === "live" ? "blue" : status === "paid" || status === "accepted" ? "green" : status === "invoiced" ? "amber" : "";
-  return <Tag tone={tone}>{jobStatusLabels[status]}</Tag>;
+  return <Tag tone={tone}>{statusLabel(status, document)}</Tag>;
 }
 export function needsChecking(job: JobSummary) { return job.document.delivery === "queued" || job.document.delivery === "outcome_unknown" || job.customerPayment === "due"; }
 export const siteOrTitle = (job: JobSummary) => known(job.siteLabel) || job.title;
@@ -367,7 +371,7 @@ function SearchPanel({ tenantId, close }: { tenantId: string; close: () => void 
   const found = useMemo(() => (jobs ?? []).filter(job => `${job.title} ${job.siteLabel} ${job.customerLabel}`.toLowerCase().includes(term.toLowerCase())), [jobs, term]);
   return <Panel title="Find it in JobGuard" text="Search the practice jobs in this workspace." close={close}>
     <label className="rr-search-field">Search jobs<input type="search" placeholder="Try kitchen…" autoFocus value={term} onChange={event => setTerm(event.target.value)}/></label>
-    <div className="rr-search-results">{jobs === null ? <p>Loading…</p> : found.length ? found.map(job => <button key={job.id} type="button" onClick={() => { close(); router.push(`/jobs/${job.id}/overview`); }}><strong>{job.title}</strong><small>{known(job.siteLabel) || jobStatusLabels[job.status]}</small><RailIcon name="arrow"/></button>) : <p>No matching practice jobs.</p>}</div>
+    <div className="rr-search-results">{jobs === null ? <p>Loading…</p> : found.length ? found.map(job => <button key={job.id} type="button" onClick={() => { close(); router.push(`/jobs/${job.id}/overview`); }}><strong>{job.title}</strong><small>{known(job.siteLabel) || statusLabel(job.status, job.document)}</small><RailIcon name="arrow"/></button>) : <p>No matching practice jobs.</p>}</div>
   </Panel>;
 }
 
