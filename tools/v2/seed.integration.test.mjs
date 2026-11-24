@@ -775,12 +775,27 @@ test("existing Switch live activates a plan once and only approved variation rev
   await assert.rejects(otherPlan.edit(jobId, { ...dated, commandId: randomUUID(), expectedVersion: 3 }), { code: "NOT_FOUND" });
   assert.deepEqual(await workPlan.read(jobId, planQuery), updated);
 
+  // A later approved revision of the extra keeps the builder's planning and flags it for review.
+  await vary("approve", { ...approve, revisionId: pendingId, approvalId: randomUUID() });
+  const revised = await workPlan.read(jobId, planQuery);
+  assert.deepEqual(revised.agreement.approvedVariations.map(item => [item.scopeItemId, item.revisionId, item.signedDeltaPence]),
+    [[scopeItemId, pendingId, 35000]]);
+  assert.deepEqual(revised.tasks[1], { ...updated.tasks[1], title: "Unapproved replacement trim", needsReview: true });
+  assert.deepEqual(revised.unplanned, live.unplanned);
+  await workPlan.edit(jobId, planEdit(revised, revised.tasks[1], { durationMinutes: 60 }));
+  const { rows: [latest] } = await admin.query(`SELECT variation_revision_id FROM app.v2_work_plan_edit
+    WHERE (job_id, scope_item_id) = ($1, $2) ORDER BY expected_version DESC LIMIT 1`, [jobId, scopeItemId]);
+  assert.equal(latest.variation_revision_id, pendingId);
+  const replanned = await workPlan.read(jobId, planQuery);
+  assert.equal(replanned.tasks[1].durationMinutes, 60);
+  assert.equal(replanned.tasks[1].needsReview, undefined, "an edit against the approved revision clears the review flag");
+
   const state = await workState.get(jobId);
   const expectedRevision = (state.events.at(-1)?.sequence ?? 0) + state.links.length;
   const closed = await workState.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(),
     expectedRevision, action: "close", reason: "cancelled_by_customer", note: "Fictional customer cancelled the work" });
   assert.equal(closed.events.at(-1).kind, "closed");
-  assert.deepEqual(await workPlan.read(jobId, planQuery), updated);
+  assert.deepEqual(await workPlan.read(jobId, planQuery), replanned);
 });
 
 test("each recorded plan edit appends one audit event in its transaction, and a replay appends none", async () => {

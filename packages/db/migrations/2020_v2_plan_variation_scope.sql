@@ -58,12 +58,13 @@ BEGIN
       RAISE EXCEPTION 'V2 plan edit extra is not an approved variation revision of its scope item'
         USING ERRCODE = 'foreign_key_violation';
     END IF;
-    RETURN NEW;
+    RETURN NULL;
   END
   $check$;
   REVOKE ALL ON FUNCTION app.v2_work_plan_edit_scope_check() FROM PUBLIC;
   DROP TRIGGER IF EXISTS v2_work_plan_edit_scope_check ON app.v2_work_plan_edit;
-  CREATE TRIGGER v2_work_plan_edit_scope_check BEFORE INSERT ON app.v2_work_plan_edit
+  -- AFTER, so the firm's row-level security check refuses an outsider first.
+  CREATE TRIGGER v2_work_plan_edit_scope_check AFTER INSERT ON app.v2_work_plan_edit
     FOR EACH ROW EXECUTE FUNCTION app.v2_work_plan_edit_scope_check();
 END
 $v2$;

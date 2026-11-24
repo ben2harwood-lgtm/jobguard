@@ -12,7 +12,7 @@ empty. No backfill is needed: every existing edit is a quote-line edit.
 
 The edit's old foreign key to `app.quote_line` cannot hold an extra's scope
 item, so it is replaced by a foreign key to `app.scope_identity` and a
-`BEFORE INSERT` trigger. The trigger keeps the old guarantee for quote-line
+`AFTER INSERT` trigger (after the firm's row-level security check). The trigger keeps the old guarantee for quote-line
 edits (the scope item is on the edit's quote revision) and requires an
 extra's edit to name an approved revision of that same scope item. A second
 foreign key binds the revision to its firm and job. No commercial table,
