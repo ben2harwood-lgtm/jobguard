@@ -3,7 +3,9 @@ import { sha256 } from "./evidence-pack.js";
 
 /**
  * QW-2: one job's site day, closed at 18:00 UK time. Day D covers activity recorded from 18:00 on D-1 (inclusive)
- * to 18:00 on D (exclusive), so a closed day never changes. Lists recorded facts only, each citing its source row.
+ * to 18:00 on D (exclusive). Lists recorded facts only, each citing its source row. It is a read, not a record:
+ * work done shows each item's current stage (the app keeps no stage history), and invalidated photos drop out, so a
+ * later read of the same day can differ. `readHash` identifies exactly what one read returned, at `readAt`.
  */
 export const SITE_DAY_CUTOFF_HOUR = 18;
 export class SiteDaySummaryError extends Error {
@@ -47,7 +49,7 @@ export function siteDayOfV1(at: Date): string {
 
 export const siteDayWorkItemV1 = z.object({ scopeItemId: uuid, description: z.string(), stage: z.enum(["in_progress", "complete"]), at: iso }).strict();
 export const siteDayIssueV1 = z.object({ variationId: uuid, description: z.string(), at: iso }).strict();
-export const siteDayDeliveryV1 = z.object({ kind: z.enum(["delivery_document", "goods_receipt"]), sourceId: uuid, label: z.string(), at: iso }).strict();
+export const siteDayDeliveryV1 = z.object({ kind: z.literal("delivery_document"), sourceId: uuid, label: z.string(), at: iso }).strict();
 export const siteDayPhotoV1 = z.object({ evidenceId: uuid, evidenceType: z.string(), scopeItemId: uuid.nullable(), at: iso }).strict();
 export const siteDayNoteV1 = z.object({ entryId: uuid, text: z.string(), onSite: z.boolean(), at: iso }).strict();
 export const siteDaySourcesV1 = z.object({
@@ -57,7 +59,7 @@ export const siteDaySourcesV1 = z.object({
 export type SiteDaySources = z.infer<typeof siteDaySourcesV1>;
 export const siteDaySummaryV1 = siteDaySourcesV1.extend({
   version: z.literal("site-day-summary.v1"), jobId: uuid, date: siteDayDateV1, startsAt: iso, closesAt: iso,
-  state: z.enum(["so_far", "day_closed"]), contentHash: z.string().regex(/^[a-f0-9]{64}$/u).nullable(),
+  state: z.enum(["so_far", "after_cutoff"]), readAt: iso, readHash: z.string().regex(/^[a-f0-9]{64}$/u),
 }).strict().readonly();
 export type SiteDaySummary = z.infer<typeof siteDaySummaryV1>;
 
@@ -67,7 +69,7 @@ const canonical = (value: unknown): string => Array.isArray(value) ? `[${value.m
     : JSON.stringify(value);
 const byTime = <T extends { at: string }>(key: (item: T) => string) => (a: T, b: T) => a.at < b.at ? -1 : a.at > b.at ? 1 : key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0;
 
-/** Orders the sources, drops anything outside the window, and hashes a closed day. `now` is supplied by the caller. */
+/** Orders the sources, drops anything outside the window, and hashes what this read returned. `now` is supplied by the caller. */
 export function buildSiteDaySummaryV1(jobId: string, date: string, now: Date, raw: SiteDaySources): SiteDaySummary {
   const window = siteDayWindowV1(date), sources = siteDaySourcesV1.parse(raw);
   if (now.toISOString() < window.startsAt) throw new SiteDaySummaryError("SITE_DAY_NOT_STARTED");
@@ -79,7 +81,7 @@ export function buildSiteDaySummaryV1(jobId: string, date: string, now: Date, ra
     photos: inside(sources.photos).sort(byTime(item => item.evidenceId)),
     notes: inside(sources.notes).sort(byTime(item => item.entryId)),
   };
-  const closed = now.toISOString() >= window.closesAt;
-  return siteDaySummaryV1.parse({ version: "site-day-summary.v1", jobId, ...window, state: closed ? "day_closed" : "so_far",
-    contentHash: closed ? sha256(canonical({ jobId, date, ...body })) : null, ...body });
+  return siteDaySummaryV1.parse({ version: "site-day-summary.v1", jobId, ...window,
+    state: now.toISOString() >= window.closesAt ? "after_cutoff" : "so_far", readAt: now.toISOString(),
+    readHash: sha256(canonical({ jobId, date, ...body })), ...body });
 }

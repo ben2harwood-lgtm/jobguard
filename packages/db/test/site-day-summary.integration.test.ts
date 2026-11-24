@@ -52,3 +52,28 @@ it("never shows another job's or another tenant's rows", async () => {
   const other = await testBoundTenantContext(f.admin, tenant, member);
   expect(await repository.sources(other, b.jobId, window)).toEqual({ workDone: [], issues: [], deliveries: [], photos: [] });
 });
+
+async function delivery(tenantId: string, jobId: string, at: string, number: string) {
+  const id = randomUUID();
+  await workTenant(f.admin, tenantId, db => db.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status,created_at) VALUES($1,$2,$3,'fictional-merchant','delivery',$4,$5,'ready',$6)", [id, tenantId, jobId, number, randomUUID().replaceAll("-", "").padEnd(64, "0"), at]));
+  return id;
+}
+
+it("moves activity at 18:00 UK time to the next day, across the March clock change, for deliveries, photos and work done", async () => {
+  const a = await seedFinalCheckJob(f), repository = new SiteDaySummaryRepository(f.runtime);
+  const day = siteDayWindowV1("2026-03-29"), next = siteDayWindowV1("2026-03-30");
+  expect(day.closesAt).toBe("2026-03-29T17:00:00.000Z");
+  const before = "2026-03-29T16:59:59.999Z", atSix = "2026-03-29T17:00:00.000Z";
+  const lateDelivery = await delivery(a.tenantId, a.jobId, before, "DN-1"), nextDelivery = await delivery(a.tenantId, a.jobId, atSix, "DN-2");
+  const latePhoto = await photo(a.tenantId, a.jobId, a.scopeItemId, before), nextPhoto = await photo(a.tenantId, a.jobId, a.scopeItemId, atSix);
+  const variationId = randomUUID(), scopeItemId = randomUUID();
+  await withTenant(f.runtime, a.context, db => insertVariationProposal(db, a.tenantId, { version: "variation-proposal.v1", id: variationId, jobId: a.jobId, scopeItemId, existingScopeItemId: null, lineageParentScopeItemId: null, captureKind: "text", captureText: "Fictional new socket", description: "Fictional new socket", suggestion: null }));
+  await workTenant(f.admin, a.tenantId, db => db.query("INSERT INTO app.scope_progress(tenant_id,job_id,scope_item_id,stage,updated_at) VALUES($1,$2,$3,'complete',$4)", [a.tenantId, a.jobId, scopeItemId, before]));
+  const closed = await repository.sources(a.context, a.jobId, day), following = await repository.sources(a.context, a.jobId, next);
+  expect(closed.deliveries).toEqual([{ kind: "delivery_document", sourceId: lateDelivery, label: "fictional-merchant DN-1", at: before }]);
+  expect(following.deliveries.map(d => d.sourceId)).toEqual([nextDelivery]);
+  expect(closed.photos.map(p => p.evidenceId)).toEqual([latePhoto]);
+  expect(following.photos.map(p => p.evidenceId)).toEqual([nextPhoto]);
+  expect(closed.workDone).toEqual([{ scopeItemId, stage: "complete", description: "Fictional new socket", at: before }]);
+  expect(following.workDone).toEqual([]);
+});

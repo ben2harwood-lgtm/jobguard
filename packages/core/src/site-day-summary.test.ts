@@ -34,16 +34,16 @@ describe("site day summary", () => {
     note("44444444-4444-4444-8444-444444444444", "2026-11-24T18:00:00.000Z", "After six: tomorrow"),
     note("55555555-5555-4555-8555-555555555555", "2026-11-23T17:59:59.999Z", "Before the window"),
   ] };
-  it("is 'so far' before 18:00 with no hash, and closed with a stable hash after", () => {
+  it("is 'so far' before 18:00 and 'after_cutoff' from 18:00; the read hash is stable under reordering and changes on edit", () => {
     const sofar = buildSiteDaySummaryV1(job, "2026-11-24", new Date("2026-11-24T12:00:00.000Z"), sources);
-    expect(sofar.state).toBe("so_far"); expect(sofar.contentHash).toBeNull();
+    expect(sofar.state).toBe("so_far"); expect(sofar.readHash).toMatch(/^[a-f0-9]{64}$/u); expect(sofar.readAt).toBe("2026-11-24T12:00:00.000Z");
     expect(sofar.notes.map(n => n.text)).toEqual(["First", "Second"]);
     const closed = buildSiteDaySummaryV1(job, "2026-11-24", new Date("2026-11-24T18:00:00.000Z"), sources);
-    expect(closed.state).toBe("day_closed"); expect(closed.contentHash).toMatch(/^[a-f0-9]{64}$/u);
+    expect(closed.state).toBe("after_cutoff"); expect(closed.readHash).toBe(sofar.readHash);
     const reordered = buildSiteDaySummaryV1(job, "2026-11-24", new Date("2026-12-01T00:00:00.000Z"), { ...sources, notes: [...sources.notes].reverse() });
-    expect(reordered.contentHash).toBe(closed.contentHash);
+    expect(reordered.readHash).toBe(closed.readHash);
     const changed = buildSiteDaySummaryV1(job, "2026-11-24", new Date("2026-12-01T00:00:00.000Z"), { ...sources, notes: [note("22222222-2222-4222-8222-222222222222", "2026-11-24T08:00:00.000Z", "Edited")] });
-    expect(changed.contentHash).not.toBe(closed.contentHash);
+    expect(changed.readHash).not.toBe(closed.readHash);
   });
   it("refuses a day that has not started, and allows an empty day", () => {
     expect(() => buildSiteDaySummaryV1(job, "2026-11-25", new Date("2026-11-24T12:00:00.000Z"), empty)).toThrow("SITE_DAY_NOT_STARTED");

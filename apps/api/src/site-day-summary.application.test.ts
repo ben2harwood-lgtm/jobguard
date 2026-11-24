@@ -19,17 +19,17 @@ afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
 it("defaults to today's site day, includes that day's diary notes and is 'so far' before 18:00", async () => {
   const app = new SiteDaySummaryApplication({} as never, "session", () => new Date("2026-11-24T12:00:00.000Z"));
   const summary = await app.read(job);
-  expect(summary).toMatchObject({ date: "2026-11-24", state: "so_far", contentHash: null });
+  expect(summary).toMatchObject({ date: "2026-11-24", state: "so_far", readAt: "2026-11-24T12:00:00.000Z" });
   expect(summary.notes.map(n => n.entryId)).toEqual(["22222222-2222-4222-8222-222222222222"]);
   expect(access).toHaveBeenCalledWith(job);
   expect(sources).toHaveBeenCalledWith({ tenantId: "t" }, job, { date: "2026-11-24", startsAt: "2026-11-23T18:00:00.000Z", closesAt: "2026-11-24T18:00:00.000Z" });
 });
-it("after 18:00 today is tomorrow's site day; a named past day is closed and hashed", async () => {
+it("after 18:00 today is tomorrow's site day; a named past day reads as after the cut-off, with a read hash", async () => {
   const app = new SiteDaySummaryApplication({} as never, "session", () => new Date("2026-11-24T18:30:00.000Z"));
   const tonight = await app.read(job);
   expect(tonight).toMatchObject({ date: "2026-11-25", state: "so_far" });
   expect(tonight.notes.map(n => n.entryId)).toEqual(["33333333-3333-4333-8333-333333333333"]);
-  expect(await app.read(job, { date: "2026-11-24" })).toMatchObject({ state: "day_closed", contentHash: expect.stringMatching(/^[a-f0-9]{64}$/u) });
+  expect(await app.read(job, { date: "2026-11-24" })).toMatchObject({ state: "after_cutoff", readHash: expect.stringMatching(/^[a-f0-9]{64}$/u) });
 });
 it("refuses bad queries, future days and pilot mode", async () => {
   const app = new SiteDaySummaryApplication({} as never, "session", () => new Date("2026-11-24T12:00:00.000Z"));
