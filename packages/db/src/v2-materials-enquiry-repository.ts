@@ -1,9 +1,10 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { calculateMaterialPackCount, materialQuantityV1 } from "@jobguard/core";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
+import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 
 const uuid = z.uuid().transform(value => value.toLowerCase());
 const version = z.number().int().min(0).max(2_147_483_646);
@@ -112,6 +113,7 @@ function canonical(value: unknown): string {
     `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(",")}}`;
 }
 
+const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 const lineId = (line: { scopeItemId: string; lineKey: string }) => `${line.scopeItemId}/${line.lineKey}`;
 const byLine = (a: { scopeItemId: string; lineKey: string }, b: { scopeItemId: string; lineKey: string }) =>
   lineId(a) < lineId(b) ? -1 : lineId(a) > lineId(b) ? 1 : 0;
@@ -172,7 +174,8 @@ export class MaterialsEnquiryRepository {
     if (!parsed.success) throw new MaterialsError("MATERIALS_INVALID_COMMAND");
     const command = parsed.data;
     const key = [context.tenantId, jobId, command.scopeItemId, command.lineKey];
-    return withTenant(this.pool, context, async ({ $client }) => {
+    return withTenant(this.pool, context, async database => {
+      const { $client } = database;
       const actor = await this.editor($client, sessionId);
       const { rows: [scope] } = await $client.query<{ version: number }>(`
         SELECT COALESCE((
@@ -201,7 +204,13 @@ export class MaterialsEnquiryRepository {
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
           ON CONFLICT DO NOTHING RETURNING ${lineReceipt}
         `, [...key, command.expectedVersion, command.commandId, JSON.stringify(command.changes), basis, actor]);
-        if (saved) return saved;
+        if (saved) {
+          // Exact retries return below without a second event. The chain head is this transaction's final lock.
+          await this.audit(database, actor, jobId, "v2_materials.line_saved", {
+            commandId: saved.commandId, scopeItemId: saved.scopeItemId, lineKey: saved.lineKey, lineVersion: String(saved.version),
+          }, { changes: sha256(canonical(command.changes)) });
+          return saved;
+        }
       }
 
       const { rows: [prior] } = await $client.query<LineReceipt & { matches: boolean }>(`
@@ -221,14 +230,16 @@ export class MaterialsEnquiryRepository {
     const parsed = materialEnquiryCommandV1.safeParse(input);
     if (!parsed.success) throw new MaterialsError("MATERIALS_INVALID_COMMAND");
     const command = parsed.data;
-    return withTenant(this.pool, context, async ({ $client }) => {
+    return withTenant(this.pool, context, async database => {
+      const { $client } = database;
       const actor = await this.editor($client, sessionId);
       const live = await this.live($client, context.tenantId, jobId);
       const replayed = await this.replay($client, context.tenantId, jobId, actor, command);
       if (replayed) return this.view(jobId, live, replayed);
 
       const latest = await this.enquiry($client, context.tenantId, jobId);
-      if ((latest?.version ?? 0) !== command.expectedVersion) throw new MaterialsError("MATERIALS_VERSION_CONFLICT");
+      // An exact retry may have committed after the replay check above.
+      if ((latest?.version ?? 0) !== command.expectedVersion) return this.lostRace($client, context.tenantId, jobId, actor, command, live);
       let result = latest;
       // Generating from unchanged inputs returns the enquiry that is already current.
       if (latest?.basisDigest !== live.digest) {
@@ -248,8 +259,19 @@ export class MaterialsEnquiryRepository {
         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING
       `, [context.tenantId, jobId, command.commandId, command.expectedVersion, result!.version, actor]);
       if (!recorded.rowCount) return this.lostRace($client, context.tenantId, jobId, actor, command, live);
+      await this.audit(database, actor, jobId, "v2_materials.enquiry_generated", {
+        commandId: command.commandId, expectedVersion: String(command.expectedVersion),
+        enquiryVersion: String(result!.version), created: String(result!.version === command.expectedVersion + 1),
+      }, { basis: result!.basisDigest });
       return this.view(jobId, live, result);
     });
+  }
+
+  private audit(database: TenantTransaction, actor: string, jobId: string, eventType: string,
+    references: Record<string, string>, hashes: Record<string, string>) {
+    return appendAuditBatch(database, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor}`,
+      eventType, subjectType: "job", subjectRef: jobId,
+      payload: { references, hashes, classifications: { action: "operational" } } }]);
   }
 
   // Only an exact retry of the same command, committed concurrently, may share the outcome.
