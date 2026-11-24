@@ -12,13 +12,14 @@ Today JobGuard helps a builder quote, catch extras and get paid. V2 makes it run
 
 ## What changed from revision 1.2
 
-1. **Fifteen small additions placed (section 2A), and twelve more proposed (section 2B) for Ben to accept or drop.** From the builder usefulness review of 24 November (`/mnt/project-files/jobguard-research/builder-usefulness-review-2026-11-24.md`, project files). Each is placed in an existing chunk or in the new chunk K, with its order and dependencies. Where BUILD_PLAN.md rev 3.0 already has the item, V2 builds only a practice slice and cross-references it; BUILD_PLAN.md's order for real use is unchanged.
+1. **Fifteen small additions placed (section 2A), and twelve more (section 2B), accepted by Ben.** From the builder usefulness review of 24 November (`/mnt/project-files/jobguard-research/builder-usefulness-review-2026-11-24.md`, project files). Each is placed in an existing chunk or in the new chunk K, with its order and dependencies. Where BUILD_PLAN.md rev 3.0 already has the item, V2 builds only a practice slice and cross-references it; BUILD_PLAN.md's order for real use is unchanged.
 2. **New chunk K, "reach the customer, crew and money".** Holds the additions that fit no existing chunk: chasing, deposits, the Friday update, share to WhatsApp, calendar links, merchant email forwarding and an accountant export.
 3. **Ben's go for the later chunks (24 Nov, 19:49 UK).** "Build the later chunks as well as long as they can be done safely." The rule for "safely" is in "In plain words" above.
 4. **B2 practice decisions made (24 Nov, 19:55 UK).** Ben accepted four offline answers for practice use only: photos encrypted on the phone, unsent work never silently deleted, unsent work kept up to 14 days, offline capture up to 72 hours with the phone clock never trusted (project file `jobguard-v2/b2-offline-decisions.md`). v2-b2a is done for practice. The D08 record on main is unchanged and real-data approval stays closed until G3.
 5. **Piece D5 split** into v2-d5a (Measurements screen, needs only d1) and v2-d5b (product picking, Materials and Briefs, after d3 and d4).
-6. **Decisions, a paradigm check and the review's big ideas added** (sections 8, 9 and 10). The big ideas are not plan text.
-7. **Plan now lives with V2.** Revisions 1.2 and 1.3 are saved on `v2/main` under `reviews/v2/`, not only on the old coordinator's briefs branch.
+6. **Ben's decisions recorded (24 Nov, 20:40 UK).** Ben agreed with the recommendation on all six questions in section 8: practice slices of BUILD_PLAN.md items, sends built now but caught locally, the chasing defaults, the accountant export as a live-app quick win, the second group (2B) accepted in full, and idea B "not now". Section 9 is a paradigm check and section 10 lists the review's big ideas, which are not plan text.
+7. **The full build order to the end of V2 is in section 2C.**
+8. **Plan now lives with V2.** Revisions 1.2 and 1.3 are saved on `v2/main` under `reviews/v2/`, not only on the old coordinator's briefs branch.
 
 ## What changed from revision 1.1
 
@@ -78,6 +79,8 @@ Owner: domain and quote workspace. Depends on: A.
   Done when: on acceptance there are zero new scheduler entries, commercial outbox rows, bookings, orders and fee rows; the plan goes Live only through the existing Switch live; retrying it has no second effect. (The single made-up afternoon check it enables is proved in v2-e4.)
 - **v2-c4 · Plan screen.** The Plan view in the job's Work tab, as described in section 3.
   Done when: the fictional job's plan can be read and edited at phone and desktop width, and survives reload; the Switch live button calls the existing activation and the banner changes to live.
+- **v2-c5 · "Don't forget" prompts on the quote (added in 1.3, #16).** A prompt list per job type (skip, scaffold, waste, parking permit, building control fee, making good, decorating after, overheads, contingency), held as data in its own file beside the v2-c1 template and keyed by the template's key. Before a V2 quote is sent, the builder sees the prompts not yet covered by a quote line and ticks or dismisses each; the choice is recorded. Prompts never add a line or a price on their own.
+  Done when: the splashback and hall quote shows its missing prompts before sending; a dismissed prompt stays dismissed after reload; ticking one opens the existing add-line route and adds nothing by itself; zero paid AI calls.
 
 ### D · Prepare materials and crew instructions
 
@@ -194,7 +197,7 @@ Owner: job workspace and communications. Depends on: what each piece names. Ever
 - **v2-k4 · Automatic chasing (#2).** The builder switches on, once, polite reminders for unanswered quotes (day 3 and day 7) and unpaid invoices (3 and 10 days after the due date), at most three per item, stopping on a reply, payment, dispute or the builder's stop. Reuses v2-e7's reminder rules and follows BUILD_PLAN.md M4-16's rules for customer messages (never chase a disputed, paid or no-charge-pilot amount). Not covered by M4-16 itself, which is about JobGuard's own fees. Depends on v2-e7. Done when: a paid or disputed invoice is never chased; a reply stops the chain; switching off stops everything queued; in practice mode it reaches only the local catcher.
 - **v2-k5 · Deposit and stage invoices from the accepted quote (#3; RED: money).** The builder picks a split (for example 30/40/30) on the accepted quote; JobGuard drafts each stage invoice with bank details and a due-date reminder through the existing invoice path. No card payments (that is BUILD_PLAN.md MON-6). This is a practice slice of BUILD_PLAN.md M4-18 (staged customer invoicing); M4-18 stays the plan of record for real use. Depends on v2-c3 (frozen accepted quote). Done when: stages always add up exactly to the accepted total under the existing rounding rules; an approved variation changes only later stages; nothing is issued without the builder's press; the final account still reconciles.
 - **v2-k6 · Forward a merchant invoice to the job (#4).** One inbound address per firm; a forwarded merchant email, or a photo of a delivery note (from B2's photo store), lands on the right job as a supplier document for the existing three-way check (M2-4-S). Practice uses a local inbound catcher. This is a practice slice of BUILD_PLAN.md M2-2 and SV-7B; real inbound mail needs a provider (D04, a new provider account, so Ben's call). Depends on v2-e3 for stock effects. Done when: a forwarded invoice reaches the check without retyping; one from an unknown sender waits for the builder; another firm's address never files into this firm.
-- **v2-k7 · Accountant export (#10; RED: firm data).** A CSV download of the firm's invoices, payments and supplier bills for a date range, for the accountant, before any Xero or QuickBooks link (BUILD_PLAN.md M5-1). Read-only; no tax mapping beyond what the records already hold. Depends on nothing in V2; it could ship on main as a quick win instead (section 8, decision 4). Done when: totals match the records exactly; the second firm's rows never appear; the file is the same for the same range.
+- **v2-k7 · Accountant export (#10; RED: firm data). Moved out of V2 by Ben's decision 4: built as live-app quick win QW-7 on main, in practice mode.** Kept here for the record. A CSV download of the firm's invoices, payments and supplier bills for a date range, for the accountant, before any Xero or QuickBooks link (BUILD_PLAN.md M5-1). Read-only; no tax mapping beyond what the records already hold. Depends on nothing in V2; it could ship on main as a quick win instead (section 8, decision 4). Done when: totals match the records exactly; the second firm's rows never appear; the file is the same for the same range.
 
 ## 2A. Where each of the fifteen additions sits (new in 1.3)
 
@@ -211,7 +214,7 @@ Numbers are the review's ranking. "BP" is BUILD_PLAN.md rev 3.0 on main.
 | 7 | Calendar link | v2-k2 | Not planned | none |
 | 8 | Daywork sheet | v2-f7 | Not planned | 2 |
 | 9 | Certificates checklist by job type | v2-g0 | Partly in v2-g2 (handover pack) | none |
-| 10 | Accountant CSV export | v2-k7 | BP M5-1 (Xero, QuickBooks via Codat, last) | 4 |
+| 10 | Accountant CSV export | QW-7 on main (was v2-k7; decision 4) | BP M5-1 (Xero, QuickBooks via Codat, last) | 4 |
 | 11 | Review request after handover | v2-g8 | Not planned | 2 |
 | 12 | Delivery chase | added to v2-e7 | V2 E already had replies, stock and reminders | 2 |
 | 13 | 6pm tomorrow list to each crew member | added to v2-e8 | V2 E Tomorrow screen | 2 |
@@ -220,24 +223,48 @@ Numbers are the review's ranking. "BP" is BUILD_PLAN.md rev 3.0 on main.
 
 **Order for the additions.** Without sends: k2 calendar (after c4), g0 certificates (data, after c1), k1 share (after d5b), f8 on site (after f1), k7 export (any time). With sends caught locally: e7 delivery chase, e8 crew list, k4 chasing, k3 Friday update, f6 approval link, f7 daywork, g8 review request. Money: k5 deposits (after c3), f7 daywork. k6 merchant email after e3.
 
-## 2B. Second group: twelve more additions, for Ben to accept or drop (new in 1.3)
+## 2B. Second group: twelve more additions, accepted by Ben (new in 1.3)
 
-From the second pass of the same review (24 November, evening), which came after Ben said "add them all". **These are proposals: Ben accepts or drops each one when he reviews this revision.** None is issued until he does. Placing follows the same rules as section 2A.
+From the second pass of the same review (24 November, evening), which came after Ben said "add them all". **Accepted in full by Ben on 24 Nov, 20:40 UK (section 8, decision 5).** Each piece is issued when its dependencies exist. Items 19 and 25 go outside V2 as noted. Placing follows the same rules as section 2A.
 
 | # | Addition | Placed as | Already planned elsewhere | Needs Ben |
 |---|---|---|---|---|
-| 16 | "Don't forget" prompts on every quote by job type (skip, scaffold, waste, parking permit, building control fee, making good, overheads, contingency) | **v2-c5**: the template (v2-c1 data) holds a prompt list per job type, shown on the quote before it is sent; the builder ticks or dismisses each. Prompts never add a price on their own. | No. BP MON-7 covers property constraints, not missed costs. | accept or drop |
-| 17 | Customer choices and PC sums tracker, with allowance and "decide by" date; over-allowance drafts an extra | **v2-e9 (RED: money)**: a choice is a customer-choice open fact (v2-e1) with an allowance amount and deadline; a choice over the allowance drafts a change through v2-f3, never a committed price. Depends on v2-e1 and v2-f3. | Partly: E already turns a price-changing choice into a pending change | accept or drop |
-| 18 | Off-hire reminders for scaffold, skips and plant | **v2-k8**: hire items on the job with booked date and weekly cost; the builder gets a reminder when the work that needs them is done (from the plan). Builder-only, no outside send. Depends on v2-c3. | No | accept or drop |
-| 19 | Quote options (good, better, best, or with or without a room) | **Outside V2**: V2 starts from an accepted quote, so options belong to the quote track on main. If accepted, it becomes a BUILD_PLAN.md or quick-win packet; V2 then plans from whichever option was accepted. | No | accept or drop, and where |
+| 16 | "Don't forget" prompts on every quote by job type (skip, scaffold, waste, parking permit, building control fee, making good, overheads, contingency) | **v2-c5**: the template (v2-c1 data) holds a prompt list per job type, shown on the quote before it is sent; the builder ticks or dismisses each. Prompts never add a price on their own. | No. BP MON-7 covers property constraints, not missed costs. | accepted |
+| 17 | Customer choices and PC sums tracker, with allowance and "decide by" date; over-allowance drafts an extra | **v2-e9 (RED: money)**: a choice is a customer-choice open fact (v2-e1) with an allowance amount and deadline; a choice over the allowance drafts a change through v2-f3, never a committed price. Depends on v2-e1 and v2-f3. | Partly: E already turns a price-changing choice into a pending change | accepted |
+| 18 | Off-hire reminders for scaffold, skips and plant | **v2-k8**: hire items on the job with booked date and weekly cost; the builder gets a reminder when the work that needs them is done (from the plan). Builder-only, no outside send. Depends on v2-c3. | No | accepted |
+| 19 | Quote options (good, better, best, or with or without a room) | **Outside V2**: V2 starts from an accepted quote, so options belong to the quote track on main, as a later live-app packet (it touches exact-revision acceptance, so RED). V2 then plans from whichever option was accepted. | No | accepted |
 | 20 | A photo on every finished task, one tap, phone camera | **Added to v2-f1**: the Done button opens the phone camera directly (B2's encrypted photo store), and the proof photo feeds the diary and k3. | Yes, V2 F | none |
-| 21 | Translate crew briefs and site notes | **v2-d4b**: a translated copy of a brief, marked as a translation, with the English original kept. Needs a translation route: paid AI or a provider (D04 and section 5 "Cost"). Depends on v2-d4. | No | accept or drop; cost and provider |
-| 22 | Simple risk assessment, method statement and construction phase plan from the job's scope | **v2-k9**: a draft filled from scope, template and plan that the builder completes and signs. JobGuard never certifies it (section 5 "Who decides"). Depends on v2-c3. | No | accept or drop |
-| 23 | Subcontractor bills and CIS | **Not added to V2**; cross-reference only | BP M4-22 (CIS) | whether to bring M4-22 forward |
+| 21 | Translate crew briefs and site notes | **v2-d4b**: a translated copy of a brief, marked as a translation, with the English original kept. Needs a translation route: paid AI or a provider (D04 and section 5 "Cost"). Depends on v2-d4. | No | accepted; translation route and cost decided when issued |
+| 22 | Simple risk assessment, method statement and construction phase plan from the job's scope | **v2-k9**: a draft filled from scope, template and plan that the builder completes and signs. JobGuard never certifies it (section 5 "Who decides"). Depends on v2-c3. | No | accepted |
+| 23 | Subcontractor bills and CIS | **Not added to V2**; cross-reference only | BP M4-22 (CIS) | accepted as a cross-reference; M4-22 order unchanged |
 | 24 | Double-booking warning, same person on two jobs one day | **Already v2-e5**. Suggested: a same-firm version (the builder's own crew, no other firm involved) can come first and is not RED. | Yes, V2 E | none |
-| 25 | "Start simple" mode: one job, quote, extras, invoice; the rest hidden until switched on | **Outside V2**: it is screen design for the whole app, so it belongs in the designed-UI plan (DUI). V2's screens sit inside the Work and Records tabs, so they can hide with it. | No | accept or drop, and where |
-| 26 | Job profit so far, in plain words | **v2-k10 (RED: money, hidden findings)**: a running figure from the accepted quote, approved extras and recorded costs. It must never reveal a hidden financial finding before the disclosure rules allow (section 5 "Final Check and pricing"). Depends on v2-c3 and the main sync. | Partly: BP VALUE-1 (value page, not a running margin) | accept or drop |
-| 27 | Aftercare and warranty reminders at 6 and 12 months | **v2-g9**: after handover release (v2-g3), one offer of a check-up visit at 6 and 12 months, if the builder switched it on. Sends follow section 8 decision 2. Sits next to BP M4-20 retention. | No | accept or drop |
+| 25 | "Start simple" mode: one job, quote, extras, invoice; the rest hidden until switched on | **Outside V2**: it is screen design for the whole app, so it belongs in the designed-UI plan (DUI), after its open drafts (#890 to #902) settle. V2's screens sit inside the Work and Records tabs, so they can hide with it. | No | accepted |
+| 26 | Job profit so far, in plain words | **v2-k10 (RED: money, hidden findings)**: a running figure from the accepted quote, approved extras and recorded costs. It must never reveal a hidden financial finding before the disclosure rules allow (section 5 "Final Check and pricing"). Depends on v2-c3 and the main sync. | Partly: BP VALUE-1 (value page, not a running margin) | accepted |
+| 27 | Aftercare and warranty reminders at 6 and 12 months | **v2-g9**: after handover release (v2-g3), one offer of a check-up visit at 6 and 12 months, if the builder switched it on. Sends follow section 8 decision 2. Sits next to BP M4-20 retention. | No | accepted |
+
+## 2C. Full build order from here to the end of V2 (new in 1.3)
+
+Each step starts when what it names is built, under the safety rule in "In plain words". RED and first-cut pieces get Astra's plan check before building. Every send goes only to the local catcher. Only Ben merges RED pieces.
+
+**Step 1, milestone one (A, C, D).** a1, a1-mac, a2, mock, d2 merged. Then c1 → c2 and c3 (repair R1) → c4 and d1 → d3 and d4 → d5a → d5b. Done when d5's done-when passes.
+
+**Step 2, started early alongside step 1.** b1 mock-ups, b1a walk record, b2b1 encrypted photos (practice), e1 open facts, c5 don't-forget prompts (data only, beside c1's template). Outside V2: QW-7 accountant export on main.
+
+**Step 3, once c3 and d1 are merged.** k2 calendar link, k5 deposit and stage invoices, k8 off-hire reminders, k9 RAMS draft, same-firm double-booking warning (first part of e5), g0 certificates checklist (needs e1). b1b walk screen and b1c check-and-correct (need b1a). b2b2 photos linked to rooms (needs b1a), b2c kill and resume (needs b2b1).
+
+**Step 4, once d3 and d4 are merged.** e2 replies, e3 stock position, e7 reminders with delivery chase, k1 share to WhatsApp (after d5b), d4b translated briefs (after its cost decision), k6 merchant email forward (after e3), f1 Done/Blocked/Changed with one-tap photos, f2 proof holds the stage, f8 who was on site, k4 automatic chasing (after e7).
+
+**Step 5, sync main into v2/main.** After milestone one merges. Brings the live-app quick wins (diary, photos on variations, Friday PDF, snag list, handover page, pack calculator) into V2's base.
+
+**Step 6, changes and the customer.** f3 change draft, f4 order already sent, f6 customer approval by link, f7 daywork sheet, e9 choices and PC sums tracker, f5 join with E, k3 Friday customer update (needs f1 and the sync), k10 job profit so far (needs the sync).
+
+**Step 7, tomorrow and crews.** e4 afternoon check, e5 clashes across jobs (RED), e6 apply and tell, e8 Tomorrow screen with the 6pm crew list. For a 1 to 5 person builder, steps 4 and 6 come before this step where both are ready (section 9).
+
+**Step 8, close-out (G).** g1 snag register and g2 to g4 handover, adopting the snag list (QW-4) and handover page (QW-5) from main after the sync. g5 hidden findings stay hidden (RED), g6 close the account, g7 screens, g8 review request, g9 aftercare reminders.
+
+**Step 9, proof (H).** h1 full browser run, h2 real-phone run, h3 second job, h4 interrupt and resume. b1d and b2d device evidence on Ben's phones.
+
+**After V2.** Hosting: the full separation proof from revision 1.1's chunk A, then G1 and the hosted pilot (section 6). Outside V2, in their own plans: quote options (#19), start-simple mode (#25, DUI plan), CIS (BUILD_PLAN.md M4-22), retention reminder (M4-20). Big ideas A to F (section 10) need Ben's decisions first.
 
 ## 3. What people see
 
@@ -307,10 +334,14 @@ Revision 1.3 (24 November) adds section 2A, chunk K and new pieces in E, F and G
 
 ## 8. Decisions for Ben (new in 1.3)
 
+**All decided by Ben on 24 Nov 2026, 20:40 UK: "Agree with you on them all", in reply to the six questions with recommendations in the project chat.** Each decision below took its recommended answer. Decision 6 is idea B in section 10.
+
 1. **Bring BUILD_PLAN.md items forward as V2 practice slices?** Items 1, 3 and 4 already sit in BUILD_PLAN.md (MON-5, M4-18, M2-2 and SV-7B) behind release gates. **Recommended:** yes for practice only. V2 builds the narrow slice; BUILD_PLAN.md stays the plan of record for real use, and its order is not changed by this revision.
 2. **Sends to customers, crew and merchants (items 1, 2, 4, 5, 8, 11, 12, 13).** **Recommended:** build them now with every send going only to the local catcher. Real sends wait for the hosted pilot, G1 and a provider choice for texts and email (D04; a new provider account is Ben's call and may cost money).
 3. **Automatic chasing defaults (item 2).** **Recommended:** builder switches it on once per firm; quotes nudged at day 3 and 7; invoices at 3 and 10 days after due; at most three per item; stop on reply, payment, dispute or the builder's stop; never on a disputed, paid or no-charge-pilot amount.
 4. **Accountant export (item 10): V2 or a live-app quick win?** It needs nothing from V2. **Recommended:** a quick win on main, in practice mode, so it isn't held behind V2's merge to main.
+5. **Second group (section 2B).** **Recommended:** accept all twelve as placed.
+6. **Idea B, live catches instead of the hidden Final Check.** **Recommended:** not now. It changes the fee model; Ben decides later, with Astra's check.
 
 ## 9. Paradigm check (new in 1.3)
 
@@ -326,7 +357,7 @@ Things that change the shape of the plan, not just its list:
 From the review's second pass. None of these is planned here. Each needs Ben's decision, and B also needs Astra's check, before any plan text is written.
 
 - **A. "Talk to the job".** One end-of-day voice note becomes a diary entry, a draft extra with an approval link, a materials enquiry and a change to tomorrow's plan, each a draft the builder approves. Needs the live AI route (BP M0-12a) and speech-to-text (M0-12b), both planned but not built. A first slice could be: voice note to diary entry plus one draft extra, on the existing dictation.
-- **B. Show missed extras live instead of holding them for the Final Check.** **This changes the fee model** (BUILD_PLAN.md §10.2, D13 and the success-fee terms), so it is a commercial decision for Ben, not a plan edit. The contractor track already shows catches live (ENT-8a). V2's rule that hidden findings never leak (d4, g5, k10) stays as written until Ben decides.
+- **B. Show missed extras live instead of holding them for the Final Check.** **Ben, 24 Nov 20:40 UK: not now (decision 6).** **This changes the fee model** (BUILD_PLAN.md §10.2, D13 and the success-fee terms), so it is a commercial decision for Ben, not a plan edit. The contractor track already shows catches live (ENT-8a). V2's rule that hidden findings never leak (d4, g5, k10) stays as written until Ben decides.
 - **C. The homeowner's job tracker.** One customer page, like a delivery tracker, that combines v2-f6, v2-k3, v2-k5 and v2-e9. Builds on BP MON-5.
 - **D. Quote check against the builder's own past jobs.** Needs several finished jobs per builder; item 16 is the starting point. Nearest planned piece: BP M5-6.
 - **E. Merchant price watch across builders.** Needs many builders, consent to pool data (D12) and competition-law care. Later stage; keep the data shape able to support it.
