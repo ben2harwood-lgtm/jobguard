@@ -17,7 +17,10 @@
         "packages/db/src/evidence.ts",
         "packages/db/migrations/0781_variation_revision_photo.sql",
         "packages/db/test/migration-proofs/0781_variation_revision_photo.proof.json",
-        "packages/db/test/variation-revision-photo.integration.test.ts"
+        "packages/db/test/variation-revision-photo.integration.test.ts",
+        "packages/db/test/later-empty-tables.ts",
+        "packages/db/test/migfix-7-upgrade.integration.test.ts",
+        "packages/db/test/plan-entitlement-lifecycle-upgrade.integration.test.ts"
       ]
     }
   }
