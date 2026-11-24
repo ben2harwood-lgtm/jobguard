@@ -13,6 +13,7 @@ export {
   type VerifiedTenantContext,
 } from "./tenant-context.js";
 export * from "./evidence.js";
+export * from "./site-day-summary-repository.js";
 
 export * from "./job-repository.js";
 

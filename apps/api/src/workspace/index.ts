@@ -88,6 +88,7 @@ export * from "../recovery-allocation.contracts.js";
 export * from "../job-source.application.js";
 export * from "../job-source.contracts.js";
 export * from "../job-source.errors.js";
+export * from "../site-day-summary.application.js";
 
 export * from "../plan-entitlements.application.js";
 export * from "../contractor/practice-worker-switch.application.js";
