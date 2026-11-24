@@ -9,6 +9,12 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 
 > **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
 
+## Dry-check against the code (planner, 25 Nov 00:10 UK)
+**Verified, with exact routes.** E1 (#919) has `app.v2_open_fact` with `kind = 'customer_choice'` (`choice_question`, `choice_may_change_price`). The existing variation route is `POST jobs/:id/variations` with `variation-command.v1` (`apps/api/src/variation/contracts.ts`).
+- **Over the allowance:** `action: "propose"`, with `price` given as `quantity`, `unit`, `unitRatePence` (an integer number of pence) and `direction: "addition"`. Existing money format; no new rounding.
+- **Back under the allowance:** close the open proposal with the builder's `action: "reject"`. Never send `"approve"`.
+- If the builder can't reject their own proposal on this base, stop and report.
+
 ## Goal
 Each customer choice (tiles, sanitaryware, worktop, paint) has an allowance (for example tiles at £25/m²) and a "decide by" date. If the choice goes over the allowance, a variation is **drafted** for the difference, never committed.
 

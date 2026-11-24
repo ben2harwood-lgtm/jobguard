@@ -6,6 +6,9 @@ Tier: T1 (read-only check, no table). Rework risk: **medium** (c3 is under its f
 Plan: rev 1.3 section 2B item 24 and piece v2-e5 ("a same-firm version can come first and is not RED").
 **Starts when:** R2 has pushed `codex/sandbox/v2-c3` (an audit commit after `2d92684`). **Base:** that c3 head. Draft PR against `codex/sandbox/v2-c3`.
 
+## Dry-check against the code (planner, 25 Nov 00:10 UK)
+**Parked until C3C.** "The same person" can't be told apart while the assignee is free text that may be empty (c3 `v2-work-plan-edits.ts` line 9). Matching on names would give false warnings for two people with the same name and miss one person entered under two spellings. Don't build until C3C binds an assignment to a crew record.
+
 ## Goal
 When the builder assigns a person to a task on a day when that same person already has a task on another job **of the same firm**, the Plan screen shows a plain warning. It never blocks the edit.
 

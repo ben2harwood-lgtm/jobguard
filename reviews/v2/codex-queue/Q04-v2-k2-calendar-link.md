@@ -9,6 +9,9 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 
 > **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
 
+## Dry-check against the code (planner, 25 Nov 00:10 UK)
+**Cut to K2A: a builder-only feed for the whole job.** On c3 the assignee is free text that can be empty (`packages/db/src/v2-work-plan-edits.ts` line 9: `assignee: z.string()...nullable()`), and c4's editor accepts any name. So a per-crew feed filtered by name could mix up two people with the same name. K2A gives the builder one private calendar link for the job, listing every task that has a `scheduledDate`, with each task's trade and assignee text shown as written. There is **no crew feed and no filtering by assignee**. Crew feeds come after **C3C** (crew binding on task assignment, a later RED packet). Ignore any crew-feed lines below this note.
+
 ## Goal
 A private calendar feed of the work plan: the builder sees every task, a crew member only their own tasks, the customer only the days work happens at their home. No prices.
 

@@ -22,7 +22,7 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | 4 | Q14 | V2-K6A merchant invoice forward, routing only on the unchanged intake (real files = K6B, later, Astra first) | ★★ | S | now | `v2/main` | 2023 | RED | low |
 | 5 | Q11 | V2-K5A payment schedule, no invoices (drafting and issuing = K5B, later, Astra first) | ★★ | S | R2 has pushed c3 | new c3 | 2012 | RED money | medium |
 | 6 | Q15 | V2-K3 Friday customer update | ★★ | S | V2-M2 mock-up checked (photo case waits for V2-PX) | new c3 | 2021 | RED | medium |
-| 7 | Q04 | V2-K2 calendar link | ★★ | S | R2 has pushed c3 | `codex/sandbox/v2-c4` merged with new c3 | 2017 | RED | medium |
+| 7 | Q04 | V2-K2A builder-only calendar feed for the whole job (crew feeds after C3C) | ★★ | S | R2 has pushed c3 | `codex/sandbox/v2-c4` merged with new c3 | 2017 | RED | medium |
 | 8 | Q16 | V2-K10 job profit so far | ★★ | S | R2 has pushed c3 | new c3 | none | RED | medium |
 | 9 | Q01 | V2-D1R1 audit append on measurement saves (safety fix) | ★ | S | R2 has pushed c3 | `codex/sandbox/v2-d1` | none | RED | low |
 | 10 | Q05 | V2-K8 off-hire reminders | ★★ | S | R2 has pushed c3 | new c3 | 2010 | RED | medium |
@@ -32,13 +32,16 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | 14 | Q06 | V2-K9 RAMS and construction phase plan draft | ★★ | M | V2-M2 mock-up checked | new c3 | 2011 | RED | medium |
 | 15 | Q08 | V2-E2 replies to open facts | ★ | M | V2-M2 mock-up checked | E1 #919 | 2013 | RED | high |
 | 16 | Q07 | V2-E3 stock position | ★ | M | now | D3 #912 | 2014 | RED | high |
-| 17 | Q02 | V2-E5A same-firm double-booking warning (multi-crew, later) | ★ | S | R2 has pushed c3 | `codex/sandbox/v2-c3` | none | T1 | medium |
+| 17 | Q02 | V2-E5A same-firm double-booking warning (multi-crew, later) | ★ | S | **parked: C3C crew binding** | `codex/sandbox/v2-c3` | none | T1 | medium |
 
 Every RED packet also needs Astra's plan check before the PR is called ready (rule 13); building can start before it lands.
 
 Why this order: the three "now" pieces at the top (F6, K4, K6) are the review's biggest time savers and sit on merged code, so they can't be wasted by a later repair. Money and customer pieces on the new c3 come next as soon as R2 lands. Pieces stacked on unchecked branches (E9, F1, E2, E3) go after, because they carry the most redo risk. Multi-crew planning (E5A, and E4 to E6 outside this queue) goes last.
 
 V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
+
+## Dry-checked against the code (25 Nov 00:10 UK)
+Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, each with a dated note at the top of its packet. Re-scoped: **K2 → K2A** (builder-only feed). Parked: **E5A** (waits for C3C). Not yet dry-checked: the pieces waiting on V2-M2 (K3, E2, K9, F1, F8). They get checked before they're released.
 
 ## Migration numbers (one list; checked against every branch 24 Nov 22:15 UK)
 2001 practice quote (main) · 2002 to 2005 c-chain and d1 · 2006 D3 #912 · 2007 D4 #916 · 2008 B1A #920 · 2009 E1 #919 · 2010 K8 · 2011 K9 · 2012 K5 · 2013 E2 · 2014 E3 · 2015 F1 · 2016 F8 · 2017 K2 · 2018 F6 #923 · 2019 K4 · **2020 C3B #922** · 2021 K3 · 2022 E9 · **2023 K6A** (moved from 2020) · next free: **2024**. A builder that needs a number not listed here stops and asks; it never takes the next one itself.

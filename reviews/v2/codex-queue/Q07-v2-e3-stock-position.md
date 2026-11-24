@@ -6,6 +6,12 @@ Tier: **RED** (new table). Migration **2014**. Astra: yes. Rework risk: **high**
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-e3.
 **Starts:** now. **Base:** D3's branch `claude/project-thread-8zze8p` (#912). Draft PR against it. Merge D3 again when it moves. Do not edit D3's files; read its enquiry lines and stock set aside.
 
+## Dry-check against the code (planner, 25 Nov 00:10 UK)
+**Verified, with decisions made.**
+- **Delivery key:** key each delivery to D3's material line `(job_id, scope_item_id, line_key)` (`app.v2_material_line`, 2006). The set-aside packs come from D3's repository (`setAsidePacks`, a whole-number string).
+- **Goods receipt:** don't reuse main's `goodsReceiptV1`, because it needs a supplier document from the fixture intake. Keep the delivery table separate; the reason is now recorded here.
+- **Migration path:** `packages/db/migrations/2014_...sql`.
+
 ## Goal
 A delivery date is only a forecast. Only a confirmed delivery or goods receipt puts stock on site.
 

@@ -6,6 +6,9 @@ Tier: **RED** (new table, money figures). Migration **2010**. Astra: yes. Rework
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-k8, section 2B item 18.
 **Starts when:** R2 has pushed c3. **Base:** that c3 head. Draft PR against `codex/sandbox/v2-c3`.
 
+## Dry-check against the code (planner, 25 Nov 00:10 UK)
+**Verified, with one change.** c3 tasks have **no "done" status** (task fields are position, durationMinutes, trade, scheduledDate and assignee only; done arrives with F1). So the reminder fires when **every linked task's `scheduledDate` has passed** (date only; a linked task with no date never fires it), **or** when a builder-set "needed until" date on the hire item has passed. Link tasks by their c3 key `(quote_revision_id, scope_item_id, template_task_key)`. Put the migration where c3 and D3 put theirs: `packages/db/migrations/2010_...sql` plus a note and proof file.
+
 ## Goal
 The builder records hired items on a job and is reminded to off-hire them when the work that needs them is done, so they stop paying for idle scaffold.
 
