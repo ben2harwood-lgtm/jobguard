@@ -127,15 +127,34 @@ CREATE FUNCTION app.snag_replay(t uuid,j uuid,c uuid,k text,h text,actor uuid) R
 DECLARE earlier app.snag_command;
 BEGIN
  IF c IS NULL THEN RAISE EXCEPTION 'SNAG_INVALID' USING ERRCODE='22023'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(t::text||':'||c::text,782));
+ -- Snag command ids share the tenant-wide command namespace (Codex P1 4685299253): the same per-id lock every
+ -- watchdog claim takes, then an id already claimed there (a photo step, any other command) conflicts.
+ PERFORM pg_advisory_xact_lock(hashtextextended('watchdog-command-id:'||lower(t::text)||':'||lower(c::text),0));
  SELECT * INTO earlier FROM app.snag_command WHERE tenant_id=t AND command_id=c;
- IF earlier.command_id IS NULL THEN RETURN NULL; END IF;
+ IF earlier.command_id IS NULL THEN
+  IF EXISTS(SELECT 1 FROM app.watchdog_command_identity w WHERE w.tenant_id=t AND w.command_id=c)
+  THEN RAISE EXCEPTION 'SNAG_COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
+  RETURN NULL;
+ END IF;
  IF earlier.job_id<>j OR earlier.kind<>k OR earlier.request_hash<>h OR earlier.actor_membership_id<>actor
  THEN RAISE EXCEPTION 'SNAG_COMMAND_CONFLICT' USING ERRCODE='23505'; END IF;
  RETURN earlier.result;
 END $$;
 ALTER FUNCTION app.snag_replay(uuid,uuid,uuid,text,text,uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.snag_replay(uuid,uuid,uuid,text,text,uuid) FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+
+-- The other direction: a watchdog claim (such as a photo begin or finalize) of an id a snag command already used
+-- conflicts. The claim holds the same per-id lock first, so a snag command cannot slip in between.
+CREATE FUNCTION app.snag_reserved_command_id() RETURNS trigger
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM app.snag_command s WHERE s.tenant_id=NEW.tenant_id AND s.command_id=NEW.command_id)
+ THEN RAISE EXCEPTION 'IDEMPOTENCY_CONFLICT' USING ERRCODE='23505'; END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.snag_reserved_command_id() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.snag_reserved_command_id() FROM PUBLIC,jobguard_runtime,jobguard_identity,jobguard_infrastructure;
+CREATE TRIGGER c_snag_command_id_before_insert BEFORE INSERT ON app.watchdog_command_identity FOR EACH ROW EXECUTE FUNCTION app.snag_reserved_command_id();
 
 -- Every fresh snag outcome appends to the tenant audit chain in the same transaction
 -- (AGENTS.md 5.7). The payload holds identifiers and hashes only, never the snag's text.

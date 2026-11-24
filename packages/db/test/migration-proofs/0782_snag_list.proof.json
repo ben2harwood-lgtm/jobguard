@@ -395,6 +395,25 @@
       "section": "routines",
       "before": null,
       "after": {
+        "identity": "function:app.snag_reserved_command_id()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
         "identity": "function:app.snag_revise(uuid,uuid,uuid,integer,text,text,text,date)",
         "owner": "jobguard_migration",
         "securityDefiner": true,
@@ -519,6 +538,11 @@
       "section": "triggers",
       "before": null,
       "after": "app.snag_revision|snag_revision_no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.watchdog_command_identity|c_snag_command_id_before_insert|app.snag_reserved_command_id|BEFORE INSERT|O"
     }
   ],
   "upgrade": [
@@ -790,6 +814,21 @@
         "nspname": "app",
         "proname": "snag_replay",
         "args": "t uuid, j uuid, c uuid, k text, h text, actor uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "snag_reserved_command_id",
+        "args": "",
         "proowner": "jobguard_migration",
         "proacl": "{jobguard_migration=X/jobguard_migration}",
         "prosecdef": true,

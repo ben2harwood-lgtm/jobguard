@@ -106,6 +106,21 @@ describe("QW-4 snag flow", () => {
 });
 
 describe("QW-4 snag photos", () => {
+  it("shares the tenant-wide command id namespace with photo steps, in both directions (Codex P1 4685299253)", async () => {
+    const a = await seedFinalCheckJob(f), snagId = await addSnag(a), r = repo(a);
+    // A snag command id cannot then start a photo upload.
+    const used = randomUUID();
+    await event(a, snagId, "mark_fixed", used);
+    await refused(r.photo(a.context, a.jobId, snagId, { version: "snag-photo.v1", action: "begin", commandId: used, fixture: "completion-photo" }), "SNAG_COMMAND_CONFLICT");
+    // A photo step's id cannot then be a snag command.
+    const begun = await r.photo(a.context, a.jobId, snagId, { version: "snag-photo.v1", action: "begin", commandId: randomUUID(), fixture: "completion-photo" });
+    await refused(event(a, snagId, "reopen", begun.uploadId), "SNAG_COMMAND_CONFLICT");
+    await refused(r.add(a.context, a.jobId, { version: "snag.v1", action: "add", commandId: begun.uploadId, snagId: randomUUID(), ...details }), "SNAG_COMMAND_CONFLICT");
+    const [row] = await r.read(a.context, a.jobId);
+    expect(row!.events.map(e => e.kind)).toEqual(["fixed"]);
+    expect((await r.read(a.context, a.jobId))).toHaveLength(1);
+  });
+
   it("links verified photos in order and refuses a seventh", async () => {
     const a = await seedFinalCheckJob(f), snagId = await addSnag(a);
     const ids: string[] = [];

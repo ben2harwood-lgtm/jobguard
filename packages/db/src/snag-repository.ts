@@ -12,6 +12,7 @@ function snagRefusal(error: unknown): never {
   const message = error instanceof Error ? error.message : "";
   if ((snagErrorCodes as readonly string[]).includes(message)) throw new SnagError(message as SnagErrorCode);
   if (message === "SNAG_INVALID") throw new SnagError("INVALID_SNAG_INPUT");
+  if (message === "IDEMPOTENCY_CONFLICT") throw new SnagError("SNAG_COMMAND_CONFLICT");
   if (message === "JOB_NOT_LIVE") throw new WatchdogError("JOB_NOT_LIVE");
   if (message === "JOB_NOT_FOUND") throw new SnagError("SNAG_NOT_FOUND");
   throw error;
