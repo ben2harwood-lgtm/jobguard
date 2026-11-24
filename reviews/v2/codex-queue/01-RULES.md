@@ -1,0 +1,16 @@
+# Rules for every packet in the Codex queue
+
+1. **Before you start**, check GitHub for an existing branch or PR for the piece. If one exists, stop and report.
+2. **Branch** `codex/sandbox/v2-<piece>` (for example `codex/sandbox/v2-k8`). Open a **draft** PR against the named base. Never target main. Never rebase or force-push; take a moving base by merging it in.
+3. **Lane file** `config/lanes/v2-<piece>.json` listing exactly the files you change and your branch. Run lane lint with `LANE_BASE_REF=origin/<base branch>`.
+4. **Do not edit files another builder owns tonight:** c1 to c3 source files (R2 is finishing c2 and c3), d1 source files (D1R1), and the D3, D4, E1, B1A, D5A, B1 mock and CI1 files. Read them, call them, never change them. If a piece can't be done without changing one, stop and report.
+5. **Shared files** (`tools/v2/bootstrap.mjs`, `tools/v2/seed.integration.test.mjs`, `packages/db/test/purchase-order-audit.integration.test.ts`, `packages/db/src/index.ts`, `apps/api/src/workspace/application.ts`, `apps/api/src/workspace/index.ts`): add only your own entries as a separate block; never edit or reorder others'. Integration order is D3 → D4 → B1A → E1 → this queue's order. The later piece resolves conflicts.
+6. **Migrations:** use only the number reserved for your piece in `00-QUEUE.md`. RLS enabled and forced, same helpers and job-visibility rule as 2002 to 2006, least-privilege grants, purchase-order-audit deferral entry, migration notes and proof file. Any new table makes the piece RED and needs a second-firm test (select, insert, update and delete none of the rows).
+7. **Audit chain (AGENTS.md rev 3.0 §5.7):** every command that changes data appends exactly one event with `appendAuditBatch` (`packages/db/src/audit.ts`) in the **same transaction**: `audit.v1`, actor `membership:<id>`, a `v2.<thing>.<verb>` event type, a subject, payload references with the command ID. **Never use the key `version` in payload references.** A replay appends nothing. Pattern: D3's commit `885b59c`. Test it: a forced failure after the insert leaves neither row nor event.
+8. **Every command** carries person, time, job, expected version and replay identity (plan section 5). Same replay key with changed content is refused.
+9. **No real sends.** Anything outbound goes only to the V2 local catcher (`captureV2Delivery`). Zero paid AI calls. V2 only (`JOBGUARD_LOCAL_V2 === "1"`, `synthetic_demo`); non-V2 behaviour unchanged, with a test.
+10. **Hidden financial findings** never reach a brief, a customer-visible text, a feed or an audit payload.
+11. **Screens** follow the checked mock-ups and section 3 of the plan; Playwright at 360 and 1280 px, including the phone-mode run on this Mac.
+12. **Tests:** real PostgreSQL with the V2 seed for anything with a table. Don't weaken, skip or delete any test. Run typecheck and lint.
+13. **Finish:** push, put the head SHA, commands and counts in the PR body, add the line "Rework risk: <low|medium|high>", and for pieces marked Astra add "Not ready for Ben: waiting for Astra's plan check". Do **not** ask Codex to review its own build: a Claude session checks it. One build plus up to two repairs, then stop and report.
+14. Follow AGENTS.md rev 3.0 on main and the Keep It Simple rule: smallest clear change, reuse existing code.

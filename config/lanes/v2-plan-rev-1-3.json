@@ -2,11 +2,18 @@
   "version": 2,
   "lanes": {
     "v2-plan-rev-1-3": {
-      "branches": ["claude/project-thread-cw5qv5"],
-      "note": "Plan only, no code. Saves V2 build plan rev 1.2 (copied unchanged from coordinator/briefs-1120) and adds rev 1.3 on v2/main. The validator includes config/lanes/v2-plan-rev-1-3.json implicitly.",
+      "branches": [
+        "claude/project-thread-cw5qv5"
+      ],
+      "note": "Plan only, no code. V2 build plan rev 1.2 (copied unchanged) and rev 1.3 on v2/main, plus the overnight Codex queue packets under reviews/v2/codex-queue/. The validator includes config/lanes/v2-plan-rev-1-3.json implicitly.",
       "allow": [
         "reviews/v2/JobGuard-V2-Build-Plan-rev-1.2.md",
-        "reviews/v2/JobGuard-V2-Build-Plan-rev-1.3.md"
+        "reviews/v2/JobGuard-V2-Build-Plan-rev-1.3.md",
+        "reviews/v2/codex-queue/00-QUEUE.md",
+        "reviews/v2/codex-queue/01-RULES.md",
+        "reviews/v2/codex-queue/Q01-v2-d1r1-measurement-audit.md",
+        "reviews/v2/codex-queue/Q02-v2-e5a-same-firm-double-booking.md",
+        "reviews/v2/codex-queue/Q03-v2-d5b-materials-briefs-screens.md"
       ]
     }
   }
