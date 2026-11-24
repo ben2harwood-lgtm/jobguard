@@ -34,6 +34,7 @@ export type CrewBriefContent = {
   accessWindow: string;
   tasks: {
     position: number;
+    scopeItemId: string;
     title: string;
     scope: { description: string; quantity: string | null; unit: string | null };
     durationMinutes: number;
@@ -251,7 +252,7 @@ export class CrewBriefRepository {
       version: "v2-crew-brief.v1", trade, quoteRevisionId: plan.quoteRevisionId, accessWindow,
       tasks: tasks.map((task, index) => {
         const source = plan.sources.get(task.scopeItemId)!;
-        return { position: index + 1, title: task.title,
+        return { position: index + 1, scopeItemId: task.scopeItemId, title: task.title,
           scope: { description: source.description, quantity: source.quantity, unit: source.unit },
           durationMinutes: task.durationMinutes, visit: task.scheduledDate ?? null, owner: task.assignee ?? null,
           proofNeeded: [...task.proofPoints] };

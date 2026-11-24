@@ -904,11 +904,11 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
     version: "v2-crew-brief.v1", trade: "tiler", quoteRevisionId,
     accessWindow: "Weekdays 08:30 to 16:00, key from the fictional neighbour",
     tasks: [
-      { position: 1, title: "Prepare the splashback surface",
+      { position: 1, scopeItemId: tilingId, title: "Prepare the splashback surface",
         scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
         durationMinutes: 60, visit: visit("prepare-splashback"), owner: assignee("prepare-splashback"),
         proofNeeded: ["Photo of the prepared surface"] },
-      { position: 2, title: "Fit and grout the splashback",
+      { position: 2, scopeItemId: tilingId, title: "Fit and grout the splashback",
         scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
         durationMinutes: 240, visit: visit("tile-splashback"), owner: assignee("tile-splashback"),
         proofNeeded: ["Photo of the finished splashback"] },
@@ -920,6 +920,7 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
   assert.deepEqual(decorator.content.tasks.map(task => task.title),
     ["Protect and prepare the hall", "Paint the hall walls and trim"]);
   assert.deepEqual(decorator.content.photos.map(photo => photo.evidenceId), [hallPhoto]);
+  assert.deepEqual(decorator.content.tasks.map(task => task.scopeItemId), [decoratingId, decoratingId]);
   assert.deepEqual([...first.content.tasks, ...decorator.content.tasks].filter(task => task.owner)
     .map(({ visit: date, owner: name }) => [date, name]), [["2026-12-09", "Fictional Tiler"]]);
   const { rows: rates } = await admin.query("SELECT unit_rate_pence::text AS rate FROM app.quote_line WHERE quote_revision_id = $1",
