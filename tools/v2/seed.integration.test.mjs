@@ -825,3 +825,211 @@ test("forced measurement policies hide revisions and reject changes from the sec
   }
   assert.equal((await runtime.query(select, key)).rowCount, 0);
 });
+
+const briefQuery = { version: "v2-crew-brief-query.v1" };
+
+async function plantPhoto(targetJobId, scopeItemId, contentType = "image/jpeg") {
+  const uploadId = randomUUID();
+  const evidenceId = randomUUID();
+  const sha = randomUUID().replaceAll("-", "").repeat(2);
+  const objectKey = `v2-brief-test/${evidenceId}`;
+  // Stands in for photos verified on site while the job was live. An earlier test
+  // has since closed the seeded job, so skip the site-work triggers for this fixture only.
+  await admin.query("BEGIN");
+  try {
+    await admin.query("SET LOCAL session_replication_role = replica");
+    await admin.query(`INSERT INTO app.evidence_upload (id, tenant_id, job_id, scope_item_id, object_key, expected_sha256,
+      expected_content_type, maximum_bytes, retention_class, state, object_version_id, server_verified_at, expires_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,1024,'standard_evidence','verified','v1',now(),now() + interval '1 day')`,
+    [uploadId, DEMO_TENANT_ID, targetJobId, scopeItemId, objectKey, sha, contentType]);
+    await admin.query(`INSERT INTO app.evidence_object (id, tenant_id, upload_id, job_id, scope_item_id, kind, evidence_type,
+      object_key, object_version_id, sha256, byte_length, content_type, retention_class, server_received_at, server_verified_at)
+      VALUES ($1,$2,$3,$4,$5,'original','photo',$6,'v1',$7,512,$8,'standard_evidence',now(),now())`,
+    [evidenceId, DEMO_TENANT_ID, uploadId, targetJobId, scopeItemId, objectKey, sha, contentType]);
+    await admin.query("COMMIT");
+  } catch (error) {
+    await admin.query("ROLLBACK");
+    throw error;
+  }
+  return evidenceId;
+}
+
+async function briefSetup() {
+  const owner = await signIn("builder");
+  const { crewBriefs, workPlan } = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const { quoteRevisionId } = await acceptedPlanSource();
+  const { rows: scope } = await admin.query(`SELECT scope_item_id, category FROM app.quote_line
+    WHERE (tenant_id, job_id, quote_revision_id) = ($1, $2, $3) AND included`, [DEMO_TENANT_ID, jobId, quoteRevisionId]);
+  const tilingId = scope.find(line => line.category === "Tiling").scope_item_id;
+  const decoratingId = scope.find(line => line.category === "Decorating").scope_item_id;
+  const command = (trade, fields = {}) => ({ version: "v2-crew-brief-command.v1", commandId: randomUUID(), trade,
+    expectedVersion: 0, accessWindow: "Weekdays 08:30 to 16:00, key from the fictional neighbour", photoIds: [], ...fields });
+  return { owner, crewBriefs, workPlan, quoteRevisionId, tilingId, decoratingId, command };
+}
+
+const briefRows = async () => (await admin.query(`SELECT
+  (SELECT count(*)::int FROM app.v2_crew_brief WHERE job_id = $1) AS briefs,
+  (SELECT count(*)::int FROM app.v2_crew_brief_photo WHERE job_id = $1) AS photos`, [jobId])).rows[0];
+
+test("each trade's unpriced brief has only its own tasks and picked photos, and generating twice keeps one current brief", async () => {
+  const { owner, crewBriefs, workPlan, quoteRevisionId, tilingId, decoratingId, command } = await briefSetup();
+  const before = await effectCounts();
+  assert.deepEqual(await crewBriefs.read(jobId, briefQuery), []);
+  const tilerPhoto = await plantPhoto(jobId, tilingId);
+  const hallPhoto = await plantPhoto(jobId, decoratingId);
+  const pdf = await plantPhoto(jobId, tilingId, "application/pdf");
+  const { rows: [other] } = await admin.query("SELECT id FROM app.job WHERE tenant_id = $1 AND id <> $2 LIMIT 1",
+    [DEMO_TENANT_ID, jobId]);
+  const elsewhere = await plantPhoto(other.id, null);
+  for (const photoIds of [[pdf], [elsewhere], [randomUUID()]]) {
+    await assert.rejects(crewBriefs.generate(jobId, command("tiler", { photoIds })), { code: "CREW_BRIEF_PHOTO_NOT_FOUND" });
+  }
+  await assert.rejects(crewBriefs.generate(jobId, command("plumber")), { code: "CREW_BRIEF_TRADE_NOT_FOUND" });
+  for (const bad of [{ photoIds: [tilerPhoto, tilerPhoto] }, { accessWindow: " " }, { trade: "" }, { price: 1 }]) {
+    await assert.rejects(crewBriefs.generate(jobId, command("tiler", bad)), { code: "CREW_BRIEF_INVALID_COMMAND" });
+  }
+
+  const tiler = command("tiler", { photoIds: [tilerPhoto] });
+  const [first, replay] = await Promise.all([crewBriefs.generate(jobId, tiler), crewBriefs.generate(jobId, tiler)]);
+  assert.deepEqual(replay, first);
+  assert.equal(first.version, 1);
+  assert.equal(first.actorMembershipId, owner.membershipId);
+  assert.deepEqual(first.content, {
+    version: "v2-crew-brief.v1", trade: "tiler", quoteRevisionId,
+    accessWindow: "Weekdays 08:30 to 16:00, key from the fictional neighbour",
+    tasks: [
+      { position: 1, title: "Prepare the splashback surface",
+        scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
+        durationMinutes: 60, visit: "2026-12-09", owner: "Fictional Tiler", proofNeeded: ["Photo of the prepared surface"] },
+      { position: 2, title: "Fit and grout the splashback",
+        scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
+        durationMinutes: 240, visit: null, owner: null, proofNeeded: ["Photo of the finished splashback"] },
+    ],
+    photos: [{ evidenceId: tilerPhoto, scopeItemId: tilingId, contentType: "image/jpeg" }],
+    proofNeeded: ["Photo of the prepared surface", "Photo of the finished splashback"],
+  });
+  const decorator = await crewBriefs.generate(jobId, command("decorator", { photoIds: [hallPhoto] }));
+  assert.deepEqual(decorator.content.tasks.map(task => task.title),
+    ["Protect and prepare the hall", "Paint the hall walls and trim"]);
+  assert.deepEqual(decorator.content.photos.map(photo => photo.evidenceId), [hallPhoto]);
+  const { rows: rates } = await admin.query("SELECT unit_rate_pence::text AS rate FROM app.quote_line WHERE quote_revision_id = $1",
+    [quoteRevisionId]);
+  for (const brief of [first, decorator]) {
+    const text = JSON.stringify(brief.content);
+    assert.doesNotMatch(text, /pence|price|rate|total|£|cost|fee/iu);
+    for (const { rate } of rates) assert.ok(!text.includes(rate), rate);
+  }
+
+  // Same inputs again: still one current brief. Stale or altered commands are refused.
+  const again = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: 1, photoIds: [tilerPhoto] }));
+  assert.deepEqual(again, first);
+  assert.deepEqual(await briefRows(), { briefs: 2, photos: 2 });
+  await assert.rejects(crewBriefs.generate(jobId, { ...tiler, accessWindow: "Weekends" }), { code: "CREW_BRIEF_COMMAND_CONFLICT" });
+  await assert.rejects(crewBriefs.generate(jobId, command("tiler", { photoIds: [] })), { code: "CREW_BRIEF_VERSION_CONFLICT" });
+  const revised = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: 1, photoIds: [], accessWindow: "Mornings only" }));
+  assert.equal(revised.version, 2);
+  assert.deepEqual(revised.content.photos, []);
+  assert.equal(revised.content.accessWindow, "Mornings only");
+
+  const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
+  const { crewBriefs: reopened } = createWorkspaceApplication({ pool: runtime, sessionId: fresh.sessionId });
+  assert.deepEqual(await reopened.read(jobId, briefQuery), [
+    { ...decorator, current: true }, { ...revised, current: true },
+  ]);
+  assert.deepEqual(await reopened.generate(jobId, tiler), first);
+
+  // A plan change leaves the stored brief intact but no longer current.
+  const plan = await workPlan.read(jobId, planQuery);
+  const task = plan.tasks.find(item => item.trade === "tiler" && item.key === "tile-splashback");
+  await workPlan.edit(jobId, planEdit(plan, task, { scheduledDate: "2026-12-10" }));
+  const [stale] = await reopened.read(jobId, { ...briefQuery, trade: "tiler" });
+  assert.deepEqual(stale, { ...revised, current: false });
+  const refreshed = await reopened.generate(jobId, command("tiler", { expectedVersion: 2, accessWindow: "Mornings only" }));
+  assert.equal(refreshed.version, 3);
+  assert.equal(refreshed.content.tasks[1].visit, "2026-12-10");
+
+  assert.deepEqual(await effectCounts(), before);
+  const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
+    FROM app.job_record_proposal WHERE model IS DISTINCT FROM 'fixture-capture-v1'`);
+  assert.equal(paid, 0);
+});
+
+test("a planted hidden financial finding leaves the exported briefs byte-identical", async () => {
+  const { crewBriefs, command } = await briefSetup();
+  const [decorator, tiler] = await crewBriefs.read(jobId, briefQuery);
+  const exports = () => Promise.all(["decorator", "tiler"].map(trade => crewBriefs.exportInternal(jobId, trade)));
+  const clean = await exports();
+  const rebuild = () => Promise.all([decorator, tiler].map(brief => crewBriefs.generate(jobId, command(brief.trade, {
+    expectedVersion: brief.version, accessWindow: brief.content.accessWindow,
+    photoIds: brief.content.photos.map(photo => photo.evidenceId) }))));
+  const cleanRebuild = await rebuild();
+  const rows = await briefRows();
+  const findings = await admin.query(`SELECT
+    (SELECT count(*)::int FROM app.commercial_integrity_value_fact) AS values,
+    (SELECT count(*)::int FROM app.commercial_integrity_activity_fact) AS activities`);
+
+  // The hidden finding: a final value far below the accepted value, plus an outside-app settlement.
+  await admin.query(`INSERT INTO app.commercial_integrity_value_fact
+    (id, tenant_id, job_id, value_kind, net_value_pence, currency, source_ref, occurred_at, synthetic)
+    VALUES ($1, $2, $3, 'final', 1, 'GBP', $4, now(), true)`, [randomUUID(), DEMO_TENANT_ID, jobId, randomUUID()]);
+  await admin.query(`INSERT INTO app.commercial_integrity_activity_fact (id, tenant_id, job_id, activity_kind, occurred_at, synthetic)
+    VALUES ($1, $2, $3, 'outside_app_settlement', now(), true)`, [randomUUID(), DEMO_TENANT_ID, jobId]);
+  const planted = await admin.query(`SELECT
+    (SELECT count(*)::int FROM app.commercial_integrity_value_fact) AS values,
+    (SELECT count(*)::int FROM app.commercial_integrity_activity_fact) AS activities`);
+  assert.deepEqual(planted.rows[0], { values: findings.rows[0].values + 1, activities: findings.rows[0].activities + 1 });
+
+  assert.deepEqual(await exports(), clean);
+  assert.deepEqual(await rebuild(), cleanRebuild);
+  assert.deepEqual(await crewBriefs.read(jobId, briefQuery), [decorator, tiler]);
+  assert.deepEqual(await briefRows(), rows);
+  const exported = JSON.parse(clean[1]);
+  assert.deepEqual(exported, { version: "v2-crew-brief-export.v1", environment: "synthetic_demo",
+    notice: "Practice sandbox — synthetic data; nothing is sent or charged", brief: tiler.content });
+});
+
+test("forced crew brief policies hide briefs and photos and reject changes from the second firm", async () => {
+  const { owner, command } = await briefSetup();
+  const outsider = await signIn("second-builder");
+  const { crewBriefs } = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  await assert.rejects(crewBriefs.read(jobId, briefQuery), { code: "NOT_FOUND" });
+  await assert.rejects(crewBriefs.generate(jobId, command("tiler", { expectedVersion: 3 })), { code: "NOT_FOUND" });
+  await assert.rejects(crewBriefs.exportInternal(jobId, "tiler"), { code: "NOT_FOUND" });
+
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+  const { rows: [photo] } = await admin.query("SELECT * FROM app.v2_crew_brief_photo WHERE job_id = $1 LIMIT 1", [jobId]);
+  for (const table of ["app.v2_crew_brief", "app.v2_crew_brief_photo"]) {
+    const { rows: [acl] } = await admin.query(`SELECT
+      relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read,
+      has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
+      has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+      has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+      has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+      has_table_privilege('jobguard_infrastructure', oid, 'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+      FROM pg_class WHERE oid = $1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+      identity_access: false, worker_access: false, infra_access: false });
+    const select = `SELECT * FROM ${table} WHERE (tenant_id, job_id) = ($1, $2)`;
+    assert.ok((await query(ownerContext, select, [DEMO_TENANT_ID, jobId])).rowCount > 0);
+    for (const scope of [outsider.realContext, context]) {
+      assert.equal((await query(scope, select, [DEMO_TENANT_ID, jobId])).rowCount, 0);
+      await assert.rejects(query(scope, `UPDATE ${table} SET trade = 'tiler' WHERE job_id = $1`, [jobId]), { code: "42501" });
+      await assert.rejects(query(scope, `DELETE FROM ${table} WHERE job_id = $1`, [jobId]), { code: "42501" });
+    }
+    assert.equal((await runtime.query(select, [DEMO_TENANT_ID, jobId])).rowCount, 0);
+  }
+  for (const scope of [outsider.realContext, context]) {
+    await assert.rejects(query(scope, `INSERT INTO app.v2_crew_brief (tenant_id, job_id, trade, expected_version, command_id,
+      quote_revision_id, access_window, content, actor_membership_id)
+      VALUES ($1, $2, 'tiler', 99, $3, $5, 'Any time', '{}', $4)`,
+    [DEMO_TENANT_ID, jobId, randomUUID(), owner.membershipId, (await acceptedPlanSource()).quoteRevisionId]),
+    { code: "42501", message: /row-level security policy/u });
+    await assert.rejects(query(scope, `INSERT INTO app.v2_crew_brief_photo
+      (tenant_id, job_id, trade, expected_version, position, evidence_id) VALUES ($1, $2, $3, $4, 20, $5)`,
+    [DEMO_TENANT_ID, jobId, photo.trade, photo.expected_version, photo.evidence_id]),
+    { code: "42501", message: /row-level security policy/u });
+  }
+});
