@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "tommy-demo-1": {
+      "branches": [
+        "claude/project-thread-qytlkj"
+      ],
+      "allow": [
+        "apps/web/**",
+        "apps/api/**",
+        "packages/db/src/**",
+        "packages/core/**"
+      ],
+      "note": "Tommy demo hardening on top of DUI-1a..DUI-6 (draft PR #918). No migrations. Registration: config/lanes/tommy-demo-1.json."
+    }
+  }
+}
