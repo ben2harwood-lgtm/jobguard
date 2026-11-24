@@ -44,7 +44,9 @@ beforeAll(async () => {
   await migrate({ query: async (sql: string, values?: unknown[]) => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
       && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
-        "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql",
+        // V2 b1a walk session record
+        "_v2_walk_record.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -59,6 +61,8 @@ beforeAll(async () => {
   const legacy = await fixture();
   upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
   await migrate(admin);
+  // V2 b1a walk session record
+  expect((await admin.query("SELECT to_regclass('app.v2_walk_session') AS session, to_regclass('app.v2_walk_entry') AS entry")).rows[0]).toEqual({ session: null, entry: null });
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();
