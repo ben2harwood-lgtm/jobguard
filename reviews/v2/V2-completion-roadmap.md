@@ -111,7 +111,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 - Quote options (#19, a main quote-track piece).
 - Start-simple mode (#25, DUI plan).
 - Hosting and the pilot. **Ben, 25 Nov 17:35 UK: decide around 3 Dec, after the full browser run.** No hosting account or spend before then; pilot hosting follows G1.
-- Big ideas A, C, D, E and F.
+- Big ideas A, C, D, E and F. **Ben, 25 Nov 17:47 UK: all later, after V2.** Revisit with pilot feedback.
 
 ## Migration numbers reserved
 2025 PX (V2 bootstrap), 2026 G0, 2027 C3C, 2028 F2, 2029 B1C, 2030 E7, 2031 F3, 2032 F4, 2033 F7, 2034 K5B, 2035 K6B, 2036 DV1, 2037 C6, 2038 E4, 2039 E5, 2040 E6, 2041 My brief, 2042 G1, 2043 G2/G3, 2044 G8, 2045 G9. 2046 K5A-2 (Q34). 2047 to 2051 V2-FL-1 to FL-5 firm-lock slices (Q35 to Q39). **Next free: 2052.** A builder whose piece turns out not to need its number leaves it unused. A builder that needs a number not listed here stops and asks.
