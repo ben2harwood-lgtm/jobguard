@@ -15,6 +15,7 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 What exists on c3, and what this means for each section of the update:
 - **Plan:** tasks have no "done" status (fields are position, durationMinutes, trade, scheduledDate and assignee; done arrives with F1). So **"This week" lists the tasks whose `scheduledDate` falls in that week, and the builder edits the wording** to say what actually got done. "Next week" lists the following week's tasks the same way.
 - **Diary:** the existing diary route (`apps/web/app/api/jobs/[id]/diary/route.ts`, migrations 0505 and 0539) has never been exercised on the V2 database. **Read it only.** If the read is refused on V2, leave the section out cleanly (empty-state wording) and say so in the PR. Never write to it.
+- **Planner confirmation (25 Nov 01:00 UK, after the K3 check of #935).** **Don't read the diary at all.** Diary entries have no "customer can see this" flag, so any diary text in a customer update could leak builder-private notes. Leaving it out is the accepted design, and this overrides the diary lines in this packet. Build the update from plan tasks, customer-visible photos, open customer facts and customer-supplied items only. The leak pair still runs: two jobs differing only in a private diary entry must give identical updates. Diary content comes back later as **K3-D**, once diary entries have a customer-visible flag (**DV1**, logged in the ranked list).
 - **Photos:** there is no `customer_visible` field, and photos on V2 wait for V2-PX. Build the photo section with its empty state only. The withdraw-before-send case is marked "waits for V2-PX". Don't call the proof or evidence upload paths.
 - **Open customer facts (E1) and customer-supplied items (D3):** neither is on c3's base, so leave both sections out cleanly. Show them later, when those pieces merge.
 - **Recipient:** use the seed job's existing customer contact. If there is none, stop and report. Send only to the catcher.
@@ -29,7 +30,7 @@ Once a week the builder previews and sends the customer a short update: what got
 
 ## Scope
 - Table of updates: job, week, version, content snapshot, sent at, sent by. Commands: prepare, edit text, send. One audit event each.
-- Content from the diary, plan tasks done and next, customer-visible photos only, open customer facts if E1 is available (skip that section cleanly if not), and customer-supplied items from D3 if available (skip cleanly if not).
+- Content (no diary; see the planner confirmation above): plan tasks done and next, customer-visible photos only, open customer facts if E1 is available (skip that section cleanly if not), and customer-supplied items from D3 if available (skip cleanly if not).
 - **No prices, private notes, other customers' photos or hidden findings.** Never sent without the builder's press; sent **only to the local catcher**.
 
 ## Acceptance cases added (Web Codex acceptance findings, frm-management-layer#3 comment 7145931890 (24 Nov 22:12 UK), folded in by the planner 22:25 UK)

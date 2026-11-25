@@ -47,3 +47,4 @@ Don't-forget prompts (C5, #921), V2 tests in CI (CI1, #917), the R2 audit repair
 0. Crew and customer test sessions on the V2 database (V2-SX, RED, Astra first, with V2-PX). Unblocks K10-R, F1 crew presses, K2 feeds, F8 and E5A.
 0. K10-R: K10's real crew and customer refusal tests (test files only), after V2-SX.
 0. F1 progress buttons: parked behind D4A plus the task key on #916 (Ben's OK for D4's third round).
+0. Diary entries get a "customer can see this" flag (DV1; RED, it touches main's diary, Astra first). Then K3-D adds diary content to the Friday update, flagged entries only.
