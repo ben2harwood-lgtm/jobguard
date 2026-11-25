@@ -1,5 +1,5 @@
 /** Q18 / V2-CI2: review pointers, never a verdict about transactional correctness.
- * Evidence convention in tools/v2/*seed*.test.mjs:
+ * Evidence convention in tools/v2/seed.integration.test.mjs:
  * test("audit-chain: packages/db/src/example.ts#Repository.save", async () => {
  *   ... call the real command against PostgreSQL ...
  *   assert.equal(..., ..., "audit-chain: event");
@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const sourcePath = /^(?:packages\/db|apps\/api)\/src\/.*\.[cm]?tsx?$/u;
-const seedPath = /^tools\/v2\/(?:[^/]+\/)*[^/]*seed[^/]*\.test\.mjs$/u;
+const seedPath = /^tools\/v2\/seed\.integration\.test\.mjs$/u;
 const shaPattern = /^[a-f0-9]{40}$/u;
 const walk = (node, visit) => { visit(node); ts.forEachChild(node, child => { walk(child, visit); }); };
 const parse = (path, source) => {
@@ -70,7 +70,11 @@ function sqlText(node, definitions, seen = new Set()) {
 // This is a bounded source scan, not SQL data-flow or routine-body analysis.
 function writes(sql) {
   const clean = sql.replace(/--[^\n]*|\/\*[\s\S]*?\*\//gu, " ").replace(/"([a-zA-Z_][\w]*)"/gu, "$1");
-  return [...clean.matchAll(/\b(?:INSERT\s+INTO|UPDATE(?!\s+SET\b)|DELETE\s+FROM)\s+(?:app\.)?([a-zA-Z_][\w]*)|\b(?:SELECT|CALL)\s+app\.((?:v2_)?(?:post|reverse|record|append|begin|complete|finish|save|set|create|update|delete|insert|issue|approve|accept|lock|confirm|transition|revoke|withdraw|cancel|mark|allocate|reconcile|generate)_[a-zA-Z_][\w]*)\s*\(/giu)]
+  // Unknown app routines are pointers regardless of verb or SELECT shape.
+  // Only these context readers/binders are excluded; reviewers classify the rest.
+  const contextRoutines = new Set(["current_actor", "current_tenant", "bind_request", "set_config"]);
+  return [...clean.matchAll(/\b(?:INSERT\s+INTO|UPDATE(?!\s+SET\b)|DELETE\s+FROM)\s+(?:app\.)?([a-zA-Z_][\w]*)|\bapp\.([a-zA-Z_][\w]*)\s*\(/giu)]
+    .filter(match => !match[2] || !contextRoutines.has(match[2].toLowerCase()))
     .map(match => match[2] ? `routine:app.${match[2]}` : `table:${match[1]}`);
 }
 
@@ -121,17 +125,48 @@ export function scanCommands(path, source, changed) {
  */
 export function seedEvidence(path, source) {
   const file = parse(path, source), evidence = [];
+  function callsSkip(body) {
+    let skipped = false;
+    walk(body, child => {
+      if (ts.isCallExpression(child) && ["skip", "todo"].includes(callName(child.expression))) skipped = true;
+    });
+    return skipped;
+  }
+  // A declaration must be registered directly at module level or in plain,
+  // non-skipped describe/suite callbacks, never behind a conditional/helper.
+  function registered(node) {
+    if (!ts.isExpressionStatement(node.parent)) return false;
+    const container = node.parent.parent;
+    if (ts.isSourceFile(container)) return true;
+    if (!ts.isBlock(container)) return false;
+    const callback = container.parent, suite = callback.parent;
+    return (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) &&
+      ts.isCallExpression(suite) && ts.isIdentifier(suite.expression) &&
+      ["describe", "suite"].includes(suite.expression.text) && suite.arguments.length === 2 &&
+      suite.arguments[1] === callback && !callsSkip(container) && registered(suite);
+  }
   walk(file, node => {
-    if (!ts.isCallExpression(node) || callName(node.expression) !== "test" || !ts.isStringLiteralLike(node.arguments[0])) return;
+    if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== "test" ||
+      !ts.isStringLiteralLike(node.arguments[0]) || !registered(node)) return;
     const match = /^audit-chain: (\S+#\S+)$/u.exec(node.arguments[0].text);
     const body = node.arguments.at(-1);
     if (!match || !body || !(ts.isArrowFunction(body) || ts.isFunctionExpression(body))) return;
     // Only test(name, callback) is eligible: options may hide a skip or todo.
-    if (node.arguments.length !== 2) return;
+    if (node.arguments.length !== 2 || !ts.isBlock(body.body)) return;
+    if (callsSkip(body.body)) return;
     const claims = new Set(), called = new Set();
-    walk(body, child => {
+    function inspectExpression(child) {
+      // Do not credit dormant closures or conditional expressions. A callback
+      // passed to assert.rejects may run, but its labels aren't direct evidence.
+      if (ts.isFunctionLike(child) || ts.isConditionalExpression(child) ||
+        (ts.isBinaryExpression(child) && [ts.SyntaxKind.AmpersandAmpersandToken,
+          ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(child.operatorToken.kind))) return;
+      ts.forEachChild(child, inspectExpression);
       if (!ts.isCallExpression(child)) return;
       called.add(callName(child.expression));
+    }
+    function inspectAssertion(child) {
+      if (!ts.isCallExpression(child)) return;
       if (!ts.isPropertyAccessExpression(child.expression) || child.expression.expression.getText(file) !== "assert") return;
       if (!["equal", "strictEqual", "deepEqual", "deepStrictEqual", "ok", "rejects"].includes(child.expression.name.text)) return;
       const label = child.arguments.at(-1);
@@ -139,7 +174,18 @@ export function seedEvidence(path, source) {
         const claim = /^audit-chain: (event|replay|rollback)(?::|$)/u.exec(label.text)?.[1];
         if (claim) claims.add(claim);
       }
-    });
+    }
+    function statements(block) {
+      for (const statement of block.statements) {
+        if (ts.isBlock(statement)) statements(statement);
+        if (!ts.isExpressionStatement(statement)) continue;
+        let expression = statement.expression;
+        if (ts.isAwaitExpression(expression)) expression = expression.expression;
+        inspectExpression(expression);
+        inspectAssertion(expression);
+      }
+    }
+    statements(body.body);
     evidence.push({ id: match[1], path, line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1, claims: [...claims], called: [...called] });
   });
   return evidence;

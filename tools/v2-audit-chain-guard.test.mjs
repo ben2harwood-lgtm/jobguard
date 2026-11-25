@@ -72,6 +72,59 @@ test("evidence must name this command, call it, and place labels on assertions",
   ]) assert.equal(check(audited, proof)[0].missing, true);
 });
 
+test("skipped suites, runtime skips and unexecuted assertion blocks are not evidence", () => {
+  const body = evidence.slice(evidence.indexOf("async () => {") + "async () => {".length, evidence.lastIndexOf("});") - 1);
+  for (const proof of [
+    `describe.skip("group", () => { ${evidence} });`,
+    `describe.todo("group", () => { ${evidence} });`,
+    `describe("group", { skip: true }, () => { ${evidence} });`,
+    `describe("group", { todo: true }, () => { ${evidence} });`,
+    `describe("outer", () => { describe.skip("inner", () => { ${evidence} }); });`,
+    `describe("group", t => { t.skip(); ${evidence} });`,
+    `describe("group", t => { t.todo(); ${evidence} });`,
+    evidence.replace("async () => {", "async t => { t.skip();"),
+    evidence.replace("async () => {", "async t => { t.todo();"),
+    `test("audit-chain: ${id}", async () => { if (false) { ${body} } });`,
+    `test("audit-chain: ${id}", async () => { const never = async () => { ${body} }; });`,
+    `if (false) { ${evidence} }`,
+    `const never = () => { ${evidence} };`,
+  ]) assert.equal(check(audited, proof)[0].missing, true, proof);
+  assert.equal(check(audited, `describe("group", () => { ${evidence} });`)[0].missing, false);
+  assert.equal(check(audited, `test("audit-chain: ${id}", async () => { { ${body} } });`)[0].missing, false);
+});
+
+test("checked routine pointers include SELECT FROM and routines outside verb prefixes", () => {
+  for (const sql of [
+    "SELECT * FROM app.record_builder_attested_acceptance($1)",
+    "SELECT * FROM app.record_practice_customer_receipt($1)",
+    "SELECT * FROM app.reverse_practice_customer_receipt($1)",
+    "SELECT * FROM app.record_simulated_settlement($1)",
+    "SELECT app.connector_machine_command($1)",
+    "SELECT app.replace_fee_reservation_book($1)",
+    "CALL app.unlisted_operation($1)",
+  ]) {
+    const commands = scanCommands(path, `async function save() { await db.query(${JSON.stringify(sql)}); }`);
+    assert.equal(commands.length, 1, sql);
+    assert.deepEqual(commands[0].targets, [`routine:${sql.match(/app\.\w+/u)[0]}`]);
+  }
+  assert.deepEqual(scanCommands(path, `async function read() {
+    await db.query('SELECT app.current_actor(), app.current_tenant(), app.bind_request($1)');
+  }`), []);
+});
+
+test("real acceptance, practice-invoice and activation checked writes are listed", () => {
+  const cases = {
+    "acceptance-repository.ts": ["record_builder_attested_acceptance", "record_quote_disposition"],
+    "practice-invoice-repository.ts": ["record_practice_customer_receipt", "reverse_practice_customer_receipt"],
+    "activation-repository.ts": ["record_simulated_settlement", "switch_job_live"],
+  };
+  for (const [name, routines] of Object.entries(cases)) {
+    const source = readFileSync(new URL(`../packages/db/src/${name}`, import.meta.url), "utf8");
+    const targets = scanCommands(`packages/db/src/${name}`, source).flatMap(command => command.targets);
+    for (const routine of routines) assert.ok(targets.includes(`routine:app.${routine}`), `${name}: ${routine}`);
+  }
+});
+
 test("only changed methods are listed, including a change away from the SQL line", () => {
   const source = `class Repo {
     async changed() { const x = 1;
@@ -96,8 +149,9 @@ test("SQL templates, constants, tagged SQL, quoted tables, ORM and checked SELEC
     const hash = value => createHash('sha256').update(value).digest('hex');
   `;
   const commands = scanCommands(path, source);
-  assert.deepEqual(commands.map(command => command.id.split("#")[1]), ["save", "set", "remove", "orm", "tagged", "post"]);
-  assert.deepEqual(commands.at(-1).targets, ["routine:app.post_plan_obligation"]);
+  assert.deepEqual(commands.map(command => command.id.split("#")[1]), ["save", "set", "remove", "orm", "tagged", "post", "editor"]);
+  assert.deepEqual(commands.at(-2).targets, ["routine:app.post_plan_obligation"]);
+  assert.deepEqual(commands.at(-1).targets, ["routine:app.v2_work_plan_editor"]);
 });
 
 test("watchdog storage helper and ledger SELECT writes remain reviewable, not automatically judged", () => {
@@ -135,7 +189,7 @@ test("scope includes #932's real Codex E3 / Claude D3 pair and excludes main", (
   assert.throws(() => inV2Scope("pull_request", {}), /Missing PR branch/);
 });
 
-function fixtureRun(source, proof = "", event = e3) {
+function fixtureRun(source, proof = "", event = e3, seeds = [seed]) {
   const directory = mkdtempSync(join(tmpdir(), "v2-ci2-test-"));
   const eventPath = join(directory, "event.json");
   writeFileSync(eventPath, JSON.stringify(event));
@@ -146,7 +200,7 @@ function fixtureRun(source, proof = "", event = e3) {
     if (args[0] === "rev-parse") return args.at(-1).startsWith("HEAD") ? head : args.at(-1).replace(/\^\{commit\}$/u, "");
     if (args[0] === "merge-base") return args.includes("--is-ancestor") ? "" : base;
     if (args[0] === "diff") return args.includes("--name-only") ? `${path}\0` : "@@ -0,0 +1,7 @@\n";
-    if (args[0] === "ls-tree") return `${seed}\0`;
+    if (args[0] === "ls-tree") return seeds.join("\0") + "\0";
     if (args[0] === "show") return args[1].endsWith(path) ? source : proof;
     throw new Error(`Unexpected git call: ${args}`);
   };
@@ -160,6 +214,14 @@ test("diff pipeline scans the actual stacked head against its merge-base and rea
   assert.ok(calls.some(args => args[0] === "diff" && args.includes(e3.pull_request.base.sha) && args.includes(e3.pull_request.head.sha)));
   assert.ok(calls.some(args => args[0] === "show" && args[1] === `${e3.pull_request.head.sha}:${seed}`));
   assert.equal(fixtureRun(broken).result.commands[0].missing, true);
+});
+
+test("only the seed file actually executed by v2-seed supplies evidence", () => {
+  for (const unexecuted of ["tools/v2/other-seed.test.mjs", "tools/v2/nested/seed.integration.test.mjs"]) {
+    const { result, calls } = fixtureRun(audited, evidence, e3, [unexecuted]);
+    assert.equal(result.commands[0].missing, true);
+    assert.ok(!calls.some(args => args[0] === "show" && args[1].endsWith(unexecuted)));
+  }
 });
 
 test("invalid parse and missing comparison data fail closed", () => {
