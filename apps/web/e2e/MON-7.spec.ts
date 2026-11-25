@@ -4,7 +4,8 @@ test.setTimeout(240_000);
 const B=(page:Page,name:string)=>page.getByRole("button",{name,exact:true});
 const read=async(page:Page,id:string)=>{const r=await page.request.get(`/api/jobs/${id}/prevention-checks`);expect(r.ok(),await r.text()).toBe(true);return r.json();};
 async function quote(page:Page){await openQuote(page);return (await page.locator(".quote-editor").getAttribute("data-job-id"))!;}
-async function panel(page:Page,id:string){await page.goto(`/jobs/${id}#quote`);const price=B(page,"Price the work");if(await price.isVisible())await price.click();await expect(page.getByTestId("prevention-panel")).toBeVisible();}
+// Price the work records #quote, so a goto to the same URL is hash-only; reload to read saved state.
+async function panel(page:Page,id:string){await page.goto(`/jobs/${id}#quote`);await page.reload();const price=B(page,"Price the work");if(await price.isVisible())await price.click();await expect(page.getByTestId("prevention-panel")).toBeVisible();}
 test("MON-7a cited property facts persist for a homeowner across reload, Jobs and a returning browser",async({page,browser})=>{
   const id=await quote(page);
   await expect(page.getByTestId("prevention-company-eligibility")).toHaveText("not run — not a registered company");
