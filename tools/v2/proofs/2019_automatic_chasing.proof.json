@@ -1,6 +1,6 @@
 {
   "migration": "tools/v2/migrations/2019_automatic_chasing.sql",
-  "status": "candidate_requires_fresh_postgresql_run",
+  "status": "executed_on_fresh_postgresql_and_phone_https",
   "scope": "V2 bootstrap only; excluded from the production migration runner and LP-0 inventory",
   "tables": [
     "app.v2_chase_setting",
@@ -40,5 +40,28 @@
       "failed": 2,
       "failure": "The practice sign-in setup returned 401."
     }
+  },
+  "current_execution": {
+    "base_commit": "b6441f6a",
+    "change": "test-only: browser spec reads the saved log instead of the run POST body",
+    "runtime": "PostgreSQL 16, synthetic embedded V2 stack, Node 24, cloud container",
+    "seed_with_k4": {
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0
+    },
+    "browser_phone_https": {
+      "passed": 2,
+      "failed": 0,
+      "widths": [
+        360,
+        1280
+      ],
+      "screenshots": [
+        "v2-chasing-360.png",
+        "v2-chasing-1280.png"
+      ]
+    },
+    "still_required": "Mac lane B: three fresh-stack phone-mode runs (rule 22); green CI at the pushed head"
   }
 }

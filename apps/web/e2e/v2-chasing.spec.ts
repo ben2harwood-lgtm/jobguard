@@ -57,7 +57,11 @@ test.describe("Seeded automatic chasing", () => {
           run.click(),
         ]);
         expect(receipt.status()).toBe(200);
-        expect(await receipt.json()).toMatchObject({ captured: 0 });
+        // The screen never reads this POST body, so Playwright's receipt.json() and finished()
+        // can hang. The 200 status arrives after the run commits; read the saved log instead.
+        const saved = await context.request.get(api);
+        expect(saved.status()).toBe(200);
+        expect((await saved.json() as { log: { message: string | null }[] }).log.filter(row => row.message)).toEqual([]);
         await expect(main.getByText("No reminders captured.", { exact: true })).toBeVisible();
         await expect(off).toBeEnabled();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
