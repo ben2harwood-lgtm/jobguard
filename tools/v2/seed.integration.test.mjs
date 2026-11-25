@@ -5,9 +5,9 @@ import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
-import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
+import { ChoiceAllowanceApplication, createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
-import { DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
+import { ChoiceAllowanceRepository, DEMO_TENANT_ID, MeasurementRepository, choiceUuid, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
@@ -1425,3 +1425,275 @@ test("e9 flow: an unpriced builder extra is priced by revise with a deterministi
     { message: "VARIATION_COMMAND_CONFLICT" }, "the same revision id with different content is refused");
 });
 
+// V2-E9 choices and allowances. Its own block; earlier pieces' tests stay as they are.
+const e9Attestation = "Builder-recorded practice acceptance — not an authenticated customer signature";
+const e9Tiles = { basis: "per_unit", amount: "25.00", quantity: "6", unit: "m2" };
+
+async function e9Setup(variations) {
+  const live = await e9LiveJob();
+  const { sessionId } = live;
+  const app = createWorkspaceApplication({ pool: runtime, sessionId });
+  const logged = await app.openFacts.command(live.draftJob, { version: "v2-open-fact-command.v1", action: "log", commandId: randomUUID(),
+    scopeItemId: null, planTask: null, owner: { kind: "customer" }, neededBy: "2099-01-10",
+    detail: { kind: "customer_choice", question: "Which wall tiles for the kitchen?", mayChangePrice: true } });
+  const choices = variations ? new ChoiceAllowanceApplication(runtime, sessionId, variations) : app.choiceAllowances;
+  const command = (expectedVersion, fields) => ({ version: "v2-choice-allowance-command.v1", commandId: randomUUID(),
+    factId: logged.factId, expectedVersion, allowance: e9Tiles, decideBy: "2099-01-05", chosen: null, ...fields });
+  return { ...live, jobId: live.draftJob, app, choices, factId: logged.factId, command };
+}
+
+const e9Events = async (jobRef, eventType) => (await admin.query(`SELECT actor_ref AS "actorRef", payload FROM app.audit_event
+  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = $2 ORDER BY sequence`, [jobRef, eventType])).rows;
+const e9Drafts = async jobRef => (await admin.query(`SELECT v.id, v.state, v.current_revision_id AS "revisionId",
+  (SELECT count(*)::int FROM app.variation_revision r WHERE r.variation_id = v.id) AS revisions,
+  (SELECT count(*)::int FROM app.variation_approval a WHERE a.tenant_id = v.tenant_id AND a.revision_id = v.current_revision_id) AS approvals
+  FROM app.variation v WHERE v.job_id = $1 ORDER BY v.id`, [jobRef])).rows;
+const e9Receipts = async ids => (await admin.query(`SELECT count(*)::int AS n FROM app.command_receipt WHERE command_id = ANY($1::uuid[])`, [ids])).rows[0].n;
+
+test("audit-chain: packages/db/src/v2-choice-allowance-repository.ts#ChoiceAllowanceRepository.set", async () => {
+  const { jobId, choices, command, factId, sessionId } = await e9Setup();
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const editor = (await signIn("builder")).membershipId;
+  const set = command(0, { chosen: null });
+  const first = await choices.command(jobId, set);
+  const events = await e9Events(jobId, "v2.choice_allowance.set");
+  assert.equal(events.length, 1, "audit-chain: event");
+  assert.equal(events[0].actorRef, `membership:${editor}`);
+  const { commandId: c, factId: f, choiceVersion, draft, withdraws } = events[0].payload.references;
+  assert.deepEqual({ commandId: c, factId: f, choiceVersion, draft, withdraws }, { commandId: set.commandId, factId, choiceVersion: "1", draft: "none", withdraws: "none" });
+  assert.doesNotMatch(JSON.stringify(events[0].payload), /tiles|25\.00/u, "no free text or amount enters the chain");
+  assert.equal("version" in events[0].payload.references, false);
+  assert.deepEqual((await Promise.all([choices.command(jobId, set), choices.command(jobId, set)])).map(r => r.receipt), [first.receipt, first.receipt]);
+  await assert.rejects(choices.command(jobId, { ...set, decideBy: "2099-01-06" }), { code: "CHOICE_ALLOWANCE_COMMAND_CONFLICT" });
+  await assert.rejects(choices.command(jobId, command(0, {})), { code: "CHOICE_ALLOWANCE_VERSION_CONFLICT" }, "a stale version is refused");
+  assert.deepEqual(await e9Events(jobId, "v2.choice_allowance.set"), events, "audit-chain: replay");
+
+  // Fail the audit append after the version insert: the transaction keeps neither.
+  const next = command(1, { chosen: { item: "Fictional metro tile", amount: "31.00" } });
+  await assert.rejects(new ChoiceAllowanceRepository(e9FailingAuditPool()).set(context, jobId, sessionId, next), { code: "FORCED" });
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_choice_allowance WHERE command_id = $1", [next.commandId])).rows[0].n, 0,
+    "audit-chain: rollback");
+  assert.deepEqual(await e9Events(jobId, "v2.choice_allowance.set"), events);
+  assert.deepEqual(await e9Drafts(jobId), [], "an allowance with no choice drafts nothing");
+  await verifyTenantChain(context.tenantId);
+});
+
+test("audit-chain: packages/db/src/v2-choice-allowance-repository.ts#ChoiceAllowanceRepository.step", async () => {
+  const { jobId, choices, command, factId, sessionId } = await e9Setup();
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const set = command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } });
+  const { choices: [view] } = await choices.command(jobId, set);
+  const steps = await e9Events(jobId, "v2.choice_allowance.step");
+  assert.deepEqual(steps.map(e => [e.payload.references.step, e.payload.references.outcome]), [["current", "none"], ["proposed", "none"], ["priced", "none"]],
+    "audit-chain: event");
+  assert.deepEqual(steps.map(e => [e.payload.references.commandId, e.payload.references.variationId]),
+    [[set.commandId, "none"], [set.commandId, view.draft.variationId], [set.commandId, view.draft.variationId]]);
+  const repo = new ChoiceAllowanceRepository(runtime);
+  assert.equal(await repo.step(context, jobId, sessionId, { factId, version: 1, step: "priced", outcome: null }), false);
+  await assert.rejects(repo.step(context, jobId, sessionId, { factId, version: 1, step: "current", outcome: "withdrawn" }), { code: "CHOICE_ALLOWANCE_STEP_INVALID" });
+  await choices.read(jobId);
+  assert.deepEqual(await e9Events(jobId, "v2.choice_allowance.step"), steps, "audit-chain: replay");
+
+  // Fail the audit append after a step insert: the transaction keeps neither, and the next read finishes it.
+  const next = command(1, { chosen: { item: "Fictional zellige tile", amount: "40.00" } });
+  await repo.set(context, jobId, sessionId, next);
+  await assert.rejects(new ChoiceAllowanceRepository(e9FailingAuditPool()).step(context, jobId, sessionId,
+    { factId, version: 2, step: "current", outcome: "withdrawn" }), { code: "FORCED" });
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_choice_allowance_step WHERE fact_id = $1 AND version = 2", [factId])).rows[0].n, 0,
+    "audit-chain: rollback");
+  assert.deepEqual(await e9Events(jobId, "v2.choice_allowance.step"), steps);
+  const [finished] = await choices.read(jobId);
+  assert.equal(finished.chosen.amount, "40.00");
+  assert.equal(finished.draft.amount, "90.00");
+  await verifyTenantChain(context.tenantId);
+});
+
+test("e9: tiles at £31/m² for 6 m² against £25/m² draft one unapproved £36 extra; at or under drafts nothing", async () => {
+  const { jobId, choices, command, factId, app } = await e9Setup();
+  const before = await counts();
+  const atAllowance = await choices.command(jobId, command(0, { chosen: { item: "Fictional plain tile", amount: "25.00" } }));
+  assert.equal(atAllowance.choices[0].draft, null);
+  assert.deepEqual(await e9Drafts(jobId), [], "a choice at the allowance drafts nothing");
+  const { choices: [view] } = await choices.command(jobId, command(1, { chosen: { item: "Fictional metro tile", amount: "31.00" } }));
+  const proposalId = choiceUuid(DEMO_TENANT_ID, `${factId}:2:excess`);
+  assert.deepEqual(view.draft, { variationId: proposalId, revisionId: choiceUuid(proposalId, "price"), state: "awaiting_approval", amount: "36.00" });
+  assert.deepEqual(view.allowance, { version: 2, basis: "per_unit", amount: "25.00", quantity: "6", unit: "m2", decideBy: "2099-01-05" });
+  assert.deepEqual(view.chosen, { item: "Fictional metro tile", amount: "31.00" });
+  assert.deepEqual(await e9Drafts(jobId), [{ id: proposalId, state: "priced", revisionId: choiceUuid(proposalId, "price"), revisions: 1, approvals: 0 }]);
+  const workspace = await app.variation.get(jobId);
+  assert.equal(workspace.approvedAdditionsPence, 0, "nothing is committed to the price");
+  assert.equal(workspace.pendingExtrasPence, 3600);
+  assert.deepEqual(await counts(), before, "the accepted quote, documents and sends are untouched");
+
+  // A change that keeps the same excess (only the decide-by date) keeps the same draft.
+  const { choices: [kept] } = await choices.command(jobId, command(2, { decideBy: "2099-01-07", chosen: { item: "Fictional metro tile", amount: "31.00" } }));
+  assert.equal(kept.draft.variationId, proposalId);
+  assert.equal((await e9Drafts(jobId)).length, 1);
+
+  // A total allowance drafts the difference once.
+  const { choices: [total] } = await choices.command(jobId, command(3, { allowance: { basis: "total", amount: "150.00" },
+    chosen: { item: "Fictional metro tile, whole kitchen", amount: "186.50" } }));
+  assert.equal(total.draft.amount, "36.50");
+  assert.equal((await e9Drafts(jobId)).find(d => d.id === proposalId).state, "rejected", "the superseded draft is withdrawn");
+});
+
+test("e9: over to equal after a draft exists rejects the draft, which can then never be approved", async () => {
+  const { jobId, choices, command, app } = await e9Setup();
+  const { choices: [over] } = await choices.command(jobId, command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } }));
+  const { choices: [equal] } = await choices.command(jobId, command(1, { chosen: { item: "Fictional plain tile", amount: "25.00" } }));
+  assert.equal(equal.draft, null);
+  const rejectionId = choiceUuid(over.draft.variationId, "superseded");
+  assert.deepEqual(equal.withdrawn, [{ variationId: over.draft.variationId, rejectionId, reason: "superseded_by_choice_change", outcome: "withdrawn" }]);
+  const { rows: [rejection] } = await admin.query("SELECT revision_id, reason_code FROM app.variation_rejection WHERE id = $1", [rejectionId]);
+  assert.deepEqual(rejection, { revision_id: over.draft.revisionId, reason_code: "customer_did_not_approve" }, "main's fixed reason; E9 keeps the true one");
+  await assert.rejects(app.variation.command(jobId, { version: "variation-command.v1", action: "approve", variationId: over.draft.variationId,
+    revisionId: over.draft.revisionId, approvalId: randomUUID(), attestation: e9Attestation }));
+  assert.deepEqual((await e9Drafts(jobId)).map(d => [d.state, d.approvals]), [["rejected", 0]]);
+});
+
+test("e9: after the builder approves, a changed choice keeps the approval, warns and drafts no second extra", async () => {
+  const { jobId, choices, command, app } = await e9Setup();
+  const { choices: [over] } = await choices.command(jobId, command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } }));
+  await app.variation.command(jobId, { version: "variation-command.v1", action: "approve", variationId: over.draft.variationId,
+    revisionId: over.draft.revisionId, approvalId: randomUUID(), attestation: e9Attestation });
+  const { choices: [changed] } = await choices.command(jobId, command(1, { chosen: { item: "Fictional zellige tile", amount: "40.00" } }));
+  assert.equal(changed.warning, "Approved extra no longer matches this choice: raise a credit if needed");
+  assert.equal(changed.draft, null);
+  assert.deepEqual(changed.withdrawn.map(w => w.outcome), ["kept_agreed"]);
+  assert.deepEqual((await e9Drafts(jobId)).map(d => [d.id, d.state, d.revisions, d.approvals]), [[over.draft.variationId, "approved", 1, 1]]);
+  const { choices: [again] } = await choices.command(jobId, command(2, { chosen: { item: "Fictional marble tile", amount: "55.00" } }));
+  assert.equal(again.draft, null);
+  assert.equal((await e9Drafts(jobId)).length, 1, "never a second draft on top of an approved extra");
+});
+
+// Fail once at one seam of the variation flow, then let a read finish the work.
+function e9Seam(real, seam) {
+  let armed = true;
+  const fail = () => { armed = false; throw Object.assign(new Error("forced seam failure"), { code: "SEAM" }); };
+  return { get: jobRef => real.get(jobRef), async command(jobRef, body) {
+    if (armed && seam === `before:${body.action}`) fail();
+    const result = await real.command(jobRef, body);
+    if (armed && seam === `after:${body.action}`) fail();
+    return result;
+  } };
+}
+
+// "step:<name>" fails that step's insert once, after the variation command it records has committed.
+function e9FailingStepPool(step) {
+  let armed = true;
+  return {
+    query: (...args) => runtime.query(...args),
+    async connect() {
+      const client = await runtime.connect();
+      const query = client.query.bind(client);
+      client.query = (sql, values, ...rest) => {
+        if (armed && typeof sql === "string" && sql.includes("INSERT INTO app.v2_choice_allowance_step") && values?.[4] === step) {
+          armed = false;
+          return Promise.reject(Object.assign(new Error("forced seam failure"), { code: "SEAM" }));
+        }
+        return query(sql, values, ...rest);
+      };
+      const release = client.release.bind(client);
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    },
+  };
+}
+
+for (const seam of ["before:propose", "after:propose", "before:revise", "step:priced"]) {
+  test(`e9: a failure at ${seam} ends, after a read, with one variation, one priced revision, one receipt and one event per step`, async () => {
+    const { jobId, choices: real, command, factId, sessionId, app } = await e9Setup();
+    const broken = seam.startsWith("step:") ? new ChoiceAllowanceApplication(e9FailingStepPool(seam.slice(5)), sessionId, app.variation)
+      : new ChoiceAllowanceApplication(runtime, sessionId, e9Seam(app.variation, seam));
+    const set = command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } });
+    await assert.rejects(broken.command(jobId, set), { code: "SEAM" });
+    const [view] = await real.read(jobId);
+    const proposalId = choiceUuid(DEMO_TENANT_ID, `${factId}:1:excess`);
+    assert.deepEqual(view.draft, { variationId: proposalId, revisionId: choiceUuid(proposalId, "price"), state: "awaiting_approval", amount: "36.00" });
+    assert.equal(view.unfinished, null);
+    assert.deepEqual(await e9Drafts(jobId), [{ id: proposalId, state: "priced", revisionId: choiceUuid(proposalId, "price"), revisions: 1, approvals: 0 }]);
+    assert.equal(await e9Receipts([proposalId]), 1);
+    assert.equal((await e9Events(jobId, "v2.choice_allowance.set")).length, 1);
+    assert.deepEqual((await e9Events(jobId, "v2.choice_allowance.step")).map(e => e.payload.references.step), ["current", "proposed", "priced"]);
+    assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.audit_event WHERE event_type = 'variation.builder_logged' AND subject_ref = $1",
+      [proposalId])).rows[0].n, 1);
+    assert.deepEqual((await real.command(jobId, set)).receipt, { factId, version: 1, commandId: set.commandId }, "a retry replays");
+    assert.equal((await e9Drafts(jobId)).length, 1);
+  });
+}
+
+test("e9: a failure after the withdrawal commits finishes on the next read without a second rejection", async () => {
+  const { jobId, choices: real, command, sessionId, app } = await e9Setup();
+  const { choices: [over] } = await real.command(jobId, command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } }));
+  const broken = new ChoiceAllowanceApplication(e9FailingStepPool("current"), sessionId, app.variation);
+  await assert.rejects(broken.command(jobId, command(1, { chosen: { item: "Fictional zellige tile", amount: "40.00" } })), { code: "SEAM" });
+  const [view] = await real.read(jobId);
+  assert.equal(view.draft.amount, "90.00");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.variation_rejection WHERE variation_id = $1", [over.draft.variationId])).rows[0].n, 1);
+  assert.deepEqual((await e9Drafts(jobId)).map(d => d.state).sort(), ["priced", "rejected"]);
+});
+
+test("e9: the same choice version sent twice at once gives one variation", async () => {
+  const { jobId, choices, command } = await e9Setup();
+  const set = command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } });
+  const results = await Promise.allSettled([choices.command(jobId, set), choices.command(jobId, set), choices.read(jobId)]);
+  assert.ok(results.slice(0, 2).some(result => result.status === "fulfilled"));
+  const [view] = await choices.read(jobId);
+  assert.equal(view.draft.amount, "36.00");
+  assert.equal((await e9Drafts(jobId)).length, 1);
+  assert.equal((await e9Events(jobId, "v2.choice_allowance.set")).length, 1);
+  assert.deepEqual((await e9Events(jobId, "v2.choice_allowance.step")).map(e => e.payload.references.step), ["current", "proposed", "priced"]);
+});
+
+test("e9: a late choice is flagged, a non-choice fact is refused and V2 mode is required", async () => {
+  const { jobId, choices, command, app } = await e9Setup();
+  await choices.command(jobId, command(0, { decideBy: "2020-01-01" }));
+  assert.equal((await choices.read(jobId))[0].late, "overdue");
+  await choices.command(jobId, command(1, { decideBy: "2020-01-01", chosen: { item: "Fictional plain tile", amount: "20.00" } }));
+  assert.equal((await choices.read(jobId))[0].late, "chosen_late");
+  const access = await app.openFacts.command(jobId, { version: "v2-open-fact-command.v1", action: "log", commandId: randomUUID(),
+    scopeItemId: null, planTask: null, owner: { kind: "builder" }, neededBy: "2099-01-10", detail: { kind: "access", need: "Fictional key safe" } });
+  await assert.rejects(choices.command(jobId, { ...command(0, {}), factId: access.factId }), { code: "CHOICE_ALLOWANCE_NOT_A_CHOICE" });
+  assert.equal((await choices.read(jobId)).length, 1, "only customer-choice facts are listed");
+  const previous = process.env.JOBGUARD_LOCAL_V2;
+  delete process.env.JOBGUARD_LOCAL_V2;
+  try { await assert.rejects(choices.read(jobId), { code: "SYNTHETIC_MODE_REQUIRED" }); }
+  finally { process.env.JOBGUARD_LOCAL_V2 = previous; }
+});
+
+test("e9: forced choice-allowance policies hide rows and refuse writes from the second firm", async () => {
+  const { jobId, choices, command, factId } = await e9Setup();
+  await choices.command(jobId, command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } }));
+  const outsider = await signIn("second-builder");
+  await assert.rejects(createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).choiceAllowances.read(jobId));
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  for (const scope of [outsider.realContext, context]) {
+    const query = (sql, values) => withTenant(runtime, scope, db => db.$client.query(sql, values));
+    for (const table of ["app.v2_choice_allowance", "app.v2_choice_allowance_step"]) {
+      assert.equal((await query(`SELECT * FROM ${table} WHERE job_id = $1`, [jobId])).rowCount, 0);
+      await assert.rejects(query(`UPDATE ${table} SET actor_membership_id = actor_membership_id WHERE job_id = $1`, [jobId]), { code: "42501" });
+      await assert.rejects(query(`DELETE FROM ${table} WHERE job_id = $1`, [jobId]), { code: "42501" });
+    }
+    await assert.rejects(query(`INSERT INTO app.v2_choice_allowance_step (tenant_id, job_id, fact_id, version, step, actor_membership_id)
+      VALUES ($1, $2, $3, 1, 'priced', $4)`, [DEMO_TENANT_ID, jobId, factId, randomUUID()]));
+  }
+  const { rows } = await admin.query(`SELECT relname, relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+    has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS mutable
+    FROM pg_class WHERE oid IN ('app.v2_choice_allowance'::regclass, 'app.v2_choice_allowance_step'::regclass) ORDER BY relname`);
+  assert.deepEqual(rows, [{ relname: "v2_choice_allowance", forced: true, owner: "jobguard_migration", mutable: false },
+    { relname: "v2_choice_allowance_step", forced: true, owner: "jobguard_migration", mutable: false }]);
+});
+
+function e9FailingAuditPool() {
+  return {
+    async connect() {
+      const client = await runtime.connect();
+      const query = client.query.bind(client);
+      client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+        ? Promise.reject(Object.assign(new Error("forced audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+      const release = client.release.bind(client);
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    },
+  };
+}

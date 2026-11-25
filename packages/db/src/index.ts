@@ -25,6 +25,7 @@ export * from "./quote-repository.js";
 export * from "./v2-work-plan-repository.js";
 export * from "./v2-measurement-repository.js";
 export * from "./v2-open-fact-repository.js";
+export * from "./v2-choice-allowance-repository.js";
 export * from "./quote-document-repository.js";
 export * from "./acceptance-repository.js";
 export * from "./activation-repository.js";

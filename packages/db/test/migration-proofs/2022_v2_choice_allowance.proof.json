@@ -1,0 +1,6 @@
+{
+  "migration": "2022_v2_choice_allowance.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
