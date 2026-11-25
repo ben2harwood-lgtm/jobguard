@@ -650,6 +650,18 @@ test("exact acceptance freezes the issued revision without scheduling, sending, 
   assert.deepEqual(await effectCounts(), effectsBeforeAcceptance);
 });
 
+const editEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
+  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_work_plan.edited' ORDER BY sequence`, [jobRef])).rows;
+
+async function verifyTenantChain(tenantId) {
+  const { rows } = await admin.query(`SELECT id, tenant_id AS "tenantId", sequence::int, version, actor_ref AS "actorRef",
+    event_type AS "eventType", subject_type AS "subjectType", subject_ref AS "subjectRef", occurred_at AS "occurredAt", payload,
+    trim(payload_hash) AS "payloadHash", trim(previous_hash) AS "previousHash", trim(event_hash) AS "eventHash"
+    FROM app.audit_event WHERE tenant_id = $1 ORDER BY sequence`, [tenantId]);
+  assert.ok(rows.length > 0);
+  assert.doesNotThrow(() => verifyAuditChain(rows));
+}
+
 test("existing Switch live activates a plan once and only approved variation revisions regenerate money scope", async () => {
   const { cookies, sessionId, csrfToken } = await signIn("builder");
   const { workPlan, variation, workState } = createWorkspaceApplication({ pool: runtime, sessionId });
@@ -676,34 +688,173 @@ test("existing Switch live activates a plan once and only approved variation rev
   const vary = (action, fields) => variation.command(jobId, { version: "variation-command.v1", action, ...fields });
   const proposed = await vary("propose", { proposalId, scopeItemId, existingScopeItemId: null, lineageParentScopeItemId: null,
     description: "Add trim", captureText: "Customer asks about trim", price });
-  assert.deepEqual((await workPlan.read(jobId, planQuery)).agreement, live.agreement);
+  assert.deepEqual(await workPlan.read(jobId, planQuery), live, "a pending extra adds nothing to the plan");
   const revisionId = proposed.variations.find(item => item.id === proposalId).currentRevisionId;
   const approvalId = randomUUID();
-  await vary("approve", { variationId: proposalId, revisionId, approvalId,
-    attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  const approve = { variationId: proposalId, revisionId, approvalId,
+    attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" };
+  const beforeApproval = await effectCounts();
+  await vary("approve", approve);
+  assert.deepEqual(await effectCounts(), beforeApproval, "approval schedules, sends, books, orders and charges nothing");
   const expected = { ...live.agreement, approvedVariations: [{ scopeItemId, revisionId, approvalId,
     description: "Add trim", quantity: "1", unit: "item", signedDeltaPence: 12500 }] };
-  assert.deepEqual((await workPlan.read(jobId, planQuery)).agreement, expected);
+  const extraItem = { scopeItemId, title: "Add trim", status: "Unplanned" };
+  const withExtra = { ...live, agreement: expected, unplanned: [...live.unplanned, extraItem],
+    scopeItems: [...live.scopeItems, { scopeItemId, description: "Add trim", category: null, quantity: "1", unit: "item",
+      variationRevisionId: revisionId }] };
+  assert.deepEqual(await workPlan.read(jobId, planQuery), withExtra, "the approved extra joins the plan as Unplanned");
+  await vary("approve", approve).catch(() => undefined);
+  assert.deepEqual(await workPlan.read(jobId, planQuery), withExtra, "replaying the approval adds no second item");
+
+  const declinedId = randomUUID();
+  const declined = await vary("propose", { proposalId: declinedId, scopeItemId: randomUUID(), existingScopeItemId: null,
+    lineageParentScopeItemId: null, description: "Declined extra shelf", captureText: "Customer asks about a shelf", price });
+  await vary("reject", { variationId: declinedId, revisionId: declined.variations.find(item => item.id === declinedId).currentRevisionId,
+    rejectionId: randomUUID() });
+  assert.deepEqual(await workPlan.read(jobId, planQuery), withExtra, "a declined extra adds nothing");
   const pendingId = randomUUID();
   await vary("revise", { variationId: proposalId, expectedRevisionId: revisionId, revisionId: pendingId,
     description: "Unapproved replacement trim", price: { ...price, unitRatePence: 35000 } });
   const { context } = await authenticatePracticeSession(runtime, sessionId);
   const regenerated = await new WorkPlanRepository(runtime).generate(context, planSource(jobId, live.quoteRevisionId));
-  assert.deepEqual(regenerated, { ...live, agreement: expected });
+  assert.deepEqual(regenerated, withExtra, "an unapproved later revision changes neither the plan nor the money");
   const liveEdit = planEdit(regenerated, regenerated.tasks[0], { scheduledDate: "2026-12-09", assignee: "Fictional Tiler" });
   const receipt = await workPlan.edit(jobId, liveEdit);
   assert.equal(receipt.version, 1);
+
+  // The builder gives the extra a trade, duration and place, then a date and an assignee.
+  const placed = { ...planEdit(await workPlan.read(jobId, planQuery), { scopeItemId, key: customTaskKey },
+    { position: 2, trade: "joiner", durationMinutes: 45 }), variationRevisionId: revisionId };
+  await assert.rejects(workPlan.edit(jobId, { ...placed, changes: { trade: "joiner" } }), { code: "WORK_PLAN_INVALID_EDIT" });
+  const { variationRevisionId: _named, ...unnamed } = placed;
+  await assert.rejects(workPlan.edit(jobId, unnamed), { code: "WORK_PLAN_INVALID_EDIT" }, "an extra's edit names its revision");
+  await assert.rejects(workPlan.edit(jobId, { ...placed, variationRevisionId: pendingId }), { code: "WORK_PLAN_VERSION_CONFLICT" },
+    "an edit naming another revision of the extra is refused");
+  await assert.rejects(workPlan.edit(jobId, { ...planEdit(await workPlan.read(jobId, planQuery), regenerated.tasks[0],
+    { durationMinutes: 61 }), variationRevisionId: revisionId }), { code: "WORK_PLAN_INVALID_EDIT" }, "a quote line names no revision");
+  const placedReceipt = await workPlan.edit(jobId, placed);
+  assert.deepEqual(await workPlan.edit(jobId, placed), placedReceipt);
+  const dated = { ...planEdit(await workPlan.read(jobId, planQuery), { scopeItemId, key: customTaskKey },
+    { scheduledDate: "2026-12-10", assignee: "Fictional Jo Joiner" }), variationRevisionId: revisionId };
+  await workPlan.edit(jobId, dated);
   const updated = await workPlan.read(jobId, planQuery);
+  assert.equal(updated.version, 3);
   assert.equal(updated.tasks[0].scheduledDate, "2026-12-09");
   assert.equal(updated.tasks[0].assignee, "Fictional Tiler");
+  assert.deepEqual(updated.tasks[1], { key: customTaskKey, scopeItemId, title: "Add trim", position: 2, trade: "joiner",
+    durationMinutes: 45, dependsOn: [], materialNeeds: [], proofPoints: [], customerChoices: [],
+    scheduledDate: "2026-12-10", assignee: "Fictional Jo Joiner" });
+  assert.deepEqual(updated.unplanned, live.unplanned);
   assert.deepEqual(updated.agreement, expected);
+  const { rows: saved } = await admin.query(`SELECT variation_revision_id FROM app.v2_work_plan_edit
+    WHERE (job_id, scope_item_id) = ($1, $2)`, [jobId, scopeItemId]);
+  assert.deepEqual(saved, [{ variation_revision_id: revisionId }, { variation_revision_id: revisionId }]);
+  const [extraEvent] = (await editEvents(jobId)).filter(event => event.payload.references.commandId === placed.commandId);
+  assert.equal(extraEvent.payload.references.variationRevisionId, revisionId);
+  assert.equal(extraEvent.payload.references.scopeItemId, scopeItemId);
+  assert.equal("version" in extraEvent.payload.references, false);
+  await verifyTenantChain(context.tenantId);
+  assert.deepEqual(await effectCounts(), beforeApproval, "planning the extra schedules, sends, books, orders and charges nothing");
+
+  // The database refuses an extra's edit that names no approved revision of its scope item.
+  const { rows: [actor] } = await admin.query("SELECT actor_membership_id AS id FROM app.v2_work_plan_edit WHERE command_id = $1",
+    [placed.commandId]);
+  const rawEdit = (variationRevisionId, scope) => withTenant(runtime, context, db => db.$client.query(`INSERT INTO app.v2_work_plan_edit
+    (tenant_id,job_id,quote_revision_id,command_id,scope_item_id,template_task_key,expected_version,changes,actor_membership_id,variation_revision_id)
+    VALUES ($1,$2,$3,$4,$5,$6,99,'{"durationMinutes":88}',$7,$8)`,
+  [context.tenantId, jobId, live.quoteRevisionId, randomUUID(), scope, customTaskKey, actor.id, variationRevisionId]));
+  await assert.rejects(rawEdit(pendingId, scopeItemId), { code: "23503" });
+  await assert.rejects(rawEdit(null, scopeItemId), { code: "23503" });
+
+  // A fresh signed-in session reads the same planned extra; the second firm sees and changes nothing.
+  const owner = await signIn("builder");
+  const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
+  const reopened = new Pool({ connectionString: settings.DATABASE_URL, max: 1 });
+  try {
+    assert.deepEqual(await createWorkspaceApplication({ pool: reopened, sessionId: fresh.sessionId }).workPlan
+      .read(jobId, planQuery), updated);
+  } finally {
+    await reopened.end();
+  }
+  const outsider = await signIn("second-builder");
+  const otherPlan = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).workPlan;
+  await assert.rejects(otherPlan.read(jobId, planQuery), { code: "NOT_FOUND" });
+  await assert.rejects(otherPlan.edit(jobId, { ...dated, commandId: randomUUID(), expectedVersion: 3 }), { code: "NOT_FOUND" });
+  assert.deepEqual(await workPlan.read(jobId, planQuery), updated);
+
+  // A later approved revision of the extra keeps the builder's planning and flags it for review.
+  await vary("approve", { ...approve, revisionId: pendingId, approvalId: randomUUID() });
+  const revised = await workPlan.read(jobId, planQuery);
+  assert.deepEqual(revised.agreement.approvedVariations.map(item => [item.scopeItemId, item.revisionId, item.signedDeltaPence]),
+    [[scopeItemId, pendingId, 35000]]);
+  assert.deepEqual(revised.tasks[1], { ...updated.tasks[1], title: "Unapproved replacement trim", needsReview: true });
+  assert.deepEqual(revised.unplanned, live.unplanned);
+  assert.equal(revised.scopeItems.find(item => item.scopeItemId === scopeItemId).variationRevisionId, pendingId);
+  await assert.rejects(workPlan.edit(jobId, { ...planEdit(revised, revised.tasks[1], { durationMinutes: 60 }),
+    variationRevisionId: revisionId }), { code: "WORK_PLAN_VERSION_CONFLICT" }, "an edit planned against the old revision is stale");
+  await workPlan.edit(jobId, { ...planEdit(revised, revised.tasks[1], { durationMinutes: 60 }), variationRevisionId: pendingId });
+  const { rows: [latest] } = await admin.query(`SELECT variation_revision_id FROM app.v2_work_plan_edit
+    WHERE (job_id, scope_item_id) = ($1, $2) ORDER BY expected_version DESC LIMIT 1`, [jobId, scopeItemId]);
+  assert.equal(latest.variation_revision_id, pendingId);
+  const replanned = await workPlan.read(jobId, planQuery);
+  assert.equal(replanned.tasks[1].durationMinutes, 60);
+  assert.equal(replanned.tasks[1].needsReview, undefined, "an edit against the approved revision clears the review flag");
+
+  // An approved omission is removed work: its money stays in the agreement, but it never becomes a task,
+  // even under a tiling parent whose template tasks would otherwise match.
+  const tiling = live.scopeItems.find(item => item.category === "Tiling");
+  const omissionId = randomUUID();
+  const omittedScope = randomUUID();
+  const omission = await vary("propose", { proposalId: omissionId, scopeItemId: omittedScope, existingScopeItemId: null,
+    lineageParentScopeItemId: tiling.scopeItemId, description: "Omit the upstand tiling", captureText: "Customer drops the upstand",
+    price: { ...price, unitRatePence: 18000, direction: "omission" } });
+  const omissionRevision = omission.variations.find(item => item.id === omissionId).currentRevisionId;
+  await vary("approve", { ...approve, variationId: omissionId, revisionId: omissionRevision, approvalId: randomUUID() });
+  // A zero-value extra stores no direction, so it is not assumed to be work.
+  const freeId = randomUUID();
+  const freeScope = randomUUID();
+  const free = await vary("propose", { proposalId: freeId, scopeItemId: freeScope, existingScopeItemId: null,
+    lineageParentScopeItemId: null, description: "No-charge extra", captureText: "Builder adds a no-charge extra",
+    price: { ...price, unitRatePence: 0 } });
+  const freeRevision = free.variations.find(item => item.id === freeId).currentRevisionId;
+  await vary("approve", { ...approve, variationId: freeId, revisionId: freeRevision, approvalId: randomUUID() });
+  const removed = await workPlan.read(jobId, planQuery);
+  assert.deepEqual(removed.tasks, replanned.tasks, "an approved omission adds no task");
+  assert.deepEqual(removed.unplanned, replanned.unplanned, "an approved omission is not Unplanned work");
+  assert.deepEqual(removed.extrasNotPlanned, [
+    { scopeItemId: omittedScope, title: "Omit the upstand tiling", reason: "omission", planningDropped: false },
+    { scopeItemId: freeScope, title: "No-charge extra", reason: "direction_unknown", planningDropped: false },
+  ]);
+  const money = Object.fromEntries(removed.agreement.approvedVariations.map(item => [item.scopeItemId, item.signedDeltaPence]));
+  assert.deepEqual(money, { [scopeItemId]: 35000, [omittedScope]: -18000, [freeScope]: 0 }, "the agreement keeps every approved revision's money");
+  for (const [scope, revision] of [[omittedScope, omissionRevision], [freeScope, freeRevision]]) {
+    const command = planEdit(removed, { scopeItemId: scope, key: customTaskKey }, { position: 1, trade: "tiler", durationMinutes: 30 });
+    await assert.rejects(workPlan.edit(jobId, command), { code: "WORK_PLAN_INVALID_EDIT" });
+    await assert.rejects(workPlan.edit(jobId, { ...command, variationRevisionId: revision }), { code: "WORK_PLAN_INVALID_EDIT" });
+    await assert.rejects(rawEdit(revision, scope), { code: "23503" }, "the database refuses planning a non-addition");
+  }
+
+  // A planned extra whose later approved revision is an omission leaves the plan, and the builder is told.
+  const flipId = randomUUID();
+  await vary("revise", { variationId: proposalId, expectedRevisionId: pendingId, revisionId: flipId,
+    description: "Trim no longer needed", price: { ...price, direction: "omission" } });
+  await vary("approve", { ...approve, revisionId: flipId, approvalId: randomUUID() });
+  const flipped = await workPlan.read(jobId, planQuery);
+  assert.equal(flipped.tasks.some(task => task.scopeItemId === scopeItemId), false);
+  assert.equal(flipped.unplanned.some(item => item.scopeItemId === scopeItemId), false);
+  assert.equal(flipped.scopeItems.some(item => item.scopeItemId === scopeItemId), false);
+  assert.deepEqual(flipped.extrasNotPlanned[0],
+    { scopeItemId, title: "Trim no longer needed", reason: "omission", planningDropped: true });
+  assert.equal(flipped.agreement.approvedVariations.find(item => item.scopeItemId === scopeItemId).signedDeltaPence, -12500);
+  assert.equal(flipped.version, replanned.version, "removal by approval records no plan edit");
+  assert.deepEqual(await effectCounts(), beforeApproval, "omissions schedule, send, book, order and charge nothing");
 
   const state = await workState.get(jobId);
   const expectedRevision = (state.events.at(-1)?.sequence ?? 0) + state.links.length;
   const closed = await workState.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(),
     expectedRevision, action: "close", reason: "cancelled_by_customer", note: "Fictional customer cancelled the work" });
   assert.equal(closed.events.at(-1).kind, "closed");
-  assert.deepEqual(await workPlan.read(jobId, planQuery), updated);
+  assert.deepEqual(await workPlan.read(jobId, planQuery), flipped);
 });
 
 const measurementQuery = { version: "v2-measurement-query.v1" };
@@ -825,18 +976,6 @@ test("forced measurement policies hide revisions and reject changes from the sec
   }
   assert.equal((await runtime.query(select, key)).rowCount, 0);
 });
-
-const editEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
-  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_work_plan.edited' ORDER BY sequence`, [jobRef])).rows;
-
-async function verifyTenantChain(tenantId) {
-  const { rows } = await admin.query(`SELECT id, tenant_id AS "tenantId", sequence::int, version, actor_ref AS "actorRef",
-    event_type AS "eventType", subject_type AS "subjectType", subject_ref AS "subjectRef", occurred_at AS "occurredAt", payload,
-    trim(payload_hash) AS "payloadHash", trim(previous_hash) AS "previousHash", trim(event_hash) AS "eventHash"
-    FROM app.audit_event WHERE tenant_id = $1 ORDER BY sequence`, [tenantId]);
-  assert.ok(rows.length > 0);
-  assert.doesNotThrow(() => verifyAuditChain(rows));
-}
 
 test("each recorded plan edit appends one audit event in its transaction, and a replay appends none", async () => {
   const { draftJob, sessionId, read, edit } = await draftForPlan();
