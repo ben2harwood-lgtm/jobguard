@@ -64,6 +64,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | C14 | Q39 | V2-FL-5 firm lock, supplier, feed and the rest (37) | **web Codex** | `codex/sandbox/v2-fl1` | 2051 | RED tenancy |
 | C15 | Q40 | V2-FL-F definer-function review (report, no migration) | **web Codex** | `codex/sandbox/v2-fl1` | none | RED tenancy |
 | C16 | Q41 | V2-D4B translated crew briefs, fake translator only (Ben: paid service later) | **web Codex** | #954 `codex/sandbox/v2-d5b-b` | 2052 | RED |
+| D5 | Q42 | V2-B1C walk check and correct: "needs room" tray, re-file a photo, original kept | **desktop Codex** | `codex/sandbox/v2-b1b` #957 | 2029 | RED |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Codex** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
