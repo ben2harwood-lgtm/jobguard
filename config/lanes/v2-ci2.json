@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-ci2": {
+      "branches": ["codex/sandbox/v2-ci2"],
+      "allow": [
+        ".github/workflows/ci.yml",
+        "tools/v2/audit-chain-guard.mjs",
+        "tools/v2-audit-chain-guard.test.mjs"
+      ],
+      "note": "Q18 V2-CI2 T2: review pointers and named seed evidence declarations. No app, database or browser workflow changes. Stacked on #938 (codex/sandbox/v2-ci1-stack) so the guard scope matches V2_SEED_REQUIRED; retarget to v2/main after #938 merges. This lane's own JSON is implicitly allowed."
+    }
+  }
+}
