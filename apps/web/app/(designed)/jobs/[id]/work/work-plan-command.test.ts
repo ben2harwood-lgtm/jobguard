@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extraNotPlannedReason, workPlanEditCommand } from "./work-plan-command";
+import { extraDirectionCommand, extraNotPlannedReason, workPlanEditCommand } from "./work-plan-command";
 
 const plan = { quoteRevisionId: "00000000-0000-4000-8000-000000000001", version: 3 };
 const scopeItemId = "00000000-0000-4000-8000-000000000010";
@@ -37,5 +37,15 @@ describe("extraNotPlannedReason", () => {
       .toBe("no price change: say whether it adds or removes work");
     expect(extraNotPlannedReason({ ...extra, reason: "omission", planningDropped: true }))
       .toBe("removed work, nothing to plan · planning on this extra was set aside");
+  });
+});
+
+// C3B-2 (Q48)
+describe("extraDirectionCommand", () => {
+  it("binds the answer to the shown plan version and revision", () => {
+    expect(extraDirectionCommand(plan, { variationRevisionId }, "adds_work")).toEqual({
+      version: "work-plan-extra-direction.v1", quoteRevisionId: plan.quoteRevisionId, expectedVersion: 3,
+      variationRevisionId, direction: "adds_work" });
+    expect(extraDirectionCommand(plan, { variationRevisionId }, "removes_work").direction).toBe("removes_work");
   });
 });

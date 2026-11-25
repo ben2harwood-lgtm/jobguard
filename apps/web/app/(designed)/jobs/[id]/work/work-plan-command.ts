@@ -13,7 +13,15 @@ export function workPlanEditCommand(plan: { quoteRevisionId: string; version: nu
 
 export type ExtraNotPlanned = {
   scopeItemId: string; title: string; reason: "omission" | "direction_unknown"; planningDropped: boolean;
+  variationRevisionId?: string;
 };
+
+/** C3B-2: the builder's answer for an approved no-charge extra, bound to the revision the screen shows. */
+export function extraDirectionCommand(plan: { quoteRevisionId: string; version: number },
+  extra: { variationRevisionId: string }, direction: "adds_work" | "removes_work") {
+  return { version: "work-plan-extra-direction.v1", quoteRevisionId: plan.quoteRevisionId, expectedVersion: plan.version,
+    variationRevisionId: extra.variationRevisionId, direction } as const;
+}
 
 /** The plain reason an approved extra is not on the plan. */
 export function extraNotPlannedReason(extra: ExtraNotPlanned) {

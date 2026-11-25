@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Card, Empty, Note, Tag, shortDate } from "../../../designed-ui";
 import { JOB_SAVED_EVENT } from "../../../../ui/job-page-fetch";
-import { extraNotPlannedReason, workPlanEditCommand, type ExtraNotPlanned, type TaskChanges } from "./work-plan-command";
+import { extraDirectionCommand, extraNotPlannedReason, workPlanEditCommand, type ExtraNotPlanned, type TaskChanges } from "./work-plan-command";
 
 // The work-plan route's JSON, as this card reads it. Client code keeps server packages out.
 type Task = {
@@ -156,6 +156,38 @@ export function WorkPlan({ jobId }: { jobId: string }) {
     }
   }
 
+  // C3B-2: say whether an approved no-charge extra adds or removes work, then re-read the plan.
+  const directionReplay = useRef<{ payload: string; commandId: string }>(null);
+  async function recordDirection(extra: ExtraNotPlanned & { variationRevisionId: string }, direction: "adds_work" | "removes_work") {
+    if (!plan || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setProblem(null);
+    setNotice("");
+    const command = extraDirectionCommand(plan, extra, direction);
+    const payload = JSON.stringify(command);
+    if (directionReplay.current?.payload !== payload) directionReplay.current = { payload, commandId: crypto.randomUUID() };
+    try {
+      await requestPlan(path, { ...command, commandId: directionReplay.current.commandId });
+      directionReplay.current = null;
+      setNotice(direction === "adds_work" ? "Extra added to Unplanned." : "Extra kept off the plan.");
+      try {
+        const { view, current } = await readPlan();
+        if (current) setPlan(view);
+      } catch {
+        setProblem({ message: "Your answer was saved, but the updated plan could not open.", reload: true });
+      }
+    } catch (error) {
+      const stale = error instanceof PlanRequestError && error.message === "WORK_PLAN_VERSION_CONFLICT";
+      setProblem(stale
+        ? { message: "The plan changed since you opened it. Your answer was not saved.", reload: true }
+        : { message: "Your answer could not be confirmed. Try again." });
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
+
   async function switchLive() {
     if (!plan || plan.state !== "accepted" || plan.acceptanceCancelled || inFlight.current) return;
     inFlight.current = true;
@@ -230,7 +262,17 @@ export function WorkPlan({ jobId }: { jobId: string }) {
     </div>}
     {!!plan?.extrasNotPlanned?.length && <div className="card-body">
       <h3>Approved extras not on the plan</h3>
-      <ul>{plan.extrasNotPlanned.map(extra => <li key={extra.scopeItemId}>{extra.title}: {extraNotPlannedReason(extra)}</li>)}</ul>
+      <ul>{plan.extrasNotPlanned.map(extra => <li key={extra.scopeItemId}>{extra.title}: {extraNotPlannedReason(extra)}
+        {extra.reason === "direction_unknown" && extra.variationRevisionId ? (() => {
+          const asked = { ...extra, variationRevisionId: extra.variationRevisionId };
+          return <div className="form-actions">
+            <button type="button" className="btn small" aria-label={`Adds work: ${extra.title}`} disabled={busy || problem?.reload}
+              onClick={() => void recordDirection(asked, "adds_work")}>Adds work</button>
+            <button type="button" className="btn small" aria-label={`Removes work: ${extra.title}`} disabled={busy || problem?.reload}
+              onClick={() => void recordDirection(asked, "removes_work")}>Removes work</button>
+          </div>;
+        })() : null}
+      </li>)}</ul>
     </div>}
   </Card>;
 }

@@ -822,8 +822,10 @@ test("existing Switch live activates a plan once and only approved variation rev
   assert.deepEqual(removed.tasks, replanned.tasks, "an approved omission adds no task");
   assert.deepEqual(removed.unplanned, replanned.unplanned, "an approved omission is not Unplanned work");
   assert.deepEqual(removed.extrasNotPlanned, [
-    { scopeItemId: omittedScope, title: "Omit the upstand tiling", reason: "omission", planningDropped: false },
-    { scopeItemId: freeScope, title: "No-charge extra", reason: "direction_unknown", planningDropped: false },
+    { scopeItemId: omittedScope, title: "Omit the upstand tiling", variationRevisionId: omissionRevision, reason: "omission",
+      planningDropped: false },
+    { scopeItemId: freeScope, title: "No-charge extra", variationRevisionId: freeRevision, reason: "direction_unknown",
+      planningDropped: false },
   ]);
   const money = Object.fromEntries(removed.agreement.approvedVariations.map(item => [item.scopeItemId, item.signedDeltaPence]));
   assert.deepEqual(money, { [scopeItemId]: 35000, [omittedScope]: -18000, [freeScope]: 0 }, "the agreement keeps every approved revision's money");
@@ -844,7 +846,7 @@ test("existing Switch live activates a plan once and only approved variation rev
   assert.equal(flipped.unplanned.some(item => item.scopeItemId === scopeItemId), false);
   assert.equal(flipped.scopeItems.some(item => item.scopeItemId === scopeItemId), false);
   assert.deepEqual(flipped.extrasNotPlanned[0],
-    { scopeItemId, title: "Trim no longer needed", reason: "omission", planningDropped: true });
+    { scopeItemId, title: "Trim no longer needed", variationRevisionId: flipId, reason: "omission", planningDropped: true });
   assert.equal(flipped.agreement.approvedVariations.find(item => item.scopeItemId === scopeItemId).signedDeltaPence, -12500);
   assert.equal(flipped.version, replanned.version, "removal by approval records no plan edit");
   assert.deepEqual(await effectCounts(), beforeApproval, "omissions schedule, send, book, order and charge nothing");
@@ -1030,4 +1032,198 @@ test("opening the plan screen creates the plan with one audit event; a quote-sav
   assert.equal(saves.length, 1, "the quote save appended its own event for the refreshed revision");
   await read();
   assert.equal((await generatedEvents(nextId)).length, 0);
+});
+
+// ---- C3B-2 (Q48): the builder says whether an approved no-charge extra adds or removes work. ----
+// Runs after the c-chain test above has closed the seeded job, so this job can switch live on its own.
+async function liveJobForDirections() {
+  const { draftJob, read } = await draftForPlan();
+  const { sessionId, cookies } = await signIn("builder");
+  const { parties, quote, workPlan, variation } = createWorkspaceApplication({ pool: runtime, sessionId });
+  const partyView = await parties.view({ sessionId }, draftJob);
+  const customer = { version: "customer.v1", type: "person", name: "Fictional C3B-2 Customer",
+    email: "c3b2-customer@jobguard-v2.invalid", phone: "+447700900043" };
+  await parties.command({ sessionId }, draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: partyView.jobRevision, expectedBindingId: null, customer, customerRef: null,
+    site: { version: "site.v1", addressLines: ["44 Make-Believe Mews"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  await read();
+  const { view: { documentId, documentVersion, contentHash } } = await quote.preview(draftJob, {
+    version: "quote-preview-command.v1", recipient: customer.email,
+  });
+  await quote.issue(draftJob, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId, contentHash, recipient: customer.email });
+  await json(await request(`/api/jobs/${draftJob}/quotes/delivery/execute`, {
+    cookies, body: { version: "quote-execute-command.v1", documentId, mode: "success" },
+  }));
+  await quote.accept(draftJob, { documentId, documentVersion, documentHash: contentHash,
+    version: "quote-acceptance-command.v1", commandId: randomUUID(), statedCustomerName: customer.name,
+    statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  await quote.activate(draftJob, switchLive());
+  const vary = (action, fields) => variation.command(draftJob, { version: "variation-command.v1", action, ...fields });
+  const attestation = "Builder-recorded practice acceptance — not an authenticated customer signature";
+  const approvedExtra = async (description, unitRatePence, direction = "addition") => {
+    const proposalId = randomUUID();
+    const scopeItemId = randomUUID();
+    const proposed = await vary("propose", { proposalId, scopeItemId, existingScopeItemId: null, lineageParentScopeItemId: null,
+      description, captureText: description, price: { quantity: "1", unit: "item", unitRatePence, direction } });
+    const revisionId = proposed.variations.find(item => item.id === proposalId).currentRevisionId;
+    await vary("approve", { variationId: proposalId, revisionId, approvalId: randomUUID(), attestation });
+    return { proposalId, scopeItemId, revisionId };
+  };
+  return { jobId: draftJob, sessionId, workPlan, vary, approvedExtra, attestation,
+    read: () => workPlan.read(draftJob, planQuery) };
+}
+
+const directionCommand = (plan, variationRevisionId, direction) => ({ version: "work-plan-extra-direction.v1",
+  commandId: randomUUID(), quoteRevisionId: plan.quoteRevisionId, expectedVersion: plan.version, variationRevisionId, direction });
+const directionEvents = async jobId => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
+  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_work_plan.extra_direction_recorded' ORDER BY sequence`,
+[jobId])).rows;
+
+test("C3B-2: a no-charge extra marked 'adds work' can be planned, 'removes work' stays off, and money is unchanged", async () => {
+  const { jobId, sessionId, workPlan, approvedExtra, vary, attestation, read } = await liveJobForDirections();
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const socket = await approvedExtra("Move the socket", 0);
+  const skirting = await approvedExtra("Leave the skirting", 0);
+  const trim = await approvedExtra("Add trim", 12500);
+  const before = await read();
+  assert.deepEqual(before.extrasNotPlanned, [
+    { scopeItemId: socket.scopeItemId, title: "Move the socket", variationRevisionId: socket.revisionId,
+      reason: "direction_unknown", planningDropped: false },
+    { scopeItemId: skirting.scopeItemId, title: "Leave the skirting", variationRevisionId: skirting.revisionId,
+      reason: "direction_unknown", planningDropped: false },
+  ]);
+  const money = JSON.stringify(before.agreement);
+
+  // With no direction, the £0 extra can't be planned, by the app or the database.
+  const unplannedEdit = { ...planEdit(before, { scopeItemId: socket.scopeItemId, key: customTaskKey },
+    { position: before.tasks.length + 1, trade: "electrician", durationMinutes: 30 }), variationRevisionId: socket.revisionId };
+  await assert.rejects(workPlan.edit(jobId, unplannedEdit), { code: "WORK_PLAN_INVALID_EDIT" });
+  const { rows: [owner] } = await admin.query(`SELECT actor_membership_id AS id FROM app.v2_work_plan_edit
+    WHERE tenant_id = $1 LIMIT 1`, [context.tenantId]);
+  const rawEdit = extra => withTenant(runtime, context, db => db.$client.query(`INSERT INTO app.v2_work_plan_edit
+    (tenant_id,job_id,quote_revision_id,command_id,scope_item_id,template_task_key,expected_version,changes,actor_membership_id,variation_revision_id)
+    VALUES ($1,$2,$3,$4,$5,$6,999,'{"durationMinutes":88}',$7,$8)`,
+  [context.tenantId, jobId, before.quoteRevisionId, randomUUID(), extra.scopeItemId, customTaskKey, owner.id, extra.revisionId]));
+  await assert.rejects(rawEdit(socket), { code: "23503" }, "the 2020 check still refuses a £0 extra with no direction");
+
+  // "Adds work": one event, version up by one, and the extra is Unplanned, ready for C3B-1's editing.
+  const adds = directionCommand(before, socket.revisionId, "adds_work");
+  await assert.rejects(workPlan.recordExtraDirection(jobId, { ...adds, direction: "sideways" }), { code: "WORK_PLAN_INVALID_EDIT" });
+  await assert.rejects(workPlan.recordExtraDirection(jobId, { ...adds, expectedVersion: before.version + 1 }),
+    { code: "WORK_PLAN_VERSION_CONFLICT" });
+  const receipt = await workPlan.recordExtraDirection(jobId, adds);
+  assert.equal(receipt.version, before.version + 1);
+  assert.equal(receipt.direction, "adds_work");
+  assert.deepEqual(await workPlan.recordExtraDirection(jobId, adds), receipt, "an exact replay returns the same receipt");
+  await assert.rejects(workPlan.recordExtraDirection(jobId, { ...adds, direction: "removes_work" }),
+    { code: "WORK_PLAN_COMMAND_CONFLICT" });
+  const added = await read();
+  assert.equal(added.version, before.version + 1);
+  assert.deepEqual(added.unplanned.find(item => item.scopeItemId === socket.scopeItemId),
+    { scopeItemId: socket.scopeItemId, title: "Move the socket", status: "Unplanned" });
+  assert.equal(added.scopeItems.find(item => item.scopeItemId === socket.scopeItemId).variationRevisionId, socket.revisionId);
+  assert.equal(added.extrasNotPlanned.some(item => item.scopeItemId === socket.scopeItemId), false);
+  assert.equal(JSON.stringify(added.agreement), money, "the agreement is byte-identical");
+  const [event, ...more] = await directionEvents(jobId);
+  assert.equal(more.length, 0, "the replay appended nothing");
+  assert.equal(event.tenant_id, context.tenantId);
+  assert.equal(event.actor_ref, `membership:${receipt.actorMembershipId}`);
+  assert.deepEqual(event.payload.references, { commandId: adds.commandId, variationRevisionId: socket.revisionId,
+    scopeItemId: socket.scopeItemId, direction: "adds_work" });
+  assert.equal("version" in event.payload.references, false);
+  assert.doesNotMatch(JSON.stringify(event.payload), /socket/iu, "no free text in the audit payload");
+
+  // The open screen's next edit is stale; planned against the new version, the extra joins the plan.
+  await assert.rejects(workPlan.edit(jobId, unplannedEdit), { code: "WORK_PLAN_VERSION_CONFLICT" });
+  const planned = { ...planEdit(added, { scopeItemId: socket.scopeItemId, key: customTaskKey },
+    { position: added.tasks.length + 1, trade: "electrician", durationMinutes: 30 }), variationRevisionId: socket.revisionId };
+  await workPlan.edit(jobId, planned);
+  const withSocket = await read();
+  assert.deepEqual(withSocket.tasks.at(-1), { key: customTaskKey, scopeItemId: socket.scopeItemId, title: "Move the socket",
+    position: added.tasks.length + 1, trade: "electrician", durationMinutes: 30, dependsOn: [], materialNeeds: [],
+    proofPoints: [], customerChoices: [] });
+  assert.equal(withSocket.version, added.version + 1);
+
+  // "Removes work" lists the extra as an omission; it stays off the plan.
+  const removes = directionCommand(withSocket, skirting.revisionId, "removes_work");
+  await workPlan.recordExtraDirection(jobId, removes);
+  const removed = await read();
+  assert.deepEqual(removed.extrasNotPlanned, [{ scopeItemId: skirting.scopeItemId, title: "Leave the skirting",
+    variationRevisionId: skirting.revisionId, reason: "omission", planningDropped: false }]);
+  assert.equal(removed.unplanned.some(item => item.scopeItemId === skirting.scopeItemId), false);
+  await assert.rejects(rawEdit(skirting), { code: "23503" }, "the database refuses planning a £0 'removes work' extra");
+  assert.equal(JSON.stringify(removed.agreement), money, "the agreement is byte-identical");
+
+  // Only a direction_unknown extra in this snapshot takes an answer.
+  for (const revisionId of [socket.revisionId, trim.revisionId, randomUUID()]) {
+    await assert.rejects(workPlan.recordExtraDirection(jobId, directionCommand(removed, revisionId, "adds_work")),
+      { code: "WORK_PLAN_INVALID_EDIT" });
+  }
+
+  // The database refuses a direction for a non-zero, unapproved or other-scope-item revision, and a second answer.
+  const pendingId = randomUUID();
+  await vary("revise", { variationId: trim.proposalId, expectedRevisionId: trim.revisionId, revisionId: pendingId,
+    description: "Add trim, no charge", price: { quantity: "1", unit: "item", unitRatePence: 0, direction: "addition" } });
+  const rawDirection = (revisionId, scopeItemId, direction = "adds_work") => withTenant(runtime, context, db => db.$client.query(
+    `INSERT INTO app.v2_extra_direction (tenant_id, job_id, variation_revision_id, scope_item_id, direction, quote_revision_id,
+      command_id, request_digest, actor_membership_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [context.tenantId, jobId, revisionId, scopeItemId, direction, removed.quoteRevisionId, randomUUID(), "0".repeat(64),
+      receipt.actorMembershipId]));
+  await assert.rejects(rawDirection(trim.revisionId, trim.scopeItemId), { code: "23503" }, "non-zero revision");
+  await assert.rejects(rawDirection(pendingId, trim.scopeItemId), { code: "23503" }, "unapproved revision");
+  const other = await approvedExtra("Patch the plaster", 0);
+  await assert.rejects(rawDirection(other.revisionId, socket.scopeItemId), { code: "23503" }, "another scope item");
+  await assert.rejects(rawDirection(socket.revisionId, socket.scopeItemId, "removes_work"), { code: "23505" },
+    "one answer per revision");
+  await assert.rejects(withTenant(runtime, context, db => db.$client.query(
+    "UPDATE app.v2_extra_direction SET direction = 'removes_work' WHERE variation_revision_id = $1", [socket.revisionId])));
+  await assert.rejects(withTenant(runtime, context, db => db.$client.query(
+    "DELETE FROM app.v2_extra_direction WHERE variation_revision_id = $1", [socket.revisionId])));
+  await assert.rejects(admin.query("UPDATE app.v2_extra_direction SET direction = 'removes_work' WHERE variation_revision_id = $1",
+    [socket.revisionId]), "the immutability trigger refuses an UPDATE even for the owner");
+  await assert.rejects(admin.query("DELETE FROM app.v2_extra_direction WHERE variation_revision_id = $1", [socket.revisionId]),
+    "the immutability trigger refuses a DELETE even for the owner");
+
+  // A later approved revision of the same extra starts as direction_unknown again; its planning is set aside.
+  const nextFree = randomUUID();
+  await vary("revise", { variationId: socket.proposalId, expectedRevisionId: socket.revisionId, revisionId: nextFree,
+    description: "Move the socket and switch", price: { quantity: "1", unit: "item", unitRatePence: 0, direction: "addition" } });
+  await vary("approve", { variationId: socket.proposalId, revisionId: nextFree, approvalId: randomUUID(), attestation });
+  const reasked = await read();
+  assert.deepEqual(reasked.extrasNotPlanned.find(item => item.scopeItemId === socket.scopeItemId), {
+    scopeItemId: socket.scopeItemId, title: "Move the socket and switch", variationRevisionId: nextFree,
+    reason: "direction_unknown", planningDropped: true });
+  assert.equal(reasked.tasks.some(task => task.scopeItemId === socket.scopeItemId), false);
+
+  // A forced audit failure keeps neither the direction nor its event.
+  const failing = directionCommand(reasked, other.revisionId, "adds_work");
+  await assert.rejects(new WorkPlanRepository(failingAuditPool(runtime)).recordExtraDirection(context, jobId, sessionId, failing),
+    { code: "FORCED" });
+  const { rows: [{ count }] } = await admin.query("SELECT count(*)::int AS count FROM app.v2_extra_direction WHERE command_id = $1",
+    [failing.commandId]);
+  assert.equal(count, 0, "the direction rolled back with its audit event");
+  assert.equal((await directionEvents(jobId)).length, 2);
+  assert.equal((await read()).version, reasked.version);
+  await verifyTenantChain(context.tenantId);
+
+  // Rule 30: the second firm reads none of the rows as jobguard_runtime, and its direction command is refused.
+  const outsider = await signIn("second-builder");
+  const { rowCount } = await withTenant(runtime, outsider.realContext, db => db.$client.query(
+    "SELECT 1 FROM app.v2_extra_direction WHERE job_id = $1", [jobId]));
+  assert.equal(rowCount, 0, "the second firm reads none of the first firm's directions");
+  const { context: outsiderPractice } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  if (outsiderPractice.tenantId !== context.tenantId) {
+    const { rowCount: practiceRows } = await withTenant(runtime, outsiderPractice, db => db.$client.query(
+      "SELECT 1 FROM app.v2_extra_direction WHERE job_id = $1", [jobId]));
+    assert.equal(practiceRows, 0);
+  }
+  const otherPlan = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).workPlan;
+  await assert.rejects(otherPlan.recordExtraDirection(jobId, directionCommand(reasked, other.revisionId, "adds_work")),
+    { code: "NOT_FOUND" });
+  assert.equal((await directionEvents(jobId)).length, 2);
 });
