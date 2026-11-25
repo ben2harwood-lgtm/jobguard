@@ -221,7 +221,8 @@ export async function runChasingProof(t, { admin, runtime, firstSession, secondS
       if (reduction === "payment") {
         await recordPayment(job, fixture, 6000);
       } else {
-        await db.withTenant(admin, first.context, tx => tx.$client.query(`INSERT INTO app.customer_credit_note
+        const creditPool = db.practiceMaterialPool(admin, first.digest);
+        await db.withTenant(creditPool, first.context, tx => tx.$client.query(`INSERT INTO app.customer_credit_note
           (id,tenant_id,job_id,invoice_id,authorization_id,credit_number,amount_pence,currency,reason,net_pence,tax_pence,total_pence)
           VALUES($1,$2,$3,$4,$5,$6,6000,'GBP','Fictional partial credit',-5000,-1000,-6000)`,
         [randomUUID(), tenant, job.job, fixture.invoice, fixture.authorization, `K4-CN-${fixture.invoice.slice(0, 8)}`]));
