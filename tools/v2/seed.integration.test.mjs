@@ -1417,7 +1417,10 @@ test("D4B translates and reloads offline, audits once, replays without writes an
     assert.equal(events[0].payload.references.commandId, command.commandId);
     assert.equal(events[0].payload.references.briefVersion, String(brief.version));
     assert.equal("version" in events[0].payload.references, false);
-    assert.doesNotMatch(JSON.stringify(events[0].payload), /tiler|Translation rehearsal|owner|splashback|price|fee/iu);
+    // The hex hashes can contain letter runs such as "fee", so check them by shape and the text regex on the rest.
+    assert.match(events[0].payload.hashes.trade, /^[0-9a-f]{64}$/u);
+    assert.equal(events[0].payload.hashes.sourceText, saved.sourceTextHash);
+    assert.doesNotMatch(JSON.stringify({ ...events[0].payload, hashes: undefined }), /tiler|Translation rehearsal|owner|splashback|price|fee/iu);
     const reopened = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId }).crewBriefTranslations;
     assert.deepEqual(await reopened.read(jobId, query), saved);
     assert.deepEqual(await reopened.translate(jobId, command), saved);
@@ -1486,7 +1489,7 @@ test("D4B is immutable, fake-only, forced-RLS and invisible to the second firm f
     FROM pg_class WHERE oid = $1::regclass`, [table]);
   assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
     identity_access: false, worker_access: false, infra_access: false });
-  const firmLock = await admin.query(`SELECT permissive, cmd, roles FROM pg_policies
+  const firmLock = await admin.query(`SELECT permissive, cmd, roles::text[] AS roles FROM pg_policies
     WHERE schemaname = 'app' AND tablename = 'v2_crew_brief_translation' AND policyname = 'v2_practice_firm'`);
   assert.deepEqual(firmLock.rows, [{ permissive: "RESTRICTIVE", cmd: "ALL", roles: ["jobguard_runtime"] }]);
   const select = `SELECT * FROM ${table} WHERE job_id = $1`;
