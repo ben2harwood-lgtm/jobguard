@@ -3,20 +3,21 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Card, Empty, Note, Tag, shortDate } from "../../../designed-ui";
 import { JOB_SAVED_EVENT } from "../../../../ui/job-page-fetch";
+import { extraNotPlannedReason, workPlanEditCommand, type ExtraNotPlanned, type TaskChanges } from "./work-plan-command";
 
 // The work-plan route's JSON, as this card reads it. Client code keeps server packages out.
 type Task = {
   key: string; scopeItemId: string; title: string; trade: string; durationMinutes: number; position: number;
-  scheduledDate?: string | null; assignee?: string | null; needsReview?: true;
+  scheduledDate?: string | null; assignee?: string | null; needsReview?: true; variationRevisionId?: string;
 };
 type PlanView = {
   state: "draft" | "accepted" | "live"; tasks: Task[]; quoteRevisionId: string; version: number;
   changes: { added: Task[]; changed: { before: Task; after: Task }[]; removed: Task[] };
   acceptanceCancelled: boolean;
-  unplanned: { scopeItemId: string; title: string; key: string }[];
+  unplanned: { scopeItemId: string; title: string; key: string; variationRevisionId?: string }[];
+  extrasNotPlanned?: ExtraNotPlanned[];
 };
-type TaskChanges = Partial<Pick<Task, "position" | "durationMinutes" | "trade" | "scheduledDate" | "assignee">>;
-type EditableTask = Pick<Task, "title" | "key" | "scopeItemId"> &
+type EditableTask = Pick<Task, "title" | "key" | "scopeItemId" | "variationRevisionId"> &
   Partial<Pick<Task, "trade" | "position" | "durationMinutes" | "scheduledDate" | "assignee">>;
 type Problem = { message: string; reload?: boolean };
 
@@ -130,8 +131,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
     setBusy(true);
     setProblem(null);
     setNotice("");
-    const command = { version: "work-plan-edit.v1", quoteRevisionId: plan.quoteRevisionId,
-      expectedVersion: plan.version, taskKey: task.key, scopeItemId: task.scopeItemId, changes } as const;
+    const command = workPlanEditCommand(plan, task, changes);
     const payload = JSON.stringify(command);
     if (editReplay.current?.payload !== payload) editReplay.current = { payload, commandId: crypto.randomUUID() };
     try {
@@ -227,6 +227,10 @@ export function WorkPlan({ jobId }: { jobId: string }) {
         <p>Needs a trade, duration and place in the plan</p>
         {taskEditor(item)}
       </article>)}
+    </div>}
+    {!!plan?.extrasNotPlanned?.length && <div className="card-body">
+      <h3>Approved extras not on the plan</h3>
+      <ul>{plan.extrasNotPlanned.map(extra => <li key={extra.scopeItemId}>{extra.title}: {extraNotPlannedReason(extra)}</li>)}</ul>
     </div>}
   </Card>;
 }
