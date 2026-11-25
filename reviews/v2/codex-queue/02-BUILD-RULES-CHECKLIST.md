@@ -14,6 +14,7 @@ For JobGuard (jobguard repo, AGENTS.md rev 3.0) and Vibe Control (aac-studio, LE
 7. **Commands.** Each one carries person, time, job, expected version and replay identity. A stale version is refused, and the same id with changed content is refused.
 8. **Migrations.** Use only your reserved number. RLS is enabled and forced, runtime gets SELECT/INSERT only, and the migration note and proof file are included. Add a second-firm test (select, insert, update and delete none of the rows).
 9. **No secrets or real sends.** No real keys in code or fixtures, and no fixed secret on anything reachable from outside. Outbound goes only to the local catcher. Zero paid AI calls unless the packet says otherwise.
+    - **Origin check (V2 addition, 25 Nov):** every new POST route checks `Origin` against the configured `AUTH_ALLOWED_ORIGIN` (signed-in: `resolveVerifiedTenantContext(..., identity.allowedOrigin)`; customer link: F6's `extraLinkOrigin`). Never compare with `new URL(request.url).origin` and never trust forwarded headers. See 01-RULES rule 21.
 10. **Never weaken checks.** Do not delete, skip or loosen a test or guard to get green. A test that skips itself must fail in CI, not pass silently.
 
 ## Tests
