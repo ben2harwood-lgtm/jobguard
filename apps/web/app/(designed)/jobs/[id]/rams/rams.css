@@ -10,9 +10,20 @@
 .rams-section-text { white-space: pre-wrap; }
 .rams-warning { font-weight: 700; }
 @media print {
-  body * { visibility: hidden !important; }
-  #rams-document, #rams-document * { visibility: visible !important; }
-  #rams-document { position: absolute; inset: 0 auto auto 0; width: 100%; color: #000 !important; background: #fff !important; }
+  /* Let the document flow across pages through the normally scrollable app shell. */
+  :has(#rams-document) {
+    display: block !important;
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body:has(#rams-document) > :not(#rams-document):not(:has(#rams-document)),
+  body :has(#rams-document) > :not(#rams-document):not(:has(#rams-document)) { display: none !important; }
+  #rams-document { width: 100%; color: #000 !important; background: #fff !important; }
   #rams-document .rams-controls, #rams-document button { display: none !important; }
   #rams-document .card { background: #fff !important; color: #000 !important; box-shadow: none !important; border: 1px solid #aaa; break-inside: avoid; }
   #rams-document p, #rams-document h1, #rams-document h2, #rams-document .tag { color: #000 !important; }

@@ -1,5 +1,4 @@
 // Q06: run against the checked V2 server, including the HTTPS phone-mode server.
-// Sign-in setup copied from K5A 7560b597 (rule 22); one HTTPS session per file.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
@@ -7,54 +6,33 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { DEMO_TENANT_ID } from "../../packages/db/dist/index.js";
-import { chromium, expect } from "../../apps/web/node_modules/@playwright/test/index.mjs";
+import { expect } from "../../apps/web/node_modules/@playwright/test/index.mjs";
 
-const origin = process.env.V2_TEST_ORIGIN;
-assert.ok(origin && new URL(origin).protocol === "https:", "Use the running V2 phone HTTPS origin");
+import { launchV2Browser, signInOnce, v2Context } from "./test/browser-session.mjs";
+
 const warning = "Prepared by JobGuard from your plan. You must check and complete it. It is not a certificate.";
-let browser, storageState, jobId, jobTitle, jobAddress;
+let origin, browser, storageState, jobId, jobTitle, jobAddress;
 before(async () => {
-  browser = await chromium.launch({ executablePath: process.env.V2_TEST_CHROMIUM });
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  browser = await launchV2Browser();
+  ({ origin, storageState, jobId } = await signInOnce(browser));
+  const context = await v2Context(browser, storageState, 360);
   try {
-    const page = await context.newPage();
-    await page.goto(`${origin}/sign-in`);
-    await page.getByLabel("Fictional email address").fill("builder@jobguard-v2.invalid");
-    await page.getByLabel("What do you want to do?").selectOption("signin");
-    await page.getByRole("button", {name:"Request code"}).click();
-    const code = page.getByTestId("fixture-code");
-    await expect(code).toHaveText(/^[0-9]{8}$/u);
-    await page.getByLabel("Eight-digit code").fill(await code.textContent());
-    const [verified] = await Promise.all([page.waitForResponse(`${origin}/api/auth/verify`), page.getByRole("button",{name:"Verify code"}).click()]);
-    const {csrfToken} = await verified.json();
-    // Reuse one signed-in session across both viewports and reloads.
-    await page.evaluate(async token => {
-      const response = await fetch("/api/auth/practice", {method:"POST", headers:{"content-type":"application/json","x-csrf-token":token},
-        body:JSON.stringify({version:"linked-practice-company.v1",action:"enter"})});
-      if (!response.ok) throw new Error(`practice:${response.status}`);
-    }, csrfToken);
-    const jobs = await page.evaluate(async tenantId => {
-      const response = await fetch(`/api/jobs?tenantId=${tenantId}`);
-      if (!response.ok) throw new Error(`jobs:${response.status}`);
-      return (await response.json()).jobs;
-    }, DEMO_TENANT_ID);
-    jobId = jobs.find(job => job.title.includes("Occupied-home kitchen splashback and hall decorating"))?.id;
-    assert.ok(jobId, "The seeded job must appear in Jobs");
-    jobTitle = jobs.find(job => job.id === jobId).title;
-    jobAddress = await page.evaluate(async id => {
-      const response = await fetch(`/api/jobs/${id}/parties`);
-      if (!response.ok) throw new Error(`parties:${response.status}`);
-      const { current } = await response.json();
-      if (!current?.site) throw new Error("The seeded site address must exist");
-      return [...current.site.addressLines, current.site.town, current.site.postcode].filter(Boolean).join(", ");
-    }, jobId);
-    storageState = await context.storageState();
+    const jobsResponse = await context.request.get(`${origin}/api/jobs?tenantId=${DEMO_TENANT_ID}`);
+    assert.ok(jobsResponse.ok(), `Jobs read failed: ${jobsResponse.status()}`);
+    const { jobs } = await jobsResponse.json();
+    jobTitle = jobs.find(job => job.id === jobId)?.title;
+    assert.ok(jobTitle, "The seeded job must have a title");
+    const partiesResponse = await context.request.get(`${origin}/api/jobs/${jobId}/parties`);
+    assert.ok(partiesResponse.ok(), `Parties read failed: ${partiesResponse.status()}`);
+    const { current } = await partiesResponse.json();
+    assert.ok(current?.site, "The seeded site address must exist");
+    jobAddress = [...current.site.addressLines, current.site.town, current.site.postcode].filter(Boolean).join(", ");
   } finally { await context.close(); }
 });
 after(async () => browser?.close());
 for (const width of [360, 1280]) {
   test(`Q06 RAMS browser, reload and actual print PDF at ${width}px`, { timeout: 120_000 }, async () => {
-    const context = await browser.newContext({ viewport: { width, height: 800 }, storageState, ignoreHTTPSErrors: true });
+    const context = await v2Context(browser, storageState, width);
     const directory = await mkdtemp(join(tmpdir(), "jobguard-rams-pdf-"));
     try {
       const page = await context.newPage(), foreign = [];
@@ -101,6 +79,7 @@ for (const width of [360, 1280]) {
       assert.equal(extracted.status, 0, `Install/use the test host's pdftotext for the real PDF check: ${extracted.error ?? extracted.stderr}`);
       const printed = (await readFile(join(directory, "rams.txt"), "utf8")).replace(/\s+/gu, " ");
       assert.ok(printed.includes(warning));
+      assert.ok(printed.includes("Emergency contacts"), "Emergency contacts must print");
       for (const heading of await document.getByRole("heading", { level: 2 }).allTextContents()) assert.ok(printed.includes(heading), heading);
       assert.ok(printed.includes(jobTitle));
       assert.ok(printed.includes(jobAddress));
