@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-c3": {
+      "branches": ["codex/sandbox/v2-c3"],
+      "note": "RED. Observe V2 plan acceptance and activation, and record internal planning edits. The validator includes config/lanes/v2-c3.json implicitly.",
+      "allow": [
+        "apps/api/src/workspace/work-plan.application.ts",
+        "packages/db/migration-notes/2004_v2_plan_disposition.md",
+        "packages/db/migrations/2004_v2_plan_disposition.sql",
+        "packages/db/src/v2-work-plan-edits.ts",
+        "packages/db/src/v2-work-plan-repository.ts",
+        "packages/db/test/migration-proofs/2004_v2_plan_disposition.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
