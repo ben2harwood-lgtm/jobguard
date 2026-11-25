@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-g0": {
+      "branches": ["codex/sandbox/v2-g0"],
+      "note": "T1 Q30 V2-G0. Certificates checklist, device-only drafts. Records page: mount only.",
+      "allow": [
+        "apps/web/app/ui/v2-certificates.ts",
+        "apps/web/app/ui/v2-certificates-panel.tsx",
+        "apps/web/app/ui/v2-certificates.test.ts",
+        "apps/web/app/(designed)/jobs/[id]/records/page.tsx",
+        "tools/v2/certificates.browser.test.mjs"
+      ]
+    }
+  }
+}
