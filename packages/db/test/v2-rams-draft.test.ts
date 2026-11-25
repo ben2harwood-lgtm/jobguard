@@ -65,6 +65,20 @@ describe("Q06 V2-K9 deterministic safety draft", () => {
     expect(editRamsSections(changed, clash.key, clash.text).find(section => section.key === clash.key)?.needsReview).toBe(false);
     expect(JSON.stringify(original)).toBe(frozen);
   });
+  it("flags edited controls on unplanned work when an approved replacement changes only its quantity or unit", () => {
+    const extra = randomUUID(), key = `hazards:${extra}:unplanned`;
+    const scopeItem = { scopeItemId: extra, description: "Add trim", category: null, quantity: "1", unit: "item", variationRevisionId: randomUUID() };
+    const withExtra = { ...plan, unplanned: [{ scopeItemId: extra, title: "Add trim", status: "Unplanned" as const }], scopeItems: [scopeItem] };
+    const original = previous(editRamsSections(ramsSections(withExtra as typeof plan), key, "Builder's fictional trim controls"));
+    expect(ramsSections(withExtra as typeof plan, original).find(section => section.key === key))
+      .toMatchObject({ text: "Builder's fictional trim controls", edited: true, needsReview: false });
+    for (const change of [{ quantity: "3" }, { unit: "m" }]) {
+      const replaced = { ...withExtra, scopeItems: [{ ...scopeItem, ...change, variationRevisionId: scopeItem.variationRevisionId }] };
+      expect(ramsSections(replaced as typeof plan, original).find(section => section.key === key))
+        .toMatchObject({ text: "Builder's fictional trim controls", edited: true, needsReview: true });
+      expect(ramsReadyToSign(ramsSections(replaced as typeof plan, original))).toBe(false);
+    }
+  });
   it("retains removed edited sections for reconciliation", () => {
     const sections = editRamsSections(ramsSections(plan), `hazards:${scope}:tile-splashback`, "Fictional builder controls");
     const next = ramsSections({ ...plan, tasks: [] }, previous(sections));

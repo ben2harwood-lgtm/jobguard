@@ -63,7 +63,10 @@ export function ramsSections(plan: WorkPlan, previous?: RamsDraft): RamsSection[
     const source = plan.tasks.find(entry => entry.scopeItemId === task.scopeItemId && entry.key === task.key);
     return section(`hazards:${task.scopeItemId}:${task.key}`, `Hazards and controls — ${task.title}`,
       hazards?.join("\n") ?? "No standard hazards listed: add your own",
-      { templateKey: plan.templateKey, task: source ? taskSource(source) : task }, !hazards);
+      // Unplanned work hashes its scope item too, so an approved replacement that only changes quantity or unit
+      // flags the builder's carried-over controls for review.
+      { templateKey: plan.templateKey, task: source ? taskSource(source)
+        : { ...task, scope: plan.scopeItems.find(item => item.scopeItemId === task.scopeItemId) } }, !hazards);
   });
   sections.push(
     section("sequence", "Sequence of work", plan.tasks.map((task, index) => `${index + 1}. ${task.title} (${task.trade})`).join("\n"),
