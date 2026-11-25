@@ -14,6 +14,7 @@ export {
 } from "./tenant-context.js";
 export * from "./evidence.js";
 export * from "./site-day-summary-repository.js";
+export * from "./variation-photo.js";
 
 export * from "./job-repository.js";
 
