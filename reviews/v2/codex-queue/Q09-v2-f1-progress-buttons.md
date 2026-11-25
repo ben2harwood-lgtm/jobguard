@@ -6,6 +6,14 @@ Tier: **RED** (new table; proof for the Final Check). Migration **2015**. Astra:
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-f1, plus section 2B item 20 (one-tap photo).
 **Starts:** now. **Base:** D4's branch `claude/project-thread-btt9d2` (#916). Draft PR against it. Merge D4 again when it moves (its audit fix D4A may land later). Do not edit D4's files.
 
+## Dry-check against the code (planner, 25 Nov 00:20 UK): verified with re-scoping; the mock-up passed (#930 at ff4d3366)
+- **Who presses:** there is no crew sign-in or crew link on V2 yet, and assignees are free text until C3C. So in this piece **the builder** presses Done, Blocked or Changed on a trade's brief (D4 #916), recording on the trade's behalf. A crew member pressing from their own link comes later, after C3C.
+- **Where it's recorded:** in F1's own table, shown on the brief. **No diary write.** The existing diary intake (0505 and 0539) has never been exercised on the V2 database. Writing to it is a later small piece (F1-D), after a probe shows it works on V2.
+- **Photos:** none in this piece. The upload path (`EvidenceService.beginUpload`/`finalize`) refuses on the V2 database (see V2-PX). Keep a nullable photo-reference column empty and add photos as F1-P after V2-PX. No camera.
+- **Task key:** tasks come from D4's brief, keyed by c3's `(quote_revision_id, scope_item_id, template_task_key)`.
+- **Event names (rule 18):** `v2.progress.done_recorded`, `.blocked_recorded` and `.changed_recorded`. Never use "completed" (0758 refuses it).
+- **Migration:** `packages/db/migrations/2015_...sql`.
+
 ## Goal
 On a trade's current brief, three actions: Done, Blocked (with a reason) and Changed (what changed on site). Each can carry proof photos attached to the right work item, and each writes into the existing job diary.
 
@@ -17,5 +25,5 @@ On a trade's current brief, three actions: Done, Blocked (with a reason) and Cha
 - Screen: buttons on the brief view, V2 only.
 
 ## Done when
-- Replaying a progress update records it once; Done on the tiling task shows in the diary; Blocked shows the reason; Changed adds nothing to scope, price or orders.
+- Replaying a progress update records it once; Done on the tiling task shows on the brief (diary later, F1-D); Blocked shows the reason; Changed adds nothing to scope, price or orders.
 - Second-firm and audit tests per the rules. Playwright 360/1280 + phone-mode run. CI green apart from Vercel.

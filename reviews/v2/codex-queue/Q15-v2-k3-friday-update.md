@@ -9,6 +9,16 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 
 > **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
 
+## Dry-check against the code (planner, 25 Nov 00:20 UK): verified with re-scoping; the mock-up passed (#930 at ff4d3366)
+What exists on c3, and what this means for each section of the update:
+- **Plan:** tasks have no "done" status (fields are position, durationMinutes, trade, scheduledDate and assignee; done arrives with F1). So **"This week" lists the tasks whose `scheduledDate` falls in that week, and the builder edits the wording** to say what actually got done. "Next week" lists the following week's tasks the same way.
+- **Diary:** the existing diary route (`apps/web/app/api/jobs/[id]/diary/route.ts`, migrations 0505 and 0539) has never been exercised on the V2 database. **Read it only.** If the read is refused on V2, leave the section out cleanly (empty-state wording) and say so in the PR. Never write to it.
+- **Photos:** there is no `customer_visible` field, and photos on V2 wait for V2-PX. Build the photo section with its empty state only. The withdraw-before-send case is marked "waits for V2-PX". Don't call the proof or evidence upload paths.
+- **Open customer facts (E1) and customer-supplied items (D3):** neither is on c3's base, so leave both sections out cleanly. Show them later, when those pieces merge.
+- **Recipient:** use the seed job's existing customer contact. If there is none, stop and report. Send only to the catcher.
+- **Event names (rule 18):** `v2.friday_update.prepared`, `.edited` and `.sent_to_catcher`.
+- **Migration:** `packages/db/migrations/2021_...sql`.
+
 ## Goal
 Once a week the builder previews and sends the customer a short update: what got done, photos marked customer-visible, what's next, decisions needed, and anything the customer must buy and by when.
 

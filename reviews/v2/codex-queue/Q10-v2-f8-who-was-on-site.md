@@ -6,6 +6,9 @@ Tier: **RED** (new table; personal attendance data). Migration **2016**. Astra: 
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-f8, section 2A item 15.
 **Starts when:** Q09 (V2-F1) has pushed. **Base:** `codex/sandbox/v2-f1`. Draft PR against it.
 
+## Dry-check against the code (planner, 25 Nov 00:20 UK): **parked until C3C**
+"One tap per person" and "a crew member sees only their own days" both need a real crew identity. On V2 the assignee is free text and crew members can't sign in yet. Don't build until C3C (crew binding) exists.
+
 ## Goal
 One tap per person per day on the job's diary, with **no location tracking**, to feed the diary and later daywork sheets.
 
