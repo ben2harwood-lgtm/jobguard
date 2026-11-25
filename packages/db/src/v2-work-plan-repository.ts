@@ -326,15 +326,24 @@ export class WorkPlanRepository {
     const approvedVariations = rows.map(({ scopeItemId, revisionId, approvalId, description, quantity, unit, signedDeltaPence }) =>
       ({ scopeItemId, revisionId, approvalId, description, quantity, unit, signedDeltaPence: Number(signedDeltaPence) }));
     const revisions = new Map<string, string>();
-    const scope: WorkPlanScopeRow[] = rows.filter(row => !row.onQuote)
+    const seen = new Set<string>();
+    const extras = rows.filter(row => !row.onQuote)
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.variationId < b.variationId ? -1 : 1))
-      .filter(row => !revisions.has(row.scopeItemId) && revisions.set(row.scopeItemId, row.revisionId))
+      .filter(row => !seen.has(row.scopeItemId) && seen.add(row.scopeItemId));
+    // Only an approved addition is work to plan. An approved omission is removed work: its money stays
+    // in the agreement, but it never becomes a task. The variation stores no direction apart from the
+    // sign of its money, so a zero-value extra is not assumed to be an addition and is held back too.
+    const notPlanned = extras.filter(row => Number(row.signedDeltaPence) <= 0).map(row => ({
+      scopeItemId: row.scopeItemId, title: row.description,
+      reason: Number(row.signedDeltaPence) < 0 ? "omission" as const : "direction_unknown" as const }));
+    const scope: WorkPlanScopeRow[] = extras.filter(row => Number(row.signedDeltaPence) > 0)
+      .filter(row => revisions.set(row.scopeItemId, row.revisionId))
       .map(row => ({ scope_item_id: row.scopeItemId, source: row.source, template_task_key: null }));
     const tasks = scope.flatMap(row => this.template.tasks.filter(task => task.category === row.source.category)
       .map(({ category: _category, ...task }) => ({ ...task, scopeItemId: row.scope_item_id, position: 0,
         dependsOn: task.dependsOn.map(templateTaskKey => ({ scopeItemId: row.scope_item_id, templateTaskKey })) })))
       .map((task, index) => ({ ...task, position: after + index + 1 }));
-    return { approvedVariations, scope, tasks, revisions };
+    return { approvedVariations, scope, tasks, revisions, notPlanned };
   }
 
   private async readPlan(client: PoolClient, key: PlanKey, head: PlanHead) {
@@ -389,6 +398,10 @@ export class WorkPlanRepository {
         const variationRevisionId = extras?.revisions.get(scopeItemId);
         return { scopeItemId, ...details, ...(variationRevisionId && { variationRevisionId }) };
       }),
+      // Approved extras that are not work to plan. Planning recorded on one before it became an omission
+      // is kept in the edit history but no longer shows as a task; planningDropped tells the builder.
+      extrasNotPlanned: (extras?.notPlanned ?? []).map(item => ({ ...item,
+        planningDropped: edits.some(edit => edit.scope_item_id === item.scopeItemId) })),
       changes: compareWorkPlanTasks(previous, refreshed) };
   }
 }

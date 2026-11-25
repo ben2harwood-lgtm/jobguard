@@ -54,8 +54,10 @@ BEGIN
       JOIN app.variation_approval a ON (a.tenant_id, a.job_id, a.revision_id, a.revision, a.content_hash, a.signed_delta_pence)
         = (r.tenant_id, r.job_id, r.id, r.revision, r.content_hash, r.signed_delta_pence)
       WHERE (r.tenant_id, r.job_id, r.id, r.scope_item_id)
-        = (NEW.tenant_id, NEW.job_id, NEW.variation_revision_id, NEW.scope_item_id)) THEN
-      RAISE EXCEPTION 'V2 plan edit extra is not an approved variation revision of its scope item'
+        = (NEW.tenant_id, NEW.job_id, NEW.variation_revision_id, NEW.scope_item_id)
+        -- Only an approved addition is work to plan; an omission or a zero-value extra is not.
+        AND r.signed_delta_pence > 0) THEN
+      RAISE EXCEPTION 'V2 plan edit extra is not an approved addition revision of its scope item'
         USING ERRCODE = 'foreign_key_violation';
     END IF;
     RETURN NULL;

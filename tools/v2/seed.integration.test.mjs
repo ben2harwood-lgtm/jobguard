@@ -800,12 +800,61 @@ test("existing Switch live activates a plan once and only approved variation rev
   assert.equal(replanned.tasks[1].durationMinutes, 60);
   assert.equal(replanned.tasks[1].needsReview, undefined, "an edit against the approved revision clears the review flag");
 
+  // An approved omission is removed work: its money stays in the agreement, but it never becomes a task,
+  // even under a tiling parent whose template tasks would otherwise match.
+  const tiling = live.scopeItems.find(item => item.category === "Tiling");
+  const omissionId = randomUUID();
+  const omittedScope = randomUUID();
+  const omission = await vary("propose", { proposalId: omissionId, scopeItemId: omittedScope, existingScopeItemId: null,
+    lineageParentScopeItemId: tiling.scopeItemId, description: "Omit the upstand tiling", captureText: "Customer drops the upstand",
+    price: { ...price, unitRatePence: 18000, direction: "omission" } });
+  const omissionRevision = omission.variations.find(item => item.id === omissionId).currentRevisionId;
+  await vary("approve", { ...approve, variationId: omissionId, revisionId: omissionRevision, approvalId: randomUUID() });
+  // A zero-value extra stores no direction, so it is not assumed to be work.
+  const freeId = randomUUID();
+  const freeScope = randomUUID();
+  const free = await vary("propose", { proposalId: freeId, scopeItemId: freeScope, existingScopeItemId: null,
+    lineageParentScopeItemId: null, description: "No-charge extra", captureText: "Builder adds a no-charge extra",
+    price: { ...price, unitRatePence: 0 } });
+  const freeRevision = free.variations.find(item => item.id === freeId).currentRevisionId;
+  await vary("approve", { ...approve, variationId: freeId, revisionId: freeRevision, approvalId: randomUUID() });
+  const removed = await workPlan.read(jobId, planQuery);
+  assert.deepEqual(removed.tasks, replanned.tasks, "an approved omission adds no task");
+  assert.deepEqual(removed.unplanned, replanned.unplanned, "an approved omission is not Unplanned work");
+  assert.deepEqual(removed.extrasNotPlanned, [
+    { scopeItemId: omittedScope, title: "Omit the upstand tiling", reason: "omission", planningDropped: false },
+    { scopeItemId: freeScope, title: "No-charge extra", reason: "direction_unknown", planningDropped: false },
+  ]);
+  const money = Object.fromEntries(removed.agreement.approvedVariations.map(item => [item.scopeItemId, item.signedDeltaPence]));
+  assert.deepEqual(money, { [scopeItemId]: 35000, [omittedScope]: -18000, [freeScope]: 0 }, "the agreement keeps every approved revision's money");
+  for (const [scope, revision] of [[omittedScope, omissionRevision], [freeScope, freeRevision]]) {
+    const command = planEdit(removed, { scopeItemId: scope, key: customTaskKey }, { position: 1, trade: "tiler", durationMinutes: 30 });
+    await assert.rejects(workPlan.edit(jobId, command), { code: "WORK_PLAN_INVALID_EDIT" });
+    await assert.rejects(workPlan.edit(jobId, { ...command, variationRevisionId: revision }), { code: "WORK_PLAN_INVALID_EDIT" });
+    await assert.rejects(rawEdit(revision, scope), { code: "23503" }, "the database refuses planning a non-addition");
+  }
+
+  // A planned extra whose later approved revision is an omission leaves the plan, and the builder is told.
+  const flipId = randomUUID();
+  await vary("revise", { variationId: proposalId, expectedRevisionId: pendingId, revisionId: flipId,
+    description: "Trim no longer needed", price: { ...price, direction: "omission" } });
+  await vary("approve", { ...approve, revisionId: flipId, approvalId: randomUUID() });
+  const flipped = await workPlan.read(jobId, planQuery);
+  assert.equal(flipped.tasks.some(task => task.scopeItemId === scopeItemId), false);
+  assert.equal(flipped.unplanned.some(item => item.scopeItemId === scopeItemId), false);
+  assert.equal(flipped.scopeItems.some(item => item.scopeItemId === scopeItemId), false);
+  assert.deepEqual(flipped.extrasNotPlanned[0],
+    { scopeItemId, title: "Trim no longer needed", reason: "omission", planningDropped: true });
+  assert.equal(flipped.agreement.approvedVariations.find(item => item.scopeItemId === scopeItemId).signedDeltaPence, -12500);
+  assert.equal(flipped.version, replanned.version, "removal by approval records no plan edit");
+  assert.deepEqual(await effectCounts(), beforeApproval, "omissions schedule, send, book, order and charge nothing");
+
   const state = await workState.get(jobId);
   const expectedRevision = (state.events.at(-1)?.sequence ?? 0) + state.links.length;
   const closed = await workState.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(),
     expectedRevision, action: "close", reason: "cancelled_by_customer", note: "Fictional customer cancelled the work" });
   assert.equal(closed.events.at(-1).kind, "closed");
-  assert.deepEqual(await workPlan.read(jobId, planQuery), replanned);
+  assert.deepEqual(await workPlan.read(jobId, planQuery), flipped);
 });
 
 test("each recorded plan edit appends one audit event in its transaction, and a replay appends none", async () => {

@@ -14,7 +14,8 @@ The edit's old foreign key to `app.quote_line` cannot hold an extra's scope
 item, so it is replaced by a foreign key to `app.scope_identity` and a
 `AFTER INSERT` trigger (after the firm's row-level security check). The trigger keeps the old guarantee for quote-line
 edits (the scope item is on the edit's quote revision) and requires an
-extra's edit to name an approved revision of that same scope item. A second
+extra's edit to name an approved addition revision (positive money) of that same
+scope item. An approved omission is removed work and is never planned. A second
 foreign key binds the revision to its firm and job. No commercial table,
 grant or policy changes, and nothing recalculates money.
 
