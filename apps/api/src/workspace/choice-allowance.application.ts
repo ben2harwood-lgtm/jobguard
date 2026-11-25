@@ -48,26 +48,28 @@ export class ChoiceAllowanceApplication {
   /** Finishes any unfinished choice change first, then shows each customer choice with its allowance. */
   async read(jobId: string): Promise<ChoiceAllowanceView[]> {
     const { context } = await this.authorize(jobId);
-    const unfinished = await this.reconcile(context, jobId, false);
+    const unfinished = await this.reconcile(context, jobId);
     return this.view(await this.choices.read(context, jobId), await this.variations.get(jobId), unfinished);
   }
 
   async command(jobId: string, command: ChoiceAllowanceCommand) {
     const { context } = await this.authorize(jobId);
-    await this.reconcile(context, jobId, true);
+    // Another choice that can't be finished never blocks this one; this choice's own failure is reported.
+    const target = (command as { factId?: unknown })?.factId;
+    await this.reconcile(context, jobId, target);
     const receipt = await this.choices.set(context, jobId, this.sessionId!, command);
-    await this.reconcile(context, jobId, true);
-    return { receipt, choices: this.view(await this.choices.read(context, jobId), await this.variations.get(jobId), new Map()) };
+    const unfinished = await this.reconcile(context, jobId, receipt.factId);
+    return { receipt, choices: this.view(await this.choices.read(context, jobId), await this.variations.get(jobId), unfinished) };
   }
 
-  private async reconcile(context: Parameters<ChoiceAllowanceRepository["read"]>[0], jobId: string, strict: boolean) {
+  private async reconcile(context: Parameters<ChoiceAllowanceRepository["read"]>[0], jobId: string, strictFor: unknown = null) {
     const unfinished = new Map<string, string>();
     for (const fact of await this.choices.read(context, jobId)) {
       const latest = fact.versions.at(-1);
       if (!latest || choiceVersionFinished(latest)) continue;
       try { await this.finish(context, jobId, fact, latest); }
       catch (error) {
-        if (strict) throw error;
+        if (typeof strictFor === "string" && strictFor.toLowerCase() === fact.factId) throw error;
         unfinished.set(fact.factId, errorCode(error));
       }
     }
@@ -100,14 +102,17 @@ export class ChoiceAllowanceApplication {
       await step("proposed");
     }
     const current = async () => (await this.variations.get(jobId)).variations.find(item => item.id === proposalId)?.currentRevisionId;
-    if (await current() !== revisionId) {
+    const before = await current();
+    // If the builder priced the draft in Extras before E9 could, their revision stands: E9 never overwrites it.
+    if (before === null || before === undefined) {
       try {
         await this.variations.command(jobId, { version: "variation-command.v1", action: "revise", variationId: proposalId, revisionId,
           expectedRevisionId: null, description, price: { quantity: version.quantity, unit: version.unit,
             unitRatePence: version.excessRatePence!, direction: "addition" } });
       } catch (error) {
-        // A racing twin may have priced it with the same id first.
-        if (await current() !== revisionId) throw error;
+        // A racing twin, or the builder, may have priced it first.
+        const after = await current();
+        if (after === null || after === undefined) throw error;
       }
     }
     await step("priced");

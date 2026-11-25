@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
-import { parsePoundsToPence } from "@jobguard/core";
+import { calculateNetLine, money, parsePoundsToPence, parseQuantity } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
@@ -176,6 +176,12 @@ export class ChoiceAllowanceRepository {
       };
       // Per unit, the draft is the rate difference times the quantity; for a total, the difference once.
       const excess = row.chosenPence === null ? 0 : row.chosenPence - row.allowancePence;
+      // The draft's amount must fit main's money limit, checked with the same exact calculation main's revise uses,
+      // before anything is recorded or withdrawn.
+      if (excess > 0) {
+        try { calculateNetLine(parseQuantity(row.quantity), money(excess)); }
+        catch { throw new ChoiceAllowanceError("CHOICE_ALLOWANCE_INVALID_COMMAND"); }
+      }
       const agreedBefore = versions.some(v => v.steps.some(step => step.outcome === "kept_agreed"));
       const draft = effectiveDraft(latest);
       let plan: { withdraw: string | null; draftKind: "new" | "carried" | null; proposalId: string | null; revisionId: string | null } =

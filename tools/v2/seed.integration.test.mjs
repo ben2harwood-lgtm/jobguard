@@ -1697,3 +1697,32 @@ function e9FailingAuditPool() {
     },
   };
 }
+
+test("e9: when the builder prices the draft in Extras before E9 does, the builder's revision stands", async () => {
+  const { jobId, choices: real, command, sessionId, app } = await e9Setup();
+  const broken = new ChoiceAllowanceApplication(runtime, sessionId, e9Seam(app.variation, "before:revise"));
+  await assert.rejects(broken.command(jobId, command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } })), { code: "SEAM" });
+  // The unpriced draft is visible in Extras; the builder prices it there before any E9 read finishes it.
+  const [{ id: variationId, revisionId: none }] = await e9Drafts(jobId);
+  assert.equal(none, null);
+  const builderRevision = randomUUID();
+  await app.variation.command(jobId, { version: "variation-command.v1", action: "revise", variationId, revisionId: builderRevision,
+    expectedRevisionId: null, description: "Builder's own tile price", price: { quantity: "6", unit: "m2", unitRatePence: 500, direction: "addition" } });
+  const [view] = await real.read(jobId);
+  assert.equal(view.unfinished, null);
+  assert.deepEqual(view.draft, { variationId, revisionId: builderRevision, state: "awaiting_approval", amount: "30.00" });
+  assert.deepEqual((await e9Drafts(jobId)).map(d => [d.revisionId, d.revisions]), [[builderRevision, 1]], "E9 never adds a revision over the builder's");
+  assert.deepEqual((await e9Events(jobId, "v2.choice_allowance.step")).map(e => e.payload.references.step), ["current", "proposed", "priced"]);
+  const { choices: [next] } = await real.command(jobId, command(1, { chosen: { item: "Fictional plain tile", amount: "25.00" } }));
+  assert.equal(next.draft, null, "later allowance edits still work");
+});
+
+test("e9: an excess too large for the money limit is refused before anything is recorded", async () => {
+  const { jobId, choices, command, factId } = await e9Setup();
+  await assert.rejects(choices.command(jobId, command(0, { allowance: { basis: "per_unit", amount: "0", quantity: "2", unit: "m2" },
+    chosen: { item: "Fictional gold tile", amount: "10000000000.00" } })), { code: "CHOICE_ALLOWANCE_INVALID_COMMAND" });
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_choice_allowance WHERE fact_id = $1", [factId])).rows[0].n, 0);
+  assert.deepEqual(await e9Events(jobId, "v2.choice_allowance.set"), []);
+  const { choices: [ok] } = await choices.command(jobId, command(0, { chosen: { item: "Fictional metro tile", amount: "31.00" } }));
+  assert.equal(ok.draft.amount, "36.00");
+});
