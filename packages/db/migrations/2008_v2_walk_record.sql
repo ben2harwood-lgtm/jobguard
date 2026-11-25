@@ -70,6 +70,11 @@ BEGIN
   DECLARE
     original record;
   BEGIN
+    -- Serialize with an upload of the same ID (app.v2_walk_photo_upload_guard), so
+    -- whichever commits second sees the first, in either insertion order.
+    IF NEW.photo_id IS NOT NULL THEN
+      PERFORM pg_advisory_xact_lock(hashtextextended('v2-walk-photo:' || NEW.tenant_id || ':' || NEW.photo_id, 0));
+    END IF;
     IF NEW.photo_id IS NOT NULL AND EXISTS (
       SELECT FROM app.evidence_upload u
       WHERE (u.tenant_id, u.id) = (NEW.tenant_id, NEW.photo_id) AND u.job_id <> NEW.job_id
@@ -94,6 +99,32 @@ BEGIN
   DROP TRIGGER IF EXISTS v2_walk_entry_guard ON app.v2_walk_entry;
   CREATE TRIGGER v2_walk_entry_guard BEFORE INSERT ON app.v2_walk_entry
     FOR EACH ROW EXECUTE FUNCTION app.v2_walk_entry_guard();
+
+  -- The other insertion order: a walk photo entry can arrive before its upload.
+  -- An upload may then only begin on the job the walk filed the photo on. Runs
+  -- with the caller's rights, like the entry guard; a writer that cannot read
+  -- walk entries (no V2 walk) is not affected.
+  CREATE OR REPLACE FUNCTION app.v2_walk_photo_upload_guard()
+  RETURNS trigger
+  LANGUAGE plpgsql SET search_path = pg_catalog
+  AS $guard$
+  BEGIN
+    IF has_table_privilege('app.v2_walk_entry', 'SELECT') THEN
+      PERFORM pg_advisory_xact_lock(hashtextextended('v2-walk-photo:' || NEW.tenant_id || ':' || NEW.id, 0));
+      IF EXISTS (
+        SELECT FROM app.v2_walk_entry e
+        WHERE (e.tenant_id, e.photo_id) = (NEW.tenant_id, NEW.id) AND e.job_id <> NEW.job_id
+      ) THEN
+        RAISE EXCEPTION 'V2_WALK_PHOTO_OTHER_JOB' USING ERRCODE = '23514';
+      END IF;
+    END IF;
+    RETURN NEW;
+  END
+  $guard$;
+  REVOKE ALL ON FUNCTION app.v2_walk_photo_upload_guard() FROM PUBLIC;
+  DROP TRIGGER IF EXISTS v2_walk_photo_upload_guard ON app.evidence_upload;
+  CREATE TRIGGER v2_walk_photo_upload_guard BEFORE INSERT ON app.evidence_upload
+    FOR EACH ROW EXECUTE FUNCTION app.v2_walk_photo_upload_guard();
 
   -- Linked V2 sessions share a synthetic membership. Resolve the signed-in
   -- person's membership from their verified linked credential and bound firm.

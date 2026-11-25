@@ -43,3 +43,14 @@ and session, and every photo to an upload in the same firm.
 
 Correct the schema with a later V2 migration if needed. To rehearse the
 previous branch, keep its database in a separate checkout with separate state.
+
+Repair (Lane C P2, 25 Nov): a photo entry may be filed before its evidence
+upload begins. A second guard, `app.v2_walk_photo_upload_guard`, is a BEFORE
+INSERT trigger on `app.evidence_upload` that refuses an upload whose ID a walk
+already filed on a different job. Both guards take the same per-photo
+transaction advisory lock before checking, so concurrent inserts in either
+order serialize and the second sees the first. A pending upload on the walk's
+own job is unaffected. Both run with the caller's rights; a writer without
+SELECT on walk entries skips the upload-side check, and a photo filed by a
+different firm in the shared practice tenant is not visible to it (photo IDs
+are random device-generated UUIDs).

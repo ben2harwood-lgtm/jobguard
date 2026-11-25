@@ -1067,6 +1067,66 @@ test("a walk photo from another job in the same firm, or from another firm, is r
     [[sameFirm, uploadedElsewhere, otherFirm]])).rows[0].n, 2);
 });
 
+// Lane C P2: a photo entry filed before its upload binds the upload to the walk's job, in either order and concurrently.
+test("an upload for a walk photo filed first must begin on the walk's job, including a concurrent upload", async () => {
+  const { walk, otherJob, ownerContext } = await walkSetup();
+  const now = new Date();
+  // Walks run on the draft job; uploads begin only on a live job, so the upload goes to the suite's live job.
+  const begin = async walkJob => {
+    const sessionId = walkId();
+    await walk.start(walkJob, { version: "v2-walk-session-command.v1", sessionId, deviceStartedAt: now.toISOString() });
+    await walk.record(walkJob, entryCommand(sessionId, 1, { kind: "room", room: "Kitchen" }, now));
+    return sessionId;
+  };
+  // Uploads begin only on a live job with open work, which these fixture jobs are not. The test administrator
+  // inserts with the other upload guards off and only this guard on (ENABLE ALWAYS, rolled back with its insert).
+  const uploads = new Pool({ connectionString: migrationUrl, max: 2 });
+  const insertUpload = async (id, uploadJobId) => {
+    const client = await uploads.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL session_replication_role = replica");
+      await client.query("ALTER TABLE app.evidence_upload ENABLE ALWAYS TRIGGER v2_walk_photo_upload_guard");
+      await client.query(`INSERT INTO app.evidence_upload (id, tenant_id, job_id,
+        object_key, expected_sha256, expected_content_type, maximum_bytes, retention_class, device_captured_at, expires_at)
+        VALUES ($1, $2, $3, $4, repeat('a', 64), 'image/jpeg', 1000000, 'transient_upload', now(), now() + interval '1 day')`,
+      [id, DEMO_TENANT_ID, uploadJobId, `tenants/${DEMO_TENANT_ID}/uploads/${id}/original`]);
+    } finally { await client.query("ROLLBACK"); client.release(); }
+  };
+  const elsewhere = await begin(otherJob);
+  const filedFirst = walkId();
+  await walk.record(otherJob, entryCommand(elsewhere, 2, { kind: "photo", photoId: filedFirst }, now));
+  await assert.rejects(insertUpload(filedFirst, jobId),
+    { code: "23514", message: "V2_WALK_PHOTO_OTHER_JOB" });
+  // A pending upload on the walk's own job still begins.
+  const own = await begin(jobId);
+  const pending = walkId();
+  await walk.record(jobId, entryCommand(own, 2, { kind: "photo", photoId: pending }, now));
+  await insertUpload(pending, jobId);
+  // Concurrent: the entry's transaction is open when the other job's upload starts; the upload waits, then is refused.
+  const racing = walkId();
+  const { rows: [{ actor }] } = await admin.query("SELECT actor_membership_id AS actor FROM app.v2_walk_session WHERE id = $1", [elsewhere]);
+  let release, inserted;
+  const held = new Promise(resolve => { release = resolve; });
+  const entryWritten = new Promise(resolve => { inserted = resolve; });
+  const entry = withTenant(runtime, ownerContext, async db => {
+    await db.$client.query(`INSERT INTO app.v2_walk_entry (tenant_id, job_id, session_id, capture_order, expected_version,
+      command_id, kind, photo_id, device_captured_at, actor_membership_id)
+      VALUES ($1, $2, $3, 3, 0, $4, 'photo', $5, now(), $6)`, [DEMO_TENANT_ID, otherJob, elsewhere, walkId(), racing, actor]);
+    inserted();
+    await held;
+  });
+  await entryWritten;
+  const upload = insertUpload(racing, jobId);
+  const outcome = await Promise.race([upload.then(() => "done", () => "refused"),
+    new Promise(resolve => setTimeout(() => resolve("waiting"), 500))]);
+  assert.equal(outcome, "waiting", "the upload waits for the open walk entry");
+  release();
+  await entry;
+  await assert.rejects(upload, { code: "23514", message: "V2_WALK_PHOTO_OTHER_JOB" });
+  await uploads.end();
+});
+
 test("walk device claim, server receipt and photo verification stay distinct in every stored row", async () => {
   const { walk } = await walkSetup();
   const claimed = new Date(Date.now() - 6 * HOUR);
