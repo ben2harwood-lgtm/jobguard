@@ -1,0 +1,117 @@
+name: Frozen V2 verification
+on:
+  push:
+    branches:
+      - verification/frozen-v2-20261125
+    paths:
+      - .github/workflows/frozen-v2-verify.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.repository == 'ben2harwood-lgtm/jobguard' && github.ref == 'refs/heads/verification/frozen-v2-20261125'
+    name: '#${{ matrix.pr }} / ${{ matrix.phase }}'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { pr: 941, phase: seed, sha: 57bdf3d01e21664636a476cff6e751d746608e82 }
+          - { pr: 939, phase: rams, sha: 879332fae57a3bbef7fc35357a579087b1bb13d3 }
+          - { pr: 940, phase: materials, sha: e5fb94d171662ac8dc6bfa3ac32f3931e7582d70 }
+          - { pr: 942, phase: friday, sha: 988e5bc55283f7578d0a363cd8a836fc0b31b738 }
+          - { pr: 944, phase: seed, sha: 6d7128c81632560b6d20fb3477df1f1a3b59ef19 }
+          - { pr: 944, phase: chasing, sha: 6d7128c81632560b6d20fb3477df1f1a3b59ef19 }
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ matrix.sha }}
+          persist-credentials: false
+      - name: Confirm frozen source and empty launcher state
+        env:
+          EXPECTED_SHA: ${{ matrix.sha }}
+        run: |
+          git rev-parse HEAD
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test ! -e .jobguard/v2
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
+        with: { node-version: 24.15.0 }
+      - run: pnpm install --frozen-lockfile
+      - name: Install project-pinned Chromium
+        if: matrix.phase != 'seed'
+        run: pnpm --filter @jobguard/web exec playwright install --with-deps chromium
+      - name: Confirm the system PDF reader
+        if: matrix.phase == 'rams'
+        run: command -v pdftotext || (sudo apt-get update && sudo apt-get install --no-install-recommends -y poppler-utils)
+      - name: Start isolated embedded stack and run the frozen suite
+        shell: bash
+        env:
+          PHASE: ${{ matrix.phase }}
+        run: |
+          set -euo pipefail
+          store_dir=$(pnpm store path --silent)
+          clean=(env -i "PATH=$PATH" "HOME=$HOME" LANG=C.UTF-8 "npm_config_store_dir=$store_dir"
+            COREPACK_ENABLE_DOWNLOAD_PROMPT=0 JOBGUARD_V2_BACKEND=embedded)
+          launcher_env=()
+          test_env=(JOBGUARD_ENV=synthetic_demo)
+          shots="$RUNNER_TEMP/frozen-v2-screenshots"
+          if [[ "$PHASE" != seed ]]; then
+            # Isolated runner-only interface. The signed-in rehearsal is never bound to its network-facing NIC.
+            address=192.168.253.17
+            sudo ip link add v2-rehearsal type dummy
+            sudo ip address add "$address/32" dev v2-rehearsal
+            sudo ip link set v2-rehearsal up
+            origin="https://$address:3400"
+            chromium=$(cd apps/web && node -p 'require("@playwright/test").chromium.executablePath()')
+            test -x "$chromium"
+            mkdir "$shots"
+            launcher_env=("JOBGUARD_V2_PHONE_HOST=$address" JOBGUARD_V2_PHONE_SELF_SIGNED=1)
+            test_env+=("V2_TEST_ORIGIN=$origin" "V2_TEST_CHROMIUM=$chromium" "V2_TEST_SCREENSHOTS=$shots")
+          fi
+          log="$RUNNER_TEMP/frozen-v2-launcher.log"
+          "${clean[@]}" "${launcher_env[@]}" setsid node tools/v2/start.mjs >"$log" 2>&1 &
+          launcher=$!
+          stop() {
+            result=$?
+            kill -TERM -- "-$launcher" 2>/dev/null || true
+            wait "$launcher" 2>/dev/null || true
+            if ((result)); then grep -E "^V2 start failed:" "$log" | tail -n 2 || true; fi
+            exit "$result"
+          }
+          trap stop EXIT
+          deadline=$((SECONDS + 1200))
+          until grep -q '^JobGuard V2 API: ' "$log"; do
+            if ! kill -0 "$launcher" 2>/dev/null || ((SECONDS >= deadline)); then
+              echo "The checked launcher exited or timed out" >&2
+              exit 1
+            fi
+            sleep 3
+          done
+          grep '^JobGuard V2 ' "$log"
+          if [[ "$PHASE" != seed ]]; then
+            grep -Fx "JobGuard V2 phone: $origin/sign-in" "$log"
+            curl --silent --show-error --fail --noproxy '*' --cacert ".jobguard/v2/tls-$address/cert.pem" "$origin/sign-in" >/dev/null
+          fi
+          case "$PHASE" in
+            seed) command=(node --test tools/v2/seed.integration.test.mjs) ;;
+            rams) command=(node --test tools/v2/rams.browser.test.mjs) ;;
+            materials) command=(pnpm --filter @jobguard/web exec playwright test --config=playwright.v2-d5b.config.ts --reporter=list) ;;
+            friday) command=(pnpm --filter @jobguard/web exec playwright test --config=playwright.v2-k3.config.ts --reporter=list) ;;
+            chasing) command=(pnpm --filter @jobguard/web exec playwright test --config=playwright.v2-chasing.config.ts --reporter=list) ;;
+            *) exit 2 ;;
+          esac
+          witness="$RUNNER_TEMP/suite-started"
+          touch "$witness"
+          "${clean[@]}" "${test_env[@]}" "${command[@]}"
+          if [[ "$PHASE" != seed ]]; then
+            if [[ "$PHASE" == materials ]]; then shots=apps/web/e2e/artifacts/v2-d5b; fi
+            for width in 360 1280; do
+              find "$shots" -type f -newer "$witness" -name "*-$width.png" -size +0c -print -quit | grep -q .
+            done
+            find "$shots" -type f -newer "$witness" -name '*.png' -exec sha256sum {} +
+          fi
