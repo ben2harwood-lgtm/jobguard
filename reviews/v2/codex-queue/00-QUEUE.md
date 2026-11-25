@@ -87,7 +87,7 @@ Already moving, so don't duplicate: CI2 #947, phone-test sign-in #950, E2 #949, 
 Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, since 00:15 UK **K9 (Q06) and E2 (Q08)**, and since 00:20 UK **K3 (Q15) and F1 (Q09)** with re-scoping. All four mock-ups passed in #930, each with a dated note at the top of its packet. Re-scoped: **K2 → K2A** (builder-only feed). Parked: **E5A** and **F8**, both waiting for C3C. They get checked before they're released.
 
 ## Migration numbers (one list; checked against every branch 24 Nov 22:15 UK)
-2001 practice quote (main) · 2002 to 2005 c-chain and d1 · 2006 D3 #912 · 2007 D4 #916 · 2008 B1A #920 · 2009 E1 #919 · 2010 K8 · 2011 K9 · 2012 K5 · 2013 E2 · 2014 E3 · 2015 F1 · 2016 F8 · 2017 K2 · 2018 F6 #923 · 2019 K4 · **2020 C3B #922** · 2021 K3 · 2022 E9 · **2023 K6A** (moved from 2020) · **2024 V2-SX** (crew and customer test sessions, V2 bootstrap file, Astra first) · 2025 to 2045 reserved in `reviews/v2/V2-completion-roadmap.md` · **2046 K5A-2** · **2047 to 2051 V2-FL-1 to FL-5** · **2052 D4B** · **2053 F1-P** · **2054 FL-6** · next free: **2055**. A builder that needs a number not listed here stops and asks; it never takes the next one itself.
+2001 practice quote (main) · 2002 to 2005 c-chain and d1 · 2006 D3 #912 · 2007 D4 #916 · 2008 B1A #920 · 2009 E1 #919 · 2010 K8 · 2011 K9 · 2012 K5 · 2013 E2 · 2014 E3 · 2015 F1 · 2016 F8 · 2017 K2 · 2018 F6 #923 · 2019 K4 · **2020 C3B #922** · 2021 K3 · 2022 E9 · **2023 K6A** (moved from 2020) · **2024 V2-SX** (crew and customer test sessions, V2 bootstrap file, Astra first) · 2025 to 2045 reserved in `reviews/v2/V2-completion-roadmap.md` · **2046 K5A-2** · **2047 to 2051 V2-FL-1 to FL-5** · **2052 D4B** · **2053 F1-P** · **2054 FL-6** · 2055 C3B-2 (reserved) · next free: **2056**. A builder that needs a number not listed here stops and asks; it never takes the next one itself.
 
 ## Not in this queue, and why
 - **New piece found by the C5 builder:** once scope is confirmed the app can't add a line to a priced quote, so prompts can only remind or be dismissed. "Add a line to a priced quote" (v2-c6) is its own later piece, on the quote track; not tonight.
@@ -102,6 +102,7 @@ Web Codex has no runner, so desktop Codex lane A is the single Codex lane. It ha
 3. F1-P (Q43).
 4. FL-5 (Q39).
 5. B1C (Q42).
+6. C3B-1 and then C3B-2 (follow-ups from #922). The planner writes their packets next, after a dry-check on v2/main with #922 merged.
 Done or passed: FL-3 #969, FL-4 #970. FL-F (Q40) is building.
 
 Tenancy locks come first because every later V2 piece relies on them. F1-P is ahead of FL-4 because builders use proof photos every day.

@@ -60,6 +60,8 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 | D8 | **E5A** same-firm double-booking warning (Q02) | ★ | S | A | C3C | none | T1 |
 | D9 | **F8** who was on site today (Q10) | ★ | S | A | F1, C3C | 2016 | RED |
 | D10 | **SYNC-1** merge main into v2/main (diary, photos on variations, Friday PDF, snag list, handover page, pack calculator) | ★★★ | M | O | Ben merges milestone one plus the QW PRs | none | T2 |
+| D11 | **C3B-1** c4 sends the extra's version number when an extra's plan task is edited, so a stale edit is refused (follow-up from #922, merged 25 Nov) | ★★ | S | A | c4 #903, #922 | none | T1 |
+| D12 | **C3B-2** record whether a £0 extra adds or removes work, so a free addition can be planned (follow-up from #922) | ★ | S | A | #922 | 2055 | RED |
 
 ## Batch E: about 27 to 29 Nov, changes and money
 | # | Piece | Use | Size | Lane | Waits on | Mig | Tier |
@@ -114,7 +116,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 - Big ideas A, C, D, E and F. **Ben, 25 Nov 17:47 UK: all later, after V2.** Revisit with pilot feedback.
 
 ## Migration numbers reserved
-2025 PX (V2 bootstrap), 2026 G0, 2027 C3C, 2028 F2, 2029 B1C, 2030 E7, 2031 F3, 2032 F4, 2033 F7, 2034 K5B, 2035 K6B, 2036 DV1, 2037 C6, 2038 E4, 2039 E5, 2040 E6, 2041 My brief, 2042 G1, 2043 G2/G3, 2044 G8, 2045 G9. 2046 K5A-2 (Q34). 2047 to 2051 V2-FL-1 to FL-5 firm-lock slices (Q35 to Q39). 2052 D4B (Q41). 2053 F1-P (Q43). 2054 FL-6 (Q44). **Next free: 2055.** A builder whose piece turns out not to need its number leaves it unused. A builder that needs a number not listed here stops and asks.
+2025 PX (V2 bootstrap), 2026 G0, 2027 C3C, 2028 F2, 2029 B1C, 2030 E7, 2031 F3, 2032 F4, 2033 F7, 2034 K5B, 2035 K6B, 2036 DV1, 2037 C6, 2038 E4, 2039 E5, 2040 E6, 2041 My brief, 2042 G1, 2043 G2/G3, 2044 G8, 2045 G9. 2046 K5A-2 (Q34). 2047 to 2051 V2-FL-1 to FL-5 firm-lock slices (Q35 to Q39). 2052 D4B (Q41). 2053 F1-P (Q43). 2054 FL-6 (Q44). 2055 C3B-2 (reserved). **Next free: 2056.** A builder whose piece turns out not to need its number leaves it unused. A builder that needs a number not listed here stops and asks.
 
 ## Throughput check
 That's 46 pieces over 10 days, about 5 released a day. Lane A runs two at a time, W one or two, and O three or four threads at once. B tests every PR. Batches overlap: the next batch's packets are written while the current one builds. **The real limit is merging.** About 25 PRs are already waiting on Ben, and each stacked piece needs its base merged first. **Settled (Ben, 25 Nov 12:10 UK, "Merge everything to unlock everything"):** the "Merge all ready PRs" thread merges continuously once CI is green and the review is clean. Ben merges by hand only for releases and deploys. No daily merge slot is needed.
