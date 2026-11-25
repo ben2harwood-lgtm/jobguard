@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { pr: 944, phase: chasing, sha: b94273a6abee30e0fe7ab306c9f5efd3efc7fd05 }
+          - { pr: 946, phase: stock, sha: b26b5b835bd9bdae9316ec9a2a8727728f651056 }
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -98,7 +98,7 @@ jobs:
             rams) command=(node --test tools/v2/rams.browser.test.mjs) ;;
             materials) command=(pnpm --filter @jobguard/web exec playwright test --config=playwright.v2-d5b.config.ts --reporter=list) ;;
             friday) command=(pnpm --filter @jobguard/web exec playwright test --config=playwright.v2-k3.config.ts --reporter=list) ;;
-            chasing) command=(pnpm --filter @jobguard/web exec playwright test --config=playwright.v2-chasing.config.ts --timeout=180000 --reporter=list) ;;
+            chasing) command=(pnpm --filter @jobguard/web exec playwright test --config=playwright.v2-chasing.config.ts --reporter=list) ;;
             *) exit 2 ;;
           esac
           witness="$RUNNER_TEMP/suite-started"
