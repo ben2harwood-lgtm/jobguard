@@ -1,7 +1,7 @@
 {
-  "slice": "FL-3",
-  "packet": "Q37",
-  "note": "Copied from reviews/v2/codex-queue/Q37-v2-fl3-firm-lock-orders-site.md at a3f4c1462. The slice deletes this file when it locks these tables.",
+  "packet": "Q37 / V2-FL-3",
+  "migration": "2049_v2_firm_lock_orders_site.sql",
+  "database": "jobguard_v2_local",
   "tables": [
     "app.activation_acceptance_operation_use",
     "app.imported_job_baseline",
@@ -36,5 +36,9 @@
     "app.work_order_line",
     "app.import_row_receipt",
     "app.work_order_revision"
-  ]
+  ],
+  "policies": "RESTRICTIVE v2_practice_firm FOR ALL TO jobguard_runtime; direct job or named FK parent visibility",
+  "runtimeGrants": "unchanged",
+  "tests": "tools/v2/seed.integration.test.mjs loads tools/v2/firm-lock/FL-3.checks.mjs",
+  "execution": "Pending CI: no local PostgreSQL permitted"
 }

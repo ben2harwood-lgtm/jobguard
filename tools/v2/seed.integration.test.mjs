@@ -1038,6 +1038,35 @@ const firmLockHelpers = {
     };
   })(),
 };
+// V2-FL-3 (Q37): use the existing capture command and cached second-firm session.
+firmLockHelpers.fl3SecondFirmJob = async () => {
+  const { sessionId } = await signIn("second-builder");
+  const { capture } = createWorkspaceApplication({ pool: runtime, sessionId });
+  return (await capture.create({
+    contractVersion: "job_capture_v1", requested_tenant_id: DEMO_TENANT_ID, captureId: randomUUID(),
+    fixtureId: "v2-c1-typed-joinery",
+    source: { kind: "text", text: "JOB: Fit a shelf\nITEM: Fit a timber shelf | QTY: 1 | UNIT: item | RATE: £95.00" },
+  })).jobId;
+};
+
+
+// V2-FL-3: use real material, order-draft and receipt commands where available.
+firmLockHelpers.fl3OrderRows = async jobId => {
+  const { sessionId } = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId });
+  const { rows: [scope] } = await admin.query("SELECT id FROM app.scope_identity WHERE job_id=$1 ORDER BY id LIMIT 1", [jobId]);
+  const rate = await app.materials.addRate({ version: "material-rate-command.v1", merchantName: `FL-3 ${randomUUID()}`,
+    sku: "FL-3", description: "FL-3 fictional material", pricePence: 100, priceUnit: "each", taxBasis: "net",
+    effectiveFrom: "2026-01-01", sourceLabel: "FL-3 synthetic fixture", expectedVersion: 0 });
+  const requirement = await app.materials.addRequirement(jobId, { version: "material-requirement-command.v1",
+    scopeItemId: scope.id, skuId: rate.skuId, quantity: "10", unit: "each", expectedRevision: 0 });
+  await app.purchaseOrders.revise(jobId, { version: "purchase-order-draft.v1", commandId: randomUUID(),
+    requirementId: requirement.id, quantity: "10", unitPricePence: 100, recipient: "orders@fl3.invalid",
+    requiredDate: "2026-11-26", expectedRevision: 0 });
+  await app.supplierDocuments.intake(jobId, { version: "supplier-document-intake.v1", commandId: randomUUID(),
+    fixtureId: "materials-B-delivery", channel: "picker", expectedRevision: 0 });
+};
+
 for (const file of readdirSync(new URL("./firm-lock/", import.meta.url)).filter(name => /^FL-.*\.checks\.mjs$/u.test(name)).sort()) {
   (await import(`./firm-lock/${file}`)).register(firmLockHelpers);
 }
