@@ -19,12 +19,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { pr: 941, phase: seed, sha: 57bdf3d01e21664636a476cff6e751d746608e82 }
-          - { pr: 939, phase: rams, sha: 879332fae57a3bbef7fc35357a579087b1bb13d3 }
-          - { pr: 940, phase: materials, sha: e5fb94d171662ac8dc6bfa3ac32f3931e7582d70 }
-          - { pr: 942, phase: friday, sha: 988e5bc55283f7578d0a363cd8a836fc0b31b738 }
-          - { pr: 944, phase: seed, sha: 6d7128c81632560b6d20fb3477df1f1a3b59ef19 }
-          - { pr: 944, phase: chasing, sha: 6d7128c81632560b6d20fb3477df1f1a3b59ef19 }
+          - { pr: 944, phase: seed, sha: b94273a6abee30e0fe7ab306c9f5efd3efc7fd05 }
+          - { pr: 944, phase: chasing, sha: b94273a6abee30e0fe7ab306c9f5efd3efc7fd05 }
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
