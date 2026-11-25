@@ -7,6 +7,7 @@
       ],
       "note": "RED. Persist template-based work plans and tasks on the dedicated V2 rehearsal database. The lane validator grants its own file, config/lanes/v2-c1.json, implicitly.",
       "allow": [
+        ".gitleaksignore",
         "packages/db/migration-notes/2002_v2_work_plan.md",
         "packages/db/migrations/2002_v2_work_plan.sql",
         "packages/db/src/index.ts",
