@@ -106,7 +106,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 | H4 | **H2, B1D and B2D** real-phone runs on a named phone | **Ben's phone** | H1, B2C |
 
 ## Held for Ben (not scheduled until he decides)
-- **D4B** translated crew briefs (needs a paid translation route).
+- **D4B** translated crew briefs (needs a paid translation route). **Ben, 25 Nov 17:37 UK: plan it with a paid service.** The planner writes the D4B packet plus a privacy note (job details leave JobGuard). Ben picks and pays for the service; practice use first, real use only after the privacy check.
 - **F1-cam** one-tap camera (after B2B1's device piece).
 - Quote options (#19, a main quote-track piece).
 - Start-simple mode (#25, DUI plan).
