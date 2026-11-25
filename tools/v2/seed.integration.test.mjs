@@ -708,6 +708,37 @@ test("existing Switch live activates a plan once and only approved variation rev
   assert.deepEqual(await workPlan.read(jobId, planQuery), updated);
 });
 
+// The test above closes the seeded job's work, and the demo practice cannot reopen it.
+// Later pieces that need open work on an accepted quote make their own job here.
+async function acceptedPracticeJob() {
+  const { draftJob, lines, save } = await draftForPlan();
+  const { sessionId, cookies } = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId });
+  await save(1, lines);
+  const party = await app.parties.view({ sessionId }, draftJob);
+  await app.parties.command({ sessionId }, draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: party.jobRevision, expectedBindingId: null,
+    customer: { version: "customer.v1", type: "person", name: "Fictional Accepted Customer",
+      email: "customer@jobguard-v2.invalid", phone: "+447700900043" }, customerRef: null,
+    site: { version: "site.v1", addressLines: ["12 Fictional Lane"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const { view: { documentId, documentVersion, contentHash } } = await app.quote.preview(draftJob, {
+    version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid",
+  });
+  await app.quote.issue(draftJob, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId, contentHash, recipient: "customer@jobguard-v2.invalid" });
+  await json(await request(`/api/jobs/${draftJob}/quotes/delivery/execute`, {
+    cookies, body: { version: "quote-execute-command.v1", documentId, mode: "success" },
+  }));
+  await app.quote.accept(draftJob, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
+    documentId, documentVersion, documentHash: contentHash,
+    statedCustomerName: "Fictional Accepted Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  return draftJob;
+}
+
 const editEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
   WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_work_plan.edited' ORDER BY sequence`, [jobRef])).rows;
 
@@ -903,6 +934,7 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
   const { VariationApplication } = await import("../../apps/api/dist/variation/variation.application.js");
   const { V2CustomerExtraLinkApplication } = await import("../../apps/api/dist/v2-customer-extra-link.application.js");
   assert.ok(owner && other, "reuse the suite's authenticated owner and second-firm sessions");
+  const jobId = await acceptedPracticeJob();
   const auth = await authenticatePracticeSession(runtime, owner.sessionId);
   const second = await authenticatePracticeSession(runtime, other.sessionId);
   await json(await request(`/api/jobs/${jobId}/quotes/activation`, { cookies: owner.cookies,
@@ -977,6 +1009,10 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
       `UPDATE app.v2_customer_extra_link SET ${assignment} WHERE id=$1`, [first.linkId])),
     error => error.code === "42501");
   }
+  // Runtime has no DELETE grant, so an agreed claim cannot be removed either.
+  await assert.rejects(withTenant(runtime, auth.context, db => db.$client.query(
+    "DELETE FROM app.v2_customer_extra_link WHERE id=$1", [first.linkId])),
+  error => error.code === "42501");
   assert.deepEqual(await repository.open(first.capability), agreed);
   const savedAgreement = (await repository.list(auth.context, jobId)).find(link => link.id === first.linkId);
   assert.equal(savedAgreement.amount, "125.00");
