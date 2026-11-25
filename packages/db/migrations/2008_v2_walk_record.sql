@@ -101,22 +101,24 @@ BEGIN
     FOR EACH ROW EXECUTE FUNCTION app.v2_walk_entry_guard();
 
   -- The other insertion order: a walk photo entry can arrive before its upload.
-  -- An upload may then only begin on the job the walk filed the photo on. Runs
-  -- with the caller's rights, like the entry guard; a writer that cannot read
-  -- walk entries (no V2 walk) is not affected.
+  -- An upload may then only begin on the job the walk filed the photo on, in
+  -- any firm of the tenant. The guard runs as its owner so it sees every firm's
+  -- photo entries through the narrow read-only policy below (photo rows only,
+  -- no writes), and it is enabled ALWAYS so no writer skips it.
+  DROP POLICY IF EXISTS v2_walk_entry_photo_guard ON app.v2_walk_entry;
+  CREATE POLICY v2_walk_entry_photo_guard ON app.v2_walk_entry FOR SELECT TO jobguard_migration
+    USING (kind = 'photo' AND photo_id IS NOT NULL);
   CREATE OR REPLACE FUNCTION app.v2_walk_photo_upload_guard()
   RETURNS trigger
-  LANGUAGE plpgsql SET search_path = pg_catalog
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog
   AS $guard$
   BEGIN
-    IF has_table_privilege('app.v2_walk_entry', 'SELECT') THEN
-      PERFORM pg_advisory_xact_lock(hashtextextended('v2-walk-photo:' || NEW.tenant_id || ':' || NEW.id, 0));
-      IF EXISTS (
-        SELECT FROM app.v2_walk_entry e
-        WHERE (e.tenant_id, e.photo_id) = (NEW.tenant_id, NEW.id) AND e.job_id <> NEW.job_id
-      ) THEN
-        RAISE EXCEPTION 'V2_WALK_PHOTO_OTHER_JOB' USING ERRCODE = '23514';
-      END IF;
+    PERFORM pg_advisory_xact_lock(hashtextextended('v2-walk-photo:' || NEW.tenant_id || ':' || NEW.id, 0));
+    IF EXISTS (
+      SELECT FROM app.v2_walk_entry e
+      WHERE (e.tenant_id, e.photo_id) = (NEW.tenant_id, NEW.id) AND e.kind = 'photo' AND e.job_id <> NEW.job_id
+    ) THEN
+      RAISE EXCEPTION 'V2_WALK_PHOTO_OTHER_JOB' USING ERRCODE = '23514';
     END IF;
     RETURN NEW;
   END
@@ -125,6 +127,7 @@ BEGIN
   DROP TRIGGER IF EXISTS v2_walk_photo_upload_guard ON app.evidence_upload;
   CREATE TRIGGER v2_walk_photo_upload_guard BEFORE INSERT ON app.evidence_upload
     FOR EACH ROW EXECUTE FUNCTION app.v2_walk_photo_upload_guard();
+  ALTER TABLE app.evidence_upload ENABLE ALWAYS TRIGGER v2_walk_photo_upload_guard;
 
   -- Linked V2 sessions share a synthetic membership. Resolve the signed-in
   -- person's membership from their verified linked credential and bound firm.

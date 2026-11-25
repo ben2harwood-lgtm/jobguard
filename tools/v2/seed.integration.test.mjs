@@ -1069,7 +1069,7 @@ test("a walk photo from another job in the same firm, or from another firm, is r
 
 // Lane C P2: a photo entry filed before its upload binds the upload to the walk's job, in either order and concurrently.
 test("an upload for a walk photo filed first must begin on the walk's job, including a concurrent upload", async () => {
-  const { walk, otherJob, ownerContext } = await walkSetup();
+  const { walk, outsiderWalk, otherJob, outsiderJob, ownerContext } = await walkSetup();
   const now = new Date();
   // Walks run on the draft job; uploads begin only on a live job, so the upload goes to the suite's live job.
   const begin = async walkJob => {
@@ -1079,14 +1079,13 @@ test("an upload for a walk photo filed first must begin on the walk's job, inclu
     return sessionId;
   };
   // Uploads begin only on a live job with open work, which these fixture jobs are not. The test administrator
-  // inserts with the other upload guards off and only this guard on (ENABLE ALWAYS, rolled back with its insert).
+  // inserts in replica mode, which turns the other upload guards off; this guard is enabled ALWAYS, so it still runs.
   const uploads = new Pool({ connectionString: migrationUrl, max: 2 });
   const insertUpload = async (id, uploadJobId) => {
     const client = await uploads.connect();
     try {
       await client.query("BEGIN");
       await client.query("SET LOCAL session_replication_role = replica");
-      await client.query("ALTER TABLE app.evidence_upload ENABLE ALWAYS TRIGGER v2_walk_photo_upload_guard");
       await client.query(`INSERT INTO app.evidence_upload (id, tenant_id, job_id,
         object_key, expected_sha256, expected_content_type, maximum_bytes, retention_class, device_captured_at, expires_at)
         VALUES ($1, $2, $3, $4, repeat('a', 64), 'image/jpeg', 1000000, 'transient_upload', now(), now() + interval '1 day')`,
@@ -1098,6 +1097,28 @@ test("an upload for a walk photo filed first must begin on the walk's job, inclu
   await walk.record(otherJob, entryCommand(elsewhere, 2, { kind: "photo", photoId: filedFirst }, now));
   await assert.rejects(insertUpload(filedFirst, jobId),
     { code: "23514", message: "V2_WALK_PHOTO_OTHER_JOB" });
+  // Another firm's walk in the same practice tenant: the guard runs as its owner and still sees that entry.
+  const outsiderSession = walkId();
+  await outsiderWalk.start(outsiderJob, { version: "v2-walk-session-command.v1", sessionId: outsiderSession, deviceStartedAt: now.toISOString() });
+  await outsiderWalk.record(outsiderJob, entryCommand(outsiderSession, 1, { kind: "room", room: "Hall" }, now));
+  const otherFirmPhoto = walkId();
+  await outsiderWalk.record(outsiderJob, entryCommand(outsiderSession, 2, { kind: "photo", photoId: otherFirmPhoto }, now));
+  assert.equal((await withTenant(runtime, ownerContext, db => db.$client.query(
+    "SELECT 1 FROM app.v2_walk_entry WHERE photo_id = $1", [otherFirmPhoto]))).rowCount, 0, "the uploading firm cannot see it");
+  await assert.rejects(insertUpload(otherFirmPhoto, jobId), { code: "23514", message: "V2_WALK_PHOTO_OTHER_JOB" });
+  const { rows: [guard] } = await admin.query(`SELECT p.prosecdef AS definer, p.proowner::regrole::text AS owner, t.tgenabled AS enabled,
+    (SELECT polcmd FROM pg_policy WHERE polrelid = 'app.v2_walk_entry'::regclass AND polname = 'v2_walk_entry_photo_guard') AS policy
+    FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid
+    WHERE t.tgrelid = 'app.evidence_upload'::regclass AND t.tgname = 'v2_walk_photo_upload_guard'`);
+  assert.deepEqual(guard, { definer: true, owner: "jobguard_migration", enabled: "A", policy: "r" });
+  // The owner role reads the other firm's photo entry through the read-only policy, and cannot write.
+  const owner = await uploads.connect();
+  try {
+    await owner.query("BEGIN");
+    await owner.query("SET LOCAL ROLE jobguard_migration");
+    assert.equal((await owner.query("SELECT 1 FROM app.v2_walk_entry WHERE photo_id = $1", [otherFirmPhoto])).rowCount, 1);
+    assert.equal((await owner.query("UPDATE app.v2_walk_entry SET note_text = note_text WHERE photo_id = $1", [otherFirmPhoto])).rowCount, 0);
+  } finally { await owner.query("ROLLBACK"); owner.release(); }
   // A pending upload on the walk's own job still begins.
   const own = await begin(jobId);
   const pending = walkId();

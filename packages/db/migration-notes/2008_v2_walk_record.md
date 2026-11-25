@@ -47,10 +47,10 @@ previous branch, keep its database in a separate checkout with separate state.
 Repair (Lane C P2, 25 Nov): a photo entry may be filed before its evidence
 upload begins. A second guard, `app.v2_walk_photo_upload_guard`, is a BEFORE
 INSERT trigger on `app.evidence_upload` that refuses an upload whose ID a walk
-already filed on a different job. Both guards take the same per-photo
-transaction advisory lock before checking, so concurrent inserts in either
-order serialize and the second sees the first. A pending upload on the walk's
-own job is unaffected. Both run with the caller's rights; a writer without
-SELECT on walk entries skips the upload-side check, and a photo filed by a
-different firm in the shared practice tenant is not visible to it (photo IDs
-are random device-generated UUIDs).
+already filed on a different job, in any firm of the tenant. It is SECURITY
+DEFINER, owned by jobguard_migration, and reads walk photo entries through one
+narrow read-only policy (`v2_walk_entry_photo_guard`: SELECT, photo rows only,
+for jobguard_migration). The trigger is enabled ALWAYS, so no writer skips it.
+Both guards take the same per-photo transaction advisory lock before checking,
+so concurrent inserts in either order serialize and the second sees the first.
+A pending upload on the walk's own job is unaffected.
