@@ -5,6 +5,7 @@ import { z } from "zod";
 import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { nextStockMaterialBasis, type StockMaterialBasis } from "./v2-stock-material-basis.js";
 
 const uuid = z.uuid().transform(value => value.toLowerCase());
 const version = z.number().int().min(0).max(2_147_483_646);
@@ -72,6 +73,7 @@ type LineState = LineInputs & {
   lineKey: string;
   version: number;
   overrideBasisPacks: string | null;
+  stockBasis: StockMaterialBasis;
   updatedByMembershipId: string;
   updatedAt: Date;
 };
@@ -118,11 +120,14 @@ const lineId = (line: { scopeItemId: string; lineKey: string }) => `${line.scope
 const byLine = (a: { scopeItemId: string; lineKey: string }, b: { scopeItemId: string; lineKey: string }) =>
   lineId(a) < lineId(b) ? -1 : lineId(a) > lineId(b) ? 1 : 0;
 
-function fold(state: LineInputs, changes: LineChanges, overrideBasis: string | null): LineInputs & { overrideBasisPacks?: string | null } {
-  const next: LineInputs & { overrideBasisPacks?: string | null } = { ...state };
+function fold(state: LineInputs & { overrideBasisPacks: string | null; stockBasis?: StockMaterialBasis },
+  changes: LineChanges, overrideBasis: string | null, revision: number) {
+  const stockBasis = nextStockMaterialBasis(state.stockBasis, changes, revision);
+  const next = { ...state, stockBasis };
   for (const key of Object.keys(inputNames) as (keyof LineInputs)[]) {
     if (changes[key] !== undefined) (next as Record<string, unknown>)[key] = changes[key];
   }
+  next.setAsidePacks = stockBasis.confirmedSetAside;
   if (changes.packsOverride !== undefined) next.overrideBasisPacks = changes.packsOverride === null ? null : overrideBasis;
   return next;
 }
@@ -193,7 +198,7 @@ export class MaterialsEnquiryRepository {
         if (command.changes.packsOverride) {
           const live = await this.live($client, context.tenantId, jobId);
           const prior = live.lines.find(line => lineId(line) === lineId(command)) ?? { ...emptyLine, overrideBasisPacks: null };
-          const next = fold(prior, command.changes, null);
+          const next = fold(prior, command.changes, null, command.expectedVersion);
           const calculation = calculate({ ...next, overrideBasisPacks: null }, live.measurements.get(command.scopeItemId) ?? null);
           basis = calculation.status === "calculated" ? calculation.calculatedPacks : null;
         }
@@ -337,8 +342,8 @@ export class MaterialsEnquiryRepository {
     for (const revision of revisions) {
       const id = lineId(revision);
       const prior = states.get(id) ?? { ...emptyLine, overrideBasisPacks: null };
-      const { overrideBasisPacks, ...inputs } = fold(prior, revision.changes, revision.overrideBasisPacks);
-      states.set(id, { ...prior, ...inputs, overrideBasisPacks: overrideBasisPacks === undefined ? prior.overrideBasisPacks : overrideBasisPacks,
+      const inputs = fold(prior, revision.changes, revision.overrideBasisPacks, revision.expectedVersion);
+      states.set(id, { ...inputs,
         scopeItemId: revision.scopeItemId, lineKey: revision.lineKey, version: revision.expectedVersion + 1,
         updatedByMembershipId: revision.actorMembershipId, updatedAt: revision.recordedAt });
     }
@@ -385,7 +390,7 @@ export class MaterialsEnquiryRepository {
   }
 
   private view(jobId: string, live: Awaited<ReturnType<MaterialsEnquiryRepository["live"]>>, row: EnquiryRow | undefined) {
-    const lines = live.lines.map(({ overrideBasisPacks: _basis, ...line }) => line);
+    const lines = live.lines.map(({ overrideBasisPacks: _basis, stockBasis: _stockBasis, ...line }) => line);
     if (!row) return { jobId, lines, enquiry: null };
     const before = new Map(row.basis.map(entry => [lineId(entry), entry]));
     const after = new Map(live.basis.map(entry => [lineId(entry), entry]));

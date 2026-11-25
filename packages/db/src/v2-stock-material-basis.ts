@@ -1,5 +1,5 @@
 type Pack = { quantity: string; unit: string };
-export type StockMaterialChanges = { product?: string | null; packSize?: Pack | null; setAsidePacks?: string };
+export type StockMaterialChanges = { product?: string | null | undefined; packSize?: Pack | null | undefined; setAsidePacks?: string | undefined };
 type MaterialBasis = { product: string | null; packSize: Pack | null };
 
 export type StockMaterialBasis = MaterialBasis & {
