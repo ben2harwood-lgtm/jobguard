@@ -7,7 +7,10 @@ const taskChanges = z.strictObject({
   trade: z.string().trim().min(1).max(100).optional(),
   scheduledDate: z.iso.date().nullable().optional(),
   assignee: z.string().trim().min(1).max(100).nullable().optional(),
-}).refine(changes => Object.values(changes).some(value => value !== undefined));
+  // V2-C3C: a firm crew record (app.v2_crew_contact.crew_id). Old edits without it are unchanged.
+  assigneeRef: uuid.nullable().optional(),
+}).refine(changes => Object.values(changes).some(value => value !== undefined))
+  .refine(changes => changes.assignee === undefined || changes.assigneeRef === undefined);
 
 export const customWorkPlanTaskKey = "custom-scope-item";
 export const workPlanQueryV1 = z.strictObject({ version: z.literal("work-plan-query.v1") });
@@ -35,7 +38,9 @@ export type WorkPlanTask = {
   proofPoints: readonly string[];
   customerChoices: readonly string[];
   scheduledDate?: string | null;
+  /** Free text from older edits: shown as "(not linked)", never used for matching. */
   assignee?: string | null;
+  assigneeRef?: string | null;
   needsReview?: true;
 };
 
@@ -78,10 +83,17 @@ export function applyWorkPlanEdits(scope: WorkPlanScopeRow[], baseTasks: WorkPla
         durationMinutes: changes.durationMinutes, position: changes.position, dependsOn: [],
         materialNeeds: [], proofPoints: [], customerChoices: [] };
     }
-    const { position, trade, durationMinutes, scheduledDate, assignee } = changes;
+    const { position, trade, durationMinutes, scheduledDate, assignee, assigneeRef } = changes;
     const { needsReview: _needsReview, ...prior } = task;
     const next: WorkPlanTask = { ...prior, trade: trade ?? task.trade, durationMinutes: durationMinutes ?? task.durationMinutes,
       ...(scheduledDate !== undefined && { scheduledDate }), ...(assignee !== undefined && { assignee }) };
+    // A task has one assignment: setting a crew record replaces free text, and the reverse.
+    if (assigneeRef !== undefined) {
+      delete next.assignee;
+      next.assigneeRef = assigneeRef;
+    } else if (assignee !== undefined) {
+      delete next.assigneeRef;
+    }
     if (scopeChanged(item.source, edit.source)) next.needsReview = true;
     if (index >= 0) tasks.splice(index, 1);
     tasks.splice(position === undefined ? index : position - 1, 0, next);
