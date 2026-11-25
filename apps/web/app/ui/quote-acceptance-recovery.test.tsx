@@ -110,7 +110,9 @@ it("contains a lost committed reply, holds conflicting actions, and recovers sav
   expect(accepted(tree)).toBe(true); expect(text(tree)).toContain("no new acceptance was sent");
   expect(text(tree)).not.toContain("result is unknown"); expect(posts()).toHaveLength(1);
   expect(onCommitted).toHaveBeenCalledTimes(1);
-  expect(elements(tree).find(({ node }) => node.props["aria-label"] === "Unit rate Paint fictional room")?.node.props.value).toBe("1000.00");
+  // The rate box is a NumberField (TOMMY-DEMO); it shows its committed value through show().
+  const rate = elements(tree).find(({ node }) => node.props.label === "Unit rate Paint fictional room")?.node.props;
+  expect(rate?.show(rate.value)).toBe("1000.00");
 });
 
 it("keeps an empty authoritative read on hold and explicitly retries the identical command bytes", async () => {

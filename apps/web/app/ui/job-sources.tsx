@@ -2,6 +2,7 @@
 import { jobPageFetch as fetch } from "./job-page-fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LINKED_JOB_COPY, customerMessageInputV1, customerMessageReadV1, diaryInputV1, diaryReadV1, type CustomerMessageRead, type DiaryRead } from "@jobguard/core";
+import { jobWorkspaceResponseV1 } from "@jobguard/api/workspace-contracts";
 import styles from "./practice-receipts.module.css";
 
 const when = (value: string) => new Date(value).toLocaleString("en-GB", { timeZone: "Europe/London", dateStyle: "medium", timeStyle: "short" });
@@ -15,23 +16,40 @@ const refusal = (status: number, code: string | undefined) =>
  status === 409 ? "That save conflicted with an earlier one. The saved list has been reloaded." :
  "It was not saved. Nothing was changed.";
 
+const PRE_LIVE = new Set(["draft", "quoting", "accepted"]);
+/** A source 404 also covers refusals, so only the job's own status proves it is not live yet. */
+async function confirmedPreLive(jobId: string): Promise<boolean> {
+ try {
+  const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, { cache: "no-store" });
+  if (!response.ok) return false;
+  const { job } = jobWorkspaceResponseV1.parse(await response.json());
+  return job.id === jobId && PRE_LIVE.has(job.status);
+ } catch { return false; }
+}
+
+export const NOT_LIVE_YET = "Notes and customer messages open once the job is live: after the customer accepts the quote and you start the job.";
+
 /** Shared load/save for one source list; the server picks actor, tenant, time and hashes. */
 function useSource<T>(jobId: string, kind: Kind, parse: (raw: unknown) => T) {
- const [view, setView] = useState<T | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState("");
+ const [view, setView] = useState<T | null>(null), [busy, setBusy] = useState(true), [error, setError] = useState(""), [notLive, setNotLive] = useState(false);
  const currentJob = useRef(jobId), epoch = useRef(0), pending = useRef<Record<string, unknown> | null>(null);
  currentJob.current = jobId;
  const load = useCallback(async () => {
   const requestEpoch = ++epoch.current; setBusy(true);
   try {
    const response = await fetch(`/api/jobs/${jobId}/${kind}`, { cache: "no-store" });
+   // The source read refuses jobs that are not live yet with the same 404 as another firm's job,
+   // so the calm notice needs the job itself to confirm it has not started.
+   if (response.status === 404 && await confirmedPreLive(jobId)) { if (currentJob.current === jobId && epoch.current === requestEpoch) { setView(null); setError(""); setNotLive(true); } return; }
    if (!response.ok) throw new Error("Could not load. Try again.");
+   if (currentJob.current === jobId && epoch.current === requestEpoch) setNotLive(false);
    const saved = parse(await response.json());
    if (currentJob.current === jobId && epoch.current === requestEpoch) setView(saved);
   } catch (e) { if (currentJob.current === jobId && epoch.current === requestEpoch) { setView(null); setError(e instanceof Error ? e.message : "Could not load."); } }
   finally { if (epoch.current === requestEpoch) setBusy(false); }
  // parse wraps a module-level schema; only the job and kind select the request.
  }, [jobId, kind]);
- useEffect(() => { pending.current = null; setView(null); setError(""); void load(); return () => { epoch.current++; }; }, [load]);
+ useEffect(() => { pending.current = null; setView(null); setError(""); setNotLive(false); void load(); return () => { epoch.current++; }; }, [load]);
  // A retry after an unknown outcome resends the same command id.
  const save = async (command: Record<string, unknown>) => {
   if (busy || (pending.current && pending.current !== command)) return false;
@@ -47,11 +65,11 @@ function useSource<T>(jobId: string, kind: Kind, parse: (raw: unknown) => T) {
   await load();
   return saved;
  };
- return { view, busy, error, load, save, pending };
+ return { view, busy, error, load, save, pending, notLive };
 }
 
 export function JobDiary({ jobId, extrasHref, designed = false }: { jobId: string; designed?: boolean; extrasHref?: string }) {
- const { view, busy, error, save, pending } = useSource<DiaryRead>(jobId, "diary", raw => diaryReadV1.parse(raw));
+ const { view, busy, error, save, pending, notLive } = useSource<DiaryRead>(jobId, "diary", raw => diaryReadV1.parse(raw));
  const [onSite, setOnSite] = useState(false);
  const [text, setText] = useState(""), [mode, setMode] = useState<"typed" | "dictated_text">("typed");
  const extrasLabel = "Log an extra", extrasIndex = view?.notice.indexOf(extrasLabel) ?? -1;
@@ -61,6 +79,7 @@ export function JobDiary({ jobId, extrasHref, designed = false }: { jobId: strin
  };
  return <section id="job-diary" className={designed ? "card card-body form designed-site-work" : styles.panel} aria-labelledby="job-diary-title" aria-busy={busy} data-testid="job-diary">
   <h2 id="job-diary-title">Job diary</h2>
+  {notLive ? <p role="status" data-testid="job-sources-not-live">{NOT_LIVE_YET}</p> : <>
   {view && <p data-testid="diary-notice">{extrasHref && extrasIndex >= 0 ? <>{view.notice.slice(0, extrasIndex)}<a href={extrasHref}>{extrasLabel}</a>{view.notice.slice(extrasIndex + extrasLabel.length)}</> : view.notice}</p>}
   {error && <p role="alert">{error}</p>}
   <div className={styles.field}><label htmlFor="diary-text">Note</label><textarea id="diary-text" value={text} maxLength={8000} disabled={busy} onChange={e => setText(e.target.value)}/></div>
@@ -70,12 +89,13 @@ export function JobDiary({ jobId, extrasHref, designed = false }: { jobId: strin
    <button className={designed ? "btn" : undefined} type="button" disabled={busy || !!pending.current || text.trim() === ""} onClick={() => void submit(false)}>Save note</button>
    {pending.current && !busy && <button className={designed ? "btn" : undefined} type="button" onClick={() => void submit(true)}>Retry the same save</button>}
   </div>
-  <ol>{view?.entries.map(entry => <li key={entry.id} data-testid="diary-entry" data-entry-id={entry.id}><p style={{ whiteSpace: "pre-wrap" }}>{entry.text}</p><small>{entry.entryMode === "typed" ? "Typed" : "Dictated"} · {when(entry.evidence.serverReceivedAt)}</small></li>)}</ol>
+  </>}
+  {!notLive && <ol>{view?.entries.map(entry => <li key={entry.id} data-testid="diary-entry" data-entry-id={entry.id}><p style={{ whiteSpace: "pre-wrap" }}>{entry.text}</p><small>{entry.entryMode === "typed" ? "Typed" : "Dictated"} · {when(entry.evidence.serverReceivedAt)}</small></li>)}</ol>}
  </section>;
 }
 
 export function CustomerMessages({ jobId, designed = false }: { jobId: string; designed?: boolean }) {
- const { view, busy, error, save, pending } = useSource<CustomerMessageRead>(jobId, "customer-messages", raw => customerMessageReadV1.parse(raw));
+ const { view, busy, error, save, pending, notLive } = useSource<CustomerMessageRead>(jobId, "customer-messages", raw => customerMessageReadV1.parse(raw));
  const [text, setText] = useState(""), [name, setName] = useState("");
  const submit = async (retry: boolean) => {
   const command = retry && pending.current ? pending.current : customerMessageInputV1.parse({ version: "customer-message-input.v1", commandId: crypto.randomUUID(), fictionalCustomer: { kind: "named_fictional_customer", name }, text });
@@ -83,6 +103,7 @@ export function CustomerMessages({ jobId, designed = false }: { jobId: string; d
  };
  return <section id="customer-messages" className={designed ? "card card-body form designed-site-work" : styles.panel} aria-labelledby="customer-messages-title" aria-busy={busy} data-testid="customer-messages">
   <h2 id="customer-messages-title">Customer messages</h2>
+  {notLive ? <p role="status" data-testid="job-sources-not-live">{NOT_LIVE_YET}</p> : <>
   <p>Practice sandbox: you type a message as a made-up customer. Nothing is sent to anyone.</p>
   {error && <p role="alert">{error}</p>}
   <div className={designed ? "work-actions form" : styles.actions}>
@@ -91,6 +112,7 @@ export function CustomerMessages({ jobId, designed = false }: { jobId: string; d
    <button className={designed ? "btn" : undefined} type="button" disabled={busy || !!pending.current || text.trim() === "" || name.trim() === ""} onClick={() => void submit(false)}>Save message</button>
    {pending.current && !busy && <button className={designed ? "btn" : undefined} type="button" onClick={() => void submit(true)}>Retry the same save</button>}
   </div>
-  <ol>{view?.messages.map(message => <li key={message.id} data-testid="customer-message" data-message-id={message.id}><strong>{message.fictionalCustomer.name}</strong><p style={{ whiteSpace: "pre-wrap" }}>{message.text}</p><small>{when(message.evidence.serverReceivedAt)} · Evidence {message.evidence.id} · SHA-256 {message.evidence.sha256} · Version {message.evidence.objectVersionId}</small></li>)}</ol>
+  </>}
+  {!notLive && <ol>{view?.messages.map(message => <li key={message.id} data-testid="customer-message" data-message-id={message.id}><strong>{message.fictionalCustomer.name}</strong><p style={{ whiteSpace: "pre-wrap" }}>{message.text}</p><small>{when(message.evidence.serverReceivedAt)} · Evidence {message.evidence.id} · SHA-256 {message.evidence.sha256} · Version {message.evidence.objectVersionId}</small></li>)}</ol>}
  </section>;
 }
