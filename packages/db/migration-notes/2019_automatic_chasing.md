@@ -10,11 +10,15 @@ The metadata routine exposes existing synthetic invoice metadata for the bound
 job only; it grants no access to hidden financial findings.
 
 Two fixed steps: quote sent+3/+7 days, invoice due+3/+10 days. At most two captures
-per item (below the maximum of three). The run command uses a server clock;
-tests inject one in the repository, never through HTTP. One firm lock serializes
-runs, switch-off and stops. Enabling the setting authorizes these bounded local
+per item. Only the latest due step can be captured, within two days of its due time.
+An overdue or superseded step is saved as chase_skipped with no recipient, message
+or sent time. Each step occupies its original unique key whether sent or skipped.
+Reinstalling 2019 upgrades the existing outcome constraint in place and preserves old rows. The run command uses a server clock;
+tests inject one in the repository, never through HTTP. Selection happens before the firm lock. Finalization uses a fresh state read under that lock.
+The message insert also compares the live item projection in its own PostgreSQL statement;
+a committed payment, credit, dispute, decision or switch-off suppresses stale delivery. Enabling the setting authorizes these bounded local
 fictional templates only. The command records its member, job, time, expected
-setting revision and exact replay hash. Each command and captured message is
+setting revision and exact replay hash. Each command and each newly captured or skipped step is
 audited in the same transaction, with audit locking last. Exact replays make no
 writes and emit no extra catcher notification. Messages persist in the local
 chase log, and `captureV2Delivery` emits the usual catcher metadata after commit.
@@ -23,11 +27,12 @@ There is no provider or network executor and no production standing authority.
 Invoice due dates and dispute/refund state come from the existing administrative
 `dunning_invoice` synthetic projection. Missing, malformed or stale metadata
 suppresses chasing. Actual customer invoice balances, credits and unreversed
-receipts are also checked on every run. No due date is guessed from issue date.
+receipts are also checked at delivery. A partial payment or credit suppresses the invoice even
+when the current metadata correctly shows the reduced balance. No due date is guessed from issue date.
 This does not introduce an invoice metadata authoring workflow; the V2 fixture
 suite supplies that metadata. Replies/disputes can be recorded by the builder
 through the stop command; existing quote acceptance/disposition facts also stop
-chasing. Paid, disputed, pilot and decided items acquire permanent stop markers
+chasing. Paid, part-paid, disputed, pilot and decided items acquire permanent stop markers
 on an enabled run. Switch-off hides all future steps immediately across jobs;
 switch-on resumes only remaining steps on items without a permanent stop.
 

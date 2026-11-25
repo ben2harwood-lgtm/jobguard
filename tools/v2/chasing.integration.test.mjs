@@ -2,126 +2,105 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { after, before, test } from "node:test";
-import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
+import { fileURLToPath } from "node:url";
 import * as db from "../../packages/db/dist/index.js";
-import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
-import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
-import { migrationUrl, validateSettings } from "./settings.mjs";
 
-const { settings } = validateSettings({});
-Object.assign(process.env, settings, { JOBGUARD_LOCAL_V2: "1", JOBGUARD_ENV: "synthetic_demo" });
-if (process.env.JOBGUARD_V2_BACKEND === "embedded") process.env.JOBGUARD_V2_STORAGE_DIR = storageData;
-process.env.AUTH_CODE_SECRET = readFileSync(new URL("../../.jobguard/v2-auth-secret", import.meta.url), "utf8");
-const admin = new Pool({ connectionString: migrationUrl, max: 1 });
-const runtime = new Pool({ connectionString: settings.DATABASE_URL, max: 2 });
-const identity = createIdentityApplication(process.env);
 const tenant = db.DEMO_TENANT_ID;
 const day = 86_400_000;
-let first, second;
-let now = Date.now();
-const repo = new db.V2ChaseRepository(runtime, () => now);
 const input = (action, expectedVersion, extra = {}) => ({ version: "v2-chase-command.v1", commandId: randomUUID(), action, expectedVersion, ...extra });
-async function signIn(localPart) {
-  const credentials = { email: `${localPart}@jobguard-v2.invalid`, purpose: "signin" };
-  const { fixtureCode } = await identity.request({ version: "identity-request.v1", ...credentials }, "127.0.0.1", identity.allowedOrigin);
-  const { sessionToken } = await identity.verify({ version: "identity-verify.v1", ...credentials, code: fixtureCode }, identity.allowedOrigin);
-  const token = await db.enterLinkedPracticeCompany(identity.provider.repository.pool, sessionToken, process.env.AUTH_CODE_SECRET,
-    { version: "linked-practice-company.v1", action: "enter" });
-  return { token, realToken: sessionToken, ...await db.authenticatePracticeSession(runtime, token) };
-}
-before(async () => {
-  const embedded = process.env.JOBGUARD_V2_BACKEND === "embedded";
-  await verifyDatabaseTarget(admin, embedded ? embeddedSystemId() : process.env.JOBGUARD_V2_TEST_SYSTEM_ID, embedded);
+export async function runChasingProof(t, { admin, runtime, firstSession, secondSession }) {
+  const principal = async ({ sessionId }) => ({ token: sessionId, ...await db.authenticatePracticeSession(runtime, sessionId) });
+  const first = await principal(firstSession), second = await principal(secondSession);
   assert.ok((await admin.query("SELECT to_regclass('app.v2_chase_setting') relation")).rows[0].relation,
-    "Restart the V2 launcher to apply migration 2019 before running this suite");
-  first = await signIn("builder"); second = await signIn("second-builder");
-});
-after(async () => {
-  for (const person of [first, second]) if (person) await identity.provider.revokeSession(person.realToken);
-  await Promise.all([admin.end(), runtime.end(), identity.provider.repository.pool.end()]);
-});
+    "Apply migration 2019 before running the V2 seed suite");
+  let now = Date.now();
+  const repo = new db.V2ChaseRepository(runtime, () => now);
+  // The normal capture/quote commands create a fresh, unanswered quote. No mutation
+  // of an immutable seed quote, authorization, acceptance or delivery is needed.
+  async function quoteFixture() {
+    const workspace = createWorkspaceApplication({ pool: runtime, sessionId: first.token });
+    const saved = await workspace.capture.create({ contractVersion: "job_capture_v1", requested_tenant_id: tenant,
+      captureId: randomUUID(), fixtureId: "v2-a2-occupied-home", source: { kind: "text", text:
+        "JOB: Fictional chasing rehearsal\nITEM: Fit kitchen splashback tiles | QTY: 6 | UNIT: m2 | RATE: £95.00\nITEM: Paint the hall | QTY: 1 | UNIT: item | RATE: £420.00" } });
+    const job = saved.jobId;
+    const partyView = await workspace.parties.view({ sessionId: first.token }, job);
+    await workspace.parties.command({ sessionId: first.token }, job, { version: "job-parties-command.v1", action: "save_form",
+      commandId: randomUUID(), expectedJobRevision: partyView.jobRevision, expectedBindingId: null,
+      customer: { version: "customer.v1", type: "person", name: "Fictional Customer", email: "customer@jobguard-v2.invalid", phone: "+447700900042" },
+      customerRef: null, site: { version: "site.v1", addressLines: ["42 Make-Believe Mews"], town: "Sampleford", postcode: "ZY1 0AA" },
+      savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+      payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false });
+    const { review } = await workspace.capture.save(job, { contractVersion: "proposal_review_command_v1", expectedRevision: 0,
+      review: { version: "proposal_review_v1", jobId: job, proposalId: saved.proposalId, reviewId: saved.reviewId, revision: 0,
+        lines: saved.proposal.lines.map(line => ({ id: line.id, scopeItemId: line.scopeItemId, origin: "proposal",
+          description: line.description.value, room: "Kitchen", category: "Tiling", quantity: line.quantity.value, unit: line.unit.value,
+          unitPricePence: line.unitPricePence.value, disposition: "accepted", dismissalReason: null, parentScopeItemIds: [], sourceExcerpt: line.sourceExcerpt })),
+        questions: saved.proposal.questions.map(({ question }) => ({ id: randomUUID(), question: question.value, blocking: true,
+          disposition: "answered", answer: "Fictional builder removes the waste." })) } });
+    await workspace.capture.confirm(job, { contractVersion: "proposal_review_confirm_v1", commandId: randomUUID(), expectedRevision: review.revision });
+    const priced = await workspace.quote.get(job);
+    const quoteInput = { contractVersion: "quote_draft_command_v1", draftId: randomUUID(), expectedRevision: 0,
+      currency: M1_QUOTE_POLICY.currency, taxPolicyVersion: M1_QUOTE_POLICY.taxPolicyVersion,
+      lines: priced.scope.map(line => ({ ...line, id: randomUUID(), origin: "captured", included: true, exclusionReason: null,
+        discountPercent: "0", taxTreatment: M1_QUOTE_POLICY.taxTreatment, rateProvenance: "entered", category: "Tiling", region: null })) };
+    await workspace.quote.save(job, quoteInput);
+    const { view } = await workspace.quote.preview(job, { version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid" });
+    await workspace.quote.issue(job, { version: "quote-send-command.v1", commandId: randomUUID(), documentId: view.documentId,
+      contentHash: view.contentHash, recipient: "customer@jobguard-v2.invalid" });
+    await workspace.quote.execute(job, { version: "quote-execute-command.v1", documentId: view.documentId, mode: "success" });
+    const anchor = (await admin.query("SELECT issued_at FROM app.quote_send WHERE tenant_id=$1 AND job_id=$2", [tenant, job])).rows[0].issued_at.getTime();
+    return { job, view, workspace, anchor, quoteInput };
+  }
+  async function setting(job, enabled) {
+    const view = await repo.read(first.token, job);
+    return repo.command(first.token, job, input("setting", view.revision, { enabled }));
+  }
+  async function run(job) {
+    return repo.command(first.token, job, input("run", (await repo.read(first.token, job)).revision));
+  }
+  async function effects(job) {
+    return (await admin.query(`SELECT
+      (SELECT count(*)::int FROM app.v2_chase_log WHERE job_id=$1) logs,
+      (SELECT count(*)::int FROM app.v2_chase_command WHERE job_id=$1) commands,
+      (SELECT count(*)::int FROM app.audit_event WHERE subject_ref=$1::text AND event_type LIKE 'v2.chase.%') audits`, [job])).rows[0];
+  }
 
-// The normal capture/quote commands create a fresh, unanswered quote. No mutation
-// of an immutable seed quote, authorization, acceptance or delivery is needed.
-async function quoteFixture() {
-  const workspace = createWorkspaceApplication({ pool: runtime, sessionId: first.token });
-  const saved = await workspace.capture.create({ contractVersion: "job_capture_v1", requested_tenant_id: tenant,
-    captureId: randomUUID(), fixtureId: "v2-a2-occupied-home", source: { kind: "text", text:
-      "JOB: Fictional chasing rehearsal\nITEM: Fit kitchen splashback tiles | QTY: 6 | UNIT: m2 | RATE: £95.00\nITEM: Paint the hall | QTY: 1 | UNIT: item | RATE: £420.00" } });
-  const job = saved.jobId;
-  const partyView = await workspace.parties.view({ sessionId: first.token }, job);
-  await workspace.parties.command({ sessionId: first.token }, job, { version: "job-parties-command.v1", action: "save_form",
-    commandId: randomUUID(), expectedJobRevision: partyView.jobRevision, expectedBindingId: null,
-    customer: { version: "customer.v1", type: "person", name: "Fictional Customer", email: "customer@jobguard-v2.invalid", phone: "+447700900042" },
-    customerRef: null, site: { version: "site.v1", addressLines: ["42 Make-Believe Mews"], town: "Sampleford", postcode: "ZY1 0AA" },
-    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
-    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false });
-  const { review } = await workspace.capture.save(job, { contractVersion: "proposal_review_command_v1", expectedRevision: 0,
-    review: { version: "proposal_review_v1", jobId: job, proposalId: saved.proposalId, reviewId: saved.reviewId, revision: 0,
-      lines: saved.proposal.lines.map(line => ({ id: line.id, scopeItemId: line.scopeItemId, origin: "proposal",
-        description: line.description.value, room: "Kitchen", category: "Tiling", quantity: line.quantity.value, unit: line.unit.value,
-        unitPricePence: line.unitPricePence.value, disposition: "accepted", dismissalReason: null, parentScopeItemIds: [], sourceExcerpt: line.sourceExcerpt })),
-      questions: saved.proposal.questions.map(({ question }) => ({ id: randomUUID(), question: question.value, blocking: true,
-        disposition: "answered", answer: "Fictional builder removes the waste." })) } });
-  await workspace.capture.confirm(job, { contractVersion: "proposal_review_confirm_v1", commandId: randomUUID(), expectedRevision: review.revision });
-  const priced = await workspace.quote.get(job);
-  await workspace.quote.save(job, { contractVersion: "quote_draft_command_v1", draftId: randomUUID(), expectedRevision: 0,
-    currency: M1_QUOTE_POLICY.currency, taxPolicyVersion: M1_QUOTE_POLICY.taxPolicyVersion,
-    lines: priced.scope.map(line => ({ ...line, id: randomUUID(), origin: "captured", included: true, exclusionReason: null,
-      discountPercent: "0", taxTreatment: M1_QUOTE_POLICY.taxTreatment, rateProvenance: "entered", category: "Tiling", region: null })) });
-  const { view } = await workspace.quote.preview(job, { version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid" });
-  await workspace.quote.issue(job, { version: "quote-send-command.v1", commandId: randomUUID(), documentId: view.documentId,
-    contentHash: view.contentHash, recipient: "customer@jobguard-v2.invalid" });
-  await workspace.quote.execute(job, { version: "quote-execute-command.v1", documentId: view.documentId, mode: "success" });
-  const anchor = (await admin.query("SELECT issued_at FROM app.quote_send WHERE tenant_id=$1 AND job_id=$2", [tenant, job])).rows[0].issued_at.getTime();
-  return { job, view, workspace, anchor };
-}
-async function setting(job, enabled) {
-  const view = await repo.read(first.token, job);
-  return repo.command(first.token, job, input("setting", view.revision, { enabled }));
-}
-async function run(job) {
-  return repo.command(first.token, job, input("run", (await repo.read(first.token, job)).revision));
-}
-async function effects(job) {
-  return (await admin.query(`SELECT
-    (SELECT count(*)::int FROM app.v2_chase_log WHERE job_id=$1) logs,
-    (SELECT count(*)::int FROM app.v2_chase_command WHERE job_id=$1) commands,
-    (SELECT count(*)::int FROM app.audit_event WHERE subject_ref=$1::text AND event_type LIKE 'v2.chase.%') audits`, [job])).rows[0];
-}
+  // Administrative synthetic source fixtures only. These are not live issuance or
+  // payment tests; K4 must read their current balance and suppression facts safely.
+  async function invoiceFixture(f, flags = {}) {
+    const { activeAcceptance } = await f.workspace.quote.accept(f.job, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
+      documentId: f.view.documentId, documentVersion: f.view.documentVersion, documentHash: f.view.contentHash,
+      statedCustomerName: "Fictional Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+    assert.equal(activeAcceptance.documentId, f.view.documentId);
+    const invoice = randomUUID(), revision = randomUUID(), draft = randomUUID(), sourceHash = "b".repeat(64);
+    const authorization = (await admin.query("SELECT authorization_id FROM app.quote_send WHERE tenant_id=$1 AND job_id=$2", [tenant, f.job])).rows[0].authorization_id;
+    await db.withTenant(admin, first.context, async tx => {
+      await tx.$client.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draft, tenant, f.job]);
+      await tx.$client.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,
+        baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
+        VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',10000,2000,12000,false,'[]')`,
+      [revision, tenant, f.job, draft, sourceHash, f.view.documentId]);
+      await tx.$client.query(`INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,
+        issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
+        VALUES($1,$2,$3,$4,$5,$6,'2026-11-01','{}','candidate_m1_standard_v1','GBP',10000,2000,12000,$7,$7,$8,true,'SYNTHETIC - NOT A REAL INVOICE')`,
+      [invoice, tenant, f.job, revision, authorization, `K4-${invoice.slice(0, 8)}`, sourceHash, Buffer.from("synthetic fixture")]);
+    });
+    const projection = { version: "dunning-invoice.v1", environment: "synthetic_demo", tenantId: tenant, jobId: f.job, invoiceId: invoice,
+      revision: 1, sourceRevision: 1, sourceHash, sourceState: "issued_invoice", finalAccountLockId: null, currency: "GBP",
+      originalPence: 12000, outstandingPence: 12000, dueTick: f.anchor, category: "customer", recipient: "customer@jobguard-v2.invalid",
+      pilotNoCharge: false, disputed: false, refundPending: false, reversed: false, cancelled: false, attemptState: "none", ...flags };
+    await admin.query("INSERT INTO app.dunning_invoice(tenant_id,job_id,invoice_id,projection) VALUES($1,$2,$3,$4)", [tenant, f.job, invoice, projection]);
+    return { invoice, projection, authorization };
+  }
 
-// Administrative synthetic source fixtures only. These are not live issuance or
-// payment tests; K4 must read their current balance and suppression facts safely.
-async function invoiceFixture(f, flags = {}) {
-  const { activeAcceptance } = await f.workspace.quote.accept(f.job, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
-    documentId: f.view.documentId, documentVersion: f.view.documentVersion, documentHash: f.view.contentHash,
-    statedCustomerName: "Fictional Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
-  assert.equal(activeAcceptance.documentId, f.view.documentId);
-  const invoice = randomUUID(), revision = randomUUID(), draft = randomUUID(), sourceHash = "b".repeat(64);
-  const authorization = (await admin.query("SELECT authorization_id FROM app.quote_send WHERE tenant_id=$1 AND job_id=$2", [tenant, f.job])).rows[0].authorization_id;
-  await db.withTenant(admin, first.context, async tx => {
-    await tx.$client.query("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draft, tenant, f.job]);
-    await tx.$client.query(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,
-      baseline_quote_version_id,currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
-      VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',10000,2000,12000,false,'[]')`,
-    [revision, tenant, f.job, draft, sourceHash, f.view.documentId]);
-    await tx.$client.query(`INSERT INTO app.customer_invoice(id,tenant_id,job_id,final_account_revision_id,authorization_id,invoice_number,
-      issued_on,issuer_details,tax_policy_version,currency,net_pence,tax_pence,total_pence,source_hash,pdf_sha256,pdf_bytes,synthetic,watermark)
-      VALUES($1,$2,$3,$4,$5,$6,'2026-11-01','{}','candidate_m1_standard_v1','GBP',10000,2000,12000,$7,$7,$8,true,'SYNTHETIC - NOT A REAL INVOICE')`,
-    [invoice, tenant, f.job, revision, authorization, `K4-${invoice.slice(0, 8)}`, sourceHash, Buffer.from("synthetic fixture")]);
-  });
-  const projection = { version: "dunning-invoice.v1", environment: "synthetic_demo", tenantId: tenant, jobId: f.job, invoiceId: invoice,
-    revision: 1, sourceRevision: 1, sourceHash, sourceState: "issued_invoice", finalAccountLockId: null, currency: "GBP",
-    originalPence: 12000, outstandingPence: 12000, dueTick: f.anchor, category: "customer", recipient: "customer@jobguard-v2.invalid",
-    pilotNoCharge: false, disputed: false, refundPending: false, reversed: false, cancelled: false, attemptState: "none", ...flags };
-  await admin.query("INSERT INTO app.dunning_invoice(tenant_id,job_id,invoice_id,projection) VALUES($1,$2,$3,$4)", [tenant, f.job, invoice, projection]);
-  return { invoice, projection, authorization };
-}
-
-test("V2-K4 real PostgreSQL rehearsal", { timeout: 240_000 }, async t => {
+  async function recordPayment(job, fixture, amountPence) {
+    await db.withTenant(admin, first.context, tx => tx.$client.query(`INSERT INTO app.customer_payment
+      (id,tenant_id,job_id,invoice_id,authorization_id,paid_on,amount_pence,currency,method,reference,builder_attested,provenance)
+      VALUES($1,$2,$3,$4,$5,'2026-11-20',$6,'GBP','bank_transfer','fictional-k4',true,'manual_builder_attestation')`,
+    [randomUUID(), tenant, job.job, fixture.invoice, fixture.authorization, amountPence]));
+  }
   const f = await quoteFixture();
   await t.test("quote day 3/day 7, exact replay, altered replay and catcher/audit counts", async () => {
     await setting(f.job, true);
@@ -164,10 +143,7 @@ test("V2-K4 real PostgreSQL rehearsal", { timeout: 240_000 }, async t => {
     for (const flags of [{}, { disputed: true, outstandingPence: 6000 }, { pilotNoCharge: true }, { outstandingPence: 0 }]) {
       const job = await quoteFixture(), fixture = await invoiceFixture(job, flags);
       if (flags.disputed || flags.outstandingPence === 0) {
-        await db.withTenant(admin, first.context, tx => tx.$client.query(`INSERT INTO app.customer_payment(id,tenant_id,job_id,invoice_id,
-          authorization_id,paid_on,amount_pence,currency,method,reference,builder_attested,provenance)
-          VALUES($1,$2,$3,$4,$5,'2026-11-20',$6,'GBP','bank_transfer','fictional-k4',true,'manual_builder_attestation')`,
-        [randomUUID(), tenant, job.job, fixture.invoice, fixture.authorization, flags.disputed ? 6000 : 12000]));
+        await recordPayment(job, fixture, flags.disputed ? 6000 : 12000);
       }
       now = job.anchor + 3 * day - 1; assert.equal((await run(job.job)).captured, 0);
       now++;
@@ -180,22 +156,135 @@ test("V2-K4 real PostgreSQL rehearsal", { timeout: 240_000 }, async t => {
         assert.equal(logs.length, 2); assert.ok(logs.every(row => row.kind === "invoice"));
       }
       // A recorded payment, even with stale metadata, suppresses rather than reuses an old amount.
-      if (!flags.disputed && flags.outstandingPence !== 0) await db.withTenant(admin, first.context, tx => tx.$client.query(`INSERT INTO app.customer_payment(id,tenant_id,job_id,invoice_id,
-        authorization_id,paid_on,amount_pence,currency,method,reference,builder_attested,provenance)
-        VALUES($1,$2,$3,$4,$5,'2026-11-20',$6,'GBP','bank_transfer','fictional-k4',true,'manual_builder_attestation')`,
-      [randomUUID(), tenant, job.job, fixture.invoice, fixture.authorization, flags.disputed ? 6000 : 12000]));
+      if (!flags.disputed && flags.outstandingPence !== 0) await recordPayment(job, fixture, 12000);
       assert.equal((await run(job.job)).captured, 0);
     }
   });
-  await t.test("declining a sent quote stops reminders without needing the K4 stop command", async () => {
-    const declined = await quoteFixture();
-    await declined.workspace.quote.disposition(declined.job, { version: "quote-disposition-command.v1", commandId: randomUUID(),
-      documentId: declined.view.documentId, documentHash: declined.view.contentHash, documentVersion: declined.view.documentVersion,
-      kind: "declined", occurredAt: new Date().toISOString() });
-    now = declined.anchor + 20 * day;
-    assert.equal((await run(declined.job)).captured, 0);
-    assert.equal((await repo.read(first.token, declined.job)).items[0].stoppedReason, "decision");
+  await t.test("a missed quote or invoice sends only the latest due step inside its two-day window", async () => {
+    for (const kind of ["quote", "invoice"]) {
+      // Exercise the inclusive deadline and the very next millisecond.
+      for (const lateBy of [2 * day, 2 * day + 1]) {
+        const job = await quoteFixture();
+        const itemId = kind === "quote" ? job.view.documentId : (await invoiceFixture(job)).invoice;
+        await setting(job.job, false);
+        now = job.anchor + (kind === "quote" ? 7 : 10) * day + lateBy;
+        await setting(job.job, true);
+        const captured = lateBy === 2 * day ? 1 : 0;
+        const command = input("run", (await repo.read(first.token, job.job)).revision);
+        assert.equal((await repo.command(first.token, job.job, command)).captured, captured);
+        const initial = await effects(job.job);
+        assert.equal((await repo.command(first.token, job.job, command)).replayed, true);
+        assert.deepEqual(await effects(job.job), initial);
+        assert.equal((await run(job.job)).captured, 0);
+        now += 90 * day;
+        assert.equal((await run(job.job)).captured, 0);
+        const state = await repo.read(first.token, job.job);
+        const steps = state.log.filter(row => row.item_id === itemId && row.step > 0).sort((a, b) => a.step - b.step);
+        assert.deepEqual(steps.map(row => row.step), [1, 2]);
+        const skipped = steps.filter(row => row.stopped_reason === "chase_skipped");
+        assert.deepEqual(skipped.map(row => row.step), captured ? [1] : [1, 2]);
+        assert.ok(skipped.every(row => row.message === null && row.sent_at === null));
+        assert.deepEqual(steps.filter(row => row.message !== null).map(row => row.step), captured ? [2] : []);
+        assert.equal(state.items.find(item => item.id === itemId).next, null);
+      }
+    }
   });
+  await t.test("a declined quote records the K4 decision stop without the main-only disposition routine", async () => {
+    const job = await quoteFixture();
+    const command = input("stop", (await repo.read(first.token, job.job)).revision,
+      { kind: "quote", itemId: job.view.documentId, reason: "decision" });
+    await repo.command(first.token, job.job, command);
+    const old = await effects(job.job);
+    assert.equal((await repo.command(first.token, job.job, command)).replayed, true);
+    assert.deepEqual(await effects(job.job), old);
+    now = job.anchor + 3 * day;
+    assert.equal((await run(job.job)).captured, 0);
+    assert.equal((await repo.read(first.token, job.job)).items.find(item => item.id === job.view.documentId).stoppedReason, "decision");
+  });
+  await t.test("a newly issued quote withdraws the earlier version from chasing", async () => {
+    const job = await quoteFixture();
+    await job.workspace.quote.save(job.job, { ...job.quoteInput, expectedRevision: 1 });
+    const { view } = await job.workspace.quote.preview(job.job, { version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid" });
+    assert.ok(view.documentVersion > job.view.documentVersion);
+    await job.workspace.quote.issue(job.job, { version: "quote-send-command.v1", commandId: randomUUID(),
+      documentId: view.documentId, contentHash: view.contentHash, recipient: "customer@jobguard-v2.invalid" });
+    await job.workspace.quote.execute(job.job, { version: "quote-execute-command.v1", documentId: view.documentId, mode: "success" });
+    now = job.anchor + 4 * day;
+    assert.equal((await run(job.job)).captured, 1);
+    const state = await repo.read(first.token, job.job);
+    assert.equal(state.items.find(item => item.id === job.view.documentId).stoppedReason, "decision");
+    assert.deepEqual(state.log.filter(row => row.message).map(row => row.item_id), [view.documentId]);
+  });
+  for (const reduction of ["payment", "credit note"]) {
+    await t.test(`an undisputed partial ${reduction} with matching metadata suppresses chasing`, async () => {
+      const job = await quoteFixture(), fixture = await invoiceFixture(job, { outstandingPence: 6000 });
+      if (reduction === "payment") {
+        await recordPayment(job, fixture, 6000);
+      } else {
+        await db.withTenant(admin, first.context, tx => tx.$client.query(`INSERT INTO app.customer_credit_note
+          (id,tenant_id,job_id,invoice_id,authorization_id,credit_number,amount_pence,currency,reason,net_pence,tax_pence,total_pence)
+          VALUES($1,$2,$3,$4,$5,$6,6000,'GBP','Fictional partial credit',-5000,-1000,-6000)`,
+        [randomUUID(), tenant, job.job, fixture.invoice, fixture.authorization, `K4-CN-${fixture.invoice.slice(0, 8)}`]));
+      }
+      now = job.anchor + 3 * day;
+      assert.equal((await run(job.job)).captured, 0);
+      const invoice = (await repo.read(first.token, job.job)).items.find(item => item.id === fixture.invoice);
+      assert.equal(invoice.amountPence, 6000);
+      assert.equal(invoice.stoppedReason, "part_paid");
+      assert.equal(invoice.next, null);
+    });
+  }
+  await t.test("a no-charge pilot activation suppresses the invoice even with otherwise eligible metadata", async () => {
+    const job = await quoteFixture(), fixture = await invoiceFixture(job);
+    assert.equal(fixture.projection.pilotNoCharge, false);
+    await db.withTenant(admin, first.context, tx => tx.$client.query(`INSERT INTO app.job_activation
+      (id,tenant_id,job_id,accepted_document_id,accepted_document_version,accepted_document_hash,mode,activation_terms_version,
+       fee_policy_version,actor_membership_id,activated_at)
+      VALUES($1,$2,$3,$4,$5,$6,'pilot_no_charge','pilot_no_charge.v1','reference_fee_policy_v1',$7,now())`,
+    [randomUUID(), tenant, job.job, job.view.documentId, job.view.documentVersion, job.view.contentHash, first.membershipId]));
+    now = job.anchor + 3 * day;
+    assert.equal((await run(job.job)).captured, 0);
+    const state = await repo.read(first.token, job.job);
+    assert.equal(state.items.find(item => item.id === fixture.invoice).stoppedReason, "pilot_no_charge");
+    assert.ok(!state.log.some(row => row.message));
+  });
+  for (const change of ["payment", "dispute", "reply", "switch-off"]) {
+    await t.test(`a committed ${change} after selection prevents delivery, including on retry`, async t => {
+      const job = await quoteFixture();
+      const fixture = ["payment", "dispute"].includes(change) ? await invoiceFixture(job) : null;
+      await setting(job.job, true);
+      now = job.anchor + 3 * day;
+      const initial = await repo.read(first.token, job.job);
+      const id = fixture?.invoice ?? job.view.documentId;
+      assert.equal(initial.items.find(item => item.id === id).next.step, 1);
+      let hookCalls = 0;
+      const racing = new db.V2ChaseRepository(runtime, () => now, async () => {
+        hookCalls++;
+        if (change === "payment") await recordPayment(job, fixture, 12000);
+        if (change === "dispute") {
+          const update = await admin.query(`UPDATE app.dunning_invoice SET projection=jsonb_set(projection,'{disputed}','true')
+            WHERE tenant_id=$1 AND job_id=$2 AND invoice_id=$3`, [tenant, job.job, id]);
+          assert.equal(update.rowCount, 1);
+        }
+        if (change === "reply") await repo.command(first.token, job.job, input("stop", initial.revision,
+          { kind: "quote", itemId: id, reason: "reply" }));
+        if (change === "switch-off") await setting(job.job, false);
+      });
+      const caught = t.mock.method(console, "info");
+      const command = input("run", initial.revision);
+      assert.equal((await racing.command(first.token, job.job, command)).captured, 0);
+      assert.equal(hookCalls, 1);
+      const after = await effects(job.job);
+      const replay = await repo.command(first.token, job.job, command);
+      assert.equal(replay.replayed, true);
+      assert.equal(replay.captured, 0);
+      assert.deepEqual(await effects(job.job), after);
+      assert.equal((await run(job.job)).captured, 0);
+      assert.ok(!(await repo.read(first.token, job.job)).log.some(row => row.message));
+      assert.ok(!caught.mock.calls.some(call => call.arguments[0] === '{"event":"v2.delivery.captured","kind":"v2.chase"}'));
+    });
+  }
+  await setting(f.job, true);
   await t.test("second linked firm cannot reach the first firm's reads or writes", async () => {
     await assert.rejects(repo.read(second.token, f.job), /NOT_FOUND/);
     await assert.rejects(repo.command(second.token, f.job, input("run", 0)), /NOT_FOUND/);
@@ -250,4 +339,7 @@ test("V2-K4 real PostgreSQL rehearsal", { timeout: 240_000 }, async t => {
     assert.ok(catalog.every(row => row.owner === "jobguard_migration" && row.relrowsecurity && row.relforcerowsecurity && !row.can_delete && !row.can_truncate));
     await setting(f.job, false);
   });
-});
+}
+
+// Preserve the original command-line entry point with the same full-suite setup.
+if (process.argv[1] === fileURLToPath(import.meta.url)) await import("./seed.integration.test.mjs");

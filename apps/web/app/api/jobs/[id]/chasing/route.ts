@@ -1,22 +1,41 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { AuthError, resolveVerifiedTenantContext } from "@jobguard/api/identity";
+import { ZodError } from "zod";
 import { V2ChaseRepository, V2ChaseError, requireV2Chasing } from "@jobguard/db";
-import { enforcePracticePair } from "../../../../lib/linked-practice-entry";
+import { authenticateLinkedPractice, enforcePracticePair } from "../../../../lib/linked-practice-entry";
 import { practiceFailure, syntheticPool } from "../../../../lib/synthetic-server";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store" };
 async function execute(request: Request, params: Promise<{ id: string }>, write: boolean) {
   try {
     requireV2Chasing();
-    const token = (await cookies()).get("jg_session")?.value;
-    await enforcePracticePair(syntheticPool(), token);
-    if (write && request.headers.get("origin") !== new URL(request.url).origin)
-      return NextResponse.json({ code: "FORBIDDEN" }, { status: 403, headers });
-    const repository = new V2ChaseRepository(syntheticPool());
+    const pool = syntheticPool();
+    const jar = await cookies();
+    const token = jar.get("jg_session")?.value;
+    if (write) {
+      if (!process.env.AUTH_ALLOWED_ORIGIN) return NextResponse.json({ code: "FORBIDDEN" }, { status: 403, headers });
+      const { application, session } = await authenticateLinkedPractice(pool, token);
+      // Linked owner lookup already verified the single owner membership and the exact practice pair.
+      await resolveVerifiedTenantContext(application.provider, {
+        sessionToken: jar.get("jobguard_session")?.value,
+        requestedTenantId: session.memberships[0]!.tenantId,
+        csrfToken: request.headers.get("x-csrf-token") ?? undefined,
+        origin: request.headers.get("origin") ?? undefined,
+      }, application.allowedOrigin);
+    } else {
+      await enforcePracticePair(pool, token);
+    }
+    const repository = new V2ChaseRepository(pool);
     const { id } = await params;
     return NextResponse.json(write ? await repository.command(token, id, await request.json().catch(() => null))
       : await repository.read(token, id), { headers });
   } catch (error) {
+    if (error instanceof AuthError || error instanceof ZodError) {
+      const unauthenticated = error instanceof AuthError && error.code === "UNAUTHENTICATED";
+      return NextResponse.json({ code: unauthenticated ? "UNAUTHENTICATED" : "FORBIDDEN" },
+        { status: unauthenticated ? 401 : 403, headers });
+    }
     const denied = practiceFailure(error);
     if (denied) return denied;
     const code = error instanceof V2ChaseError ? error.code : "CHASE_UNAVAILABLE";

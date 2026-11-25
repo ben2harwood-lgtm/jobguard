@@ -6,7 +6,7 @@ export const chaseCommand = z.discriminatedUnion("action", [
     action: z.literal("setting"), enabled: z.boolean() }).strict(),
   z.object({ version: z.literal("v2-chase-command.v1"), commandId: z.guid(), expectedVersion: z.number().int().nonnegative(),
     action: z.literal("stop"), itemId: z.guid(), kind: z.enum(["quote", "invoice"]),
-    reason: z.enum(["builder_stop", "reply", "dispute"]) }).strict(),
+    reason: z.enum(["builder_stop", "reply", "dispute", "decision"]) }).strict(),
   z.object({ version: z.literal("v2-chase-command.v1"), commandId: z.guid(), expectedVersion: z.number().int().nonnegative(),
     action: z.literal("run") }).strict(),
 ]);
@@ -15,12 +15,33 @@ export interface ChaseItem {
   id: string; kind: "quote" | "invoice"; reference: string; amountPence: number;
   anchor: number; stoppedReason: string | null; recipient: string;
 }
-export function nextChase(item: ChaseItem, sent: readonly number[]) {
+const dayMs = 86_400_000;
+type ChaseStep = { step: number; due: string };
+
+export function chaseSchedule(item: ChaseItem, recordedSteps: readonly number[], now: number) {
+  const result: { next: ChaseStep | null; skipped: ChaseStep[] } = { next: null, skipped: [] };
   if (item.stoppedReason || !Number.isSafeInteger(item.amountPence) || item.amountPence <= 0 ||
-    item.amountPence > 1_000_000_000_000 || !Number.isSafeInteger(item.anchor) || item.anchor < 0) return null;
+    item.amountPence > 1_000_000_000_000 || !Number.isSafeInteger(item.anchor) || item.anchor < 0 ||
+    !Number.isSafeInteger(now) || now < 0) return result;
+
   const days = item.kind === "quote" ? [3, 7] : [3, 10];
-  const step = days.findIndex((_, index) => !sent.includes(index + 1));
-  return step < 0 ? null : { step: step + 1, due: new Date(item.anchor + days[step]! * 86_400_000).toISOString() };
+  const dates = days.map(day => new Date(item.anchor + day * dayMs));
+  if (dates.some(date => !Number.isFinite(date.getTime()))) return result;
+
+  // The two dates are further apart than the inclusive two-day send window.
+  // A later terminal step also prevents an earlier send after a clock rollback.
+  for (const [index, date] of dates.entries()) {
+    const step = index + 1;
+    if (recordedSteps.includes(step)) continue;
+    const entry = { step, due: date.toISOString() };
+    const hasLaterRecord = recordedSteps.some(recorded => recorded > step);
+    if (now - date.getTime() > 2 * dayMs || (hasLaterRecord && now >= date.getTime())) {
+      result.skipped.push(entry);
+    } else if (!hasLaterRecord && !result.next) {
+      result.next = entry;
+    }
+  }
+  return result;
 }
 export function chaseMessage(firm: string, item: ChaseItem) {
   const amount = formatRecoveryMessagePounds(item.amountPence);

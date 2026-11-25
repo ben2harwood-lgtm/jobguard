@@ -30,6 +30,25 @@ CREATE TABLE IF NOT EXISTS app.v2_chase_log (
     OR (step>0 AND stopped_reason IS NULL AND due_at IS NOT NULL AND sent_at IS NOT NULL
         AND message IS NOT NULL AND recipient IS NOT NULL AND recipient='customer@jobguard-v2.invalid'))
 );
+-- An existing rehearsal has the original anonymous stop/sent constraint.
+-- Identify just that constraint by its stopped_reason column, keep all rows,
+-- and validate the expanded three-way check inside this same transaction.
+DO $$ DECLARE previous_shape name; BEGIN
+ IF NOT EXISTS (SELECT 1 FROM pg_constraint
+   WHERE conrelid='app.v2_chase_log'::regclass AND conname='v2_chase_log_outcome') THEN
+  SELECT c.conname INTO STRICT previous_shape FROM pg_constraint c
+   JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attname='stopped_reason' AND a.attnum=ANY(c.conkey)
+   WHERE c.conrelid='app.v2_chase_log'::regclass AND c.contype='c';
+  EXECUTE format('ALTER TABLE app.v2_chase_log DROP CONSTRAINT %I',previous_shape);
+  ALTER TABLE app.v2_chase_log ADD CONSTRAINT v2_chase_log_outcome CHECK (
+    (step=0 AND stopped_reason IS NOT NULL AND sent_at IS NULL AND message IS NULL AND recipient IS NULL)
+    OR (step>0 AND due_at IS NOT NULL AND stopped_reason IS NOT NULL AND stopped_reason='chase_skipped'
+        AND sent_at IS NULL AND message IS NULL AND recipient IS NULL)
+    OR (step>0 AND due_at IS NOT NULL AND stopped_reason IS NULL AND sent_at IS NOT NULL
+        AND message IS NOT NULL AND recipient IS NOT NULL AND recipient='customer@jobguard-v2.invalid')
+  );
+ END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS app.v2_chase_command (
  tenant_id uuid NOT NULL, firm_key text NOT NULL, job_id uuid NOT NULL, command_id uuid NOT NULL,
  request_hash char(64) NOT NULL, result jsonb NOT NULL,
