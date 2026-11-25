@@ -115,6 +115,10 @@ for (const width of [360, 1280]) {
       const trade = main.getByRole("region", { name: "tiler brief", exact: true });
       const task = trade.getByRole("region", { name: brief.content.tasks.find(task => task.taskKey === "tile-splashback").title, exact: true });
       const note = task.getByRole("textbox");
+      // The list loads after the page; count only once it shows, or the 1280 run
+      // reads 0 while the 360 run's three presses are still to appear.
+      await expect(task).toBeVisible();
+      await expect(main.getByText("Loading brief progress…")).toHaveCount(0);
       const recordedBefore = await task.getByRole("listitem").count();
       await expect(task.getByRole("button", { name: "Blocked", exact: true })).toBeDisabled();
       await expect(task.getByRole("button", { name: "Changed", exact: true })).toBeDisabled();
