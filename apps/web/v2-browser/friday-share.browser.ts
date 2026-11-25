@@ -37,12 +37,16 @@ test.beforeAll(async ({ browser }) => {
       });
       if (!response.ok) throw new Error(`practice:${response.status}`);
     }, csrfToken);
-    const { DEMO_TENANT_ID } = await import("../../../packages/db/dist/index.js");
-    const jobs = await page.evaluate(async tenantId => {
-      const response = await fetch(`/api/jobs?tenantId=${tenantId}`);
+    // The signed-in workspace's own tenant (as BH1 and WALK-3.spec.ts do), not a fixture import.
+    const jobs = await page.evaluate(async () => {
+      const session = await fetch("/api/session");
+      if (!session.ok) throw new Error(`session:${session.status}`);
+      const tenantId = (await session.json()).tenants?.[0]?.id;
+      if (!tenantId) throw new Error("session:no-tenant");
+      const response = await fetch(`/api/jobs?tenantId=${encodeURIComponent(tenantId)}`);
       if (!response.ok) throw new Error(`jobs:${response.status}`);
       return (await response.json()).jobs;
-    }, DEMO_TENANT_ID);
+    });
     jobId = jobs.find((job: { title: string }) => job.title.includes("Occupied-home kitchen splashback and hall decorating"))?.id;
     expect(jobId).toBeTruthy();
     storageState = await context.storageState();
