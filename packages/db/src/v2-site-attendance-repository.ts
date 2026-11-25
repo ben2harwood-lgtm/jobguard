@@ -77,6 +77,9 @@ export class SiteAttendanceRepository {
       const crewId = command.person.kind === "crew" ? command.person.crewId : null;
       const personRef = crewId ?? editor;
 
+      // Serialise uses of one command id first (on any job), then taps for one person on one job
+      // and day, so a reused id and a race each resolve to one saved tap.
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('v2_site_attendance_command:' || $1))", [command.commandId]);
       // Serialise taps for one person on one job and day, so a race resolves to one revision.
       await client.query("SELECT pg_advisory_xact_lock(hashtext('v2_site_attendance:' || $1))",
         [`${jobId}:${command.day}:${command.person.kind}:${personRef}`]);

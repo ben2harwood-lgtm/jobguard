@@ -1312,6 +1312,19 @@ test("F8: a replayed tap counts once, an edit is the next revision, and the day 
     WHERE job_id = $1 AND crew_id = $2 AND day = $3::date`, [jobId, sam.crewId, today])).rows[0].count;
   assert.equal(await count(), 1, "a replayed tap counts once");
   await assert.rejects(attendance.record(jobId, { ...first, onSite: false }), { code: "SITE_ATTENDANCE_COMMAND_CONFLICT" });
+  // One command id names one tap: reused on another of the firm's jobs, even concurrently, only one saves.
+  const { draftJob } = await draftForPlan();
+  await assert.rejects(attendance.record(draftJob, first), { code: "SITE_ATTENDANCE_COMMAND_CONFLICT" });
+  const shared = tapCommand(today);
+  const raced = await Promise.allSettled([attendance.record(jobId, shared), attendance.record(draftJob, shared),
+    attendance.record(draftJob, { ...shared, note: "Changed" })]);
+  assert.equal(raced.filter(result => result.status === "fulfilled").length, 1);
+  for (const result of raced.filter(result => result.status === "rejected")) {
+    assert.equal(result.reason.code, "SITE_ATTENDANCE_COMMAND_CONFLICT");
+  }
+  assert.equal((await admin.query(`SELECT count(*)::int AS count FROM ${attendanceTable} WHERE command_id = $1`,
+    [shared.commandId])).rows[0].count, 1);
+  const savedOn = raced.find(result => result.status === "fulfilled").value;
   // A second, different tap at the same version is stale; an edit names the current revision.
   await assert.rejects(attendance.record(jobId, tapCommand(today, { person: first.person })),
     { code: "SITE_ATTENDANCE_VERSION_CONFLICT" });
@@ -1319,7 +1332,8 @@ test("F8: a replayed tap counts once, an edit is the next revision, and the day 
     note: "Went to another job" }));
   assert.equal(undo.revision, 2);
   assert.equal(await count(), 2, "the first revision is kept unchanged");
-  const me = await attendance.record(jobId, tapCommand(today));
+  const me = (await attendance.list(jobId, attendanceQuery)).records.some(entry => entry.personKind === "builder" &&
+    entry.day === today) ? savedOn : await attendance.record(jobId, tapCommand(today));
   const view = await attendance.list(jobId, attendanceQuery);
   assert.equal(view.today, today);
   assert.equal(view.days.length, 7);

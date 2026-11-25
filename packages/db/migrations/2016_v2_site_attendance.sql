@@ -32,7 +32,8 @@ BEGIN
     tapped_by_membership_id uuid NOT NULL,
     recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (tenant_id, job_id, day, person_kind, person_ref, revision),
-    UNIQUE (tenant_id, job_id, command_id),
+    -- One command id names one tap in the tenant, whichever job it was sent for.
+    UNIQUE (tenant_id, command_id),
     CHECK ((person_kind = 'crew') = (crew_id IS NOT NULL)),
     CHECK ((person_kind = 'builder') = (builder_membership_id IS NOT NULL)),
     -- "Me" is always the person who tapped it.
