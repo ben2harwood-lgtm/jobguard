@@ -124,3 +124,12 @@ Customers and crew never get a main sign-in on V2. They reach it only through V2
 
 ## Change, 25 Nov 17:50 UK: plan checks go to Astra; Codex builds as much as it safely can
 Ben, 17:38 UK: from now on, plan checks go to Astra on frm-management-layer#3, not Claude threads. Keep desktop and web Codex coding alongside Opus. Every new packet names Codex as builder unless it needs a live V2 database while building or a security boundary design. The V2-FL sweep is split into FL-1 (Opus, guard test plus core) and FL-2 to FL-5 plus FL-F (Codex).
+
+## Ben's decisions, 25 Nov 17:35 to 17:48 UK (asked one at a time)
+1. Hosting: decide around 3 Dec, after the full browser run. No host account or spend before then.
+2. Merge slot: not needed. The standing go-ahead (12:10 UK) has the merge thread merging on green CI and a clean review.
+3. Translated crew briefs: plan it with a paid service. Packet Q41 (fake translator) and privacy note `reviews/v2/D4B-privacy-note.md` are written. Ben picks and pays for a provider before real use.
+4. C6, add a line to a priced quote: in V2, practice first.
+5. Real-phone runs: his iPhone, around 4 Dec, about an hour with a script. Android not yet tested.
+6. Big ideas A, C, D, E, F: all later, after V2.
+7. Next templates: bathroom refresh and single-room decorating, built around 5 Dec after H1 passes (data files plus one worked test each, no new code).
