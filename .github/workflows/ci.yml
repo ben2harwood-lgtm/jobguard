@@ -29,10 +29,10 @@ jobs:
       - uses: actions/setup-node@v4.0.3
         with: { node-version: 24.15.0, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      # Q18 / V2-CI2: keep CI1's seed job unchanged. Its base-only scope misses
-      # Codex V2 heads stacked on Claude bases (#932), so these pointers run here.
+      # Q18 / V2-CI2: review pointers only count where v2-seed runs the named cases.
+      # Keep this condition identical to v2-seed and V2_SEED_REQUIRED in the checks gate.
       - name: List V2 audit-chain review pointers
-        if: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-') || startsWith(github.head_ref, 'codex/sandbox/v2-')) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main' }}
+        if: ${{ github.event_name == 'pull_request' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-') || (startsWith(github.base_ref, 'claude/project-thread-') && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'codex/sandbox/v2-'))) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main' }}
         run: |
           node --test tools/v2-audit-chain-guard.test.mjs
           node tools/v2/audit-chain-guard.mjs

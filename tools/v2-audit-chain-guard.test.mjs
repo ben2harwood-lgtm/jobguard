@@ -174,8 +174,8 @@ test("payload references version is flagged separately from the audit envelope v
 
 // Real #932 stacked pair, verified via GitHub on 25 Nov 2026. CI1's base-only
 // condition missed this pair; neither the author nor the base prefix decides it.
-const e3 = { pull_request: {
-  head: { ref: "codex/sandbox/v2-e3", sha: "80d4bd0d7c78a449e6f2a77cb540d8453c3d8df4" },
+const e3 = { repository: { full_name: "ben2harwood-lgtm/jobguard" }, pull_request: {
+  head: { ref: "codex/sandbox/v2-e3", sha: "80d4bd0d7c78a449e6f2a77cb540d8453c3d8df4", repo: { full_name: "ben2harwood-lgtm/jobguard" } },
   base: { ref: "claude/project-thread-8zze8p", sha: "c04969a162b757a496c262fb8569b7bdb01d696a" },
 } };
 
@@ -184,6 +184,11 @@ test("scope includes #932's real Codex E3 / Claude D3 pair and excludes main", (
   for (const base of ["v2/main", "codex/sandbox/v2-d1"]) assert.equal(inV2Scope("pull_request", { pull_request: { base: { ref: base }, head: { ref: "claude/example" } } }), true);
   assert.equal(inV2Scope("pull_request", { pull_request: { ...e3.pull_request, base: { ref: "main" } } }), false);
   assert.equal(inV2Scope("pull_request", { pull_request: { base: { ref: "unrelated" }, head: { ref: "claude/unrelated" } } }), false);
+  // Same scope as v2-seed after #938: no seed run means no evidence, so no guard run.
+  const fork = { ...e3, pull_request: { ...e3.pull_request, head: { ...e3.pull_request.head, repo: { full_name: "contributor/jobguard" } } } };
+  assert.equal(inV2Scope("pull_request", fork), false);
+  assert.equal(inV2Scope("pull_request", { ...e3, pull_request: { ...e3.pull_request, base: { ref: "release/1" } } }), false);
+  assert.equal(inV2Scope("pull_request", { ...e3, pull_request: { ...e3.pull_request, head: { ref: "feature/editor", repo: e3.pull_request.head.repo } } }), false);
   assert.equal(inV2Scope("push", { ref: "refs/heads/v2/main" }), true);
   assert.equal(inV2Scope("push", { ref: "refs/heads/main" }), false);
   assert.throws(() => inV2Scope("pull_request", {}), /Missing PR branch/);
@@ -273,9 +278,38 @@ test("workflow runs the guard and its fixtures in V2 core-checks without changin
   const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
   const step = workflow.match(/      - name: List V2 audit-chain review pointers\n([\s\S]*?)(?=      - )/u)?.[1];
   assert.ok(step);
-  assert.match(step, /github\.base_ref != 'main'/);
-  assert.match(step, /startsWith\(github\.head_ref, 'codex\/sandbox\/v2-'\)/);
+  // The guard only runs where v2-seed runs the named cases (P2b, after #938).
+  const condition = step.match(/^        if: (\$\{\{.*\}\})$/mu)?.[1];
+  const seedRequired = workflow.match(/^          V2_SEED_REQUIRED: (\$\{\{.*\}\})$/mu)?.[1];
+  const seedJob = workflow.match(/^  v2-seed:\n[\s\S]*?^    if: (\$\{\{.*\}\})$/mu)?.[1];
+  assert.ok(condition && seedRequired && seedJob);
+  assert.equal(condition, seedRequired);
+  assert.equal(condition, seedJob);
   assert.match(step, /node --test tools\/v2-audit-chain-guard\.test\.mjs/);
   assert.match(step, /node tools\/v2\/audit-chain-guard\.mjs/);
   assert.doesNotMatch(step, /continue-on-error|pull_request_target/);
+});
+
+test("test files are not pointers, and a named helper arrow belongs to its method", () => {
+  const helper = `export class R { async save(tx) { const insert = async () => tx.query("INSERT INTO app.v2_x VALUES (1)"); await insert(); } }`;
+  assert.deepEqual(scanCommands("packages/db/src/r.ts", helper).map(command => command.id), ["packages/db/src/r.ts#R.save"]);
+  const factory = `export const make = () => ({ save: async tx => tx.query("INSERT INTO app.v2_x VALUES (1)") });`;
+  assert.deepEqual(scanCommands("packages/db/src/f.ts", factory).map(command => command.id), ["packages/db/src/f.ts#save"]);
+  const directory = mkdtempSync(join(tmpdir(), "v2-ci2-test-"));
+  try {
+    const eventPath = join(directory, "event.json");
+    writeFileSync(eventPath, JSON.stringify(e3));
+    const shown = [];
+    const git = args => {
+      if (args[0] === "rev-parse") return args.at(-1).startsWith("HEAD") ? e3.pull_request.head.sha : args.at(-1).replace(/\^\{commit\}$/u, "");
+      if (args[0] === "merge-base") return args.includes("--is-ancestor") ? "" : e3.pull_request.base.sha;
+      if (args[0] === "diff") return args.includes("--name-only") ? "packages/db/src/x.test.ts\0apps/api/src/y.test.mts\0" : "@@ -0,0 +1,7 @@\n";
+      if (args[0] === "ls-tree") return `${seed}\0`;
+      if (args[0] === "show") { shown.push(args[1]); return args[1].endsWith(seed) ? "" : `test("x", () => db.query("INSERT INTO app.v2_x VALUES (1)"));`; }
+      throw new Error(`Unexpected git call: ${args}`);
+    };
+    const result = inspectAuditChain({ env: { GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: eventPath }, git });
+    assert.deepEqual(result.commands, []);
+    assert.ok(!shown.some(item => /\.test\.m?ts$/u.test(item)));
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });

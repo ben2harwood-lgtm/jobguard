@@ -16,7 +16,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-const sourcePath = /^(?:packages\/db|apps\/api)\/src\/.*\.[cm]?tsx?$/u;
+const sourcePath = /^(?:packages\/db|apps\/api)\/src\/(?!.*\.test\.[cm]?tsx?$).*\.[cm]?tsx?$/u;
 const seedPath = /^tools\/v2\/seed\.integration\.test\.mjs$/u;
 const shaPattern = /^[a-f0-9]{40}$/u;
 const walk = (node, visit) => { visit(node); ts.forEachChild(node, child => { walk(child, visit); }); };
@@ -29,13 +29,16 @@ const propertyName = node => node && ts.isComputedPropertyName(node) ? propertyN
   : node && (ts.isIdentifier(node) || ts.isStringLiteralLike(node)) ? node.text : undefined;
 const callName = node => ts.isIdentifier(node) ? node.text : ts.isPropertyAccessExpression(node) ? node.name.text : undefined;
 
-/** Head naming matters: #932 is a Codex E3 head stacked on a Claude D3 base. */
+/** Mirrors v2-seed's condition (V2_SEED_REQUIRED): evidence only counts where
+ * the seed suite runs. #932 is a Codex E3 head stacked on a Claude D3 base. */
 export function inV2Scope(eventName, event) {
   if (eventName === "push") return event.ref === "refs/heads/v2/main" && event.deleted !== true;
   if (eventName !== "pull_request") return false;
   const { base, head } = event.pull_request ?? {};
   if (typeof base?.ref !== "string" || typeof head?.ref !== "string") throw new Error("Missing PR branch identity.");
-  return base.ref !== "main" && (base.ref === "v2/main" || base.ref.startsWith("codex/sandbox/v2-") || head.ref.startsWith("codex/sandbox/v2-"));
+  const sameRepository = typeof head.repo?.full_name === "string" && head.repo.full_name === event.repository?.full_name;
+  return base.ref === "v2/main" || base.ref.startsWith("codex/sandbox/v2-") ||
+    (base.ref.startsWith("claude/project-thread-") && sameRepository && head.ref.startsWith("codex/sandbox/v2-"));
 }
 
 function functionName(node) {
@@ -82,9 +85,14 @@ function writes(sql) {
 export function scanCommands(path, source, changed) {
   const file = parse(path, source), definitions = new Map(), commands = new Map();
   walk(file, node => { if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) definitions.set(node.name.text, node.initializer); });
+  // A named helper arrow inside a method belongs to that method: seed cases call the method.
   function ownerOf(node) {
-    for (let current = node.parent; current; current = current.parent) if (functionName(current)) return current;
-    return file;
+    let nearest;
+    for (let current = node.parent; current; current = current.parent) {
+      if ((ts.isMethodDeclaration(current) || ts.isFunctionDeclaration(current)) && functionName(current)) return current;
+      if (!nearest && functionName(current)) nearest = current;
+    }
+    return nearest ?? file;
   }
   walk(file, node => {
     if (!ts.isCallExpression(node) && !ts.isTaggedTemplateExpression(node)) return;
