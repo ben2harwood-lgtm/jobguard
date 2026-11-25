@@ -2,11 +2,11 @@
 
 > Found by the Claude check of the FL PRs (25 Nov 18:28 UK). The Q35 catalog was read on a base that didn't yet have the V2 piece tables on unmerged branches, so those tables are on no FL list. Examples:
 > - `v2_crew_brief`, `v2_crew_brief_photo` and `v2_crew_brief_command` (migration 2007, #916 and #954);
-> - likely `v2_measurement` (2005, #904).
+> - likely `v2_measurement` (d1 #904; its file was 2005 and is now `2021_v2_measurement.sql` after the merge-time renumber at aca51458).
 >
 > The FL-1 guard will fail as soon as one of those branches meets FL-1.
 
-**Tier:** RED (tenancy). **Builder:** desktop Codex (lane A). It's one SQL file and one bootstrap line, and CI1 is the proof. Checker: Claude. **Base:** `codex/sandbox/v2-fl1` (#966). **Branch:** `codex/sandbox/v2-fl6`. **PR:** draft into `codex/sandbox/v2-fl1`. **Migration: 2054**, a V2 bootstrap file (next free becomes 2055). **Plan check:** Astra. Planner: Fable thread, 25 Nov 18:35 UK.
+**Tier:** RED (tenancy). **Builder:** desktop Codex (lane A). It's one SQL file and one bootstrap line, and CI1 is the proof. Checker: Claude. **Base:** `codex/sandbox/v2-fl1` (#966). **Branch:** `codex/sandbox/v2-fl6`. **PR:** draft into `codex/sandbox/v2-fl1`. **Migration: 2054**, a V2 bootstrap file (next free becomes 2055). This is a build-time number. At merge it may be renumbered by `tools/migration-renumber.mjs`. It must stay the **last bootstrap line** whatever its number. The loop finds tables by name pattern, never by migration number. **Plan check:** Astra. Planner: Fable thread, 25 Nov 18:35 UK.
 
 ## Dry-check against `codex/sandbox/v2-fl1` (rule 23)
 - `tools/v2/bootstrap.mjs` lines 64 to 71 load the V2 files explicitly, in order: 2001, 2002 to 2004, 2025, then 2047. Every V2 piece branch adds its own line here.
