@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import test from "node:test";
-import { expect } from "../../apps/web/node_modules/@playwright/test/index.mjs";
+import { expect as playwrightExpect } from "../../apps/web/node_modules/@playwright/test/index.mjs";
 import { launchV2Browser, signInOnce, v2Context } from "./test/browser-session.mjs";
+
+// The cold embedded web app compiles several work-screen routes before refreshing a saved row.
+const expect = playwrightExpect.configure({ timeout: 30_000 });
 
 test("real contractor replaces receipted tiles, then explicitly confirms packs of oak", { timeout: 180_000 }, async t => {
   const browser = await launchV2Browser();
