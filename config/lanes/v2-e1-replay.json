@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-e1-replay": {
+      "branches": [
+        "codex/sandbox/v2-e1-replay"
+      ],
+      "note": "RED E1: reconcile a concurrently committed open-fact receipt before refusing a stale version.",
+      "allow": [
+        "packages/db/src/v2-open-fact-repository.ts",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

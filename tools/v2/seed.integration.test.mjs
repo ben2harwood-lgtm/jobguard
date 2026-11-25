@@ -1236,3 +1236,64 @@ test("forced open fact policies hide facts and reject changes from the second fi
     { code: "42501", message: /row-level security policy/u });
   }
 });
+
+test("an open-fact command committed between receipt and version reads keeps its original outcome", async () => {
+  const owner = await signIn("builder");
+  const access = { sessionId: owner.sessionId };
+  const writer = createWorkspaceApplication({ ...access, pool: runtime }).openFacts;
+
+  // Both connections talk to PostgreSQL. Run the winning command just after
+  // PostgreSQL answers the retry's first receipt query, before its next SELECT.
+  const retryPool = new Pool({ connectionString: settings.DATABASE_URL, max: 1 });
+  let scheduled;
+  retryPool.on("connect", client => {
+    const query = client.query.bind(client);
+    client.query = (sql, ...args) => {
+      const result = query(sql, ...args);
+      if (!scheduled || typeof sql !== "string" || !sql.includes("FROM app.v2_open_fact_change WHERE (tenant_id, job_id, command_id)")
+          || args[0]?.[2] !== scheduled.retryId) return result;
+      const run = scheduled;
+      scheduled = undefined;
+      return result.then(async firstRead => {
+        assert.equal(firstRead.rowCount, 0);
+        run.receipt = await writer.command(jobId, run.winner);
+        return firstRead;
+      });
+    };
+  });
+  try {
+    const reader = createWorkspaceApplication({ ...access, pool: retryPool }).openFacts;
+    for (const [action, variant] of [
+      ["answer", "identical"], ["cancel", "identical"], ["mark_out_of_date", "identical"],
+      ["answer", "changed payload"], ["answer", "different command"],
+    ]) {
+      const fact = await writer.command(jobId, logFact({ owner: { kind: "merchant", name: "Practice Tiles" },
+        neededBy: "2026-12-03", detail: { kind: "merchant_delivery_date", item: "Kitchen tiles" } }));
+      const winner = factCommand({ action, factId: fact.factId, expectedVersion: fact.version,
+        ...(action === "answer" && { answer: { kind: "merchant_delivery_date", deliveryDate: "2026-12-04" } }) });
+      const retry = { ...winner };
+      if (variant === "changed payload") retry.answer = { ...winner.answer, deliveryDate: "2026-12-05" };
+      if (variant === "different command") retry.commandId = randomUUID();
+      const run = { retryId: retry.commandId, winner, receipt: null };
+      scheduled = run;
+      if (variant === "identical") {
+        const receipt = await reader.command(jobId, retry);
+        assert.deepEqual(receipt, run.receipt);
+      } else {
+        await assert.rejects(reader.command(jobId, retry), {
+          code: variant === "changed payload" ? "OPEN_FACT_COMMAND_CONFLICT" : "OPEN_FACT_VERSION_CONFLICT",
+        });
+      }
+      assert.ok(run.receipt, "the first copy committed during the retry's transaction");
+      const [saved] = await writer.read(jobId, { ...factQuery, factId: fact.factId });
+      assert.deepEqual(saved.history.map(row => row.commandId), [fact.commandId, winner.commandId]);
+      const { rowCount } = await admin.query(`SELECT 1 FROM app.audit_event WHERE tenant_id = $1
+        AND subject_type = 'job' AND subject_ref = $2 AND event_type = $3
+        AND payload->'references'->>'commandId' = $4`,
+      [DEMO_TENANT_ID, jobId, `v2_open_fact.${action}`, winner.commandId]);
+      assert.equal(rowCount, 1);
+    }
+  } finally {
+    await retryPool.end();
+  }
+});
