@@ -318,7 +318,7 @@ export function useAttention(workspace: Workspace, jobs: JobSummary[] | null, fa
 
 const ROUTES: Record<string, string> = { today: "/today", jobs: "/jobs", check: "/check", money: "/money", more: "/more" };
 
-export function Shell({ workspace, title, subtitle, active, onSearch, today = false, children }: { workspace: Workspace | null; title: string; subtitle: string; active: string; onSearch?: () => void; today?: boolean; children: ReactNode }) {
+export function Shell({ workspace, title, subtitle, active, onSearch, today = false, staticChrome = false, children }: { workspace: Workspace | null; title: string; subtitle: string; active: string; onSearch?: () => void; today?: boolean; staticChrome?: boolean; children: ReactNode }) {
   const router = useRouter();
   const [panel, setPanel] = useState<"messages" | "settings" | "search" | null>(null);
   const [now, setNow] = useState<Date | null>(null);
@@ -332,7 +332,7 @@ export function Shell({ workspace, title, subtitle, active, onSearch, today = fa
   const search = onSearch ?? (() => setPanel("search"));
   return <div className={`rr-app ${today ? "rr-is-today" : "rr-is-inner"}`} data-persona="owner">
     <a className="skip" href="#main">Skip to content</a>
-    <aside id="sidebar" className="rr-rail">
+    <aside id="sidebar" className="rr-rail" inert={staticChrome}>
       <a className="rr-brand" href="/today" onClick={event => { event.preventDefault(); go("today"); }}><Logo/><div><strong>JobGuard</strong><p>Run the job.<br/>Protect the profit.<br/>Get paid.</p></div><span className="rr-beta">BETA</span></a>
       <nav className="rr-navigation" aria-label="Main navigation">{TABS.map(([id, label, icon]) => <button key={id} type="button" className={active === id ? "active" : ""} aria-current={active === id ? "page" : undefined} onClick={() => go(id)}><RailIcon name={icon}/><span>{label}</span>{id === "check" && <b>{workspace?.pending ?? 0}</b>}</button>)}</nav>
       <div className="rr-secondary-navigation"><button type="button" onClick={() => setPanel("search")}><RailIcon name="search"/><span>Search</span></button><button type="button" onClick={() => setPanel("messages")}><RailIcon name="message"/><span>Messages</span></button><button type="button" onClick={() => setPanel("settings")}><RailIcon name="settings"/><span>Settings</span></button></div>
@@ -341,13 +341,13 @@ export function Shell({ workspace, title, subtitle, active, onSearch, today = fa
     </aside>
     <main className="rr-main" id="main">
       <header className="rr-header"><div className="rr-company">{company.toUpperCase()}</div><h1>{title}</h1><p className="rr-subtitle">{subtitle}</p>
-        <div className="rr-header-tools"><button type="button" className="rr-search" onClick={search}><RailIcon name="search"/><span>Search jobs, suppliers, invoices...</span></button><button className="rr-round rr-notify" type="button" aria-label="Things needing attention" onClick={() => go("check")}><RailIcon name="bell"/>{(workspace?.pending ?? 0) > 0 && <i></i>}</button><button className="rr-round" type="button" aria-label={`${firstName || "Your"} profile`} onClick={() => setPanel("settings")}>{initials(name)}</button></div>
+        <div className="rr-header-tools" inert={staticChrome}><button type="button" className="rr-search" onClick={search}><RailIcon name="search"/><span>Search jobs, suppliers, invoices...</span></button><button className="rr-round rr-notify" type="button" aria-label="Things needing attention" onClick={() => go("check")}><RailIcon name="bell"/>{(workspace?.pending ?? 0) > 0 && <i></i>}</button><button className="rr-round" type="button" aria-label={`${firstName || "Your"} profile`} onClick={() => setPanel("settings")}>{initials(name)}</button></div>
         <div className="rr-date"><span>{date}</span><span>{greeting}</span></div>
       </header>
       <div id="reference-content" className={today ? "" : "rr-inner-content"}>{children}</div>
       <footer className="rr-footer"><span>Practice workspace · fictional records · no real messages, invoices or payments sent</span></footer>
     </main>
-    <nav className="rr-mobile-nav" aria-label="Mobile navigation">{TABS.map(([id, label, icon]) => <button key={id} type="button" className={active === id ? "active" : ""} aria-current={active === id ? "page" : undefined} onClick={() => go(id)}><RailIcon name={icon}/><span>{label}</span></button>)}</nav>
+    <nav className="rr-mobile-nav" inert={staticChrome} aria-label="Mobile navigation">{TABS.map(([id, label, icon]) => <button key={id} type="button" className={active === id ? "active" : ""} aria-current={active === id ? "page" : undefined} onClick={() => go(id)}><RailIcon name={icon}/><span>{label}</span></button>)}</nav>
     {panel === "search" && <SearchPanel tenantId={workspace?.tenantId ?? ""} close={() => setPanel(null)}/>}
     {panel === "messages" && <Panel title="Your messages" text="No real customer or supplier messages are connected to this practice workspace." close={() => setPanel(null)}><div className="rr-empty-inbox"><RailIcon name="message"/><h3>Nothing has been sent.</h3><p>Each job’s customer messages and diary are in its Records tab.</p></div></Panel>}
     {panel === "settings" && workspace && <SettingsPanel workspace={workspace} close={() => setPanel(null)}/>}
@@ -357,7 +357,7 @@ export function Shell({ workspace, title, subtitle, active, onSearch, today = fa
 export function Panel({ title, text, close, children }: { title: string; text: string; close: () => void; children?: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current; if (dialog && !dialog.open) dialog.showModal(); }, []);
-  return <dialog ref={ref} className="rr-assist" onClose={close}><div className="rr-assist-head"><h2>{title}</h2><button type="button" aria-label="Close" onClick={() => ref.current?.close()}><RailIcon name="close"/></button></div><p>{text}</p>{children}</dialog>;
+  return <dialog ref={ref} className="rr-assist" aria-label={title} onClose={close}><div className="rr-assist-head"><h2>{title}</h2><button type="button" aria-label="Close" onClick={() => ref.current?.close()}><RailIcon name="close"/></button></div><p>{text}</p>{children}</dialog>;
 }
 
 function SearchPanel({ tenantId, close }: { tenantId: string; close: () => void }) {
