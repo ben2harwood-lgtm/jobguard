@@ -94,12 +94,12 @@ const aad = (mediaId: string, index: number, chunkCount: number, byteLength: num
  new TextEncoder().encode(`jobguard-media.v1:${mediaId}:${index}:${chunkCount}:${byteLength}`);
 
 /**
- * Settles `unsyncedWork` to none only when encrypted media set the hold itself, no other local notes or inline files
- * exist, and the hold rule allows it. A hold set by anything else (for example `MobileClient.save`) is never cleared.
+ * Settles `unsyncedWork` to none only when encrypted media set the hold itself, no other local notes, inline files or
+ * cleanup reservations exist, and the hold rule allows it. A hold set by anything else (for example `MobileClient.save`) is never cleared.
  */
 export function settleUnsynced(data: LocalData): LocalData {
  return data.unsyncedWork === "present" && data.mediaOwnsUnsyncedHold && data.notes.length === 0 && data.files.length === 0
-  && nothingUnsynced(data) ? { ...data, unsyncedWork: "none", mediaOwnsUnsyncedHold: false } : data;
+  && data.mediaCleanup.length === 0 && nothingUnsynced(data) ? { ...data, unsyncedWork: "none", mediaOwnsUnsyncedHold: false } : data;
 }
 
 // One writer queue per workspace document, shared by every store instance over it, so a sweep can never
@@ -128,15 +128,24 @@ export class EncryptedMediaStore {
    const mediaId = z.guid().parse(this.uuid()).toLowerCase(), finalizeCommandId = z.guid().parse(this.uuid()).toLowerCase();
    const chunkCount = Math.ceil(bytes.length / MEDIA_CHUNK_BYTES);
    const written: string[] = [];
-   let keyStored = false;
+   // Codex P2 (repair 3): a durable cleanup reservation is written BEFORE any key or chunk exists, so a failed capture
+   // whose own undo also fails still leaves sweep() a pointer to its key and chunks. It holds logout like a tombstone.
+   await this.document.transaction(async data => ({ data: { ...data, mediaCleanup: [...data.mediaCleanup, { mediaId, chunkCount }],
+    unsyncedWork: data.unsyncedWork === "none" ? "present" as const : data.unsyncedWork,
+    mediaOwnsUnsyncedHold: data.unsyncedWork === "none" ? true : data.mediaOwnsUnsyncedHold }, result: undefined }))
+    .catch(error => { throw new MediaRefusal(error instanceof MobileClientError && error.code === "MOBILE_BUSY" ? "MEDIA_BUSY" : "MEDIA_DENIED"); });
    const undo = async () => {
-    for (const path of written) await this.files.remove(path).catch(() => undefined);
-    if (keyStored) await this.vault.remove(keyName(mediaId)).catch(() => undefined);
+    try {
+     for (const path of written) await this.files.remove(path);
+     await this.vault.remove(keyName(mediaId));
+    } catch { return; } // The reservation stays, so a later cleanup() finishes the job.
+    await this.document.transaction(async data => ({ data: settleUnsynced({ ...data,
+     mediaCleanup: data.mediaCleanup.filter(t => t.mediaId !== mediaId) }), result: undefined })).catch(() => undefined);
    };
    try {
     const key = await this.cipher.randomBytes(32);
     if (key.length !== 32) throw new Error("key");
-    await this.vault.set(keyName(mediaId), hex(key)); keyStored = true;
+    await this.vault.set(keyName(mediaId), hex(key));
     for (let index = 0; index < chunkCount; index++) {
      const plain = bytes.subarray(index * MEDIA_CHUNK_BYTES, Math.min(bytes.length, (index + 1) * MEDIA_CHUNK_BYTES));
      const iv = await this.cipher.randomBytes(12);
@@ -156,7 +165,8 @@ export class EncryptedMediaStore {
      jobId: value.jobId, scopeItemId: value.scopeItemId, kind: "photo", contentType: value.contentType, clientSha256: sha256,
      clientMetadata: { deviceCapturedAtMs: value.deviceCapturedAtMs }, byteLength: bytes.length, status: "local_only", serverVerification: null });
     return await this.document.transaction(async data => {
-     if (data.media.some(m => m.mediaId === mediaId) || data.captures.some(c => c.item.uploadId === mediaId)) throw new MediaRefusal("MEDIA_DENIED");
+     if (data.media.some(m => m.mediaId === mediaId) || data.captures.some(c => c.item.uploadId === mediaId)
+      || !data.mediaCleanup.some(t => t.mediaId === mediaId)) throw new MediaRefusal("MEDIA_DENIED");
      const counter = data.mediaSequences.find(s => s.sessionId === value.sessionId);
      const sequence = (counter?.last ?? 0) + 1;
      const record = storedMediaV1.parse({ state: "stored", mediaId, jobId: value.jobId, captureOrder: { sessionId: value.sessionId, sequence },
@@ -166,7 +176,7 @@ export class EncryptedMediaStore {
       : [...data.mediaSequences, { sessionId: value.sessionId, last: sequence }];
      return { data: { ...data, unsyncedWork: data.unsyncedWork === "none" ? "present" as const : data.unsyncedWork,
       mediaOwnsUnsyncedHold: data.unsyncedWork === "none" ? true : data.mediaOwnsUnsyncedHold, mediaSequences,
-      media: [...data.media, record], captures: [...data.captures, { item, upload: { finalizeCommandId,
+      mediaCleanup: data.mediaCleanup.filter(t => t.mediaId !== mediaId), media: [...data.media, record], captures: [...data.captures, { item, upload: { finalizeCommandId,
        requestedExpiresAtMs: value.requestedExpiresAtMs, serverExpiresAtMs: null, nextOffset: 0 } }] },
       result: { mediaId, captureOrder: record.captureOrder } };
     });
@@ -254,7 +264,13 @@ export class EncryptedMediaStore {
   const done = new Set(tombstones.map(t => t.mediaId));
   // The hold may clear only here, after every receipt and discard target lost its bytes AND key without error, so a
   // logout or firm switch can never erase the partition while a media key or chunk is still waiting to be removed.
-  await this.document.transaction(async data => ({ data: settleUnsynced({ ...data, mediaCleanup: data.mediaCleanup.filter(t => !done.has(t.mediaId)) }), result: undefined }));
+  // Codex P2 (repair 3): transfer() can write a receipt while this sweep runs. Settle only if every receipt in the
+  // CURRENT row was cleaned by this sweep; otherwise the hold waits for the cleanup() that transfer() queues next.
+  await this.document.transaction(async data => {
+   const next = { ...data, mediaCleanup: data.mediaCleanup.filter(t => !done.has(t.mediaId)) };
+   const allCleaned = next.media.every(m => m.state !== "verified_receipt" || targets.has(m.mediaId));
+   return { data: allCleaned ? settleUnsynced(next) : next, result: undefined };
+  });
  }
 
  /** Screen rows: capture order, retention warning and whether the server verified it. No bytes. */

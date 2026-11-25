@@ -308,6 +308,54 @@ it("Codex P1 (repair 1): a hold set by other local work is never cleared by sett
  expect(m.data().unsyncedWork).toBe("present");
 });
 
+it("Codex P2 (repair 3): a failed capture whose undo also fails leaves a cleanup reservation, not an orphan key", async () => {
+ const real = webCryptoMediaCipher(crypto.subtle, a => crypto.getRandomValues(a));
+ let seals = 0;
+ const failing: MediaCipherPort = { ...real, seal: async (...args) => { if (++seals === 2) throw new Error("fictional cipher failure"); return real.seal(...args); } };
+ const r = rig({ cipher: failing }); r.signIn();
+ const remove = r.vault.vault.remove; let failKey = true;
+ r.vault.vault.remove = async key => { if (failKey) { failKey = false; throw new Error("fictional key store failure"); } return remove(key); };
+ await expect(r.shoot(photo(3 * MEDIA_CHUNK_BYTES))).rejects.toMatchObject({ code: "MEDIA_ENCRYPTION_FAILED" });
+ expect(r.vault.keys.size).toBe(1);
+ const [reservation] = r.data().mediaCleanup;
+ expect(reservation).toMatchObject({ chunkCount: 3 });
+ expect([...r.vault.keys.keys()]).toEqual([`m32.mediakey.${reservation!.mediaId}`]);
+ expect(r.data().media).toEqual([]); expect(r.data().captures).toEqual([]);
+ expect(r.data().unsyncedWork).toBe("present"); // logout stays locked while the key is still in the key store
+ const again = rig({ saved: r.saved, files: r.files, vault: r.vault });
+ await again.media.cleanup();
+ expect(r.vault.keys.size).toBe(0); expect(r.files.disk.size).toBe(0);
+ expect(again.data().mediaCleanup).toEqual([]); expect(again.data().unsyncedWork).toBe("none");
+ // A clean failure (undo works) leaves no reservation and no hold behind.
+ seals = 0; failKey = false;
+ const c = rig({ cipher: failing }); c.signIn();
+ await expect(c.shoot(photo(3 * MEDIA_CHUNK_BYTES))).rejects.toMatchObject({ code: "MEDIA_ENCRYPTION_FAILED" });
+ expect(c.data().mediaCleanup).toEqual([]); expect(c.data().unsyncedWork).toBe("none"); expect(c.vault.keys.size).toBe(0);
+ // A successful capture keeps no reservation.
+ const ok = rig(); ok.signIn(); await ok.shoot(photo(10));
+ expect(ok.data().mediaCleanup).toEqual([]); expect(ok.data().media).toHaveLength(1);
+});
+
+it("Codex P2 (repair 3): a receipt written while a sweep runs keeps the hold until its own bytes and key are gone", async () => {
+ const r = rig(); r.signIn();
+ const first = await r.shoot(photo(10)), second = await r.shoot(photo(10));
+ await r.upload.transfer(first.mediaId); // first is a receipt with nothing left; second is still unsent
+ // Pause a sweep after it has read the row, then let a transfer write the second receipt in the gap.
+ const list = r.files.port.list; let release!: () => void; let paused = true;
+ const gate = new Promise<void>(resolve => { release = resolve; });
+ r.files.port.list = async prefix => { if (paused && prefix === "media/") { paused = false; await gate; } return list(prefix); };
+ const sweep = r.media.cleanup();
+ await new Promise(resolve => setTimeout(resolve, 0));
+ const transfer = r.upload.transfer(second.mediaId);
+ await vi.waitFor(() => expect(r.data().media.find(m => m.mediaId === second.mediaId)?.state).toBe("verified_receipt"));
+ const leftovers = () => [...r.files.disk.keys()].filter(path => path.includes(second.mediaId)).length + r.vault.keys.size;
+ expect(leftovers()).toBeGreaterThan(0);
+ release(); await sweep;
+ expect(leftovers()).toBeGreaterThan(0); expect(r.data().unsyncedWork).toBe("present"); // never settled for a receipt this sweep did not clean
+ await transfer;
+ expect(leftovers()).toBe(0); expect(r.data().unsyncedWork).toBe("none");
+});
+
 describe("A: logout and firm switch with verified receipts and pending items on the same device", () => {
  const policy = { version: "mobile-auth-policy-specimen.v1", environment: "synthetic_demo", policyVersion: "fictional_mobile_auth_policy_v1",
   accessDurationMs: 100, refreshDurationMs: 500, sessionDurationMs: 1000, readLeaseDurationMs: 200 };
