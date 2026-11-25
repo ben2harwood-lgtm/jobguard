@@ -20,12 +20,12 @@ Next routes, through the web origin. `jobId` is the seeded job.
 The V2 API (Nest), called **directly** at `settings.NEXT_PUBLIC_API_URL` (plain mode, `http://127.0.0.1:3401`, `tools/v2/settings.mjs` lines 11 and 36):
 
 9. `GET /jobs/<jobId>`, from `apps/api/src/workspace/workspace.controller.ts` line 9. It reads `jg_session` at line 16 and maps codes to 401, 403 or 404 at line 19.
-10. `GET /jobs/<jobId>/fee-illustration`, from `fee-illustration.controller.ts` line 14.
+10. `GET /jobs/<jobId>/fee-illustration`, from `fee-illustration.controller.ts` line 14. **The planner hasn't confirmed** that the seeded job has an illustration source. If the builder's positive control isn't 200, drop route 10, say so in the PR body, and don't fail the test. Routes 1 to 9 are all read by the existing seed test, so they must pass.
 
 **Write routes (POST) are out of SX.** Each writing piece already proves its own refusal with its command's fixture. A shared POST list would need a valid body per route, and that is the trap revision 4 fell into.
 
 ## Rule that makes a refusal count (planner, binding)
-- **A positive control comes first.** For each route, the builder's own session must get **200 with the expected body** (for example the job id, or `jobs.length === 1`), from the same request helper, path and transport. Without that, the route is listed as "not testable on this base", which fails the test. A refusal is never counted on a route the builder can't open.
+- **A positive control comes first.** For each route, the builder's own session must get **200 with the expected body** (for example the job id, or `jobs.length === 1`), from the same request helper, path and transport. Without that, the test fails, except for route 10 (see above). A refusal is never counted on a route the builder can't open.
 - **A refusal must be typed.** The status is 401, 403 or 404 **and** the JSON `code` is one of `UNAUTHENTICATED`, `TENANT_FORBIDDEN` or `NOT_FOUND`. For route 1, `jobs` is `[]`. A 400, a 5xx, an HTML 404 or a missing body fails.
 - **No fields leak.** A refused body contains none of: `jobs[0]`, `title`, `customer`, `email`, `totalPence`, `amount`, `price`, `profit`, `margin`, `finding`.
 
