@@ -17,7 +17,7 @@ import { createHash } from "node:crypto";
 import { uploadPracticePhoto } from "./test/practice-photo.mjs";
 // V2-FL
 import { readdirSync } from "node:fs";
-import { firmLockCatalog, firmLockFailures, pendingTables } from "./firm-lock/guard.mjs";
+import { firmLockCatalog, firmLockFailures, lockProblems, pendingTables } from "./firm-lock/guard.mjs";
 
 const { settings } = validateSettings({});
 const origin = settings.AUTH_ALLOWED_ORIGIN;
@@ -1022,6 +1022,17 @@ test("FL guard: every pending table is still in the catalog and still unlocked",
   const stale = [...pendingTables()].filter(([table]) => !catalog.has(table) || catalog.get(table).firm_policy)
     .map(([table, slice]) => `${slice}: ${table}`);
   assert.deepEqual(stale, [], "a slice locked its tables but kept its pending file, or a table left the catalog");
+});
+
+test("FL guard: an indirect lock must match the parent's full key, not just the tenant", async () => {
+  const catalog = await firmLockCatalog(admin);
+  const locked = new Set(catalog.filter(row => row.firm_policy).map(row => row.relation));
+  const row = catalog.find(entry => entry.relation === "app.finding_suppression");
+  assert.deepEqual(lockProblems(row, locked), [], "the real 2047 policy passes");
+  const tenantOnly = "(EXISTS ( SELECT\n   FROM app.job_finding f\n  WHERE (f.tenant_id = finding_suppression.tenant_id)))";
+  assert.deepEqual(lockProblems({ ...row, firm_policy: { ...row.firm_policy, using: tenantOnly } }, locked),
+    ["v2_practice_firm does not join a firm-locked parent on every column of a foreign key to it"]);
+  assert.notDeepEqual(lockProblems(row, new Set()), [], "a parent without its own firm lock doesn't count");
 });
 
 let firmContexts;
