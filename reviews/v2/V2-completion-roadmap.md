@@ -110,7 +110,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 - **F1-cam** one-tap camera (after B2B1's device piece).
 - Quote options (#19, a main quote-track piece).
 - Start-simple mode (#25, DUI plan).
-- Hosting and the pilot.
+- Hosting and the pilot. **Ben, 25 Nov 17:35 UK: decide around 3 Dec, after the full browser run.** No hosting account or spend before then; pilot hosting follows G1.
 - Big ideas A, C, D, E and F.
 
 ## Migration numbers reserved
