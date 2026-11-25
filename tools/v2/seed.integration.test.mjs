@@ -775,6 +775,124 @@ test("each recorded plan edit appends one audit event in its transaction, and a 
   assert.equal(rowCount, 0, "the second firm cannot see the edit events");
 });
 
+const generatedEvents = async quoteRevisionId => (await admin.query(`SELECT tenant_id, actor_ref, subject_ref, payload
+  FROM app.audit_event WHERE event_type = 'v2_work_plan.generated' AND payload->'references'->>'quoteRevisionId' = $1
+  ORDER BY sequence`, [quoteRevisionId])).rows;
+
+// Fails the audit append inside the repository's own transaction, after the plan and task inserts.
+const failingAuditPool = pool => ({
+  async connect() {
+    const client = await pool.connect();
+    const query = client.query.bind(client);
+    client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+      ? Promise.reject(Object.assign(new Error("forced audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+    const release = client.release.bind(client);
+    client.release = (...args) => { client.query = query; return release(...args); };
+    return client;
+  },
+});
+
+test("creating a plan appends one audit event in its transaction, and a replay appends none", async () => {
+  const { sessionId, realContext } = await signIn("builder");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const { capture, quote } = createWorkspaceApplication({ pool: runtime, sessionId });
+  const saved = await capture.create({
+    contractVersion: "job_capture_v1", requested_tenant_id: DEMO_TENANT_ID, captureId: randomUUID(),
+    fixtureId: "v2-c1-plan-audit",
+    source: { kind: "text", text: "JOB: Fit a shelf\nITEM: Fit a timber shelf | QTY: 1 | UNIT: item | RATE: £95.00" },
+  });
+  const review = await capture.save(saved.jobId, {
+    contractVersion: "proposal_review_command_v1", expectedRevision: 0,
+    review: {
+      version: "proposal_review_v1", jobId: saved.jobId, proposalId: saved.proposalId, reviewId: saved.reviewId,
+      revision: 0,
+      questions: saved.proposal.questions.map(({ question }) => ({
+        id: randomUUID(), question: question.value, blocking: true, disposition: "answered",
+        answer: "Builder will supply the shelf and clear the work area.",
+      })),
+      lines: saved.proposal.lines.map(line => ({
+        id: line.id, scopeItemId: line.scopeItemId, origin: "proposal", description: line.description.value,
+        room: "Utility", category: "Joinery", quantity: line.quantity.value, unit: line.unit.value,
+        unitPricePence: line.unitPricePence.value, disposition: "accepted",
+        dismissalReason: null, parentScopeItemIds: [], sourceExcerpt: line.sourceExcerpt,
+      })),
+    },
+  });
+  await capture.confirm(saved.jobId, {
+    contractVersion: "proposal_review_confirm_v1", commandId: randomUUID(), expectedRevision: review.review.revision,
+  });
+  const workspace = await quote.get(saved.jobId);
+  const draft = await quote.save(saved.jobId, {
+    contractVersion: "quote_draft_command_v1", draftId: randomUUID(), expectedRevision: 0,
+    currency: M1_QUOTE_POLICY.currency, taxPolicyVersion: M1_QUOTE_POLICY.taxPolicyVersion,
+    lines: workspace.scope.map(line => ({
+      ...line, id: randomUUID(), origin: "captured", included: true, exclusionReason: null,
+      discountPercent: "0", taxTreatment: M1_QUOTE_POLICY.taxTreatment, rateProvenance: "entered",
+      category: "Joinery", region: null,
+    })),
+  });
+  const source = planSource(saved.jobId, draft.draft.currentRevisionId);
+
+  // A forced audit failure after the inserts leaves neither the plan, its tasks nor an event.
+  await assert.rejects(new WorkPlanRepository(failingAuditPool(runtime), joineryTemplate).generate(context, source),
+    { code: "FORCED" });
+  assert.deepEqual(await planCounts(source.quoteRevisionId), [0, 0]);
+  assert.equal((await generatedEvents(source.quoteRevisionId)).length, 0);
+
+  const plans = new WorkPlanRepository(runtime, joineryTemplate);
+  const [first, second] = await Promise.all([plans.generate(context, source), plans.generate(context, source)]);
+  assert.deepEqual(second, first);
+  assert.deepEqual(await plans.generate(context, source), first);
+  const [event, ...extra] = await generatedEvents(source.quoteRevisionId);
+  assert.equal(extra.length, 0, "concurrent and repeated generation append one event");
+  assert.equal(event.tenant_id, context.tenantId);
+  assert.equal(event.actor_ref, "system:v2-work-plan");
+  assert.equal(event.subject_ref, saved.jobId);
+  assert.deepEqual(event.payload.references, {
+    ...event.payload.references, quoteRevisionId: source.quoteRevisionId, templateKey: joineryTemplate.key, taskCount: "1",
+  });
+  assert.equal("version" in event.payload.references, false);
+  assert.match(event.payload.hashes.tasks, /^[a-f0-9]{64}$/u);
+  assert.doesNotMatch(JSON.stringify(event.payload), /shelf/iu, "no free text in the audit payload");
+
+  const { rows: chain } = await admin.query(`SELECT id, tenant_id AS "tenantId", sequence::int, version, actor_ref AS "actorRef",
+    event_type AS "eventType", subject_type AS "subjectType", subject_ref AS "subjectRef", occurred_at AS "occurredAt", payload,
+    trim(payload_hash) AS "payloadHash", trim(previous_hash) AS "previousHash", trim(event_hash) AS "eventHash"
+    FROM app.audit_event WHERE tenant_id = $1 ORDER BY sequence`, [context.tenantId]);
+  assert.doesNotThrow(() => verifyAuditChain(chain));
+
+  // The audit chain is tenant-scoped, so the second firm's own tenant sees none of it.
+  const outsider = await signIn("second-builder");
+  assert.notEqual(outsider.realContext.tenantId, context.tenantId);
+  assert.notEqual(realContext.tenantId, outsider.realContext.tenantId);
+  const { rowCount } = await withTenant(runtime, outsider.realContext, db => db.$client.query(
+    "SELECT 1 FROM app.audit_event WHERE subject_ref = $1", [saved.jobId]));
+  assert.equal(rowCount, 0);
+});
+
+test("opening the plan screen creates the plan with one audit event; a quote-save refresh adds none", async () => {
+  const { draftJob, lines, save, read, edit } = await draftForPlan();
+  const plan = await read();
+  const [opened, ...extra] = await generatedEvents(plan.quoteRevisionId);
+  assert.equal(extra.length, 0);
+  assert.equal(opened.actor_ref, "system:v2-work-plan");
+  assert.equal(opened.subject_ref, draftJob);
+  assert.equal(opened.payload.references.taskCount, String(plan.tasks.length));
+  await Promise.all([read(), read()]);
+  await edit(planEdit(await read(), plan.tasks[0], { durationMinutes: 61 }));
+  assert.equal((await generatedEvents(plan.quoteRevisionId)).length, 1, "reopening and editing append no second creation event");
+
+  const revision = await save(1, lines.map((line, index) => index === 0 ? { ...line, quantity: "2" } : line));
+  const nextId = revision.draft.currentRevisionId;
+  assert.deepEqual(await planCounts(nextId), [1, 4], "the quote save created the refreshed plan");
+  assert.equal((await generatedEvents(nextId)).length, 0, "the refresh is covered by the quote save event");
+  const { rows: saves } = await admin.query(`SELECT 1 FROM app.audit_event WHERE event_type = 'quote.draft.saved'
+    AND subject_ref = $1 AND payload->'references'->>'jobId' = $2`, [nextId, draftJob]);
+  assert.equal(saves.length, 1, "the quote save appended its own event for the refreshed revision");
+  await read();
+  assert.equal((await generatedEvents(nextId)).length, 0);
+});
+
 // V2-K8: hire persistence, audit, replay, failure and firm boundary proofs.
 const hireCommand = (action, hireId, expectedVersion, extra = {}) => ({
   version: "hire-command.v1", commandId: randomUUID(), hireId, expectedVersion, action, ...extra,

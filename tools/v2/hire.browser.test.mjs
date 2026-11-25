@@ -9,37 +9,66 @@ import { chromium, expect } from "../../apps/web/node_modules/@playwright/test/i
 // (or a production build). One sign-in is reused at both widths; no new OTP per test.
 const origin = process.env.V2_TEST_ORIGIN;
 assert.ok(origin && new URL(origin).protocol === "https:", "V2_TEST_ORIGIN must be the phone-mode HTTPS origin");
-// Shared setup copied from V2-K5 at 7560b597 (01-RULES rule 22).
-let browser, storageState, jobId;
-before(async () => {
-  browser = await chromium.launch({ executablePath: process.env.V2_TEST_CHROMIUM });
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+// signInOnce copied from V2-BH1 at 3e9fad3b (not merged yet; 01-RULES rule 22).
+// Uses this file's HTTPS origin and DEMO_TENANT_ID import; waits for navigation
+// after verification before any page.evaluate.
+async function signInOnce(browser, { jobTitle = "Occupied-home kitchen splashback and hall decorating" } = {}) {
+  let context;
+  let step = "create context";
   try {
+    context = await browser.newContext({ ignoreHTTPSErrors: true });
     const page = await context.newPage();
+    step = "open sign-in";
     await page.goto(`${origin}/sign-in`);
+    step = "request code";
     await page.getByLabel("Fictional email address").fill("builder@jobguard-v2.invalid");
     await page.getByLabel("What do you want to do?").selectOption("signin");
-    await page.getByRole("button", {name:"Request code"}).click();
+    await page.getByRole("button", { name: "Request code" }).click();
     const code = page.getByTestId("fixture-code");
     await expect(code).toHaveText(/^[0-9]{8}$/u);
     await page.getByLabel("Eight-digit code").fill(await code.textContent());
-    const [verified] = await Promise.all([page.waitForResponse(`${origin}/api/auth/verify`), page.getByRole("button",{name:"Verify code"}).click()]);
-    const {csrfToken} = await verified.json();
-    // Reuse one signed-in session across both viewports and reloads.
+    step = "verify code";
+    const [verified] = await Promise.all([
+      page.waitForResponse(`${origin}/api/auth/verify`),
+      page.getByRole("button", { name: "Verify code" }).click(),
+    ]);
+    assert.equal(verified.status(), 200, "Code verification must succeed");
+    const { csrfToken } = await verified.json();
+    assert.ok(typeof csrfToken === "string" && csrfToken, "Verification must return a CSRF token");
+    step = "finish sign-in navigation";
+    await page.waitForURL(url => !url.pathname.startsWith("/sign-in"));
+    await page.waitForLoadState("load");
+    step = "enter practice";
     await page.evaluate(async token => {
-      const response = await fetch("/api/auth/practice", {method:"POST", headers:{"content-type":"application/json","x-csrf-token":token},
-        body:JSON.stringify({version:"linked-practice-company.v1",action:"enter"})});
+      const response = await fetch("/api/auth/practice", {
+        method: "POST", headers: { "content-type": "application/json", "x-csrf-token": token },
+        body: JSON.stringify({ version: "linked-practice-company.v1", action: "enter" }),
+      });
       if (!response.ok) throw new Error(`practice:${response.status}`);
     }, csrfToken);
+    step = "find seeded job";
     const jobs = await page.evaluate(async tenantId => {
       const response = await fetch(`/api/jobs?tenantId=${tenantId}`);
       if (!response.ok) throw new Error(`jobs:${response.status}`);
       return (await response.json()).jobs;
     }, DEMO_TENANT_ID);
-    jobId = jobs.find(job => job.title.includes("Occupied-home kitchen splashback and hall decorating"))?.id;
-    assert.ok(jobId, "The seeded job must appear in Jobs");
-    storageState = await context.storageState();
-  } finally { await context.close(); }
+    const jobId = jobs.find(job => job.title.includes(jobTitle))?.id;
+    assert.ok(jobId, `The seeded job must appear in Jobs: ${jobTitle}`);
+    step = "save session";
+    return { origin, storageState: await context.storageState(), csrfToken, jobId };
+  } catch (cause) {
+    const error = new Error(`V2 browser session failed at ${step}`, { cause });
+    error.name = "V2BrowserSessionError";
+    throw error;
+  } finally {
+    await context?.close();
+  }
+}
+
+let browser, storageState, jobId;
+before(async () => {
+  browser = await chromium.launch({ executablePath: process.env.V2_TEST_CHROMIUM });
+  ({ storageState, jobId } = await signInOnce(browser));
 });
 after(async () => browser?.close());
 test("V2-K8: off-hire journey persists at 360 and 1280px on the phone origin", { timeout: 120_000 }, async () => {
