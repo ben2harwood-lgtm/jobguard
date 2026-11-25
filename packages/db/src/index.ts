@@ -238,3 +238,7 @@ export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
 export { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";
 
 export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
+
+// V2-K3: customer update snapshots and the local inbox only.
+export * from "./v2-friday-update.js";
+export * from "./v2-friday-update-repository.js";

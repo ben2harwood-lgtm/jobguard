@@ -1,0 +1,7 @@
+# V2-K3 · Friday customer update · RED
+
+2021 runs only in jobguard_v2_local after 2001's firm boundary. The normal migration runner is a no-op elsewhere; the checked V2 bootstrap also installs it on upgrades. One append-only table stores prepared/edited snapshots and sent snapshots as the durable local inbox. Runtime has SELECT/INSERT only, enabled and forced RLS with 2002–2004's bound-tenant and job-visibility predicate. No anonymous customer route, new role or SECURITY DEFINER routine. No customer agreements are created.
+
+Commands serialize per tenant/job before reading replay/version and writing. Exact replay writes nothing; sending an already-sent version with a new key is refused as stale and writes nothing. Changed command content conflicts. Audit append is the final database operation in the same transaction. Forced audit failure proves snapshot and event roll back together in the full V2 seed suite. No external provider calls; captureV2Delivery logs metadata after commit, while the message persists atomically in the send row. No money, diary text, hidden findings or evidence is queried into content. Photos are always empty until V2-PX.
+
+Forward fix preferred: stop K3 commands, retain all snapshots/audit history, apply a separately reserved corrective migration. Do not delete issued snapshots or renumber this migration. Non-V2 schema and behaviour remain unchanged. Fresh/upgrade proof, second-firm SELECT/INSERT/UPDATE/DELETE denial and command/audit proof are in tools/v2/seed.integration.test.mjs; they require CI's real V2 database.
