@@ -1,3 +1,4 @@
+import { pilotInvoiceDraft } from "./pilot-invoice-draft.js";
 import { pilotFinalCheck } from "./pilot-final-check.js";
 import { pilotFinalAccount } from "./pilot-final-account.js";
 import { pilotJobContinuation } from "./pilot-job-continuation.js";
@@ -143,6 +144,7 @@ export async function createPilotWorkspaceApplication(
     listJobs: (jobId?: string) => jobs.listPilotJobs(context, jobId),
     continuation: pilotJobContinuation(pool, context, access),
     finalAccount: pilotFinalAccount(pool, context, access),
+    invoiceDraft: pilotInvoiceDraft(pool, context, access),
     finalCheck: pilotFinalCheck(pool, context, access),
     invoicePolicyPending: async (id: string) => {
       await access(id, true);

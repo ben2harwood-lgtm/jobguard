@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { pounds } from "../lib/pounds";
 import { FinalCheckReveal } from "../ui/final-check-reveal";
+import { PilotInvoiceDraftPanel } from "./pilot-invoice-draft";
 import { Card } from "./designed-ui";
 
 const viewSchema = z.object({
@@ -120,6 +121,7 @@ export function PilotFinalAccount({ jobId, pilotFetch }: { jobId: string; pilotF
       </>}
     </Card>
     {view?.lock && <FinalCheckReveal jobId={jobId} pilotFetch={pilotFetch}/>}
+    {view?.lock && <PilotInvoiceDraftPanel jobId={jobId} pilotFetch={pilotFetch}/>}
     <p>Invoices are not yet available in the pilot until the invoice rules are approved.</p>
   </>;
 }

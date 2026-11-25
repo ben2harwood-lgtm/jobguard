@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-05c": {
+      "branches": [
+        "codex/sandbox/pilot-05c"
+      ],
+      "note": "RED: read-only builder-reviewed pilot invoice drafts; NOPR handoff, no issuance or receipts.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/pilot-invoice-draft.test.ts",
+        "apps/api/src/workspace/pilot-invoice-draft.ts",
+        "apps/web/app/(designed)/pilot-final-account.tsx",
+        "apps/web/app/(designed)/pilot-invoice-draft.test.tsx",
+        "apps/web/app/(designed)/pilot-invoice-draft.tsx",
+        "apps/web/app/api/jobs/[id]/customer-invoices/draft/route.test.ts",
+        "apps/web/app/api/jobs/[id]/customer-invoices/draft/route.ts",
+        "apps/web/e2e/pilot-05c.browser.ts",
+        "apps/web/e2e/pilot-05c.config.ts",
+        "docs/operations/pilot-05c-drafts.md",
+        "packages/core/src/index.ts",
+        "packages/core/src/pilot-invoice-draft.test.ts",
+        "packages/core/src/pilot-invoice-draft.ts",
+        "packages/db/test/pilot-invoice-draft.integration.test.ts"
+      ]
+    }
+  }
+}
