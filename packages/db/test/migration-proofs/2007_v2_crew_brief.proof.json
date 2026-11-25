@@ -1,0 +1,6 @@
+{
+  "migration": "2007_v2_crew_brief.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

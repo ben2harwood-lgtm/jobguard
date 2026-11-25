@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "d5b-confirm-set-aside": {
+      "branches": ["codex/d5b-confirm-set-aside"],
+      "note": "Ben's D5B set-aside confirmation decision; UI and existing browser journey only.",
+      "allow": [
+        "apps/web/app/(designed)/jobs/[id]/work/materials.tsx",
+        "apps/web/e2e/v2-d5b.spec.mts"
+      ]
+    }
+  }
+}
