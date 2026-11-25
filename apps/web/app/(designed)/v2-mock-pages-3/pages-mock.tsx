@@ -99,7 +99,7 @@ function Certificates() {
   return <Card title="Certificates checklist" sub="Splashback and hall decorating · builder records only">
     <div className="card-body"><Note tone={missing ? "warning" : ""}>{missing ? "Not ready for handover: certificates are still needed or have no reason for being left out." : "Checklist complete in this preview. This does not certify the work."}</Note></div>
     {rows.map(row => <article className="card-body form" key={row.key}><h3>{row.label}</h3><p>{row.when}</p><p>Issued or supplied by: {row.issuer}</p>
-      <label>{row.label} status<select style={{ minHeight: 44 }} value={row.status} onChange={event => change(row.key, { status: event.target.value })}><option>Got it</option><option>Not needed</option><option>Still needed</option></select></label>
+      <label>{row.label} status<select aria-label={`${row.label} status`} style={{ minHeight: 44 }} value={row.status} onChange={event => change(row.key, { status: event.target.value })}><option>Got it</option><option>Not needed</option><option>Still needed</option></select></label>
       {row.status === "Not needed" && <><label>Why is {row.label} not needed?<input style={{ minHeight: 44 }} maxLength={200} value={row.reason} onChange={event => change(row.key, { reason: event.target.value })}/></label>
         {!row.reason.trim() && <p role="alert">Give a reason before this can count as not needed.</p>}</>}
     </article>)}

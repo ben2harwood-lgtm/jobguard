@@ -7,8 +7,8 @@ if (externalOrigin && new URL(externalOrigin).protocol !== "https:") throw new E
 const baseURL = externalOrigin ?? "http://127.0.0.1:3109";
 const executablePath = process.env.V2_TEST_CHROMIUM ?? process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
-// M2's isolated Next dev pattern, with a programmatic config override so the
-// dev indicator is actually off without editing the shared next.config.mjs.
+// M2's isolated Next dev pattern. The spec also disables the dev indicator
+// through Next's own endpoint before navigation; conf alone was insufficient.
 const command = `node --input-type=module -e "import next from 'next'; import { createServer } from 'node:http'; const app = next({ dev: true, hostname: '127.0.0.1', port: 3109, conf: { devIndicators: false } }); await app.prepare(); createServer(app.getRequestHandler()).listen(3109, '127.0.0.1');"`;
 
 export default defineConfig({

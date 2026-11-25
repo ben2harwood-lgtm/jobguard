@@ -28,6 +28,12 @@ if (process.env.JOBGUARD_LOCAL_V2 !== "1") {
     expect(await response.text()).not.toContain("Remaining screens mock-up");
   });
 } else {
+  test.beforeEach(async ({ request }) => {
+    // Disable Next's overlay before opening a page so it cannot cover mock-up content.
+    const response = await request.post("/__nextjs_disable_dev_indicator");
+    expect(response.status()).toBe(204);
+  });
+
   test("all eight screens and every state at the packet viewport", async ({ page }) => {
     test.setTimeout(180_000);
     const outbound: string[] = [], mutations: string[] = [], errors: string[] = [];
@@ -100,6 +106,7 @@ if (process.env.JOBGUARD_LOCAL_V2 !== "1") {
     await expect(content).toContainText("Minor Electrical Installation Works Certificate (BS 7671)");
     await expect(content).toContainText("only for notifiable work");
     await content.getByLabel("Minor Electrical Installation Works Certificate (BS 7671) status", { exact: true }).selectOption("Not needed");
+    await expect(content.getByLabel("Minor Electrical Installation Works Certificate (BS 7671) status", { exact: true })).toHaveValue("Not needed");
     await expect(content.getByRole("alert")).toContainText("Give a reason");
     await content.getByLabel("Why is Minor Electrical Installation Works Certificate (BS 7671) not needed?", { exact: true }).fill("No electrical work on this job.");
     await expect(content.getByRole("alert")).toHaveCount(0);
