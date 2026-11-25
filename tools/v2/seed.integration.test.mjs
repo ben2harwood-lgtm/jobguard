@@ -9,6 +9,10 @@ import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
 import { DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
 import { FactReplyRepository, openFactAnswerFor, openFactCommandV1 } from "../../packages/db/dist/index.js";
+// V2-E7 reminders.
+import { FactReminderRepository } from "../../packages/db/dist/index.js";
+import { daysBefore, londonEight } from "../../packages/db/dist/v2-fact-reminder-policy.js";
+import { FactReminderApplication } from "../../apps/api/dist/workspace/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
@@ -2155,5 +2159,325 @@ test("audit-chain: packages/db/src/v2-fact-reply-repository.ts#FactReplyReposito
   await factReplies.command(jobId, apply);
   assert.deepEqual(await replyEvents("v2.fact_reply.applied_by_builder"), recorded, "audit-chain: replay");
   assert.equal((await replyEvents("v2_open_fact.answer")).length, before.answers.length + 1);
+  await replyChain(context.tenantId);
+});
+
+// V2-E7 reminders. Added as its own block; earlier pieces' tests stay as they are.
+const HOUR = 3_600_000;
+// The suite's HTTP helper; inside these tests `request` is E2's reply request from replySetup().
+const httpRequest = request;
+// The packet's Thursday 3 Dec 2026, moved on by whole weeks until a request made now is made by
+// Monday noon London, so the same dates hold on a later run. 10 Dec is skipped: E2's tests ask for then.
+function reminderWeek() {
+  let thursday = "2026-12-03";
+  while (Date.now() > londonEight(daysBefore(thursday, 3)) + 4 * HOUR || thursday === "2026-12-10") thursday = daysBefore(thursday, -7);
+  // London wall-clock hour on a day relative to the Thursday (clocks change at 01:00 UTC, never between 08:00 and 23:00).
+  return { thursday, at: (days, hour) => londonEight(daysBefore(thursday, -days)) + (hour - 8) * HOUR };
+}
+const reminderCommand = (commandId = randomUUID()) => ({ version: "v2-fact-reminder-command.v1", commandId });
+const reminderCaptures = lines => lines.filter(line => line.kind === "v2_fact_reminder");
+
+async function reminderSetup() {
+  const base = await replySetup();
+  const week = reminderWeek();
+  const runAt = (clock, command = reminderCommand(), pool = runtime) =>
+    caught(() => new FactReminderRepository(pool, () => clock).run(base.context, jobId, base.owner.sessionId, command));
+  const rowsFor = async requestId => (await new FactReminderRepository(runtime).read(base.context, jobId)).reminders
+    .filter(row => row.requestId === requestId).map(row => ({ kind: row.kind, reason: row.reason, dueAt: row.dueAt.getTime(),
+      recordedAt: row.recordedAt.getTime() }));
+  const requestedAt = async requestId => (await admin.query("SELECT requested_at FROM app.v2_fact_reply_request WHERE id = $1",
+    [requestId])).rows[0].requested_at.getTime();
+  return { ...base, week, runAt, rowsFor, requestedAt };
+}
+
+test("V2-E7: a delivery due Thursday with no reply gets one reminder on Tuesday and is unconfirmed from Wednesday 08:00", async () => {
+  const { context, owner, factReplies, fact, request, week, runAt, rowsFor, requestedAt } = await reminderSetup();
+  const before = await effectCounts();
+  const { rows: [merchant] } = await admin.query("SELECT id, name FROM app.merchant WHERE tenant_id = $1", [DEMO_TENANT_ID]);
+  const factId = await fact({ neededBy: week.thursday, owner: { kind: "merchant", name: merchant.name },
+    detail: { kind: "merchant_delivery_date", item: "Bathroom floor tiles, 5 packs" } });
+  const recipient = await factReplies.command(jobId, replyCommand({ action: "record_recipient", commandId: randomUUID(), role: "merchant",
+    merchantId: merchant.id, displayName: merchant.name, contactEmail: "merchant@jobguard-v2.invalid", correctsId: null }));
+  const { result: sent, lines: asked } = await caught(() => request(factId, { recipient: { kind: "recorded", recipientId: recipient.id } }));
+  assert.deepEqual(asked, [{ event: "v2.delivery.captured", kind: "v2_fact_reply_request" }]);
+
+  // Tuesday 12:00 London: one reminder row and one capture.
+  const tuesday = await runAt(week.at(-2, 12));
+  assert.deepEqual(tuesday.result.reminded, [sent.id]);
+  assert.ok(!tuesday.result.unconfirmed.includes(sent.id));
+  assert.deepEqual(reminderCaptures(tuesday.lines), [{ event: "v2.delivery.captured", kind: "v2_fact_reminder" }]);
+  // Tuesday 13:00, a new press: no new row and nothing captured.
+  const again = await runAt(week.at(-2, 13));
+  assert.deepEqual([again.result.reminded, reminderCaptures(again.lines)], [[], []]);
+  assert.ok(!again.result.unconfirmed.includes(sent.id));
+  // Wednesday 08:00 London: stored as unconfirmed, reason no_reply, and no second reminder.
+  const wednesday = await runAt(week.at(-1, 8));
+  assert.ok(wednesday.result.unconfirmed.includes(sent.id));
+  assert.deepEqual([wednesday.result.reminded, reminderCaptures(wednesday.lines)], [[], []]);
+  const thursday = await runAt(week.at(0, 9));
+  assert.ok(!thursday.result.unconfirmed.includes(sent.id));
+
+  const dueAt = Math.max(week.at(-2, 8), await requestedAt(sent.id) + 24 * HOUR);
+  assert.deepEqual(await rowsFor(sent.id), [
+    { kind: "reminder", reason: null, dueAt, recordedAt: week.at(-2, 12) },
+    { kind: "unconfirmed", reason: "no_reply", dueAt: week.at(-1, 8), recordedAt: week.at(-1, 8) }]);
+  // The reminder names the request's own contact; the flag names no one.
+  const { rows: stored } = await admin.query(`SELECT m.kind, m.recipient, r.contact_email FROM app.v2_fact_reminder m
+    JOIN app.v2_fact_reply_request r ON (r.tenant_id, r.job_id, r.id) = (m.tenant_id, m.job_id, m.request_id)
+    WHERE m.request_id = $1 ORDER BY m.kind`, [sent.id]);
+  assert.deepEqual(stored, [{ kind: "reminder", recipient: "merchant@jobguard-v2.invalid", contact_email: "merchant@jobguard-v2.invalid" },
+    { kind: "unconfirmed", recipient: null, contact_email: "merchant@jobguard-v2.invalid" }]);
+
+  // The builder sees both after a reload, through the screen's own route.
+  const { cookies } = owner;
+  const shown = (await json(await httpRequest(`/api/jobs/${jobId}/fact-reminders`, { cookies }))).reminders
+    .filter(row => row.requestId === sent.id).map(row => [row.kind, row.reason]);
+  assert.deepEqual(shown, [["reminder", null], ["unconfirmed", "no_reply"]]);
+
+  // One event per row, references only: no address, item or question text.
+  const ofRequest = async type => (await replyEvents(type)).filter(event => event.payload.references.requestId === sent.id);
+  const [reminded, flagged] = [await ofRequest("v2.fact_reminder.sent"), await ofRequest("v2.fact_reminder.unconfirmed")];
+  assert.deepEqual([reminded.length, flagged.length], [1, 1]);
+  assert.equal(reminded[0].actorRef, `membership:${owner.membershipId}`);
+  assert.deepEqual(ownReferences(reminded[0]), { commandId: tuesday.result.id, runId: tuesday.result.id, requestId: sent.id, factId,
+    factVersion: "1" });
+  assert.deepEqual(ownReferences(flagged[0]), { commandId: wednesday.result.id, runId: wednesday.result.id, requestId: sent.id, factId,
+    factVersion: "1", reason: "no_reply" });
+  const payloads = JSON.stringify([reminded, flagged]);
+  for (const words of ["merchant@", "Bathroom", merchant.name]) assert.ok(!payloads.includes(words), words);
+  await replyChain(context.tenantId);
+  assert.deepEqual(await effectCounts(), before);
+});
+
+test("V2-E7: a reply, a cancel or a changed question or recipient stops the reminder and the flag", async () => {
+  const { openFacts, factReplies, fact, request, week, runAt, rowsFor } = await reminderSetup();
+  const access = need => fact({ neededBy: week.thursday, owner: { kind: "customer" }, detail: { kind: "access", need } });
+  const e1 = (factId, action, fields = {}) => openFacts.command(jobId, factCommand({ action, factId, expectedVersion: 1, ...fields }));
+  const stopped = [];
+
+  // A link reply before Tuesday.
+  const linked = await request(await access("Parking permit for the van?"));
+  await factReplies.receive(tokenOf(linked), linkAnswer({ arrangement: "Permit in the porch" }));
+  stopped.push(linked.id);
+  // A reply pasted from a call, for the same fact version.
+  const pastedFact = await access("Which door for deliveries?");
+  stopped.push((await request(pastedFact)).id);
+  await factReplies.command(jobId, replyCommand({ action: "paste", commandId: randomUUID(), factId: pastedFact, expectedFactVersion: 1,
+    answer: { arrangement: "Side door" } }));
+  // A cancelled link.
+  const cancelled = await request(await access("Is the loft hatch clear?"));
+  await factReplies.command(jobId, replyCommand({ action: "cancel", commandId: randomUUID(), requestId: cancelled.id }));
+  stopped.push(cancelled.id);
+  // The fact answered, cancelled or marked out of date in E1 (a changed question).
+  for (const [action, fields] of [["answer", { answer: { kind: "access", arrangement: "Neighbour has a key" } }], ["cancel", {}],
+    ["mark_out_of_date", {}]]) {
+    const factId = await access(`Spare key arrangement (${action})?`);
+    stopped.push((await request(factId)).id);
+    await e1(factId, action, fields);
+  }
+  // A newer request for the same fact: the old one is not current. The newer one is cancelled so it is quiet too.
+  const twice = await access("Can the skip go on the drive?");
+  stopped.push((await request(twice)).id);
+  const newer = await request(twice);
+  await factReplies.command(jobId, replyCommand({ action: "cancel", commandId: randomUUID(), requestId: newer.id }));
+  stopped.push(newer.id);
+  // A corrected recipient.
+  const crew = await fact({ neededBy: week.thursday, owner: { kind: "crew_member", name: "Fictional Tiler" },
+    detail: { kind: "crew_availability", need: "Grout the bathroom on Thursday" } });
+  const record = fields => factReplies.command(jobId, replyCommand({ action: "record_recipient", commandId: randomUUID(),
+    role: "crew_member", merchantId: null, displayName: "Fictional Tiler", contactEmail: "tiler@jobguard-v2.invalid", ...fields }));
+  const tiler = await record({ correctsId: null });
+  stopped.push((await request(crew, { recipient: { kind: "recorded", recipientId: tiler.id } })).id);
+  await record({ correctsId: tiler.id });
+
+  for (const clock of [week.at(-2, 12), week.at(-1, 8), week.at(0, 9)]) {
+    const { result, lines } = await runAt(clock);
+    assert.deepEqual(reminderCaptures(lines), [], String(new Date(clock)));
+    for (const id of stopped) assert.ok(!result.reminded.includes(id) && !result.unconfirmed.includes(id), id);
+  }
+  for (const id of stopped) assert.deepEqual(await rowsFor(id), [], id);
+});
+
+test("V2-E7: an expired link gets no reminder and is unconfirmed because the link expired", async () => {
+  const { fact, request, week, runAt, rowsFor } = await reminderSetup();
+  const sent = await request(await fact({ neededBy: week.thursday, owner: { kind: "customer" },
+    detail: { kind: "access", need: "Can the crew use the side gate?" } }), { expiresInDays: 1 });
+  const tuesday = await runAt(week.at(-2, 12));
+  assert.ok(!tuesday.result.reminded.includes(sent.id));
+  assert.deepEqual(reminderCaptures(tuesday.lines), []);
+  const wednesday = await runAt(week.at(-1, 8));
+  assert.ok(wednesday.result.unconfirmed.includes(sent.id));
+  assert.deepEqual(await rowsFor(sent.id), [{ kind: "unconfirmed", reason: "link_expired", dueAt: week.at(-1, 8), recordedAt: week.at(-1, 8) }]);
+});
+
+test("V2-E7: a run replays by its command id, and the same id with another actor or content is refused", async () => {
+  const { owner, context, fact, request, week, runAt, rowsFor } = await reminderSetup();
+  const sent = await request(await fact({ neededBy: week.thursday, owner: { kind: "customer" },
+    detail: { kind: "access", need: "Where can the crew wash brushes?" } }));
+  const command = reminderCommand();
+  const { result: both, lines } = await caught(() => Promise.all([0, 1].map(() =>
+    new FactReminderRepository(runtime, () => week.at(-2, 12)).run(context, jobId, owner.sessionId, command))));
+  assert.deepEqual(both.map(entry => entry.replayed).sort(), [false, true]);
+  assert.ok(both.every(entry => entry.reminded.includes(sent.id)));
+  assert.equal(reminderCaptures(lines).length, 1);
+  // Replayed on Wednesday: the stored Tuesday result, nothing captured and no flag written.
+  const replay = await runAt(week.at(-1, 8), command);
+  assert.deepEqual(replay.result, { ...both.find(entry => !entry.replayed), replayed: true });
+  assert.deepEqual(reminderCaptures(replay.lines), []);
+  assert.deepEqual((await rowsFor(sent.id)).map(row => row.kind), ["reminder"]);
+
+  const digestOf = commandId => createHash("sha256").update(JSON.stringify({ jobId,
+    input: { commandId, version: "v2-fact-reminder-command.v1" } })).digest("hex");
+  const stored = (commandId, digest, actor) => admin.query(`INSERT INTO app.v2_fact_reminder_run (tenant_id, job_id, id, request_digest,
+    result, actor_membership_id, recorded_at) VALUES ($1,$2,$3,$4,'{"reminded":[],"unconfirmed":[]}',$5,now())`,
+  [DEMO_TENANT_ID, jobId, commandId, digest, actor]);
+  const otherActor = reminderCommand();
+  await stored(otherActor.commandId, digestOf(otherActor.commandId), randomUUID());
+  await assert.rejects(runAt(week.at(-1, 8), otherActor), { code: "REMINDER_COMMAND_CONFLICT" });
+  const otherContent = reminderCommand();
+  await stored(otherContent.commandId, "0".repeat(64), owner.membershipId);
+  await assert.rejects(runAt(week.at(-1, 8), otherContent), { code: "REMINDER_COMMAND_CONFLICT" });
+  for (const bad of [{ version: "v2-fact-reminder-command.v1" }, { ...reminderCommand(), extra: true }, { ...reminderCommand(), version: "v1" }]) {
+    await assert.rejects(runAt(week.at(-1, 8), bad), { code: "REMINDER_INVALID_COMMAND" });
+  }
+  assert.deepEqual((await rowsFor(sent.id)).map(row => row.kind), ["reminder"]);
+});
+
+test("V2-E7: a run waits on the request lock that E2's link reply and cancel take", async () => {
+  const { context, fact, request, week, owner } = await reminderSetup();
+  const sent = await request(await fact({ neededBy: week.thursday, owner: { kind: "customer" },
+    detail: { kind: "access", need: "Is there a parking bay outside?" } }));
+  const holder = await runtime.connect();
+  try {
+    await holder.query("BEGIN");
+    await holder.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 2013))", [`${context.tenantId}:${sent.id}`]);
+    let settled = false;
+    const running = caught(() => new FactReminderRepository(runtime, () => week.at(-2, 12)).run(context, jobId, owner.sessionId,
+      reminderCommand())).finally(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(settled, false, "the run waits while the request is locked");
+    await holder.query("ROLLBACK");
+    const { result, lines } = await running;
+    assert.deepEqual([result.reminded, reminderCaptures(lines).length], [[sent.id], 1]);
+  } finally { holder.release(); }
+});
+
+test("V2-E7: the database keeps one reminder per request, ties reason and recipient to the kind, and never changes a row", async () => {
+  const { context, fact, request, week, runAt } = await reminderSetup();
+  const sent = await request(await fact({ neededBy: week.thursday, owner: { kind: "customer" },
+    detail: { kind: "access", need: "Can the crew use the downstairs loo?" } }));
+  const { result: run } = await runAt(week.at(-2, 12));
+  assert.ok(run.reminded.includes(sent.id));
+  const insert = fields => withTenant(runtime, context, db => db.$client.query(`INSERT INTO app.v2_fact_reminder (tenant_id, job_id,
+    request_id, kind, reason, due_at, recorded_at, recipient, run_id, actor_membership_id) VALUES ($1,$2,$3,$4,$5,$6,$6,$7,$8,$9)`,
+  [DEMO_TENANT_ID, jobId, fields.requestId ?? sent.id, fields.kind, fields.reason ?? null, new Date(week.at(-2, 12)),
+    fields.recipient ?? null, run.id, randomUUID()]));
+  await assert.rejects(insert({ kind: "reminder", recipient: "customer@jobguard-v2.invalid" }), { code: "23505" });
+  const other = await request(await fact({ neededBy: week.thursday, owner: { kind: "customer" },
+    detail: { kind: "access", need: "Can the crew park on the drive?" } }));
+  await assert.rejects(insert({ requestId: other.id, kind: "reminder", reason: "no_reply", recipient: "customer@jobguard-v2.invalid" }),
+    { code: "23514" });
+  await assert.rejects(insert({ requestId: other.id, kind: "reminder" }), { code: "23514" });
+  await assert.rejects(insert({ requestId: other.id, kind: "unconfirmed" }), { code: "23514" });
+  await assert.rejects(insert({ requestId: other.id, kind: "unconfirmed", reason: "no_reply", recipient: "customer@jobguard-v2.invalid" }),
+    { code: "23514" });
+  await assert.rejects(insert({ requestId: other.id, kind: "reminder", recipient: "orders@teacup.example" }), { code: "23514" });
+  for (const [table, column, id] of [["app.v2_fact_reminder", "request_id", sent.id], ["app.v2_fact_reminder_run", "id", run.id]]) {
+    const filter = `WHERE (tenant_id, job_id, ${column}) = ($1, $2, $3)`;
+    const key = [DEMO_TENANT_ID, jobId, id];
+    await assert.rejects(withTenant(runtime, context, db => db.$client.query(`UPDATE ${table} SET recorded_at = recorded_at ${filter}`, key)),
+      { code: "42501" }, table);
+    await assert.rejects(withTenant(runtime, context, db => db.$client.query(`DELETE FROM ${table} ${filter}`, key)), { code: "42501" }, table);
+    // Even the owner cannot change or remove a recorded row.
+    await assert.rejects(admin.query(`UPDATE ${table} SET recorded_at = recorded_at ${filter}`, key), { code: "55000" }, table);
+    await assert.rejects(admin.query(`DELETE FROM ${table} ${filter}`, key), { code: "55000" }, table);
+  }
+});
+
+test("V2-E7: forced reminder policies hide every row from the second firm (rule 30 firm A/B read check)", async () => {
+  const { owner, context, fact, request, week, runAt } = await reminderSetup();
+  const sent = await request(await fact({ neededBy: week.thursday, owner: { kind: "customer" },
+    detail: { kind: "access", need: "Is the garage open for storage?" } }));
+  const { result: run } = await runAt(week.at(-2, 12));
+  assert.ok(run.reminded.includes(sent.id));
+  const outsider = await signIn("second-builder");
+  const theirs = new FactReminderApplication(runtime, outsider.sessionId);
+  await assert.rejects(theirs.read(jobId), { code: "NOT_FOUND" });
+  await assert.rejects(theirs.run(jobId, reminderCommand()), { code: "NOT_FOUND" });
+  const { context: theirContext } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+  for (const [table, column, id] of [["app.v2_fact_reminder", "request_id", sent.id], ["app.v2_fact_reminder_run", "id", run.id]]) {
+    const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read, has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
+      has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+      has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+      has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access
+      FROM pg_class WHERE oid = $1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+      identity_access: false, worker_access: false }, table);
+    const filter = `WHERE (tenant_id, job_id, ${column}) = ($1, $2, $3)`;
+    const key = [DEMO_TENANT_ID, jobId, id];
+    assert.ok((await query(context, `SELECT * FROM ${table} ${filter}`, key)).rowCount >= 1, table);
+    for (const scope of [outsider.realContext, theirContext]) {
+      assert.equal((await query(scope, `SELECT * FROM ${table} ${filter}`, key)).rowCount, 0, table);
+      assert.equal((await query(scope, `SELECT * FROM ${table}`)).rowCount, 0, table);
+      await assert.rejects(query(scope, `UPDATE ${table} SET recorded_at = recorded_at ${filter}`, key), { code: "42501" });
+      await assert.rejects(query(scope, `DELETE FROM ${table} ${filter}`, key), { code: "42501" });
+    }
+    assert.equal((await runtime.query(`SELECT * FROM ${table} ${filter}`, key)).rowCount, 0, table);
+  }
+  for (const scope of [outsider.realContext, theirContext]) {
+    await assert.rejects(query(scope, `INSERT INTO app.v2_fact_reminder_run (tenant_id, job_id, id, request_digest, result,
+      actor_membership_id, recorded_at) VALUES ($1,$2,$3,$4,'{}',$5,now())`, [DEMO_TENANT_ID, jobId, randomUUID(), "0".repeat(64),
+      owner.membershipId]), { code: "42501", message: /row-level security policy/u });
+  }
+});
+
+test("V2-E7: the reminders route refuses no session, an invalid session and the second firm (rule 29: pending V2-SX)", async () => {
+  const path = `/api/jobs/${jobId}/fact-reminders`;
+  // Positive control first: the builder reads the rows.
+  const { cookies } = await signIn("builder");
+  assert.ok(Array.isArray((await json(await httpRequest(path, { cookies }))).reminders));
+  assert.deepEqual(await json(await httpRequest(path), 401), { code: "UNAUTHENTICATED" });
+  for (const session of ["made-up-session", randomUUID()]) {
+    assert.deepEqual(await json(await httpRequest(path, { cookies: `jg_session=${session}` }), 401), { code: "UNAUTHENTICATED" }, session);
+  }
+  const outsider = await signIn("second-builder");
+  assert.deepEqual(await json(await httpRequest(path, { cookies: outsider.cookies }), 404), { code: "NOT_FOUND" });
+  // POST without the configured origin is refused before anything runs.
+  const refused = await fetch(origin + path, { method: "POST", headers: { origin: "https://elsewhere.invalid",
+    "content-type": "application/json", cookie: cookies }, body: JSON.stringify(reminderCommand()) });
+  assert.deepEqual([refused.status, await refused.json()], [403, { code: "ORIGIN_REFUSED" }]);
+});
+
+test("V2-E7: reminders stay disabled outside local V2", async () => {
+  const { owner } = await reminderSetup();
+  const reminders = new FactReminderApplication(runtime, owner.sessionId);
+  const previous = process.env.JOBGUARD_LOCAL_V2;
+  delete process.env.JOBGUARD_LOCAL_V2;
+  try {
+    await assert.rejects(reminders.read(jobId), { code: "SYNTHETIC_MODE_REQUIRED" });
+    await assert.rejects(reminders.run(jobId, reminderCommand()), { code: "SYNTHETIC_MODE_REQUIRED" });
+  } finally { process.env.JOBGUARD_LOCAL_V2 = previous; }
+});
+
+test("audit-chain: packages/db/src/v2-fact-reminder-repository.ts#FactReminderRepository.run", async () => {
+  const { context, fact, request, week, runAt, rowsFor } = await reminderSetup();
+  const sent = await request(await fact({ neededBy: week.thursday, owner: { kind: "customer" },
+    detail: { kind: "access", need: "Can the crew leave tools overnight?" } }));
+  const command = reminderCommand();
+  const before = await replyEvents("v2.fact_reminder.sent");
+  const { lines } = await caught(() => assert.rejects(runAt(week.at(-2, 12), command, failingPool(auditFails)), { code: "FORCED" }));
+  assert.deepEqual(lines, [], "nothing reaches the catcher when the run rolls back");
+  assert.deepEqual(await rowsFor(sent.id), [], "audit-chain: rollback");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_fact_reminder_run WHERE id = $1", [command.commandId])).rows[0].n, 0);
+  assert.deepEqual(await replyEvents("v2.fact_reminder.sent"), before);
+  const { result } = await runAt(week.at(-2, 12), command);
+  assert.ok(result.reminded.includes(sent.id));
+  const recorded = await replyEvents("v2.fact_reminder.sent");
+  assert.equal(recorded.length, before.length + result.reminded.length, "audit-chain: event");
+  assert.ok(recorded.some(event => event.payload.references.requestId === sent.id && event.payload.references.commandId === command.commandId));
+  await runAt(week.at(-2, 12), command);
+  assert.deepEqual(await replyEvents("v2.fact_reminder.sent"), recorded, "audit-chain: replay");
   await replyChain(context.tenantId);
 });

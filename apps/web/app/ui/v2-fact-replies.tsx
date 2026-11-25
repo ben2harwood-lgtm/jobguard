@@ -1,6 +1,7 @@
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { FactReplyView } from "@jobguard/api/workspace";
+import { reminderLabel, type ReminderRow } from "./v2-fact-reminder-label";
 
 type Fact = FactReplyView["facts"][number];
 type Answer = { other: string } | { deliveryDate: string } | { available: boolean } | { arrangement: string };
@@ -37,6 +38,9 @@ export function V2FactReplies({ jobId }: { jobId: string }) {
   const [link, setLink] = useState<{ factId: string; path: string } | null>(null);
   const pending = useRef<{ key: string; commandId: string } | null>(null);
   const path = `/api/jobs/${jobId}/fact-replies`;
+  // V2-E7: reminder rows per request, and the practice run's command id kept for a retry.
+  const [reminders, setReminders] = useState<(ReminderRow & { requestId: string })[]>([]);
+  const run = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -44,8 +48,11 @@ export function V2FactReplies({ jobId }: { jobId: string }) {
       if (!response.ok) throw new Error("load");
       // A reload after a refused press keeps that press's message on screen.
       setView(await response.json() as FactReplyView);
+      const stored = await fetch(`/api/jobs/${jobId}/fact-reminders`, { cache: "no-store" });
+      if (!stored.ok) throw new Error("load");
+      setReminders((await stored.json() as { reminders: (ReminderRow & { requestId: string })[] }).reminders);
     } catch { setError("Replies are unavailable. Reload to try again."); }
-  }, [path]);
+  }, [path, jobId]);
   useEffect(() => { void load(); }, [load]);
 
   async function send(body: Record<string, unknown>, failure: string) {
@@ -67,6 +74,20 @@ export function V2FactReplies({ jobId }: { jobId: string }) {
       await load();
       return result;
     } catch { setError(failure); return null; }
+    finally { setBusy(false); }
+  }
+
+  async function runReminders() {
+    // A fresh press gets a new command id; a retry after no response keeps it, so it sends once.
+    run.current ??= crypto.randomUUID();
+    setBusy(true); setError("");
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/fact-reminders`, { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version: "v2-fact-reminder-command.v1", commandId: run.current }) });
+      run.current = null;
+      if (!response.ok) setError("Could not run the reminders. Reload and try again.");
+      await load();
+    } catch { setError("Could not run the reminders. Press again to retry."); }
     finally { setBusy(false); }
   }
 
@@ -92,14 +113,16 @@ export function V2FactReplies({ jobId }: { jobId: string }) {
         </li>;
       })}</ul>}
       <h3>Ask by link</h3>
+      <p><button type="button" disabled={busy} onClick={() => void runReminders()}>Run reminders now (practice)</button></p>
       {open.length === 0 ? <p>No open questions waiting on someone else.</p> : open.map(fact =>
-        <FactAsk key={fact.id} fact={fact} view={view} busy={busy} link={link?.factId === fact.id ? link.path : null}
+        <FactAsk key={fact.id} fact={fact} view={view} reminders={reminders} busy={busy} link={link?.factId === fact.id ? link.path : null}
           send={send} shown={path => setLink(path ? { factId: fact.id, path } : null)}/>)}
     </>}
   </section>;
 }
 
-function FactAsk({ fact, view, busy, link, send, shown }: { fact: Fact; view: FactReplyView; busy: boolean; link: string | null;
+export function FactAsk({ fact, view, reminders, busy, link, send, shown }: { fact: Fact; view: FactReplyView;
+  reminders: (ReminderRow & { requestId: string })[]; busy: boolean; link: string | null;
   send: (body: Record<string, unknown>, failure: string) => Promise<{ replyPath?: string } | null>; shown: (path: string | null) => void }) {
   const [options, setOptions] = useState("");
   const [allowOther, setAllowOther] = useState(false);
@@ -129,6 +152,7 @@ function FactAsk({ fact, view, busy, link, send, shown }: { fact: Fact; view: Fa
   return <article aria-label={`Ask: ${question}`} style={{ minWidth: 0, marginBottom: 16 }}>
     <p><strong>{question}</strong> · waiting on {ownerLabel(fact)}</p>
     {requests.map(request => <p key={request.id}>Link to {request.contactEmail}: {request.status === "open" && !request.current ? "out of date" : request.status}
+      {reminders.filter(row => row.requestId === request.id).map(row => <span key={row.kind}> · {reminderLabel(row)}</span>)}
       {request.status === "open" && <> <button type="button" disabled={busy} onClick={() => void send({ action: "cancel", requestId: request.id },
         "Could not cancel the link. Reload and check it.")}>Cancel link</button></>}</p>)}
     {link && <p role="status">Link sent to the local catcher. Practice only: <a href={link} target="_blank" rel="noreferrer">open the reply page</a>.</p>}

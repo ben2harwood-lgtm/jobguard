@@ -26,6 +26,8 @@ export * from "./v2-work-plan-repository.js";
 export * from "./v2-measurement-repository.js";
 export * from "./v2-open-fact-repository.js";
 export * from "./v2-fact-reply-repository.js";
+// V2-E7 reminders.
+export * from "./v2-fact-reminder-repository.js";
 export * from "./quote-document-repository.js";
 export * from "./acceptance-repository.js";
 export * from "./activation-repository.js";
