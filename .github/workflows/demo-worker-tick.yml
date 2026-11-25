@@ -1,0 +1,61 @@
+name: Demo worker tick (fictional demo only)
+# The Cloudflare web Worker does not run the Graphile worker. This runs the existing worker
+# entry for a short, capped window so the fictional demo's practice final check, evidence
+# packs and source holds are processed. Off until Ben sets the repository variable
+# JOBGUARD_CRON_ENABLED to true: merging this file runs nothing.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: demo-worker-tick
+  cancel-in-progress: false
+jobs:
+  tick:
+    if: ${{ vars.JOBGUARD_CRON_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@v4.0.3
+        with: { node-version: 24.15.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run build --filter=@jobguard/api^...
+      - name: Run the practice worker for one capped window
+        working-directory: apps/api
+        env:
+          JOBGUARD_ENV: synthetic_demo
+          TICK_SECONDS: "240"
+          GRAPHILE_DATABASE_URL: ${{ secrets.DEMO_GRAPHILE_DATABASE_URL }}
+          WORKER_DATABASE_URL: ${{ secrets.DEMO_WORKER_DATABASE_URL }}
+          RUNTIME_DATABASE_URL: ${{ secrets.DEMO_RUNTIME_DATABASE_URL }}
+          SHADOW_DATABASE_URL: ${{ secrets.DEMO_SHADOW_DATABASE_URL }}
+        run: |
+          if [ "${JOBGUARD_ENV:-}" != "synthetic_demo" ]; then
+            echo "Refused: the demo worker tick runs only with JOBGUARD_ENV=synthetic_demo." >&2; exit 1
+          fi
+          if [ -n "${MIGRATION_DATABASE_URL:-}" ]; then
+            echo "Refused: MIGRATION_DATABASE_URL must never reach the worker." >&2; exit 1
+          fi
+          for name in GRAPHILE_DATABASE_URL WORKER_DATABASE_URL RUNTIME_DATABASE_URL SHADOW_DATABASE_URL; do
+            url="${!name:-}"
+            if [ -z "$url" ]; then echo "Refused: $name is not set." >&2; exit 1; fi
+            if ! [[ "$url" =~ ^postgres(ql)?://[^/?#]+/jobguard_synthetic_demo(\?sslmode=(require|verify-ca|verify-full))?$ ]]; then
+              echo "Refused: $name must target the database jobguard_synthetic_demo." >&2; exit 1
+            fi
+          done
+          if ! [[ "${TICK_SECONDS:-}" =~ ^[1-9][0-9]{0,2}$ ]] || [ "$TICK_SECONDS" -gt 480 ]; then
+            echo "Refused: TICK_SECONDS must be 1 to 480." >&2; exit 1
+          fi
+          # Same task set the browser journeys are tested with: queued outbox actions stay manual.
+          export JOBGUARD_WORKER_PRACTICE_FINAL_CHECK_ONLY=1
+          status=0
+          timeout --signal=TERM --kill-after=30s "$TICK_SECONDS" ./node_modules/.bin/tsx src/worker.ts || status=$?
+          if [ "$status" -eq 124 ]; then echo "Worker stopped at the ${TICK_SECONDS}s cap."; exit 0; fi
+          echo "Worker ended before the cap or did not stop cleanly (exit $status)." >&2
+          exit 1

@@ -70,10 +70,47 @@ jobs only. This host change does not approve real customers, live providers or m
    DEMO-S and ENT-11b on phone and laptop, inspect Worker CPU/errors and database
    connection counts, and keep the switch pending if Free limits are exceeded.
 
-9. A web Worker does not run the existing Graphile worker service. Keep any required
-   background demo tasks on their existing approved host; verify final-check processing
-   in DEMO-S before claiming the complete journey works. Do not add a live provider
-   or an administrative database credential to make a missing step pass.
+9. The web Worker does not run the Graphile worker. Without it, the practice final
+   check, evidence packs and source holds stay queued and DEMO-S cannot finish. The
+   repository includes `.github/workflows/demo-worker-tick.yml`, a free scheduled
+   GitHub Action that runs the existing worker (`apps/api/src/worker.ts`) in practice
+   mode for one 240-second window every 10 minutes. It is off until you turn it on,
+   and it never deploys. A demo user may wait up to about 15 minutes for a result.
+   GitHub can delay scheduled runs. A Cloudflare Cron Trigger is not used: this
+   worker reads fixture files from disk and uses Graphile's own cron schedule. It also
+   needs the shadow and queue logins, which stay out of the public web Worker.
+   To turn it on:
+   1. Connect as the administrative database user and create three worker logins.
+      Use new random passwords and keep them outside the repository:
+      ```sql
+      CREATE ROLE jobguard_demo_worker_queue LOGIN PASSWORD '<new>' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
+      GRANT jobguard_infrastructure TO jobguard_demo_worker_queue;
+      CREATE ROLE jobguard_demo_worker_actions LOGIN PASSWORD '<new>' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
+      GRANT jobguard_worker TO jobguard_demo_worker_actions;
+      CREATE ROLE jobguard_demo_worker_shadow LOGIN PASSWORD '<new>' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOBYPASSRLS;
+      GRANT jobguard_shadow TO jobguard_demo_worker_shadow;
+      GRANT CREATE ON DATABASE jobguard_synthetic_demo TO jobguard_demo_worker_queue;
+      ```
+   2. In the GitHub repository, open Settings → Secrets and variables → Actions. Add four
+      repository secrets, each ending `/jobguard_synthetic_demo?sslmode=require`:
+      `DEMO_GRAPHILE_DATABASE_URL` uses the queue login, `DEMO_WORKER_DATABASE_URL` the
+      actions login and `DEMO_SHADOW_DATABASE_URL` the shadow login.
+      `DEMO_RUNTIME_DATABASE_URL` uses the same `jobguard_runtime` login as the
+      Worker's `DATABASE_URL`. Never add `MIGRATION_DATABASE_URL` or an administrative
+      login. The workflow refuses any other database name or `JOBGUARD_ENV`.
+   3. Add the repository variable `JOBGUARD_CRON_ENABLED` with value `true`. Under
+      Actions, run **Demo worker tick** once with **Run workflow**. A green run ends
+      with `Worker stopped at the 240s cap.` After this first run creates the
+      `graphile_worker` schema, run
+      `REVOKE CREATE ON DATABASE jobguard_synthetic_demo FROM jobguard_demo_worker_queue;`.
+   4. Run DEMO-S to the final check and confirm it completes within one tick.
+   To pause the worker, set `JOBGUARD_CRON_ENABLED` to `false`. While the shadow login exists,
+   `pnpm bootstrap:demo` refuses because `jobguard_shadow` has a holder. Before
+   re-running bootstrap, run `REVOKE jobguard_shadow FROM jobguard_demo_worker_shadow;`.
+   After bootstrap finishes, grant it again. GitHub's Actions terms ask for low-burden use. This is
+   one short run every 10 minutes for a fictional demo, but read those terms before
+   enabling it. Do not add a live provider or an administrative database credential
+   to make a missing step pass.
 
 10. Initially test on workers.dev. Only after the journeys pass, save the existing DNS
     records and TTL, add the intended custom domain under the Worker's Settings →

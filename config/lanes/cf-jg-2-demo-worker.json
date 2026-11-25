@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "cf-jg-2-demo-worker": {
+      "branches": [
+        "claude/project-thread-hattxr-cf-jg-2"
+      ],
+      "note": "CF-JG-2: run the fictional demo's existing Graphile worker in practice mode from an opt-in scheduled GitHub Action (off until the JOBGUARD_CRON_ENABLED repository variable is true). No Cloudflare, Worker build, worker code, database, migration or secret change. Own lane file is implicitly permitted.",
+      "allow": [
+        ".github/workflows/demo-worker-tick.yml",
+        "docs/operations/cloudflare-hosting.md",
+        "tools/demo-worker-tick.test.mjs"
+      ]
+    }
+  }
+}
