@@ -56,6 +56,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | C4 | Q30 | V2-G0 certificates checklist | **Codex** (web or lane A) | v2/main | none | T1 |
 | C5 | Q31 | V2-K1 share the Friday update to WhatsApp | **Codex** (web or lane A) | `codex/sandbox/v2-k3` | none | T1 |
 | C6 | Q32 | V2-B1B Walk screen, online first cut | **desktop Codex** (lane A) | #920, PR into v2/main | none | T1 |
+| C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Codex** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
 ## Batch released 25 Nov 14:55 UK (planner; Ben: "why is nothing coding?")

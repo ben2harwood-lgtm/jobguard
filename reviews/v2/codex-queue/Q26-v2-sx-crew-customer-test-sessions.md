@@ -6,6 +6,18 @@
 >
 > **This section replaces revision 4's "What to build" items 1 and 2.** Revision 4's decision, cases (a) to (f), items 3 and 4, and its dependencies all still stand. **Round count:** this resumes the held round 1 of 3. The kept uncommitted draft may be reused.
 
+## Plan-check conditions (frm-management-layer#3 comment 7167278263, GO WITH CONDITIONS; folded in by planner 16:55 UK; these override the text above)
+1. **Case (b)** sends two values: `fictional-invalid`, and a well-formed UUID v4 that was never issued. The UUID one reaches the real session check (`apps/web/app/lib/synthetic-server.ts` line 13 checks the format only). If that value gets a 5xx, it fails closed but isn't typed: record it as a finding, and don't loosen the typed rule.
+2. **Case (c)** reuses the **old `jg_session` value** after signout. If it still gets 200, that's a session defect under rule 24: **stop and report**, and don't change the test.
+3. **Typed codes** are `UNAUTHENTICATED`, `TENANT_FORBIDDEN`, `FORBIDDEN` (from `practiceFailure`, line 60) and `NOT_FOUND`. List the code you saw for each route and case in the PR body. Route 1's `jobs: []` counts as refused only in case (d); cases (a) to (c) expect a typed 401.
+4. **The positive controls for routes 2, 6 and 9 aren't in the seed test today.** If any of them isn't 200 with the expected body, **stop at round 1 and report it as a planner miss**. Don't drop the route quietly.
+5. **Export `builderGetRoutes`** from `tools/v2/test/refusals.mjs`, starting with routes 1 to 10. The last test signs out once and runs case (c) over every route in the list. After it runs, the helper marks the cached `builder` entry revoked, so a later `signIn("builder")` throws a clear error. Rule 29 in `01-RULES.md` tells later pieces to append their routes here.
+6. Conditions 1 to 3 and 5 of the revision 4 verdict still stand:
+   - case (d) uses both contexts;
+   - case (e) passes the capability value as `jg_session`;
+   - the no-leak check covers £ and pence values;
+   - the pilot-gate item.
+
 ## Routes, fixed list (each one already reads the seeded job with a valid fixture in `tools/v2/seed.integration.test.mjs` lines 104 to 133; GET only)
 Next routes, through the web origin. `jobId` is the seeded job.
 1. `GET /api/jobs?tenantId=<DEMO_TENANT_ID>` (line 79). Refused means `jobs` is `[]`, not an error.

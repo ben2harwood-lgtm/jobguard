@@ -71,3 +71,13 @@
    - **The ledger.** It records VC-1 and VC-2 with heads, owners and evidence. The repo's builder and checker policy is kept separate from the ledger's existing launch decision, which allows a fresh same-family session with the independence flag false.
    - **Writers.** The one-Studio-builder limit stays until it is reconciled explicitly.
    - **Until the rules file lands,** Vibe Control builders follow this file and the checklist.
+29. **Every V2 route proves who it refuses, using the SX helpers (planner, 25 Nov 16:50 UK; V2-SX rev 5 plan check, condition 5, frm-management-layer#3 comment 7167278263).**
+   - **Builder routes.** Every piece that adds a real Next `route.ts` under `apps/web/app/api/v2-backend/` calls `assertBuilderRouteRefuses` (`tools/v2/test/refusals.mjs`, from V2-SX Q26) on each of its GET routes. The call needs:
+     - a positive control first: the builder gets 200 with the expected body;
+     - cases (a), (b) and (d) in your own test: no session; an invalid session, using both the made-up value and a well-formed UUID v4 that was never issued; and the second firm;
+     - case (c), signed out: **don't sign out in your own test.** It would kill the cached builder session for every later test. Instead, append your route as one line to the exported `builderGetRoutes` list in `tools/v2/test/refusals.mjs` (shared-file rule 5: append only). SX's single last test signs out once and runs (c) over every listed route;
+     - typed codes only: `UNAUTHENTICATED`, `TENANT_FORBIDDEN`, `FORBIDDEN` or `NOT_FOUND`.
+
+     `/api/v2-backend/*` is a **fallback** rewrite (`apps/web/next.config.mjs` line 12), so a real `route.ts` there is a Next boundary, not a proxy to Nest.
+   - **Capability links.** Every piece that adds a V2 capability link or token (customer, crew or merchant) calls `assertCapabilityConfined` for cases (e) and (f).
+   - **Helper not on your base yet** (SX not merged): put "Rule 29: pending V2-SX" in the PR's "Rules met" list, and add the calls in one test-only commit after SX merges and you re-merge `v2/main`. The PR is not called ready until they're there.
