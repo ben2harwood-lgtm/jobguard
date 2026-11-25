@@ -47,6 +47,17 @@ Why this order: the three "now" pieces at the top (F6, K4, K6) are the review's 
 
 V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 
+## Batch C released 25 Nov 16:00 UK (planner; dry-checked, each packet lists the files and lines it opened)
+| Order | Packet | Piece | Builder | Base | Migration | Tier |
+|---|---|---|---|---|---|---|
+| C1 | Q29 | V2-M3 mock-ups for every remaining screen | **desktop Codex** (lane A) | v2/main | none | T1 |
+| C2 | Q27 | V2-PX proof photos on the V2 database | **Opus** | v2/main | none (2025 reserved) | RED |
+| C3 | Q04 | V2-K2A builder-only calendar feed | **desktop Codex** (lane A), after its Claude plan check | `codex/sandbox/v2-c4` | 2017 | RED |
+| C4 | Q30 | V2-G0 certificates checklist | **Codex** (web or lane A) | v2/main | none | T1 |
+| C5 | Q31 | V2-K1 share the Friday update to WhatsApp | **Codex** (web or lane A) | `codex/sandbox/v2-k3` | none | T1 |
+| C6 | Q32 | V2-B1B Walk screen, online first cut | **desktop Codex** (lane A) | #920, PR into v2/main | none | T1 |
+| C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
+
 ## Batch released 25 Nov 14:55 UK (planner; Ben: "why is nothing coding?")
 Every piece below was dry-checked against the current code (rule 23). None needs a database before building: their database proof is in seed tests or browser tests that CI1 or Mac lane B run. Open each PR **into `v2/main` or a `codex/sandbox/v2-*` branch**, so CI1's seed job runs.
 
