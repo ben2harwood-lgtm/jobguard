@@ -1,6 +1,8 @@
 // Q36 / V2-FL-2. Registered by the full V2 seed suite, sharing its two sign-ins.
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { clientContractDocumentV1, referenceApprovalRulesV1, renderBillingExport,
+  normalizeBillingStatus, deriveUnambiguousBilling } from "../../../packages/core/dist/index.js";
 import { FinalAccountCommandService, FeeIllustrationRepository } from "../../../packages/db/dist/index.js";
 import { registerFirmChecks } from "./checks-lib.mjs";
 
@@ -55,9 +57,14 @@ async function contractorFixture({ admin, withTenant }, context, digest) {
     await put("org_unit", { id: branch, kind: "branch", parent_id: region, parent_kind: "region", name: "FL-2 fictional branch" });
     await put("client_organisation", { id: client, branch_id: branch, name: "FL-2 fictional client", client_type: "housing_association" });
     await put("client_contract", { id: contract, client_id: client });
-    await put("approval_rule_version", { id: rule, client_id: client, contract_id: contract, revision: 1, document: { version: "approval-rules.v1" } });
+    // Same documents as packages/db/test/contractor.integration.test.ts; use the shared rules.
+    const rules = referenceApprovalRulesV1;
+    const contractDocument = clientContractDocumentV1.parse({ version: "client-contract.v1", reference: "FICTIONAL",
+      startsOn: "2026-10-01", endsOn: null, sorVersionIds: [], tenderedAdjustment: { numerator: "-35", denominator: "1000" },
+      photoRule: "required", vatCode: "synthetic-unreviewed", exportedNotBilledAlertDays: 30 });
+    await put("approval_rule_version", { id: rule, client_id: client, contract_id: contract, revision: 1, document: rules });
     await put("client_contract_version", { id: contractVersion, client_id: client, contract_id: contract, revision: 1,
-      rule_version_id: rule, document: { version: "client-contract.v1" } });
+      rule_version_id: rule, document: contractDocument });
     const scope = randomUUID(), extra = randomUUID(), revision = randomUUID(), binding = randomUUID(), request = randomUUID();
     const raise = await command("RecordOfficeExtra", `extra-origin:${jobId}:${extra}`);
     await put("scope_identity", { id: scope, job_id: jobId });
@@ -75,11 +82,16 @@ async function contractorFixture({ admin, withTenant }, context, digest) {
       source_kind: "ordinary", source_revision_id: revision, variation_revision_id: revision, source_hash: h,
       command_id: raise, actor_membership_id: actor, binding_hash: h });
     const submit = await command("SubmitExtra");
+    // Snapshot the actual requirement, as extra-approval-rules.integration.test.ts does.
+    const { rows: [{ requirement, rule_hash: ruleHash }] } = await sql(
+      "SELECT app.xa_requirement(document,100) AS requirement, encode(sha256(convert_to(document::text,'UTF8')),'hex') AS rule_hash FROM app.approval_rule_version WHERE tenant_id=$1 AND id=$2",
+      [tenant, rule]);
     await put("extra_approval_request", { id: request, job_id: jobId, variation_id: extra, request_revision: 1, binding_id: binding,
-      rule_version_id: rule, contract_version_id: contractVersion, client_id: client, rule_document_hash: h, requirement: {}, comparisons: {},
+      rule_version_id: rule, contract_version_id: contractVersion, client_id: client, rule_document_hash: ruleHash,
+      requirement, comparisons: requirement.comparisons,
       net_pence: "100", revision_hash: h, command_id: submit, submitter_membership_id: actor, request_hash: h });
     await put("extra_approval_step_fact", { id: randomUUID(), job_id: jobId, variation_id: extra, request_id: request, step_index: 0,
-      step_role: "supervisor", actor_kind: "contract_rule", approved_hash: h, approved_net_pence: "100", command_id: submit });
+      step_role: "supervisor", actor_kind: "member", actor_membership_id: actor, approved_hash: h, approved_net_pence: "100", command_id: submit });
     await put("extra_approval_outcome", { id: randomUUID(), job_id: jobId, variation_id: extra, request_id: request, kind: "approved",
       actor_kind: "member", actor_membership_id: actor, command_id: submit });
     await put("extra_escalation_fact", { id: randomUUID(), job_id: jobId, variation_id: extra, request_id: request,
@@ -102,23 +114,37 @@ async function contractorFixture({ admin, withTenant }, context, digest) {
       issued_by_membership_id: actor, authorization_id: authorization, outbox_action_id: outbox, command_id: submit });
     await put("extra_client_link_closure", { id: randomUUID(), link_id: link, kind: "revoked", actor_membership_id: actor, command_id: submit });
 
-    const batch = randomUUID(), line = randomUUID(), imported = randomUUID(), fact = randomUUID(), run = randomUUID();
+    // Use the same renderer/status shape as contractor-billing-fixtures.ts and the repository.
+    const exported = renderBillingExport({ version: "billing-export.v1", clientContractId: contract, lines: [{
+      jobId, extraId: extra, scopeItemId: scope, revisionId: revision, revisionHash: h, approvalBindingId: binding,
+      approvalSnapshotHash: h, description: "Fictional FL-2 extra", quantity: "1", unit: "item",
+      priceProvenance: "human_confirmed", approvedNet: { pence: 100, currency: "GBP" },
+    }] });
+    const batch = randomUUID(), line = exported.lines[0].exportLineId, imported = randomUUID(), fact = randomUUID(), run = randomUUID();
     const cmd = await command("FL2BillingFixture");
     await put("billing_export_batch", { id: batch, job_id: jobId, client_contract_id: contract, command_id: cmd,
-      artifact: {}, json_content: "{}", csv_content: "FL-2 fictional CSV", json_hash: hash("{}"), csv_hash: hash("FL-2 fictional CSV"), total_net_pence: "100" });
+      artifact: JSON.parse(exported.json), json_content: exported.json, csv_content: exported.csv,
+      json_hash: exported.jsonHash, csv_hash: exported.csvHash, total_net_pence: "100" });
     await put("billing_export_line", { id: line, job_id: jobId, client_contract_id: contract, batch_id: batch,
       extra_id: extra, scope_item_id: scope, revision_id: revision, revision_hash: h, approval_request_id: request,
-      approval_binding_id: binding, approved_net_pence: "100", line: {} });
+      approval_binding_id: binding, approved_net_pence: "100", line: exported.lines[0] });
     await put("billing_export_delivery", { id: randomUUID(), job_id: jobId, client_contract_id: contract, batch_id: batch,
       outbox_action_id: outbox, command_id: cmd });
     await put("billing_status_import", { id: imported, job_id: jobId, command_id: cmd, transport: "csv", source_hash: h, actor_membership_id: actor });
-    await put("billing_fact", { id: fact, job_id: jobId, client_contract_id: contract, import_id: imported, source: "FL-2 fixture",
-      source_event_id: fact, invoice_number: "FL-2", payload: {}, payload_hash: h, match_valid: true });
+    const amounts = { netPence: 100, vatPence: 20, grossPence: 120 };
+    const status = normalizeBillingStatus({ version: "billing-status.v1", clientContractId: contract, source: "fictional",
+      sourceEventId: fact, invoiceNumber: "FL-2", factType: "invoiced", effectiveAt: now, remittanceReference: null,
+      reconciliationId: null, originalEventId: null, amount: amounts, explicit: null, separateInvoice: false, lineAdjustments: [],
+      composition: { declared: amounts, lines: [{ externalInvoiceLineId: "FL-2", kind: "extra", existedAt: now, ...amounts,
+        match: { exportLineId: line, jobId, extraId: extra, scopeItemId: scope, revisionId: revision, revisionHash: h } }] },
+    });
+    await put("billing_fact", { id: fact, job_id: jobId, client_contract_id: contract, import_id: imported, source: status.event.source,
+      source_event_id: fact, invoice_number: "FL-2", payload: status.event, payload_hash: status.hash, match_valid: true });
     await put("billing_line_match", { id: randomUUID(), job_id: jobId, client_contract_id: contract, fact_id: fact,
       external_invoice_line_id: "FL-2", export_line_id: line, line_job_id: jobId });
     await put("billing_quarantine", { id: randomUUID(), job_id: jobId, client_contract_id: contract, fact_id: fact, reason: "fixture" });
-    await put("billing_allocation_run", { id: run, job_id: jobId, client_contract_id: contract, source: "FL-2 fixture", invoice_number: "FL-2",
-      input_hash: h, projection: {}, command_id: cmd });
+    await put("billing_allocation_run", { id: run, job_id: jobId, client_contract_id: contract, source: status.event.source, invoice_number: "FL-2",
+      input_hash: h, projection: deriveUnambiguousBilling([status.event]), command_id: cmd });
     await put("billing_application_event", { id: randomUUID(), job_id: jobId, run_id: run, command_id: cmd });
     // Fixture receipts are terminal before commit; none can be mistaken for pending product work.
     await sql("UPDATE app.command_receipt SET status='succeeded',result='{}',completed_at=clock_timestamp() WHERE tenant_id=$1 AND command_id=ANY($2::uuid[])",
