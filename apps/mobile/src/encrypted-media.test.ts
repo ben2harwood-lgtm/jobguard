@@ -54,16 +54,17 @@ const empty = () => JSON.stringify(localData.parse({ version: "mobile-cache.v1",
 
 /** Synthetic resumable-evidence server: verifies the exact bytes it received. */
 function syntheticServer(jobId: string) {
- const uploads = new Map<string, { meta: Record<string, unknown>; bytes: number[]; state: "pending" | "verified" }>();
+ // Received bytes go into one preallocated buffer per upload (no per-byte arrays), keeping the 20 MiB test light in CI.
+ const uploads = new Map<string, { meta: Record<string, unknown>; buffer: Uint8Array; length: number; state: "pending" | "verified" }>();
  let largestAppend = 0;
  const transport = { transfer: vi.fn(async (raw: unknown) => {
   const { version: _v, action, uploadId, ...fields } = raw as Record<string, unknown> & { action: string; uploadId: string };
-  if (action === "begin") { uploads.set(uploadId, { meta: fields, bytes: [], state: "pending" }); const { jobId: j, ...rest } = fields; return { uploadId, jobId: j, ...rest }; }
+  if (action === "begin") { uploads.set(uploadId, { meta: fields, buffer: new Uint8Array(fields.byteLength as number), length: 0, state: "pending" }); const { jobId: j, ...rest } = fields; return { uploadId, jobId: j, ...rest }; }
   const upload = uploads.get(uploadId)!;
-  if (action === "status") return { status: { version: "resumable-evidence.v1", state: upload.state, nextOffset: upload.bytes.length }, checkedAtMs: 1 };
-  if (action === "append") { const bytes = fields.bytes as Uint8Array; largestAppend = Math.max(largestAppend, bytes.length); upload.bytes.push(...bytes); return { nextOffset: upload.bytes.length }; }
+  if (action === "status") return { status: { version: "resumable-evidence.v1", state: upload.state, nextOffset: upload.length }, checkedAtMs: 1 };
+  if (action === "append") { const bytes = fields.bytes as Uint8Array; largestAppend = Math.max(largestAppend, bytes.length); upload.buffer.set(bytes, upload.length); upload.length += bytes.length; return { nextOffset: upload.length }; }
   if (action === "finalize") { upload.state = "verified"; return { jobId, scopeItemId: null, evidenceId: uploadId, objectVersionId: "fictional-object-version",
-   sha256: await digest(Uint8Array.from(upload.bytes)), byteLength: upload.bytes.length }; }
+   sha256: await digest(upload.buffer.slice(0, upload.length)), byteLength: upload.length }; }
   throw new Error("unknown action");
  }) };
  return { transport, uploads, largestAppend: () => largestAppend };
@@ -101,7 +102,7 @@ describe("V2-B2B1 encrypted media store (synthetic adapter, practice only)", () 
   const rows = await r.upload.transfer(mediaId);
   expect(rows.find(row => row.uploadId === mediaId)).toMatchObject({ status: "verified", isServerProof: true, byteLength: MEDIA_MAX_BYTES });
   expect(r.server.largestAppend()).toBeLessThanOrEqual(32 * 1024);
-  expect(sameBytes(r.server.uploads.get(mediaId)!.bytes, photo(MEDIA_MAX_BYTES))).toBe(true);
+  expect(sameBytes(r.server.uploads.get(mediaId)!.buffer, photo(MEDIA_MAX_BYTES))).toBe(true);
  }, 60_000);
 
  it("never writes plaintext anywhere: chunk files, any other path, or the SQLCipher row; encryption failure stores nothing", async () => {
