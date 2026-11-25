@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
@@ -7,7 +7,7 @@ import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
-import { DEMO_TENANT_ID, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
+import { DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
@@ -706,6 +706,126 @@ test("existing Switch live activates a plan once and only approved variation rev
   assert.deepEqual(await workPlan.read(jobId, planQuery), updated);
 });
 
+const measurementQuery = { version: "v2-measurement-query.v1" };
+const packInputs = {
+  wastageMultiplier: "1.10",
+  product: { packSize: { quantity: "1.2", unit: "m²" } },
+  confirmedUsablePacksSetAside: 0n,
+};
+
+async function seededMeasurement(category = "Tiling") {
+  const owner = await signIn("builder");
+  const { measurements } = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const { quoteRevisionId } = await acceptedPlanSource();
+  const { rows: [scope] } = await admin.query(`
+    SELECT scope_item_id FROM app.quote_line
+    WHERE (tenant_id, job_id, quote_revision_id) = ($1, $2, $3) AND included AND category = $4
+  `, [DEMO_TENANT_ID, jobId, quoteRevisionId, category]);
+  const scopeItemId = scope.scope_item_id;
+  return { measurements, owner, scopeItemId, command: {
+    version: "v2-measurement-command.v1", scopeItemId, commandId: randomUUID(),
+    expectedVersion: 0, quantity: "6.000000", unit: "m²", confirmed: false,
+  } };
+}
+
+test("the seeded scope asks for missing and unconfirmed measurements and calculates from a confirmed revision", async () => {
+  const { measurements, owner, scopeItemId, command } = await seededMeasurement();
+  const before = await effectCounts();
+  const query = { ...measurementQuery, scopeItemId };
+  const question = { scopeItemId, status: "needs_input", reason: "measurement" };
+  const [missing] = await measurements.read(jobId, query);
+  assert.deepEqual(missing, { scopeItemId, version: 0, measurement: null });
+  assert.deepEqual(await measurements.calculatePacks(jobId, scopeItemId, packInputs), question);
+  for (const quantity of ["six", "0.000000", "6.0000001", "06", "6\n", 6]) {
+    await assert.rejects(measurements.save(jobId, { ...command, quantity }), { code: "MEASUREMENT_INVALID_COMMAND" });
+  }
+  await assert.rejects(measurements.save(jobId, { ...command, scopeItemId: randomUUID() }), { code: "NOT_FOUND" });
+
+  const [draft, replay] = await Promise.all([measurements.save(jobId, command), measurements.save(jobId, command)]);
+  assert.deepEqual(replay, draft);
+  assert.equal(draft.version, 1);
+  assert.equal(draft.source, "builder_typed");
+  assert.equal(draft.confirmedAt, null);
+  assert.equal(draft.confirmedByMembershipId, null);
+  assert.deepEqual(await measurements.calculatePacks(jobId, scopeItemId, packInputs), question);
+
+  const confirm = { ...command, commandId: randomUUID(), expectedVersion: 1, confirmed: true };
+  const revisions = await Promise.allSettled([
+    measurements.save(jobId, confirm),
+    measurements.save(jobId, { ...confirm, commandId: randomUUID() }),
+  ]);
+  assert.equal(revisions.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal(revisions.find(result => result.status === "rejected").reason.code, "MEASUREMENT_VERSION_CONFLICT");
+  const confirmed = revisions.find(result => result.status === "fulfilled").value;
+  assert.equal(confirmed.version, 2);
+  assert.equal(confirmed.quantity, "6.000000");
+  assert.equal(confirmed.confirmedByMembershipId, owner.membershipId);
+  assert.deepEqual(confirmed.confirmedAt, confirmed.recordedAt);
+  assert.deepEqual(await measurements.calculatePacks(jobId, scopeItemId, packInputs), {
+    scopeItemId, status: "calculated", grossPacks: 6n, setAsidePacksUsed: 0n, neededPacks: 6n,
+  });
+
+  const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
+  assert.notEqual(fresh.sessionId, owner.sessionId);
+  const { measurements: reopened } = createWorkspaceApplication({ pool: runtime, sessionId: fresh.sessionId });
+  assert.deepEqual(await reopened.save(jobId, command), draft);
+  await assert.rejects(reopened.save(jobId, { ...command, quantity: "7" }), { code: "MEASUREMENT_COMMAND_CONFLICT" });
+  assert.deepEqual(await reopened.read(jobId, query), [{ scopeItemId, version: 2, measurement: confirmed }]);
+  const listed = await reopened.read(jobId, measurementQuery);
+  assert.deepEqual(listed.find(item => item.scopeItemId === scopeItemId), { scopeItemId, version: 2, measurement: confirmed });
+  const { scopeItemId: decoratingId } = await seededMeasurement("Decorating");
+  assert.deepEqual(listed.find(item => item.scopeItemId === decoratingId), {
+    scopeItemId: decoratingId, version: 0, measurement: null,
+  });
+  const { rows: [stored] } = await admin.query(`
+    SELECT count(*)::int AS revisions FROM app.v2_measurement WHERE job_id = $1
+  `, [jobId]);
+  assert.equal(stored.revisions, 2);
+  assert.deepEqual(await effectCounts(), before);
+  const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
+    FROM app.job_record_proposal WHERE model IS DISTINCT FROM 'fixture-capture-v1'`);
+  assert.equal(paid, 0);
+});
+
+test("forced measurement policies hide revisions and reject changes from the second firm", async () => {
+  const { command, scopeItemId, owner, measurements: builder } = await seededMeasurement("Decorating");
+  await builder.save(jobId, { ...command, quantity: "2", unit: "litre", confirmed: true });
+  const outsider = await signIn("second-builder");
+  const { measurements } = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  await assert.rejects(measurements.read(jobId, measurementQuery), { code: "NOT_FOUND" });
+  await assert.rejects(measurements.save(jobId, command), { code: "NOT_FOUND" });
+  await assert.rejects(measurements.calculatePacks(jobId, scopeItemId, packInputs), { code: "NOT_FOUND" });
+
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { rows: [acl] } = await admin.query(`SELECT
+    relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+    has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read,
+    has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+    has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+    has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+    has_table_privilege('jobguard_infrastructure', oid, 'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+    FROM pg_class WHERE oid = 'app.v2_measurement'::regclass`);
+  assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+    identity_access: false, worker_access: false, infra_access: false });
+  const key = [DEMO_TENANT_ID, jobId, scopeItemId];
+  const filter = "WHERE (tenant_id, job_id, scope_item_id) = ($1, $2, $3)";
+  const select = `SELECT * FROM app.v2_measurement ${filter}`;
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+  assert.equal((await query(ownerContext, select, key)).rowCount, 1);
+  for (const scope of [outsider.realContext, context]) {
+    assert.equal((await query(scope, select, key)).rowCount, 0);
+    await assert.rejects(query(scope, `INSERT INTO app.v2_measurement
+      (tenant_id, job_id, scope_item_id, expected_version, command_id, quantity, unit, source, confirmed, actor_membership_id)
+      VALUES ($1,$2,$3,2,$4,'7','m²','builder_typed',true,$5)`,
+    [...key, randomUUID(), owner.membershipId]), { code: "42501", message: /row-level security policy/u });
+    await assert.rejects(query(scope, `UPDATE app.v2_measurement SET quantity = '7' ${filter}`, key), { code: "42501" });
+    await assert.rejects(query(scope, `DELETE FROM app.v2_measurement ${filter}`, key), { code: "42501" });
+  }
+  assert.equal((await runtime.query(select, key)).rowCount, 0);
+});
+
 const editEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
   WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_work_plan.edited' ORDER BY sequence`, [jobRef])).rows;
 
@@ -894,122 +1014,79 @@ test("opening the plan screen creates the plan with one audit event; a quote-sav
 });
 
 
-const measurementQuery = { version: "v2-measurement-query.v1" };
-const packInputs = {
-  wastageMultiplier: "1.10",
-  product: { packSize: { quantity: "1.2", unit: "m²" } },
-  confirmedUsablePacksSetAside: 0n,
-};
+// V2-D1R1: measurement audit append, replay, rollback and tenant-chain proof.
+for (const confirmed of [false, true]) {
+  test(`a measurement ${confirmed ? "confirmation" : "save"} appends once, rolls back atomically and stays tenant-scoped`, async () => {
+    const { measurements, owner, scopeItemId, command: initial } = await seededMeasurement();
+    const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+    const [current] = await measurements.read(jobId, { ...measurementQuery, scopeItemId });
+    const command = { ...initial, expectedVersion: current.version, confirmed };
+    const events = async () => (await admin.query(`SELECT tenant_id, actor_ref, event_type, payload
+      FROM app.audit_event WHERE subject_type = 'scope_item' AND subject_ref = $1
+      AND event_type IN ('v2.measurement.saved', 'v2.measurement.confirmed') ORDER BY sequence`, [scopeItemId])).rows;
+    const before = await events();
+    const receipt = await measurements.save(jobId, command);
+    const recorded = await events();
+    assert.equal(recorded.length, before.length + 1);
+    const event = recorded.at(-1);
+    assert.equal(event.tenant_id, context.tenantId);
+    assert.equal(event.actor_ref, `membership:${owner.membershipId}`);
+    assert.equal(event.event_type, confirmed ? "v2.measurement.confirmed" : "v2.measurement.saved");
+    assert.deepEqual(event.payload.references, { ...event.payload.references,
+      commandId: command.commandId, jobId, scopeItemId, expectedVersion: String(current.version),
+      measurementVersion: String(receipt.version), quantity: receipt.quantity,
+      source: "builder_typed", confirmed: String(confirmed) });
+    assert.equal("version" in event.payload.references, false);
+    assert.equal(event.payload.hashes.unit, createHash("sha256").update(command.unit).digest("hex"));
 
-async function seededMeasurement(category = "Tiling") {
-  const owner = await signIn("builder");
-  const { measurements } = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
-  const { quoteRevisionId } = await acceptedPlanSource();
-  const { rows: [scope] } = await admin.query(`
-    SELECT scope_item_id FROM app.quote_line
-    WHERE (tenant_id, job_id, quote_revision_id) = ($1, $2, $3) AND included AND category = $4
-  `, [DEMO_TENANT_ID, jobId, quoteRevisionId, category]);
-  const scopeItemId = scope.scope_item_id;
-  return { measurements, owner, scopeItemId, command: {
-    version: "v2-measurement-command.v1", scopeItemId, commandId: randomUUID(),
-    expectedVersion: 0, quantity: "6.000000", unit: "m²", confirmed: false,
-  } };
+    assert.deepEqual(await measurements.save(jobId, command), receipt);
+    const replays = await Promise.all([measurements.save(jobId, command), measurements.save(jobId, command)]);
+    assert.deepEqual(replays, [receipt, receipt]);
+    await assert.rejects(measurements.save(jobId, { ...command, quantity: "7" }), { code: "MEASUREMENT_COMMAND_CONFLICT" });
+    assert.deepEqual(await events(), recorded, "replays and conflicts append nothing");
+
+    const failing = {
+      async connect() {
+        const client = await runtime.connect();
+        const query = client.query.bind(client);
+        client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+          ? Promise.reject(Object.assign(new Error("forced audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+        const release = client.release.bind(client);
+        client.release = (...args) => { client.query = query; return release(...args); };
+        return client;
+      },
+    };
+    const next = { ...command, commandId: randomUUID(), expectedVersion: receipt.version, quantity: "8" };
+    await assert.rejects(new MeasurementRepository(failing).save(context, jobId, owner.sessionId, next), { code: "FORCED" });
+    const { rows: [{ count }] } = await admin.query(
+      "SELECT count(*)::int AS count FROM app.v2_measurement WHERE command_id = $1", [next.commandId]);
+    assert.equal(count, 0, "the measurement insert rolls back when audit append fails");
+    assert.deepEqual(await events(), recorded);
+    assert.deepEqual(await measurements.read(jobId, { ...measurementQuery, scopeItemId }),
+      [{ scopeItemId, version: receipt.version, measurement: receipt }]);
+
+    await measurements.save(jobId, next);
+    assert.equal((await events()).length, recorded.length + 1);
+    await verifyTenantChain(context.tenantId);
+    const outsider = await signIn("second-builder");
+    assert.notEqual(outsider.realContext.tenantId, context.tenantId);
+    const { rowCount } = await withTenant(runtime, outsider.realContext, db => db.$client.query(
+      "SELECT 1 FROM app.audit_event WHERE subject_type = 'scope_item' AND subject_ref = $1", [scopeItemId]));
+    assert.equal(rowCount, 0, "the second firm's real tenant cannot see measurement audit events");
+  });
 }
 
-test("the seeded scope asks for missing and unconfirmed measurements and calculates from a confirmed revision", async () => {
-  const { measurements, owner, scopeItemId, command } = await seededMeasurement();
-  const before = await effectCounts();
-  const query = { ...measurementQuery, scopeItemId };
-  const question = { scopeItemId, status: "needs_input", reason: "measurement" };
-  const [missing] = await measurements.read(jobId, query);
-  assert.deepEqual(missing, { scopeItemId, version: 0, measurement: null });
-  assert.deepEqual(await measurements.calculatePacks(jobId, scopeItemId, packInputs), question);
-  for (const quantity of ["six", "0.000000", "6.0000001", "06", "6\n", 6]) {
-    await assert.rejects(measurements.save(jobId, { ...command, quantity }), { code: "MEASUREMENT_INVALID_COMMAND" });
+test("measurement commands remain disabled outside local V2", async () => {
+  const previous = process.env.JOBGUARD_LOCAL_V2;
+  delete process.env.JOBGUARD_LOCAL_V2;
+  try {
+    const { measurements } = createWorkspaceApplication({ pool: runtime });
+    await assert.rejects(measurements.save(jobId, {
+      version: "v2-measurement-command.v1", scopeItemId: randomUUID(), commandId: randomUUID(),
+      expectedVersion: 0, quantity: "1", unit: "m²", confirmed: true,
+    }), { code: "SYNTHETIC_MODE_REQUIRED" });
+  } finally {
+    if (previous === undefined) delete process.env.JOBGUARD_LOCAL_V2;
+    else process.env.JOBGUARD_LOCAL_V2 = previous;
   }
-  await assert.rejects(measurements.save(jobId, { ...command, scopeItemId: randomUUID() }), { code: "NOT_FOUND" });
-
-  const [draft, replay] = await Promise.all([measurements.save(jobId, command), measurements.save(jobId, command)]);
-  assert.deepEqual(replay, draft);
-  assert.equal(draft.version, 1);
-  assert.equal(draft.source, "builder_typed");
-  assert.equal(draft.confirmedAt, null);
-  assert.equal(draft.confirmedByMembershipId, null);
-  assert.deepEqual(await measurements.calculatePacks(jobId, scopeItemId, packInputs), question);
-
-  const confirm = { ...command, commandId: randomUUID(), expectedVersion: 1, confirmed: true };
-  const revisions = await Promise.allSettled([
-    measurements.save(jobId, confirm),
-    measurements.save(jobId, { ...confirm, commandId: randomUUID() }),
-  ]);
-  assert.equal(revisions.filter(result => result.status === "fulfilled").length, 1);
-  assert.equal(revisions.find(result => result.status === "rejected").reason.code, "MEASUREMENT_VERSION_CONFLICT");
-  const confirmed = revisions.find(result => result.status === "fulfilled").value;
-  assert.equal(confirmed.version, 2);
-  assert.equal(confirmed.quantity, "6.000000");
-  assert.equal(confirmed.confirmedByMembershipId, owner.membershipId);
-  assert.deepEqual(confirmed.confirmedAt, confirmed.recordedAt);
-  assert.deepEqual(await measurements.calculatePacks(jobId, scopeItemId, packInputs), {
-    scopeItemId, status: "calculated", grossPacks: 6n, setAsidePacksUsed: 0n, neededPacks: 6n,
-  });
-
-  const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
-  assert.notEqual(fresh.sessionId, owner.sessionId);
-  const { measurements: reopened } = createWorkspaceApplication({ pool: runtime, sessionId: fresh.sessionId });
-  assert.deepEqual(await reopened.save(jobId, command), draft);
-  await assert.rejects(reopened.save(jobId, { ...command, quantity: "7" }), { code: "MEASUREMENT_COMMAND_CONFLICT" });
-  assert.deepEqual(await reopened.read(jobId, query), [{ scopeItemId, version: 2, measurement: confirmed }]);
-  const listed = await reopened.read(jobId, measurementQuery);
-  assert.deepEqual(listed.find(item => item.scopeItemId === scopeItemId), { scopeItemId, version: 2, measurement: confirmed });
-  const { scopeItemId: decoratingId } = await seededMeasurement("Decorating");
-  assert.deepEqual(listed.find(item => item.scopeItemId === decoratingId), {
-    scopeItemId: decoratingId, version: 0, measurement: null,
-  });
-  const { rows: [stored] } = await admin.query(`
-    SELECT count(*)::int AS revisions FROM app.v2_measurement WHERE job_id = $1
-  `, [jobId]);
-  assert.equal(stored.revisions, 2);
-  assert.deepEqual(await effectCounts(), before);
-  const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
-    FROM app.job_record_proposal WHERE model IS DISTINCT FROM 'fixture-capture-v1'`);
-  assert.equal(paid, 0);
-});
-
-test("forced measurement policies hide revisions and reject changes from the second firm", async () => {
-  const { command, scopeItemId, owner, measurements: builder } = await seededMeasurement("Decorating");
-  await builder.save(jobId, { ...command, quantity: "2", unit: "litre", confirmed: true });
-  const outsider = await signIn("second-builder");
-  const { measurements } = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
-  await assert.rejects(measurements.read(jobId, measurementQuery), { code: "NOT_FOUND" });
-  await assert.rejects(measurements.save(jobId, command), { code: "NOT_FOUND" });
-  await assert.rejects(measurements.calculatePacks(jobId, scopeItemId, packInputs), { code: "NOT_FOUND" });
-
-  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
-  const { rows: [acl] } = await admin.query(`SELECT
-    relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
-    has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read,
-    has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
-    has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
-    has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
-    has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
-    has_table_privilege('jobguard_infrastructure', oid, 'SELECT,INSERT,UPDATE,DELETE') AS infra_access
-    FROM pg_class WHERE oid = 'app.v2_measurement'::regclass`);
-  assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
-    identity_access: false, worker_access: false, infra_access: false });
-  const key = [DEMO_TENANT_ID, jobId, scopeItemId];
-  const filter = "WHERE (tenant_id, job_id, scope_item_id) = ($1, $2, $3)";
-  const select = `SELECT * FROM app.v2_measurement ${filter}`;
-  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
-  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
-  assert.equal((await query(ownerContext, select, key)).rowCount, 1);
-  for (const scope of [outsider.realContext, context]) {
-    assert.equal((await query(scope, select, key)).rowCount, 0);
-    await assert.rejects(query(scope, `INSERT INTO app.v2_measurement
-      (tenant_id, job_id, scope_item_id, expected_version, command_id, quantity, unit, source, confirmed, actor_membership_id)
-      VALUES ($1,$2,$3,2,$4,'7','m²','builder_typed',true,$5)`,
-    [...key, randomUUID(), owner.membershipId]), { code: "42501", message: /row-level security policy/u });
-    await assert.rejects(query(scope, `UPDATE app.v2_measurement SET quantity = '7' ${filter}`, key), { code: "42501" });
-    await assert.rejects(query(scope, `DELETE FROM app.v2_measurement ${filter}`, key), { code: "42501" });
-  }
-  assert.equal((await runtime.query(select, key)).rowCount, 0);
 });
