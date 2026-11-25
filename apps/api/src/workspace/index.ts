@@ -133,3 +133,6 @@ export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
 export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";
+
+// V2-K2A: builder-only calendar link application.
+export { CalendarFeedApplication, type CalendarFeed } from "./calendar-feed.application.js";

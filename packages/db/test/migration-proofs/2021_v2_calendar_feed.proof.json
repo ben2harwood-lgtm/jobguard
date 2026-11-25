@@ -1,0 +1,6 @@
+{
+  "migration": "2021_v2_calendar_feed.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
