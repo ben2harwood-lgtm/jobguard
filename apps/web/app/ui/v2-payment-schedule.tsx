@@ -70,22 +70,22 @@ export function V2PaymentSchedule({ jobId }: { jobId: string }) {
   return <section aria-labelledby="payment-schedule-heading" className="card">
     <h2 id="payment-schedule-heading">Payment schedule</h2>
     <p>Practice sandbox — synthetic data; nothing is sent or charged.</p>
-    <p>Plan only. No invoice is drafted or issued. Amounts exclude VAT.</p>
+    <p>Plan only. No invoice is drafted or issued. Every amount here is ex-VAT; VAT is added only on an invoice.</p>
     {error && <p role="alert">{error}</p>}
     {!view && !error && <p>Loading payment schedule…</p>}
-    {view && <p>Accepted quote total, before VAT: £{view.acceptedTotal}</p>}
+    {view && <p>Accepted quote total: £{view.acceptedTotal} ex-VAT</p>}
     {view?.schedule ? <>
       <ol>{view.schedule.stages.map((stage, index) => <li key={index}>
-        <strong>{stage.label} — £{stage.amount}</strong><p>{stage.status === "due" ? "Due now" : "Planned"} · {
+        <strong>{stage.label} — £{stage.amount} ex-VAT</strong><p>{stage.status === "due" ? "Due now" : "Planned"} · {
           stage.trigger.kind === "acceptance" ? "On acceptance" : stage.trigger.kind === "date" ? stage.trigger.date : `On task done: ${stage.trigger.taskKey}`}</p>
         {stage.status === "planned" && stage.trigger.kind === "task" && <button type="button" disabled={busy}
           onClick={() => { if (stage.trigger.kind === "task") void confirmTask(stage.trigger.scopeItemId, stage.trigger.taskKey); }}>
           Confirm task done for this schedule
         </button>}
       </li>)}</ol>
-      <p>Extras approved before the schedule was set: £{view.schedule.extrasBeforeSchedule} — for a later invoice or the final account.</p>
-      <p>Extras since the schedule was set: £{view.schedule.extrasSinceSchedule}</p>
-      <p>Extras outside the stages: £{view.schedule.unscheduledExtras} — for a later invoice or the final account.</p>
+      <p>Extras approved before the schedule was set: £{view.schedule.extrasBeforeSchedule} ex-VAT — for a later invoice or the final account.</p>
+      <p>Extras since the schedule was set: £{view.schedule.extrasSinceSchedule} ex-VAT</p>
+      <p>Extras outside the stages: £{view.schedule.unscheduledExtras} ex-VAT — for a later invoice or the final account.</p>
       <p>Stages already due stay fixed. Extras are shared across planned stages in proportion to their amounts; the last takes the remainder.</p>
     </> : view && <form onSubmit={event => { event.preventDefault(); void save(); }}>
       <p>Set this schedule once for the accepted quote. The last stage takes the remainder. Percentage-only splits must total 100%.</p>
@@ -93,7 +93,7 @@ export function V2PaymentSchedule({ jobId }: { jobId: string }) {
         <legend>Stage {index + 1}</legend>
         <label>Label <input required maxLength={100} value={stage.label} onChange={event => change(index, { label: event.target.value })}/></label>
         <label>Split <select value={stage.kind} onChange={event => change(index, { kind: event.target.value as StageDraft["kind"] })}>
-          <option value="percentage">Percentage</option><option value="fixed">Fixed amount (£)</option>
+          <option value="percentage">Percentage</option><option value="fixed">Fixed amount (£, ex-VAT)</option>
         </select></label>
         <label>Value <input required inputMode="decimal" value={stage.value} onChange={event => change(index, { value: event.target.value })}/></label>
         <label>Due when <select value={stage.trigger} onChange={event => change(index, { trigger: event.target.value as StageDraft["trigger"] })}>

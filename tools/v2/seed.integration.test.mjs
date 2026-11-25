@@ -1142,6 +1142,37 @@ test("K5A preserves database microseconds for both extra/task orders and both sc
   }
 });
 
+test("K5A leak pair: a held hidden finding changes no stage amount or schedule line", async () => {
+  // Rule 20: two jobs that differ only by a held shadow finding must give identical schedules.
+  const plain = await k5AcceptedJob(), planted = await k5AcceptedJob();
+  // A held finding belongs to a live job's commercial track, so switch both jobs live alike.
+  for (const job of [plain, planted]) await job.app.quote.activate(job.draftJob, switchLive());
+  const { context } = await authenticatePracticeSession(runtime, planted.sessionId);
+  await admin.query(`INSERT INTO app.shadow_commercial_signal
+    (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,
+     description,estimated_value_pence,confidence_band,state)
+    VALUES($1,$2,$3,$4,'possible_extra','deterministic','k5a.fixture.v1',clock_timestamp(),
+     'K5A hidden money canary',99999999,'low','held_for_final_check')`,
+  [context.tenantId, planted.draftJob, randomUUID(), randomUUID()]);
+  const triggers = [{ kind: "acceptance" }, { kind: "date", date: "2099-01-01" }, { kind: "date", date: "2099-02-01" }];
+  const shown = async ({ app, draftJob, cookies, csrfToken }) => {
+    const path = `/api/jobs/${draftJob}/payment-schedule`;
+    const before = await json(await request(path, { cookies }));
+    await json(await request(path, { cookies, csrf: csrfToken, body: k5Command(await app.paymentSchedule.read(draftJob), triggers) }));
+    const after = await json(await request(path, { cookies }));
+    // Only ids and times may differ between the two jobs.
+    const normal = view => JSON.stringify(view)
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu, "<id>")
+      .replace(/[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9:]+)?/gu, "<time>");
+    return [normal(before), normal(after)];
+  };
+  const [plainBefore, plainAfter] = await shown(plain), [plantedBefore, plantedAfter] = await shown(planted);
+  assert.equal(plantedBefore, plainBefore);
+  assert.equal(plantedAfter, plainAfter);
+  assert.match(plainAfter, /"stages"/u, "the compared view includes the saved stages");
+  assert.doesNotMatch(plantedAfter, /hidden|canary|99999999/iu);
+});
+
 test("K5A extras approved before setting the schedule remain visible separately after reload", async () => {
   const { app, draftJob } = await k5AcceptedJob();
   await app.quote.activate(draftJob, switchLive());

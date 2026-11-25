@@ -91,7 +91,7 @@ for (const width of [360,1280]) {
       page.on("request", request => { if(request.method() === "POST" && request.url().includes("customer-invoice"))invoices.push(request.url()); });
       await page.goto(`${origin}/jobs/${jobId}/money`);
       const section = page.getByRole("main").getByRole("region",{name:"Payment schedule"});
-      await expect(section.getByText("Accepted quote total, before VAT:",{exact:false})).toBeVisible();
+      await expect(section.getByText("Accepted quote total:",{exact:false})).toBeVisible();
       const save = section.getByRole("button",{name:"Set payment schedule"});
       if(await save.count()) {
         const fields = section.locator("fieldset");
@@ -105,6 +105,10 @@ for (const width of [360,1280]) {
       await expect(section).toContainText("Extras approved before the schedule was set:");
       await expect(section).toContainText("Extras since the schedule was set:");
       assert.equal(await section.innerText(),saved);
+      // Plan check (merge condition): every amount on screen is labelled ex-VAT.
+      const amounts = saved.match(/£[^\s]*(?:\s+\S+)?/gu) ?? [];
+      assert.ok(amounts.length >= 5, `expected the total, stages and extras lines: ${amounts}`);
+      for (const amount of amounts) assert.match(amount, /^£[0-9][0-9,]*\.[0-9]{2} ex-VAT$/u, `amount without ex-VAT label: ${amount}`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false);
       assert.deepEqual(invoices,[]);
       if(process.env.V2_TEST_SCREENSHOTS)await page.screenshot({path:`${process.env.V2_TEST_SCREENSHOTS}/v2-k5-payment-schedule-${width}.png`,fullPage:true});
