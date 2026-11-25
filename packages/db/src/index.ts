@@ -240,3 +240,7 @@ export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
 export { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";
 
 export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
+
+// V2-D4B: practice-only brief translation.
+export * from "./v2-brief-translator.js";
+export * from "./v2-crew-brief-translation-repository.js";

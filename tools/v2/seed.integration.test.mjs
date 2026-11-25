@@ -1374,3 +1374,155 @@ test("forced crew brief policies hide briefs and photos and reject changes from 
     { code: "42501", message: /row-level security policy/u });
   }
 });
+
+// V2-D4B · appended packet proofs. Uses the suite's cached builder and second-firm sessions.
+import { CrewBriefTranslationRepository, briefTextsForTranslation } from "../../packages/db/dist/index.js";
+async function translationSetup() {
+  const setup = await briefSetup();
+  const [previous] = await setup.crewBriefs.read(jobId, { ...briefQuery, trade: "tiler" });
+  const brief = await setup.crewBriefs.generate(jobId, setup.command("tiler", {
+    expectedVersion: previous?.version ?? 0, accessWindow: `Translation rehearsal ${randomUUID()}`,
+  }));
+  const { crewBriefTranslations } = createWorkspaceApplication({ pool: runtime, sessionId: setup.owner.sessionId });
+  const command = { version: "v2-crew-brief-translation-command.v1", commandId: randomUUID(),
+    trade: brief.trade, expectedVersion: brief.version, lang: "pl" };
+  const query = { version: "v2-crew-brief-translation-query.v1", trade: brief.trade,
+    expectedVersion: brief.version, lang: "pl" };
+  return { ...setup, brief, translations: crewBriefTranslations, translationCommand: command, translationQuery: query };
+}
+const translationEvents = async commandId => (await admin.query(`SELECT actor_ref, payload FROM app.audit_event
+  WHERE event_type = 'v2.crew_brief.translated' AND subject_ref = $1 AND payload->'references'->>'commandId' = $2`,
+[jobId, commandId])).rows;
+const translationCount = async commandId => (await admin.query(`SELECT count(*)::int AS count
+  FROM app.v2_crew_brief_translation WHERE job_id = $1 AND command_id = $2`, [jobId, commandId])).rows[0].count;
+
+test("D4B translates and reloads offline, audits once, replays without writes and refuses changed commands and versions", async () => {
+  const { owner, brief, crewBriefs, translations, translationCommand: command, translationQuery: query } = await translationSetup();
+  await assert.rejects(translations.read(jobId, query), { code: "NOT_FOUND" });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () => { throw new Error("Translation must never use the network"); };
+  try {
+    const [saved, replay] = await Promise.all([translations.translate(jobId, command), translations.translate(jobId, command)]);
+    assert.deepEqual(saved, replay);
+    assert.equal(saved.provider, "fake"); assert.equal(saved.briefVersion, brief.version);
+    assert.equal(saved.actorMembershipId, owner.membershipId);
+    assert.deepEqual(briefTextsForTranslation(saved.content), briefTextsForTranslation(brief.content).map(text => `[pl] ${text}`));
+    assert.equal(saved.sourceTextHash, createHash("sha256").update(JSON.stringify(briefTextsForTranslation(brief.content))).digest("hex"));
+    assert.deepEqual(saved.content.photos, brief.content.photos);
+    assert.deepEqual(saved.content.tasks.map(task => [task.owner, task.scope.quantity, task.scope.unit, task.scopeItemId, task.taskKey]),
+      brief.content.tasks.map(task => [task.owner, task.scope.quantity, task.scope.unit, task.scopeItemId, task.taskKey]));
+    assert.equal(await translationCount(command.commandId), 1);
+    const events = await translationEvents(command.commandId);
+    assert.equal(events.length, 1); assert.equal(events[0].actor_ref, `membership:${owner.membershipId}`);
+    assert.equal(events[0].payload.references.commandId, command.commandId);
+    assert.equal(events[0].payload.references.briefVersion, String(brief.version));
+    assert.equal("version" in events[0].payload.references, false);
+    assert.doesNotMatch(JSON.stringify(events[0].payload), /tiler|Translation rehearsal|owner|splashback|price|fee/iu);
+    const reopened = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId }).crewBriefTranslations;
+    assert.deepEqual(await reopened.read(jobId, query), saved);
+    assert.deepEqual(await reopened.translate(jobId, command), saved);
+    assert.deepEqual(await translationEvents(command.commandId), events);
+    assert.equal(await translationCount(command.commandId), 1);
+    for (const patch of [{ lang: "ro" }, { expectedVersion: brief.version + 1 }, { trade: "decorator" }]) {
+      await assert.rejects(translations.translate(jobId, { ...command, ...patch }), { code: "CREW_BRIEF_TRANSLATION_COMMAND_CONFLICT" });
+    }
+    await assert.rejects(translations.translate(jobId, { ...command, commandId: randomUUID() }), { code: "CREW_BRIEF_TRANSLATION_EXISTS_CONFLICT" });
+    await assert.rejects(translations.translate(jobId, { ...command, lang: "xx" }), { code: "CREW_BRIEF_TRANSLATION_INVALID_COMMAND" });
+    const [english] = await crewBriefs.read(jobId, { ...briefQuery, trade: brief.trade });
+    assert.deepEqual(english.content, brief.content, "English remains the unchanged source of record");
+    const next = await crewBriefs.generate(jobId, { version: "v2-crew-brief-command.v1", commandId: randomUUID(),
+      trade: brief.trade, expectedVersion: brief.version, accessWindow: "A new English revision", photoIds: [] });
+    await assert.rejects(translations.translate(jobId, { ...command, commandId: randomUUID(), lang: "ro" }),
+      { code: "CREW_BRIEF_TRANSLATION_VERSION_CONFLICT" });
+    assert.deepEqual(await translations.translate(jobId, command), saved, "old exact replay stays a no-op after a new brief");
+    await assert.rejects(translations.read(jobId, { ...query, expectedVersion: next.version }), { code: "NOT_FOUND" });
+    const updated = await translations.translate(jobId, { ...command, commandId: randomUUID(), expectedVersion: next.version });
+    assert.notEqual(updated.sourceTextHash, saved.sourceTextHash);
+    assert.equal(updated.content.accessWindow, "[pl] A new English revision");
+  } finally { globalThis.fetch = originalFetch; }
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  await verifyTenantChain(context.tenantId);
+});
+
+test("D4B rolls back the translation AND the appended event on a forced failure after audit", async () => {
+  const { owner, translationCommand: command } = await translationSetup();
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const failing = { async connect() {
+    const client = await runtime.connect();
+    const query = client.query.bind(client);
+    client.query = async (sql, ...rest) => {
+      const result = await query(sql, ...rest);
+      if (typeof sql === "string" && sql.includes("app.append_audit(")) throw Object.assign(new Error("forced after audit"), { code: "FORCED" });
+      return result;
+    };
+    const release = client.release.bind(client);
+    client.release = (...args) => { client.query = query; return release(...args); };
+    return client;
+  } };
+  await assert.rejects(new CrewBriefTranslationRepository(failing).translate(context, jobId, owner.sessionId, command), { code: "FORCED" });
+  assert.equal(await translationCount(command.commandId), 0);
+  assert.deepEqual(await translationEvents(command.commandId), []);
+  await verifyTenantChain(context.tenantId);
+});
+
+test("D4B is immutable, fake-only, forced-RLS and invisible to the second firm for SELECT/INSERT/UPDATE/DELETE", async () => {
+  const { owner, translations, translationCommand: command, translationQuery: readQuery } = await translationSetup();
+  await translations.translate(jobId, command);
+  const other = await signIn("second-builder");
+  const outsider = createWorkspaceApplication({ pool: runtime, sessionId: other.sessionId }).crewBriefTranslations;
+  await assert.rejects(outsider.read(jobId, readQuery), { code: "NOT_FOUND" });
+  await assert.rejects(outsider.translate(jobId, command), { code: "NOT_FOUND" });
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const { context: otherContext } = await authenticatePracticeSession(runtime, other.sessionId);
+  const sql = (context, statement, params) => withTenant(runtime, context, db => db.$client.query(statement, params));
+  const table = "app.v2_crew_brief_translation";
+  const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced,
+    relowner::regrole::text AS owner, has_table_privilege('jobguard_runtime', oid, 'SELECT') AS can_read,
+    has_table_privilege('jobguard_runtime', oid, 'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime', oid, 'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+    has_table_privilege('jobguard_identity', oid, 'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+    has_table_privilege('jobguard_worker', oid, 'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+    has_table_privilege('jobguard_infrastructure', oid, 'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+    FROM pg_class WHERE oid = $1::regclass`, [table]);
+  assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+    identity_access: false, worker_access: false, infra_access: false });
+  const select = `SELECT * FROM ${table} WHERE job_id = $1`;
+  assert.ok((await sql(ownerContext, select, [jobId])).rowCount > 0);
+  assert.equal((await runtime.query(select, [jobId])).rowCount, 0);
+  for (const context of [otherContext, other.realContext]) {
+    assert.equal((await sql(context, select, [jobId])).rowCount, 0);
+    await assert.rejects(sql(context, `INSERT INTO ${table}
+      (tenant_id,job_id,trade,expected_version,lang,provider,command_id,content,source_text_hash,actor_membership_id)
+      VALUES ($1,$2,$3,$4,'ro','fake',$5,'{}',$6,$7)`,
+    [DEMO_TENANT_ID, jobId, command.trade, command.expectedVersion - 1, randomUUID(), "a".repeat(64), owner.membershipId]),
+    { code: "42501", message: /row-level security policy/u });
+  }
+  for (const context of [ownerContext, otherContext, other.realContext]) {
+    await assert.rejects(sql(context, `UPDATE ${table} SET provider = 'fake' WHERE job_id = $1`, [jobId]), { code: "42501" });
+    await assert.rejects(sql(context, `DELETE FROM ${table} WHERE job_id = $1`, [jobId]), { code: "42501" });
+  }
+  await assert.rejects(sql(ownerContext, `INSERT INTO ${table}
+    (tenant_id,job_id,trade,expected_version,lang,provider,command_id,content,source_text_hash,actor_membership_id)
+    SELECT tenant_id,job_id,trade,expected_version,'ro','live',$2,content,source_text_hash,actor_membership_id
+    FROM ${table} WHERE command_id = $1`, [command.commandId, randomUUID()]), { code: "23514" });
+});
+
+test("D4B route has a builder positive control and refuses absent, invalid, unissued and second-firm sessions", async () => {
+  const { owner, translationCommand: command, translationQuery: query } = await translationSetup();
+  const path = `/api/v2-backend/jobs/${jobId}/crew-briefs/translation`;
+  const search = `?${new URLSearchParams({ trade: query.trade, version: String(query.expectedVersion), lang: query.lang })}`;
+  const saved = await json(await request(path, { cookies: owner.cookies, body: command }));
+  assert.equal(saved.provider, "fake");
+  assert.deepEqual(await json(await request(path + search, { cookies: owner.cookies })), saved);
+  assert.deepEqual(await json(await request(path, { cookies: owner.cookies, body: command })), saved);
+  const other = await signIn("second-builder");
+  for (const cookies of [undefined, "jg_session=made-up", `jg_session=${randomUUID()}`, other.cookies]) {
+    for (const options of [{}, { body: { ...command, commandId: randomUUID() } }]) {
+      const response = await request(path + (options.body ? "" : search), { ...options, cookies });
+      assert.ok([401, 403, 404].includes(response.status));
+      assert.ok(["UNAUTHENTICATED", "TENANT_FORBIDDEN", "FORBIDDEN", "NOT_FOUND"].includes((await response.json()).code));
+    }
+  }
+  // Rule 29: pending V2-SX. Append this GET to builderGetRoutes and use
+  // assertBuilderRouteRefuses after SX merges. Never sign out the shared session here.
+});
