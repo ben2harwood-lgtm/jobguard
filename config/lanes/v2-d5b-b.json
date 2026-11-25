@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-d5b-b": {
+      "branches": ["codex/sandbox/v2-d5b-b"],
+      "note": "T1 packet Q23 V2-D5B-B. Stacked on D4 #916; review only commits after f7aacf55d. work/page.tsx: mount only, owned by main (live Work tab). Compare against origin/claude/project-thread-btt9d2.",
+      "test": "tools/v2/crew-briefs.browser.test.mjs",
+      "allow": [
+        "apps/web/app/api/v2-backend/jobs/[id]/crew-briefs/route.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/crew-briefs/route.test.ts",
+        "apps/web/app/(designed)/jobs/[id]/work/briefs.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
+        "tools/v2/crew-briefs.browser.test.mjs"
+      ]
+    }
+  }
+}
