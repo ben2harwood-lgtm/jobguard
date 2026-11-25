@@ -77,6 +77,12 @@ const origin = v2Origin();
 let browser, storageState, jobId;
 before(async () => {
   browser = await launchV2Browser();
+  const setup = await browser.newContext({ ignoreHTTPSErrors: true });
+  try {
+    // F6T #928: disable Next's dev indicator before opening any pages.
+    const disabled = await setup.request.post(`${origin}/__nextjs_disable_dev_indicator`);
+    assert.equal(disabled.status(), 204, "The test stack must disable the Next.js dev indicator");
+  } finally { await setup.close(); }
   ({ storageState, jobId } = await signInOnce(browser));
   if (process.env.V2_TEST_SCREENSHOTS) await mkdir(process.env.V2_TEST_SCREENSHOTS, { recursive: true });
 });

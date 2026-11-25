@@ -2,7 +2,6 @@ const localV2Api = process.env.JOBGUARD_LOCAL_V2 === "1" && process.env.NEXT_PUB
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  devIndicators: false,
   // OpenNext copies the full external package, including its workerd exports.
   // Next's Node trace otherwise includes only pg-cloudflare's empty fallback.
   serverExternalPackages: ["pg-cloudflare"],
