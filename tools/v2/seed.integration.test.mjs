@@ -1246,3 +1246,122 @@ test("B1B start and record append once, exact replays append nothing, and rows a
   assert.ok(!JSON.stringify(events).includes(note.entry.text));
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_walk_entry WHERE session_id = $1", [sessionId])).rows[0].n, 1);
 });
+
+// ---- B1C mount, owned by B1A #920: append-only photo filing proofs ----
+import { describe as b1cDescribe } from "node:test";
+b1cDescribe("B1C walk photo filing", () => {
+  async function fixture() {
+    const setup = await walkSetup();
+    const sessionId = walkId();
+    const now = new Date();
+    await setup.walk.start(jobId, { version: "v2-walk-session-command.v1", sessionId, deviceStartedAt: now.toISOString() });
+    await setup.walk.record(jobId, entryCommand(sessionId, 1, { kind: "photo", photoId: walkId() }, now));
+    await setup.walk.record(jobId, entryCommand(sessionId, 2, { kind: "room", room: "Hall" }, now));
+    await setup.walk.record(jobId, entryCommand(sessionId, 3, { kind: "room", room: "Kitchen" }, now));
+    const command = { version: "v2-walk-photo-filing-command.v1", sessionId, commandId: walkId(),
+      captureOrder: 1, roomCaptureOrder: 2, expectedVersion: 0, reason: "no_room" };
+    const original = (await admin.query("SELECT * FROM app.v2_walk_entry WHERE session_id = $1 ORDER BY capture_order", [sessionId])).rows;
+    return { ...setup, sessionId, command, original };
+  }
+  const stored = sessionId => admin.query("SELECT * FROM app.v2_walk_photo_filing WHERE session_id = $1 ORDER BY expected_version", [sessionId]);
+
+  test("files and re-files a no-room photo, retaining originals, both versions and once-only audit events", async () => {
+    const { walk, owner, sessionId, command, original } = await fixture();
+    const first = await walk.fileWalkPhoto(jobId, command);
+    assert.deepEqual(await walk.fileWalkPhoto(jobId, command), first);
+    assert.equal((await stored(sessionId)).rowCount, 1);
+    let [read] = await walk.read(jobId, { ...walkQuery, sessionId });
+    assert.equal(read.entries[0].link, "filed");
+    assert.equal(read.entries[0].linkedRoom, "Hall");
+    assert.equal(read.entries[0].originalRoomCaptureOrder, null);
+    const next = { ...command, commandId: walkId(), roomCaptureOrder: 3, expectedVersion: 1, reason: "misfiled" };
+    const second = await walk.fileWalkPhoto(jobId, next);
+    assert.equal(second.version, 2);
+    assert.deepEqual(await walk.fileWalkPhoto(jobId, command), first, "old exact replay returns its original receipt");
+    [read] = await walk.read(jobId, { ...walkQuery, sessionId });
+    assert.equal(read.entries[0].linkedRoom, "Kitchen");
+    assert.equal(read.entries[0].originalLinkedRoom, null);
+    assert.deepEqual((await stored(sessionId)).rows.map(row => [row.expected_version, row.room_capture_order]), [[0, 2], [1, 3]]);
+    assert.deepEqual((await admin.query("SELECT * FROM app.v2_walk_entry WHERE session_id = $1 ORDER BY capture_order", [sessionId])).rows, original);
+    const events = await walkAudit("v2.walk.photo_filed", sessionId);
+    assert.equal(events.length, 2);
+    assert.ok(events.every(event => event.actorRef === `membership:${owner.membershipId}`));
+    assert.deepEqual(events.map(event => event.payload.references.commandId).sort(), [command.commandId, next.commandId].sort());
+    assert.ok(!JSON.stringify(events).includes("Hall"));
+    assert.ok(!JSON.stringify(events).includes('"version"'));
+  });
+
+  test("refuses stale versions, changed retries, non-photos and another session's room", async () => {
+    const { walk, sessionId, command } = await fixture();
+    await walk.fileWalkPhoto(jobId, command);
+    await assert.rejects(walk.fileWalkPhoto(jobId, { ...command, roomCaptureOrder: 3 }), { code: "WALK_COMMAND_CONFLICT" });
+    await assert.rejects(walk.fileWalkPhoto(jobId, { ...command, commandId: walkId() }), { code: "WALK_VERSION_CONFLICT" });
+    await assert.rejects(walk.fileWalkPhoto(jobId, { ...command, commandId: walkId(), captureOrder: 2 }), { code: "WALK_PHOTO_REFUSED" });
+    const otherSession = walkId();
+    await walk.start(jobId, { version: "v2-walk-session-command.v1", sessionId: otherSession, deviceStartedAt: new Date().toISOString() });
+    await walk.record(jobId, entryCommand(otherSession, 9, { kind: "room", room: "Other session" }, new Date()));
+    await assert.rejects(walk.fileWalkPhoto(jobId, { ...command, commandId: walkId(), roomCaptureOrder: 9, expectedVersion: 1 }), { code: "WALK_PHOTO_REFUSED" });
+    assert.equal((await stored(sessionId)).rowCount, 1);
+    assert.equal((await walkAudit("v2.walk.photo_filed", sessionId)).length, 1);
+  });
+
+  test("serializes concurrent exact retries and conflicting next versions", async () => {
+    const { walk, sessionId, command } = await fixture();
+    const receipts = await Promise.all([walk.fileWalkPhoto(jobId, command), walk.fileWalkPhoto(jobId, command)]);
+    assert.deepEqual(receipts[0], receipts[1]);
+    const race = await Promise.allSettled([2, 3].map(roomCaptureOrder => walk.fileWalkPhoto(jobId,
+      { ...command, commandId: walkId(), expectedVersion: 1, roomCaptureOrder })));
+    assert.equal(race.filter(result => result.status === "fulfilled").length, 1);
+    assert.equal(race.find(result => result.status === "rejected").reason.code, "WALK_VERSION_CONFLICT");
+    assert.equal((await stored(sessionId)).rowCount, 2);
+    assert.equal((await walkAudit("v2.walk.photo_filed", sessionId)).length, 2);
+  });
+
+  test("forced failure after the row and audit append rolls back both; retry then appends once", async () => {
+    const { walk, owner, sessionId, command } = await fixture();
+    const failing = walkWorkspace({ pool: b1bRollbackPool(runtime), sessionId: owner.sessionId }).walk;
+    await assert.rejects(failing.fileWalkPhoto(jobId, command), { code: "B1B_FORCED" });
+    assert.equal((await stored(sessionId)).rowCount, 0);
+    assert.equal((await walkAudit("v2.walk.photo_filed", sessionId)).length, 0);
+    const saved = await walk.fileWalkPhoto(jobId, command);
+    assert.deepEqual(await walk.fileWalkPhoto(jobId, command), saved);
+    assert.equal((await stored(sessionId)).rowCount, 1);
+    assert.equal((await walkAudit("v2.walk.photo_filed", sessionId)).length, 1);
+  });
+
+  test("forced RLS and the firm lock hide filings and refuse second-firm writes; originals stay immutable", async () => {
+    const { walk, outsiderWalk, outsiderContext, ownerContext, sessionId, command, original } = await fixture();
+    await walk.fileWalkPhoto(jobId, command);
+    const query = (scope, sql, values = []) => withTenant(runtime, scope, db => db.$client.query(sql, values));
+    assert.equal((await query(ownerContext, "SELECT * FROM app.v2_walk_photo_filing WHERE session_id = $1", [sessionId])).rowCount, 1);
+    assert.equal((await query(outsiderContext, "SELECT * FROM app.v2_walk_photo_filing WHERE session_id = $1", [sessionId])).rowCount, 0);
+    await assert.rejects(outsiderWalk.fileWalkPhoto(jobId, { ...command, commandId: walkId(), expectedVersion: 1 }), { code: "NOT_FOUND" });
+    await assert.rejects(query(outsiderContext, `INSERT INTO app.v2_walk_photo_filing
+      (tenant_id,job_id,session_id,capture_order,expected_version,command_id,room_capture_order,reason,actor_membership_id)
+      VALUES ($1,$2,$3,1,1,$4,2,'misfiled',$5)`, [DEMO_TENANT_ID, jobId, sessionId, walkId(), original[0].actor_membership_id]), { code: "42501" });
+    for (const scope of [ownerContext, outsiderContext]) {
+      await assert.rejects(query(scope, "UPDATE app.v2_walk_photo_filing SET reason = 'waiting' WHERE session_id = $1", [sessionId]), { code: "42501" });
+      await assert.rejects(query(scope, "DELETE FROM app.v2_walk_photo_filing WHERE session_id = $1", [sessionId]), { code: "42501" });
+    }
+    const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced,
+      relowner::regrole::text AS owner, has_table_privilege('jobguard_runtime',oid,'SELECT') AS can_read,
+      has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
+      has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate
+      FROM pg_class WHERE oid = 'app.v2_walk_photo_filing'::regclass`);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false });
+    assert.equal((await admin.query("SELECT count(*)::int AS n FROM pg_policy WHERE polrelid = 'app.v2_walk_photo_filing'::regclass AND polname = 'v2_practice_firm' AND NOT polpermissive")).rows[0].n, 1);
+  });
+
+  test("the database guard refuses version gaps and wrong entry kinds", async () => {
+    const { ownerContext, sessionId, original } = await fixture();
+    const insert = (captureOrder, roomCaptureOrder, expectedVersion) => withTenant(runtime, ownerContext, db => db.$client.query(`
+      INSERT INTO app.v2_walk_photo_filing
+      (tenant_id,job_id,session_id,capture_order,expected_version,command_id,room_capture_order,reason,actor_membership_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,'misfiled',$8)`,
+    [DEMO_TENANT_ID, jobId, sessionId, captureOrder, expectedVersion, walkId(), roomCaptureOrder, original[0].actor_membership_id]));
+    await assert.rejects(insert(1, 2, 2), { code: "23514", message: "V2_WALK_VERSION_GAP" });
+    await assert.rejects(insert(2, 3, 0), { code: "23514", message: "V2_WALK_PHOTO_FILING_TARGET_REFUSED" });
+    await assert.rejects(insert(1, 1, 0), { code: "23514", message: "V2_WALK_PHOTO_FILING_TARGET_REFUSED" });
+    assert.equal((await stored(sessionId)).rowCount, 0);
+  });
+});

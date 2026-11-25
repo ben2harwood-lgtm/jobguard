@@ -175,3 +175,52 @@ for (const [width, phone] of [[360, false], [1280, false], [390, true]]) {
     } finally { await context.close(); }
   });
 }
+
+// B1C uses this file's existing one-time K5A sign-in and fresh contexts.
+for (const [width, phone] of [[360, false], [1280, false], [390, true]]) {
+  test(`B1C needs-room filing persists at ${width}px${phone ? " phone mode" : ""}`, { timeout: 120_000 }, async () => {
+    const context = await browser.newContext({ viewport: { width, height: 900 }, ignoreHTTPSErrors: true,
+      storageState, isMobile: phone, hasTouch: phone });
+    try {
+      const page = await context.newPage();
+      const endpoint = `${origin}/api/v2-backend/jobs/${jobId}/walk`;
+      const sessionId = crypto.randomUUID();
+      const post = async command => {
+        const response = await context.request.post(endpoint, { headers: { origin }, data: command });
+        assert.equal(response.status(), 200, await response.text());
+      };
+      await post({ action: "start", version: "v2-walk-session-command.v1", sessionId, deviceStartedAt: new Date().toISOString() });
+      for (const [captureOrder, entry] of [[1, { kind: "photo", photoId: crypto.randomUUID() }],
+        [2, { kind: "room", room: "Hall" }], [3, { kind: "room", room: "Kitchen" }]]) {
+        await post({ action: "record", version: "v2-walk-entry-command.v1", sessionId, commandId: crypto.randomUUID(),
+          captureOrder, expectedVersion: 0, deviceCapturedAt: new Date().toISOString(), entry });
+      }
+      await page.goto(`${origin}/jobs/${jobId}/walk`);
+      const walk = page.getByRole("main").getByRole("region", { name: "Walk the job", exact: true });
+      await walk.getByLabel("Walk session", { exact: true }).selectOption(sessionId);
+      const trayPhoto = walk.getByRole("article", { name: "Photo 1 needs room", exact: true });
+      await expect(trayPhoto).toBeVisible();
+      if (process.env.V2_TEST_SCREENSHOTS) await page.screenshot({
+        path: `${process.env.V2_TEST_SCREENSHOTS}/v2-b1c-needs-room-${width}${phone ? "-phone" : ""}.png`, fullPage: true });
+      await trayPhoto.getByLabel("File under…", { exact: true }).selectOption("2");
+      await trayPhoto.getByRole("button", { name: "File photo 1", exact: true }).click();
+      await expect(trayPhoto).toHaveCount(0);
+      const saved = walk.getByRole("list", { name: "Saved walk entries" });
+      await expect(saved.getByText("Filed under Hall (taken in no room)", { exact: true })).toBeVisible();
+      await page.reload();
+      await expect(saved.getByText("Filed under Hall (taken in no room)", { exact: true })).toBeVisible();
+      if (process.env.V2_TEST_SCREENSHOTS) await page.screenshot({
+        path: `${process.env.V2_TEST_SCREENSHOTS}/v2-b1c-filed-${width}${phone ? "-phone" : ""}.png`, fullPage: true });
+      await saved.getByRole("button", { name: "Move to another room", exact: true }).click();
+      await saved.getByLabel("File under…", { exact: true }).selectOption("3");
+      await saved.getByRole("button", { name: "File photo 1", exact: true }).click();
+      await expect(saved.getByText("Filed under Kitchen (taken in no room)", { exact: true })).toBeVisible();
+      const read = await context.request.get(`${endpoint}?sessionId=${sessionId}`);
+      assert.equal(read.status(), 200);
+      const { sessions } = await read.json();
+      assert.equal(sessions[0].entries[0].filingVersion, 2);
+      assert.equal(sessions[0].entries[0].originalRoomCaptureOrder, null);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    } finally { await context.close(); }
+  });
+}

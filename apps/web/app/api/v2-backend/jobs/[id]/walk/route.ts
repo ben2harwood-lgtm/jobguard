@@ -1,4 +1,4 @@
-import { WalkError, walkEntryCommandV1, walkQueryV1, walkSessionCommandV1 } from "@jobguard/api/workspace";
+import { WalkError, walkPhotoFilingCommandV1, walkEntryCommandV1, walkQueryV1, walkSessionCommandV1 } from "@jobguard/api/workspace";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isTrustedBrowserOrigin } from "../../../../contractor/origin";
@@ -9,7 +9,8 @@ type Route = { params: Promise<{ id: string }> };
 const enabled = () => process.env.JOBGUARD_LOCAL_V2 === "1" && process.env.JOBGUARD_ENV === "synthetic_demo";
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 const start = walkSessionCommandV1.extend({ action: z.literal("start") });
-const record = walkEntryCommandV1.extend({ action: z.literal("record") });
+const filing = walkPhotoFilingCommandV1.extend({ action: z.literal("file") });
+const commands = z.union([start, filing, walkEntryCommandV1.extend({ action: z.literal("record") })]);
 
 function failure(error: unknown) {
   if (error instanceof WalkError) return reply({ code: error.code },
@@ -32,17 +33,20 @@ export async function POST(request: Request, { params }: Route) {
   if (!enabled()) return reply({ code: "NOT_FOUND" }, 404);
   if (!isTrustedBrowserOrigin(request)) return reply({ code: "ORIGIN_FORBIDDEN" }, 403);
   const raw: unknown = await request.json().catch(() => null);
-  const session = start.safeParse(raw);
-  const entry = record.safeParse(raw);
-  if (!session.success && !entry.success) return reply({ code: "WALK_INVALID_COMMAND" }, 400);
+  const parsed = commands.safeParse(raw);
+  if (!parsed.success) return reply({ code: "WALK_INVALID_COMMAND" }, 400);
   try {
     const { walk } = await workspaceApplication();
     const { id } = await params;
-    if (session.success) {
-      const { action: _action, ...command } = session.data;
+    if (parsed.data.action === "file") {
+      const { action: _action, ...command } = parsed.data;
+      return reply(await walk.fileWalkPhoto(id, command));
+    }
+    if (parsed.data.action === "start") {
+      const { action: _action, ...command } = parsed.data;
       return reply(await walk.start(id, { ...command, deviceStartedAt: command.deviceStartedAt.toISOString() }));
     }
-    const { action: _action, ...command } = entry.data!;
+    const { action: _action, ...command } = parsed.data;
     return reply(await walk.record(id, { ...command, deviceCapturedAt: command.deviceCapturedAt.toISOString() }));
   } catch (error) { return failure(error); }
 }

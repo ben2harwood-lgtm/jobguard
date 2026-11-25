@@ -67,6 +67,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
   // V2 b1a walk session record
   await client.query(readFileSync(new URL("../../packages/db/migrations/2008_v2_walk_record.sql", import.meta.url), "utf8"));
+  // B1C mount, owned by B1A #920: 2029 precedes the final 2054 firm lock when integrated.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2029_v2_walk_photo_filing.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const app = vi.hoisted(() => ({ read: vi.fn(), start: vi.fn(), record: vi.fn(), compose: vi.fn(), failure: vi.fn() }));
+const app = vi.hoisted(() => ({ read: vi.fn(), start: vi.fn(), record: vi.fn(), fileWalkPhoto: vi.fn(), compose: vi.fn(), failure: vi.fn() }));
 vi.mock("../../../../../lib/workspace-server", () => ({ workspaceApplication: app.compose }));
 vi.mock("../../../../../lib/synthetic-server", () => ({ practiceFailure: app.failure }));
 // Exercise B1A's real command schemas; persistence is tested by the full V2 seed suite.
@@ -87,5 +87,31 @@ describe("B1B walk route", () => {
     const response = await GET(new Request(origin), context);
     expect(response.status).toBe(404); expect(await response.json()).toEqual({ code: "NOT_FOUND" });
     expect(app.failure).toHaveBeenCalledWith(error);
+  });
+});
+
+// B1C extends the existing route, with the same origin and session boundary.
+describe("B1C filing route", () => {
+  const filing = { action: "file", version: "v2-walk-photo-filing-command.v1", sessionId, commandId,
+    captureOrder: 1, roomCaptureOrder: 2, expectedVersion: 0, reason: "no_room" };
+  it("dispatches a filing through the strict union", async () => {
+    app.fileWalkPhoto.mockResolvedValue({ version: 1 });
+    expect((await POST(request(filing), context)).status).toBe(200);
+    const { action: _action, ...command } = filing;
+    expect(app.fileWalkPhoto).toHaveBeenCalledWith("job", command);
+  });
+  it.each([{ actorMembershipId: commandId }, { reason: "anything" }, { roomCaptureOrder: 0 }, { entry: record.entry }])
+    ("refuses malformed and mixed commands", async extra => {
+      expect((await POST(request({ ...filing, ...extra }), context)).status).toBe(400);
+      expect(app.compose).not.toHaveBeenCalled();
+    });
+  it.each([null, "https://foreign.invalid"])("refuses filing origin %s", async from => {
+    expect((await POST(request(filing, from, { "x-forwarded-host": "phone.example.invalid", "x-forwarded-proto": "https" }), context)).status).toBe(403);
+    expect(app.compose).not.toHaveBeenCalled();
+  });
+  it("keeps filings disabled outside V2", async () => {
+    vi.stubEnv("JOBGUARD_LOCAL_V2", "0");
+    expect((await POST(request(filing), context)).status).toBe(404);
+    expect(app.compose).not.toHaveBeenCalled();
   });
 });

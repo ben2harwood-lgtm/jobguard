@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentRoom, newEntry, nextCaptureOrder, validMeasurement, type EntryView } from "./walk-state";
+import { needsRoom, filingLabel, currentRoom, newEntry, nextCaptureOrder, validMeasurement, type EntryView } from "./walk-state";
 
 const row = (captureOrder: number, room: string, deviceCapturedAt: string) =>
   ({ captureOrder, room, kind: "room", deviceCapturedAt } as EntryView);
@@ -19,5 +19,22 @@ describe("B1B device capture order", () => {
   });
   it.each(["1", "14.5", "0.000001", "1.123456"])("keeps exact quantity %s", value => {
     expect(validMeasurement(value)).toBe(true);
+  });
+});
+
+describe("B1C needs-room helpers", () => {
+  const photo = (link: EntryView["link"], flagged = false) => ({ kind: "photo", captureOrder: 1, link,
+    clock: { flagged, differenceSeconds: 0 }, linkedRoom: "Hall", originalLinkedRoom: null } as EntryView);
+  it("includes no-room, waiting and clock-flagged photos only", () => {
+    const rows = [photo("no_room"), photo("waiting"), photo("linked", true), photo("linked"),
+      photo("filed"), { ...photo("room", true), kind: "room" } as EntryView];
+    expect(needsRoom(rows)).toEqual(rows.slice(0, 3));
+    expect(needsRoom([photo("filed", true)])).toHaveLength(1);
+  });
+  it("labels both the corrected room and the original room", () => {
+    expect(filingLabel(photo("filed"))).toBe("Filed under Hall (taken in no room)");
+    expect(filingLabel({ ...photo("filed"), originalLinkedRoom: "Kitchen" }))
+      .toBe("Filed under Hall (taken in Kitchen)");
+    expect(filingLabel(photo("waiting"))).toBe("Room link needs checking");
   });
 });

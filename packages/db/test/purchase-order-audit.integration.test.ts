@@ -47,7 +47,9 @@ beforeAll(async () => {
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
         "_v2_plan_disposition.sql",
         // V2 b1a walk session record
-        "_v2_walk_record.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_v2_walk_record.sql",
+        // V2 B1C: local-only filing migration deferral.
+        "_v2_walk_photo_filing.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -64,6 +66,8 @@ beforeAll(async () => {
   await migrate(admin);
   // V2 b1a walk session record
   expect((await admin.query("SELECT to_regclass('app.v2_walk_session') AS session, to_regclass('app.v2_walk_entry') AS entry")).rows[0]).toEqual({ session: null, entry: null });
+  // V2 B1C: the ordinary synthetic database must remain unchanged.
+  expect((await admin.query("SELECT to_regclass('app.v2_walk_photo_filing') AS filing")).rows[0]).toEqual({ filing: null });
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();

@@ -26,3 +26,15 @@ export function newEntry(sessionId: string, entries: readonly EntryView[], entry
 export function validMeasurement(quantity: string) {
   return quantity.length <= 40 && /^(0|[1-9][0-9]*)(\.[0-9]{1,6})?$/u.test(quantity) && /[1-9]/u.test(quantity);
 }
+
+// B1C: clock warnings remain visible even after an explicit filing.
+export function needsRoom(entries: readonly EntryView[]) {
+  return entries.filter(entry => entry.kind === "photo" &&
+    (entry.link === "no_room" || entry.link === "waiting" || entry.clock.flagged));
+}
+
+export function filingLabel(entry: EntryView) {
+  return entry.link === "filed"
+    ? `Filed under ${entry.linkedRoom} (taken in ${entry.originalLinkedRoom ?? "no room"})`
+    : entry.link === "linked" ? entry.linkedRoom ?? "Room link needs checking" : "Room link needs checking";
+}

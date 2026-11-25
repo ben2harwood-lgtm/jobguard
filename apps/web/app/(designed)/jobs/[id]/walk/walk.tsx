@@ -2,16 +2,31 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { WalkEntryCommand, WalkSessionCommand } from "@jobguard/api/workspace";
+import type { WalkEntryCommand, WalkPhotoFilingCommand, WalkSessionCommand } from "@jobguard/api/workspace";
 import { Card, Note, Tag } from "../../../designed-ui";
-import { currentRoom, newEntry, validMeasurement, type EntryBody, type SessionView } from "./walk-state";
+import { currentRoom, filingLabel, needsRoom, newEntry, validMeasurement, type EntryBody, type EntryView, type SessionView } from "./walk-state";
 
-type Pending = ({ action: "start" } & WalkSessionCommand) | ({ action: "record" } & WalkEntryCommand);
+type Pending = ({ action: "start" } & WalkSessionCommand) | ({ action: "record" } & WalkEntryCommand) | ({ action: "file" } & WalkPhotoFilingCommand);
+
+function PhotoRoomPicker({ entry, rooms, blocked, file }: {
+  entry: EntryView; rooms: EntryView[]; blocked: boolean; file: (roomCaptureOrder: number) => void;
+}) {
+  const [roomOrder, setRoomOrder] = useState("");
+  return <div className="form">
+    <label>File under…<select value={roomOrder} disabled={blocked} onChange={event => setRoomOrder(event.target.value)}>
+      <option value="">Choose a room</option>
+      {rooms.map(room => <option key={room.captureOrder} value={room.captureOrder}>{room.room} (room {room.captureOrder})</option>)}
+    </select></label>
+    <button type="button" className="btn" disabled={blocked || !roomOrder} onClick={() => file(Number(roomOrder))}>File photo {entry.captureOrder}</button>
+    {rooms.length === 0 && <p>Add a room before filing this photo.</p>}
+  </div>;
+}
 
 export function Walk({ jobId }: { jobId: string }) {
   const router = useRouter();
   const endpoint = `/api/v2-backend/jobs/${encodeURIComponent(jobId)}/walk`;
   const [sessions, setSessions] = useState<SessionView[] | null>(null);
+  const [movingPhoto, setMovingPhoto] = useState<number | null>(null);
   const [selected, setSelected] = useState("");
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,6 +96,18 @@ export function Walk({ jobId }: { jobId: string }) {
     void save({ action: "record", ...command });
   }
 
+  function file(entry: EntryView, roomCaptureOrder: number) {
+    if (!session || blocked || sending.current) return;
+    void save({ action: "file", version: "v2-walk-photo-filing-command.v1", sessionId: session.sessionId,
+      commandId: crypto.randomUUID(), captureOrder: entry.captureOrder, roomCaptureOrder,
+      expectedVersion: entry.filingVersion ?? 0,
+      reason: entry.link === "no_room" ? "no_room" : entry.link === "waiting" ? "waiting" : "misfiled" });
+  }
+  const rooms = entries.filter(entry => entry.kind === "room");
+  const tray = needsRoom(entries);
+  const picker = (entry: EntryView) => <PhotoRoomPicker entry={entry} rooms={rooms} blocked={blocked || unsent}
+    file={roomCaptureOrder => file(entry, roomCaptureOrder)}/>;
+
   const pendingEntry = pending?.action === "record" ? pending : null;
   const roomNames = [...new Set(entries.filter(entry => entry.kind === "room").map(entry => entry.room!))];
   const roomName = pendingEntry?.entry.kind === "room" ? pendingEntry.entry.room : activeRoom?.room;
@@ -102,7 +129,18 @@ export function Walk({ jobId }: { jobId: string }) {
       {pending?.action === "start" && <div role="status">{busy ? "Starting walk…" : "Not saved yet."}
         <button type="button" className="btn" disabled={busy} onClick={() => void save(pending)}>Retry</button></div>}
       {!session && !pending && <p>No rooms yet. Start a walk, then add the first room.</p>}
+      {pending?.action === "file" && <div role="status">{busy ? "Filing photo…" : "Not saved yet."}
+        {!busy && <button type="button" className="btn" onClick={() => void save(pending)}>Retry</button>}</div>}
       {session && <>
+        <Card title="Needs room">
+          {tray.length === 0 ? <p className="card-body">Nothing waiting for a room.</p> : tray.map(entry =>
+            <article key={entry.captureOrder} className="card-body" aria-label={`Photo ${entry.captureOrder} needs room`}>
+              <strong>Photo {entry.captureOrder}</strong>
+              <p>{filingLabel(entry)}</p>
+              {entry.clock.flagged && <p>Phone time needs checking.</p>}
+              {picker(entry)}
+            </article>)}
+        </Card>
         <Card title={roomName ?? "Choose the first room"}>
           <div className="card-body form">
             {roomNames.length > 0 && <label>Pick a room<select value="" disabled={blocked || unsent}
@@ -147,7 +185,12 @@ export function Walk({ jobId }: { jobId: string }) {
           <ol aria-label="Saved walk entries">
             {entries.map(entry => <li key={entry.captureOrder} data-testid="walk-entry" className="card-body">
               <strong>{entry.captureOrder}. {entry.kind === "room" ? entry.room : entry.kind === "measurement" ? `${entry.quantity} ${entry.unit}` : entry.kind === "photo" ? "Photo record" : entry.text}</strong>
-              {entry.kind !== "room" && <p>{entry.link === "linked" ? entry.linkedRoom : "Room link needs checking"}</p>}
+              {entry.kind !== "room" && <p>{filingLabel(entry)}</p>}
+              {entry.kind === "photo" && <>
+                <button type="button" className="btn" disabled={blocked || unsent}
+                  onClick={() => setMovingPhoto(movingPhoto === entry.captureOrder ? null : entry.captureOrder)}>Move to another room</button>
+                {movingPhoto === entry.captureOrder && picker(entry)}
+              </>}
               <p><time dateTime={entry.deviceCapturedAt}>{entry.deviceCapturedAt}</time> · phone time</p>
               <Tag tone="green">Saved</Tag>
             </li>)}
