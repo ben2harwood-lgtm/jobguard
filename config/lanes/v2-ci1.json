@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-ci1": {
+      "branches": ["claude/project-thread-qfah0w"],
+      "note": "T2 CI change. Runs the V2 seed suite (tools/v2/seed.integration.test.mjs) in a v2-seed CI job for V2 pull requests and v2/main pushes only; main's CI is unchanged. The validator includes config/lanes/v2-ci1.json implicitly.",
+      "allow": [
+        ".github/workflows/ci.yml",
+        "tools/ci-workflow.test.mjs"
+      ]
+    }
+  }
+}

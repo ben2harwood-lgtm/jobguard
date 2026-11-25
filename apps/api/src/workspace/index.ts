@@ -1,4 +1,5 @@
 export * from "./application.js";
+export * from "./work-plan.application.js";
 // V2 b1a walk session record
 export * from "./walk.application.js";
 export * from "./contracts.js";
