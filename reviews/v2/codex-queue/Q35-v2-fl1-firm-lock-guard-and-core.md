@@ -27,7 +27,7 @@
 - **Planner ruling, 25 Nov 18:05 UK (FL-2 and FL-3 round-1 holds). This overrides the old stop item about definer writes.**
   - **Definer writes are not a slice blocker.** If a SECURITY DEFINER function writes to a table in your list, such as `app.xa_revoke_link` (0749 lines 1179 to 1199) into `extra_client_link_closure`, the lock still does its job: it limits what `jobguard_runtime` reads and writes directly. The function runs as its owner, so the lock doesn't reach inside it. List each one you find in the PR body under "Definer writes, for FL-F". Then carry on. FL-F (Q40) decides whether each one checks the firm.
   - **Fixture path on V2.** Use a real command where one works on V2. Where the only command is fenced to `jobguard_synthetic_demo`, such as `app.work_order_commit` (0749 lines 418 to 500), or has no V2 route, create the firm A and firm B rows **inside the test only**:
-    - use the seed suite's owner connection, the one the bootstrap uses;
+    - use the seed suite's `admin` pool (`migrationUrl`, `tools/v2/seed.integration.test.mjs` line 22). If a table trigger refuses the owner insert, record it under "Definer writes, for FL-F" and test that table through a sibling table in the same family;
     - label each insert with a `// fixture: <command> is fenced on V2` comment;
     - give it values that pass the table's own constraints and FKs.
     Then run the **read checks** through `jobguard_runtime` with each firm's practice session. That's the proof that counts. Never add fixture rows in a migration, and never retarget a fenced function in an FL slice.
