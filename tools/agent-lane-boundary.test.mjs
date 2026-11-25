@@ -223,3 +223,12 @@ test("a lane migration sharing a number with an imported main migration still fa
   f.commit("packages/db/migrations/3000_task.sql", "SELECT 'task';\n");
   assert.throws(() => inspectLane({ cwd: f.cwd, config, env: { LANE_BASE_REF: v2 } }), /3000_task\.sql" shares number 3000 with "packages\/db\/migrations\/3000_main\.sql" from main/u);
 });
+// Codex P2 on #984 (14330a99): an imported main migration can't reuse a number the base already has.
+test("an imported main migration sharing a number with a base migration still fails", (t) => {
+  const f = fixture(t);
+  f.git("switch", "-c", "v2", f.base); const v2 = f.commit("packages/db/migrations/2001_base.sql", "SELECT 2001;\n");
+  f.git("switch", "main"); const main = f.commit("packages/db/migrations/2001_main.sql", "SELECT 'main';\n");
+  f.git("update-ref", "refs/remotes/origin/main", main);
+  f.git("switch", "-C", "codex/ci-repair", v2); f.git("merge", "--no-ff", "--no-edit", "main"); f.commit("tools/new.mjs");
+  assert.throws(() => inspectLane({ cwd: f.cwd, config: policy, env: { LANE_BASE_REF: v2 } }), /2001_base\.sql" shares number 2001 with "packages\/db\/migrations\/2001_main\.sql" from main/u);
+});

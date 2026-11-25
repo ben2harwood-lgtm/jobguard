@@ -370,11 +370,15 @@ export function inspectLane({ cwd = process.cwd(), env = process.env, argv = [],
     // Migrations main already has, byte for byte, keep main's numbers; only this lane's own migrations are ordered,
     // and none of them may share a number with an imported main migration.
     const imported = [...added].filter((file) => fromMain(file)), own = [...added].filter((file) => !fromMain(file));
-    const order = migrationOrderViolations(splitPaths(git(["ls-tree", "-r", "--name-only", "-z", base, ...scope])), own);
-    const importedNumbers = new Map(imported.filter((file) => MIGRATION_PATH.test(file)).map((file) => [MIGRATION_PATH.exec(file)[1], file]));
-    for (const file of own.filter((path) => MIGRATION_PATH.test(path)).sort()) {
-      const clash = importedNumbers.get(MIGRATION_PATH.exec(file)[1]);
-      if (clash) order.push(`${JSON.stringify(file)} shares number ${MIGRATION_PATH.exec(file)[1]} with ${JSON.stringify(clash)} from main`);
+    const baseMigrations = splitPaths(git(["ls-tree", "-r", "--name-only", "-z", base, ...scope])).filter((file) => MIGRATION_PATH.test(file));
+    const order = migrationOrderViolations(baseMigrations, own);
+    // Imported numbers must also be unique against the base's and the lane's own (the runner refuses repeats).
+    const claimed = new Map([...baseMigrations, ...own].filter((file) => MIGRATION_PATH.test(file)).map((file) => [MIGRATION_PATH.exec(file)[1], file]));
+    const seenImported = new Map();
+    for (const file of imported.filter((path) => MIGRATION_PATH.test(path)).sort()) {
+      const n = MIGRATION_PATH.exec(file)[1], clash = claimed.get(n) ?? seenImported.get(n);
+      if (clash && clash !== file) order.push(`${JSON.stringify(clash)} shares number ${n} with ${JSON.stringify(file)} from main`);
+      seenImported.set(n, file);
     }
     if (order.length) throw migrationFailure(order);
   }
