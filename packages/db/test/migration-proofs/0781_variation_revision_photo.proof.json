@@ -1,0 +1,402 @@
+{
+  "migration": "0781_variation_revision_photo.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-variation-photos",
+        "title": "Photos on variations",
+        "description": "Pricing a variation revision freezes up to six verified, uninvalidated photos of that extra into immutable links. The checked customer routine shows only those photos, refuses an approval whose photo list differs, and returns one linked photo's stored object for a 60-second signed download. The runtime may only read links under tenant RLS; only the pricing trigger writes them, and no role may update or delete them. A link ties one revision, its variation, its scope item and a photo on that same job and scope item. The customer download refuses any linked object that is not a variation photo or has been invalidated. A forward migration can drop the routine and policy while keeping the links as evidence history.",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Keep customer photo reads bound to the checked portal session, its exact job and photos frozen on a priced revision of that job.",
+          "LP-12": "Keep the photo links immutable, written only by the pricing trigger, and bind customer approval to the exact frozen photo list."
+        },
+        "sources": [
+          "packages/db/migrations/0781_variation_revision_photo.sql",
+          "apps/api/src/auth/customer-variation.ts",
+          "apps/api/src/workspace/pilot-job-continuation.ts",
+          "packages/db/src/variation-photo.ts"
+        ],
+        "tests": [
+          "packages/db/test/variation-revision-photo.integration.test.ts",
+          "packages/db/test/variation-photo-service.integration.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-variation-photos",
+        "title": "Photos on variations",
+        "kind": "evidence",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Keep link writes in the pricing trigger and customer reads inside the checked portal routines."
+        },
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Keep customer photo reads bound to the checked portal session, its exact job and photos frozen on a priced revision of that job.",
+          "LP-12": "Keep the photo links immutable, written only by the pricing trigger, and bind customer approval to the exact frozen photo list."
+        },
+        "downstream": "Pricing a variation revision freezes up to six verified, uninvalidated photos of that extra into immutable links. The checked customer routine shows only those photos, refuses an approval whose photo list differs, and returns one linked photo's stored object for a 60-second signed download. The runtime may only read links under tenant RLS; only the pricing trigger writes them, and no role may update or delete them. A link ties one revision, its variation, its scope item and a photo on that same job and scope item. The customer download refuses any linked object that is not a variation photo or has been invalidated. A forward migration can drop the routine and policy while keeping the links as evidence history.",
+        "path": "ap-variation-photos",
+        "sources": [
+          "packages/db/migrations/0781_variation_revision_photo.sql",
+          "apps/api/src/auth/customer-variation.ts",
+          "apps/api/src/workspace/pilot-job-continuation.ts",
+          "packages/db/src/variation-photo.ts"
+        ],
+        "tests": [
+          "packages/db/test/variation-revision-photo.integration.test.ts",
+          "packages/db/test/variation-photo-service.integration.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|rel|table|app.variation_revision_photo|jobguard_runtime|SELECT|-",
+        "group": "a-variation-photos"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:identity.customer_variation_photo(uuid,uuid,uuid,text,uuid)|jobguard_identity|EXECUTE|-",
+        "group": "a-variation-photos"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|rel:table|app.variation_revision_photo|jobguard_migration",
+        "group": "a-variation-photos"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:identity.customer_variation_photo(uuid,uuid,uuid,text,uuid)|jobguard_migration",
+        "group": "a-variation-photos"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.link_variation_revision_photos()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "app.variation_revision_photo"
+        ],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:identity.customer_variation(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "3153495fd94a320c546d2ca94558852621ad9b2183e4103a33b1ca1a370e73e5",
+        "staticWrites": [
+          "app.customer_variation_approval",
+          "app.scope_progress",
+          "app.variation",
+          "app.variation_approval"
+        ],
+        "staticCalls": [
+          "app.customer_portal_audit",
+          "app.final_lock_hash",
+          "app.lock_recovery_message_sources",
+          "app.lp11_close_customer_scope",
+          "app.lp11_customer_command",
+          "app.lp11_customer_operation",
+          "app.lp11_customer_variation_target",
+          "app.lp11_open_customer_scope",
+          "identity.customer_portal_use"
+        ]
+      },
+      "after": {
+        "identity": "function:identity.customer_variation(uuid,uuid,uuid,text,jsonb)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": "fe6984cb9d99e5b0187efe48894a9824dbd60c009b2dc6f51d03b6b18dbe9fa0",
+        "staticWrites": [
+          "app.customer_variation_approval",
+          "app.scope_progress",
+          "app.variation",
+          "app.variation_approval"
+        ],
+        "staticCalls": [
+          "app.customer_portal_audit",
+          "app.final_lock_hash",
+          "app.lock_recovery_message_sources",
+          "app.lp11_close_customer_scope",
+          "app.lp11_customer_command",
+          "app.lp11_customer_operation",
+          "app.lp11_customer_variation_target",
+          "app.lp11_open_customer_scope",
+          "identity.customer_portal_use"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:identity.customer_variation_photo(uuid,uuid,uuid,text,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_identity"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp11_close_customer_scope",
+          "app.lp11_customer_operation",
+          "app.lp11_open_customer_scope",
+          "identity.customer_portal_use"
+        ]
+      }
+    },
+    {
+      "section": "rls",
+      "before": null,
+      "after": "app.variation_revision_photo|rls=t|forced=t"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.evidence_invalidation|lp11_customer_variation_photo_invalidation|PERMISSIVE|SELECT|jobguard_migration|c655da8582b048c2"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.evidence_object|lp11_customer_variation_photo_read|PERMISSIVE|SELECT|jobguard_migration|ee53b6f5b1519557"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.variation_revision_photo|lp11_customer_variation_read|PERMISSIVE|SELECT|jobguard_migration|c05c894fc01042a3"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.variation_revision_photo|tenant_isolation|PERMISSIVE|ALL|jobguard_migration,jobguard_runtime|1dee645b6478adf6"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.variation_revision|variation_revision_photo_link|app.link_variation_revision_photos|AFTER INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.variation_revision_photo|variation_revision_photo_immutable|app.reject_immutable_commercial_mutation|BEFORE DELETE/UPDATE|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.variation_revision_photo|variation_revision_photo_no_truncate|app.reject_immutable_commercial_mutation|BEFORE TRUNCATE|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "variation_revision_photo",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration,jobguard_runtime=r/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "variation_revision_photo_identity_uq",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "variation_revision_photo_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "relname": "variation_revision_photo_tenant_id_revision_id_position_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "link_variation_revision_photos",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "identity",
+        "proname": "customer_variation_photo",
+        "args": "t uuid, j uuid, c uuid, digest text, evidence uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_identity=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_invalidation",
+        "policyname": "lp11_customer_variation_photo_invalidation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(EXISTS ( SELECT 1\n   FROM app.variation_revision_photo p\n  WHERE (((p.tenant_id = evidence_invalidation.tenant_id) AND (p.evidence_id = evidence_invalidation.evidence_id)) AND (p.tenant_id = app.lp11_customer_tenant('variation_job'::text, p.job_id)))))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "evidence_object",
+        "policyname": "lp11_customer_variation_photo_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id)) AND (EXISTS ( SELECT 1\n   FROM app.variation_revision_photo p\n  WHERE ((p.tenant_id = evidence_object.tenant_id) AND (p.job_id = evidence_object.job_id) AND (p.evidence_id = evidence_object.id)))))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "variation_revision_photo",
+        "policyname": "lp11_customer_variation_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(tenant_id = app.lp11_customer_tenant('variation_job'::text, job_id))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "variation_revision_photo",
+        "policyname": "tenant_isolation",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration,jobguard_runtime}",
+        "cmd": "ALL",
+        "qual": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)",
+        "with_check": "(tenant_id = (NULLIF((( SELECT app.lp11_policy_tenant() AS lp11_policy_tenant))::text, ''::text))::uuid)"
+      }
+    }
+  ],
+  "tenancy": [
+    {
+      "relname": "variation_revision_photo",
+      "before": null,
+      "after": {
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "guarded": true,
+        "owner": "jobguard_migration"
+      }
+    }
+  ]
+}
