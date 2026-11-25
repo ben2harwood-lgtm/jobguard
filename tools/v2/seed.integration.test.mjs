@@ -774,3 +774,175 @@ test("each recorded plan edit appends one audit event in its transaction, and a 
     "SELECT 1 FROM app.audit_event WHERE subject_ref = $1", [draftJob]));
   assert.equal(rowCount, 0, "the second firm cannot see the edit events");
 });
+
+// V2-K3 · Friday customer update. Uses the suite's shared sessions; never requests another OTP.
+const fridayWeek = "2026-11-23";
+const fridayEvents = async commandId => (await admin.query(`SELECT actor_ref,payload,event_type FROM app.audit_event
+  WHERE event_type LIKE 'v2.friday_update.%' AND payload->'references'->>'commandId'=$1`, [commandId])).rows;
+const fridayCommand = (action, expectedVersion, extra = {}) => ({ schema: "friday-command.v1", action,
+  commandId: randomUUID(), week: fridayWeek, expectedVersion, clientCreatedAt: new Date().toISOString(), ...extra });
+
+test("K3 prepares from scheduled plan work, edits persisted text and sends one exact safe snapshot to the catcher", async () => {
+  const { cookies, sessionId, csrfToken } = await signIn("builder");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const { FridayUpdateRepository } = await import("../../packages/db/dist/index.js");
+  const updates = new FridayUpdateRepository(runtime);
+  const plans = createWorkspaceApplication({ pool: runtime, sessionId }).workPlan;
+  let plan = await plans.read(jobId, planQuery);
+  const thisTask = plan.tasks[0], nextTask = plan.tasks[1];
+  await plans.edit(jobId, planEdit(plan, thisTask, { scheduledDate: fridayWeek }));
+  plan = await plans.read(jobId, planQuery);
+  await plans.edit(jobId, planEdit(plan, nextTask, { scheduledDate: "2026-11-30" }));
+  const path = `/api/jobs/${jobId}/friday-update`;
+  const post = body => request(path, { cookies, csrf: csrfToken, body }).then(response => json(response));
+  const before = await planCounts(plan.quoteRevisionId);
+  const prepare = fridayCommand("prepare", 0);
+  const prepared = (await post(prepare)).snapshot;
+  assert.ok(prepared.content.thisWeek.includes(thisTask.title));
+  assert.ok(prepared.content.nextWeek.includes(nextTask.title));
+  assert.deepEqual(prepared.content.photos, []);
+  assert.deepEqual(await planCounts(plan.quoteRevisionId), before, "K3 reads the plan without creating rows");
+  assert.equal((await fridayEvents(prepare.commandId)).length, 1);
+  assert.deepEqual((await post(prepare)).snapshot, prepared);
+  assert.equal((await fridayEvents(prepare.commandId)).length, 1);
+  const edit = fridayCommand("edit", prepared.sequence, { content: {
+    schema: "friday-content.v1", thisWeek: ["Splashback prepared and tiled."], nextWeek: ["Grout the splashback."], photos: [],
+  } });
+  const edited = (await post(edit)).snapshot;
+  assert.equal(edited.contentVersion, prepared.contentVersion + 1);
+  assert.deepEqual((await json(await request(path + `?week=${fridayWeek}`, { cookies }))).snapshot, edited);
+  assert.deepEqual(await updates.read(context, jobId, fridayWeek), edited);
+  const send = fridayCommand("send", edited.sequence, { contentHash: edited.contentHash });
+  const [first, duplicate] = await Promise.all([post(send), post(send)]);
+  assert.deepEqual(first.snapshot, duplicate.snapshot);
+  assert.ok(first.snapshot.sentAt); assert.ok(first.snapshot.sentBy);
+  assert.deepEqual(first.snapshot.content, edited.content);
+  assert.equal(first.snapshot.contentVersion, edited.contentVersion);
+  await json(await request(path, { cookies, csrf: csrfToken, body: { ...send, commandId: randomUUID() } }), 409);
+  const { rows: inbox } = await admin.query(`SELECT content,catcher_message,recipient FROM app.v2_friday_update
+    WHERE job_id=$1 AND week=$2 AND action='send'`, [jobId, fridayWeek]);
+  assert.equal(inbox.length, 1);
+  assert.deepEqual(inbox[0].content, edit.content);
+  assert.equal(inbox[0].recipient, "customer@jobguard-v2.invalid");
+  assert.match(inbox[0].catcher_message, /Splashback prepared and tiled\./u);
+  assert.match(inbox[0].catcher_message, /Grout the splashback\./u);
+  assert.match(inbox[0].catcher_message, /No photos this week\./u);
+  assert.doesNotMatch(inbox[0].catcher_message, /£|GBP|pence|private|hidden|assignee|Fictional Tiler/u);
+  for (const [command, eventType] of [[prepare, "prepared"], [edit, "edited"], [send, "sent_to_catcher"]]) {
+    const events = await fridayEvents(command.commandId);
+    assert.equal(events.length, 1); assert.equal(events[0].event_type, `v2.friday_update.${eventType}`);
+    assert.match(events[0].actor_ref, /^membership:/u);
+    assert.equal("version" in events[0].payload.references, false);
+    assert.doesNotMatch(JSON.stringify(events[0].payload), /Splashback|Grout|customer@|Fictional|photos/u);
+    await post(command);
+    assert.equal((await fridayEvents(command.commandId)).length, 1);
+  }
+  await json(await request(path, { cookies, csrf: csrfToken, body: { ...edit, content: { ...edit.content, thisWeek: ["Changed replay"] } } }), 409);
+  await json(await request(path, { cookies, csrf: csrfToken, body: fridayCommand("edit", 0, { content: edit.content }) }), 409);
+  await json(await request(path, { cookies, csrf: csrfToken, body: fridayCommand("send", first.snapshot.sequence, { contentHash: "0".repeat(64) }) }), 409);
+  const editAgain = (await post(fridayCommand("edit", first.snapshot.sequence, { content: edit.content }))).snapshot;
+  assert.equal(editAgain.sentAt, null); assert.equal(editAgain.contentVersion, edited.contentVersion + 1);
+  await verifyTenantChain(context.tenantId);
+});
+
+test("K3 all three commands roll back their row when audit append fails after insertion", async () => {
+  const { FridayUpdateRepository } = await import("../../packages/db/dist/index.js");
+  const { sessionId } = await signIn("builder");
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const updates = new FridayUpdateRepository(runtime);
+  const failing = { async connect() {
+    const client = await runtime.connect(); const query = client.query.bind(client);
+    client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+      ? Promise.reject(Object.assign(new Error("forced audit failure after snapshot insert"), { code: "FORCED" })) : query(sql, ...rest);
+    const release = client.release.bind(client);
+    client.release = (...args) => { client.query = query; return release(...args); };
+    return client;
+  } };
+  let snapshot = null;
+  for (const action of ["prepare", "edit", "send"]) {
+    const command = fridayCommand(action, snapshot?.sequence ?? 0, { week: "2026-12-14",
+      ...(action === "edit" ? { content: { ...snapshot.content, thisWeek: ["Reviewed customer wording"] } } : {}),
+      ...(action === "send" ? { contentHash: snapshot.contentHash } : {}) });
+    await assert.rejects(new FridayUpdateRepository(failing).command(context, jobId, sessionId, command), { code: "FORCED" });
+    assert.equal((await admin.query("SELECT 1 FROM app.v2_friday_update WHERE command_id=$1", [command.commandId])).rowCount, 0);
+    assert.equal((await fridayEvents(command.commandId)).length, 0);
+    assert.deepEqual(await updates.read(context, jobId, command.week), snapshot);
+    snapshot = await updates.command(context, jobId, sessionId, command);
+    assert.equal((await fridayEvents(command.commandId)).length, 1);
+    assert.deepEqual(await updates.command(context, jobId, sessionId, command), snapshot);
+    assert.equal((await fridayEvents(command.commandId)).length, 1);
+  }
+});
+
+test("K3 forced RLS and immutable inbox refuse second-firm reads, inserts, updates and deletes", async () => {
+  const { cookies, sessionId, csrfToken, realContext } = await signIn("second-builder");
+  const path = `/api/jobs/${jobId}/friday-update`;
+  await json(await request(path + `?week=${fridayWeek}`, { cookies }), 404);
+  await json(await request(path, { cookies, csrf: csrfToken, body: fridayCommand("prepare", 0) }), 404);
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const { rows: [catalog] } = await admin.query(`SELECT c.relrowsecurity,c.relforcerowsecurity,r.rolname
+    FROM pg_class c JOIN pg_roles r ON r.oid=c.relowner WHERE c.oid='app.v2_friday_update'::regclass`);
+  assert.deepEqual(catalog, { relrowsecurity: true, relforcerowsecurity: true, rolname: "jobguard_migration" });
+  for (const scope of [realContext, context]) {
+    await withTenant(runtime, scope, async db => {
+      assert.equal((await db.$client.query("SELECT 1 FROM app.v2_friday_update WHERE job_id=$1", [jobId])).rowCount, 0);
+      const { rows: [grants] } = await db.$client.query(`SELECT
+        has_table_privilege(current_user,'app.v2_friday_update','UPDATE') AS update,
+        has_table_privilege(current_user,'app.v2_friday_update','DELETE') AS delete,
+        has_table_privilege(current_user,'app.v2_friday_update','TRUNCATE') AS truncate`);
+      assert.deepEqual(grants, { update: false, delete: false, truncate: false });
+    });
+    for (const sql of ["UPDATE app.v2_friday_update SET content=content WHERE job_id=$1", "DELETE FROM app.v2_friday_update WHERE job_id=$1"])
+      await assert.rejects(withTenant(runtime, scope, db => db.$client.query(sql, [jobId])), { code: "42501" });
+    // Valid row shape, forbidden job: INSERT fails the same job-visibility policy as SELECT.
+    await assert.rejects(withTenant(runtime, scope, db => db.$client.query(`INSERT INTO app.v2_friday_update
+      (tenant_id,job_id,command_id,week,sequence,content_version,action,content,content_hash,recipient,
+       actor_membership_id,request_hash,client_created_at)
+      VALUES ($1,$2,$3,'2027-01-04',1,1,'prepare',$4,$5,'customer@jobguard-v2.invalid',$3,$5,clock_timestamp())`,
+    [DEMO_TENANT_ID, jobId, randomUUID(), JSON.stringify({ schema: "friday-content.v1", thisWeek: [], nextWeek: [], photos: [] }), "a".repeat(64)])), { code: "42501" });
+  }
+  const owner = await signIn("builder");
+  const ownerContext = (await authenticatePracticeSession(runtime, owner.sessionId)).context;
+  for (const sql of ["UPDATE app.v2_friday_update SET content=content WHERE job_id=$1", "DELETE FROM app.v2_friday_update WHERE job_id=$1"])
+    await assert.rejects(withTenant(runtime, ownerContext, db => db.$client.query(sql, [jobId])), { code: "42501" });
+});
+
+test("K3 leak pair: a hidden finding changes neither the saved content nor the sent message", async () => {
+  const { FridayUpdateApplication } = await import("../../apps/api/dist/workspace/index.js");
+  const pair = [await draftForPlan(), await draftForPlan()];
+  const snapshots = [];
+  const messages = [];
+  for (const [index, fixture] of pair.entries()) {
+    const { draftJob, sessionId, read, edit } = fixture;
+    const app = createWorkspaceApplication({ pool: runtime, sessionId });
+    const principal = { sessionId };
+    const partyView = await app.parties.view(principal, draftJob);
+    await app.parties.command(principal, draftJob, {
+      version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+      expectedJobRevision: partyView.jobRevision, expectedBindingId: null,
+      customer: { version: "customer.v1", type: "person", name: "Fictional Pippa Patchwork", email: "customer@jobguard-v2.invalid", phone: "+447700900042" },
+      customerRef: null, site: { version: "site.v1", addressLines: ["42 Make-Believe Mews"], town: "Sampleford", postcode: "ZY1 0AA" },
+      savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+      payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+    });
+    const plan = await read();
+    await edit(planEdit(plan, plan.tasks[0], { scheduledDate: fridayWeek }));
+    if (index === 1) {
+      // Privileged synthetic fixture only: never grant builder access to hidden storage.
+      await admin.query(`INSERT INTO app.job_commercial_track(tenant_id,job_id,job_track,environment,provenance)
+        VALUES ($1,$2,'small_builder','synthetic_demo','backfilled_synthetic_fixture') ON CONFLICT DO NOTHING`, [DEMO_TENANT_ID, draftJob]);
+      await admin.query(`INSERT INTO app.shadow_commercial_signal
+        (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,description,estimated_value_pence,confidence_band)
+        VALUES ($1,$2,$3,$4,'missed_work','deterministic','fixture.v1',clock_timestamp(),'hidden marker',9876500,'low')`,
+      [DEMO_TENANT_ID, draftJob, randomUUID(), randomUUID()]);
+    }
+    const updates = new FridayUpdateApplication(runtime, sessionId);
+    const snapshot = await updates.command(draftJob, fridayCommand("prepare", 0));
+    snapshots.push(snapshot.content);
+    await updates.command(draftJob, fridayCommand("send", snapshot.sequence, { contentHash: snapshot.contentHash }));
+    messages.push((await admin.query("SELECT catcher_message FROM app.v2_friday_update WHERE job_id=$1 AND action='send'", [draftJob])).rows[0].catcher_message);
+  }
+  assert.deepEqual(snapshots[1], snapshots[0]);
+  assert.equal(messages[1], messages[0]);
+  assert.doesNotMatch(messages[1], /hidden marker|98765|£|GBP/u);
+});

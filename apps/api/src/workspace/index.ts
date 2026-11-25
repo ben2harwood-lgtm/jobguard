@@ -133,3 +133,6 @@ export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
 export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";
+
+// V2-K3: independent entry point; no changes to other packet applications.
+export * from "./friday-update.application.js";
