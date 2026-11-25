@@ -19,7 +19,7 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | Order | Packet | Piece | Use | Effort | Starts when | Base | Migration | Tier | Rework risk |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | Q03 | V2-D5B-M product picker and Materials screen (resume from the kept base merge; Briefs half D5B-B waits for D4A) | ★★ | M | now | merge of D3 #912 + D4 #916 + D5A #914 | none | T1 | high |
-| 1b | Q18 | V2-CI2 automatic guard for the audit-chain rule (safety, protects every piece below) | ★★ | S | now | #917 branch | none | T2 | low |
+| 1b | Q18 | V2-CI2 automatic guard for the audit-chain rule (safety, protects every piece below) | ★★ | S | now | v2/main (#917 merged 12:12 UK 25 Nov) | none | T2 | low |
 | 1c | Q20 | V2-BH1 shared sign-in helper for V2 browser tests (test helper only; stops tonight's repeated sign-in failures, rule 22) | ★★ | XS | now | `v2/main` | none | T1 | low |
 | 1d | Q21 | RULES-T, one "Rules met" PR template (jobguard; base `main`, after #915 merges) | ★★ | XS | after #915 | `main` | none | T1 | low |
 | 1e | Q22 | CI-RV, RED PRs need an other-vendor review naming the current head (base `main`) | ★★★ | S | after Astra | `main` | none | T2 | low |
