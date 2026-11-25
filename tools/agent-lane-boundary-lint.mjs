@@ -367,8 +367,15 @@ export function inspectLane({ cwd = process.cwd(), env = process.env, argv = [],
       for (const file of splitPaths(git(["diff", "--no-renames", "--diff-filter=A", "--name-only", "-z", "--cached", "HEAD", ...scope]))) added.add(file);
       for (const file of splitPaths(git(["ls-files", "--others", "--exclude-standard", "-z", ...scope]))) added.add(file);
     }
-    // Migrations main already has, byte for byte, keep main's numbers; only this lane's own migrations are ordered.
-    const order = migrationOrderViolations(splitPaths(git(["ls-tree", "-r", "--name-only", "-z", base, ...scope])), [...added].filter((file) => !fromMain(file)));
+    // Migrations main already has, byte for byte, keep main's numbers; only this lane's own migrations are ordered,
+    // and none of them may share a number with an imported main migration.
+    const imported = [...added].filter((file) => fromMain(file)), own = [...added].filter((file) => !fromMain(file));
+    const order = migrationOrderViolations(splitPaths(git(["ls-tree", "-r", "--name-only", "-z", base, ...scope])), own);
+    const importedNumbers = new Map(imported.filter((file) => MIGRATION_PATH.test(file)).map((file) => [MIGRATION_PATH.exec(file)[1], file]));
+    for (const file of own.filter((path) => MIGRATION_PATH.test(path)).sort()) {
+      const clash = importedNumbers.get(MIGRATION_PATH.exec(file)[1]);
+      if (clash) order.push(`${JSON.stringify(file)} shares number ${MIGRATION_PATH.exec(file)[1]} with ${JSON.stringify(clash)} from main`);
+    }
     if (order.length) throw migrationFailure(order);
   }
   return { lane: name, branch, event: eventName, base, head: target, comparison, files: [...files].sort(),

@@ -212,3 +212,14 @@ test("a mode or type change to a merged main file is the lane's own edit and sti
   const head = f.git("rev-parse", "HEAD");
   assert.throws(() => f.pr(head, f.v2), /cannot edit:\n"packages\/db\/protected\.txt"/u);
 });
+// Codex P2 on #984 (8cca1161): an imported main migration still counts for duplicate numbers.
+test("a lane migration sharing a number with an imported main migration still fails", (t) => {
+  const f = fixture(t);
+  f.git("switch", "-c", "v2", f.base); const v2 = f.commit("packages/db/migrations/2001_base.sql", "SELECT 2001;\n");
+  f.git("switch", "main"); const main = f.commit("packages/db/migrations/3000_main.sql", "SELECT 3000;\n");
+  f.git("update-ref", "refs/remotes/origin/main", main);
+  f.git("switch", "-C", "codex/ci-repair", v2); f.git("merge", "--no-ff", "--no-edit", "main");
+  const config = structuredClone(policy); config.lanes.repair.allow = ["tools/**", "packages/db/migrations/3000_task.sql"];
+  f.commit("packages/db/migrations/3000_task.sql", "SELECT 'task';\n");
+  assert.throws(() => inspectLane({ cwd: f.cwd, config, env: { LANE_BASE_REF: v2 } }), /3000_task\.sql" shares number 3000 with "packages\/db\/migrations\/3000_main\.sql" from main/u);
+});
