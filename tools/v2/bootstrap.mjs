@@ -62,6 +62,10 @@ try {
   }
   process.env.AUTH_CODE_SECRET = authSecret();
   await client.query(readFileSync(new URL("./migrations/2001_practice_quote.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2002_v2_work_plan.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2003_v2_work_plan_edits.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
+
   // V2-F6: reserved local-only migration, independent of unmerged V2 tables.
   await client.query(readFileSync(new URL("./migrations/2018_customer_extra_links.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
