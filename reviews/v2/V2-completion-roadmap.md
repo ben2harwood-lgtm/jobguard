@@ -114,7 +114,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 - Big ideas A, C, D, E and F.
 
 ## Migration numbers reserved
-2025 PX (V2 bootstrap), 2026 G0, 2027 C3C, 2028 F2, 2029 B1C, 2030 E7, 2031 F3, 2032 F4, 2033 F7, 2034 K5B, 2035 K6B, 2036 DV1, 2037 C6, 2038 E4, 2039 E5, 2040 E6, 2041 My brief, 2042 G1, 2043 G2/G3, 2044 G8, 2045 G9. **Next free: 2046.** A builder whose piece turns out not to need its number leaves it unused. A builder that needs a number not listed here stops and asks.
+2025 PX (V2 bootstrap), 2026 G0, 2027 C3C, 2028 F2, 2029 B1C, 2030 E7, 2031 F3, 2032 F4, 2033 F7, 2034 K5B, 2035 K6B, 2036 DV1, 2037 C6, 2038 E4, 2039 E5, 2040 E6, 2041 My brief, 2042 G1, 2043 G2/G3, 2044 G8, 2045 G9. 2046 K5A-2 (Q34). **Next free: 2047.** A builder whose piece turns out not to need its number leaves it unused. A builder that needs a number not listed here stops and asks.
 
 ## Throughput check
 That's 46 pieces over 10 days, about 5 released a day. Lane A runs two at a time, W one or two, and O three or four threads at once. B tests every PR. Batches overlap: the next batch's packets are written while the current one builds. **The real limit is merging.** About 25 PRs are already waiting on Ben, and each stacked piece needs its base merged first. A short daily merge window keeps stacks from going stale (see the decisions below).
