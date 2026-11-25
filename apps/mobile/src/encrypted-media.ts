@@ -134,13 +134,13 @@ export class EncryptedMediaStore {
     unsyncedWork: data.unsyncedWork === "none" ? "present" as const : data.unsyncedWork,
     mediaOwnsUnsyncedHold: data.unsyncedWork === "none" ? true : data.mediaOwnsUnsyncedHold }, result: undefined }))
     .catch(error => { throw new MediaRefusal(error instanceof MobileClientError && error.code === "MOBILE_BUSY" ? "MEDIA_BUSY" : "MEDIA_DENIED"); });
+   // Codex P2 (repair 4): rollback goes through sweep(), which treats the reservation as a tombstone and settles the
+   // hold only after EVERY receipt and tombstone was cleaned, so it never clears a hold another receipt still needs.
+   // If the sweep fails, the reservation stays and a later cleanup() finishes the job.
    const undo = async () => {
-    try {
-     for (const path of written) await this.files.remove(path);
-     await this.vault.remove(keyName(mediaId));
-    } catch { return; } // The reservation stays, so a later cleanup() finishes the job.
-    await this.document.transaction(async data => ({ data: settleUnsynced({ ...data,
-     mediaCleanup: data.mediaCleanup.filter(t => t.mediaId !== mediaId) }), result: undefined })).catch(() => undefined);
+    for (const path of written) await this.files.remove(path).catch(() => undefined);
+    await this.vault.remove(keyName(mediaId)).catch(() => undefined);
+    await this.sweep().catch(() => undefined);
    };
    try {
     const key = await this.cipher.randomBytes(32);

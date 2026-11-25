@@ -314,7 +314,7 @@ it("Codex P2 (repair 3): a failed capture whose undo also fails leaves a cleanup
  const failing: MediaCipherPort = { ...real, seal: async (...args) => { if (++seals === 2) throw new Error("fictional cipher failure"); return real.seal(...args); } };
  const r = rig({ cipher: failing }); r.signIn();
  const remove = r.vault.vault.remove; let failKey = true;
- r.vault.vault.remove = async key => { if (failKey) { failKey = false; throw new Error("fictional key store failure"); } return remove(key); };
+ r.vault.vault.remove = async key => { if (failKey) throw new Error("fictional key store failure"); return remove(key); };
  await expect(r.shoot(photo(3 * MEDIA_CHUNK_BYTES))).rejects.toMatchObject({ code: "MEDIA_ENCRYPTION_FAILED" });
  expect(r.vault.keys.size).toBe(1);
  const [reservation] = r.data().mediaCleanup;
@@ -322,6 +322,7 @@ it("Codex P2 (repair 3): a failed capture whose undo also fails leaves a cleanup
  expect([...r.vault.keys.keys()]).toEqual([`m32.mediakey.${reservation!.mediaId}`]);
  expect(r.data().media).toEqual([]); expect(r.data().captures).toEqual([]);
  expect(r.data().unsyncedWork).toBe("present"); // logout stays locked while the key is still in the key store
+ failKey = false; // the key store recovers
  const again = rig({ saved: r.saved, files: r.files, vault: r.vault });
  await again.media.cleanup();
  expect(r.vault.keys.size).toBe(0); expect(r.files.disk.size).toBe(0);
@@ -331,6 +332,20 @@ it("Codex P2 (repair 3): a failed capture whose undo also fails leaves a cleanup
  const c = rig({ cipher: failing }); c.signIn();
  await expect(c.shoot(photo(3 * MEDIA_CHUNK_BYTES))).rejects.toMatchObject({ code: "MEDIA_ENCRYPTION_FAILED" });
  expect(c.data().mediaCleanup).toEqual([]); expect(c.data().unsyncedWork).toBe("none"); expect(c.vault.keys.size).toBe(0);
+ // Codex P2 (repair 4): photo A verified but its cleanup failed; photo B then fails and rolls back cleanly.
+ // B's rollback must not clear the hold while A's key is still in the key store.
+ seals = 0; failKey = false;
+ const a = rig({ cipher: failing }); a.signIn();
+ const shotA = await a.shoot(photo(10)); // seal 1
+ const removeA = a.vault.vault.remove; let failA = true;
+ a.vault.vault.remove = async key => { if (failA && key.endsWith(shotA.mediaId)) throw new Error("fictional key store failure"); return removeA(key); };
+ await a.upload.transfer(shotA.mediaId);
+ expect(a.data().media[0]!.state).toBe("verified_receipt"); expect(a.vault.keys.size).toBe(1);
+ await expect(a.shoot(photo(3 * MEDIA_CHUNK_BYTES))).rejects.toMatchObject({ code: "MEDIA_ENCRYPTION_FAILED" }); // seal 2 fails
+ expect(a.vault.keys.size).toBe(1); expect(a.data().unsyncedWork).toBe("present");
+ failA = false; await a.media.cleanup();
+ expect(a.vault.keys.size).toBe(0); expect(a.files.disk.size).toBe(0);
+ expect(a.data().mediaCleanup).toEqual([]); expect(a.data().unsyncedWork).toBe("none");
  // A successful capture keeps no reservation.
  const ok = rig(); ok.signIn(); await ok.shoot(photo(10));
  expect(ok.data().mediaCleanup).toEqual([]); expect(ok.data().media).toHaveLength(1);
