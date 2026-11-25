@@ -43,7 +43,8 @@ export function V2HireItems({ jobId }: { jobId: string }) {
       }
       throw new Error("Could not save hire item. Check the details and try again.");
     }
-    pending.current = null; await load();
+    // Keep the identity until the refresh succeeds, so a retry after a failed reload replays this command.
+    await load(); pending.current = null;
   }
   function edit(item: HireItem) {
     setEditing(item); setDetails({ kind: item.kind, supplier: item.supplier, bookedFrom: item.bookedFrom,

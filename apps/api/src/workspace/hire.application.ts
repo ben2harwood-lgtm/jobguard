@@ -23,7 +23,7 @@ export class HireApplication {
     const { context } = await this.authorize(jobId);
     const plan = await new WorkPlanApplication(this.pool, this.sessionId).read(jobId, { version: "work-plan-query.v1" });
     return { environment: "synthetic_demo", tasks: plan.tasks.map(task => ({ quoteRevisionId: plan.quoteRevisionId,
-      scopeItemId: task.scopeItemId, templateTaskKey: task.key, title: task.title })), items: await this.hires.list(context, jobId, this.sessionId!) };
+      scopeItemId: task.scopeItemId, templateTaskKey: task.key, title: task.title })), items: await this.hires.list(context, jobId, this.sessionId!, new Date(), plan) };
   }
   async command(jobId: string, raw: unknown) {
     const { context } = await this.authorize(jobId);

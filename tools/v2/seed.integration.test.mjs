@@ -1088,6 +1088,34 @@ test("V2-K8: every hire command persists one audit event, replays nothing, and r
   await verifyTenantChain(DEMO_TENANT_ID);
 });
 
+test("V2-K8: a linked task's date comes from the current plan after a new quote revision", async () => {
+  const { draftJob, sessionId, lines, save, read, edit } = await draftForPlan();
+  let plan = await read();
+  const task = plan.tasks[0];
+  await edit(planEdit(plan, task, { scheduledDate: "2026-01-02" }));
+  plan = await read();
+  const app = createWorkspaceApplication({ pool: runtime, sessionId }).hires;
+  const id = randomUUID();
+  await app.command(draftJob, hireCommand("add", id, 0, { details: hireDetails }));
+  await app.command(draftJob, hireCommand("link", id, 1, { tasks: [{ quoteRevisionId: plan.quoteRevisionId,
+    scopeItemId: task.scopeItemId, templateTaskKey: task.key }] }));
+  const reminderOf = async () => (await app.list(draftJob)).items.find(item => item.hireId === id);
+  assert.equal((await reminderOf()).neededAfter, "2026-01-02");
+  // A new draft revision refreshes the plan; the builder then moves the same task later.
+  await save(1, lines);
+  let refreshed = await read();
+  assert.notEqual(refreshed.quoteRevisionId, plan.quoteRevisionId);
+  const moved = refreshed.tasks.find(next => next.scopeItemId === task.scopeItemId && next.key === task.key);
+  assert.ok(moved, "the linked task survives the refresh");
+  await edit(planEdit(refreshed, moved, { scheduledDate: "2099-01-04" }));
+  const later = await reminderOf();
+  assert.equal(later.reminder, false, "the old revision's date must not trigger an off-hire reminder");
+  assert.equal(later.neededAfter, null);
+  refreshed = await read();
+  await edit(planEdit(refreshed, moved, { scheduledDate: "2026-01-03" }));
+  assert.equal((await reminderOf()).neededAfter, "2026-01-03", "the current plan's date drives the reminder");
+});
+
 test("V2-K8: audit failure rolls back add, edit, link and both status commands", async () => {
   const { HireRepository } = await import("../../packages/db/dist/index.js");
   const { draftJob, sessionId, read } = await draftForPlan();

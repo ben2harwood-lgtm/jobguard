@@ -8,12 +8,14 @@ import { approximateHireCost, hireCommandV1, hireNeededAfter, londonHireDate, Hi
 
 export type HireReceipt = { hireId: string; itemVersion: number; actorMembershipId: string; recordedAt: string };
 type HireRow = HireReceipt & { state: HireState };
+/** The job's current work plan, as the work-plan application opens it. */
+export type CurrentPlan = { tasks: readonly { scopeItemId: string; key: string; scheduledDate?: string | null }[] };
 const taskKey = (task: HireTask) => `${task.quoteRevisionId}/${task.scopeItemId}/${task.templateTaskKey}`;
 
 export class HireRepository {
   constructor(private readonly pool: Pool) {}
 
-  async list(context: VerifiedTenantContext, jobId: string, sessionId: string, now = new Date()) {
+  async list(context: VerifiedTenantContext, jobId: string, sessionId: string, now = new Date(), current?: CurrentPlan) {
     const rows = await withTenant(this.pool, context, async ({ $client }) => {
       await this.editor($client, sessionId);
       return (await $client.query<HireRow>(`SELECT DISTINCT ON (hire_id)
@@ -22,22 +24,31 @@ export class HireRepository {
         FROM app.v2_hire_revision WHERE (tenant_id, job_id) = ($1,$2)
         ORDER BY hire_id, item_version DESC`, [context.tenantId, jobId])).rows;
     });
-    // Read existing plans only: this must never create a plan as a side effect.
-    const plans = new WorkPlanRepository(this.pool);
+    // Linked tasks resolve against the job's current plan by scope item and task key, so a
+    // reschedule on a newer quote revision is what counts. A link whose task is not in the
+    // current plan has no date and so never triggers a reminder.
+    const currentDates = new Map((current?.tasks ?? []).map(task => [`${task.scopeItemId}/${task.key}`, task.scheduledDate ?? null]));
     const dates = new Map<string, string | null>();
-    for (const revision of new Set(rows.flatMap(row => row.state.tasks.map(task => task.quoteRevisionId)))) {
-      try {
-        const plan = await plans.read(context, { version: "work-plan-source.v1", jobId, quoteRevisionId: revision });
-        for (const task of plan?.tasks ?? []) dates.set(taskKey({ quoteRevisionId: revision,
-          scopeItemId: task.scopeItemId, templateTaskKey: task.key }), task.scheduledDate ?? null);
-      } catch (error) {
-        // A superseded plan is never evidence that linked work no longer needs hire.
-        if (!(error instanceof Error && "code" in error && error.code === "WORK_PLAN_VERSION_CONFLICT")) throw error;
+    if (!current) {
+      // Read existing plans only: this must never create a plan as a side effect.
+      const plans = new WorkPlanRepository(this.pool);
+      for (const revision of new Set(rows.flatMap(row => row.state.tasks.map(task => task.quoteRevisionId)))) {
+        try {
+          const plan = await plans.read(context, { version: "work-plan-source.v1", jobId, quoteRevisionId: revision });
+          for (const task of plan?.tasks ?? []) dates.set(taskKey({ quoteRevisionId: revision,
+            scopeItemId: task.scopeItemId, templateTaskKey: task.key }), task.scheduledDate ?? null);
+        } catch (error) {
+          // A superseded plan is never evidence that linked work no longer needs hire.
+          if (!(error instanceof Error && "code" in error && error.code === "WORK_PLAN_VERSION_CONFLICT")) throw error;
+        }
       }
     }
+    const dateOf = (task: HireTask) => current
+      ? currentDates.get(`${task.scopeItemId}/${task.templateTaskKey}`) ?? null
+      : dates.get(taskKey(task)) ?? null;
     const today = londonHireDate(now);
     return rows.map(({ state, ...row }): HireItem => {
-      const neededAfter = hireNeededAfter(state, state.tasks.map(task => dates.get(taskKey(task)) ?? null), today);
+      const neededAfter = hireNeededAfter(state, state.tasks.map(dateOf), today);
       return { ...row, ...state, reminder: neededAfter !== null, neededAfter,
         approximateCost: approximateHireCost(state, today) };
     });
