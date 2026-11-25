@@ -64,6 +64,7 @@ for (const width of [360, 1280]) test(`K3 preview/edit/send survives reload at $
     const week = width === 360 ? "2027-01-11" : "2027-01-18";
     const weekLabel = width === 360 ? "Monday 11 January 2027" : "Monday 18 January 2027";
     await page.goto(`${origin}/jobs/${jobId}/friday-update`);
+    await page.waitForLoadState("networkidle");
     const main = page.getByRole("main");
     await expect(main.getByTestId("friday-update")).toBeVisible();
     // V2's Next config disables the dev indicator; all content checks stay in main.
@@ -78,11 +79,20 @@ for (const width of [360, 1280]) test(`K3 preview/edit/send survives reload at $
     await main.getByLabel("Next week text").fill("Grout the splashback.");
     for (const button of await main.getByTestId("friday-update").getByRole("button").all())
       expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    await main.getByRole("button", { name: "Save text", exact: true }).click();
+    // Wait for the save itself: the text shows from local state while the POST is still in flight,
+    // and a reload then could abort it.
+    const [saved] = await Promise.all([
+      page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === `/api/jobs/${jobId}/friday-update`),
+      main.getByRole("button", { name: "Save text", exact: true }).click(),
+    ]);
+    expect(saved.status()).toBe(200);
     await expect(main.getByText("Splashback prepared and tiled.", { exact: true })).toBeVisible();
     await page.reload();
+    // Let the dev server hydrate first: a fill before hydration is reset to the default week.
+    await page.waitForLoadState("networkidle");
     await expect(main.getByLabel("Week starting Monday")).toBeEnabled();
     await main.getByLabel("Week starting Monday").fill(week);
+    await expect(main.getByLabel("Week starting Monday")).toHaveValue(week);
     await expect(main.getByText("Splashback prepared and tiled.", { exact: true })).toBeVisible();
     await expect(main.getByText(`Week of ${weekLabel} · to customer@jobguard-v2.invalid`, { exact: true })).toBeVisible();
     await main.getByRole("button", { name: "Preview as the customer sees it", exact: true }).click();
@@ -112,8 +122,11 @@ for (const width of [360, 1280]) test(`K3 preview/edit/send survives reload at $
     await expect(main.getByText(/sent to the practice inbox\. Sending this version again adds nothing/u)).toBeVisible();
     await expect(send).toBeDisabled();
     await page.reload();
+    // Let the dev server hydrate first: a fill before hydration is reset to the default week.
+    await page.waitForLoadState("networkidle");
     await expect(main.getByLabel("Week starting Monday")).toBeEnabled();
     await main.getByLabel("Week starting Monday").fill(week);
+    await expect(main.getByLabel("Week starting Monday")).toHaveValue(week);
     await expect(main.getByRole("button", { name: "Send update", exact: true })).toBeDisabled();
     await expect(main.getByText("Grout the splashback.", { exact: true })).toBeVisible();
     await main.getByRole("button", { name: "Preview as the customer sees it", exact: true }).click();
