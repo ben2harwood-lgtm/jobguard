@@ -25,6 +25,7 @@ A plain line for the builder only: "Quoted £18,400, extras £1,250, spent £9,1
   1. Keep the builder, leak-pair and second-firm tests on the real V2 database.
   2. Prove the read endpoint's **own** role gate with an HTTP-level test. Use the same route handler and a session whose resolved membership role is crew or customer (the repo's existing role-check test pattern). It must get the plain refusal and a body with no figures.
   3. Don't add skipped or todo tests, because rule 10 forbids silent skips. List the real-session crew and customer cases in the PR body under "Waits for V2-SX".
+  - **Correction (25 Nov 02:55 UK, plan check 7150113086).** The seed test that sends `jg_customer_session=fictional-customer-token` and expects 401 proves only that an invalid session is refused. It does not prove a real customer is refused. Keep it, but name it "invalid customer cookie is refused", and don't count it as the customer-role test. The real-role proof (separate cookie jars, no financial fields, after signout, across firms) is in V2-SX revision 2 and comes back as K10-R.
   4. K10 is judged on 1 and 2. The real-session tests come back as **K10-R**, test files only, once V2-SX merges.
 
 ## Done when
