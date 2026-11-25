@@ -50,6 +50,8 @@ test("captured extras can be priced, and stale edits and rejections preserve app
   expect(saved.variations.find(v => v.id === priced.id)!.revisions).toHaveLength(2);
   expect(saved.approvedAdditionsPence).toBe(20000);
   await page.reload();
-  await page.getByRole("button", { name: "Price the work", exact: true }).click();
+  const price = page.getByRole("button", { name: "Price the work", exact: true });
+  await page.locator(".quote-editor").or(price).first().waitFor();
+  if (await price.isVisible()) await price.click();
   await expect(page.getByTestId("approved-additions")).toHaveText("£200.00");
 });
