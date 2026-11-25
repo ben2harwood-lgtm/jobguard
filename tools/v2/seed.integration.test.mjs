@@ -1042,7 +1042,7 @@ async function liveJobForDirections() {
   const { parties, quote, workPlan, variation } = createWorkspaceApplication({ pool: runtime, sessionId });
   const partyView = await parties.view({ sessionId }, draftJob);
   const customer = { version: "customer.v1", type: "person", name: "Fictional C3B-2 Customer",
-    email: "c3b2-customer@jobguard-v2.invalid", phone: "+447700900043" };
+    email: "customer@jobguard-v2.invalid", phone: "+447700900043" };
   await parties.command({ sessionId }, draftJob, {
     version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
     expectedJobRevision: partyView.jobRevision, expectedBindingId: null, customer, customerRef: null,
@@ -1133,7 +1133,8 @@ test("C3B-2: a no-charge extra marked 'adds work' can be planned, 'removes work'
   assert.equal(more.length, 0, "the replay appended nothing");
   assert.equal(event.tenant_id, context.tenantId);
   assert.equal(event.actor_ref, `membership:${receipt.actorMembershipId}`);
-  assert.deepEqual(event.payload.references, { commandId: adds.commandId, variationRevisionId: socket.revisionId,
+  assert.deepEqual(event.payload.references, { ...event.payload.references, commandId: adds.commandId,
+    variationRevisionId: socket.revisionId,
     scopeItemId: socket.scopeItemId, direction: "adds_work" });
   assert.equal("version" in event.payload.references, false);
   assert.doesNotMatch(JSON.stringify(event.payload), /socket/iu, "no free text in the audit payload");

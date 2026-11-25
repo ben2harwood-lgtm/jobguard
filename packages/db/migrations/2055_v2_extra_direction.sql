@@ -29,8 +29,9 @@ BEGIN
     UNIQUE (tenant_id, job_id, command_id),
     FOREIGN KEY (tenant_id, job_id, variation_revision_id) REFERENCES app.variation_revision (tenant_id, job_id, id),
     FOREIGN KEY (tenant_id, job_id, scope_item_id) REFERENCES app.scope_identity (tenant_id, job_id, id),
-    FOREIGN KEY (tenant_id, job_id, quote_revision_id) REFERENCES app.v2_work_plan (tenant_id, job_id, quote_revision_id),
-    FOREIGN KEY (tenant_id, actor_membership_id) REFERENCES app.membership (tenant_id, id)
+    -- The actor is the signed-in person's own membership from app.v2_work_plan_editor(), which lives in
+    -- their firm, not the shared practice tenant, so it has no tenant foreign key (as in 2003).
+    FOREIGN KEY (tenant_id, job_id, quote_revision_id) REFERENCES app.v2_work_plan (tenant_id, job_id, quote_revision_id)
   );
 
   CREATE OR REPLACE FUNCTION app.v2_extra_direction_check()
