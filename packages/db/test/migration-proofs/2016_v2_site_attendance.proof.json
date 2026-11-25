@@ -1,0 +1,6 @@
+{
+  "migration": "2016_v2_site_attendance.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

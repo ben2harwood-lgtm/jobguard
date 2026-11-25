@@ -68,6 +68,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2020_v2_plan_variation_scope.sql", import.meta.url), "utf8"));
   // V2-C3C crew records (2027).
   await client.query(readFileSync(new URL("../../packages/db/migrations/2027_v2_crew_contact.sql", import.meta.url), "utf8"));
+  // V2-F8 who was on site today (2016), after the crew records it checks. Rule 30: stays above FL-6's 2054 line.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2016_v2_site_attendance.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
