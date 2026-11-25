@@ -11,6 +11,7 @@
         "apps/api/src/workspace/index.ts",
         "apps/api/src/workspace/stock.application.ts",
         "apps/web/app/api/jobs/[id]/stock/route.ts",
+        "apps/web/app/api/jobs/[id]/stock/route.test.ts",
         "packages/db/src/index.ts",
         "packages/db/src/v2-stock-repository.ts",
         "packages/db/test/v2-stock.test.ts",

@@ -1352,7 +1352,7 @@ test("V2-E3 forecasts and confirmed dates add no stock; three of five received p
   assert.deepEqual((await createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId }).stock.read(jobId, stockQuery)),
     await stock.read(jobId, stockQuery));
   const rest = { ...receive, commandId: randomUUID(), expectedVersion: 3, packsReceived: "2" };
-  await json(await request(path, { cookies: owner.cookies, body: rest }));
+  await json(await request(path, { cookies: owner.cookies, csrf: owner.csrfToken, body: rest }));
   assert.deepEqual(pick(await position(), ["availablePacks", "shortPacks"]), { availablePacks: "6", shortPacks: "0" });
   // Even after subsequent receipts, replay returns the exact earlier partial receipt.
   assert.deepEqual(await stock.execute(jobId, receive), received);
@@ -1390,7 +1390,7 @@ test("V2-E3 refuses stale, changed replay, over-receipt and invalid transitions;
 
   await assert.rejects(stock.execute(jobId, { ...receipt, commandId: randomUUID(), expectedVersion: 2, packsReceived: "0" }),
     { code: "STOCK_INVALID_COMMAND" });
-  await json(await request(`/api/jobs/${jobId}/stock`, { cookies: owner.cookies, body: over }), 400);
+  await json(await request(`/api/jobs/${jobId}/stock`, { cookies: owner.cookies, csrf: owner.csrfToken, body: over }), 400);
   assert.equal((await request(`/api/jobs/${jobId}/stock`)).status, 401);
 });
 
@@ -1436,7 +1436,7 @@ test("V2-E3 FORCE RLS and runtime privileges deny second-firm select, insert, up
   await assert.rejects(other.read(jobId, stockQuery), { code: "NOT_FOUND" });
   await assert.rejects(other.execute(jobId, forecast()), { code: "NOT_FOUND" });
   await json(await request(`/api/jobs/${jobId}/stock`, { cookies: outsider.cookies }), 404);
-  await json(await request(`/api/jobs/${jobId}/stock`, { cookies: outsider.cookies, body: forecast() }), 404);
+  await json(await request(`/api/jobs/${jobId}/stock`, { cookies: outsider.cookies, csrf: outsider.csrfToken, body: forecast() }), 404);
   const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced,
     relowner::regrole::text AS owner, has_table_privilege('jobguard_runtime',oid,'SELECT') AS can_read,
     has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
