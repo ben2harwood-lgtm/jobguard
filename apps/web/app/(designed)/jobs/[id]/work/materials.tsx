@@ -51,7 +51,7 @@ function ProductForm({ line, busy, save, cancel }: {
       <label>Product<input name="product" maxLength={200} defaultValue={line?.product ?? ""}/></label>
       <div className="field-pair">
         <label>Pack size<input name="packQuantity" inputMode="decimal" maxLength={40} defaultValue={line?.packSize?.quantity ?? ""}/></label>
-        <label>Pack unit<input name="packUnit" maxLength={40} defaultValue={line?.packSize?.unit ?? line?.measurement?.unit ?? ""}/></label>
+        <label>Pack unit<input name="packUnit" maxLength={40} defaultValue={line?.packSize?.unit ?? ""}/></label>
       </div>
       <label>Firm's wastage multiplier (1.10 includes 10%)<input name="allowance" inputMode="decimal" maxLength={40} defaultValue={line?.wastageMultiplier ?? ""}/></label>
       <label>Confirmed usable whole packs set aside for this job<input name="stock" inputMode="numeric" maxLength={9} defaultValue={line?.setAsidePacks ?? "0"}/></label>

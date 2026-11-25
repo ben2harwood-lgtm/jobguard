@@ -104,6 +104,24 @@ test("D5B-M measurements to products to unsent enquiry, persisted with stale and
     await page.reload();
     await expect(card(page).locator("section").filter({ has: page.getByRole("heading", { name: "Customer-supplied items", exact: true }) }).getByRole("article").filter({ hasText: `Fictional tiles ${width}` })).toBeVisible();
   }
+  // A measured scope can have a material whose pack size is still unknown.
+  const pendingProduct = `Fictional pending pack ${randomUUID()}`;
+  await card(page).getByLabel("Add product for").selectOption(scopeItemId);
+  await card(page).getByLabel("Product", { exact: true }).fill(pendingProduct);
+  await card(page).getByRole("button", { name: "Save material", exact: true }).click();
+  await expect(card(page).getByText("Material saved.", { exact: true })).toBeVisible();
+  await page.reload();
+
+  const pendingRow = card(page).getByRole("article").filter({ has: page.getByRole("heading", { name: pendingProduct }) });
+  await pendingRow.getByRole("button", { name: `Edit material ${pendingProduct}` }).click();
+  await expect(pendingRow.getByLabel("Pack size", { exact: true })).toHaveValue("");
+  await expect(pendingRow.getByLabel("Pack unit", { exact: true })).toHaveValue("");
+  await pendingRow.getByLabel("Enquiry notes").fill("Waiting for merchant pack details");
+  await pendingRow.getByRole("button", { name: "Save material", exact: true }).click();
+  await expect(card(page).getByText("Material saved.", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(pendingRow).toContainText("Waiting for merchant pack details");
+  await expect(pendingRow).toContainText("Enter the pack size");
   expect(outbound).toEqual([]);
 });
 
