@@ -1,0 +1,6 @@
+{
+  "migration": "2055_v2_extra_direction.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

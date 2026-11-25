@@ -1,5 +1,5 @@
 import { customWorkPlanTaskKey, WorkPlanError } from "@jobguard/db";
-import { workPlanEditV1 } from "@jobguard/api/workspace";
+import { workPlanEditV1, workPlanExtraDirectionV1 } from "@jobguard/api/workspace";
 import { NextResponse } from "next/server";
 import { practiceFailure } from "../../../../../lib/synthetic-server";
 import { workspaceApplication } from "../../../../../lib/workspace-server";
@@ -51,11 +51,16 @@ export async function GET(_request: Request, { params }: Route) {
 
 export async function POST(request: Request, { params }: Route) {
   if (process.env.JOBGUARD_LOCAL_V2 !== "1") return failure("NOT_FOUND", 404);
-  const input = workPlanEditV1.safeParse(await request.json().catch(() => null));
-  if (!input.success) return failure("WORK_PLAN_INVALID_EDIT", 400);
+  const body: unknown = await request.json().catch(() => null);
+  const edit = workPlanEditV1.safeParse(body);
+  // C3B-2: the direction body is parsed only when the edit body fails.
+  const direction = edit.success ? null : workPlanExtraDirectionV1.safeParse(body);
+  if (!edit.success && !direction?.success) return failure("WORK_PLAN_INVALID_EDIT", 400);
   try {
     const { workPlan } = await workspaceApplication();
-    return NextResponse.json(await workPlan.edit((await params).id, input.data));
+    const { id } = await params;
+    return NextResponse.json(edit.success ? await workPlan.edit(id, edit.data)
+      : await workPlan.recordExtraDirection(id, direction!.data!));
   } catch (error) {
     return planFailure(error);
   }

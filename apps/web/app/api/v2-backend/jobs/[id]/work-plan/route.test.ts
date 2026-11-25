@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const read = vi.hoisted(() => vi.fn());
+const { read, edit, recordExtraDirection } = vi.hoisted(() => ({ read: vi.fn(), edit: vi.fn(), recordExtraDirection: vi.fn() }));
 vi.mock("../../../../../lib/workspace-server", () => ({
-  workspaceApplication: async () => ({ workPlan: { read }, quote: { acceptanceView: async () => ({ events: [], activeAcceptance: {} }) } }),
+  workspaceApplication: async () => ({ workPlan: { read, edit, recordExtraDirection }, quote: { acceptanceView: async () => ({ events: [], activeAcceptance: {} }) } }),
 }));
 vi.mock("../../../../../lib/synthetic-server", () => ({ practiceFailure: () => null }));
-import { GET } from "./route";
+import { GET, POST } from "./route";
 
 const jobId = "00000000-0000-4000-8000-000000000001";
 const lineScope = "00000000-0000-4000-8000-000000000010";
@@ -47,4 +47,39 @@ it("stays closed outside V2", async () => {
   const response = await GET(new Request("https://company.invalid/x"), { params: Promise.resolve({ id: jobId }) });
   expect(response.status).toBe(404);
   expect(read).not.toHaveBeenCalled();
+});
+
+// C3B-2 (Q48): the POST takes either body version, and parses the direction body only when the edit body fails.
+describe("POST chooses between the edit and direction bodies", () => {
+  const post = (body: unknown) => POST(new Request(`https://company.invalid/api/v2-backend/jobs/${jobId}/work-plan`,
+    { method: "POST", body: JSON.stringify(body) }), { params: Promise.resolve({ id: jobId }) });
+  const base = { commandId: revision(3), quoteRevisionId: revision(0), expectedVersion: 2 };
+  beforeEach(() => { edit.mockResolvedValue({ kind: "edit" }); recordExtraDirection.mockResolvedValue({ kind: "direction" }); });
+  afterEach(() => { edit.mockReset(); recordExtraDirection.mockReset(); });
+
+  it("sends an edit body to edit", async () => {
+    const body = { ...base, version: "work-plan-edit.v1", scopeItemId: lineScope, taskKey: "prepare", changes: { trade: "joiner" } };
+    expect(await (await post(body)).json()).toEqual({ kind: "edit" });
+    expect(edit).toHaveBeenCalledWith(jobId, body);
+    expect(recordExtraDirection).not.toHaveBeenCalled();
+  });
+
+  it("sends a direction body to recordExtraDirection", async () => {
+    const body = { ...base, version: "work-plan-extra-direction.v1", variationRevisionId: revision(1), direction: "adds_work" };
+    expect(await (await post(body)).json()).toEqual({ kind: "direction" });
+    expect(recordExtraDirection).toHaveBeenCalledWith(jobId, body);
+    expect(edit).not.toHaveBeenCalled();
+  });
+
+  it("refuses a body that is neither", async () => {
+    for (const body of [null, { ...base, version: "work-plan-extra-direction.v1", variationRevisionId: revision(1),
+      direction: "sideways" }, { ...base, version: "work-plan-extra-direction.v1", variationRevisionId: revision(1),
+      direction: "adds_work", scopeItemId: lineScope }]) {
+      const response = await post(body);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ code: "WORK_PLAN_INVALID_EDIT" });
+    }
+    expect(edit).not.toHaveBeenCalled();
+    expect(recordExtraDirection).not.toHaveBeenCalled();
+  });
 });

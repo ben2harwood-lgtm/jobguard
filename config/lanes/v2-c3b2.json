@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-c3b2": {
+      "branches": [
+        "claude/project-thread-ff8k1c-c3b2"
+      ],
+      "note": "RED. The builder says whether an approved no-charge extra adds or removes work (migration 2055, app.v2_extra_direction); 'adds work' lets it join the plan. Money is never recalculated. Stacked on v2-c3b1 (claude/project-thread-ff8k1c). Changes to C3B (#922) files: v2-work-plan-edits.ts adds workPlanExtraDirectionV1; v2-work-plan-repository.ts reads the direction in approvedScope's one statement, adds variationRevisionId to extrasNotPlanned, counts directions in the plan version and adds recordExtraDirection. C3B-1/c4 mounts: route.ts POST accepts the direction body; work-plan.tsx shows Adds work / Removes work. Shared files: own entries only (bootstrap 2055 line, purchase-order-audit deferral, seed test appended; two #922 extrasNotPlanned assertions now also expect variationRevisionId, agreed by the coordinator). The validator includes config/lanes/v2-c3b2.json implicitly.",
+      "allow": [
+        "apps/api/src/workspace/work-plan.application.ts",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan-command.test.ts",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan-command.ts",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.tsx",
+        "apps/web/app/api/v2-backend/jobs/[id]/work-plan/route.test.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/work-plan/route.ts",
+        "apps/web/e2e/artifacts/v2-c3b2/direction-ask-1280.png",
+        "apps/web/e2e/artifacts/v2-c3b2/direction-ask-360.png",
+        "apps/web/e2e/artifacts/v2-c3b2/direction-planned-1280.png",
+        "apps/web/e2e/artifacts/v2-c3b2/direction-planned-360.png",
+        "apps/web/e2e/v2-c4.spec.mts",
+        "packages/db/migration-notes/2055_v2_extra_direction.md",
+        "packages/db/migrations/2055_v2_extra_direction.sql",
+        "packages/db/src/v2-work-plan-edits.ts",
+        "packages/db/src/v2-work-plan-repository.ts",
+        "packages/db/test/migration-proofs/2055_v2_extra_direction.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/v2-work-plan-extra-direction.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

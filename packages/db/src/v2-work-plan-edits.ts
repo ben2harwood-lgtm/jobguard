@@ -25,6 +25,18 @@ export const workPlanEditV1 = z.strictObject({
 
 export type WorkPlanEdit = z.infer<typeof workPlanEditV1>;
 
+// C3B-2: the builder says once, per approved no-charge revision, whether the extra adds or removes work.
+export const workPlanExtraDirectionV1 = z.strictObject({
+  version: z.literal("work-plan-extra-direction.v1"),
+  commandId: uuid,
+  quoteRevisionId: uuid,
+  expectedVersion: z.number().int().min(0).max(2_147_483_647),
+  variationRevisionId: uuid,
+  direction: z.enum(["adds_work", "removes_work"]),
+});
+
+export type WorkPlanExtraDirection = z.infer<typeof workPlanExtraDirectionV1>;
+
 export type WorkPlanTask = {
   key: string;
   scopeItemId: string;

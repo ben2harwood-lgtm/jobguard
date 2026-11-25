@@ -4,10 +4,11 @@ import { z } from "zod";
 import { appendAuditBatch } from "./audit.js";
 import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { splashbackDecoratingTemplate } from "./v2-splashback-decorating-template.js";
-import { applyWorkPlanEdits, compareWorkPlanTasks, customWorkPlanTaskKey, workPlanEditV1,
-  type WorkPlanEdit, type WorkPlanEditRow, type WorkPlanScopeRow } from "./v2-work-plan-edits.js";
+import { applyWorkPlanEdits, compareWorkPlanTasks, customWorkPlanTaskKey, workPlanEditV1, workPlanExtraDirectionV1,
+  type WorkPlanEdit, type WorkPlanEditRow, type WorkPlanExtraDirection, type WorkPlanScopeRow } from "./v2-work-plan-edits.js";
 
-export { customWorkPlanTaskKey, workPlanEditV1, workPlanQueryV1, type WorkPlanEdit } from "./v2-work-plan-edits.js";
+export { customWorkPlanTaskKey, workPlanEditV1, workPlanExtraDirectionV1, workPlanQueryV1, type WorkPlanEdit,
+  type WorkPlanExtraDirection } from "./v2-work-plan-edits.js";
 
 interface TemplateTask {
   key: string;
@@ -53,7 +54,10 @@ type ApprovedVariation = {
   signedDeltaPence: number;
 };
 type ApprovedScopeRow = Omit<ApprovedVariation, "signedDeltaPence"> & { signedDeltaPence: string;
-  source: WorkPlanScopeRow["source"]; onQuote: boolean; createdAt: Date; variationId: string };
+  source: WorkPlanScopeRow["source"]; onQuote: boolean; createdAt: Date; variationId: string;
+  direction: "adds_work" | "removes_work" | null };
+type DirectionReceipt = { commandId: string; quoteRevisionId: string; variationRevisionId: string;
+  direction: "adds_work" | "removes_work"; actorMembershipId: string; recordedAt: Date };
 type EditReceipt = { commandId: string; quoteRevisionId: string; version: number; actorMembershipId: string; recordedAt: Date };
 
 export class WorkPlanError extends Error {
@@ -146,6 +150,59 @@ export class WorkPlanRepository {
       // A replay returned above, so each recorded edit appends exactly one event in this transaction.
       await this.audit(database, editor.id, jobId, command, saved!.version, extra);
       return saved;
+    });
+  }
+
+  // C3B-2: the builder says whether an approved no-charge extra adds or removes work. Money is unchanged.
+  async recordExtraDirection(context: VerifiedTenantContext, jobId: string, sessionId: string, input: WorkPlanExtraDirection) {
+    const command = workPlanExtraDirectionV1.parse(input);
+    const key: PlanKey = [context.tenantId, jobId, command.quoteRevisionId];
+    const { commandId: _commandId, ...request } = command;
+    const digest = createHash("sha256").update(JSON.stringify(request)).digest("hex");
+    return withTenant(this.pool, context, async database => {
+      const { $client: client } = database;
+      const session = createHash("sha256").update(sessionId).digest("hex");
+      const { rows: [editor] } = await client.query<{ id: string | null }>("SELECT app.v2_work_plan_editor($1) AS id", [session]);
+      if (!editor?.id) throw new WorkPlanError("WORK_PLAN_EDITOR_REQUIRED");
+
+      const head = await this.planHead(client, key[0], jobId, true);
+      const { rows: [prior] } = await client.query<DirectionReceipt & { matches: boolean }>(`
+        SELECT command_id AS "commandId", quote_revision_id AS "quoteRevisionId", variation_revision_id AS "variationRevisionId",
+          direction, actor_membership_id AS "actorMembershipId", recorded_at AS "recordedAt",
+          request_digest = $4 AND actor_membership_id = $5 AS matches
+        FROM app.v2_extra_direction WHERE (tenant_id, job_id, command_id) = ($1, $2, $3)
+      `, [key[0], jobId, command.commandId, digest, editor.id]);
+      if (prior) {
+        const { matches, ...saved } = prior;
+        if (!matches) throw new WorkPlanError("WORK_PLAN_COMMAND_CONFLICT");
+        return { ...saved, version: command.expectedVersion + 1 };
+      }
+      this.requireCurrentRevision(head);
+      if (head.quoteRevisionId !== command.quoteRevisionId) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
+      const plan = await this.generatePlan(database, key, head);
+      if (plan.version !== command.expectedVersion) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
+      const extra = plan.extrasNotPlanned.find(item => item.variationRevisionId === command.variationRevisionId &&
+        item.reason === "direction_unknown");
+      if (!extra) throw new WorkPlanError("WORK_PLAN_INVALID_EDIT");
+      const { rows: [saved] } = await client.query<DirectionReceipt>(`
+        INSERT INTO app.v2_extra_direction (tenant_id, job_id, variation_revision_id, scope_item_id, direction,
+          quote_revision_id, command_id, request_digest, actor_membership_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        RETURNING command_id AS "commandId", quote_revision_id AS "quoteRevisionId",
+          variation_revision_id AS "variationRevisionId", direction, actor_membership_id AS "actorMembershipId",
+          recorded_at AS "recordedAt"
+      `, [key[0], jobId, command.variationRevisionId, extra.scopeItemId, command.direction, command.quoteRevisionId,
+        command.commandId, digest, editor.id]);
+      // A replay returned above, so each recorded direction appends exactly one event in this transaction.
+      await appendAuditBatch(database, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${editor.id}`,
+        eventType: "v2_work_plan.extra_direction_recorded", subjectType: "job", subjectRef: jobId,
+        payload: {
+          references: { commandId: command.commandId, variationRevisionId: command.variationRevisionId,
+            scopeItemId: extra.scopeItemId, direction: command.direction },
+          hashes: { request: digest },
+          classifications: { action: "operational" },
+        } }]);
+      return { ...saved!, version: command.expectedVersion + 1 };
     });
   }
 
@@ -310,13 +367,15 @@ export class WorkPlanRepository {
             'quantity', r.quantity_decimal, 'unit', r.unit) AS source,
           EXISTS (SELECT FROM app.quote_line q WHERE (q.tenant_id, q.job_id, q.quote_revision_id, q.scope_item_id)
             = ($1, $2, $3, r.scope_item_id)) AS "onQuote",
-          v.created_at AS "createdAt", a.variation_id AS "variationId"
+          v.created_at AS "createdAt", a.variation_id AS "variationId", d.direction
         FROM app.variation_approval a JOIN app.variation_revision r
           ON (r.tenant_id, r.job_id, r.variation_id, r.id, r.revision, r.content_hash)
            = (a.tenant_id, a.job_id, a.variation_id, a.revision_id, a.revision, a.content_hash)
         JOIN app.variation v ON (v.tenant_id, v.job_id, v.id) = (a.tenant_id, a.job_id, a.variation_id)
         LEFT JOIN app.quote_line p ON (p.tenant_id, p.job_id, p.quote_revision_id, p.scope_item_id)
           = (v.tenant_id, v.job_id, $3, v.lineage_parent_scope_item_id)
+        -- The builder's answer for a no-charge revision, read in this same snapshot (C3B-2).
+        LEFT JOIN app.v2_extra_direction d ON (d.tenant_id, d.job_id, d.variation_revision_id) = (r.tenant_id, r.job_id, r.id)
         WHERE (a.tenant_id, a.job_id) = ($1, $2)
           AND r.signed_delta_pence = a.signed_delta_pence
         ORDER BY a.variation_id, a.revision DESC
@@ -332,11 +391,13 @@ export class WorkPlanRepository {
       .filter(row => !seen.has(row.scopeItemId) && seen.add(row.scopeItemId));
     // Only an approved addition is work to plan. An approved omission is removed work: its money stays
     // in the agreement, but it never becomes a task. The variation stores no direction apart from the
-    // sign of its money, so a zero-value extra is not assumed to be an addition and is held back too.
-    const notPlanned = extras.filter(row => Number(row.signedDeltaPence) <= 0).map(row => ({
-      scopeItemId: row.scopeItemId, title: row.description,
-      reason: Number(row.signedDeltaPence) < 0 ? "omission" as const : "direction_unknown" as const }));
-    const scope: WorkPlanScopeRow[] = extras.filter(row => Number(row.signedDeltaPence) > 0)
+    // sign of its money, so a zero-value extra waits for the builder to say whether it adds or removes work.
+    const sign = (row: ApprovedScopeRow) => Number(row.signedDeltaPence) ||
+      (row.direction === "adds_work" ? 1 : row.direction === "removes_work" ? -1 : 0);
+    const notPlanned = extras.filter(row => sign(row) <= 0).map(row => ({
+      scopeItemId: row.scopeItemId, title: row.description, variationRevisionId: row.revisionId,
+      reason: sign(row) < 0 ? "omission" as const : "direction_unknown" as const }));
+    const scope: WorkPlanScopeRow[] = extras.filter(row => sign(row) > 0)
       .filter(row => revisions.set(row.scopeItemId, row.revisionId))
       .map(row => ({ scope_item_id: row.scopeItemId, source: row.source, template_task_key: null }));
     const tasks = scope.flatMap(row => this.template.tasks.filter(task => task.category === row.source.category)
@@ -374,6 +435,11 @@ export class WorkPlanRepository {
       ORDER BY h.distance DESC, e.expected_version
     `, key);
     const inherited = edits.filter(edit => edit.quote_revision_id !== key[2]);
+    const { rows: [counted] } = await client.query<{ directions: number }>(`
+      SELECT count(*)::int AS directions FROM app.v2_extra_direction
+      WHERE (tenant_id, job_id, quote_revision_id) = ($1, $2, $3)
+    `, key);
+    const directions = counted?.directions ?? 0;
     const base = await this.loadTasks(client, key);
     // Approved extras exist only once the quote is accepted, so they never appear in a refresh comparison.
     const extras = head.acceptedDocumentId ? await this.approvedScope(client, key, base.tasks.length) : null;
@@ -393,7 +459,8 @@ export class WorkPlanRepository {
     const state = head.activationId ? "live" as const : agreement ? "accepted" as const : "draft" as const;
     return { jobId: key[1], quoteRevisionId: key[2], templateKey: plan.template_key, state, agreement,
       activationId: head.activationId,
-      version: edits.length - inherited.length, tasks: current.tasks, unplanned: current.unplanned,
+      // A recorded no-charge direction changes the plan's shape, so it counts as one plan change (C3B-2).
+      version: edits.length - inherited.length + directions, tasks: current.tasks, unplanned: current.unplanned,
       scopeItems: [...current.sources].map(([scopeItemId, details]) => {
         const variationRevisionId = extras?.revisions.get(scopeItemId);
         return { scopeItemId, ...details, ...(variationRevisionId && { variationRevisionId }) };

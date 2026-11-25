@@ -262,6 +262,66 @@ test("an approved extra can be planned from the screen and a later approval make
   checkRequests();
 });
 
+// C3B-2 (Q48): a no-charge extra is marked "Adds work", then planned. Runs on the seeded job after the tests above.
+test("a no-charge extra marked Adds work can be planned and the plan keeps it after reload", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  const checkRequests = trackRequests(page, baseURL!);
+  const jobs = await json<{ jobs: { id: string; title: string }[] }>(
+    await page.request.get(`/api/jobs?tenantId=${tenantId}`));
+  const job = jobs.jobs.find(row => row.title === "Occupied-home kitchen splashback and hall decorating");
+  expect(job).toBeDefined();
+  const path = planPath(job!.id);
+  const card = planCard(page);
+  if ((await json<{ state: string }>(await page.request.get(path))).state !== "live") {
+    await json(await page.request.post(`/api/v2-backend/jobs/${job!.id}/quotes/activation`, { data: {
+      version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" } }));
+  }
+  const vary = async (fields: Record<string, unknown>) => json<{ variations: { id: string; currentRevisionId: string }[] }>(
+    await page.request.post(`/api/jobs/${job!.id}/variations`, { data: { version: "variation-command.v1", ...fields } }));
+  const proposalId = randomUUID();
+  const proposed = await vary({ action: "propose", proposalId, scopeItemId: randomUUID(), existingScopeItemId: null,
+    lineageParentScopeItemId: null, description: "Move the socket", captureText: "Move the socket, no charge",
+    price: { quantity: "1", unit: "item", unitRatePence: 0, direction: "addition" } });
+  const revisionId = proposed.variations.find(row => row.id === proposalId)!.currentRevisionId;
+  await vary({ action: "approve", variationId: proposalId, revisionId, approvalId: randomUUID(),
+    attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+
+  await page.goto(`/jobs/${job!.id}/work`);
+  await expect(card.getByText("Move the socket: no price change: say whether it adds or removes work")).toBeVisible();
+  for (const width of [360, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await card.screenshot({ path: resolve(shots, `../v2-c3b2/direction-ask-${width}.png`), animations: "disabled",
+      style: "nextjs-portal, .rr-mobile-nav { display: none !important; }" });
+  }
+  await page.setViewportSize({ width: 360, height: 800 });
+  const answered = page.waitForResponse(r => r.url().endsWith(path) && r.request().method() === "POST");
+  await card.getByRole("button", { name: "Adds work: Move the socket" }).click();
+  const answer = await answered;
+  expect(answer.ok(), await answer.text()).toBe(true);
+  expect(answer.request().postDataJSON()).toMatchObject({ version: "work-plan-extra-direction.v1", variationRevisionId: revisionId,
+    direction: "adds_work", commandId: expect.any(String) });
+  await expect(card.getByText("Extra added to Unplanned.")).toBeVisible();
+  await card.getByRole("button", { name: "Plan task Move the socket" }).click();
+  await card.getByLabel("Trade", { exact: true }).fill("Electrician");
+  await card.getByLabel("Duration (minutes)").fill("30");
+  const saved = page.waitForResponse(r => r.url().endsWith(path) && r.request().method() === "POST");
+  await card.getByRole("button", { name: "Save task" }).click();
+  expect((await saved).request().postDataJSON()).toMatchObject({ variationRevisionId: revisionId });
+  await expect(card.getByText("Task saved.")).toBeVisible();
+  await page.reload();
+  const row = card.getByRole("article").filter({ has: page.getByRole("heading", { name: /Move the socket$/u }) });
+  await expect(row).toContainText("Electrician · 30 min");
+  await expect(card.getByText(/Move the socket: no price change/u)).toHaveCount(0);
+  for (const width of [360, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await card.screenshot({ path: resolve(shots, `../v2-c3b2/direction-planned-${width}.png`), animations: "disabled",
+      style: "nextjs-portal, .rr-mobile-nav { display: none !important; }" });
+  }
+  checkRequests();
+});
+
 test("empty, changed draft and problem states match the checked mock-up at both widths", async ({ page, baseURL }) => {
   const checkRequests = trackRequests(page, baseURL!);
   const { jobId, proposalId, reviewId, proposal } = await json<{
