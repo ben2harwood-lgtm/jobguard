@@ -13,6 +13,8 @@
         "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
         "apps/web/app/api/jobs/[id]/hires/route.ts",
         "apps/web/app/ui/v2-hire-items.tsx",
+        "apps/web/app/ui/v2-hire-links.test.ts",
+        "apps/web/app/ui/v2-hire-links.ts",
         "packages/core/src/watchdog.ts",
         "packages/db/migration-notes/2021_v2_hire.md",
         "packages/db/migrations/2021_v2_hire.sql",

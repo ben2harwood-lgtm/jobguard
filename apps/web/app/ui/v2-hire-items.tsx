@@ -2,13 +2,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { HireItem, HireTask } from "@jobguard/api/workspace";
 import { jobPageFetch as fetch } from "./job-page-fetch";
+import { hireTaskKey, isHireTaskLinked, toggleHireTask } from "./v2-hire-links";
 
 type Details = Pick<HireItem, "kind" | "supplier" | "bookedFrom" | "weeklyCost" | "neededUntil">;
 type Task = HireTask & { title: string };
 type View = { items: HireItem[]; tasks: Task[] };
 const empty: Details = { kind: "scaffold", supplier: "", bookedFrom: "", weeklyCost: "", neededUntil: null };
 const control = { minHeight: 44, maxWidth: "100%" };
-const identity = (task: HireTask) => `${task.quoteRevisionId}/${task.scopeItemId}/${task.templateTaskKey}`;
 
 export function V2HireItems({ jobId }: { jobId: string }) {
   const [view, setView] = useState<View>({ items: [], tasks: [] });
@@ -80,10 +80,10 @@ export function V2HireItems({ jobId }: { jobId: string }) {
       {item.status !== "off_hire" && <>
         <button style={control} disabled={busy} onClick={() => edit(item)}>Edit hire item</button>
         <fieldset disabled={busy}><legend>Tasks that need this hire item</legend>
-          {view.tasks.map(task => <label key={identity(task)} style={{ display: "block", minHeight: 44 }}>
-            <input type="checkbox" checked={item.tasks.some(link => identity(link) === identity(task))}
+          {view.tasks.map(task => <label key={hireTaskKey(task)} style={{ display: "block", minHeight: 44 }}>
+            <input type="checkbox" checked={isHireTaskLinked(item.tasks, task)}
               onChange={event => { const { title: _title, ...link } = task;
-                const tasks = event.target.checked ? [...item.tasks, link] : item.tasks.filter(prior => identity(prior) !== identity(task));
+                const tasks = toggleHireTask(item.tasks, link, event.target.checked);
                 void run(() => change("link", item, { tasks })); }}/>{task.title}
           </label>)}
           {!view.tasks.length && <p>No dated plan tasks yet. Use Needed until for a reminder.</p>}
