@@ -1,0 +1,10 @@
+{
+  "packet": "Q44 / V2-FL-6 (V2-owned job tables)",
+  "migration": "2054_v2_own_tables_firm_lock.sql",
+  "database": "jobguard_v2_local",
+  "tables": "Catalog-discovered app.v2_* ordinary and partitioned tables with tenant_id and job_id, missing v2_practice_firm",
+  "policies": "2001's RESTRICTIVE v2_practice_firm FOR ALL TO jobguard_runtime, EXISTS on app.job (tenant_id, id) = (tenant_id, job_id)",
+  "runtimeGrants": "unchanged",
+  "tests": "tools/v2/firm-lock/FL-6.checks.mjs, automatically registered by tools/v2/seed.integration.test.mjs: complete V2 catalog coverage, missing-policy installation, double application, unchanged grants/other policies, persisted firm A rows and firm B refusal",
+  "executionStatus": "PostgreSQL execution pending CI; source inspection is not database proof"
+}

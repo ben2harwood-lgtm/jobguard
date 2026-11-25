@@ -69,6 +69,8 @@ try {
   await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   // V2-FL-1 firm lock on the V2 core tables (2047).
   await client.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
+  // V2-FL-6 (2054): must stay the last migration line; later pieces add theirs above it (rule 30).
+  await client.query(readFileSync(new URL("./migrations/2054_v2_own_tables_firm_lock.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
