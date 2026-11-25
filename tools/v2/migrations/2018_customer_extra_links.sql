@@ -138,6 +138,7 @@ BEGIN
  SELECT * INTO r FROM app.variation_revision WHERE tenant_id=l.tenant_id AND job_id=l.job_id AND id=l.revision_id AND variation_id=l.variation_id;
  IF v.current_revision_id IS DISTINCT FROM l.revision_id OR v.state NOT IN('priced','approved')
   OR r.content_hash IS DISTINCT FROM l.content_hash OR r.revision IS DISTINCT FROM l.variation_version
+  OR r.description IS DISTINCT FROM l.description
   OR to_char(r.signed_delta_pence::numeric/100,'FM999999999999999990.00') IS DISTINCT FROM l.amount
   OR NOT EXISTS(SELECT FROM app.job WHERE tenant_id=l.tenant_id AND id=l.job_id AND status='live')
   OR EXISTS(SELECT FROM app.variation_rejection WHERE tenant_id=l.tenant_id AND revision_id=l.revision_id)
@@ -213,4 +214,30 @@ END $$;
 ALTER FUNCTION app.v2_f6_photo(text,text,uuid) OWNER TO jobguard_migration;
 REVOKE ALL ON FUNCTION app.v2_f6_photo(text,text,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.v2_f6_photo(text,text,uuid) TO jobguard_runtime;
+-- An agreement can only commit with its own audit event. The check runs at commit,
+-- after the repository appends the event, so a direct runtime call of
+-- app.v2_f6_agree without the audit is refused instead of recording a silent claim.
+CREATE OR REPLACE FUNCTION app.v2_f6_require_agree_audit() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF NOT EXISTS(SELECT FROM app.audit_event e WHERE e.tenant_id=NEW.tenant_id
+  AND e.event_type='v2.customer_extra_link.agreed' AND e.subject_type='customer_extra_link'
+  AND e.subject_ref=NEW.id::text AND e.payload->'references'->>'commandId'=NEW.agree_command_id::text)
+ THEN RAISE EXCEPTION 'LINK_AGREEMENT_UNAUDITED' USING ERRCODE='23514'; END IF;
+ RETURN NULL;
+END $$;
+ALTER FUNCTION app.v2_f6_require_agree_audit() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.v2_f6_require_agree_audit() FROM PUBLIC;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT FROM pg_policy WHERE polrelid='app.audit_event'::regclass AND polname='v2_f6_agree_audit_check') THEN
+ CREATE POLICY v2_f6_agree_audit_check ON app.audit_event FOR SELECT TO jobguard_migration
+ USING(event_type='v2.customer_extra_link.agreed' AND subject_type='customer_extra_link');
+ END IF;
+END $$;
+DROP TRIGGER IF EXISTS v2_f6_require_agree_audit ON app.v2_customer_extra_link;
+CREATE CONSTRAINT TRIGGER v2_f6_require_agree_audit AFTER UPDATE ON app.v2_customer_extra_link
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+ WHEN (OLD.agreed_at IS NULL AND NEW.agreed_at IS NOT NULL)
+ EXECUTE FUNCTION app.v2_f6_require_agree_audit();
+ALTER TABLE app.v2_customer_extra_link ENABLE ALWAYS TRIGGER v2_f6_require_agree_audit;
 COMMIT;

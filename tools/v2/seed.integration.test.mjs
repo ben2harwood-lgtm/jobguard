@@ -1035,6 +1035,20 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
     assert.equal((await insertCopy(db, {})).rowCount, 1);
     throw new Error("F6_ROLLBACK_PRISTINE");
   }), /F6_ROLLBACK_PRISTINE/u);
+  // Codex P2 (29ded0c): a pending copy whose description differs from its revision never opens.
+  await assert.rejects(withTenant(runtime, auth.context, async db => {
+    const h = randomBytes(32).toString("hex");
+    await insertCopy(db, { token_hash: h, description: "Substituted wording" });
+    await db.$client.query("SELECT app.v2_f6_open($1,$2)", [stored.firm_digest, h]);
+  }), error => error.code === "42501" && error.message === "LINK_UNAVAILABLE");
+  // Codex P1 (29ded0c): calling the agree routine directly, without its audit event, cannot commit.
+  await assert.rejects(withTenant(runtime, auth.context, async db => {
+    const h = randomBytes(32).toString("hex");
+    await insertCopy(db, { token_hash: h });
+    await db.$client.query("SELECT app.v2_f6_agree($1,$2,$3,$4,$5,1)",
+      [stored.firm_digest, h, randomUUID(), "f", "Fictional customer"]);
+  }), error => error.code === "23514" && error.message === "LINK_AGREEMENT_UNAUDITED");
+  assert.deepEqual(await events(), afterAgree);
   assert.deepEqual(await repository.open(first.capability), agreed);
   const savedAgreement = (await repository.list(auth.context, jobId)).find(link => link.id === first.linkId);
   assert.equal(savedAgreement.amount, "125.00");
