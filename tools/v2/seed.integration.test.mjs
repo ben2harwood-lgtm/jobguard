@@ -1520,6 +1520,39 @@ test("V2-E3 counts the declared set-aside after completing an initially partial 
     setAsidePacks: "4", receivedPacks: "0", availablePacks: "4", shortPacks: "2" });
 });
 
+test("V2-E3 retains early receipts through first completion but never across a partial substitution", async () => {
+  const { stock, line, tilingId, forecast } = await stockSetup();
+  const lineKey = "early-receipt-" + randomUUID();
+  const edit = changes => line(tilingId, lineKey, changes);
+  async function receive(count) {
+    const add = { ...forecast(), lineKey, packsExpected: count };
+    await stock.execute(jobId, add);
+    await stock.execute(jobId, { version: add.version, action: "record_receipt", commandId: randomUUID(),
+      deliveryId: add.deliveryId, expectedVersion: 1, packsReceived: count });
+    return add.deliveryId;
+  }
+  const read = () => stock.read(jobId, stockQuery);
+  const position = async () => (await read()).lines.find(item => item.lineKey === lineKey);
+  await edit({ notes: "Awaiting product" });
+  const unknown = await receive("1");
+  await edit({ product: "Fictional tile", wastageMultiplier: "1", setAsidePacks: "0" });
+  const tiles = await receive("4");
+  assert.equal((await position()).receivedPacks, "0");
+  const packSize = { quantity: "1", unit: "m²" };
+  await edit({ packSize });
+  assert.equal((await position()).receivedPacks, "4", "only the named tile receipt counts after completion");
+  await edit({ packSize: null });
+  const provisional = await receive("2");
+  await edit({ product: "Fictional oak" });
+  const oak = await receive("3");
+  await edit({ packSize });
+  const final = await read();
+  assert.equal(final.lines.find(item => item.lineKey === lineKey).receivedPacks, "3");
+  for (const [id, count] of [[unknown, "1"], [tiles, "4"], [provisional, "2"], [oak, "3"]]) {
+    assert.equal(final.deliveries.find(item => item.deliveryId === id).packsReceived, count);
+  }
+});
+
 test("D3 enquiries deduct only stock confirmed for the current product and pack", async () => {
   const { materials, tilingId, measure, line, generate } = await materialsSetup();
   await measure(tilingId, "6", "m²");
