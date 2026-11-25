@@ -1,4 +1,6 @@
-# Q45 · V2-SYNC-1: merge main into v2/main (diary, photos on extras, Friday PDF, snag list, handover page, pack calculator, pilot work)
+# Q45 · V2-SYNC-1: merge main into v2/main (photos on extras, snag list, pack count, pilot work)
+
+> As of 25 Nov 20:10 UK, main has #905 (photos on variations), #910 (pack count) and #911 (snag list). It does **not** have #906 (6pm diary) or #907 (Friday PDF), which are both still open against main, and there's no handover-page PR on main yet. A **SYNC-2** follows once those merge.
 
 **Tier:** RED (it brings 12 main migrations and changes in the shared code). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Checker:** Codex, by a `@codex review` comment on the PR or a read-only Mac review (rule 27). **Base:** v2/main. **Branch:** `claude/<thread>-sync1`. **PR:** draft into v2/main, made as a **merge commit**. Don't squash or rebase. **V2 migration: 2056** (a V2 bootstrap file; next free becomes 2057). **Plan check:** Astra. Planner: Fable thread, 25 Nov 20:10 UK.
 
@@ -49,7 +51,7 @@
 - Any main migration that refuses on `jobguard_v2_local` other than the three fences listed above.
 
 ## Done when
-- v2/main has main's six builder features (diary, photos on extras, Friday PDF, snag list, handover page, pack count) working on the V2 practice job.
+- v2/main has main's photos on extras, snag list and pack count working on the V2 practice job.
 - Snags work on V2. The new tables are locked. CI1 is green.
 - The Codex review is clean or answered.
 - After it merges, the G pieces can reuse QW-4 and QW-5 (roadmap batch G).

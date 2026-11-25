@@ -67,7 +67,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D5 | Q42 | V2-B1C walk check and correct: "needs room" tray, re-file a photo, original kept | **Opus** | `codex/sandbox/v2-b1b` #957 | 2029 | RED |
 | D3 | Q43 | V2-F1-P photo on Done, Blocked or Changed | **Opus** | `codex/sandbox/v2-f1` #953 (PX #964 before merge) | 2053 | RED |
 | C17 | Q44 | V2-FL-6 lock every V2-owned job table, last bootstrap line (rule 30) | **Opus** | `codex/sandbox/v2-fl1` #966 | 2054 | RED tenancy |
-| D10 | Q45 | V2-SYNC-1 merge main into v2/main, retarget the snag fence, lock 8 new main job tables | **Opus** | v2/main (merge after FL-1) | 2056 | RED |
+| D10 | Q45 | V2-SYNC-1 merge main into v2/main (#905, #910, #911 and pilot 0771 to 0782; SYNC-2 later for #906 and #907), retarget the snag fence, lock 8 new main job tables | **Opus** | v2/main (merge after FL-1) | 2056 | RED |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
