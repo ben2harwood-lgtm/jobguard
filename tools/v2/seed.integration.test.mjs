@@ -1374,3 +1374,214 @@ test("forced crew brief policies hide briefs and photos and reject changes from 
     { code: "42501", message: /row-level security policy/u });
   }
 });
+
+// V2-F1 uses its own live job: earlier suite tests deliberately close the seeded job.
+// Keep every earlier test and its assertions unchanged; use normal commands for setup.
+const { BriefProgressRepository } = await import("../../packages/db/dist/index.js");
+const { describe: describeF1 } = await import("node:test");
+describeF1("V2-F1 brief progress", () => {
+let jobId;
+async function f1Setup() {
+  const owner = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const command = (trade, fields = {}) => ({ version: "v2-crew-brief-command.v1", commandId: randomUUID(), trade,
+    expectedVersion: 0, accessWindow: "F1 fictional mornings", photoIds: [], ...fields });
+  return { owner, crewBriefs: app.crewBriefs, command };
+}
+before(async () => {
+  const { draftJob } = await draftForPlan();
+  jobId = draftJob;
+  const owner = await signIn("builder");
+  const { parties, quote, workPlan, crewBriefs } = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const party = await parties.view({ sessionId: owner.sessionId }, jobId);
+  const customer = { version: "customer.v1", type: "person", name: "Fictional F1 Customer",
+    email: "customer@jobguard-v2.invalid", phone: "+447700900042" };
+  await parties.command({ sessionId: owner.sessionId }, jobId, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: party.jobRevision, expectedBindingId: null, customer, customerRef: null,
+    site: { version: "site.v1", addressLines: ["45 Make-Believe Mews"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const { view: preview } = await quote.preview(jobId, { version: "quote-preview-command.v1", recipient: customer.email });
+  await quote.issue(jobId, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId: preview.documentId, contentHash: preview.contentHash, recipient: customer.email });
+  await quote.execute(jobId, { version: "quote-execute-command.v1", documentId: preview.documentId, mode: "success" });
+  await quote.accept(jobId, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
+    documentId: preview.documentId, documentVersion: preview.documentVersion, documentHash: preview.contentHash,
+    statedCustomerName: customer.name, statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  await workPlan.read(jobId, planQuery);
+  await quote.activate(jobId, switchLive());
+  await crewBriefs.generate(jobId, (await f1Setup()).command("tiler"));
+});
+// V2-F1 · own block: real application + database/audit/isolation proofs.
+const progressEvents = commandId => admin.query(`SELECT actor_ref, event_type, payload FROM app.audit_event
+  WHERE subject_ref = $1 AND event_type LIKE 'v2.progress.%'
+    AND payload->'references'->>'commandId' = $2`, [jobId, commandId]).then(result => result.rows);
+const progressCommand = (brief, task, fields = {}) => ({ version: "v2-brief-progress-command.v1", commandId: randomUUID(),
+  trade: brief.trade, briefVersion: brief.version, scopeItemId: task.scopeItemId, taskKey: task.taskKey,
+  expectedVersion: 0, kind: "done", note: "", ...fields });
+const f1CommercialSnapshot = async () => {
+  const tables = ["quote_line", "scope_revision", "scope_progress", "purchase_order_draft", "purchase_order_revision", "stage_completion"];
+  return Promise.all(tables.map(async table => [table, (await admin.query(`SELECT to_jsonb(t) AS row FROM app.${table} t
+    WHERE (tenant_id, job_id) = ($1, $2) ORDER BY to_jsonb(t)::text`, [DEMO_TENANT_ID, jobId])).rows]));
+};
+
+test("F1 Done, Blocked and Changed append once with exact audit, and replay or changed replay cannot add records", async () => {
+  const { owner } = await f1Setup();
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const view = await app.briefProgress.read(jobId);
+  const brief = view.briefs.find(item => item.trade === "tiler");
+  assert.ok(brief);
+  assert.ok(brief.content.tasks.length >= 2, "two tasks may share a scope identity");
+  const task = brief.content.tasks[0];
+  const snapshot = await f1CommercialSnapshot();
+  for (const [index, kind] of ["done", "blocked", "changed"].entries()) {
+    const command = progressCommand(brief, task, { kind, expectedVersion: index,
+      note: kind === "done" ? "" : `F1 fictional ${kind} reason` });
+    const before = await app.briefProgress.read(jobId);
+    const [first, replay] = await Promise.all([app.briefProgress.record(jobId, command), app.briefProgress.record(jobId, command)]);
+    assert.deepEqual(replay, first);
+    assert.equal(first.version, index + 1);
+    assert.equal(first.briefVersion, brief.version);
+    assert.equal(first.photoReference, null);
+    const events = await progressEvents(command.commandId);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].actor_ref, `membership:${owner.membershipId}`);
+    assert.equal(events[0].event_type, `v2.progress.${kind}_recorded`);
+    assert.equal(events[0].payload.references.commandId, command.commandId);
+    assert.equal(events[0].payload.references.briefVersion, String(brief.version));
+    assert.equal(Object.hasOwn(events[0].payload.references, "version"), false);
+    assert.doesNotMatch(JSON.stringify(events), /fictional|reason|note/u);
+    assert.equal((await app.briefProgress.read(jobId)).progress.length, before.progress.length + 1);
+    await assert.rejects(app.briefProgress.record(jobId, { ...command, note: "changed replay" }), { code: "BRIEF_PROGRESS_COMMAND_CONFLICT" });
+    assert.equal((await progressEvents(command.commandId)).length, 1);
+  }
+  assert.deepEqual(await f1CommercialSnapshot(), snapshot, "no scope, price, order or completion writes");
+  const otherTask = brief.content.tasks[1];
+  assert.equal(otherTask.scopeItemId, task.scopeItemId);
+  assert.notEqual(otherTask.taskKey, task.taskKey);
+  const independent = await app.briefProgress.record(jobId, progressCommand(brief, otherTask));
+  assert.equal(independent.version, 1, "each task has its own expected version");
+  await assert.rejects(app.briefProgress.record(jobId, progressCommand(brief, task)), { code: "BRIEF_PROGRESS_VERSION_CONFLICT" });
+  await assert.rejects(app.briefProgress.record(jobId, progressCommand(brief, task, { taskKey: "missing-task" })), { code: "BRIEF_PROGRESS_TASK_NOT_FOUND" });
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  await verifyTenantChain(context.tenantId);
+});
+
+test("F1 failure after row and audit insertion rolls both back for every kind", async () => {
+  const { owner } = await f1Setup();
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const brief = (await app.briefProgress.read(jobId)).briefs.find(item => item.trade === "tiler");
+  // Execute the real audit append, then throw before commit. Both staged writes must disappear.
+  const failing = { async connect() {
+    const client = await runtime.connect(), original = client.query.bind(client), release = client.release.bind(client);
+    client.query = async (sql, ...args) => {
+      const result = await original(sql, ...args);
+      if (typeof sql === "string" && sql.includes("app.append_audit(")) throw Object.assign(new Error("forced after audit"), { code: "F1_FORCED" });
+      return result;
+    };
+    client.release = (...args) => { client.query = original; return release(...args); };
+    return client;
+  } };
+  for (const kind of ["done", "blocked", "changed"]) {
+    const command = progressCommand(brief, brief.content.tasks[0], { kind, expectedVersion: 3, note: "F1 rollback" });
+    const before = await app.briefProgress.read(jobId);
+    await assert.rejects(new BriefProgressRepository(failing).record(context, jobId, owner.sessionId, command), { code: "F1_FORCED" });
+    assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [command.commandId])).rowCount, 0);
+    assert.deepEqual(await progressEvents(command.commandId), []);
+    assert.deepEqual(await app.briefProgress.read(jobId), before);
+  }
+});
+
+test("F1 records survive brief regeneration; stale versions and saved briefs without taskKey are refused", async () => {
+  const { owner, crewBriefs, command } = await f1Setup();
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const before = await app.briefProgress.read(jobId);
+  const brief = before.briefs.find(item => item.trade === "tiler");
+  const regenerated = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: brief.version,
+    accessWindow: "F1 fictional afternoon access" }));
+  assert.ok(regenerated.version > brief.version);
+  assert.deepEqual((await app.briefProgress.read(jobId)).progress, before.progress);
+  const stale = progressCommand(brief, brief.content.tasks[0], { expectedVersion: 3 });
+  await assert.rejects(app.briefProgress.record(jobId, stale), { code: "BRIEF_PROGRESS_STALE_BRIEF" });
+  assert.deepEqual(await progressEvents(stale.commandId), []);
+  const legacyContent = structuredClone(regenerated.content);
+  legacyContent.tasks.forEach(task => delete task.taskKey);
+  // Synthetic legacy fixture only, preserving the real v1 stored schema label.
+  await admin.query(`INSERT INTO app.v2_crew_brief (tenant_id,job_id,trade,expected_version,command_id,quote_revision_id,
+    access_window,content,actor_membership_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+  [DEMO_TENANT_ID,jobId,brief.trade,regenerated.version,randomUUID(),regenerated.content.quoteRevisionId,
+    regenerated.content.accessWindow,JSON.stringify(legacyContent),owner.membershipId]);
+  const legacy = progressCommand(regenerated, regenerated.content.tasks[0], { briefVersion: regenerated.version + 1, expectedVersion: 3 });
+  await assert.rejects(app.briefProgress.record(jobId, legacy), { code: "BRIEF_PROGRESS_REGENERATE" });
+  assert.deepEqual(await progressEvents(legacy.commandId), []);
+  const current = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: regenerated.version + 1,
+    accessWindow: "F1 fictional morning access restored" }));
+  const saved = await app.briefProgress.record(jobId, progressCommand(current, current.content.tasks[0], { expectedVersion: 3 }));
+  assert.equal(saved.version, 4);
+  assert.equal(saved.briefVersion, current.version);
+  const reloaded = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  assert.deepEqual((await reloaded.briefProgress.read(jobId)).progress, [...before.progress, saved]);
+});
+
+test("F1 second firm cannot read, press, insert, update or delete; grants are forced and append only", async () => {
+  const owner = await signIn("builder"), outsider = await signIn("second-builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const foreign = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  const brief = (await app.briefProgress.read(jobId)).briefs.find(item => item.trade === "tiler");
+  await assert.rejects(foreign.briefProgress.read(jobId), { code: "NOT_FOUND" });
+  await assert.rejects(foreign.briefProgress.record(jobId, progressCommand(brief, brief.content.tasks[0])), { code: "NOT_FOUND" });
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { context: ownerContext } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const query = (scope, sql, args) => withTenant(runtime, scope, db => db.$client.query(sql, args));
+  const table = "app.v2_brief_progress";
+  const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced,
+    relowner::regrole::text AS owner, has_table_privilege('jobguard_runtime',oid,'SELECT') AS can_read,
+    has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+    has_table_privilege('jobguard_identity',oid,'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+    has_table_privilege('jobguard_worker',oid,'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+    has_table_privilege('jobguard_infrastructure',oid,'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+    FROM pg_class WHERE oid=$1::regclass`, [table]);
+  assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+    identity_access: false, worker_access: false, infra_access: false });
+  for (const scope of [outsider.realContext, context]) {
+    assert.equal((await query(scope, `SELECT * FROM ${table} WHERE job_id=$1`, [jobId])).rowCount, 0);
+    for (const sql of [`UPDATE ${table} SET note='forged' WHERE job_id=$1`, `DELETE FROM ${table} WHERE job_id=$1`]) {
+      await assert.rejects(query(scope, sql, [jobId]), { code: "42501" });
+    }
+    await assert.rejects(query(scope, `INSERT INTO ${table} (tenant_id,job_id,command_id,trade,brief_version,scope_item_id,
+      task_key,expected_version,kind,note,actor_membership_id) VALUES ($1,$2,$3,$4,$5,$6,$7,99,'done','',$8)`,
+    [DEMO_TENANT_ID,jobId,randomUUID(),brief.trade,brief.version-1,brief.content.tasks[0].scopeItemId,
+      brief.content.tasks[0].taskKey,owner.membershipId]), { code: "42501" });
+  }
+  assert.ok((await query(ownerContext, `SELECT * FROM ${table} WHERE job_id=$1`, [jobId])).rowCount > 0);
+  for (const verb of ["UPDATE", "DELETE"]) await assert.rejects(query(ownerContext,
+    verb === "UPDATE" ? `UPDATE ${table} SET note='forged' WHERE job_id=$1` : `DELETE FROM ${table} WHERE job_id=$1`, [jobId]), { code: "42501" });
+  assert.equal((await runtime.query(`SELECT * FROM ${table} WHERE job_id=$1`, [jobId])).rowCount, 0);
+});
+
+// V2-F1: preserve the existing job-stage boundary and historical reads.
+test("F1 refuses non-live and closed job presses without rows or audit", async () => {
+  const owner = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const view = await app.briefProgress.read(jobId);
+  const brief = view.briefs.find(item => item.trade === "tiler");
+  const { draftJob } = await draftForPlan();
+  const nonlive = progressCommand(brief, brief.content.tasks[0], { expectedVersion: 4 });
+  await assert.rejects(app.briefProgress.record(draftJob, nonlive), { code: "JOB_NOT_LIVE" });
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [nonlive.commandId])).rowCount, 0);
+  const state = await app.workState.get(jobId);
+  await app.workState.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(), action: "close",
+    expectedRevision: (state.events.at(-1)?.sequence ?? 0) + state.links.length,
+    reason: "cancelled_by_customer", note: "F1 fictional closing fixture" });
+  const closed = progressCommand(brief, brief.content.tasks[0], { expectedVersion: 4 });
+  await assert.rejects(app.briefProgress.record(jobId, closed), { message: "JOB_WORK_CLOSED" });
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [closed.commandId])).rowCount, 0);
+  assert.deepEqual(await progressEvents(closed.commandId), []);
+  assert.deepEqual((await app.briefProgress.read(jobId)).progress, view.progress);
+});
+
+});
