@@ -29,7 +29,9 @@ BEGIN
     PRIMARY KEY (tenant_id, crew_id, revision),
     UNIQUE (tenant_id, firm_key, crew_id, revision),
     UNIQUE (tenant_id, firm_key, command_id),
-    CHECK ((revision = 1 AND previous_revision IS NULL) OR previous_revision = revision - 1),
+    -- Neither check can evaluate to NULL: every later revision must name its predecessor.
+    CHECK ((revision = 1) = (previous_revision IS NULL)),
+    CHECK (previous_revision IS NULL OR previous_revision = revision - 1),
     FOREIGN KEY (tenant_id, firm_key, crew_id, previous_revision)
       REFERENCES app.v2_crew_contact (tenant_id, firm_key, crew_id, revision)
   );

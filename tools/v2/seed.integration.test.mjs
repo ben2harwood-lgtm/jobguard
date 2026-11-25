@@ -940,6 +940,15 @@ test("C3C: crew records are forced to their own firm in the shared practice tena
     await assert.rejects(query(`UPDATE ${crewTable} SET trade = 'x' WHERE crew_id = $1`, [mine.crewId]), { code: "42501" });
     await assert.rejects(query(`DELETE FROM ${crewTable} WHERE crew_id = $1`, [mine.crewId]), { code: "42501" });
   }
+  // Nor can a raw insert give another firm's crewId a later revision: it must name a predecessor in its own firm.
+  for (const previous of [null, 1]) {
+    await assert.rejects(withTenant(runtime, shared, async db => {
+      const { rows: [{ key }] } = await db.$client.query("SELECT app.current_firm_profile_key() AS key");
+      return db.$client.query(`INSERT INTO ${crewTable} (tenant_id, firm_key, crew_id, revision, previous_revision, command_id,
+        display_name, trade, phone, actor_membership_id) VALUES ($1, $2, $3, 2, $4, $5, 'Copy', 'tiler', '07700900124', $6)`,
+      [DEMO_TENANT_ID, key, mine.crewId, previous, randomUUID(), mine.actorMembershipId]);
+    }), { code: previous === null ? "23514" : "23503" });
+  }
   // The second firm cannot take over the crewId either: it is refused as stale, never revealed.
   await assert.rejects(crewApp(outsider.sessionId).record(crewCommand({ crewId: mine.crewId })),
     { code: "CREW_CONTACT_VERSION_CONFLICT" });
