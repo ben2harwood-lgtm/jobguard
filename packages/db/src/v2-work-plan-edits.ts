@@ -21,6 +21,8 @@ export const workPlanEditV1 = z.strictObject({
   expectedVersion: z.number().int().min(0).max(2_147_483_647),
   scopeItemId: uuid,
   taskKey: z.string().min(1).max(100),
+  // Required for an approved extra: the approved variation revision shown in the plan's scopeItems.
+  variationRevisionId: uuid.optional(),
   changes: taskChanges,
 });
 
