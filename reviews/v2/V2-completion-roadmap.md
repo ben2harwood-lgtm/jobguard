@@ -72,7 +72,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 | E6 | **K6B** merchant invoice real attached files | ★★ | M | O | K6A #927, PX | 2035 | RED |
 | E7 | **DV1** diary entries get a "customer can see this" flag (touches main's diary) | ★★ | S | O | SYNC-1 | 2036 | RED |
 | E8 | **K3-D** Friday update includes flagged diary entries | ★★ | S | A | DV1, k3 | none | RED |
-| E9 | **C6** add a line to a priced quote (quote track; makes c5 prompts actionable) | ★★ | M | O | SYNC-1 | 2037 | RED money |
+| E9 | ~~C6~~ **moved to main (Ben, 25 Nov 17:39 UK: "On main, the live app")**. Built as a main quote-track piece under BUILD_PLAN.md release gates, not in V2. V2 picks it up through the next main sync. Migration 2037 is left unused. | | | | | | |
 
 ## Batch F: about 29 Nov to 1 Dec, tomorrow and crews
 | # | Piece | Use | Size | Lane | Waits on | Mig | Tier |
