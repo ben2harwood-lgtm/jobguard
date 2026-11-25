@@ -313,3 +313,13 @@ test("test files are not pointers, and a named helper arrow belongs to its metho
     assert.ok(!shown.some(item => /\.test\.m?ts$/u.test(item)));
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+test("both branches of conditional SQL are scanned, including the real accounting export routine", () => {
+  const ternary = `export class R { async run(tx, a) { const sql = a ? "SELECT app.v2_one($1) r" : ("SELECT * FROM app.v2_two($1)" as string); await tx.query(sql); } }`;
+  assert.deepEqual(scanCommands("packages/db/src/r.ts", ternary)[0].targets, ["routine:app.v2_one", "routine:app.v2_two"]);
+  const fallback = `export async function run(tx, sql) { await tx.query(sql ?? "INSERT INTO app.v2_x VALUES (1)"); }`;
+  assert.deepEqual(scanCommands("packages/db/src/f.ts", fallback)[0].targets, ["table:v2_x"]);
+  const real = "packages/db/src/accounting-export-repository.ts";
+  const targets = scanCommands(real, readFileSync(new URL(`../${real}`, import.meta.url), "utf8")).flatMap(command => command.targets);
+  for (const routine of ["accounting_export", "accounting_export_route", "accounting_export_route_read"]) assert.ok(targets.includes(`routine:app.${routine}`), routine);
+});

@@ -65,6 +65,12 @@ function sqlText(node, definitions, seen = new Set()) {
     return sqlText(definitions.get(node.text), definitions, seen);
   }
   if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) return sqlText(node.left, definitions, seen) + sqlText(node.right, definitions, seen);
+  // Any SQL a command may run is scanned: both ternary branches and both sides of a fallback.
+  if (ts.isConditionalExpression(node)) return `${sqlText(node.whenTrue, definitions, seen)} ; ${sqlText(node.whenFalse, definitions, seen)}`;
+  if (ts.isBinaryExpression(node) && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(node.operatorToken.kind))
+    return `${sqlText(node.left, definitions, seen)} ; ${sqlText(node.right, definitions, seen)}`;
+  if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isNonNullExpression(node))
+    return sqlText(node.expression, definitions, seen);
   if (ts.isObjectLiteralExpression(node)) return sqlText(node.properties.find(p => propertyName(p.name) === "text")?.initializer, definitions, seen);
   return "";
 }
