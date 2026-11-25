@@ -31,7 +31,8 @@
         "reviews/v2/v2-ranked-by-usefulness.md",
         "reviews/v2/codex-queue/Q18-v2-ci2-audit-chain-guard.md",
         "reviews/v2/codex-queue/Q19-v2-f6t-customer-approval-browser-proof.md",
-        "reviews/v2/codex-queue/02-BUILD-RULES-CHECKLIST.md"
+        "reviews/v2/codex-queue/02-BUILD-RULES-CHECKLIST.md",
+        "reviews/v2/codex-queue/Q20-v2-bh1-browser-session-helper.md"
       ]
     }
   }
