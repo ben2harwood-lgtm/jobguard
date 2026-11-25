@@ -67,6 +67,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2005_v2_measurement.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2006_v2_materials_enquiry.sql", import.meta.url), "utf8"));
+  // V2-E3: separate stock deliveries, after D3 material lines.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2014_v2_stock.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

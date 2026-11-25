@@ -42,6 +42,9 @@ beforeAll(async () => {
   // Install current main first, retain a real synthetic PO, then apply this branch's
   // migration through the normal runner. Fresh install is covered by tenancy's runner.
   await migrate({ query: async (sql: string, values?: unknown[]) => {
+    // V2-E3: defer 2014 to the upgrade pass, keeping the predecessor fixture intact.
+    if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
+      && String(values?.[0]).endsWith("_v2_stock.sql")) return { rows: [{}], rowCount: 1 };
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
       && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
@@ -60,7 +63,9 @@ beforeAll(async () => {
   runtime = new Pool({ ...connection, user: "jobguard_runtime", password: "synthetic", max: 5 });
   const legacy = await fixture();
   upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
+  // V2-E3: the V2-only migration must also be harmless on the ordinary database.
   await migrate(admin);
+  expect((await admin.query("SELECT to_regclass('app.v2_stock_delivery') AS stock")).rows[0].stock).toBeNull();
   expect((await admin.query("SELECT to_regclass('app.v2_measurement') AS measurement")).rows[0].measurement).toBeNull();
   expect((await admin.query("SELECT to_regclass('app.v2_material_line') AS line, to_regclass('app.v2_material_enquiry') AS enquiry, to_regclass('app.v2_material_enquiry_command') AS command")).rows[0]).toEqual({ line: null, enquiry: null, command: null });
 }, 60000);

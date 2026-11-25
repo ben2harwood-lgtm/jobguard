@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-e3": {
+      "branches": [
+        "codex/sandbox/v2-e3"
+      ],
+      "note": "RED Q07 V2-E3. Data, commands and stock read API only; no screen. Base claude/project-thread-8zze8p. Migration 2014.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/api/src/workspace/stock.application.ts",
+        "apps/web/app/api/jobs/[id]/stock/route.ts",
+        "apps/web/app/api/jobs/[id]/stock/route.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-stock-repository.ts",
+        "packages/db/test/v2-stock.test.ts",
+        "packages/db/migrations/2014_v2_stock.sql",
+        "packages/db/migration-notes/2014_v2_stock.md",
+        "packages/db/test/migration-proofs/2014_v2_stock.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
