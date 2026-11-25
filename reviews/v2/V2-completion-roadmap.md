@@ -118,3 +118,6 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 
 ## Throughput check
 That's 46 pieces over 10 days, about 5 released a day. Lane A runs two at a time, W one or two, and O three or four threads at once. B tests every PR. Batches overlap: the next batch's packets are written while the current one builds. **The real limit is merging.** About 25 PRs are already waiting on Ben, and each stacked piece needs its base merged first. A short daily merge window keeps stacks from going stale (see the decisions below).
+
+## Change, 25 Nov 16:35 UK: V2-SX revision 4
+Customers and crew never get a main sign-in on V2. They reach it only through V2 capability links (F6, E2, K3, F7 My brief, K2 feeds, Your choices, handover pack). Each capability piece proves its own confinement with SX's `assertCapabilityConfined`. D1 K10-R needs only SX rev 4 (cases a to d), and D8 E5A and D9 F8 need only C3C. Migration 2024 is freed.
