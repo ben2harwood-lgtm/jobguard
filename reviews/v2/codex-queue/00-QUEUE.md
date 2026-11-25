@@ -97,12 +97,11 @@ Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, since 00:15 UK **K9 (Q0
 
 ## Lane A order (25 Nov 18:20 UK)
 Web Codex has no runner, so desktop Codex lane A is the single Codex lane. It has at most 4 builds on the Mac at once, shared with Vibe Control. Building now: FL-F (Q40) and D4B (Q41). Next, in this order as slots free:
-1. FL-6 (Q44), small and unblocks every V2 branch meeting FL-1
-2. FL-2 (Q36), repair round
-3. FL-3 (Q37), passed
-3. F1-P (Q43)
-4. FL-4 (Q38)
-5. FL-5 (Q39)
-6. B1C (Q42)
+1. FL-6 (Q44). It's small, and it unblocks every V2 branch that meets FL-1.
+2. FL-2 (Q36) repair round, and D4B (Q41) repair round.
+3. F1-P (Q43).
+4. FL-5 (Q39).
+5. B1C (Q42).
+Done or passed: FL-3 #969, FL-4 #970. FL-F (Q40) is building.
 
 Tenancy locks come first because every later V2 piece relies on them. F1-P is ahead of FL-4 because builders use proof photos every day.
