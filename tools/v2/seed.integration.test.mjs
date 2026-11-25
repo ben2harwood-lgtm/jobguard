@@ -1013,6 +1013,24 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
   await assert.rejects(withTenant(runtime, auth.context, db => db.$client.query(
     "DELETE FROM app.v2_customer_extra_link WHERE id=$1", [first.linkId])),
   error => error.code === "42501");
+  // Codex P1: same-firm runtime cannot insert a link that is already agreed or cancelled; only pending links.
+  const copy = changes => JSON.stringify({ ...stored, id: randomUUID(), token_hash: randomBytes(32).toString("hex"), ...changes });
+  const insertCopy = (db, changes) => db.$client.query(`INSERT INTO app.v2_customer_extra_link
+    SELECT * FROM jsonb_populate_record(NULL::app.v2_customer_extra_link,$1::jsonb)`, [copy(changes)]);
+  for (const changes of [
+    { agreed_at: new Date().toISOString(), agreed_by: "Fictional customer", agree_command_id: randomUUID(), agree_fingerprint: "f", link_version: 2 },
+    { agreed_at: new Date().toISOString(), agreed_by: "Fictional customer" },
+    { agree_command_id: randomUUID() }, { link_version: 2 },
+    { cancelled_at: new Date().toISOString(), cancel_command_id: randomUUID(), cancel_fingerprint: "f", link_version: 2 },
+  ]) {
+    await assert.rejects(withTenant(runtime, auth.context, db => insertCopy(db, changes)),
+      error => error.code === "42501" && error.message === "LINK_UNAVAILABLE");
+  }
+  // A pristine pending link still inserts (rolled back here so the suite's counts stay the same).
+  await assert.rejects(withTenant(runtime, auth.context, async db => {
+    assert.equal((await insertCopy(db, {})).rowCount, 1);
+    throw new Error("F6_ROLLBACK_PRISTINE");
+  }), /F6_ROLLBACK_PRISTINE/u);
   assert.deepEqual(await repository.open(first.capability), agreed);
   const savedAgreement = (await repository.list(auth.context, jobId)).find(link => link.id === first.linkId);
   assert.equal(savedAgreement.amount, "125.00");

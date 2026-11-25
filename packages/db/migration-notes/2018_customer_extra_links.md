@@ -111,3 +111,8 @@ Repair2 local validation (working tree based on ccdf8ddbe2807c31184e1397949a5780
   HTTPS phone mode. Record actual counts against the resulting committed head;
   no Mac/browser pass or new head is claimed here. Independent RED recheck and
   required CI remain the router's gates.
+
+Repair (Codex P1, 25 Nov): a BEFORE INSERT guard, `app.v2_f6_guard_insert`,
+refuses any new link that is not pristine (link_version 1, no cancel or
+agreement fields). Without it, same-firm runtime could insert a link that was
+already "agreed" and skip `app.v2_f6_agree`, its checks and its audit event.

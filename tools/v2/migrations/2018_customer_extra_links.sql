@@ -59,6 +59,22 @@ REVOKE ALL ON FUNCTION app.v2_f6_guard_update() FROM PUBLIC;
 CREATE OR REPLACE TRIGGER v2_f6_guard_update BEFORE UPDATE ON app.v2_customer_extra_link
  FOR EACH ROW EXECUTE FUNCTION app.v2_f6_guard_update();
 
+-- A new link is always pending: no insert may arrive already agreed or cancelled,
+-- so agreement only ever comes through app.v2_f6_agree and its checks and audit.
+CREATE OR REPLACE FUNCTION app.v2_f6_guard_insert() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ IF NEW.link_version<>1 OR NEW.cancelled_at IS NOT NULL OR NEW.cancel_command_id IS NOT NULL
+  OR NEW.cancel_fingerprint IS NOT NULL OR NEW.agreed_at IS NOT NULL OR NEW.agreed_by IS NOT NULL
+  OR NEW.agree_command_id IS NOT NULL OR NEW.agree_fingerprint IS NOT NULL
+ THEN RAISE EXCEPTION 'LINK_UNAVAILABLE' USING ERRCODE='42501'; END IF;
+ RETURN NEW;
+END $$;
+ALTER FUNCTION app.v2_f6_guard_insert() OWNER TO jobguard_migration;
+REVOKE ALL ON FUNCTION app.v2_f6_guard_insert() FROM PUBLIC;
+CREATE OR REPLACE TRIGGER v2_f6_guard_insert BEFORE INSERT ON app.v2_customer_extra_link
+ FOR EACH ROW EXECUTE FUNCTION app.v2_f6_guard_insert();
+
 -- LP-11 has removed GUC-only tenant authority. These policies give only the
 -- private migration-owner functions token-scoped reads; runtime gains no access
 -- to any existing business table. The capability hash is never a tenant selector.
