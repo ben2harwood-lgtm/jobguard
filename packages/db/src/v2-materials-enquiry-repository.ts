@@ -242,7 +242,10 @@ export class MaterialsEnquiryRepository {
       if ((latest?.version ?? 0) !== command.expectedVersion) return this.lostRace($client, context.tenantId, jobId, actor, command, live);
       let result = latest;
       // Generating from unchanged inputs returns the enquiry that is already current.
-      if (latest?.basisDigest !== live.digest) {
+      const creating = latest?.basisDigest !== live.digest;
+      if (creating) {
+        // A concurrent copy of this command can still win the receipt below; the new version must not outlive it.
+        await $client.query("SAVEPOINT v2_material_enquiry_insert");
         const inserted = await $client.query(`
           INSERT INTO app.v2_material_enquiry (tenant_id, job_id, version, command_id, basis_digest, basis, content,
             actor_membership_id)
@@ -258,7 +261,10 @@ export class MaterialsEnquiryRepository {
           actor_membership_id)
         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING
       `, [context.tenantId, jobId, command.commandId, command.expectedVersion, result!.version, actor]);
-      if (!recorded.rowCount) return this.lostRace($client, context.tenantId, jobId, actor, command, live);
+      if (!recorded.rowCount) {
+        if (creating) await $client.query("ROLLBACK TO SAVEPOINT v2_material_enquiry_insert");
+        return this.lostRace($client, context.tenantId, jobId, actor, command, live);
+      }
       await this.audit(database, actor, jobId, "v2_materials.enquiry_generated", {
         commandId: command.commandId, expectedVersion: String(command.expectedVersion),
         enquiryVersion: String(result!.version), created: String(result!.version === command.expectedVersion + 1),

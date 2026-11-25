@@ -1389,3 +1389,60 @@ test("audit-chain: packages/db/src/v2-materials-enquiry-repository.ts#MaterialsE
   assert.equal((await auditEvents("v2_materials.enquiry_generated")).length, recorded.length + 1);
   await verifyTenantChain(context.tenantId);
 });
+
+test("a copy of a generate command that loses the receipt race to an unchanged-input copy leaves no extra enquiry", async () => {
+  const { owner, materials, tilingId, line, generate } = await materialsSetup();
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  await generate();
+  const { enquiry: current } = await materials.read(jobId, materialsQuery);
+  assert.equal(current.current, true);
+  const command = { version: "v2-material-enquiry-generate.v1", commandId: randomUUID(), expectedVersion: current.version };
+
+  // Copy A records its receipt for the current enquiry, then pauses before its audit append and commit.
+  let paused, resume;
+  const reachedAudit = new Promise(resolve => { paused = resolve; });
+  const gate = new Promise(resolve => { resume = resolve; });
+  const pausing = {
+    async connect() {
+      const client = await runtime.connect();
+      const query = client.query.bind(client);
+      client.query = async (sql, ...rest) => {
+        if (typeof sql === "string" && sql.includes("app.append_audit(")) { paused(); await gate; }
+        return query(sql, ...rest);
+      };
+      const release = client.release.bind(client);
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    },
+  };
+  const first = new MaterialsEnquiryRepository(pausing).generate(context, jobId, owner.sessionId, command);
+  await reachedAudit;
+
+  // The inputs change, and copy B creates a new version before waiting on A's receipt.
+  await line(tilingId, "audit-chain-spacers", { notes: "2 mm" });
+  const events = (await auditEvents("v2_materials.enquiry_generated")).length;
+  const second = materials.generate(jobId, command);
+  for (let waited = 0; ; waited += 25) {
+    const { rowCount } = await admin.query(`SELECT 1 FROM pg_stat_activity
+      WHERE wait_event_type = 'Lock' AND query LIKE '%v2_material_enquiry_command%'`);
+    if (rowCount) break;
+    assert.ok(waited < 10000, "copy B waits on copy A's receipt");
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  resume();
+  const [a, b] = await Promise.all([first, second]);
+  assert.equal(a.enquiry.version, current.version);
+  assert.equal(a.enquiry.current, true);
+  assert.deepEqual([b.enquiry.version, b.enquiry.commandId, b.enquiry.generatedAt],
+    [a.enquiry.version, a.enquiry.commandId, a.enquiry.generatedAt], "both copies share the first copy's outcome");
+  assert.equal(b.enquiry.current, false, "the second copy reports that the shared enquiry is now out of date");
+
+  const { rows: [{ latest }] } = await admin.query(
+    "SELECT max(version)::int AS latest FROM app.v2_material_enquiry WHERE job_id = $1", [jobId]);
+  assert.equal(latest, current.version, "the losing copy's new version rolled back");
+  assert.equal((await auditEvents("v2_materials.enquiry_generated")).length, events + 1);
+  const after = await materials.read(jobId, materialsQuery);
+  assert.equal(after.enquiry.version, current.version);
+  assert.equal(after.enquiry.current, false);
+  await verifyTenantChain(context.tenantId);
+});
