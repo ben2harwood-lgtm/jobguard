@@ -15,11 +15,12 @@ export function extraPriceWords(pence: number, revision: number) {
   };
 }
 
-/** QW-1b: the approval binds the exact photos shown, in the order shown (withdrawn ones included). */
+/** QW-1b: the approval binds the exact photos shown, in the order shown (withdrawn ones included).
+ * An extra without photos sends no `photos` key, so its request is unchanged from before QW-1. */
 export function extraApprovalRequest(view: CustomerVariationView, item: Extra, commandId: string) {
   return { version: "customer-portal-approval.v1" as const, commandId, jobId: view.jobId, expectedJobRevision: view.jobRevision,
     target: { kind: "variation" as const, id: item.id, revision: item.revision, hash: item.hash, amount: item.amount,
-      photos: item.photos.map(photo => photo.sha256) } };
+      ...(item.photos.length > 0 ? { photos: item.photos.map(photo => photo.sha256) } : {}) } };
 }
 
 export const PHOTOS_CHANGED_NOTICE = "The photos on this extra have changed. Check them again before approving.";
