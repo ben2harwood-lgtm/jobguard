@@ -145,8 +145,9 @@ jobs:
   v2-seed:
     # V2's database seed suite, against V2's own embedded PostgreSQL on loopback.
     # It runs only for V2 pull requests and pushes to v2/main; main is unaffected.
+    # For an opaque Claude parent, only a V2 head in this repository identifies a V2 stack.
     # Keep this condition identical to V2_SEED_REQUIRED in the checks gate.
-    if: ${{ github.event_name == 'pull_request' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-')) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main' }}
+    if: ${{ github.event_name == 'pull_request' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-') || (startsWith(github.base_ref, 'claude/project-thread-') && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'codex/sandbox/v2-'))) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -204,7 +205,7 @@ jobs:
           SECRETS: ${{ needs.secrets.result }}
           DEPENDENCY_REVIEW: ${{ needs.dependency-review.result }}
           V2_SEED: ${{ needs.v2-seed.result }}
-          V2_SEED_REQUIRED: ${{ github.event_name == 'pull_request' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-')) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main' }}
+          V2_SEED_REQUIRED: ${{ github.event_name == 'pull_request' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-') || (startsWith(github.base_ref, 'claude/project-thread-') && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'codex/sandbox/v2-'))) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main' }}
         run: |
           printf 'core: %s\nweb: %s\nsecrets: %s\ndependency-review: %s\n' "${CORE:-}" "${WEB:-}" "${SECRETS:-}" "${DEPENDENCY_REVIEW:-}"
           printf 'v2-seed: %s\nv2-seed required: %s\n' "${V2_SEED:-}" "${V2_SEED_REQUIRED:-}"

@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-ci1-stack": {
+      "branches": ["codex/sandbox/v2-ci1-stack"],
+      "note": "T2 CI-only child of V2-CI1. Recognize JobGuard V2 heads stacked on Claude project branches in the same repository.",
+      "allow": [
+        ".github/workflows/ci.yml",
+        "tools/ci-workflow.test.mjs"
+      ]
+    }
+  }
+}
