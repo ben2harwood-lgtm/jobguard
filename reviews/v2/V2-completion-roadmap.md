@@ -103,7 +103,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 | H1 | **H1** full browser run, from an empty account to a kept handover, with builder, trade and customer sign-ins | O + B | everything above |
 | H2 | **H3** second fictional job (utility room and landing), crew clashes | O | H1 |
 | H3 | **H4** interrupt and resume the local environment mid-job | O + B | H1 |
-| H4 | **H2, B1D and B2D** real-phone runs on a named phone | **Ben's phone** | H1, B2C |
+| H4 | **H2, B1D and B2D** real-phone runs on a named phone. **Ben, 25 Nov 17:43 UK: his iPhone, around 4 Dec, one session of about an hour with a step-by-step script. Android stays "not yet tested".** | **Ben's phone** | H1, B2C |
 
 ## Held for Ben (not scheduled until he decides)
 - **D4B** translated crew briefs (needs a paid translation route). **Ben, 25 Nov 17:37 UK: plan it with a paid service.** The planner writes the D4B packet plus a privacy note (job details leave JobGuard). Ben picks and pays for the service; practice use first, real use only after the privacy check.
