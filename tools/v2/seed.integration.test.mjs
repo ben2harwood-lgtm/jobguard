@@ -1406,7 +1406,9 @@ before(async () => {
   const { view: preview } = await quote.preview(jobId, { version: "quote-preview-command.v1", recipient: customer.email });
   await quote.issue(jobId, { version: "quote-send-command.v1", commandId: randomUUID(),
     documentId: preview.documentId, contentHash: preview.contentHash, recipient: customer.email });
-  await quote.execute(jobId, { version: "quote-execute-command.v1", documentId: preview.documentId, mode: "success" });
+  await json(await request(`/api/jobs/${jobId}/quotes/delivery/execute`, {
+    cookies: owner.cookies, body: { version: "quote-execute-command.v1", documentId: preview.documentId, mode: "success" },
+  }));
   await quote.accept(jobId, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
     documentId: preview.documentId, documentVersion: preview.documentVersion, documentHash: preview.contentHash,
     statedCustomerName: customer.name, statedMethod: "verbal", acceptedAt: new Date().toISOString() });

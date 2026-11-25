@@ -94,7 +94,7 @@ before(async () => {
   const sessionId = storageState.cookies.find(cookie => cookie.name === "jg_session")?.value;
   assert.ok(sessionId);
   const app = createWorkspaceApplication({ pool, sessionId });
-  await app.workPlan.read(jobId, { version: "v2-work-plan-query.v1" });
+  await app.workPlan.read(jobId, { version: "work-plan-query.v1" });
   await app.quote.activate(jobId, { version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" });
   const briefs = await app.crewBriefs.read(jobId, { version: "v2-crew-brief-query.v1", trade: "tiler" });
   brief = await app.crewBriefs.generate(jobId, { version: "v2-crew-brief-command.v1", commandId: randomUUID(),
