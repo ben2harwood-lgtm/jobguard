@@ -218,7 +218,7 @@ export class OpenFactRepository {
         await this.audit(database, jobId, saved, command.action === "log" ? command.detail.kind : null);
         return receipt(saved);
       }
-      // Uniqueness arbitrated a race: an exact concurrent retry replays, anything else lost.
+      // The version or uniqueness check lost a race. Return a matching receipt if it committed.
       const raced = await this.replay($client, context.tenantId, jobId, command.commandId, actor.id, digest);
       if (raced) return raced;
       throw new OpenFactError("OPEN_FACT_VERSION_CONFLICT");
@@ -295,7 +295,9 @@ export class OpenFactRepository {
       WHERE (f.tenant_id, f.job_id, f.id) = ($1, $2, $3)
     `, [tenantId, jobId, command.factId]);
     if (!fact) throw new PracticeAccessError("NOT_FOUND");
-    if (fact.version !== command.expectedVersion) throw new OpenFactError("OPEN_FACT_VERSION_CONFLICT");
+    // A matching request may have committed since the first receipt lookup.
+    // Let command() check its identity and digest before reporting a stale version.
+    if (fact.version !== command.expectedVersion) return undefined;
     if (fact.status === "answered" || fact.status === "cancelled") throw new OpenFactError("OPEN_FACT_CLOSED");
     if (command.action === "mark_out_of_date" && fact.status === "out_of_date") throw new OpenFactError("OPEN_FACT_CLOSED");
     const a = command.action === "answer" ? command.answer : null;
