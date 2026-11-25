@@ -1116,7 +1116,16 @@ test("K6A forwards fixtures, holds real files, replays once and isolates both fi
   const filed = await repo.receive(auth,forward);
   assert.equal(filed.state,"filed");
   assert.deepEqual(await repo.receive(auth,forward),filed);
-  assert.equal((await repo.receive(auth,{...forward,commandId:randomUUID()})).duplicate,true);
+  const again = {...forward,commandId:randomUUID()};
+  const duplicate = await repo.receive(auth,again);
+  assert.deepEqual(duplicate,{itemId:filed.itemId,duplicate:true});
+  // The duplicate's own command id is now bound to its request: an exact replay returns the
+  // same result, and reusing it for another message or a dismiss is refused.
+  assert.deepEqual(await repo.receive(auth,again),duplicate);
+  await assert.rejects(repo.receive(auth,{...again,messageId:randomUUID()}),/IDEMPOTENCY_CONFLICT/);
+  await assert.rejects(repo.command(auth,{version:"v2-inbound-mail.v1",commandId:again.commandId,expectedVersion:0,
+    action:"dismiss",itemId:filed.itemId}),/IDEMPOTENCY_CONFLICT/);
+  assert.equal((await events(again.commandId)).length,0,"a duplicate delivery adds no routing event");
   await assert.rejects(repo.receive(auth,{...forward,subject:"changed"}),/IDEMPOTENCY_CONFLICT/);
   await assert.rejects(repo.receive(auth,{...forward,commandId:randomUUID(),body:"changed"}),/IDEMPOTENCY_CONFLICT/);
   assert.equal((await events(forward.commandId)).length,1);

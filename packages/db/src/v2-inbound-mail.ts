@@ -123,7 +123,11 @@ export class V2InboundMailRepository {
       const prior = (await db.$client.query("SELECT id,message_hash FROM app.v2_inbound_item WHERE message_id=$1",[input.messageId])).rows[0];
       if (prior) {
         if (prior.message_hash !== hash(message)) throw new InboundMailError("IDEMPOTENCY_CONFLICT");
-        return { itemId: prior.id, duplicate: true };
+        // Record this command's receipt too, so reusing its id for another request is refused.
+        // No intake and no routing event: the delivery was already handled.
+        const duplicate = { itemId: prior.id, duplicate: true };
+        await this.reserve(db, principal, input.commandId, input, duplicate);
+        return duplicate;
       }
       if (input.expectedVersion !== 0) throw new InboundMailError("STALE_INBOUND");
       const fixture = z.enum(supplierFixtureIds).safeParse(input.fixtureId);
