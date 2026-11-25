@@ -3,9 +3,9 @@ import type { Pool } from "pg";
 import { z } from "zod";
 import { supplierFixtureIds } from "@jobguard/core";
 import { appendAuditBatch } from "./audit.js";
-import { practiceMaterialPool } from "./practice-session.js";
+import { practiceMaterialPool, type authenticatePracticeSession } from "./practice-session.js";
 import { SupplierDocumentRepository } from "./supplier-document-repository.js";
-import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type TenantTransaction } from "./tenant-context.js";
 
 const base = z.object({
   version: z.literal("v2-inbound-mail.v1"), commandId: z.guid(),
@@ -24,7 +24,8 @@ export const inboundItemCommand = base.extend({
 }).superRefine((input, ctx) => {
   if (input.action === "file" && !input.jobId) ctx.addIssue({ code: "custom", message: "Choose a job", path: ["jobId"] });
 });
-type Principal = { context: VerifiedTenantContext; membershipId: string; digest: string };
+// The authenticated practice session, as blank-practice-company.ts types it.
+type Principal = Awaited<ReturnType<typeof authenticatePracticeSession>>;
 type Item = { id: string; state: string; revision: number; fixture_id: string | null; job_id: string | null; document_id: string | null };
 export class InboundMailError extends Error {
   constructor(readonly code: "NOT_FOUND" | "V2_ONLY" | "STALE_INBOUND" | "IDEMPOTENCY_CONFLICT" | "NEEDS_K6B" | "ITEM_CLOSED") { super(code); }
