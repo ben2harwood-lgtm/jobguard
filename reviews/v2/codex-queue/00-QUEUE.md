@@ -4,7 +4,7 @@
 >
 > Earlier note (25 Nov 01:10 UK): no new pieces went to Codex overnight beyond Q20 (BH1) and K3's repair (#935).
 
-Ben, 24 Nov 21:25 UK: "Keep jobguard v2 building on codex desktop all night." Builder: desktop Codex on Ben's Mac (`codex exec`), at most two builds at a time. A Claude session checks each PR; the builder never checks its own work. Only Ben merges RED or T2.
+Ben, 24 Nov 21:25 UK: "Keep jobguard v2 building on codex desktop all night." Builder: desktop Codex on Ben's Mac (`codex exec`), at most two builds at a time. A Claude session checks each PR; the builder never checks its own work. Only Ben merges RED or T2. **Updated (Ben, 25 Nov 20:02 UK, via the coordinator):** T2 PRs are merged by the "Merge all ready PRs" thread once CI is green and the Codex check is clean. Only RED merges still go to Ben.
 
 Plan of record: V2 build plan rev 1.3, `reviews/v2/JobGuard-V2-Build-Plan-rev-1.3.md` on branch `claude/project-thread-cw5qv5` (PR #915). These packets are also on that branch under `reviews/v2/codex-queue/`.
 
@@ -101,6 +101,11 @@ Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, since 00:15 UK **K9 (Q0
 
 ## Workflow change (Ben, 25 Nov 19:53 UK): "I want Opus 5.5 to do the coding and Codex to do the checking."
 Every queued and future packet is built and repaired by an Opus 5.5 thread. Codex only checks, by `@codex review` on the PR or a read-only Mac review. Desktop Codex lane A takes no new builds. Repair rounds already used on Codex-built PRs still count.
+
+## Who decides (Ben, 25 Nov 20:02 and 20:07 UK, via the coordinator)
+- T2 PRs: the merge thread merges once CI is green and Codex is clean.
+- Build decisions (design choices, P1/P0 fix-or-log, extra repair rounds, when to stop reviewing): the coordinator decides. Builders and the planner bring them to the coordinator, not to Ben.
+- Still Ben only: RED merges, deploys, spending, accounts, and company facts.
 
 ## (Superseded) Lane A order (25 Nov 18:20 UK)
 Web Codex has no runner, so desktop Codex lane A is the single Codex lane. It has at most 4 builds on the Mac at once, shared with Vibe Control. Building now: FL-F (Q40) and D4B (Q41). Next, in this order as slots free:
