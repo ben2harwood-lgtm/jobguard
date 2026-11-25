@@ -238,3 +238,7 @@ export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
 export { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";
 
 export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
+
+// Q06 V2-K9 RAMS draft (separate registration block).
+export { RamsRepository } from "./v2-rams-repository.js";
+export { ramsCommandV1, ramsDraftV1, ramsWarning, ramsReadyToSign, RamsError, type RamsDraft } from "./v2-rams-draft.js";

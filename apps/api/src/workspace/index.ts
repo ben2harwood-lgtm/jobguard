@@ -133,3 +133,6 @@ export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
 export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";
+
+// Q06 V2-K9 RAMS draft (separate registration block).
+export { RamsApplication, RamsError, type RamsScreen } from "./rams.application.js";
