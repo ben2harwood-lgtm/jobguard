@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import type { WorkPlan as SavedPlan, WorkPlanEdit } from "@jobguard/db";
 import { Card, Empty, Note, Tag, shortDate } from "../../../designed-ui";
+import { JOB_SAVED_EVENT } from "../../../../ui/job-page-fetch";
 
 type PlanView = Pick<SavedPlan, "state" | "tasks" | "quoteRevisionId" | "version" | "changes"> & {
   acceptanceCancelled: boolean;
@@ -74,17 +75,44 @@ export function WorkPlan({ jobId }: { jobId: string }) {
   const editReplay = useRef<{ payload: string; commandId: string }>(null);
   const activationId = useRef<string>(null);
 
-  useEffect(() => {
-    let current = true;
-    requestPlan<PlanView>(path).then(view => {
+  // Each read takes a number; only the newest read may replace the card.
+  const reads = useRef(0);
+  const readPlan = useCallback(async () => {
+    const read = ++reads.current;
+    const view = await requestPlan<PlanView>(path);
+    return { view, current: read === reads.current };
+  }, [path]);
+  const refresh = useCallback(() => {
+    const read = reads.current + 1;
+    readPlan().then(({ view, current }) => {
       if (current) setPlan(view);
     }).catch(error => {
-      if (!current) return;
+      if (read !== reads.current) return;
       if (error instanceof PlanRequestError && error.message === "QUOTE_REVISION_NOT_FOUND") setPlan(null);
       else setProblem({ message: "The plan could not open. Your job is unchanged.", reload: true });
     });
-    return () => { current = false; };
-  }, [path]);
+  }, [readPlan]);
+
+  useEffect(() => {
+    refresh();
+    return () => { reads.current++; };
+  }, [refresh]);
+
+  // Quote saves and lifecycle changes in the workspace below change the plan's source.
+  useEffect(() => {
+    const changed = (event: Event) => {
+      const detail: unknown = (event as CustomEvent).detail;
+      const id = typeof detail === "string" ? detail : (detail as { jobId?: unknown } | null)?.jobId;
+      if (id === jobId) refresh();
+    };
+    const names = [JOB_SAVED_EVENT, "job-lifecycle-changed"];
+    names.forEach(name => window.addEventListener(name, changed));
+    return () => names.forEach(name => window.removeEventListener(name, changed));
+  }, [jobId, refresh]);
+
+  // An open task form belongs to the quote revision it was opened on.
+  const revision = plan?.quoteRevisionId;
+  useEffect(() => { setEditing(null); }, [revision]);
 
   function reload() {
     window.location.reload();
@@ -106,7 +134,8 @@ export function WorkPlan({ jobId }: { jobId: string }) {
       setEditing(null);
       setNotice("Task saved.");
       try {
-        setPlan(await requestPlan<PlanView>(path));
+        const { view, current } = await readPlan();
+        if (current) setPlan(view);
       } catch {
         setProblem({ message: "The task was saved, but the updated plan could not open.", reload: true });
       }
@@ -132,8 +161,8 @@ export function WorkPlan({ jobId }: { jobId: string }) {
       await requestPlan(`${jobPath}/quotes/activation`, {
         version: "practice-activation-command.v1", commandId: activationId.current, scenario: "no_charge",
       });
-      const live = await requestPlan<PlanView>(path);
-      setPlan(live);
+      const { view, current } = await readPlan();
+      if (current) setPlan(view);
       window.dispatchEvent(new CustomEvent("job-lifecycle-changed", { detail: jobId }));
     } catch {
       setProblem({ message: "Switch live could not be confirmed. Reload the plan to check its status.", reload: true });
