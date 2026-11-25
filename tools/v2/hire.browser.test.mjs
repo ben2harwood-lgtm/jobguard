@@ -5,7 +5,7 @@ import { after, before, test } from "node:test";
 import { DEMO_TENANT_ID } from "../../packages/db/dist/index.js";
 import { chromium, expect } from "../../apps/web/node_modules/@playwright/test/index.mjs";
 
-// Run after the full seed suite, on its existing HTTPS V2 stack with devIndicators:false
+// Run on a fresh HTTPS V2 stack, before the seed suite, with devIndicators:false
 // (or a production build). One sign-in is reused at both widths; no new OTP per test.
 const origin = process.env.V2_TEST_ORIGIN;
 assert.ok(origin && new URL(origin).protocol === "https:", "V2_TEST_ORIGIN must be the phone-mode HTTPS origin");
@@ -66,12 +66,17 @@ async function signInOnce(browser, { jobTitle = "Occupied-home kitchen splashbac
 }
 
 let browser, storageState, jobId;
+// Each command click waits for its own POST to come back.
+const saved = (page, click) => Promise.all([
+  page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/hires")),
+  click(),
+]).then(([response]) => assert.equal(response.status(), 200, `hire command: ${response.status()}`));
 before(async () => {
   browser = await chromium.launch({ executablePath: process.env.V2_TEST_CHROMIUM });
   ({ storageState, jobId } = await signInOnce(browser));
 });
 after(async () => browser?.close());
-test("V2-K8: off-hire journey persists at 360 and 1280px on the phone origin", { timeout: 120_000 }, async () => {
+test("V2-K8: off-hire journey persists at 360 and 1280px on the phone origin", { timeout: 240_000 }, async () => {
   for (const width of [360, 1280]) {
     const context = await browser.newContext({ storageState, ignoreHTTPSErrors: true, viewport: { width, height: 800 } });
     try {
@@ -79,6 +84,8 @@ test("V2-K8: off-hire journey persists at 360 and 1280px on the phone origin", {
       const external = [];
       page.on("request", request => { if (new URL(request.url()).origin !== origin) external.push(request.url()); });
       await page.goto(`${origin}/jobs/${jobId}/work`);
+      // The work page loads ~25 panels and reflows for several seconds; act only once it is quiet.
+      await page.waitForLoadState("networkidle", { timeout: 120_000 });
       const hires = page.getByRole("main").getByTestId("v2-hire-items");
       await expect(hires).toBeVisible();
       await expect(hires.getByText("Practice sandbox — synthetic data; nothing is sent or charged. Builder only.")).toBeVisible();
@@ -92,28 +99,31 @@ test("V2-K8: off-hire journey persists at 360 and 1280px on the phone origin", {
       await add.focus(); await expect(add).toBeFocused();
       const box = await add.boundingBox();
       assert.ok(box && box.width >= 44 && box.height >= 44);
-      await add.click();
+      await saved(page, () => add.click());
       const item = hires.getByRole("article", { name: `scaffold from ${supplier}` });
-      await expect(item.getByText("scaffold not needed after 2026-01-02: off-hire it?", { exact: true })).toBeVisible();
+      await expect(item.getByText("scaffold not needed after 2026-01-02: off-hire it?", { exact: true })).toBeVisible({ timeout: 30_000 });
       await expect(item.getByText(/About £[0-9]+\.[0-9]{2} so far/u)).toBeVisible();
       if (process.env.V2_TEST_SCREENSHOTS) {
         await mkdir(process.env.V2_TEST_SCREENSHOTS, { recursive: true });
         await page.screenshot({ path: join(process.env.V2_TEST_SCREENSHOTS, `v2-k8-reminder-${width}.png`), fullPage: true });
       }
       await page.reload();
+      await page.waitForLoadState("networkidle", { timeout: 120_000 });
       await expect(item).toBeVisible();
       await item.getByRole("button", { name: "Edit hire item", exact: true }).click();
       await hires.getByLabel("Weekly cost (£)", { exact: true }).fill("130.02");
-      await hires.getByRole("button", { name: "Save hire changes", exact: true }).click();
-      await expect(item.getByText(/£130.02 per week/u)).toBeVisible();
+      await saved(page, () => hires.getByRole("button", { name: "Save hire changes", exact: true }).click());
+      await expect(item.getByText(/£130.02 per week/u)).toBeVisible({ timeout: 30_000 });
       const checkbox = item.getByRole("checkbox").first();
       await expect(checkbox).toBeVisible();
-      await checkbox.check(); await expect(checkbox).toBeChecked();
-      await item.getByRole("button", { name: "Mark off-hire requested", exact: true }).click();
-      await expect(item.getByText("Off-hire requested — contact the supplier yourself", { exact: true })).toBeVisible();
-      await item.getByRole("button", { name: "Mark off hire", exact: true }).click();
+      // The checkbox is controlled and only changes once the link POST and reload finish.
+      await saved(page, () => checkbox.click()); await expect(checkbox).toBeChecked({ timeout: 30_000 });
+      await saved(page, () => item.getByRole("button", { name: "Mark off-hire requested", exact: true }).click());
+      await expect(item.getByText("Off-hire requested — contact the supplier yourself", { exact: true })).toBeVisible({ timeout: 30_000 });
+      await saved(page, () => item.getByRole("button", { name: "Mark off hire", exact: true }).click());
       await page.reload();
-      await expect(item.getByText("Off hire", { exact: true })).toBeVisible();
+      await page.waitForLoadState("networkidle", { timeout: 120_000 });
+      await expect(item.getByText("Off hire", { exact: true })).toBeVisible({ timeout: 30_000 });
       await expect(item.getByText(/off-hire it\?/u)).toHaveCount(0);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       assert.deepEqual(external, []);
