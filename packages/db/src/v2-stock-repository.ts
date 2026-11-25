@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { appendAuditBatch } from "./audit.js";
+import { nextStockMaterialBasis, type StockMaterialBasis, type StockMaterialChanges } from "./v2-stock-material-basis.js";
 import { MaterialsEnquiryRepository } from "./v2-materials-enquiry-repository.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
@@ -63,12 +64,34 @@ export class StockRepository {
         SELECT DISTINCT ON (delivery_id) ${columns} FROM app.v2_stock_delivery
         WHERE (tenant_id, job_id) = ($1,$2) ORDER BY delivery_id, expected_version DESC
       `, [context.tenantId, jobId]);
-      const lines = materials.lines.filter(line => !line.removed).map(line => ({
-        scopeItemId: line.scopeItemId, lineKey: line.lineKey, product: line.product,
-        ...stockPosition(line.setAsidePacks, line.calculation.status === "calculated" ? line.calculation.grossPacks : null,
-          deliveries.filter(delivery => delivery.scopeItemId === line.scopeItemId && delivery.lineKey === line.lineKey)
-            .map(delivery => delivery.packsReceived)),
-      }));
+      // D3's current view identifies the exact material version we are displaying. Ignore edits
+      // newer than that view if one arrived between the two reads.
+      const active = materials.lines.filter(line => !line.removed);
+      const key = (line: { scopeItemId: string; lineKey: string }) => line.scopeItemId + "/" + line.lineKey;
+      const currentVersions = new Map(active.map(line => [key(line), line.version - 1]));
+      const { rows: revisions } = await $client.query<{ scopeItemId: string; lineKey: string;
+        revision: number; changes: StockMaterialChanges }>(`
+        SELECT scope_item_id AS "scopeItemId", line_key AS "lineKey", expected_version AS revision, changes
+        FROM app.v2_material_line WHERE (tenant_id, job_id) = ($1,$2)
+        ORDER BY scope_item_id, line_key, expected_version
+      `, [context.tenantId, jobId]);
+      const bases = new Map<string, StockMaterialBasis>();
+      for (const edit of revisions) {
+        const id = key(edit);
+        if (edit.revision <= (currentVersions.get(id) ?? -1)) {
+          bases.set(id, nextStockMaterialBasis(bases.get(id), edit.changes, edit.revision));
+        }
+      }
+      const lines = active.map(line => {
+        const basis = bases.get(key(line));
+        const since = basis?.since;
+        const receipts = since == null ? [] : deliveries.filter(delivery => delivery.scopeItemId === line.scopeItemId &&
+          delivery.lineKey === line.lineKey && delivery.materialLineRevision >= since &&
+          delivery.materialLineRevision < line.version).map(delivery => delivery.packsReceived);
+        return { scopeItemId: line.scopeItemId, lineKey: line.lineKey, product: line.product,
+          ...stockPosition(basis?.confirmedSetAside ?? "0",
+            line.calculation.status === "calculated" ? line.calculation.grossPacks : null, receipts) };
+      });
       return { jobId, lines, deliveries };
     });
   }

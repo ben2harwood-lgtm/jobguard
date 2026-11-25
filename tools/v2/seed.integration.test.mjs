@@ -1471,7 +1471,7 @@ test("V2-E3 FORCE RLS and runtime privileges deny second-firm select, insert, up
 });
 
 test("V2-E3 retains actual receipts through note edits and never counts delivered tiles as replacement flooring", async () => {
-  const { stock, line, tilingId, lineKey, forecast } = await stockSetup();
+  const { stock, owner, line, tilingId, lineKey, forecast } = await stockSetup();
   await line(tilingId, lineKey, { setAsidePacks: "0" });
   const add = forecast();
   await stock.execute(jobId, add);
@@ -1482,9 +1482,29 @@ test("V2-E3 retains actual receipts through note edits and never counts delivere
   await line(tilingId, lineKey, { notes: "Fictional rear entrance" });
   assert.deepEqual(pick(position(await read()), ["receivedPacks", "availablePacks", "shortPacks"]), {
     receivedPacks: "4", availablePacks: "4", shortPacks: "2" });
-  await line(tilingId, lineKey, { product: "Fictional engineered oak flooring" });
+  await line(tilingId, lineKey, { packSize: { quantity: "1.00", unit: "m²" }, supplier: "Fictional yard" });
+  assert.equal(position(await read()).availablePacks, "4", "equivalent packs still count");
+  await line(tilingId, lineKey, { setAsidePacks: "2" });
+  assert.equal(position(await read()).availablePacks, "6");
+  await line(tilingId, lineKey, { product: "Fictional engineered oak flooring", setAsidePacks: "2" });
   const after = await read();
   assert.equal(after.deliveries.find(item => item.deliveryId === add.deliveryId).packsReceived, "4");
   assert.deepEqual(pick(position(after), ["product", "receivedPacks", "availablePacks", "shortPacks"]), {
     product: "Fictional engineered oak flooring", receivedPacks: "0", availablePacks: "0", shortPacks: "6" });
+  await line(tilingId, lineKey, { product: "Fictional engineered oak flooring", notes: "Fictional note", setAsidePacks: "2" });
+  assert.equal(position(await read()).setAsidePacks, "0", "a full-form echo cannot reclaim tile stock");
+  await line(tilingId, lineKey, { setAsidePacks: "2" });
+  assert.equal(position(await read()).availablePacks, "2", "explicit fresh confirmation for oak");
+  const oak = forecast();
+  await stock.execute(jobId, oak);
+  await stock.execute(jobId, { version: oak.version, action: "record_receipt", commandId: randomUUID(),
+    deliveryId: oak.deliveryId, expectedVersion: 1, packsReceived: "3" });
+  assert.equal(position(await read()).availablePacks, "5", "only the oak receipt and confirmed oak packs count");
+  await line(tilingId, lineKey, { packSize: { quantity: "2", unit: "m²" } });
+  const newPack = await read();
+  assert.equal(newPack.deliveries.find(item => item.deliveryId === oak.deliveryId).packsReceived, "3");
+  assert.deepEqual(pick(position(newPack), ["setAsidePacks", "receivedPacks", "requiredPacks", "shortPacks"]), {
+    setAsidePacks: "0", receivedPacks: "0", requiredPacks: "3", shortPacks: "3" });
+  const reloaded = await json(await request(`/api/jobs/${jobId}/stock`, { cookies: owner.cookies }));
+  assert.deepEqual(position(reloaded), position(newPack));
 });
