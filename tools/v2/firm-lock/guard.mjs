@@ -32,8 +32,12 @@ export async function firmLockCatalog(admin) {
       UNION ALL SELECT oid, 'direct' FROM direct
     )
     SELECT t.oid::regclass::text AS relation, t.kind, c.relrowsecurity AS rls,
-      (SELECT array_agg(DISTINCT k.confrelid::regclass::text ORDER BY k.confrelid::regclass::text) FROM pg_constraint k
-       WHERE k.conrelid = t.oid AND k.contype = 'f') AS parents,
+      (SELECT jsonb_agg(jsonb_build_object('parent', k.confrelid::regclass::text, 'pairs',
+         (SELECT jsonb_agg(jsonb_build_array(ca.attname, pa.attname) ORDER BY x.n)
+          FROM unnest(k.conkey, k.confkey) WITH ORDINALITY AS x(child, parent, n)
+          JOIN pg_attribute ca ON ca.attrelid = k.conrelid AND ca.attnum = x.child
+          JOIN pg_attribute pa ON pa.attrelid = k.confrelid AND pa.attnum = x.parent)))
+       FROM pg_constraint k WHERE k.conrelid = t.oid AND k.contype = 'f') AS foreign_keys,
       has_table_privilege('jobguard_runtime', t.oid, 'SELECT,INSERT,UPDATE,DELETE') AS runtime_access,
       EXISTS (SELECT FROM pg_policy p WHERE p.polrelid = t.oid AND p.polpermissive
         AND ('jobguard_runtime'::regrole::oid = ANY (p.polroles) OR p.polroles = '{0}')) AS runtime_permissive,
@@ -45,8 +49,36 @@ export async function firmLockCatalog(admin) {
   return rows;
 }
 
+// The body of each EXISTS ( ... ) in a policy expression, with its parentheses balanced.
+function existsBodies(expression) {
+  const bodies = [];
+  for (let start = expression.indexOf("EXISTS ("); start !== -1; start = expression.indexOf("EXISTS (", start + 1)) {
+    let depth = 0;
+    for (let i = start + "EXISTS ".length; i < expression.length; i += 1) {
+      if (expression[i] === "(") depth += 1;
+      if (expression[i] === ")" && --depth === 0) { bodies.push(expression.slice(start + "EXISTS (".length, i)); break; }
+    }
+  }
+  return bodies;
+}
+
+// The foreign keys into job-bound parents that no EXISTS matches on every column (empty when all are).
+// Each must read a firm-locked parent: a row naming two jobs (job_link) needs both to be visible.
+function unmatchedParentKeys(row, table, using, jobBound, lockedParents) {
+  const bodies = existsBodies(using);
+  const keys = (row.foreign_keys ?? []).filter(({ parent }) => jobBound.has(parent));
+  const matched = keys.filter(({ parent, pairs }) => lockedParents.has(parent) && bodies.some(body => {
+    const from = body.match(/^\s*SELECT\s+FROM (\S+) (\w+)\s+WHERE /u);
+    return from?.[1] === parent && pairs.every(([child, key]) => body.includes(`(${from[2]}.${key} = ${table}.${child})`));
+  }));
+  // A key whose columns sit inside a matched key is covered by it (job_link's job ids sit inside its binding keys).
+  const covered = ({ pairs }) => matched.some(other => pairs.every(([child]) => other.pairs.some(([c]) => c === child)));
+  return keys.filter(key => !covered(key)).map(({ parent, pairs }) => `${parent}(${pairs.map(([child]) => child).join(", ")})`);
+}
+
 // The reasons a table is not truly firm-locked (empty when it is).
-export function lockProblems(row) {
+// jobBound: every catalog relation. lockedParents: those that carry a v2_practice_firm policy themselves.
+export function lockProblems(row, lockedParents = new Set(), jobBound = lockedParents) {
   const problems = [];
   const policy = row.firm_policy;
   if (!row.rls) problems.push("row security is off, so no policy applies");
@@ -61,10 +93,11 @@ export function lockProblems(row) {
   if (row.kind === "direct" && !joinsJob.test(using)) problems.push("v2_practice_firm does not join app.job on (tenant_id, job_id)");
   // app.job is the root: 2001's rule compares the job's own practice digest with the session's firm.
   if (row.kind === "root" && !/app\.current_firm_profile_key\(\)/u.test(using)) problems.push("app.job's v2_practice_firm does not check the session's firm");
-  // An indirect lock must reach the job through a table this one has a foreign key to, matched on this row's columns.
-  const joinsParent = (row.parents ?? []).some(parent =>
-    new RegExp(`EXISTS \\(\\s*SELECT\\s+FROM ${parent.replace(".", "\\.")} \\w+\\s+WHERE .*= ${table}\\.\\w+\\)`, "su").test(using));
-  if (row.kind === "indirect" && !joinsParent) problems.push("v2_practice_firm does not join a parent it has a foreign key to");
+  // An indirect lock must reach the job through a firm-locked parent it has a foreign key to, on that key's every column.
+  if (row.kind === "indirect") {
+    const unmatched = unmatchedParentKeys(row, table, using, jobBound, lockedParents);
+    if (unmatched.length > 0) problems.push(`v2_practice_firm does not join every job-bound parent on its full key: ${unmatched.join("; ")}`);
+  }
   if (policy.check !== null && policy.check !== using) problems.push("v2_practice_firm has a different WITH CHECK");
   return problems;
 }
@@ -72,8 +105,11 @@ export function lockProblems(row) {
 /** Tables that fail the guard, with reasons. Pending slices and tables runtime can't touch pass. */
 export async function firmLockFailures(admin) {
   const pending = pendingTables();
-  return (await firmLockCatalog(admin))
+  const catalog = await firmLockCatalog(admin);
+  const lockedParents = new Set(catalog.filter(row => row.firm_policy).map(row => row.relation));
+  const jobBound = new Set(catalog.map(row => row.relation));
+  return catalog
     .filter(row => row.runtime_access && !pending.has(row.relation))
-    .map(row => ({ relation: row.relation, kind: row.kind, problems: lockProblems(row) }))
+    .map(row => ({ relation: row.relation, kind: row.kind, problems: lockProblems(row, lockedParents, jobBound) }))
     .filter(row => row.problems.length > 0);
 }
