@@ -4,7 +4,7 @@ import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import type { WorkPlan } from "./v2-work-plan-repository.js";
-import { editRamsSections, RamsError, ramsCommandV1, ramsDraftV1, ramsHash, ramsReadyToSign, ramsSections,
+import { editRamsSections, RamsError, ramsCommandV1, ramsDraftV1, ramsHash, ramsPlanHash, ramsReadyToSign, ramsSections,
   ramsJobV1, type RamsDraft, type RamsJob } from "./v2-rams-draft.js";
 
 export class RamsRepository {
@@ -76,6 +76,11 @@ export class RamsRepository {
       }
       if (command.action !== "generate" && (!previous || previous.quoteRevisionId !== source.quote_revision_id ||
         previous.planVersion !== source.plan_version)) throw new RamsError("RAMS_PLAN_CHANGED");
+      // An approved extra or replacement changes the work without a plan edit, so compare the work itself too.
+      const planHash = ramsPlanHash(plan);
+      if (command.action !== "generate" && previous?.planHash !== undefined && previous.planHash !== planHash) {
+        throw new RamsError("RAMS_PLAN_CHANGED");
+      }
       let sections = previous?.sections ?? [];
       if (command.action === "generate") sections = ramsSections(plan, previous);
       if (command.action === "edit") sections = editRamsSections(sections, command.sectionKey, command.text);
@@ -92,7 +97,9 @@ export class RamsRepository {
         actorMembershipId: editor.id, recordedAt,
         signedBy: command.action === "sign" ? editor.id : null, signedAt: command.action === "sign" ? recordedAt : null,
         signedName: command.action === "sign" ? command.signerName : null,
-        job: ramsJobV1.parse(job),
+        // Edits and signing keep the details the builder has been checking; only a new draft takes the current ones.
+        job: ramsJobV1.parse(command.action === "generate" ? job : previous?.job ?? job),
+        planHash,
       };
       await client.query(`INSERT INTO app.v2_rams_draft
         (tenant_id,job_id,command_id,revision,quote_revision_id,plan_version,request_hash,snapshot,actor_membership_id)

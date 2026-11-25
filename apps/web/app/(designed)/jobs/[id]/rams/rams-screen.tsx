@@ -41,7 +41,8 @@ export function RamsScreen({ jobId }: { jobId: string }) {
   useEffect(() => { if (error) alert.current?.focus(); }, [error]);
   const latest = screen?.drafts.at(-1);
   const draft = screen?.drafts.find(item => item.revision === selected) ?? latest;
-  const stale = !!draft && (draft.quoteRevisionId !== screen?.plan.quoteRevisionId || draft.planVersion !== screen?.plan.planVersion);
+  const stale = !!draft && (draft.quoteRevisionId !== screen?.plan.quoteRevisionId || draft.planVersion !== screen?.plan.planVersion ||
+    (draft.planHash !== undefined && draft.planHash !== screen?.plan.planHash));
   const readOnly = draft?.status === "signed" || draft?.revision !== latest?.revision || stale;
   const ready = !!screen?.canSign;
 

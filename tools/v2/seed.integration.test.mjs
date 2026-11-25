@@ -991,14 +991,49 @@ test("Q06 RAMS: a signed version keeps the site address it was signed with after
   for (const section of draft.sections.filter(section => section.required)) {
     draft = await f.run("edit", { sectionKey: section.key, text: "Fictional site-specific details checked by the builder." });
   }
+  // A correction between drafting and signing does not slip into the version the builder checked.
+  await saveSite("46 Make-Believe Mews");
   const signed = await f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" });
-  assert.deepEqual(signed.job, draft.job);
+  assert.deepEqual(signed.job, draft.job, "signing keeps the details shown on the checked draft");
   await saveSite("45 Make-Believe Mews");
   const view = await f.app.read(f.draftJob);
   assert.equal(view.job.address, "45 Make-Believe Mews, Sampleford, ZY1 0AA", "the screen shows the corrected job details");
   assert.deepEqual(view.drafts.find(row => row.revision === signed.revision), signed, "the signed version is unchanged");
   assert.equal(view.drafts.find(row => row.revision === signed.revision).job.address, "44 Make-Believe Mews, Sampleford, ZY1 0AA");
+  const fresh = await f.run("generate");
+  assert.equal(fresh.job.address, "45 Make-Believe Mews, Sampleford, ZY1 0AA", "a new draft takes the corrected details");
 });
+
+test("Q06 RAMS: work added without a plan edit (an approved extra) blocks signing until regenerated", async () => {
+  const f = await ramsFixture();
+  let draft = await f.run("generate");
+  assert.match(draft.planHash, /^[a-f0-9]{64}$/u);
+  for (const section of draft.sections.filter(section => section.required)) {
+    draft = await f.run("edit", { sectionKey: section.key, text: "Fictional site-specific details checked by the builder." });
+  }
+  assert.equal((await f.app.read(f.draftJob)).canSign, true);
+  // The approved-extra projection: one more Unplanned item and its scope, with the plan edit version unchanged.
+  const plan = await f.read(), extraScope = randomUUID();
+  const withExtra = { ...plan, unplanned: [...plan.unplanned, { scopeItemId: extraScope, title: "Add trim", status: "Unplanned" }],
+    scopeItems: [...plan.scopeItems, { scopeItemId: extraScope, description: "Add trim", category: null, quantity: "1", unit: "item",
+      variationRevisionId: randomUUID() }] };
+  const view = await f.app.read(f.draftJob);
+  const sign = { version: "rams-command.v1", commandId: randomUUID(), action: "sign", expectedVersion: view.drafts.at(-1).revision,
+    quoteRevisionId: plan.quoteRevisionId, expectedPlanVersion: plan.version, checkedAllSections: true, signerName: "Fictional Builder" };
+  const before = (await ramsRows(f.draftJob)).length;
+  await assert.rejects(new RamsRepository(runtime).command(f.context, f.draftJob, f.sessionId, sign, withExtra, view.job),
+    { code: "RAMS_PLAN_CHANGED" });
+  assert.equal((await ramsRows(f.draftJob)).length, before, "nothing is signed");
+  const { checkedAllSections: _checked, signerName: _name, ...envelope } = sign;
+  const regenerated = await new RamsRepository(runtime).command(f.context, f.draftJob, f.sessionId,
+    { ...envelope, commandId: randomUUID(), action: "generate" }, withExtra, view.job);
+  assert.ok(regenerated.sections.some(section => section.key === `hazards:${extraScope}:unplanned` && section.required),
+    "the regenerated draft lists the new work for the builder's own hazards");
+  // The unchanged plan still signs normally.
+  const signedNormally = await f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" }).catch(error => error);
+  assert.equal(signedNormally.code, "RAMS_PLAN_CHANGED", "a draft drawn from the extra cannot be signed against the plan without it");
+});
+
 
 test("Q06 RAMS: each generate/edit/sign audits once; replay, stale input and forced audit failures", async () => {
   const f = await ramsFixture();

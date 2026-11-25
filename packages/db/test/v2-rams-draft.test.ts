@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { ramsCommandV1, ramsSections, editRamsSections, ramsReadyToSign, RamsError, type RamsDraft } from "../src/v2-rams-draft.js";
+import { ramsCommandV1, ramsPlanHash, ramsSections, editRamsSections, ramsReadyToSign, RamsError, type RamsDraft } from "../src/v2-rams-draft.js";
 import type { WorkPlan } from "../src/v2-work-plan-repository.js";
 import { splashbackDecoratingTemplate } from "../src/v2-splashback-decorating-template.js";
 
@@ -18,6 +18,14 @@ const previous = (sections: RamsDraft["sections"]): RamsDraft => ({
 });
 
 describe("Q06 V2-K9 deterministic safety draft", () => {
+  it("changes the plan hash when an approved extra adds work without a plan edit", () => {
+    const extra = randomUUID();
+    const withExtra = { ...plan, unplanned: [{ scopeItemId: extra, title: "Add trim", status: "Unplanned" as const }],
+      scopeItems: [{ scopeItemId: extra, description: "Add trim", category: null, quantity: "1", unit: "item" }] };
+    expect(ramsPlanHash(plan)).toMatch(/^[a-f0-9]{64}$/u);
+    expect(ramsPlanHash({ ...plan })).toBe(ramsPlanHash(plan));
+    expect(ramsPlanHash(withExtra as typeof plan)).not.toBe(ramsPlanHash(plan));
+  });
   it("lists tile-cutting dust, occupied-home controls, COSHH and height for the exact template tasks", () => {
     const sections = ramsSections(plan);
     expect(sections.map(section => section.heading)).toEqual([

@@ -30,6 +30,8 @@ export const ramsDraftV1 = z.strictObject({
   signedBy: uuid.nullable(), signedAt: z.string().nullable(), signedName: z.string().nullable(),
   // The job title and site address as shown on this version, so a signed version keeps them after a later correction.
   job: ramsJobV1.optional(),
+  // Hash of the planned work this version was drawn from; approved extras change it without a plan edit.
+  planHash: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
 });
 export type RamsDraft = z.infer<typeof ramsDraftV1>;
 export type RamsSection = z.infer<typeof ramsSectionV1>;
@@ -39,6 +41,11 @@ export class RamsError extends Error {
 }
 export function ramsHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+/** The work the RAMS covers: tasks, unplanned items and scope, including approved variations. */
+export function ramsPlanHash(plan: Pick<WorkPlan, "tasks" | "unplanned" | "scopeItems">): string {
+  return ramsHash({ tasks: plan.tasks, unplanned: plan.unplanned, scopeItems: plan.scopeItems });
 }
 
 export function ramsSections(plan: WorkPlan, previous?: RamsDraft): RamsSection[] {

@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { PracticeAccessError, RamsRepository, RamsError, WorkPlanRepository, ramsCommandV1,
-  JobRepository, JobPartiesRepository, ramsWarning, ramsReadyToSign } from "@jobguard/db";
+  JobRepository, JobPartiesRepository, ramsWarning, ramsReadyToSign, ramsPlanHash } from "@jobguard/db";
 import { PracticeAccess } from "../practice-access.js";
 
 export class RamsApplication {
@@ -32,9 +32,12 @@ export class RamsApplication {
     const plan = await this.plans.open(context, jobId);
     const drafts = await this.drafts.read(context, jobId);
     const latest = drafts.at(-1);
-    return { canSign: !!latest && latest.status === "draft" && ramsReadyToSign(latest.sections), version: "rams-screen.v1" as const, environment: "synthetic_demo" as const, warning: ramsWarning,
+    const planHash = ramsPlanHash(plan);
+    const current = !!latest && latest.quoteRevisionId === plan.quoteRevisionId && latest.planVersion === plan.version &&
+      (latest.planHash === undefined || latest.planHash === planHash);
+    return { canSign: current && latest.status === "draft" && ramsReadyToSign(latest.sections), version: "rams-screen.v1" as const, environment: "synthetic_demo" as const, warning: ramsWarning,
       job,
-      plan: { quoteRevisionId: plan.quoteRevisionId, planVersion: plan.version }, drafts };
+      plan: { quoteRevisionId: plan.quoteRevisionId, planVersion: plan.version, planHash }, drafts };
   }
   async command(jobId: string, raw: unknown) {
     const access = await this.authorize(jobId);
