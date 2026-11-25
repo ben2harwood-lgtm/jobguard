@@ -165,8 +165,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/purchase-orders/merchant-order": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",
-  // V2-F6: customer extra links need a live job (the repository refuses unless status is live).
-  "/api/jobs/[id]/extra-links": "watchdog_live_only",
+  // V2-F6: local-only V2 table, so no main-DB CH-2 replay case can cover it; the repository itself refuses unless the job is live.
+  "/api/jobs/[id]/extra-links": "pre_live_allowed",
   "/api/jobs/[id]/quotes/acceptance/disposition": "pre_live_allowed",
   "/api/jobs/[id]/quotes/acceptance": "pre_live_allowed",
   "/api/jobs/[id]/quotes/activation": "pre_live_allowed",
