@@ -56,7 +56,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 | D4 | **F2** proof holds the stage open while its upload is pending | ★★ | S | A | F1, PX | 2028 | RED |
 | D5 | **B1C** check and correct the walk ("needs room" tray, corrections keep the original) | ★★ | M | A | B1B | 2029 | RED |
 | D6 | **B1E** walk photo upload into the existing upload path | ★★ | S | O | B1B, PX | none | RED |
-| D7 | **E7** reminders with delivery chase (stop on reply, catcher only) | ★★★ | M | O | e1 #919, e2 #949, e3 | 2030 | RED |
+| D7 | **E7** reminders with delivery chase (stop on reply, catcher only). Packet Q46 (25 Nov 20:30 UK): one reminder and one "unconfirmed" flag per E2 request; E3 stock chase split out as E7-S | ★★★ | M | O | e1 #919, e2 #949 | 2030 | RED |
 | D8 | **E5A** same-firm double-booking warning (Q02) | ★ | S | A | C3C | none | T1 |
 | D9 | **F8** who was on site today (Q10) | ★ | S | A | F1, C3C | 2016 | RED |
 | D10 | **SYNC-1** (Q45) merge main into v2/main (diary, photos on variations, Friday PDF, snag list, handover page, pack calculator) | ★★★ | M | O | Ben merges milestone one plus the QW PRs | none | T2 |

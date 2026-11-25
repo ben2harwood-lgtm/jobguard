@@ -7,10 +7,13 @@
       ],
       "note": "Plan only, no code. V2 build plan rev 1.2 (copied unchanged) and rev 1.3 on v2/main, plus the overnight Codex queue packets under reviews/v2/codex-queue/. The validator includes config/lanes/v2-plan-rev-1-3.json implicitly.",
       "allow": [
+        "reviews/v2/D4B-privacy-note.md",
         "reviews/v2/JobGuard-V2-Build-Plan-rev-1.2.md",
         "reviews/v2/JobGuard-V2-Build-Plan-rev-1.3.md",
+        "reviews/v2/V2-completion-roadmap.md",
         "reviews/v2/codex-queue/00-QUEUE.md",
         "reviews/v2/codex-queue/01-RULES.md",
+        "reviews/v2/codex-queue/02-BUILD-RULES-CHECKLIST.md",
         "reviews/v2/codex-queue/Q01-v2-d1r1-measurement-audit.md",
         "reviews/v2/codex-queue/Q02-v2-e5a-same-firm-double-booking.md",
         "reviews/v2/codex-queue/Q03-v2-d5b-materials-briefs-screens.md",
@@ -28,10 +31,8 @@
         "reviews/v2/codex-queue/Q15-v2-k3-friday-update.md",
         "reviews/v2/codex-queue/Q16-v2-k10-job-profit-so-far.md",
         "reviews/v2/codex-queue/Q17-v2-e9-choices-allowance-tracker.md",
-        "reviews/v2/v2-ranked-by-usefulness.md",
         "reviews/v2/codex-queue/Q18-v2-ci2-audit-chain-guard.md",
         "reviews/v2/codex-queue/Q19-v2-f6t-customer-approval-browser-proof.md",
-        "reviews/v2/codex-queue/02-BUILD-RULES-CHECKLIST.md",
         "reviews/v2/codex-queue/Q20-v2-bh1-browser-session-helper.md",
         "reviews/v2/codex-queue/Q21-v2-rules-met-pr-template.md",
         "reviews/v2/codex-queue/Q22-v2-reviewed-head-other-vendor-check.md",
@@ -39,7 +40,6 @@
         "reviews/v2/codex-queue/Q24-v2-k3-f-friday-price-filter.md",
         "reviews/v2/codex-queue/Q25-v2-f6-ux-recheck-and-photo-reset.md",
         "reviews/v2/codex-queue/Q26-v2-sx-crew-customer-test-sessions.md",
-        "reviews/v2/V2-completion-roadmap.md",
         "reviews/v2/codex-queue/Q27-v2-px-proof-photos-in-v2-seed.md",
         "reviews/v2/codex-queue/Q28-v2-c3c-crew-binding.md",
         "reviews/v2/codex-queue/Q29-v2-m3-mockups-remaining-screens.md",
@@ -56,11 +56,12 @@
         "reviews/v2/codex-queue/Q39-v2-fl5-firm-lock-supplier-feed-rest.md",
         "reviews/v2/codex-queue/Q40-v2-flf-definer-function-review.md",
         "reviews/v2/codex-queue/Q41-v2-d4b-translated-crew-briefs.md",
-        "reviews/v2/D4B-privacy-note.md",
         "reviews/v2/codex-queue/Q42-v2-b1c-walk-check-and-correct.md",
         "reviews/v2/codex-queue/Q43-v2-f1p-photos-on-progress.md",
         "reviews/v2/codex-queue/Q44-v2-fl6-own-v2-tables-lock.md",
-        "reviews/v2/codex-queue/Q45-v2-sync1-main-into-v2.md"
+        "reviews/v2/codex-queue/Q45-v2-sync1-main-into-v2.md",
+        "reviews/v2/codex-queue/Q46-v2-e7-reminders-delivery-chase.md",
+        "reviews/v2/v2-ranked-by-usefulness.md"
       ]
     }
   }

@@ -68,6 +68,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D3 | Q43 | V2-F1-P photo on Done, Blocked or Changed | **Opus** | `codex/sandbox/v2-f1` #953 (PX #964 before merge) | 2053 | RED |
 | C17 | Q44 | V2-FL-6 lock every V2-owned job table, last bootstrap line (rule 30) | **Opus** | `codex/sandbox/v2-fl1` #966 | 2054 | RED tenancy |
 | D10 | Q45 | V2-SYNC-1 merge main into v2/main (#905, #910, #911 and pilot 0771 to 0782; SYNC-2 later for #906 and #907), retarget the snag fence, lock 8 new main job tables | **Opus** | v2/main (merge after FL-1) | 2056 | RED |
+| D11 | Q46 | V2-E7 one reminder per unanswered E2 request, and "unconfirmed" with its reason from 08:00 London the day before (catcher only; E3 stock chase is later piece E7-S) | **Opus** | E2 #949 `claude/project-thread-49qd38` | 2030 | RED |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
@@ -93,7 +94,7 @@ Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, since 00:15 UK **K9 (Q0
 ## Not in this queue, and why
 - **New piece found by the C5 builder:** once scope is confirmed the app can't add a line to a priced quote, so prompts can only remind or be dismissed. "Add a line to a priced quote" (v2-c6) is its own later piece, on the quote track; not tonight.
 - **Wait for the main sync into v2/main** (after milestone one merges): G1 to G4 snags and handover (would duplicate QW-4 #911 and QW-5). K3 and K10 no longer wait; they are Q15 and Q16.
-- **Need unbuilt pieces first:** K1 share (after D5B), E4 and E6 multi-crew planning (later on purpose), E7, E8, F2 to F5, F7, G0 (after E1 settles), H.
+- **Need unbuilt pieces first:** K1 share (after D5B), E4 and E6 multi-crew planning (later on purpose), E7-S (stock delivery chase, needs a fact-to-delivery link), E8, F2 to F5, F7, G0 (after E1 settles), H.
 - **Better left for Claude builders:** V2-PX proof photos in the V2 seed (`packets/v2-px-proof-photos-in-v2-seed.md`; security boundary, Astra first; F6's photo proof waits for it), C3B (edits the file R2 is finishing; start right after R2), D4A (needs Ben's OK for a third round), B1E (changes the shared live-job upload rule), B2B1 (offline security, waiting for Astra), QW-7 (on main, firm money data, waiting for Astra), CI1 (#917, in flight).
 
 ## Workflow change (Ben, 25 Nov 19:53 UK): "I want Opus 5.5 to do the coding and Codex to do the checking."
