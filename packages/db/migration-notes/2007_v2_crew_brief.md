@@ -10,7 +10,9 @@ ordered photos picked for that trade; the highest revision is the current brief.
 Every generate command also appends a receipt with its inputs, verified
 editor, server time and the brief revision it returned. A command that finds
 the current brief unchanged gets a receipt but no new revision, so a replay
-returns the same result and a changed replay is refused. The brief is built only from plan tasks, scope wording and the picked
+returns the same result and a changed replay is refused. Each recorded command
+also appends one tenant audit event in the same transaction (identifiers,
+counts and hashes only); a replay appends nothing. The brief is built only from plan tasks, scope wording and the picked
 photos. It stores no price or value, and no commercial-integrity source is read.
 Composite foreign keys bind each brief to its job's plan revision and each photo
 to an original image of the same job. Runtime can only read and append to

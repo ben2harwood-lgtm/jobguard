@@ -7,7 +7,7 @@ import { Pool } from "../../packages/db/node_modules/pg/esm/index.mjs";
 import { createIdentityApplication } from "../../apps/api/dist/auth/index.js";
 import { createWorkspaceApplication } from "../../apps/api/dist/workspace/index.js";
 import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
-import { DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
+import { CrewBriefRepository, DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
@@ -1013,6 +1013,9 @@ async function briefSetup() {
   return { owner, crewBriefs, workPlan, quoteRevisionId, tilingId, decoratingId, command };
 }
 
+const briefEvents = async () => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
+  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_crew_brief.generated' ORDER BY sequence`, [jobId])).rows;
+
 const briefRows = async () => (await admin.query(`SELECT
   (SELECT count(*)::int FROM app.v2_crew_brief WHERE job_id = $1) AS briefs,
   (SELECT count(*)::int FROM app.v2_crew_brief_photo WHERE job_id = $1) AS photos,
@@ -1050,11 +1053,11 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
     version: "v2-crew-brief.v1", trade: "tiler", quoteRevisionId,
     accessWindow: "Weekdays 08:30 to 16:00, key from the fictional neighbour",
     tasks: [
-      { position: 1, scopeItemId: tilingId, title: "Prepare the splashback surface",
+      { position: 1, scopeItemId: tilingId, taskKey: "prepare-splashback", title: "Prepare the splashback surface",
         scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
         durationMinutes: 60, visit: visit("prepare-splashback"), owner: assignee("prepare-splashback"),
         proofNeeded: ["Photo of the prepared surface"] },
-      { position: 2, scopeItemId: tilingId, title: "Fit and grout the splashback",
+      { position: 2, scopeItemId: tilingId, taskKey: "tile-splashback", title: "Fit and grout the splashback",
         scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
         durationMinutes: 240, visit: visit("tile-splashback"), owner: assignee("tile-splashback"),
         proofNeeded: ["Photo of the finished splashback"] },
@@ -1067,6 +1070,9 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
     ["Protect and prepare the hall", "Paint the hall walls and trim"]);
   assert.deepEqual(decorator.content.photos.map(photo => photo.evidenceId), [hallPhoto]);
   assert.deepEqual(decorator.content.tasks.map(task => task.scopeItemId), [decoratingId, decoratingId]);
+  // Each brief task carries the plan task's key, so progress can name the exact task.
+  assert.deepEqual(decorator.content.tasks.map(task => task.taskKey),
+    decorator.content.tasks.map(task => livePlan.tasks.find(item => item.title === task.title).key));
   assert.deepEqual([...first.content.tasks, ...decorator.content.tasks].filter(task => task.owner)
     .map(({ visit: date, owner: name }) => [date, name]), [["2026-12-09", "Fictional Tiler"]]);
   const { rows: rates } = await admin.query("SELECT unit_rate_pence::text AS rate FROM app.quote_line WHERE quote_revision_id = $1",
@@ -1081,6 +1087,26 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
   const repeat = command("tiler", { expectedVersion: 1, photoIds: [tilerPhoto] });
   assert.deepEqual(await crewBriefs.generate(jobId, repeat), first);
   assert.deepEqual(await briefRows(), { briefs: 2, photos: 2, receipts: 3 });
+  // One audit event per recorded command, in its transaction; the concurrent replay appended nothing.
+  const events = await briefEvents();
+  assert.equal(events.length, 3);
+  const { context: practice } = await authenticatePracticeSession(runtime, owner.sessionId);
+  for (const event of events) {
+    assert.equal(event.tenant_id, practice.tenantId);
+    assert.equal(event.actor_ref, `membership:${owner.membershipId}`);
+    assert.equal("version" in event.payload.references, false);
+    assert.doesNotMatch(JSON.stringify(event.payload), /tiler|decorator|fictional neighbour|splashback/iu,
+      "free text stays out of the audit payload");
+    for (const value of Object.values(event.payload.hashes)) assert.match(value, /^[a-f0-9]{64}$/u);
+  }
+  assert.deepEqual(events.map(({ payload: { references: { auditActorKind, auditActorRef, auditTrust, ...own } } }) => own), [
+    { commandId: tiler.commandId, quoteRevisionId, expectedVersion: "0", briefVersion: "1", outcome: "created",
+      taskCount: "2", photoCount: "1" },
+    { commandId: events[1].payload.references.commandId, quoteRevisionId, expectedVersion: "0", briefVersion: "1",
+      outcome: "created", taskCount: "2", photoCount: "1" },
+    { commandId: repeat.commandId, quoteRevisionId, expectedVersion: "1", briefVersion: "1", outcome: "unchanged",
+      taskCount: "2", photoCount: "1" },
+  ]);
   // The unchanged generation keeps its own receipt: a changed replay is refused, not applied.
   await assert.rejects(crewBriefs.generate(jobId, { ...repeat, accessWindow: "Weekends" }), { code: "CREW_BRIEF_COMMAND_CONFLICT" });
   await assert.rejects(crewBriefs.generate(jobId, { ...tiler, accessWindow: "Weekends" }), { code: "CREW_BRIEF_COMMAND_CONFLICT" });
@@ -1106,9 +1132,29 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
   const refreshed = await reopened.generate(jobId, command("tiler", { expectedVersion: 2, accessWindow: "Mornings only" }));
   assert.equal(refreshed.version, 3);
   assert.equal(refreshed.content.tasks[1].visit, "2026-12-10");
-  // Exact replays after the plan change still return their original results.
+  // Exact replays after the plan change still return their original results, and append nothing.
   assert.deepEqual(await reopened.generate(jobId, repeat), first);
   assert.deepEqual(await reopened.generate(jobId, tiler), first);
+  assert.equal((await briefEvents()).length, 5);
+
+  // Fail the audit append after the brief and receipt inserts: the transaction must keep none of them.
+  const failing = {
+    async connect() {
+      const client = await runtime.connect();
+      const query = client.query.bind(client);
+      client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+        ? Promise.reject(Object.assign(new Error("forced audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+      const release = client.release.bind(client);
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    },
+  };
+  const rowsBefore = await briefRows();
+  await assert.rejects(new CrewBriefRepository(failing).generate(practice, jobId, owner.sessionId,
+    command("tiler", { expectedVersion: 3, accessWindow: "Afternoons" })), { code: "FORCED" });
+  assert.deepEqual(await briefRows(), rowsBefore, "the brief and receipt rolled back with the audit event");
+  assert.equal((await briefEvents()).length, 5);
+  await verifyTenantChain(practice.tenantId);
 
   assert.deepEqual(await effectCounts(), before);
   const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
@@ -1127,6 +1173,7 @@ test("a planted hidden financial finding leaves the exported briefs byte-identic
   const cleanRebuild = await rebuild();
   const rows = await briefRows();
   rows.receipts += 2;
+  const eventCount = (await briefEvents()).length + 2;
   const findings = await admin.query(`SELECT
     (SELECT count(*)::int FROM app.commercial_integrity_value_fact) AS values,
     (SELECT count(*)::int FROM app.commercial_integrity_activity_fact) AS activities`);
@@ -1146,6 +1193,13 @@ test("a planted hidden financial finding leaves the exported briefs byte-identic
   assert.deepEqual(await rebuild(), cleanRebuild);
   assert.deepEqual(await crewBriefs.read(jobId, briefQuery), [decorator, tiler]);
   assert.deepEqual(await briefRows(), rows);
+  // Each rebuild appended one "unchanged" event, with the same content hash with or without the finding.
+  const events = await briefEvents();
+  assert.equal(events.length, eventCount);
+  // The two rebuilds run concurrently, so compare each pair as a set.
+  const hashes = events.slice(-4).map(event => event.payload.hashes.content);
+  assert.deepEqual(hashes.slice(2).sort(), hashes.slice(0, 2).sort());
+  assert.deepEqual(events.slice(-4).map(event => event.payload.references.outcome), Array(4).fill("unchanged"));
   const exported = JSON.parse(clean[1]);
   assert.deepEqual(exported, { version: "v2-crew-brief-export.v1", environment: "synthetic_demo",
     notice: "Practice sandbox — synthetic data; nothing is sent or charged", brief: tiler.content });

@@ -1,8 +1,9 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient, Pool } from "pg";
 import { z } from "zod";
+import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { splashbackDecoratingTemplate } from "./v2-splashback-decorating-template.js";
 import { applyWorkPlanEdits, type WorkPlanEditRow, type WorkPlanScopeRow, type WorkPlanTask } from "./v2-work-plan-edits.js";
 import type { WorkPlanTemplate } from "./v2-work-plan-repository.js";
@@ -35,6 +36,8 @@ export type CrewBriefContent = {
   tasks: {
     position: number;
     scopeItemId: string;
+    // The plan task's key, so progress against this brief can name the exact task.
+    taskKey: string;
     title: string;
     scope: { description: string; quantity: string | null; unit: string | null };
     durationMinutes: number;
@@ -109,7 +112,8 @@ export class CrewBriefRepository {
     const parsed = crewBriefCommandV1.safeParse(input);
     if (!parsed.success) throw new CrewBriefError("CREW_BRIEF_INVALID_COMMAND");
     const command = parsed.data;
-    return withTenant(this.pool, context, async ({ $client }) => {
+    return withTenant(this.pool, context, async database => {
+      const { $client } = database;
       const digest = createHash("sha256").update(sessionId).digest("hex");
       const { rows: [actor] } = await $client.query<{ id: string | null }>(
         "SELECT app.v2_work_plan_editor($1) AS id", [digest],
@@ -163,8 +167,25 @@ export class CrewBriefRepository {
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       `, [context.tenantId, jobId, command.commandId, command.trade, command.expectedVersion, command.accessWindow,
         command.photoIds, briefVersion, actor.id]);
+      // A replay returned above, so each recorded command appends exactly one event in this transaction.
+      await this.audit(database, actor.id, jobId, command, content, briefVersion, unchanged ? "unchanged" : "created");
       return publicBrief((await this.revision($client, context.tenantId, jobId, command.trade, briefVersion))!);
     });
+  }
+
+  private audit(database: TenantTransaction, actor: string, jobId: string, command: CrewBriefCommand,
+    content: CrewBriefContent, briefVersion: number, outcome: "created" | "unchanged") {
+    const sha = (value: unknown) => createHash("sha256").update(typeof value === "string" ? value : canonical(value)).digest("hex");
+    // Identifiers and counts only; the free-text trade, access window and brief content are hashed.
+    return appendAuditBatch(database, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor}`,
+      eventType: "v2_crew_brief.generated", subjectType: "job", subjectRef: jobId,
+      payload: {
+        references: { commandId: command.commandId, quoteRevisionId: content.quoteRevisionId,
+          expectedVersion: String(command.expectedVersion), briefVersion: String(briefVersion + 1), outcome,
+          taskCount: String(content.tasks.length), photoCount: String(command.photoIds.length) },
+        hashes: { trade: sha(command.trade), accessWindow: sha(command.accessWindow), content: sha(content) },
+        classifications: { action: "operational" },
+      } }]);
   }
 
   private async requireJob(client: PoolClient, tenantId: string, jobId: string, lock = false) {
@@ -252,7 +273,7 @@ export class CrewBriefRepository {
       version: "v2-crew-brief.v1", trade, quoteRevisionId: plan.quoteRevisionId, accessWindow,
       tasks: tasks.map((task, index) => {
         const source = plan.sources.get(task.scopeItemId)!;
-        return { position: index + 1, scopeItemId: task.scopeItemId, title: task.title,
+        return { position: index + 1, scopeItemId: task.scopeItemId, taskKey: task.key, title: task.title,
           scope: { description: source.description, quantity: source.quantity, unit: source.unit },
           durationMinutes: task.durationMinutes, visit: task.scheduledDate ?? null, owner: task.assignee ?? null,
           proofNeeded: [...task.proofPoints] };
