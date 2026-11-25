@@ -1205,6 +1205,7 @@ test("forced walk policies hide sessions and entries and reject every change fro
 // Q32 / V2-B1B: the web adapter uses B1A's two commands unchanged.
 // Force a failure AFTER the audit append as well as the business insert, in the same transaction.
 const b1bRollbackPool = pool => ({
+  query: (...args) => pool.query(...args),
   async connect() {
     const client = await pool.connect();
     const query = client.query.bind(client);
