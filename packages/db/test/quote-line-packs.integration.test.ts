@@ -1,4 +1,4 @@
-// QW-6 pack count on real PostgreSQL: the quote-line read and its "confirmed" rule, across jobs and tenants.
+// QW-6 pack count on real PostgreSQL through the real application: the quote-line read and its "confirmed" rule, across jobs and tenants.
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,16 +6,16 @@ import { join } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { calculateMaterialPackCount } from "@jobguard/core";
 import { migrate, DEMO_TENANT_ID as T, DEMO_MEMBERSHIP_ID as M, QuoteAcceptanceRepository, QuoteDeliveryRepository, QuoteLinePackRepository, QuoteRepository, prepareActivationFixtureV3, withTenant } from "../src/index.js";
-import { authenticatePracticeSession, authorizePracticeJob, issuePracticeSession } from "../src/practice-session.js";
+import { authenticatePracticeSession, issuePracticeSession } from "../src/practice-session.js";
+import { QuoteLinePacksApplication } from "../../../apps/api/src/quote-line-packs.application.js";
 import { seedSyntheticPartyFixture } from "../src/synthetic-party-fixture.js";
 import { freePort, closeTestPools, syntheticOwnerPool } from "./pool-test-utils.js";
 import { testBoundTenantContext } from "./tenant-context-test-utils.js";
 
 const original = process.env.JOBGUARD_ENV, recipient = "fixture-customer@example.invalid";
 let pg: EmbeddedPostgres, admin: Pool, runtime: Pool, dir: string;
-type Practice = Awaited<ReturnType<typeof authenticatePracticeSession>>;
+type Practice = Awaited<ReturnType<typeof authenticatePracticeSession>> & { token: string };
 beforeAll(async () => {
   process.env.JOBGUARD_ENV = "synthetic_demo";
   dir = await mkdtemp(join(tmpdir(), "qw6-packs-pg-"));
@@ -32,7 +32,7 @@ afterAll(async () => {
   if (original === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = original;
 });
 
-const practice = async () => authenticatePracticeSession(runtime, await issuePracticeSession(runtime));
+const practice = async (): Promise<Practice> => { const token = await issuePracticeSession(runtime); return { ...(await authenticatePracticeSession(runtime, token)), token }; };
 /** A fictional quoting job with one draft quote line of the given quantity; optionally sent to the customer. */
 async function quotedJob(auth: Practice, quantity: string, unit: string, send: boolean) {
   const jobId = randomUUID(), scope = randomUUID(), scopeRevision = randomUUID();
@@ -55,43 +55,44 @@ async function quotedJob(auth: Practice, quantity: string, unit: string, send: b
   }
   return { jobId, lineId, document };
 }
-/** The same read the route makes: the line through the quote workspace, then whether its revision is confirmed. */
-async function packs(auth: Practice, jobId: string, lineId: string) {
-  const workspace = await new QuoteRepository(runtime).readWorkspace(auth.context, jobId);
-  const revision = workspace.revisions.find(r => r.lines.some((l: { id: string }) => l.id === lineId));
-  if (!revision) return null;
-  const line = revision.lines.find((l: { id: string }) => l.id === lineId)!;
-  const confirmed = await new QuoteLinePackRepository(runtime).revisionConfirmed(auth.context, jobId, revision.id);
-  return { confirmed, result: calculateMaterialPackCount({ measurement: { quantity: line.quantity, unit: line.unit, confirmed }, wastageMultiplier: "1.10", product: { packSize: { quantity: "1.2", unit: "m²" } }, confirmedUsablePacksSetAside: 1n }) };
-}
+const example = { packSize: "1.2", packUnit: "m²", wastage: "1.10", onSite: "1" };
+/** The route's own read: the real application, with the practice session's token, on real PostgreSQL. */
+const packs = (auth: Practice, jobId: string, lineId: string) => new QuoteLinePacksApplication(runtime, auth.token).read(jobId, lineId, example);
+const outcome = (read: Awaited<ReturnType<typeof packs>>) => read.status === "calculated"
+  ? { confirmed: read.line.confirmed, status: read.status, grossPacks: read.grossPacks, packsOnSiteUsed: read.packsOnSiteUsed, packsToOrder: read.packsToOrder }
+  : { confirmed: read.line.confirmed, status: read.status, reason: read.reason };
+const notFound = { code: "NOT_FOUND" };
 
 it("a sent 6 m² line is confirmed: 6 packs, 1 on site, order 5; an unsent draft line is not", async () => {
   const auth = await practice();
   const sent = await quotedJob(auth, "6", "m²", true), draft = await quotedJob(auth, "6", "m²", false);
-  expect(await packs(auth, sent.jobId, sent.lineId)).toEqual({ confirmed: true, result: { status: "calculated", grossPacks: 6n, setAsidePacksUsed: 1n, neededPacks: 5n } });
-  expect(await packs(auth, draft.jobId, draft.lineId)).toEqual({ confirmed: false, result: { status: "needs_input", reason: "measurement" } });
+  expect(outcome(await packs(auth, sent.jobId, sent.lineId))).toEqual({ confirmed: true, status: "calculated", grossPacks: "6", packsOnSiteUsed: "1", packsToOrder: "5" });
+  expect(outcome(await packs(auth, draft.jobId, draft.lineId))).toEqual({ confirmed: false, status: "needs_input", reason: "measurement" });
 });
 
-it("an accepted quote stays confirmed; a declined one does not", async () => {
+it("an accepted quote stays confirmed; a declined or superseded one does not", async () => {
   const auth = await practice();
   const accepted = await prepareActivationFixtureV3(admin, auth.context, `Fictional accepted ${randomUUID()}`, 100000, runtime, 100000, auth.digest);
   const revision = (await new QuoteRepository(runtime).readWorkspace(auth.context, accepted)).revisions.at(-1)!;
   expect(await new QuoteLinePackRepository(runtime).revisionConfirmed(auth.context, accepted, revision.id)).toBe(true);
   const declined = await quotedJob(auth, "6", "m²", true), d = declined.document!;
   await new QuoteAcceptanceRepository(runtime).disposition(auth.context, declined.jobId, { commandId: randomUUID(), documentId: d.documentId, documentHash: d.hash, documentVersion: d.version, kind: "declined", occurredAt: new Date().toISOString() });
-  expect((await packs(auth, declined.jobId, declined.lineId))?.confirmed).toBe(false);
+  expect(outcome(await packs(auth, declined.jobId, declined.lineId))).toEqual({ confirmed: false, status: "needs_input", reason: "measurement" });
+  const superseded = await quotedJob(auth, "6", "m²", true), s = superseded.document!;
+  expect(outcome(await packs(auth, superseded.jobId, superseded.lineId))).toMatchObject({ confirmed: true, packsToOrder: "5" });
+  await new QuoteAcceptanceRepository(runtime).disposition(auth.context, superseded.jobId, { commandId: randomUUID(), documentId: s.documentId, documentHash: s.hash, documentVersion: s.version, kind: "superseded", occurredAt: new Date().toISOString() });
+  expect(outcome(await packs(auth, superseded.jobId, superseded.lineId))).toEqual({ confirmed: false, status: "needs_input", reason: "measurement" });
 });
 
 it("never reads another job's or another tenant's quote line", async () => {
   const auth = await practice();
   const a = await quotedJob(auth, "6", "m²", true), b = await quotedJob(auth, "6", "m²", true);
   // Line a under job b: not found, and job a's revision is never confirmed through job b.
-  expect(await packs(auth, b.jobId, a.lineId)).toBeNull();
+  await expect(packs(auth, b.jobId, a.lineId)).rejects.toMatchObject(notFound);
   const aRevision = (await new QuoteRepository(runtime).readWorkspace(auth.context, a.jobId)).revisions[0]!;
   expect(await new QuoteLinePackRepository(runtime).revisionConfirmed(auth.context, b.jobId, aRevision.id)).toBe(false);
-  // Practice sessions share the synthetic tenant, so the route reaches the line only after the session's own job check,
-  // the same check every practice quote read makes. Another practice session is refused job a before any line read.
-  await expect(authorizePracticeJob(runtime, await issuePracticeSession(runtime), a.jobId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  // Practice sessions share the synthetic tenant, so the application's job check is what keeps another session out.
+  await expect(packs(await practice(), a.jobId, a.lineId)).rejects.toMatchObject(notFound);
   // A different tenant altogether sees nothing.
   const tenant = randomUUID(), user = randomUUID(), account = randomUUID(), member = randomUUID();
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [tenant]);
