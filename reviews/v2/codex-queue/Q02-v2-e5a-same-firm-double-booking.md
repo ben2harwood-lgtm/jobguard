@@ -9,7 +9,23 @@ Plan: rev 1.3 section 2B item 24 and piece v2-e5 ("a same-firm version can come 
 ## Dry-check against the code (planner, 25 Nov 00:10 UK)
 **Parked until C3C.** "The same person" can't be told apart while the assignee is free text that may be empty (c3 `v2-work-plan-edits.ts` line 9). Matching on names would give false warnings for two people with the same name and miss one person entered under two spellings. Don't build until C3C binds an assignment to a crew record.
 
-## Goal
+## Release (planner, 25 Nov 20:25 UK). This overrides "parked until C3C", the base line and the c3 references above.
+**Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK). **Checker:** Codex. **Tier:** T1 (read-only, no table). **Plan check:** not required for T1.
+
+**Two parts, because the Plan screen (c4 #903 @ eaa5afb3a) and crew records (C3C #955 @ ac8c92372) are on different unmerged branches:**
+- **E5A-1, now. Base: C3C #955** (`claude/project-thread-x8p19i`). PR into it.
+  - A read-only query, `sameFirmClashes(context, jobId)`, in a new file `packages/db/src/v2-plan-clashes.ts`. For each task on this job's effective plan with an `assigneeRef` and a `scheduledDate`, it returns other tasks in the **same firm** with the same `assigneeRef` on the same date: the other job's title and date, and nothing more.
+  - It reads the effective plan through `applyWorkPlanEdits` (`packages/db/src/v2-work-plan-edits.ts`; `assigneeRef` is at lines 11, 45 and 93 on #955).
+  - **It matches on `assigneeRef` (crew id) only, never on the free-text `assignee` name.**
+  - Firm scope comes from RLS plus `v2_practice_firm`. Test it with the second firm anyway.
+  - Expose it as a new GET route, `apps/web/app/api/v2-backend/jobs/[id]/plan-clashes/route.ts`, with rule 29 refusals, appended to `builderGetRoutes`.
+  - Unit-test the pure matcher. Seed tests:
+    - two jobs where one crew record is booked on the same day both report the clash;
+    - moving one day clears it;
+    - the second firm's same-named crew gives no clash and no data.
+- **E5A-2, after c4 #903 merges into v2/main.** Rebase onto v2/main. Show the warning next to each clashing task in `apps/web/app/(designed)/jobs/[id]/work/work-plan.tsx`, as one new component plus one mount line, with the lane note "E5A mount: warning only". It never blocks an edit. Browser test at 360 and 1280 px in phone mode.
+
+## Goal (original)
 When the builder assigns a person to a task on a day when that same person already has a task on another job **of the same firm**, the Plan screen shows a plain warning. It never blocks the edit.
 
 ## Scope

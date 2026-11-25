@@ -18,4 +18,4 @@ For each of the four routes' GET handlers:
 Find the query each GET needs in its `route.ts`. If a GET needs a fixture the seed doesn't make, stop and report it as a planner miss. No product code changes.
 
 ## Done when
-CI1 is green three times in a row with no 429, and a Claude check has been done on the frozen head. Then #903, #914 and #925 each meet rule 29 through this PR. Say so in each PR's "Rules met" list.
+CI1 is green three times in a row with no 429, and a Codex check has been done on the frozen head. Then #903, #914 and #925 each meet rule 29 through this PR. Say so in each PR's "Rules met" list.
