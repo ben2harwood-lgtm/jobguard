@@ -14,6 +14,7 @@
   - `record` is at line 49.
 - Screen: `apps/web/app/ui/brief-progress.tsx`. `TaskProgress` (line 49) builds the command at lines 60 to 62 and keeps a pending command for retries (line 55).
 - Route: `apps/web/app/api/jobs/[id]/brief-progress/route.ts`. This is a web route under `/api/jobs`, not `/api/v2-backend`.
+- Practice upload path: `packages/db/src/evidence.ts` lines 74 to 111, and `apps/api/src/proof/proof.application.ts` line 64 (generated fixture plus `synthetic_evidence_original`).
 - Same-job photo check pattern: `2008_v2_walk_record.sql` lines 63 to 77 on B1B. It refuses an `evidence_upload` from another job, using the caller's rights.
 
 ## Build
@@ -24,9 +25,14 @@
 2. **Command.** `v2-brief-progress-command.v1` is unchanged. A new `v2-brief-progress-command.v2` adds optional `photoId: uuid`, and `record` accepts both versions. `BriefProgress.photoReference` becomes `string | null`.
    - The photo isn't required for any kind yet. Proof rules are F2 (Q-later, migration 2028).
    - The view shows the photo's live verification state, read from the upload and never copied. It uses the same states as the walk: not_uploaded, pending, quarantined, verified and rejected.
-3. **Upload.** Use the existing evidence upload path that the walk photos and PX use. Don't add a new upload route.
-   - The screen gets "Add photo" on each press. It uploads first, then sends the command with the photo id. A failed upload leaves no progress row.
-   - The retry rule at line 55 still holds: the same command, with the same photo id, is sent on retry.
+3. **Upload** (amended 25 Nov 18:40 UK, rule-23 miss: there's no walk upload on this base, and B1E isn't built). Use the **practice proof upload path that is already on this base**, the same one the Proof card uses:
+   - `packages/db/src/evidence.ts` `EvidenceRepository.beginUpload` (line 74) and `finalize` (line 101). These need a live job (`requireLiveJob`, line 104). F1's progress trigger `v2_brief_progress_live` already requires that.
+   - Practice photos are **generated fixture PNGs**, made the same way `apps/api/src/proof/proof.application.ts` line 64 does it with `generatePracticePng(command.fixture)` and `synthetic_evidence_original`. Real camera bytes come later with the B2 device piece.
+   - Add the upload as a new action on F1's own route, `apps/web/app/api/jobs/[id]/brief-progress/route.ts`:
+     - a POST body version `v2-brief-progress-photo-command.v1` with `{ commandId, scopeItemId, fixture }`, which begins the upload, stores the generated original and finalizes it;
+     - it returns `{ uploadId, evidenceId, state }`.
+     The progress command then carries that id as `photoId`. Don't add a new Nest controller, and don't change `proof.application.ts`.
+   - A failed upload leaves no progress row. The retry rule at line 55 still holds: a retry sends the same command with the same photo id.
 4. **Screen.** Show a thumbnail and its state next to each progress row. Put the logic in a pure helper, `progressPhotoLabel(row)`, with unit tests (there's no jsdom).
 
 ## Tests

@@ -20,6 +20,19 @@ Plan text (rev 1.3, b1c): "Unclear links are flagged. Imported photos wait in 'n
   - Pure helpers are in `walk-state.ts` (lines 11 to 26). There's no jsdom (Q25), so new screen logic goes in pure helpers there.
 - **Route:** `apps/web/app/api/v2-backend/jobs/[id]/walk/route.ts`, with GET at line 20 and POST at line 31.
 
+## Lane mount (amended 25 Nov 18:40 UK, after Codex's rule-4 stop)
+B1C's lane file is `config/lanes/v2-b1c.json`. It lists its own new files, and it also **mounts exactly these B1A-owned edits** (lane `v2-b1a`, #920). Each one carries the lane note **"B1C mount, owned by B1A #920: <what>"**:
+- `packages/db/src/v2-walk-repository.ts`:
+  - `foldWalkEntries` takes an optional `filings` argument and adds the `filed` link and `originalRoomCaptureOrder`. Its behaviour is unchanged when there are no filings.
+  - `read` also selects the latest filing per photo.
+  - A new `fileWalkPhoto` method.
+  - New zod `walkPhotoFilingCommandV1`.
+  - Nothing else in the file changes.
+- `apps/api/src/workspace/walk.application.ts`: a `fileWalkPhoto` pass-through, beside the existing entry call.
+- `tools/v2/bootstrap.mjs`: the 2029 line, placed above 2054 (rule 30).
+- `tools/v2/seed.integration.test.mjs`: new B1C tests appended in their own `describe`.
+B1A's and B1B's existing tests must pass unchanged. No other B1A file changes. A lane-lint failure on any other B1A file is a stop.
+
 ## Build
 1. **Migration 2029: `app.v2_walk_photo_filing`.**
    - Columns: tenant_id, job_id, session_id, capture_order (the photo entry), expected_version, command_id (unique per job), room_capture_order (a room entry in the same session), reason (`'misfiled' | 'no_room' | 'waiting'`), actor_membership_id and server_received_at.
