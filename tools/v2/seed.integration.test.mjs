@@ -1163,15 +1163,25 @@ test("FL guard: every pending table is still in the catalog and still unlocked",
   assert.deepEqual(stale, [], "a slice locked its tables but kept its pending file, or a table left the catalog");
 });
 
-test("FL guard: an indirect lock must match the parent's full key, not just the tenant", async () => {
+test("FL guard: an indirect lock must match every job-bound parent's full key", async () => {
   const catalog = await firmLockCatalog(admin);
   const locked = new Set(catalog.filter(row => row.firm_policy).map(row => row.relation));
-  const row = catalog.find(entry => entry.relation === "app.finding_suppression");
-  assert.deepEqual(lockProblems(row, locked), [], "the real 2047 policy passes");
-  const tenantOnly = "(EXISTS ( SELECT\n   FROM app.job_finding f\n  WHERE (f.tenant_id = finding_suppression.tenant_id)))";
-  assert.deepEqual(lockProblems({ ...row, firm_policy: { ...row.firm_policy, using: tenantOnly } }, locked),
-    ["v2_practice_firm does not join a firm-locked parent on every column of a foreign key to it"]);
-  assert.notDeepEqual(lockProblems(row, new Set()), [], "a parent without its own firm lock doesn't count");
+  const jobBound = new Set(catalog.map(row => row.relation));
+  const check = (relation, using) => {
+    const row = catalog.find(entry => entry.relation === relation);
+    return lockProblems(using ? { ...row, firm_policy: { ...row.firm_policy, using } } : row, locked, jobBound);
+  };
+  assert.deepEqual(check("app.finding_suppression"), [], "the real 2047 policy passes");
+  assert.deepEqual(check("app.job_link"), [], "the real 2047 policy passes");
+  // Codex r1: a tenant-only EXISTS on the real parent.
+  assert.match(check("app.finding_suppression", "(EXISTS ( SELECT\n   FROM app.job_finding f\n  WHERE (f.tenant_id = finding_suppression.tenant_id)))")
+    .join(), /app\.job_finding\(tenant_id, finding_id\)/u);
+  // Codex r3: a job link must check both bindings; drop each in turn.
+  const binding = side => `(EXISTS ( SELECT\n   FROM app.job_party_binding b\n  WHERE ((b.tenant_id = job_link.tenant_id) AND (b.job_id = job_link.${side}_job_id) AND (b.id = job_link.${side}_binding_id))))`;
+  assert.match(check("app.job_link", binding("predecessor")).join(), /successor_job_id, successor_binding_id/u);
+  assert.match(check("app.job_link", binding("successor")).join(), /predecessor_job_id, predecessor_binding_id/u);
+  assert.notDeepEqual(lockProblems(catalog.find(entry => entry.relation === "app.finding_suppression"), new Set(), jobBound), [],
+    "a parent without its own firm lock doesn't count");
 });
 
 let firmContexts;
