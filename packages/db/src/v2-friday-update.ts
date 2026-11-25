@@ -1,8 +1,15 @@
 import { z } from "zod";
 
 // Customer text is explicitly reviewed; never copy diary, financial or evidence payloads.
-const line = z.string().trim().min(1).max(400).refine(value =>
-  !/[£$€]|\b(?:GBP|USD|EUR)\b|\d+[.,]\d{2}\b|\b\d+\s*(?:pence|pounds?)\b/iu.test(value), "Leave amounts out of the customer update");
+const line = z.string().trim().min(1).max(400).refine(value => {
+  if (/[£$€]|\b(?:GBP|USD|EUR)\b|\b\d+\s*(?:pence|pounds?|p)\b/iu.test(value)) return false;
+  // A two-decimal number needs an explicit measurement unit or a valid am/pm clock time.
+  return [...value.matchAll(/\d+[.,]\d{2}(?!\d)/gu)].every(match => {
+    const after = value.slice(match.index + match[0].length);
+    return /^\s*(?:mm|cm|m|m2|m²|m3|kg|g|l|ltr|litres?|metres?|sq ?m|lm)(?![\p{L}\p{N}_])/iu.test(after)
+      || (/^(?:0?[1-9]|1[0-2])\.[0-5]\d$/u.test(match[0]) && /^\s*(?:am|pm)\b/iu.test(after));
+  });
+}, "Leave amounts out of the customer update");
 export const fridayContentV1 = z.strictObject({
   schema: z.literal("friday-content.v1"),
   thisWeek: z.array(line).max(30), nextWeek: z.array(line).max(30),
@@ -25,6 +32,10 @@ export type FridaySnapshot = {
 };
 export const fridayEmpty = { thisWeek: "No work scheduled this week.", nextWeek: "Nothing planned for next week yet.",
   photos: "No photos this week." };
+const fridayOmitted = {
+  thisWeek: "Some work this week has been left out of this update. Please check before sending.",
+  nextWeek: "Some work next week has been left out of this update. Please check before sending.",
+};
 export function fridayWeekDates(week: string) {
   fridayQueryV1.parse({ week });
   const start = new Date(week + "T00:00:00Z");
@@ -33,9 +44,14 @@ export function fridayWeekDates(week: string) {
 }
 export function fridayContentFromPlan(week: string, tasks: readonly { title: string; scheduledDate?: string | null }[]): FridayContent {
   const [start, next, end] = fridayWeekDates(week) as [string, string, string];
-  const titles = (from: string, until: string) => tasks.filter(task => task.scheduledDate && task.scheduledDate >= from && task.scheduledDate < until)
-    .flatMap(task => line.safeParse(task.title).success ? [task.title] : []).slice(0, 30);
-  return fridayContentV1.parse({ schema: "friday-content.v1", thisWeek: titles(start, next), nextWeek: titles(next, end), photos: [] });
+  const titles = (from: string, until: string, omitted: string) => {
+    const scheduled = tasks.filter(task => task.scheduledDate && task.scheduledDate >= from && task.scheduledDate < until);
+    const kept = scheduled.flatMap(task => line.safeParse(task.title).success ? [task.title] : []);
+    const dropped = scheduled.length - kept.length;
+    return dropped ? [...kept.slice(0, 29), omitted] : kept.slice(0, 30);
+  };
+  return fridayContentV1.parse({ schema: "friday-content.v1", thisWeek: titles(start, next, fridayOmitted.thisWeek),
+    nextWeek: titles(next, end, fridayOmitted.nextWeek), photos: [] });
 }
 export function fridayWeekLabel(week: string) {
   fridayQueryV1.parse({ week });

@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-k3-f": {
+      "branches": ["codex/sandbox/v2-k3f"],
+      "note": "T1. Q24 V2-K3-F: Friday update measurement/time validation and omitted-title warnings; router-created branch spelling.",
+      "allow": [
+        "packages/db/src/v2-friday-update.ts",
+        "packages/db/test/v2-friday-update.test.ts"
+      ]
+    }
+  }
+}
