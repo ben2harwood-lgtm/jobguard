@@ -4,7 +4,7 @@
 
 Tier: **RED** (new table; outside answers). Migration **2013**. Astra: yes. Rework risk: **high** (E1 is in review).
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-e2.
-**Starts:** now. **Base:** E1's branch `claude/project-thread-vur4ba` (#919). Draft PR against it. Merge E1 again when it moves. Do not edit E1's files; answer facts through E1's commands.
+**Starts:** now. **Base:** E1's branch `claude/project-thread-vur4ba` (#919). Draft PR against it. Merge E1 again when it moves. Do not edit E1's files, except the one `commandIn` extraction described below; answer facts through E1's commands.
 
 ## Dry-check against the code (planner, 25 Nov 00:15 UK): verified with one change; the mock-up passed (#930)
 - **E1's answer needs a signed-in builder.** E1 (#919) has `v2-open-fact-command.v1` with actions `log`, `answer`, `cancel` and `mark_out_of_date`, each with `expectedVersion`. Its repository refuses without a signed-in editor (`OPEN_FACT_EDITOR_REQUIRED`), so the no-sign-in reply page **cannot** call E1's `answer` itself, and you may not edit E1.
@@ -13,6 +13,17 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 - **Customer link rule (rule 16):** the reply page copies the existing customer job link's anonymous-access check, not F6's.
 - **Event names (rule 18):** `v2.fact_reply.requested`, `.received`, `.cancelled` and `.applied_by_builder`. Don't use "accepted" or "completed".
 - **Migration:** `packages/db/migrations/2013_...sql`.
+- **Applying a reply in one transaction (planner decision, 25 Nov 00:50 UK, after build round 1 held).** E1's `command()` opens its own `withTenant` transaction (`v2-open-fact-repository.ts` lines 194 to 225 on #919), so calling it from E2 would make two transactions. A fact could then end up answered with no `applied_by_builder` record. **Decision: a small, behaviour-free extraction in E1's repository, made in this PR.**
+  - Move the body of `command()` into a public `commandIn(database: TenantTransaction, context, jobId, sessionId, input)` that runs inside a transaction the caller already holds. `command()` becomes `withTenant(this.pool, context, database => this.commandIn(database, context, jobId, sessionId, input))`. Nothing else in E1 changes: not the editor check, replay, race handling, audit or error codes.
+  - E2's apply runs inside **one** `withTenant`. In it: lock E2's reply row, check it is unapplied and current, call `openFacts.commandIn(database, ...)` with `action: "answer"` and the fact's `expectedVersion`, write `applied_by_builder` and its audit event, then commit. A failure anywhere rolls back both.
+  - Use E2's reply id as E1's `commandId`, so a retried apply replays in E1 and E2 instead of answering twice.
+  - **Lane:** add `packages/db/src/v2-open-fact-repository.ts` to E2's lane file with the note `"extract commandIn only, owned by E1 #919, no behaviour change"`. Say so in the PR body. E1's existing tests must pass unchanged, and you must not edit them.
+  - **Tests:**
+    - a forced failure after E1's answer and before E2's record leaves the fact unanswered and no E2 record or audit event;
+    - a retried apply answers once;
+    - a stale fact version refuses both writes.
+  - **Rejected:** a deterministic command id plus a later recovery check. It leaves a window where the fact shows answered with no E2 record, and it adds repair code that the rules would need tests for.
+  - If #919's owner changes `command()` again, merge E1 again and redo the extraction the same way.
 
 ## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
 The no-sign-in reply page is a **new route file you own**: `apps/web/app/reply/[token]/page.tsx`, which is V2 only and returns 404 when the flag is off. **One mount is allowed**, in `apps/web/app/(designed)/jobs/[id]/work/page.tsx` only: one import line plus one element, rendered only when `process.env.JOBGUARD_LOCAL_V2 === "1"`. Add that file to your lane file with the note `"mount only, owned by main (live Work tab)"`. Change nothing else in that file. It is used only for the builder's "Replies received: apply?" section, which goes in a new component file you own. This overrides any other line in this packet or brief about editing screen files.

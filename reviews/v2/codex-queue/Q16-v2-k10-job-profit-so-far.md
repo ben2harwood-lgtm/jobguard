@@ -21,6 +21,11 @@ A plain line for the builder only: "Quoted £18,400, extras £1,250, spent £9,1
 - **Correct the example (it was wrong).** This piece shows no forecast percentage, because a forecast needs a cost-to-complete input that doesn't exist yet. The builder sees, ex-VAT and stated as ex-VAT: **quoted** £18,400, **approved extras** £1,250, **job total** £19,650, **recorded costs so far** £9,100, **left in the budget** £10,550, and **spent so far** 46.31% of the total (9,100 ÷ 19,650). A forecast margin is a later piece.
 - If there is no accepted price (job total zero or missing): show "No accepted price yet" and no percentages.
 - **Leak pair.** Compare the complete response for two jobs differing only in a hidden finding; then test that crew and customer roles are refused on the read endpoint.
+- **Crew and customer refusals while V2 has no crew or customer sessions (planner, 25 Nov 00:50 UK).** Main's crew and customer session routines (`identity.customer_portal_use`, `identity.extra_customer_use`, `app.customer_portal_issuer`, the operative routines in 0549) only run on `jobguard_synthetic_demo`, so these sessions can't be made on the V2 database until V2-SX. Until then:
+  1. Keep the builder, leak-pair and second-firm tests on the real V2 database.
+  2. Prove the read endpoint's **own** role gate with an HTTP-level test. Use the same route handler and a session whose resolved membership role is crew or customer (the repo's existing role-check test pattern). It must get the plain refusal and a body with no figures.
+  3. Don't add skipped or todo tests, because rule 10 forbids silent skips. List the real-session crew and customer cases in the PR body under "Waits for V2-SX".
+  4. K10 is judged on 1 and 2. The real-session tests come back as **K10-R**, test files only, once V2-SX merges.
 
 ## Done when
-- The seed job shows the right figures from its records; the planted-finding pair is identical; crew and customer sessions get nothing; second-firm test per the rules. CI green apart from Vercel.
+- The seed job shows the right figures from its records; the planted-finding pair is identical; crew and customer roles are refused at the route (real V2 sessions wait for V2-SX); second-firm test per the rules. CI green apart from Vercel.

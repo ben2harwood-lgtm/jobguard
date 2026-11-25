@@ -28,7 +28,7 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | 9 | Q01 | V2-D1R1 audit append on measurement saves (safety fix) | ★ | S | R2 has pushed c3 | `codex/sandbox/v2-d1` | none | RED | low |
 | 10 | Q05 | V2-K8 off-hire reminders | ★★ | S | R2 has pushed c3 | new c3 | 2010 | RED | medium |
 | 11 | Q17 | V2-E9 customer choices and PC sums tracker | ★★★ | M | now | E1 #919 | 2022 | RED | high |
-| 12 | Q09 | V2-F1 Done, Blocked, Changed on a brief | ★★ | M | now (mock-up passed; builder presses, no photos, no diary write) | D4 #916 | 2015 | RED | high |
+| 12 | Q09 | V2-F1 Done, Blocked, Changed on a brief | ★★ | M | **parked** (25 Nov 00:55 UK): waits for D4A + task key on #916, Ben's OK (mock-up passed; builder presses, no photos, no diary write) | D4 #916 | 2015 | RED | high |
 | 13 | Q10 | V2-F8 who was on site today | ★ | S | **parked: C3C crew binding** | V2-F1 branch | 2016 | RED | high |
 | 14 | Q06 | V2-K9 RAMS and construction phase plan draft | ★★ | M | now (mock-up passed #930) | new c3 | 2011 | RED | medium |
 | 15 | Q08 | V2-E2 replies to open facts | ★ | M | now (mock-up passed #930) | E1 #919 | 2013 | RED | high |
@@ -45,7 +45,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, since 00:15 UK **K9 (Q06) and E2 (Q08)**, and since 00:20 UK **K3 (Q15) and F1 (Q09)** with re-scoping. All four mock-ups passed in #930, each with a dated note at the top of its packet. Re-scoped: **K2 → K2A** (builder-only feed). Parked: **E5A** and **F8**, both waiting for C3C. They get checked before they're released.
 
 ## Migration numbers (one list; checked against every branch 24 Nov 22:15 UK)
-2001 practice quote (main) · 2002 to 2005 c-chain and d1 · 2006 D3 #912 · 2007 D4 #916 · 2008 B1A #920 · 2009 E1 #919 · 2010 K8 · 2011 K9 · 2012 K5 · 2013 E2 · 2014 E3 · 2015 F1 · 2016 F8 · 2017 K2 · 2018 F6 #923 · 2019 K4 · **2020 C3B #922** · 2021 K3 · 2022 E9 · **2023 K6A** (moved from 2020) · next free: **2024**. A builder that needs a number not listed here stops and asks; it never takes the next one itself.
+2001 practice quote (main) · 2002 to 2005 c-chain and d1 · 2006 D3 #912 · 2007 D4 #916 · 2008 B1A #920 · 2009 E1 #919 · 2010 K8 · 2011 K9 · 2012 K5 · 2013 E2 · 2014 E3 · 2015 F1 · 2016 F8 · 2017 K2 · 2018 F6 #923 · 2019 K4 · **2020 C3B #922** · 2021 K3 · 2022 E9 · **2023 K6A** (moved from 2020) · **2024 V2-SX** (crew and customer test sessions, V2 bootstrap file, Astra first) · next free: **2025**. A builder that needs a number not listed here stops and asks; it never takes the next one itself.
 
 ## Not in this queue, and why
 - **New piece found by the C5 builder:** once scope is confirmed the app can't add a line to a priced quote, so prompts can only remind or be dismissed. "Add a line to a priced quote" (v2-c6) is its own later piece, on the quote track; not tonight.

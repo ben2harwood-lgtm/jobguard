@@ -44,3 +44,6 @@ Don't-forget prompts (C5, #921), V2 tests in CI (CI1, #917), the R2 audit repair
 ## Waiting on someone
 - Astra's plan check: every RED piece above (sent on the handoff issue), plus accountant export (QW-7) and encrypted offline photos (B2B1).
 - Ben: a third repair round for the crew brief audit fix (D4A); merges tomorrow.
+0. Crew and customer test sessions on the V2 database (V2-SX, RED, Astra first, with V2-PX). Unblocks K10-R, F1 crew presses, K2 feeds, F8 and E5A.
+0. K10-R: K10's real crew and customer refusal tests (test files only), after V2-SX.
+0. F1 progress buttons: parked behind D4A plus the task key on #916 (Ben's OK for D4's third round).

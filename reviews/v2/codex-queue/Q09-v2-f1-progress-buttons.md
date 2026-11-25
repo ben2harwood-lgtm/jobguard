@@ -4,7 +4,7 @@
 
 Tier: **RED** (new table; proof for the Final Check). Migration **2015**. Astra: yes. Rework risk: **high** (D4 is in review and has a pending audit fix).
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-f1, plus section 2B item 20 (one-tap photo).
-**Starts:** now. **Base:** D4's branch `claude/project-thread-btt9d2` (#916). Draft PR against it. Merge D4 again when it moves (its audit fix D4A may land later). Do not edit D4's files.
+**Starts:** PARKED (25 Nov 00:55 UK). Waits for D4A plus the task key on #916, which needs Ben's OK for a third D4 round. Was: now. **Base:** D4's branch `claude/project-thread-btt9d2` (#916). Draft PR against it. Merge D4 again when it moves (its audit fix D4A may land later). Do not edit D4's files.
 
 > **c3 audit gap (standard line, coordinator ruling 25 Nov 00:09 UK).** c3's plan read creates a plan with no audit event. That is a known c2/c3 gap, and its fix waits for Ben. This piece **reads or links to the plan only**: build against c3 as it is, and **keep out of `packages/db/src/v2-work-plan-repository.ts`** (and every other c2/c3 file). Do not hold on this gap. Put this line in the PR body: "Inherits c3's plan-creation audit gap; needs c3 re-merged after the c2/c3 fix." 
 
@@ -13,6 +13,11 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 - **Where it's recorded:** in F1's own table, shown on the brief. **No diary write.** The existing diary intake (0505 and 0539) has never been exercised on the V2 database. Writing to it is a later small piece (F1-D), after a probe shows it works on V2.
 - **Photos:** none in this piece. The upload path (`EvidenceService.beginUpload`/`finalize`) refuses on the V2 database (see V2-PX). Keep a nullable photo-reference column empty and add photos as F1-P after V2-PX. No camera.
 - **Task key:** tasks come from D4's brief, keyed by c3's `(quote_revision_id, scope_item_id, template_task_key)`.
+- **Missed by the first dry-check (corrected 25 Nov 00:55 UK).** D4's saved brief (`CrewBriefContent.tasks`, #916 lines 35 to 44) has **no** task key, and compose drops it (lines 253 to 258). Two tiling tasks share one `scopeItemId`, so neither title nor position can stand in. **Don't build until D4 saves `taskKey` (`v2-crew-brief.v2`, in the D4A round).** Then:
+  - tie each press to `(brief id, taskKey)`;
+  - refuse a press on a v1 brief with "This brief needs regenerating";
+  - never match on title or position.
+- **Round 1 work is kept.** The F1 branch keeps what it has. On restart it merges D4 again and switches its task reference to `taskKey`, which is not a new round of design.
 - **Event names (rule 18):** `v2.progress.done_recorded`, `.blocked_recorded` and `.changed_recorded`. Never use "completed" (0758 refuses it).
 - **Migration:** `packages/db/migrations/2015_...sql`.
 

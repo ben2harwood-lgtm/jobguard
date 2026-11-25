@@ -38,3 +38,10 @@
      4. Save `context.storageState()` and start each test's context from it, at 360 and 1280 px, with `ignoreHTTPSErrors: true` and the browser from `V2_TEST_CHROMIUM`. One sign-in per file keeps clear of the sign-in rate limit (rule 16c).
    - **Scope the checks** to `page.getByRole("main")` or the section's own region, with the dev indicator off (rule 17).
    - **Reference for sign-in itself:** `tools/v2/phone.test.mjs` on v2/main, the only test that signs in more than once, on purpose.
+23. **How the planner dry-checks a packet (planner, 25 Nov 00:55 UK, after F1 was held on a missing task key).** Before a packet is released, the planner opens the **saved shapes and contracts** the piece depends on, not only the routes:
+   - the stored JSON or row type and the zod contract;
+   - the compose or save function, checking that every field the piece needs survives saving;
+   - each identity the piece will key on, which must be unique where it's used (for example, two tasks on one scope item);
+   - which database a session or proof routine will run on (rules 16 and 22).
+
+   A builder who finds the packet relies on a field or session that doesn't exist **stops at round 1 and reports it**. It never invents another binding (title, position, free text). This is a planner miss, not a builder round.
