@@ -30,6 +30,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // rather than exposing the builder watchdog's status/409 diagnostics.
   "/api/customer-portal/variations/read": "pre_live_allowed",
   "/api/customer-portal/variation-approvals": "pre_live_allowed",
+  // QW-1: one photo frozen on the customer's own priced extra; same generic refusals as the read.
+  "/api/customer-portal/variation-photo": "pre_live_allowed",
   "nest:/customer-portal/variations/read": "pre_live_allowed",
   "nest:/customer-portal/variation-approvals": "pre_live_allowed",
   "/api/customer-portal/issue": "pre_live_allowed",
@@ -162,6 +164,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // Practice forecasts are operational inputs, available before the job goes live.
   "/api/jobs/[id]/exposure-schedule": "pre_live_allowed",
   "/api/jobs/[id]/proof": "watchdog_live_only",
+  // QW-1: a photo on a logged extra is new site evidence.
+  "/api/jobs/[id]/variations/photos": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/merchant-order": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",

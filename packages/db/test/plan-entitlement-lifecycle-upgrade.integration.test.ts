@@ -161,6 +161,7 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
   expect(receiptHelpers).toHaveLength(1);
   expect(receiptHelpers[0]?.definition?.split("$function$")[1]).toEqual(
     receiptGate.split("FUNCTION app.require_receipt_final_check(")[1]!.split("AS $$")[1]!.split("$$;")[0]);
+  const variationPhotoSql = await readFile(new URL("../migrations/0781_variation_revision_photo.sql", import.meta.url), "utf8");
   // 0765 preserves distinct customer, human emergency, mailbox and machine entry points.
   for (const [name, args] of [
     ["customer_stages", "t uuid, j uuid, c uuid, digest text, completion uuid, command uuid, expected_hash text"],
@@ -171,7 +172,9 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
     ["scim2_configure", "s text, csrf text, t uuid, b uuid, c uuid, is_enabled boolean, credential_hash text"],
     ["scim2_machine", "b uuid, token text, p jsonb"],
   ]) {
-    const body = lp11Sql.split(`FUNCTION identity.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
+    // QW-1 (0781) replaces only the customer_variation body: photos in the view and an exact-photo approval check.
+    const source = name === "customer_variation" ? variationPhotoSql : lp11Sql;
+    const body = source.split(`FUNCTION identity.${name}(`)[1]!.split("AS $$")[1]!.split("$$;")[0];
     const routines = live.filter(row => row.nspname === "identity" && row.proname === name && row.args === args);
     expect(routines).toHaveLength(1);
     expect(routines[0]?.definition?.split("$function$")[1]).toEqual(body);
@@ -455,6 +458,14 @@ it("0556 preserves all populated tables and routine ACLs, installs only the adap
       expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(expected);
       const body = pilotPortalSql.split(`CREATE OR REPLACE FUNCTION ${prior.nspname}.${prior.proname}(`)[1]!.split("AS $$")[1]!.split("$$;")[0]!;
       expect(current?.definition).toBe(prior.definition!.replace(prior.source, () => body));
+      expect(current?.source).toBe(body);
+      continue;
+    }
+    // QW-1 (0781) replaces only the customer_variation body; keep its metadata exact and pin the full 0781 body.
+    if (prior.nspname === "identity" && prior.proname === "customer_variation" && prior.args === "t uuid, j uuid, c uuid, digest text, command jsonb") {
+      const body = variationPhotoSql.split("FUNCTION identity.customer_variation(")[1]!.split("AS $$")[1]!.split("$$;")[0];
+      expect({ ...current, definition: prior.definition, source: prior.source }).toEqual(prior);
+      expect(current?.definition?.split("$function$")[1]).toBe(body);
       expect(current?.source).toBe(body);
       continue;
     }

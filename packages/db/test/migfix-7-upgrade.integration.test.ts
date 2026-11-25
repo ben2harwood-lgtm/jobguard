@@ -84,9 +84,11 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const lp12 = successors.find(proof => proof.migration === "0768_lp12_narrow_owners.sql")!;
   const pilotFinalCheck = successors.find(proof => proof.migration === "0777_pilot_final_check.sql")!;
   const pilotEmail = successors.find(proof => proof.migration === "0778_pilot_commercial_email.sql")!;
+  const variationPhoto = successors.find(proof => proof.migration === "0781_variation_revision_photo.sql")!;
   const lp11Policies = lp11.upgrade.filter(change => change.section === "policies");
   const lp11Relations = lp11.upgrade.filter(change => change.section === "relations");
-  const addedPolicies = [...lp12.upgrade, ...pilotFinalCheck.upgrade, ...pilotEmail.upgrade]
+  // QW-1 (0781) adds only the customer photo read policy on evidence_object; its metadata is in the 0781 proof.
+  const addedPolicies = [...lp12.upgrade, ...pilotFinalCheck.upgrade, ...pilotEmail.upgrade, ...variationPhoto.upgrade]
     .filter(change => change.section === "policies" && change.before === null);
   const lp12Relations = lp12.upgrade.filter(change => change.section === "relations");
   const replayCatalog = installedCatalog.map(relation => {
@@ -250,7 +252,8 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
     ["identity.customer_portal_use(t uuid, j uuid, c uuid, digest text, session_digest text, operation text)", "0775_pilot_customer_portal.sql"],
     ["identity.customer_portal_quote(t uuid, j uuid, c uuid, digest text, cmd jsonb)", "0775_pilot_customer_portal.sql"],
     ["identity.customer_stages(t uuid, j uuid, c uuid, digest text, completion uuid, command uuid, expected_hash text)", "0765_lp11_bound_tenant_rls.sql"],
-    ["identity.customer_variation(t uuid, j uuid, c uuid, digest text, command jsonb)", "0765_lp11_bound_tenant_rls.sql"],
+    // QW-1 (0781) is the latest body for this exact identity.
+    ["identity.customer_variation(t uuid, j uuid, c uuid, digest text, command jsonb)", "0781_variation_revision_photo.sql"],
     ["identity.dark_emergency(s text, csrf text, t uuid, p jsonb)", "0765_lp11_bound_tenant_rls.sql"],
     ["app.replace_fee_reservation_book(p_tenant uuid, p_book jsonb, p_result jsonb)", "0742_fee_webhook_receipt_binding.sql"],
     ["app.ch6_integrity_authority(t uuid, j uuid, digest text)", "0660_baseline_ancestry_audit_trust.sql"],
@@ -425,6 +428,9 @@ it("MIGFIX-7 preserves populated rows, types and privileges; changes only the tw
   const receiptDedupBody = receiptDedupSql.split("CREATE OR REPLACE FUNCTION app.record_practice_customer_receipt(")[1]!
     .split("AS $$")[1]!.split("$$;")[0]!;
   lp6dBodies.set("app.record_practice_customer_receipt(p_tenant,p_job,p_invoice,p_actor,p_command,p_paid_on,p_amount,p_method,p_reference)", receiptDedupBody);
+  // QW-1 (0781) supersedes the LP-11 customer_variation body; catalogue metadata is still checked above.
+  const variationPhotoSql = await readFile(new URL("../migrations/0781_variation_revision_photo.sql", import.meta.url), "utf8");
+  lp6dBodies.set("identity.customer_variation(t,j,c,digest,command)", variationPhotoSql.split("CREATE OR REPLACE FUNCTION identity.customer_variation(")[1]!.split("AS $$")[1]!.split("$$;")[0]!);
   // 0772 supersedes the two invitation bodies. The catalogue proof still checks all routine metadata.
   const pilotInvitationsSql = await readFile(new URL("../migrations/0772_pilot_identity_invitations.sql", import.meta.url), "utf8");
   for (const [name, args] of [["invite_member", "session_digest,t,recipient,assigned_role"], ["lp11_invitation_sso_state", "d,t"]]) {
