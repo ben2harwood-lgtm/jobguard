@@ -4,7 +4,7 @@
 
 Tier: **RED** (new table; proof for the Final Check). Migration **2015**. Astra: yes. Rework risk: **high** (D4 is in review and has a pending audit fix).
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-f1, plus section 2B item 20 (one-tap photo).
-**Starts:** NOW (released 25 Nov 14:55 UK; see the release section below, which overrides the base, PR and diary lines elsewhere). **Builder:** desktop Codex, lane A. **Base:** D4's branch `claude/project-thread-btt9d2` (#916) at `f7aacf55d` or later, which has D4A and `taskKey`. **Branch:** `codex/sandbox/v2-f1`. **PR:** draft **into `v2/main`** (not into D4's branch), so CI1's V2 seed job runs. Do not edit D4's files.
+**Starts:** NOW (released 25 Nov 14:55 UK; see the release section below, which overrides the base, PR and diary lines elsewhere). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** D4's branch `claude/project-thread-btt9d2` (#916) at `f7aacf55d` or later, which has D4A and `taskKey`. **Branch:** `codex/sandbox/v2-f1`. **PR:** draft **into `v2/main`** (not into D4's branch), so CI1's V2 seed job runs. Do not edit D4's files.
 
 > **c3 audit gap (standard line, coordinator ruling 25 Nov 00:09 UK).** c3's plan read creates a plan with no audit event. That is a known c2/c3 gap, and its fix waits for Ben. This piece **reads or links to the plan only**: build against c3 as it is, and **keep out of `packages/db/src/v2-work-plan-repository.ts`** (and every other c2/c3 file). Do not hold on this gap. Put this line in the PR body: "Inherits c3's plan-creation audit gap; needs c3 re-merged after the c2/c3 fix." 
 

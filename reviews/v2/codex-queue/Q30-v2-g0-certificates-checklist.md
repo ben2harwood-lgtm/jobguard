@@ -1,6 +1,6 @@
 # Q30 · V2-G0: certificates checklist by job type (batch C4)
 
-**Tier:** T1 (data file plus one panel; the ticks stay on the device for now and are saved by G2's handover pack later; no migration). **Builder:** web Codex, or lane A when a slot frees. No database is needed. **Base:** `v2/main` @ 63f3af5ab or later. **Branch:** `codex/sandbox/v2-g0`. **PR:** draft into `v2/main`. **Planner:** Fable thread, 25 Nov 16:00 UK. Use ★★, effort S. Migration 2026 was reserved but isn't used, so leave it unused.
+**Tier:** T1 (data file plus one panel; the ticks stay on the device for now and are saved by G2's handover pack later; no migration). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** `v2/main` @ 63f3af5ab or later. **Branch:** `codex/sandbox/v2-g0`. **PR:** draft into `v2/main`. **Planner:** Fable thread, 25 Nov 16:00 UK. Use ★★, effort S. Migration 2026 was reserved but isn't used, so leave it unused.
 
 ## Rules this piece must meet
 `01-RULES.md` (rules 1 to 28) and `02-BUILD-RULES-CHECKLIST.md`, with a "Rules met" list in the PR body.

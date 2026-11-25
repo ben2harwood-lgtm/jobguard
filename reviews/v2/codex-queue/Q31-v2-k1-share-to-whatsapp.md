@@ -1,6 +1,6 @@
 # Q31 · V2-K1: share the Friday update to WhatsApp from the phone (batch C5, Friday-update half)
 
-**Tier:** T1 (client only; the builder's own phone shares the text, and JobGuard sends nothing). **Builder:** web Codex, or lane A when a slot frees. No database is needed. **Base:** `codex/sandbox/v2-k3` (#935). **Branch:** `codex/sandbox/v2-k1`. **PR:** draft into `codex/sandbox/v2-k3`. **Planner:** Fable thread, 25 Nov 16:00 UK. Use ★★★, effort S. The brief half (K1-B, sharing a crew brief) comes after D5B-B (Q23).
+**Tier:** T1 (client only; the builder's own phone shares the text, and JobGuard sends nothing). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** `codex/sandbox/v2-k3` (#935). **Branch:** `codex/sandbox/v2-k1`. **PR:** draft into `codex/sandbox/v2-k3`. **Planner:** Fable thread, 25 Nov 16:00 UK. Use ★★★, effort S. The brief half (K1-B, sharing a crew brief) comes after D5B-B (Q23).
 
 ## Rules this piece must meet
 `01-RULES.md` (rules 1 to 28) and `02-BUILD-RULES-CHECKLIST.md`, with a "Rules met" list in the PR body.

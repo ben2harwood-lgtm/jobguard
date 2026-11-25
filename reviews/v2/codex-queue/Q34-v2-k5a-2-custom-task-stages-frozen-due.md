@@ -2,7 +2,7 @@
 
 > Called **K5A-2**, not K5B. **K5B** is already the planned "deposit and stage invoices drafted and issued" piece in `reviews/v2/V2-completion-roadmap.md` (batch E5, migration 2034).
 
-**Tier:** RED (money). **Builder:** a Claude Opus thread (needs a live V2 database while building). **Base:** K5A's branch `codex/sandbox/v2-k5` (#929) at `9dfaabdff` or later. **Branch:** `claude/<thread>`. **PR:** draft **into `codex/sandbox/v2-k5`**, so CI1 runs. **Migration: 2046** (next free becomes 2047). **Planner:** Fable thread, 25 Nov 17:30 UK. A Claude RED plan check has been requested on frm-management-layer#3. Rules 1 to 29 apply, with a "Rules met" list in the PR body.
+**Tier:** RED (money). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** K5A's branch `codex/sandbox/v2-k5` (#929) at `9dfaabdff` or later. **Branch:** `claude/<thread>`. **PR:** draft **into `codex/sandbox/v2-k5`**, so CI1 runs. **Migration: 2046** (next free becomes 2047). **Planner:** Fable thread, 25 Nov 17:30 UK. A Claude RED plan check has been requested on frm-management-layer#3. Rules 1 to 29 apply, with a "Rules met" list in the PR body.
 
 ## Dry-check against `codex/sandbox/v2-k5` @ 9dfaabdff and v2/main @ 63f3af5ab (rule 23)
 **Finding 1: custom tasks can't trigger a stage.**

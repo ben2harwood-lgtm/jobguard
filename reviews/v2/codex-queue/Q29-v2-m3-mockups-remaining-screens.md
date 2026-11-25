@@ -1,6 +1,6 @@
 # Q29 · V2-M3: clickable mock-ups for every remaining V2 screen (batch C1)
 
-**Tier:** T1 (mock-up route only, with fixture data, no backend). **Builder:** desktop Codex, lane A. No database is needed: it's a static page, like M2. **Base:** `v2/main` @ 63f3af5ab or later. **Branch:** `codex/sandbox/v2-m3`. **PR:** draft into `v2/main`. **Planner:** Fable thread, 25 Nov 16:00 UK. Use ★★★, because every screen below waits on it (screen rule, plan section 3). Effort M.
+**Tier:** T1 (mock-up route only, with fixture data, no backend). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** `v2/main` @ 63f3af5ab or later. **Branch:** `codex/sandbox/v2-m3`. **PR:** draft into `v2/main`. **Planner:** Fable thread, 25 Nov 16:00 UK. Use ★★★, because every screen below waits on it (screen rule, plan section 3). Effort M.
 
 ## Rules this piece must meet
 `01-RULES.md` (rules 1 to 28) and `02-BUILD-RULES-CHECKLIST.md`, with a "Rules met" list in the PR body.

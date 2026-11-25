@@ -58,16 +58,16 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | C6 | Q32 | V2-B1B Walk screen, online first cut | **desktop Codex** (lane A) | #920, PR into v2/main | none | T1 |
 | C9 | Q34 | V2-K5A-2 custom-task stages and frozen due amounts (Codex P2s on #929) | **Opus** | `codex/sandbox/v2-k5` | 2046 | RED money |
 | C10 | Q35 | V2-FL-1 firm-lock guard test + V2 core tables (39) | **Opus** | PX #964 / v2/main | 2047 | RED tenancy |
-| C11 | Q36 | V2-FL-2 firm lock, money tables (34) | **desktop Codex** | `codex/sandbox/v2-fl1` | 2048 | RED tenancy |
-| C12 | Q37 | V2-FL-3 firm lock, orders and site tables (33) | **desktop Codex** | `codex/sandbox/v2-fl1` | 2049 | RED tenancy |
-| C13 | Q38 | V2-FL-4 firm lock, recovery tables (35) | **desktop Codex** | `codex/sandbox/v2-fl1` | 2050 | RED tenancy |
-| C14 | Q39 | V2-FL-5 firm lock, supplier, feed and the rest (37) | **desktop Codex** | `codex/sandbox/v2-fl1` | 2051 | RED tenancy |
-| C15 | Q40 | V2-FL-F definer-function review (report, no migration) | **desktop Codex** | `codex/sandbox/v2-fl1` | none | RED tenancy |
-| C16 | Q41 | V2-D4B translated crew briefs, fake translator only (Ben: paid service later) | **desktop Codex** | #954 `codex/sandbox/v2-d5b-b` | 2052 | RED |
-| D5 | Q42 | V2-B1C walk check and correct: "needs room" tray, re-file a photo, original kept | **desktop Codex** | `codex/sandbox/v2-b1b` #957 | 2029 | RED |
-| D3 | Q43 | V2-F1-P photo on Done, Blocked or Changed | **desktop Codex** | `codex/sandbox/v2-f1` #953 (PX #964 before merge) | 2053 | RED |
-| C17 | Q44 | V2-FL-6 lock every V2-owned job table, last bootstrap line (rule 30) | **desktop Codex** | `codex/sandbox/v2-fl1` #966 | 2054 | RED tenancy |
-| C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Codex** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
+| C11 | Q36 | V2-FL-2 firm lock, money tables (34) | **Opus** | `codex/sandbox/v2-fl1` | 2048 | RED tenancy |
+| C12 | Q37 | V2-FL-3 firm lock, orders and site tables (33) | **Opus** | `codex/sandbox/v2-fl1` | 2049 | RED tenancy |
+| C13 | Q38 | V2-FL-4 firm lock, recovery tables (35) | **Opus** | `codex/sandbox/v2-fl1` | 2050 | RED tenancy |
+| C14 | Q39 | V2-FL-5 firm lock, supplier, feed and the rest (37) | **Opus** | `codex/sandbox/v2-fl1` | 2051 | RED tenancy |
+| C15 | Q40 | V2-FL-F definer-function review (report, no migration) | **Opus** | `codex/sandbox/v2-fl1` | none | RED tenancy |
+| C16 | Q41 | V2-D4B translated crew briefs, fake translator only (Ben: paid service later) | **Opus** | #954 `codex/sandbox/v2-d5b-b` | 2052 | RED |
+| D5 | Q42 | V2-B1C walk check and correct: "needs room" tray, re-file a photo, original kept | **Opus** | `codex/sandbox/v2-b1b` #957 | 2029 | RED |
+| D3 | Q43 | V2-F1-P photo on Done, Blocked or Changed | **Opus** | `codex/sandbox/v2-f1` #953 (PX #964 before merge) | 2053 | RED |
+| C17 | Q44 | V2-FL-6 lock every V2-owned job table, last bootstrap line (rule 30) | **Opus** | `codex/sandbox/v2-fl1` #966 | 2054 | RED tenancy |
+| C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
 ## Batch released 25 Nov 14:55 UK (planner; Ben: "why is nothing coding?")
@@ -95,7 +95,10 @@ Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, since 00:15 UK **K9 (Q0
 - **Need unbuilt pieces first:** K1 share (after D5B), E4 and E6 multi-crew planning (later on purpose), E7, E8, F2 to F5, F7, G0 (after E1 settles), H.
 - **Better left for Claude builders:** V2-PX proof photos in the V2 seed (`packets/v2-px-proof-photos-in-v2-seed.md`; security boundary, Astra first; F6's photo proof waits for it), C3B (edits the file R2 is finishing; start right after R2), D4A (needs Ben's OK for a third round), B1E (changes the shared live-job upload rule), B2B1 (offline security, waiting for Astra), QW-7 (on main, firm money data, waiting for Astra), CI1 (#917, in flight).
 
-## Lane A order (25 Nov 18:20 UK)
+## Workflow change (Ben, 25 Nov 19:53 UK): "I want Opus 5.5 to do the coding and Codex to do the checking."
+Every queued and future packet is built and repaired by an Opus 5.5 thread. Codex only checks, by `@codex review` on the PR or a read-only Mac review. Desktop Codex lane A takes no new builds. Repair rounds already used on Codex-built PRs still count.
+
+## (Superseded) Lane A order (25 Nov 18:20 UK)
 Web Codex has no runner, so desktop Codex lane A is the single Codex lane. It has at most 4 builds on the Mac at once, shared with Vibe Control. Building now: FL-F (Q40) and D4B (Q41). Next, in this order as slots free:
 1. FL-6 (Q44). It's small, and it unblocks every V2 branch that meets FL-1.
 2. FL-2 (Q36) repair round, and D4B (Q41) repair round.

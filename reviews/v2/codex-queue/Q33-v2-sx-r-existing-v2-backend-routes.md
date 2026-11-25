@@ -1,6 +1,6 @@
 # Q33 · V2-SX-R: refusal proof for the V2 routes built before rule 29
 
-**Tier:** T1 (tests only). **Builder:** Codex (lane A or web). No database is needed before building: the tests run in CI1. **Starts when:** V2-SX (Q26) has merged into `v2/main` **and** `codex/sandbox/v2-d5b` has re-merged `v2/main`. **Base:** `codex/sandbox/v2-d5b` (#925). **Branch:** `codex/sandbox/v2-sx-r`. **PR:** draft into `codex/sandbox/v2-d5b`. **Planner:** Fable thread, 25 Nov 16:55 UK (SX rev 5 plan check, condition 5).
+**Tier:** T1 (tests only). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Starts when:** V2-SX (Q26) has merged into `v2/main` **and** `codex/sandbox/v2-d5b` has re-merged `v2/main`. **Base:** `codex/sandbox/v2-d5b` (#925). **Branch:** `codex/sandbox/v2-sx-r`. **PR:** draft into `codex/sandbox/v2-d5b`. **Planner:** Fable thread, 25 Nov 16:55 UK (SX rev 5 plan check, condition 5).
 
 ## Dry-check (planner, 25 Nov 16:50 UK, rule 23)
 Real Next routes under `apps/web/app/api/v2-backend/jobs/[id]/`, by the branch that adds them:

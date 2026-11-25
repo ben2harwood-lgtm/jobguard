@@ -6,7 +6,7 @@
 >
 > The FL-1 guard will fail as soon as one of those branches meets FL-1.
 
-**Tier:** RED (tenancy). **Builder:** desktop Codex (lane A). It's one SQL file and one bootstrap line, and CI1 is the proof. Checker: Claude. **Base:** `codex/sandbox/v2-fl1` (#966). **Branch:** `codex/sandbox/v2-fl6`. **PR:** draft into `codex/sandbox/v2-fl1`. **Migration: 2054**, a V2 bootstrap file (next free becomes 2055). This is a build-time number. At merge it may be renumbered by `tools/migration-renumber.mjs`. It must stay the **last bootstrap line** whatever its number. The loop finds tables by name pattern, never by migration number. **Plan check:** Astra. Planner: Fable thread, 25 Nov 18:35 UK.
+**Tier:** RED (tenancy). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** `codex/sandbox/v2-fl1` (#966). **Branch:** `codex/sandbox/v2-fl6`. **PR:** draft into `codex/sandbox/v2-fl1`. **Migration: 2054**, a V2 bootstrap file (next free becomes 2055). This is a build-time number. At merge it may be renumbered by `tools/migration-renumber.mjs`. It must stay the **last bootstrap line** whatever its number. The loop finds tables by name pattern, never by migration number. **Plan check:** Astra. Planner: Fable thread, 25 Nov 18:35 UK.
 
 ## Dry-check against `codex/sandbox/v2-fl1` (rule 23)
 - `tools/v2/bootstrap.mjs` lines 64 to 71 load the V2 files explicitly, in order: 2001, 2002 to 2004, 2025, then 2047. Every V2 piece branch adds its own line here.

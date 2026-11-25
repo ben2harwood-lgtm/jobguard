@@ -1,6 +1,6 @@
 # Q28 · V2-C3C: tasks assigned to a crew record, not free text (batch C7, data and command half)
 
-> **Released 25 Nov 16:00 UK (planner).** **Builder:** a Claude Opus thread (RED, new table, needs a live V2 database). **Base:** `v2/main` @ 63f3af5ab or later (c1 to c3 are merged there). **Branch:** `claude/<thread>`. **PR:** draft into `v2/main`. **Migration: 2027** (the "next free 2024" line below is out of date). A Claude RED plan check has been requested.
+> **Released 25 Nov 16:00 UK (planner).** **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** `v2/main` @ 63f3af5ab or later (c1 to c3 are merged there). **Branch:** `claude/<thread>`. **PR:** draft into `v2/main`. **Migration: 2027** (the "next free 2024" line below is out of date). A Claude RED plan check has been requested.
 >
 > **Planner dry-check against v2/main @ 63f3af5ab (rule 23):**
 > - The assignee is free text: `packages/db/src/v2-work-plan-edits.ts` line 9 (`assignee: z.string()...nullable().optional()`), applied at lines 81 to 84 and stored as `assignee?: string | null` (line 38).

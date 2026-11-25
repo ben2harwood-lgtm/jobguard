@@ -76,7 +76,7 @@ The rate limit is one code per email per 60 s and at most 10 recent (`apps/api/s
 
 > **Revision 4 (planner, 25 Nov 16:35 UK).** This replaces revisions 1 to 3 below, which are kept only as history. The SX builder stopped at both plan-check stop points with no code written (`/mnt/project-files/jobguard-v2/v2-sx-stop-report-2026-11-25.md`). The planner checked its findings line by line against v2/main @ 63f3af5ab, and they hold. **Needs a separate Claude RED plan check before it's called ready.** It changes what the refusal proof means, even though it only adds tests.
 
-**Tier:** T1 (test helper and tests only; no product code, no migration, no grant, no change to any main file). **Builder:** desktop Codex or web Codex. No database is needed before building: the tests are seed tests that CI1 runs, and lane B may run them too. **Base:** `v2/main`. **Branch:** `codex/sandbox/v2-sx`. **PR:** draft into `v2/main`. Rules 1 to 28 apply, with a "Rules met" list in the PR body.
+**Tier:** T1 (test helper and tests only; no product code, no migration, no grant, no change to any main file). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** `v2/main`. **Branch:** `codex/sandbox/v2-sx`. **PR:** draft into `v2/main`. Rules 1 to 28 apply, with a "Rules met" list in the PR body.
 
 ## Why the old design can't work (each point checked by the planner)
 1. **Every V2 builder screen and command runs only in the shared practice tenant through a linked practice session.**
@@ -131,7 +131,7 @@ The refusal proof on V2 is therefore:
 
 ## History: revision 3 and earlier (superseded, kept for the record)
 
-> **Released 25 Nov 14:55 UK (planner).** **Builder:** a Claude Opus thread. It needs a running V2 database while building, so it isn't for Codex's sandbox. **Base:** `v2/main` @ 63f3af5ab or later. Re-checked: c1 to c3, CI1 and the B1 mock-ups merged at 12:12 UK and don't touch the session routines below or `2001_practice_quote.sql`. **Branch:** `claude/<thread>`. **PR:** draft into `v2/main`. RED. The earlier plan checks (r1 to r3) left no planning hold. Because Ben approved Claude plan checks in place of Astra's (12:50 UK), a fresh Claude RED plan check of this exact text is requested on frm-management-layer#3. Build now; the PR isn't ready until that verdict and its conditions are in. Rules 1 to 28 apply, with a "Rules met" list in the PR body. Unblocks K10-R, F1 crew presses, K2 feeds, F8 and E5A.
+> **Released 25 Nov 14:55 UK (planner).** **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** `v2/main` @ 63f3af5ab or later. Re-checked: c1 to c3, CI1 and the B1 mock-ups merged at 12:12 UK and don't touch the session routines below or `2001_practice_quote.sql`. **Branch:** `claude/<thread>`. **PR:** draft into `v2/main`. RED. The earlier plan checks (r1 to r3) left no planning hold. Because Ben approved Claude plan checks in place of Astra's (12:50 UK), a fresh Claude RED plan check of this exact text is requested on frm-management-layer#3. Build now; the PR isn't ready until that verdict and its conditions are in. Rules 1 to 28 apply, with a "Rules met" list in the PR body. Unblocks K10-R, F1 crew presses, K2 feeds, F8 and E5A.
 
 # V2-SX: crew and customer test sessions on the V2 practice database
 
@@ -139,7 +139,7 @@ The refusal proof on V2 is therefore:
 >
 > **Revision 2 (planner, 25 Nov 02:55 UK), after the plan-check comment 7150113086 on frm-management-layer#3.** The planner checked each point against v2/main @ bade747e, and all four hold. The routine list, scope and proofs are revised below. **Status: not to be built until the plan check clears.**
 
-**Tier:** RED (security boundary: sign-in, tenant isolation, customer access). **Astra first**, alongside V2-PX. **Migration:** V2 bootstrap file `tools/v2/migrations/2024_crew_customer_sessions.sql`, loaded only by the checked V2 bootstrap like 2001. Next free number after this is 2025. **Base:** `v2/main`. **Builder:** a Claude thread, after Astra's verdict. **Planner:** Fable thread, 25 Nov 00:50 UK.
+**Tier:** RED (security boundary: sign-in, tenant isolation, customer access). **Astra first**, alongside V2-PX. **Migration:** V2 bootstrap file `tools/v2/migrations/2024_crew_customer_sessions.sql`, loaded only by the checked V2 bootstrap like 2001. Next free number after this is 2025. **Base:** `v2/main`. **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Planner:** Fable thread, 25 Nov 00:50 UK.
 
 ## Rules this piece must meet
 `reviews/v2/codex-queue/01-RULES.md` (rules 1 to 22) and `02-BUILD-RULES-CHECKLIST.md`, both on `claude/project-thread-cw5qv5`. Put a "Rules met" list in the PR body.

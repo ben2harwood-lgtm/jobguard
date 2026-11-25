@@ -1,6 +1,6 @@
 # Q32 · V2-B1B: the Walk screen, online first cut (batch C6)
 
-**Tier:** T1 (route plus screen over B1A's checked application; no migration). **Builder:** desktop Codex, lane A. No database is needed while building; the browser proof runs in CI or lane B. **Base:** B1A's branch `claude/project-thread-tjgrce` (#920). **Branch:** `codex/sandbox/v2-b1b`. **PR:** draft **into `v2/main`**, so CI1 runs. Say "Stacked on #920; review only the commits after its head". **Planner:** Fable thread, 25 Nov 16:00 UK. Use ★★, effort M, rework risk medium.
+**Tier:** T1 (route plus screen over B1A's checked application; no migration). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** B1A's branch `claude/project-thread-tjgrce` (#920). **Branch:** `codex/sandbox/v2-b1b`. **PR:** draft **into `v2/main`**, so CI1 runs. Say "Stacked on #920; review only the commits after its head". **Planner:** Fable thread, 25 Nov 16:00 UK. Use ★★, effort M, rework risk medium.
 
 ## Rules this piece must meet
 `01-RULES.md` (rules 1 to 28) and `02-BUILD-RULES-CHECKLIST.md`, with a "Rules met" list in the PR body. Rule 21 applies to the POST route. Rule 22 applies to the browser test.

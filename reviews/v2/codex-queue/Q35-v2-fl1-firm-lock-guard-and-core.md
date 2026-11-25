@@ -2,7 +2,7 @@
 
 > Q35 was split on 25 Nov 17:45 UK after its builder hit stop rule 3 (258 unlocked tables; report `/mnt/project-files/jobguard-v2/v2-fl-catalog-stop-2026-11-25.md`). **FL-1 carries the guard test and runs first.** FL-2 to FL-5 (Q36 to Q39) start as soon as FL-1's branch is pushed, and run in parallel. FL-F (Q40) reviews the definer functions.
 
-**Builder:** Claude Opus thread (it needs a live V2 database to build the guard). **Base:** PX branch #964 @ b1b0bf11, or v2/main once PX has merged. **Branch:** `codex/sandbox/v2-fl1`. The `codex/sandbox/v2-*` name matters, because it makes CI1 run on the stacked FL-2 to FL-5 PRs (ci.yml lines 138 to 142). **PR:** draft into v2/main. **Migration: 2047.** Planner: Fable thread.
+**Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** PX branch #964 @ b1b0bf11, or v2/main once PX has merged. **Branch:** `codex/sandbox/v2-fl1`. The `codex/sandbox/v2-*` name matters, because it makes CI1 run on the stacked FL-2 to FL-5 PRs (ci.yml lines 138 to 142). **PR:** draft into v2/main. **Migration: 2047.** Planner: Fable thread.
 
 ## FL-1 also builds the guard (the real fix)
 1. **Guard test** in the seed suite. It queries the catalog and fails when an `app` table with `tenant_id` + `job_id` (or an indirect table from the report's list) passes all three of these:
@@ -33,7 +33,7 @@
     Then run the **read checks** through `jobguard_runtime` with each firm's practice session. That's the proof that counts. Never add fixture rows in a migration, and never retarget a fenced function in an FL slice.
   - **Still stop and ask:** a lock that breaks an existing seed or main test, unless a V2-only policy fixes it (never change main's migrations, grants or RLS); or a table in your list that no longer matches the catalog.
 - **Not blocked on FL-F.** FL-2 to FL-5 resume now. They don't wait for the definer report.
-- RED (tenancy). Builder: Claude Opus thread for FL-1. FL-2 to FL-5 go to Codex (Ben, 25 Nov: keep Codex coding). Codex needs no live database while building: the migration is a list in 2001's pattern, and CI1's seed job is the proof. The checker is Claude (rule 27). Rules 1 to 29 apply. A "Rules met" list goes in the PR body, and a Codex review is required. The merge thread merges once CI is green and the review is clean.
+- RED (tenancy). Builder: Opus 5.5 (Ben, 25 Nov 19:53 UK).  Rules 1 to 29 apply. A "Rules met" list goes in the PR body, and a Codex review is required. The merge thread merges once CI is green and the review is clean.
 
 ## FL-1 table list (39 tables, all unlocked and runtime-readable in the report)
 - `app.customer_credit_note`

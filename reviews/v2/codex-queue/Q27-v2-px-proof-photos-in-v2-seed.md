@@ -1,6 +1,6 @@
 # Q27 · V2-PX: proof photos on the V2 practice database (batch C2)
 
-> **Released 25 Nov 16:00 UK (planner).** **Builder:** a Claude Opus thread. It must run the failing upload path on a live V2 database first (finding 1 below), so it isn't for Codex's sandbox. **Base:** `v2/main` @ 63f3af5ab or later. **Branch:** `claude/<thread>`. **PR:** draft into `v2/main`. **RED.** The web Codex plan check (7147269615) is binding. A fresh Claude RED plan check is requested on frm-management-layer#3. Build now; the PR isn't ready until that verdict lands. Rules 1 to 28 apply, with a "Rules met" list in the PR body. **Migration:** none expected. 2025 is reserved if one turns out to be needed; stop and say why first.
+> **Released 25 Nov 16:00 UK (planner).** **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** `v2/main` @ 63f3af5ab or later. **Branch:** `claude/<thread>`. **PR:** draft into `v2/main`. **RED.** The web Codex plan check (7147269615) is binding. A fresh Claude RED plan check is requested on frm-management-layer#3. Build now; the PR isn't ready until that verdict lands. Rules 1 to 28 apply, with a "Rules met" list in the PR body. **Migration:** none expected. 2025 is reserved if one turns out to be needed; stop and say why first.
 >
 > **Planner re-check against v2/main @ 63f3af5ab (rule 23):**
 > - `packages/db/src/practice-proof-image.ts`, `tools/v2/bootstrap.mjs`, `tools/v2/seed.mjs` and `tools/v2/seed.integration.test.mjs` all exist.

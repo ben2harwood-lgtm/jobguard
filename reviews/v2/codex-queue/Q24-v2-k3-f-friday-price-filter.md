@@ -1,6 +1,6 @@
 # Q24 · V2-K3-F: Friday update keeps measurements and times, still drops money
 
-**Tier:** T1 (one pure function and its unit tests). **Builder:** any Codex (desktop lane A when a slot frees, or web Codex). No database is needed: the tests are plain vitest. **Base:** `codex/sandbox/v2-k3` (#935). **Branch:** `codex/sandbox/v2-k3-f`. **PR:** draft into `codex/sandbox/v2-k3`. **Planner:** Fable thread, 25 Nov 14:55 UK. Use ★★, effort XS, rework risk low. The finding came from the Claude check of #942 (comment 7154552179).
+**Tier:** T1 (one pure function and its unit tests). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** `codex/sandbox/v2-k3` (#935). **Branch:** `codex/sandbox/v2-k3-f`. **PR:** draft into `codex/sandbox/v2-k3`. **Planner:** Fable thread, 25 Nov 14:55 UK. Use ★★, effort XS, rework risk low. The finding came from the Claude check of #942 (comment 7154552179).
 
 ## Rules this piece must meet
 `01-RULES.md` (rules 1 to 28) and `02-BUILD-RULES-CHECKLIST.md`, with a "Rules met" list in the PR body.

@@ -1,6 +1,6 @@
 # Q43 · V2-F1-P: attach a photo to Done, Blocked or Changed
 
-**Tier:** RED (proof photos). **Builder:** desktop Codex (lane A), per Ben 25 Nov. It needs no live database while building; CI1 is the proof. Checker: Claude (rule 27). **Base:** F1 #953 `codex/sandbox/v2-f1` @ 30fc44b81. **Branch:** `codex/sandbox/v2-f1p`. **PR:** draft into `codex/sandbox/v2-f1`. **Waits on:** PX #964 (@ dcd9236b6) only for its firm lock on evidence tables. If PX hasn't merged, say "pending V2-PX" in "Rules met", and don't merge before PX. **Migration: 2053** (next free becomes 2054). This replaces the roadmap's "none": F1's CHECK has to change. **Plan check:** Astra, frm-management-layer#3. Rules 1 to 29 apply. Planner: Fable thread, 25 Nov 18:15 UK.
+**Tier:** RED (proof photos). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** F1 #953 `codex/sandbox/v2-f1` @ 30fc44b81. **Branch:** `codex/sandbox/v2-f1p`. **PR:** draft into `codex/sandbox/v2-f1`. **Waits on:** PX #964 (@ dcd9236b6) only for its firm lock on evidence tables. If PX hasn't merged, say "pending V2-PX" in "Rules met", and don't merge before PX. **Migration: 2053** (next free becomes 2054). This replaces the roadmap's "none": F1's CHECK has to change. **Plan check:** Astra, frm-management-layer#3. Rules 1 to 29 apply. Planner: Fable thread, 25 Nov 18:15 UK.
 
 ## Dry-check against `codex/sandbox/v2-f1` @ 30fc44b81 (rule 23)
 - `packages/db/migrations/2015_v2_brief_progress.sql`:

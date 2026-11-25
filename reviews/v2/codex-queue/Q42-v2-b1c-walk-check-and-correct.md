@@ -1,6 +1,6 @@
 # Q42 · V2-B1C: check and correct the walk ("needs room" tray, re-file a photo, keep the original)
 
-**Tier:** RED (walk record is evidence). **Builder:** desktop Codex (lane A), per Ben 25 Nov (keep Codex coding). It needs no live database while building; CI1's seed job is the database proof. Checker: Claude (rule 27). **Base:** B1B #957 `codex/sandbox/v2-b1b` @ 2c20eb6db (it carries B1A's 2008). **Branch:** `codex/sandbox/v2-b1c`. **PR:** draft into `codex/sandbox/v2-b1b`; retarget when B1B merges. **Migration: 2029** (reserved in the roadmap). **Plan check:** Astra, frm-management-layer#3. Rules 1 to 29 apply, with a "Rules met" list. Planner: Fable thread, 25 Nov 18:10 UK.
+**Tier:** RED (walk record is evidence). **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** B1B #957 `codex/sandbox/v2-b1b` @ 2c20eb6db (it carries B1A's 2008). **Branch:** `codex/sandbox/v2-b1c`. **PR:** draft into `codex/sandbox/v2-b1b`; retarget when B1B merges. **Migration: 2029** (reserved in the roadmap). **Plan check:** Astra, frm-management-layer#3. Rules 1 to 29 apply, with a "Rules met" list. Planner: Fable thread, 25 Nov 18:10 UK.
 
 Plan text (rev 1.3, b1c): "Unclear links are flagged. Imported photos wait in 'needs room'. Corrections keep the original and the revision."
 

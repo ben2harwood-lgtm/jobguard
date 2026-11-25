@@ -1,6 +1,6 @@
 # Q40 · V2-FL-F: which SECURITY DEFINER functions can cross firms on V2
 
-**Tier:** RED (tenancy), report first. **Builder:** desktop Codex (lane A; no web Codex runner, 25 Nov), reading code and the catalog report. The checker is Claude. **Base:** `codex/sandbox/v2-fl1`. **Migration:** none in this piece. Any fix becomes its own packet. Planner: Fable thread.
+**Tier:** RED (tenancy), report first. **Builder:** Opus 5.5 thread (Ben, 25 Nov 19:53 UK: Opus builds and repairs, Codex only checks). **Base:** `codex/sandbox/v2-fl1`. **Migration:** none in this piece. Any fix becomes its own packet. Planner: Fable thread.
 
 ## Why
 The Q35 catalog run found **294 SECURITY DEFINER functions in `app` granted to `jobguard_runtime`** (list at the end of `/mnt/project-files/jobguard-v2/v2-fl-catalog-stop-2026-11-25.md`). A definer function runs as its owner, so a `v2_practice_firm` policy `TO jobguard_runtime` doesn't apply inside it. If V2 calls one that reads or writes job rows by tenant only, firm B could reach firm A's job, whatever the FL locks say.

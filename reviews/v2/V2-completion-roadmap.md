@@ -136,3 +136,6 @@ Ben, 17:38 UK: from now on, plan checks go to Astra on frm-management-layer#3, n
 5. Real-phone runs: his iPhone, around 4 Dec, about an hour with a script. Android not yet tested.
 6. Big ideas A, C, D, E, F: all later, after V2.
 7. Next templates: bathroom refresh and single-room decorating, built around 5 Dec after H1 passes (data files plus one worked test each, no new code).
+
+## Change, 25 Nov 19:53 UK: Opus builds, Codex checks
+Ben: "I want Opus 5.5 to do the coding and Codex to do the checking." This supersedes the 17:38 "keep Codex coding" note and the lane A/W split. Every piece is built and repaired by an Opus 5.5 thread, and Codex reviews it. Open Codex-built PRs get Opus repair threads, and rounds already used still count.
