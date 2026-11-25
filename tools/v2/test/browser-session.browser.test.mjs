@@ -60,9 +60,11 @@ for (const width of [360, 1280]) {
 
 test("BH1 signs in ten times on one stack without a navigation race", { timeout: 1_200_000 }, async t => {
   for (let run = 1; run <= 10; run++) {
-    // Respect the real 60-second resend and ten-requests-per-ten-minutes limits,
-    // including the setup sign-in above; never bypass or retry a failed sign-in.
-    await setTimeout(61_000);
+    // Respect the real 60-second resend and ten-requests-per-ten-minutes limits
+    // (per address and per IP), never bypassing or retrying a failed sign-in.
+    // 67 s keeps at most eight earlier codes in any ten-minute window, leaving
+    // room for the setup sign-in and the launcher's own seeded request.
+    await setTimeout(67_000);
     await t.test(`signInOnce run ${run}/10`, { timeout: 120_000 }, async () => {
       const result = await signInOnce(countedBrowser);
       assert.equal(result.origin, session.origin);
