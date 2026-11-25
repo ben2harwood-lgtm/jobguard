@@ -1,15 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import type { WorkPlan as SavedPlan, WorkPlanEdit } from "@jobguard/db";
 import { Card, Empty, Note, Tag, shortDate } from "../../../designed-ui";
 import { JOB_SAVED_EVENT } from "../../../../ui/job-page-fetch";
 
-type PlanView = Pick<SavedPlan, "state" | "tasks" | "quoteRevisionId" | "version" | "changes"> & {
-  acceptanceCancelled: boolean;
-  unplanned: (SavedPlan["unplanned"][number] & { key: string })[];
+// The work-plan route's JSON, as this card reads it. Client code keeps server packages out.
+type Task = {
+  key: string; scopeItemId: string; title: string; trade: string; durationMinutes: number; position: number;
+  scheduledDate?: string | null; assignee?: string | null; needsReview?: true;
 };
-type Task = PlanView["tasks"][number];
+type PlanView = {
+  state: "draft" | "accepted" | "live"; tasks: Task[]; quoteRevisionId: string; version: number;
+  changes: { added: Task[]; changed: { before: Task; after: Task }[]; removed: Task[] };
+  acceptanceCancelled: boolean;
+  unplanned: { scopeItemId: string; title: string; key: string }[];
+};
+type TaskChanges = Partial<Pick<Task, "position" | "durationMinutes" | "trade" | "scheduledDate" | "assignee">>;
 type EditableTask = Pick<Task, "title" | "key" | "scopeItemId"> &
   Partial<Pick<Task, "trade" | "position" | "durationMinutes" | "scheduledDate" | "assignee">>;
 type Problem = { message: string; reload?: boolean };
@@ -28,7 +34,7 @@ async function requestPlan<T>(path: string, body?: unknown): Promise<T> {
   return data;
 }
 
-function editFields(event: FormEvent<HTMLFormElement>): WorkPlanEdit["changes"] {
+function editFields(event: FormEvent<HTMLFormElement>): TaskChanges {
   const fields = new FormData(event.currentTarget);
   return {
     position: Number(fields.get("position")),
@@ -41,7 +47,7 @@ function editFields(event: FormEvent<HTMLFormElement>): WorkPlanEdit["changes"] 
 
 function TaskForm({ task, positions, busy, save, cancel }: {
   task: EditableTask; positions: number; busy: boolean;
-  save: (changes: WorkPlanEdit["changes"]) => void; cancel: () => void;
+  save: (changes: TaskChanges) => void; cancel: () => void;
 }) {
   return <form className="form" onSubmit={event => { event.preventDefault(); save(editFields(event)); }}>
     <fieldset disabled={busy} className="field-pair" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
@@ -118,7 +124,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
     window.location.reload();
   }
 
-  async function save(task: EditableTask, changes: WorkPlanEdit["changes"]) {
+  async function save(task: EditableTask, changes: TaskChanges) {
     if (!plan || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
