@@ -22,9 +22,10 @@ export class SiteDaySummaryRepository {
         SELECT v.id AS "variationId",v.description,v.created_at AS at FROM app.variation v
         WHERE (v.tenant_id,v.job_id)=($1,$2) AND v.existing_scope_item_id IS NULL AND v.created_at>=$3 AND v.created_at<$4`, keys);
       // Goods receipts always point at a supplier document, so the delivery document is the one cited.
+      // Only ready documents count: a held (quarantined) duplicate is under review, not another delivery.
       const deliveries = await db.$client.query<{ kind: "delivery_document"; sourceId: string; label: string; at: Date }>(`
         SELECT 'delivery_document' AS kind,d.id AS "sourceId",d.supplier_context||coalesce(' '||d.document_number,'') AS label,d.created_at AS at
-        FROM app.supplier_document d WHERE (d.tenant_id,d.job_id)=($1,$2) AND d.document_type='delivery' AND d.created_at>=$3 AND d.created_at<$4`, keys);
+        FROM app.supplier_document d WHERE (d.tenant_id,d.job_id)=($1,$2) AND d.document_type='delivery' AND d.status='ready' AND d.created_at>=$3 AND d.created_at<$4`, keys);
       const photos = await db.$client.query<{ evidenceId: string; evidenceType: string; scopeItemId: string | null; at: Date }>(`
         SELECT e.id AS "evidenceId",e.evidence_type AS "evidenceType",e.scope_item_id AS "scopeItemId",e.server_verified_at AS at
         FROM app.evidence_object e WHERE (e.tenant_id,e.job_id)=($1,$2) AND e.kind='original' AND e.content_type LIKE 'image/%'

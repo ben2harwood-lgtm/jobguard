@@ -53,9 +53,9 @@ it("never shows another job's or another tenant's rows", async () => {
   expect(await repository.sources(other, b.jobId, window)).toEqual({ workDone: [], issues: [], deliveries: [], photos: [] });
 });
 
-async function delivery(tenantId: string, jobId: string, at: string, number: string) {
+async function delivery(tenantId: string, jobId: string, at: string, number: string, held = false) {
   const id = randomUUID();
-  await workTenant(f.admin, tenantId, db => db.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status,created_at) VALUES($1,$2,$3,'fictional-merchant','delivery',$4,$5,'ready',$6)", [id, tenantId, jobId, number, randomUUID().replaceAll("-", "").padEnd(64, "0"), at]));
+  await workTenant(f.admin, tenantId, db => db.query("INSERT INTO app.supplier_document(id,tenant_id,job_id,supplier_context,document_type,document_number,content_hash,status,hold_reason,created_at) VALUES($1,$2,$3,'fictional-merchant','delivery',$4,$5,$6,$7,$8)", [id, tenantId, jobId, number, randomUUID().replaceAll("-", "").padEnd(64, "0"), held ? "held" : "ready", held ? "Merchant review: changed delivery" : null, at]));
   return id;
 }
 
@@ -65,6 +65,7 @@ it("moves activity at 18:00 UK time to the next day, across the March clock chan
   expect(day.closesAt).toBe("2026-03-29T17:00:00.000Z");
   const before = "2026-03-29T16:59:59.999Z", atSix = "2026-03-29T17:00:00.000Z";
   const lateDelivery = await delivery(a.tenantId, a.jobId, before, "DN-1"), nextDelivery = await delivery(a.tenantId, a.jobId, atSix, "DN-2");
+  await delivery(a.tenantId, a.jobId, before, "DN-1", true); // a held duplicate is not another delivery
   const latePhoto = await photo(a.tenantId, a.jobId, a.scopeItemId, before), nextPhoto = await photo(a.tenantId, a.jobId, a.scopeItemId, atSix);
   const variationId = randomUUID(), scopeItemId = randomUUID();
   await withTenant(f.runtime, a.context, db => insertVariationProposal(db, a.tenantId, { version: "variation-proposal.v1", id: variationId, jobId: a.jobId, scopeItemId, existingScopeItemId: null, lineageParentScopeItemId: null, captureKind: "text", captureText: "Fictional new socket", description: "Fictional new socket", suggestion: null }));
