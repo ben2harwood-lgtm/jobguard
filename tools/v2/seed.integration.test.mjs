@@ -1593,27 +1593,6 @@ test("F1 refuses a press on a brief the plan has outdated since it loaded, then 
   assert.equal((await progressEvents(saved.commandId)).length, 1);
 });
 
-// V2-F1: preserve the existing job-stage boundary and historical reads.
-test("F1 refuses non-live and closed job presses without rows or audit", async () => {
-  const owner = await signIn("builder");
-  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
-  const view = await app.briefProgress.read(jobId);
-  const brief = view.briefs.find(item => item.trade === "tiler");
-  const { draftJob } = await draftForPlan();
-  const nonlive = progressCommand(brief, brief.content.tasks[0], { expectedVersion: 4 });
-  await assert.rejects(app.briefProgress.record(draftJob, nonlive), { code: "JOB_NOT_LIVE" });
-  assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [nonlive.commandId])).rowCount, 0);
-  const state = await app.workState.get(jobId);
-  await app.workState.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(), action: "close",
-    expectedRevision: (state.events.at(-1)?.sequence ?? 0) + state.links.length,
-    reason: "cancelled_by_customer", note: "F1 fictional closing fixture" });
-  const closed = progressCommand(brief, brief.content.tasks[0], { expectedVersion: 4 });
-  await assert.rejects(app.briefProgress.record(jobId, closed), { message: "JOB_WORK_CLOSED" });
-  assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [closed.commandId])).rowCount, 0);
-  assert.deepEqual(await progressEvents(closed.commandId), []);
-  assert.deepEqual((await app.briefProgress.read(jobId)).progress, view.progress);
-});
-
 // V2-F1-P own block: migration rerun preserves all grants and policies.
 test("F1-P migration 2053 reruns without changing grants or policies", async () => {
   const catalog = () => admin.query(`SELECT c.relname,c.relacl::text,c.relrowsecurity,c.relforcerowsecurity,
@@ -1630,13 +1609,10 @@ test("F1-P migration 2053 reruns without changing grants or policies", async () 
   assert.match(fk.rows[0].definition, /FOREIGN KEY \(tenant_id, photo_reference\) REFERENCES app.evidence_upload\(tenant_id, id\)/u);
 });
 
-// V2-F1-P own block: use F1's existing shared session and job, reopened through its command.
+// V2-F1-P own block: reuse F1's live job before its closing-boundary test below.
 test("F1-P photo upload and all progress kinds: audit, replay, live state, isolation and rollback", async () => {
   const owner = await signIn("builder"), outsider = await signIn("second-builder");
   const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
-  const state = await app.workState.get(jobId);
-  await app.workState.command(jobId, { version: "job-work-state-command.v1", action: "reopen", commandId: randomUUID(), closeEventId: state.events.findLast(event => event.kind === "closed").id,
-    expectedRevision: (state.events.at(-1)?.sequence ?? 0) + state.links.length });
   const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
   const { context: foreignContext } = await authenticatePracticeSession(runtime, outsider.sessionId);
   const view = await app.briefProgress.read(jobId), brief = view.briefs.find(item => item.trade === "tiler");
@@ -1730,6 +1706,27 @@ test("F1-P photo upload and all progress kinds: audit, replay, live state, isola
   const legacy = await app.briefProgress.record(jobId, progressCommand(brief, task, { expectedVersion: await next() }));
   assert.equal(legacy.photoReference, null);
   await verifyTenantChain(context.tenantId);
+});
+
+// V2-F1: preserve the existing job-stage boundary and historical reads.
+test("F1 refuses non-live and closed job presses without rows or audit", async () => {
+  const owner = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const view = await app.briefProgress.read(jobId);
+  const brief = view.briefs.find(item => item.trade === "tiler");
+  const { draftJob } = await draftForPlan();
+  const nonlive = progressCommand(brief, brief.content.tasks[0], { expectedVersion: 4 });
+  await assert.rejects(app.briefProgress.record(draftJob, nonlive), { code: "JOB_NOT_LIVE" });
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [nonlive.commandId])).rowCount, 0);
+  const state = await app.workState.get(jobId);
+  await app.workState.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(), action: "close",
+    expectedRevision: (state.events.at(-1)?.sequence ?? 0) + state.links.length,
+    reason: "cancelled_by_customer", note: "F1 fictional closing fixture" });
+  const closed = progressCommand(brief, brief.content.tasks[0], { expectedVersion: 4 });
+  await assert.rejects(app.briefProgress.record(jobId, closed), { message: "JOB_WORK_CLOSED" });
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [closed.commandId])).rowCount, 0);
+  assert.deepEqual(await progressEvents(closed.commandId), []);
+  assert.deepEqual((await app.briefProgress.read(jobId)).progress, view.progress);
 });
 
 });
