@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-f6ux": {
+      "branches": [
+        "codex/sandbox/v2-f6ux"
+      ],
+      "allow": [
+        "apps/web/app/customer/change/[capability]/view.tsx",
+        "apps/web/app/v2/jobs/[id]/extra-links/view.tsx",
+        "apps/web/app/v2-extra-links-ux.test.tsx"
+      ],
+      "note": "Q25 V2-F6-UX T1: refusal re-read and per-link photo selection reset; router-provided branch spelling."
+    }
+  }
+}
