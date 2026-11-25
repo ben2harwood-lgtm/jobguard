@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { resolveVerifiedTenantContext } from "@jobguard/api/identity";
 import { FridayUpdateApplication, fridayCommandV1, fridayQueryV1 } from "@jobguard/api/workspace";
-import { FridayUpdateError } from "@jobguard/db";
+import { fridayMessage, fridayWeekLabel, FridayUpdateError } from "@jobguard/db";
 import { identityApplication, identityCredentials } from "./identity-server";
 import { syntheticPool } from "./synthetic-server";
 const headers = { "Cache-Control": "no-store" };
@@ -25,11 +25,14 @@ export async function fridayUpdateRequest(request: Request, jobId: string) {
     const application = new FridayUpdateApplication(syntheticPool(), (await cookies()).get("jg_session")?.value);
     if (request.method === "GET") {
       const query = fridayQueryV1.parse(Object.fromEntries(new URL(request.url).searchParams));
-      return NextResponse.json({ snapshot: await application.read(jobId, query), csrfToken: session.csrfToken }, { headers });
+      const snapshot = await application.read(jobId, query);
+      return NextResponse.json({ snapshot, message: snapshot ? fridayMessage(snapshot) : null,
+        weekLabel: fridayWeekLabel(query.week), csrfToken: session.csrfToken }, { headers });
     }
     if (new URL(request.url).search) throw new Error("INVALID_INPUT");
     const command = fridayCommandV1.parse(await request.json());
-    return NextResponse.json({ snapshot: await application.command(jobId, command) }, { headers });
+    const snapshot = await application.command(jobId, command);
+    return NextResponse.json({ snapshot, message: fridayMessage(snapshot), weekLabel: fridayWeekLabel(snapshot.week) }, { headers });
   } catch (error) {
     const typed = error as { code?: string; name?: string; message?: string };
     const conflict = error instanceof FridayUpdateError && ["FRIDAY_CONFLICT", "FRIDAY_STALE", "FRIDAY_PREPARE_REQUIRED"].includes(error.code);

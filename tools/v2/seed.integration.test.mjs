@@ -810,7 +810,8 @@ test("K3 prepares from scheduled plan work, edits persisted text and sends one e
   } });
   const edited = (await post(edit)).snapshot;
   assert.equal(edited.contentVersion, prepared.contentVersion + 1);
-  assert.deepEqual((await json(await request(path + `?week=${fridayWeek}`, { cookies }))).snapshot, edited);
+  const preview = await json(await request(path + `?week=${fridayWeek}`, { cookies }));
+  assert.deepEqual(preview.snapshot, edited);
   assert.deepEqual(await updates.read(context, jobId, fridayWeek), edited);
   const send = fridayCommand("send", edited.sequence, { contentHash: edited.contentHash });
   const [first, duplicate] = await Promise.all([post(send), post(send)]);
@@ -822,6 +823,9 @@ test("K3 prepares from scheduled plan work, edits persisted text and sends one e
   const { rows: inbox } = await admin.query(`SELECT content,catcher_message,recipient FROM app.v2_friday_update
     WHERE job_id=$1 AND week=$2 AND action='send'`, [jobId, fridayWeek]);
   assert.equal(inbox.length, 1);
+  assert.equal(preview.message, inbox[0].catcher_message, "Customer preview equals the stored sent message");
+  assert.equal(first.message, inbox[0].catcher_message);
+  assert.match(preview.message, /week of Monday 23 November 2026/u);
   assert.deepEqual(inbox[0].content, edit.content);
   assert.equal(inbox[0].recipient, "customer@jobguard-v2.invalid");
   assert.match(inbox[0].catcher_message, /Splashback prepared and tiled\./u);

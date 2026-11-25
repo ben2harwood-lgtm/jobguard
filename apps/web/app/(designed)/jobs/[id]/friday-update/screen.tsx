@@ -13,6 +13,8 @@ function thisMonday() {
 export function FridayUpdateScreen({ jobId }: { jobId: string }) {
   const [week, setWeek] = useState(thisMonday);
   const [snapshot, setSnapshot] = useState<FridaySnapshot | null>(null);
+  const [message, setMessage] = useState("");
+  const [weekLabel, setWeekLabel] = useState("");
   const [csrf, setCsrf] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
@@ -26,11 +28,11 @@ export function FridayUpdateScreen({ jobId }: { jobId: string }) {
   const url = `/api/jobs/${jobId}/friday-update`;
   useEffect(() => {
     let current = true;
-    setBusy(true); setError(""); setSnapshot(null); setEditing(false); setPreview(false); pending.current = null;
+    setBusy(true); setError(""); setSnapshot(null); setMessage(""); setWeekLabel(""); setEditing(false); setPreview(false); pending.current = null;
     fetch(`${url}?week=${week}`, { cache: "no-store" }).then(async response => {
       if (!response.ok) throw new Error("Update unavailable. Check that you are signed in to the practice workspace.");
       const data = await response.json();
-      if (current) { setSnapshot(data.snapshot); setCsrf(data.csrfToken); }
+      if (current) { setSnapshot(data.snapshot); setMessage(data.message ?? ""); setWeekLabel(data.weekLabel); setCsrf(data.csrfToken); }
     }).catch(cause => { if (current) setError(cause.message); }).finally(() => { if (current) setBusy(false); });
     return () => { current = false; };
   }, [url, week]);
@@ -49,7 +51,8 @@ export function FridayUpdateScreen({ jobId }: { jobId: string }) {
         pending.current = null;
         throw new Error(response.status === 409 ? "This update changed. Reload to review the current version." : "Update refused. Check the week starts on Monday and leave amounts out of the text.");
       }
-      setSnapshot((await response.json()).snapshot); setEditing(false); pending.current = null;
+      const data = await response.json();
+      setSnapshot(data.snapshot); setMessage(data.message); setWeekLabel(data.weekLabel); setEditing(false); pending.current = null;
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Update unavailable. Retry the same action."); }
     finally { setBusy(false); }
   }
@@ -65,11 +68,17 @@ export function FridayUpdateScreen({ jobId }: { jobId: string }) {
   return <Shell workspace={null} title="Friday update" subtitle="Customer update" active="jobs">
     <Head kicker="Customer update" title="Friday update" text="Review the scheduled work and edit the wording to say what actually happened."/>
     <div className="form" data-testid="friday-update">
+      <style jsx>{`
+        [data-testid="friday-update"] button { min-height: 44px; }
+      `}</style>
       <Note>{notice}</Note>
       <a className="btn" href={`/jobs/${jobId}/overview`}>Back to job</a>
       <label>Week starting Monday<input type="date" value={week} disabled={busy || !!pending.current} onChange={event => setWeek(event.target.value)}/></label>
       {error && <div ref={errorRef} tabIndex={-1} role="alert"><Note tone="warning">{error}</Note></div>}
-      {preview ? <Card title="Your Friday update" sub={`Week of ${week}`}><div className="card-body form"><button className="btn" onClick={() => setPreview(false)}>Back to editing</button></div></Card> : <Card title="Friday update" sub={snapshot ? `Week of ${week} · to ${snapshot.recipient}` : `Week of ${week}`}
+      {preview ? <Card title="Your Friday update"><div className="card-body form">
+        <pre data-testid="customer-message" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", font: "inherit", margin: 0 }}>{message}</pre>
+        <button className="btn" onClick={() => setPreview(false)}>Back to editing</button>
+      </div></Card> : <Card title="Friday update" sub={snapshot ? `Week of ${weekLabel} · to ${snapshot.recipient}` : weekLabel ? `Week of ${weekLabel}` : ""}
         action={<Tag tone={snapshot?.sentAt ? "green" : "amber"}>{snapshot?.sentAt ? "Sent to practice inbox" : "Not sent"}</Tag>}>
         <div className="card-body form">
           <p>Nothing is sent until you press Send. Practice inbox only.</p>
@@ -87,7 +96,7 @@ export function FridayUpdateScreen({ jobId }: { jobId: string }) {
           </>}
         </div>
       </Card>}
-      {snapshot && <>
+      {snapshot && !preview && <>
         {(["thisWeek", "nextWeek"] as const).map(key => <Fragment key={key}><Card title={key === "thisWeek" ? "This week" : "Next week"}>
           <div className="card-body">
             {editing ? <label>{key === "thisWeek" ? "This week text" : "Next week text"}<textarea disabled={busy || !!pending.current} value={lines[key]} onChange={event => change(key, event.target.value)} maxLength={12000}/></label>

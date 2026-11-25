@@ -26,7 +26,8 @@ beforeEach(() => {
   state.authenticate.mockResolvedValue(Object.defineProperty({ identityUserId: tenant, sessionId: job, csrfToken: csrf }, "sessionCredential",
     { value: createHmac("sha256", "fictional-test-secret").update("session").digest("hex") }));
   state.findMembership.mockResolvedValue({ id: tenant, tenantId: tenant, identityUserId: tenant, role: "owner" });
-  state.command.mockResolvedValue({ sequence: 1 }); state.read.mockResolvedValue(null);
+  state.command.mockResolvedValue({ sequence: 1, week: body.week,
+    content: { schema: "friday-content.v1", thisWeek: ["Tile the splashback"], nextWeek: [], photos: [] } }); state.read.mockResolvedValue(null);
 });
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllEnvs(); });
 describe("V2-K3 route origin and identity", () => {
@@ -34,6 +35,17 @@ describe("V2-K3 route origin and identity", () => {
     const result = await fridayUpdateRequest(request(), job);
     expect(result.status).toBe(200); expect(result.headers.get("cache-control")).toBe("no-store");
     expect(state.command).toHaveBeenCalledWith(job, body);
+  });
+  it("returns the same customer text for saved GET and send responses", async () => {
+    const snapshot = { sequence: 2, week: "2027-01-11", content: {
+      schema: "friday-content.v1", thisWeek: ["Splashback tiled."], nextWeek: ["Grout the splashback."], photos: [],
+    } };
+    state.read.mockResolvedValue(snapshot); state.command.mockResolvedValue(snapshot);
+    const saved = await (await fridayUpdateRequest(new Request(`https://phone.invalid/api/jobs/${job}/friday-update?week=2027-01-11`), job)).json();
+    const sent = await (await fridayUpdateRequest(request(), job)).json();
+    expect(saved.message).toBe(sent.message);
+    expect(saved.weekLabel).toBe("Monday 11 January 2027");
+    expect(saved.message).toBe("Practice sandbox — synthetic data; nothing is sent or charged\nYour Friday update · week of Monday 11 January 2027\nThis week\nSplashback tiled.\nPhotos\nNo photos this week.\nNext week\nGrout the splashback.");
   });
   it.each([null, "https://foreign.invalid", "http://127.0.0.1:3400"])("refuses origin %s even with forged forwarded headers", async origin => {
     expect((await fridayUpdateRequest(request(origin, { "x-forwarded-host": "phone.invalid", "x-forwarded-proto": "https" }), job)).status).toBe(404);

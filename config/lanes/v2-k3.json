@@ -17,6 +17,7 @@
         "apps/web/app/lib/v2-friday-update-server.test.ts",
         "apps/web/app/lib/v2-friday-update-server.ts",
         "apps/web/playwright.v2-k3.config.ts",
+        "apps/web/next.config.mjs",
         "apps/web/v2-browser/friday-update.browser.ts",
         "packages/db/migration-notes/2021_v2_friday_update.md",
         "packages/db/migrations/2021_v2_friday_update.sql",

@@ -23,6 +23,11 @@ describe("V2-K3 safe customer content", () => {
     expect(fridayContentFromPlan(week, privatePair)).toEqual(fridayContentFromPlan(week, safe));
     expect(fridayMessage({ week, content: fridayContentFromPlan(week, privatePair) })).not.toMatch(/private|hidden|other-job|999/);
   });
+  it("writes the customer's week in plain UK words independent of timezone", () => {
+    const message = fridayMessage({ week: "2027-01-11", content: fridayContentFromPlan("2027-01-11", []) });
+    expect(message).toContain("Your Friday update · week of Monday 11 January 2027");
+    expect(message).not.toContain("2027-01-11");
+  });
   it("has identical empty wording regardless of excluded private data", () => {
     expect(fridayMessage({ week, content: fridayContentFromPlan(week, []) })).toContain("No photos this week.");
     expect(fridayContentFromPlan(week, [{ title: "£500", scheduledDate: week }])).toEqual(fridayContentFromPlan(week, []));

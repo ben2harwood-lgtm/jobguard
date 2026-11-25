@@ -37,9 +37,14 @@ export function fridayContentFromPlan(week: string, tasks: readonly { title: str
     .flatMap(task => line.safeParse(task.title).success ? [task.title] : []).slice(0, 30);
   return fridayContentV1.parse({ schema: "friday-content.v1", thisWeek: titles(start, next), nextWeek: titles(next, end), photos: [] });
 }
+export function fridayWeekLabel(week: string) {
+  fridayQueryV1.parse({ week });
+  return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+    .format(new Date(week + "T00:00:00Z")).replace(",", "");
+}
 export function fridayMessage(snapshot: Pick<FridaySnapshot, "content" | "week">) {
   const content = fridayContentV1.parse(snapshot.content);
-  return ["Practice sandbox — synthetic data; nothing is sent or charged", `Your Friday update · week of ${snapshot.week}`,
+  return ["Practice sandbox — synthetic data; nothing is sent or charged", `Your Friday update · week of ${fridayWeekLabel(snapshot.week)}`,
     "This week", ...(content.thisWeek.length ? content.thisWeek : [fridayEmpty.thisWeek]),
     "Photos", fridayEmpty.photos, "Next week", ...(content.nextWeek.length ? content.nextWeek : [fridayEmpty.nextWeek])].join("\n");
 }
