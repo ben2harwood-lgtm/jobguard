@@ -33,6 +33,11 @@ export function needsRoom(entries: readonly EntryView[]) {
     (entry.link === "no_room" || entry.link === "waiting" || entry.clock.flagged));
 }
 
+// B1C: a photo filed under a room belongs to that room's summary, like a linked one.
+export function roomSummaryEntries(entries: readonly EntryView[], roomName: string | null | undefined) {
+  return entries.filter(entry => (entry.link === "linked" || entry.link === "filed") && entry.linkedRoom === roomName);
+}
+
 export function filingLabel(entry: EntryView) {
   return entry.link === "filed"
     ? `Filed under ${entry.linkedRoom} (taken in ${entry.originalLinkedRoom ?? "no room"})`

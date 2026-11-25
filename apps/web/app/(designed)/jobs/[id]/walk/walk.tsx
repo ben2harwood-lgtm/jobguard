@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { WalkEntryCommand, WalkPhotoFilingCommand, WalkSessionCommand } from "@jobguard/api/workspace";
 import { Card, Note, Tag } from "../../../designed-ui";
-import { currentRoom, filingLabel, needsRoom, newEntry, validMeasurement, type EntryBody, type EntryView, type SessionView } from "./walk-state";
+import { currentRoom, filingLabel, needsRoom, roomSummaryEntries, newEntry, validMeasurement, type EntryBody, type EntryView, type SessionView } from "./walk-state";
 
 type Pending = ({ action: "start" } & WalkSessionCommand) | ({ action: "record" } & WalkEntryCommand) | ({ action: "file" } & WalkPhotoFilingCommand);
 
@@ -111,7 +111,7 @@ export function Walk({ jobId }: { jobId: string }) {
   const pendingEntry = pending?.action === "record" ? pending : null;
   const roomNames = [...new Set(entries.filter(entry => entry.kind === "room").map(entry => entry.room!))];
   const roomName = pendingEntry?.entry.kind === "room" ? pendingEntry.entry.room : activeRoom?.room;
-  const roomEntries = entries.filter(entry => entry.link === "linked" && entry.linkedRoom === roomName);
+  const roomEntries = roomSummaryEntries(entries, roomName);
 
   return <section aria-label="Walk the job" className="form">
     <h2>Walk the job</h2>

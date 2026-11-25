@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { needsRoom, filingLabel, currentRoom, newEntry, nextCaptureOrder, validMeasurement, type EntryView } from "./walk-state";
+import { needsRoom, filingLabel, roomSummaryEntries, currentRoom, newEntry, nextCaptureOrder, validMeasurement, type EntryView } from "./walk-state";
 
 const row = (captureOrder: number, room: string, deviceCapturedAt: string) =>
   ({ captureOrder, room, kind: "room", deviceCapturedAt } as EntryView);
@@ -36,5 +36,11 @@ describe("B1C needs-room helpers", () => {
     expect(filingLabel({ ...photo("filed"), originalLinkedRoom: "Kitchen" }))
       .toBe("Filed under Hall (taken in Kitchen)");
     expect(filingLabel(photo("waiting"))).toBe("Room link needs checking");
+  });
+  it("puts filed photos in their destination room's summary and keeps unfiled ones out", () => {
+    const rows = [photo("linked"), photo("filed"), { ...photo("filed"), linkedRoom: "Kitchen" } as EntryView,
+      photo("no_room"), photo("waiting")];
+    expect(roomSummaryEntries(rows, "Hall")).toEqual(rows.slice(0, 2));
+    expect(roomSummaryEntries(rows, "Kitchen")).toEqual([rows[2]]);
   });
 });
