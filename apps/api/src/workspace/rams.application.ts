@@ -1,13 +1,13 @@
 import type { Pool } from "pg";
 import { PracticeAccessError, RamsRepository, RamsError, WorkPlanRepository, ramsCommandV1,
-  ramsWarning, ramsReadyToSign } from "@jobguard/db";
+  JobRepository, JobPartiesRepository, ramsWarning, ramsReadyToSign } from "@jobguard/db";
 import { PracticeAccess } from "../practice-access.js";
 
 export class RamsApplication {
   private readonly access: PracticeAccess;
   private readonly plans: WorkPlanRepository;
   private readonly drafts: RamsRepository;
-  constructor(pool: Pool, private readonly sessionId?: string) {
+  constructor(private readonly pool: Pool, private readonly sessionId?: string) {
     this.access = new PracticeAccess(pool, sessionId);
     this.plans = new WorkPlanRepository(pool);
     this.drafts = new RamsRepository(pool);
@@ -19,11 +19,16 @@ export class RamsApplication {
     return this.access.job(jobId);
   }
   async read(jobId: string) {
-    const { context } = await this.authorize(jobId);
+    const { context, membershipId, digest } = await this.authorize(jobId);
+    const job = await new JobRepository(this.pool).readWorkspace(context, ["job:view"], jobId);
+    const parties = await new JobPartiesRepository(this.pool).view(context, membershipId, jobId, digest);
+    const site = parties.current?.site;
+    const address = site ? [...site.addressLines, site.town, site.postcode].filter(Boolean).join(", ") : "Site address not recorded";
     const plan = await this.plans.open(context, jobId);
     const drafts = await this.drafts.read(context, jobId);
     const latest = drafts.at(-1);
     return { canSign: !!latest && latest.status === "draft" && ramsReadyToSign(latest.sections), version: "rams-screen.v1" as const, environment: "synthetic_demo" as const, warning: ramsWarning,
+      job: { title: job.title, address },
       plan: { quoteRevisionId: plan.quoteRevisionId, planVersion: plan.version }, drafts };
   }
   async command(jobId: string, raw: unknown) {

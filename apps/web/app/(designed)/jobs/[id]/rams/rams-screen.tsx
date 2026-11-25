@@ -5,7 +5,10 @@ import type { RamsDraft } from "@jobguard/db";
 import { DesignedJob } from "../../../jobs-screens";
 import { Card, Empty, Note, Tag } from "../../../designed-ui";
 
+const signedDate = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/London" });
+
 const problem: Record<string, string> = {
+  FORBIDDEN: "You cannot save this change. Reload the page and check that you are signed in.",
   RAMS_INCOMPLETE: "Complete the missing sections and review every flagged change before signing.",
   RAMS_PLAN_CHANGED: "The plan has changed. Generate a new draft and check the sections before signing.",
   RAMS_VERSION_CONFLICT: "This draft changed in another window. Reload it before continuing.",
@@ -14,6 +17,7 @@ const problem: Record<string, string> = {
 
 export function RamsScreen({ jobId }: { jobId: string }) {
   const [screen, setScreen] = useState<Screen | null>(null);
+  const [csrfToken, setCsrfToken] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
   const [editor, setEditor] = useState<{ key: string; text: string } | null>(null);
   const [name, setName] = useState("");
@@ -27,6 +31,9 @@ export function RamsScreen({ jobId }: { jobId: string }) {
     const response = await fetch(path, { cache: "no-store" });
     if (!response.ok) throw new Error("The safety draft could not be loaded. Your saved versions are unchanged.");
     const data: Screen = await response.json();
+    const session = await fetch("/api/auth/session", { cache: "no-store" });
+    if (!session.ok) throw new Error("Sign in again to edit this safety draft.");
+    setCsrfToken((await session.json()).csrfToken);
     setScreen(data);
     return data;
   }, [path]);
@@ -47,7 +54,7 @@ export function RamsScreen({ jobId }: { jobId: string }) {
     }
     setBusy(true); setError("");
     try {
-      const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json" },
+      const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
         body: JSON.stringify({ ...payload, commandId: pending.current!.commandId }) });
       const saved = await response.json() as RamsDraft & { code?: string };
       if (!response.ok) throw new Error(problem[saved.code ?? ""] ?? "The change was not saved. Check the connection and retry.");
@@ -79,9 +86,10 @@ export function RamsScreen({ jobId }: { jobId: string }) {
         <h1>Risk assessment, method statement and construction phase plan</h1>
         <p className="rams-warning">{screen?.warning}</p>
         <p>Practice sandbox — synthetic data; nothing is sent or charged</p>
-        <p>Job reference: {jobId}</p>
+        <p>{screen?.job.title}</p>
+        <p>{screen?.job.address}</p>
         <p>Version {draft.documentVersion} · <Tag>{draft.status === "signed" ? "Signed — read-only" : "Draft — check before use"}</Tag></p>
-        <p>Plan revision: {draft.quoteRevisionId} · plan edit version {draft.planVersion}</p>
+        <p>Based on work plan version {draft.planVersion}</p>
         {stale && <Note tone="warning">The plan has changed. Generate a new draft. This saved version is unchanged.</Note>}
         {draft.sections.map(section => <Card key={section.key} title={section.heading}
           action={!readOnly && <button className="btn rams-controls" disabled={busy} onClick={() => setEditor({ key: section.key, text: section.text })}>Edit {section.heading}</button>}>
@@ -95,7 +103,7 @@ export function RamsScreen({ jobId }: { jobId: string }) {
           </div>}
         </Card>)}
         <section><h2>Builder signature</h2>
-          <p>{draft.signedBy ? `Signed by ${draft.signedName} (membership ${draft.signedBy}) at ${draft.signedAt}` : "Not signed — builder must check and complete this draft."}</p>
+          <p>{draft.signedBy ? `Signed by ${draft.signedName} on ${signedDate.format(new Date(draft.signedAt!))}` : "Not signed — builder must check and complete this draft."}</p>
           {!readOnly && <div className="rams-controls">
             <label>Your name<input value={name} maxLength={100} onChange={event => setName(event.target.value)}/></label>
             <label><input type="checkbox" checked={checked} onChange={event => setChecked(event.target.checked)}/> I have checked every section and completed the site-specific assessment.</label>

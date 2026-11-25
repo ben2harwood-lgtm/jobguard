@@ -31,7 +31,8 @@
         "apps/api/src/workspace/rams.controller.ts",
         "apps/api/src/app.module.ts",
         "apps/api/openapi.json",
-        "apps/api/src/workspace/rams.controller.test.ts"
+        "apps/api/src/workspace/rams.controller.test.ts",
+        "apps/web/next.config.mjs"
       ]
     }
   }
