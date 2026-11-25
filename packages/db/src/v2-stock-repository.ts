@@ -84,7 +84,7 @@ export class StockRepository {
       }
       const lines = active.map(line => {
         const basis = bases.get(key(line));
-        const since = basis?.since;
+        const since = basis?.product != null && basis.packSize != null ? basis.since : null;
         const receipts = since == null ? [] : deliveries.filter(delivery => delivery.scopeItemId === line.scopeItemId &&
           delivery.lineKey === line.lineKey && delivery.materialLineRevision >= since &&
           delivery.materialLineRevision < line.version).map(delivery => delivery.packsReceived);

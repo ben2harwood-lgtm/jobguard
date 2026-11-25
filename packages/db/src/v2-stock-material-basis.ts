@@ -18,7 +18,6 @@ function packQuantity(value: string) {
 export function nextStockMaterialBasis(prior: StockMaterialBasis | undefined, changes: StockMaterialChanges, revision: number): StockMaterialBasis {
   const product = changes.product === undefined ? prior?.product ?? null : changes.product;
   const packSize = changes.packSize === undefined ? prior?.packSize ?? null : changes.packSize;
-  const complete = product !== null && packSize !== null;
   const productChanged = prior?.product != null && prior.product !== product;
   const packChanged = prior?.packSize != null && (packSize === null || prior.packSize.unit !== packSize.unit ||
     packQuantity(prior.packSize.quantity) !== packQuantity(packSize.quantity));
@@ -31,7 +30,9 @@ export function nextStockMaterialBasis(prior: StockMaterialBasis | undefined, ch
   if (!replaced && entered !== undefined && (stockOnly || entered !== prior?.lastEnteredSetAside)) {
     confirmedSetAside = entered;
   }
-  const since = complete ? (replaced ? revision : prior?.since ?? revision) : null;
+  // A receipt may precede the first complete pack. An entirely unidentified line
+  // establishes no identity; clearing or replacing a known component starts a new one.
+  const since = product === null && packSize === null ? null : replaced ? revision : prior?.since ?? revision;
   return { product, packSize, since,
     confirmedSetAside, lastEnteredSetAside: entered ?? prior?.lastEnteredSetAside ?? "0" };
 }
