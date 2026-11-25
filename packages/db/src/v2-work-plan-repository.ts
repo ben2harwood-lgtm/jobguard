@@ -95,6 +95,14 @@ export class WorkPlanRepository {
     });
   }
 
+  // V2-E5A: read-only. The current effective plan in the caller's transaction, or null if none exists yet.
+  // Unlike open(), it never generates a plan, so it writes nothing and appends no audit event.
+  async readCurrent(client: PoolClient, tenantId: string, jobId: string) {
+    const head = await this.planHead(client, tenantId, jobId);
+    if (!head?.quoteRevisionId) return null;
+    return this.readPlan(client, [tenantId, jobId, head.quoteRevisionId], head);
+  }
+
   // Called inside quote save, under the same draft lock and before the audit append.
   async refreshDraft(client: PoolClient, key: PlanKey, previousRevisionId: string) {
     const prior = await this.planRow(client, [key[0], key[1], previousRevisionId]);

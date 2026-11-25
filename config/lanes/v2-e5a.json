@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-e5a": {
+      "branches": ["claude/project-thread-aurk3j"],
+      "note": "T1. Q02 V2-E5A part 1: read-only same-firm double-booking check (crew record + date), no table, no command. The Plan-screen warning (E5A-2) follows after c4 #903 merges.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/api/src/workspace/plan-clashes.application.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/plan-clashes/route.test.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/plan-clashes/route.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-plan-clashes.test.ts",
+        "packages/db/src/v2-plan-clashes.ts",
+        "packages/db/src/v2-work-plan-repository.ts",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

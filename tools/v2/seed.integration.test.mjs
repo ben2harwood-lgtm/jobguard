@@ -343,8 +343,8 @@ test("forced work plan policies isolate the second firm's real and shared practi
 const planQuery = { version: "work-plan-query.v1" };
 const customTaskKey = "custom-scope-item";
 
-async function draftForPlan() {
-  const { sessionId, realContext } = await signIn("builder");
+async function draftForPlan(localPart = "builder") {
+  const { sessionId, realContext } = await signIn(localPart);
   const { capture, quote, workPlan } = createWorkspaceApplication({ pool: runtime, sessionId });
   const categories = ["Tiling", "Decorating", "Joinery", "Metalwork"];
   const descriptions = ["Tile the kitchen", "Decorate the hall", "Fit a shelf", "Repair a rail"];
@@ -1256,4 +1256,78 @@ test("C3C: an old free-text edit keeps its saved changes, audit hash and replay"
     createHash("sha256").update(JSON.stringify(sorted)).digest("hex"));
   assert.equal(event.payload.references.changedFields, "assignee/durationMinutes");
   assert.deepEqual(await edit(command), receipt, "the old command still replays");
+});
+
+// V2-E5A (Q02 part 1): same-firm double-booking check. Read-only: matches on the crew record only.
+const clashApp = sessionId => createWorkspaceApplication({ pool: runtime, sessionId }).planClashes;
+const jobTitle = async id => (await admin.query("SELECT title FROM app.job WHERE id = $1", [id])).rows[0].title;
+const writeCounts = async () => (await admin.query(`SELECT (SELECT count(*)::int FROM app.audit_event) AS events,
+  (SELECT count(*)::int FROM app.v2_work_plan) AS plans, (SELECT count(*)::int FROM app.v2_work_plan_edit) AS edits`)).rows[0];
+async function bookedPlan(crewId, date, localPart = "builder") {
+  const draft = await draftForPlan(localPart);
+  const plan = await draft.read();
+  const [task] = plan.tasks;
+  await draft.edit(planEdit(plan, task, { assigneeRef: crewId }));
+  await draft.edit(planEdit(await draft.read(), task, { scheduledDate: date }));
+  return { ...draft, task };
+}
+
+test("E5A: one crew record booked on the same day on two jobs reports the clash on both; moving a day clears it", async () => {
+  const { sessionId } = await signIn("builder");
+  const tiler = await crewApp(sessionId).record(crewCommand({ displayName: "Tia Fictional" }));
+  const first = await bookedPlan(tiler.crewId, "2027-03-01");
+  const second = await bookedPlan(tiler.crewId, "2027-03-01");
+  const clashes = clashApp(sessionId);
+  const before = await writeCounts();
+  const forFirst = await clashes.read(first.draftJob);
+  const forSecond = await clashes.read(second.draftJob);
+  assert.deepEqual(await writeCounts(), before, "the check writes nothing and appends no audit event");
+  assert.deepEqual(forFirst, { version: "v2-plan-clashes.v1", jobId: first.draftJob, tasks: [{ scopeItemId: first.task.scopeItemId,
+    taskKey: first.task.key, scheduledDate: "2027-03-01", clashes: [{ jobTitle: await jobTitle(second.draftJob), scheduledDate: "2027-03-01" }] }] });
+  assert.deepEqual(forSecond.tasks.map(task => [task.scopeItemId, task.taskKey, task.clashes]), [[second.task.scopeItemId,
+    second.task.key, [{ jobTitle: await jobTitle(first.draftJob), scheduledDate: "2027-03-01" }]]]);
+  assert.doesNotMatch(JSON.stringify(forFirst), new RegExp(`${second.draftJob}|${tiler.crewId}|Tia`, "u"),
+    "the other job is named by title and date only");
+
+  await second.edit(planEdit(await second.read(), second.task, { scheduledDate: "2027-03-02" }));
+  assert.deepEqual((await clashes.read(first.draftJob)).tasks, []);
+  assert.deepEqual((await clashes.read(second.draftJob)).tasks, []);
+});
+
+test("E5A: free text never matches, and the check never creates a plan", async () => {
+  const { sessionId } = await signIn("builder");
+  const fresh = await draftForPlan();
+  const plans = async () => (await admin.query("SELECT count(*)::int AS count FROM app.v2_work_plan WHERE job_id = $1",
+    [fresh.draftJob])).rows[0].count;
+  assert.deepEqual((await clashApp(sessionId).read(fresh.draftJob)).tasks, []);
+  assert.equal(await plans(), 0, "reading clashes before the Plan screen opens generates nothing");
+  // Two jobs with the same typed name on the same day: no crew record, so no clash.
+  for (const draft of [fresh, await draftForPlan()]) {
+    const plan = await draft.read();
+    await draft.edit(planEdit(plan, plan.tasks[0], { assignee: "Tia Fictional" }));
+    await draft.edit(planEdit(await draft.read(), plan.tasks[0], { scheduledDate: "2027-03-05" }));
+  }
+  assert.deepEqual((await clashApp(sessionId).read(fresh.draftJob)).tasks, []);
+});
+
+test("E5A: the second firm's same-named crew on the same day gives no clash and no data", async () => {
+  const owner = await signIn("builder");
+  const outsider = await signIn("second-builder");
+  const mine = await crewApp(owner.sessionId).record(crewCommand({ displayName: "Tia Fictional" }));
+  const theirs = await crewApp(outsider.sessionId).record(crewCommand({ displayName: "Tia Fictional" }));
+  const ours = await bookedPlan(mine.crewId, "2027-03-10");
+  const other = await bookedPlan(theirs.crewId, "2027-03-10", "second-builder");
+  assert.deepEqual((await clashApp(owner.sessionId).read(ours.draftJob)).tasks, []);
+  assert.deepEqual((await clashApp(outsider.sessionId).read(other.draftJob)).tasks, []);
+  // The second firm cannot read the first firm's job through the check at all.
+  await assert.rejects(clashApp(outsider.sessionId).read(ours.draftJob), { code: "NOT_FOUND" });
+  // Even with a raw query in its own firm context, none of the first firm's plan edits are visible.
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { rowCount } = await withTenant(runtime, context, db => db.$client.query(
+    "SELECT FROM app.v2_work_plan_edit WHERE job_id = $1", [ours.draftJob]));
+  assert.equal(rowCount, 0);
+  // A second booking in the first firm still clashes, so the empty result above is the firm boundary, not a miss.
+  const again = await bookedPlan(mine.crewId, "2027-03-10");
+  assert.deepEqual((await clashApp(owner.sessionId).read(ours.draftJob)).tasks[0].clashes,
+    [{ jobTitle: await jobTitle(again.draftJob), scheduledDate: "2027-03-10" }]);
 });
