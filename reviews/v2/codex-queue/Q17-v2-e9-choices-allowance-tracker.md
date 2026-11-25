@@ -4,7 +4,7 @@
 
 Tier: **RED** (money). Migration **2022**. Astra: yes. Usefulness **very high**, effort **M**. Rework risk: **high** (E1 is in review).
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-e9, section 2B item 17.
-**Starts:** now. **Base:** E1's branch `claude/project-thread-vur4ba` (#919). Draft PR against it. It drafts extras through the variation path already on the base, so it does not wait for F3.
+**Starts:** PARKED (25 Nov 01:10 UK, planner miss, out of rounds; Ben decides on another round). Restart from the corrected section below. Was: now. **Base:** E1's branch `claude/project-thread-vur4ba` (#919). Draft PR against it. It drafts extras through the variation path already on the base, so it does not wait for F3.
 
 
 > **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
@@ -22,12 +22,13 @@ The variation command is main's live money path. **Do not extract, refactor or e
 - `approve` needs the exact current priced revision, and a rejected variation can't be approved.
 
 **Design.**
-1. **Deterministic ids.** Derive them with UUID v5 from a fixed E9 namespace:
-   - `proposalId = v5(tenant, choice id, choice version, "excess")`
-   - `revisionId = v5(proposalId, "price")`
-   - `rejectionId = v5(proposalId, "superseded")`
-
-   The same choice version always produces the same draft. A retry replays and never creates a second one.
+1. **Deterministic ids, matching the real contract (corrected 25 Nov 01:10 UK).**
+   - **The miss.** `propose`'s strict schema (`apps/api/src/variation/contracts.ts` line 4) has **no** `revisionId`. When `propose` carries a price, `logBuilderExtra` makes the priced revision with `randomUUID()` (`variation-repository.ts` line 182). So an E9-chosen revision id can't ride on `propose`.
+   - **Step a, propose unpriced.** Call `propose` with `proposalId = v5(tenant, choice id, choice version, "excess")` and **`price: null`**. This creates an unpriced draft, and the `command_receipt` on `proposalId` makes a retry replay.
+   - **Step b, price it with revise.** Call `revise` with `variationId = proposalId`, `revisionId = v5(proposalId, "price")`, `expectedRevisionId: null` and the excess price. `revise` already takes a client-chosen `revisionId`, and an exact committed revise replays: the application returns early when the committed revision matches.
+   - **Rejection id.** `rejectionId = v5(proposalId, "superseded")`, used with the variation's **current** revision id, read back through the existing variation read and never assumed.
+   - **The intent row** records which step is done: `proposed`, `priced`, `withdrawn`. Reconcile resumes from the last step (rule 3 below).
+   - **Before building, the builder checks** that `revise` with `expectedRevisionId: null` is accepted on an unpriced builder-logged draft on v2/main, using a seed test. If it isn't, stop at round 1 and report (rule 23). Do not price through `propose`.
 2. **Intent first.** E9's own transaction saves the choice version plus an intent row `(choice version, action propose|withdraw, variation id, state pending)` and its audit event, then commits. Only then does it call the variation command. A second E9 transaction marks the intent `done`.
 3. **Reconcile on every read and command.** Any `pending` intent is finished before anything else:
    - variation exists and matches → mark the intent done;
@@ -45,7 +46,7 @@ The variation command is main's live money path. **Do not extract, refactor or e
 - after propose;
 - before the intent is marked done.
 
-Each must end, after a retry or read, with exactly one variation, one receipt and one audit event per step. Also test:
+Also force a failure between propose and revise. Each must end, after a retry or read, with exactly one variation, one priced revision (id `v5(proposalId, "price")`), one receipt and one audit event per step. Also test:
 - over → equal after a draft exists: the draft is rejected and can't be approved;
 - the builder approves, then the choice changes: the approval stands, the warning shows, and there is no second draft;
 - an id clash with different content refuses;
