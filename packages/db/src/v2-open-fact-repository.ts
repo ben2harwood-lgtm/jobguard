@@ -194,12 +194,18 @@ export class OpenFactRepository {
     });
   }
 
-  async command(context: VerifiedTenantContext, jobId: string, sessionId: string, input: OpenFactCommand) {
+  command(context: VerifiedTenantContext, jobId: string, sessionId: string, input: OpenFactCommand) {
+    return withTenant(this.pool, context, database => this.commandIn(database, context, jobId, sessionId, input));
+  }
+
+  // The same command inside a transaction the caller already holds (E2 applies a reply and records it atomically).
+  async commandIn(database: TenantTransaction, context: VerifiedTenantContext, jobId: string, sessionId: string,
+    input: OpenFactCommand) {
     const parsed = openFactCommandV1.safeParse(input);
     if (!parsed.success) throw new OpenFactError("OPEN_FACT_INVALID_COMMAND");
     const command = parsed.data;
     const digest = digestOf(jobId, command);
-    return withTenant(this.pool, context, async database => {
+    {
       const { $client } = database;
       const credential = createHash("sha256").update(sessionId).digest("hex");
       const { rows: [actor] } = await $client.query<{ id: string | null }>(
@@ -222,7 +228,7 @@ export class OpenFactRepository {
       const raced = await this.replay($client, context.tenantId, jobId, command.commandId, actor.id, digest);
       if (raced) return raced;
       throw new OpenFactError("OPEN_FACT_VERSION_CONFLICT");
-    });
+    }
   }
 
   // References and hashes only: no question, answer, owner name or other free text enters the chain.

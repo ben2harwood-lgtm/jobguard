@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-e2": {
+      "branches": [
+        "claude/project-thread-49qd38"
+      ],
+      "note": "RED. V2 replies: ask the customer, merchant or crew one open question by a no-sign-in link (local catcher only), paste a reply heard by phone, and let the builder apply a reply to the E1 fact. Practice only: .invalid contacts recorded by the builder. The validator includes config/lanes/v2-e2.json implicitly. Stacked on v2-e1 (claude/project-thread-vur4ba). packages/db/src/v2-open-fact-repository.ts: extract commandIn only, owned by E1 #919, no behaviour change. apps/web/app/(designed)/jobs/[id]/work/page.tsx: mount only, owned by main (live Work tab).",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/fact-reply.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
+        "apps/web/app/api/jobs/[id]/fact-replies/route.test.ts",
+        "apps/web/app/api/jobs/[id]/fact-replies/route.ts",
+        "apps/web/app/api/v2/replies/route.test.ts",
+        "apps/web/app/api/v2/replies/route.ts",
+        "apps/web/app/lib/v2-fact-reply-server.ts",
+        "apps/web/app/reply/[token]/page.tsx",
+        "apps/web/app/reply/[token]/view.tsx",
+        "apps/web/app/ui/v2-fact-replies.test.tsx",
+        "apps/web/app/ui/v2-fact-replies.tsx",
+        "packages/db/migration-notes/2013_v2_fact_reply.md",
+        "packages/db/migrations/2013_v2_fact_reply.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-fact-reply-repository.ts",
+        "packages/db/src/v2-open-fact-repository.ts",
+        "packages/db/test/migration-proofs/2013_v2_fact_reply.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/fact-replies.browser.test.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
