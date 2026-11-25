@@ -37,7 +37,7 @@ test.beforeAll(async ({ browser }) => {
       });
       if (!response.ok) throw new Error(`practice:${response.status}`);
     }, csrfToken);
-    const { DEMO_TENANT_ID } = await import("../../../packages/db/dist/index.js");
+    const { DEMO_TENANT_ID } = await import("@jobguard/db");
     const jobs = await page.evaluate(async tenantId => {
       const response = await fetch(`/api/jobs?tenantId=${tenantId}`);
       if (!response.ok) throw new Error(`jobs:${response.status}`);
@@ -72,7 +72,7 @@ for (const width of [360, 1280]) test(`K3 preview/edit/send survives reload at $
     await main.getByRole("button", { name: "Edit text", exact: true }).click();
     await main.getByLabel("This week text").fill("Splashback prepared and tiled.");
     await main.getByLabel("Next week text").fill("Grout the splashback.");
-    for (const button of await main.getByRole("button").all())
+    for (const button of await main.getByTestId("friday-update").getByRole("button").all())
       expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await main.getByRole("button", { name: "Save text", exact: true }).click();
     await expect(main.getByText("Splashback prepared and tiled.", { exact: true })).toBeVisible();
@@ -94,7 +94,7 @@ for (const width of [360, 1280]) test(`K3 preview/edit/send survives reload at $
     await main.getByRole("button", { name: "Back to editing", exact: true }).click();
     const send = main.getByRole("button", { name: "Send update", exact: true });
     await send.focus(); await expect(send).toBeFocused();
-    for (const button of await main.getByRole("button").all())
+    for (const button of await main.getByTestId("friday-update").getByRole("button").all())
       expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     const [sent] = await Promise.all([
       page.waitForResponse(response => response.url().endsWith(`/api/jobs/${jobId}/friday-update`) && response.request().method() === "POST"),
