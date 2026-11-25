@@ -1687,9 +1687,11 @@ test("F1-P photo upload and all progress kinds: audit, replay, live state, isola
   await assert.rejects(foreign.briefProgress.read(jobId), { code: "NOT_FOUND" });
   await assert.rejects(foreign.briefProgress.uploadPhoto(jobId, photo), { code: "NOT_FOUND" });
   for (const scope of [outsider.realContext, foreignContext]) {
-    for (const table of ["v2_brief_progress", "evidence_upload", "synthetic_evidence_original"]) {
-      assert.equal((await withTenant(runtime, scope, db => db.$client.query(`SELECT * FROM app.${table} WHERE job_id=$1`, [jobId]))).rowCount, 0);
-    }
+    // On this base evidence_upload and synthetic_evidence_original carry tenant-only policies, so the second
+    // firm's shared-tenant scope can read their rows. Their firm lock and its read proof come with PX #964
+    // (tools/v2/test/practice-photo.mjs); F1-P must not merge before PX. Here only the progress rows are proved.
+    assert.equal((await withTenant(runtime, scope, db => db.$client.query(
+      "SELECT * FROM app.v2_brief_progress WHERE job_id=$1", [jobId]))).rowCount, 0, "v2_brief_progress");
     try {
       const changed = await withTenant(runtime, scope, db => db.$client.query(
         "UPDATE app.evidence_upload SET state='rejected' WHERE tenant_id=$1 AND id=$2", [DEMO_TENANT_ID,uploaded.uploadId]));
@@ -1722,7 +1724,11 @@ test("F1 refuses non-live and closed job presses without rows or audit", async (
   await app.workState.command(jobId, { version: "job-work-state-command.v1", commandId: randomUUID(), action: "close",
     expectedRevision: (state.events.at(-1)?.sequence ?? 0) + state.links.length,
     reason: "cancelled_by_customer", note: "F1 fictional closing fixture" });
-  const closed = progressCommand(brief, brief.content.tasks[0], { expectedVersion: 4 });
+  // F1-P's block runs first and adds rows for this task, so read the current version rather than a literal.
+  const task = brief.content.tasks[0];
+  const current = Math.max(0, ...(await app.briefProgress.read(jobId)).progress
+    .filter(row => row.trade === brief.trade && row.scopeItemId === task.scopeItemId && row.taskKey === task.taskKey).map(row => row.version));
+  const closed = progressCommand(brief, task, { expectedVersion: current });
   await assert.rejects(app.briefProgress.record(jobId, closed), { message: "JOB_WORK_CLOSED" });
   assert.equal((await admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [closed.commandId])).rowCount, 0);
   assert.deepEqual(await progressEvents(closed.commandId), []);
