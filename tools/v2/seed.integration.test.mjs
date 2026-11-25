@@ -57,6 +57,14 @@ async function openSession(localPart) {
   const { memberships } = await json(await request("/api/auth/session", { cookies: signedIn }));
   assert.equal(memberships.length, 1);
   assert.equal(memberships[0].role, "owner");
+  return {
+    ...await enterPractice(signedIn, csrfToken), signedIn, csrfToken,
+    realContext: await identity.context({ sessionToken: signedIn.slice("jobguard_session=".length),
+      requestedTenantId: memberships[0].tenantId, csrfToken, origin }),
+  };
+}
+
+async function enterPractice(signedIn, csrfToken) {
   const practice = await request("/api/auth/practice", {
     cookies: signedIn, csrf: csrfToken, body: { version: "linked-practice-company.v1", action: "enter" },
   });
@@ -65,8 +73,6 @@ async function openSession(localPart) {
   return {
     cookies: [signedIn, ...practice.headers.getSetCookie().map(cookie => cookie.split(";", 1)[0])].join("; "),
     sessionId: sessionCookie.split(";", 1)[0].slice("jg_session=".length),
-    realContext: await identity.context({ sessionToken: signedIn.slice("jobguard_session=".length),
-      requestedTenantId: memberships[0].tenantId, csrfToken, origin }),
   };
 }
 
@@ -87,6 +93,7 @@ const counts = async () => (await admin.query(`SELECT
 let jobId;
 before(async () => {
   await verifyDatabaseTarget(admin, systemId, embedded);
+  process.env.JOBGUARD_LOCAL_V2 = "1";
   const proposals = await admin.query(`SELECT job_id, model FROM app.job_record_proposal`);
   assert.equal(proposals.rowCount, 1);
   assert.equal(proposals.rows[0].model, "fixture-capture-v1");
@@ -330,6 +337,286 @@ test("forced work plan policies isolate the second firm's real and shared practi
   assert.deepEqual(await planCounts(source.quoteRevisionId), [1, 4]);
 });
 
+const planQuery = { version: "work-plan-query.v1" };
+const customTaskKey = "custom-scope-item";
+
+async function draftForPlan() {
+  const { sessionId, realContext } = await signIn("builder");
+  const { capture, quote, workPlan } = createWorkspaceApplication({ pool: runtime, sessionId });
+  const categories = ["Tiling", "Decorating", "Joinery", "Metalwork"];
+  const descriptions = ["Tile the kitchen", "Decorate the hall", "Fit a shelf", "Repair a rail"];
+  const saved = await capture.create({
+    contractVersion: "job_capture_v1", requested_tenant_id: DEMO_TENANT_ID, captureId: randomUUID(),
+    fixtureId: "v2-c2-draft-editing",
+    source: { kind: "text", text: ["JOB: Plan a fictional renovation",
+      ...descriptions.map(description => `ITEM: ${description} | QTY: 1 | UNIT: item | RATE: £95.00`)].join("\n") },
+  });
+  const draftJob = saved.jobId;
+  const review = await capture.save(draftJob, {
+    contractVersion: "proposal_review_command_v1", expectedRevision: 0,
+    review: {
+      version: "proposal_review_v1", jobId: draftJob, proposalId: saved.proposalId, reviewId: saved.reviewId,
+      revision: 0,
+      questions: saved.proposal.questions.map(({ question }) => ({
+        id: randomUUID(), question: question.value, blocking: true, disposition: "answered",
+        answer: "The fictional builder will clear the work area.",
+      })),
+      lines: saved.proposal.lines.map((line, index) => ({
+        id: line.id, scopeItemId: line.scopeItemId, origin: "proposal", description: line.description.value,
+        room: "Hall", category: categories[index], quantity: line.quantity.value, unit: line.unit.value,
+        unitPricePence: line.unitPricePence.value, disposition: "accepted",
+        dismissalReason: null, parentScopeItemIds: [], sourceExcerpt: line.sourceExcerpt,
+      })),
+    },
+  });
+  await capture.confirm(draftJob, {
+    contractVersion: "proposal_review_confirm_v1", commandId: randomUUID(), expectedRevision: review.review.revision,
+  });
+  const { scope } = await quote.get(draftJob);
+  const lines = descriptions.map((description, index) => ({
+    ...scope.find(line => line.description === description), id: randomUUID(), origin: "captured",
+    included: true, exclusionReason: null, discountPercent: "0", taxTreatment: M1_QUOTE_POLICY.taxTreatment,
+    rateProvenance: "entered", category: categories[index], region: null,
+  }));
+  const draftId = randomUUID();
+  const save = (expectedRevision, nextLines = lines) => quote.save(draftJob, {
+    contractVersion: "quote_draft_command_v1", draftId, expectedRevision, lines: nextLines,
+    currency: M1_QUOTE_POLICY.currency, taxPolicyVersion: M1_QUOTE_POLICY.taxPolicyVersion,
+  });
+  await save(0);
+  const read = () => workPlan.read(draftJob, planQuery);
+  const edit = command => workPlan.edit(draftJob, command);
+  return { draftJob, realContext, sessionId, lines, save, read, edit };
+}
+
+function planEdit(plan, task, changes) {
+  return { version: "work-plan-edit.v1", commandId: randomUUID(), quoteRevisionId: plan.quoteRevisionId,
+    expectedVersion: plan.version, scopeItemId: task.scopeItemId, taskKey: task.key, changes };
+}
+
+test("a custom task is ordered and edited tasks survive a fresh signed-in session", async () => {
+  const { draftJob, realContext, lines, read, edit } = await draftForPlan();
+  const [,, shelf, rail] = lines;
+  const plan = await read();
+  assert.equal(plan.version, 0);
+  assert.deepEqual(plan.unplanned, [shelf, rail].map(line => ({
+    scopeItemId: line.scopeItemId, title: line.description, status: "Unplanned",
+  })));
+  const task = plan.tasks[2];
+  const command = planEdit(plan, task, { position: 1, trade: "painter", durationMinutes: 77 });
+  const receipt = await edit(command);
+  const { rows: [actor] } = await admin.query(`
+    SELECT id FROM app.membership WHERE tenant_id = $1 AND role = 'owner'
+  `, [realContext.tenantId]);
+  assert.equal(receipt.actorMembershipId, actor.id);
+  assert.equal(receipt.commandId, command.commandId);
+  assert.equal(receipt.version, 1);
+  assert.ok(receipt.recordedAt instanceof Date);
+  const custom = planEdit(await read(), { scopeItemId: shelf.scopeItemId, key: customTaskKey },
+    { position: 2, trade: "joiner", durationMinutes: 45 });
+  await assert.rejects(edit({ ...custom, changes: { trade: "joiner" } }), { code: "WORK_PLAN_INVALID_EDIT" });
+  await edit(custom);
+  const current = await read();
+  assert.deepEqual(current.tasks.slice(0, 2).map(({ key, position, trade, durationMinutes }) =>
+    ({ key, position, trade, durationMinutes })), [
+    { key: task.key, position: 1, trade: "painter", durationMinutes: 77 },
+    { key: customTaskKey, position: 2, trade: "joiner", durationMinutes: 45 },
+  ]);
+  assert.deepEqual(current.unplanned.map(item => [item.scopeItemId, item.status]), [[rail.scopeItemId, "Unplanned"]]);
+
+  const owner = await signIn("builder");
+  const fresh = await enterPractice(owner.signedIn, owner.csrfToken);
+  assert.notEqual(fresh.sessionId, owner.sessionId);
+  const reopened = new Pool({ connectionString: settings.DATABASE_URL, max: 1 });
+  try {
+    const { workPlan } = createWorkspaceApplication({ pool: reopened, sessionId: fresh.sessionId });
+    assert.deepEqual(await workPlan.read(draftJob, planQuery), current);
+    assert.deepEqual(await workPlan.edit(draftJob, command), receipt);
+  } finally {
+    await reopened.end();
+  }
+});
+
+test("a draft quote save refreshes the plan, records all task changes and keeps clashing edits for review", async () => {
+  const { draftJob, lines, save, read, edit } = await draftForPlan();
+  const [tile, hall, shelf, rail] = lines;
+  const plan = await read();
+  const tilingTask = plan.tasks.find(task => task.scopeItemId === tile.scopeItemId);
+  const hallTask = plan.tasks.find(task => task.scopeItemId === hall.scopeItemId);
+  const tilingEdit = planEdit(plan, tilingTask, { durationMinutes: 77, trade: "specialist tiler" });
+  const receipt = await edit(tilingEdit);
+  await edit(planEdit(await read(), hallTask, { durationMinutes: 51 }));
+  await edit(planEdit(await read(), { scopeItemId: shelf.scopeItemId, key: customTaskKey },
+    { position: 2, trade: "joiner", durationMinutes: 40 }));
+  const beforeSave = await counts();
+  const quoteLines = [{ ...tile, description: "Tile the kitchen and upstand", quantity: "2" },
+    { ...hall, included: false, exclusionReason: "Builder removed this work" }, shelf, { ...rail, category: "Decorating" }];
+  const revision = await save(1, quoteLines);
+  const nextId = revision.draft.currentRevisionId;
+  assert.deepEqual(await planCounts(nextId), [1, 4], "the quote save persisted the refresh before a plan read");
+  const refreshed = await read();
+  assert.equal(refreshed.jobId, draftJob);
+  assert.equal(refreshed.quoteRevisionId, nextId);
+  assert.equal(refreshed.version, 0);
+  assert.deepEqual(refreshed.changes.added.map(task => task.scopeItemId), [rail.scopeItemId, rail.scopeItemId]);
+  assert.deepEqual(refreshed.changes.removed.map(task => task.scopeItemId), [hall.scopeItemId, hall.scopeItemId]);
+  assert.equal(refreshed.changes.removed.find(task => task.key === hallTask.key).needsReview, true);
+  const changed = refreshed.changes.changed.find(change => change.after.key === tilingTask.key);
+  assert.equal(changed.beforeScope.description, tile.description);
+  assert.equal(changed.afterScope.description, quoteLines[0].description);
+  const carried = refreshed.tasks.find(task => task.key === tilingTask.key);
+  assert.equal(carried.durationMinutes, 77);
+  assert.equal(carried.trade, "specialist tiler");
+  assert.equal(carried.needsReview, true);
+  assert.deepEqual(refreshed.tasks.find(task => task.key === customTaskKey), {
+    key: customTaskKey, scopeItemId: shelf.scopeItemId, title: shelf.description, position: 2,
+    trade: "joiner", durationMinutes: 40, dependsOn: [], materialNeeds: [], proofPoints: [], customerChoices: [],
+  });
+  assert.deepEqual(await edit(tilingEdit), receipt, "a replay after regeneration returns the original receipt");
+  await assert.rejects(edit({ ...tilingEdit, commandId: randomUUID() }), { code: "WORK_PLAN_VERSION_CONFLICT" });
+  assert.deepEqual(await read(), refreshed);
+  assert.equal((await counts()).sends, beforeSave.sends);
+  const { rows: [{ paid }] } = await admin.query(`SELECT count(*)::int AS paid
+    FROM app.job_record_proposal WHERE model IS DISTINCT FROM 'fixture-capture-v1'`);
+  assert.equal(paid, 0);
+});
+
+test("concurrent edits refuse stale versions and exact retries have one effect", async () => {
+  const { read, edit } = await draftForPlan();
+  const plan = await read();
+  const command = planEdit(plan, plan.tasks[0], { durationMinutes: 77 });
+  const conflict = planEdit(plan, plan.tasks[0], { durationMinutes: 88 });
+  const [recorded, replayed] = await Promise.all([edit(command), edit(command)]);
+  assert.deepEqual(recorded, replayed);
+  await assert.rejects(edit(conflict), { code: "WORK_PLAN_VERSION_CONFLICT" });
+  await assert.rejects(edit({ ...command, changes: conflict.changes }), { code: "WORK_PLAN_COMMAND_CONFLICT" });
+  const subsequentRace = await read();
+  const outcomes = await Promise.allSettled([
+    edit(planEdit(subsequentRace, plan.tasks[0], { durationMinutes: 99 })),
+    edit(planEdit(subsequentRace, plan.tasks[0], { durationMinutes: 111 })),
+  ]);
+  assert.equal(outcomes.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal(outcomes.find(result => result.status === "rejected").reason.code, "WORK_PLAN_VERSION_CONFLICT");
+  const current = await read();
+  assert.equal(current.version, 2);
+  const { rows: [{ count }] } = await admin.query(
+    "SELECT count(*)::int AS count FROM app.v2_work_plan_edit WHERE quote_revision_id = $1", [plan.quoteRevisionId],
+  );
+  assert.equal(count, 2);
+});
+
+test("forced draft edit policies hide receipts and reject writes from the second firm", async () => {
+  const { draftJob, read, edit } = await draftForPlan();
+  const plan = await read();
+  const command = planEdit(plan, plan.tasks[0], { durationMinutes: 77 });
+  const receipt = await edit(command);
+  const outsider = await signIn("second-builder");
+  const { workPlan } = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId });
+  await assert.rejects(workPlan.read(draftJob, planQuery), { code: "NOT_FOUND" });
+  await assert.rejects(workPlan.edit(draftJob, command), { code: "NOT_FOUND" });
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { rows: [acl] } = await admin.query(`SELECT
+    relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+    has_table_privilege('jobguard_runtime',oid,'SELECT') AS can_read,
+    has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+    has_table_privilege('jobguard_identity',oid,'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+    has_table_privilege('jobguard_worker',oid,'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+    has_table_privilege('jobguard_infrastructure',oid,'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+    FROM pg_class WHERE oid='app.v2_work_plan_edit'::regclass`);
+  assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+    identity_access: false, worker_access: false, infra_access: false });
+  for (const scope of [outsider.realContext, context]) {
+    const query = (sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+    const key = [DEMO_TENANT_ID, draftJob, plan.quoteRevisionId];
+    const filter = "WHERE (tenant_id,job_id,quote_revision_id)=($1,$2,$3)";
+    assert.equal((await query(`SELECT * FROM app.v2_work_plan_edit ${filter}`, key)).rowCount, 0);
+    await assert.rejects(query(`INSERT INTO app.v2_work_plan_edit
+      (tenant_id,job_id,quote_revision_id,command_id,scope_item_id,template_task_key,expected_version,changes,actor_membership_id)
+      VALUES ($1,$2,$3,$4,$5,$6,1,'{"durationMinutes":88}',$7)`,
+    [...key, randomUUID(), command.scopeItemId, command.taskKey, receipt.actorMembershipId]),
+    { code: "42501", message: /row-level security policy/u });
+    await assert.rejects(query(`UPDATE app.v2_work_plan_edit SET expected_version=2 ${filter}`, key), { code: "42501" });
+    await assert.rejects(query(`DELETE FROM app.v2_work_plan_edit ${filter}`, key), { code: "42501" });
+  }
+  assert.equal((await runtime.query("SELECT * FROM app.v2_work_plan_edit")).rowCount, 0);
+  const owner = await signIn("builder");
+  const accepted = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId }).workPlan;
+  await assert.rejects(accepted.read(jobId, planQuery), { code: "WORK_PLAN_DRAFT_REQUIRED" });
+  const source = await acceptedPlanSource();
+  await assert.rejects(accepted.edit(jobId, { ...command, quoteRevisionId: source.quoteRevisionId }),
+    { code: "WORK_PLAN_DRAFT_REQUIRED" });
+});
+
+const editEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
+  WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_work_plan.edited' ORDER BY sequence`, [jobRef])).rows;
+
+async function verifyTenantChain(tenantId) {
+  const { rows } = await admin.query(`SELECT id, tenant_id AS "tenantId", sequence::int, version, actor_ref AS "actorRef",
+    event_type AS "eventType", subject_type AS "subjectType", subject_ref AS "subjectRef", occurred_at AS "occurredAt", payload,
+    trim(payload_hash) AS "payloadHash", trim(previous_hash) AS "previousHash", trim(event_hash) AS "eventHash"
+    FROM app.audit_event WHERE tenant_id = $1 ORDER BY sequence`, [tenantId]);
+  assert.ok(rows.length > 0);
+  assert.doesNotThrow(() => verifyAuditChain(rows));
+}
+
+test("each recorded plan edit appends one audit event in its transaction, and a replay appends none", async () => {
+  const { draftJob, sessionId, read, edit } = await draftForPlan();
+  const { context: practice } = await authenticatePracticeSession(runtime, sessionId);
+  const plan = await read();
+  const task = plan.tasks[0];
+  const command = planEdit(plan, task, { trade: "specialist tiler", durationMinutes: 77 });
+  const receipt = await edit(command);
+  const [event, ...extra] = await editEvents(draftJob);
+  assert.equal(extra.length, 0);
+  assert.equal(event.tenant_id, practice.tenantId);
+  assert.equal(event.actor_ref, `membership:${receipt.actorMembershipId}`);
+  assert.deepEqual(event.payload.references, {
+    ...event.payload.references, commandId: command.commandId, quoteRevisionId: plan.quoteRevisionId,
+    scopeItemId: task.scopeItemId, taskKey: task.key, expectedVersion: "0", planVersion: "1",
+    changedFields: "durationMinutes/trade",
+  });
+  assert.equal("version" in event.payload.references, false);
+  assert.match(event.payload.hashes.changes, /^[a-f0-9]{64}$/u);
+  assert.doesNotMatch(JSON.stringify(event.payload), /specialist tiler/u, "free-text trade stays out of the audit payload");
+
+  assert.deepEqual(await edit(command), receipt);
+  await Promise.all([edit(command), edit(command)]);
+  assert.equal((await editEvents(draftJob)).length, 1, "replays append nothing");
+
+  // Fail the audit append after the edit insert: the transaction must keep neither.
+  const failing = {
+    async connect() {
+      const client = await runtime.connect();
+      const query = client.query.bind(client);
+      client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+        ? Promise.reject(Object.assign(new Error("forced audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+      const release = client.release.bind(client);
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    },
+  };
+  const next = planEdit(await read(), task, { durationMinutes: 90 });
+  await assert.rejects(new WorkPlanRepository(failing).edit(practice, draftJob, sessionId, next), { code: "FORCED" });
+  const { rows: [{ count }] } = await admin.query(
+    "SELECT count(*)::int AS count FROM app.v2_work_plan_edit WHERE command_id = $1", [next.commandId]);
+  assert.equal(count, 0, "the edit rolled back with its audit event");
+  assert.equal((await editEvents(draftJob)).length, 1);
+  assert.equal((await read()).version, 1);
+
+  await edit(next);
+  assert.equal((await editEvents(draftJob)).length, 2);
+  await verifyTenantChain(practice.tenantId);
+
+  // The audit chain is tenant-scoped (0001_audit.sql), so the second firm's own tenant sees none of these events.
+  // Shared practice sessions share one practice tenant, as for every other practice audit event.
+  const outsider = await signIn("second-builder");
+  assert.notEqual(outsider.realContext.tenantId, practice.tenantId);
+  const { rowCount } = await withTenant(runtime, outsider.realContext, db => db.$client.query(
+    "SELECT 1 FROM app.audit_event WHERE subject_ref = $1", [draftJob]));
+  assert.equal(rowCount, 0, "the second firm cannot see the edit events");
+});
+
 const generatedEvents = async quoteRevisionId => (await admin.query(`SELECT tenant_id, actor_ref, subject_ref, payload
   FROM app.audit_event WHERE event_type = 'v2_work_plan.generated' AND payload->'references'->>'quoteRevisionId' = $1
   ORDER BY sequence`, [quoteRevisionId])).rows;
@@ -423,4 +710,27 @@ test("creating a plan appends one audit event in its transaction, and a replay a
   const { rowCount } = await withTenant(runtime, outsider.realContext, db => db.$client.query(
     "SELECT 1 FROM app.audit_event WHERE subject_ref = $1", [saved.jobId]));
   assert.equal(rowCount, 0);
+});
+
+test("opening the plan screen creates the plan with one audit event; a quote-save refresh adds none", async () => {
+  const { draftJob, lines, save, read, edit } = await draftForPlan();
+  const plan = await read();
+  const [opened, ...extra] = await generatedEvents(plan.quoteRevisionId);
+  assert.equal(extra.length, 0);
+  assert.equal(opened.actor_ref, "system:v2-work-plan");
+  assert.equal(opened.subject_ref, draftJob);
+  assert.equal(opened.payload.references.taskCount, String(plan.tasks.length));
+  await Promise.all([read(), read()]);
+  await edit(planEdit(await read(), plan.tasks[0], { durationMinutes: 61 }));
+  assert.equal((await generatedEvents(plan.quoteRevisionId)).length, 1, "reopening and editing append no second creation event");
+
+  const revision = await save(1, lines.map((line, index) => index === 0 ? { ...line, quantity: "2" } : line));
+  const nextId = revision.draft.currentRevisionId;
+  assert.deepEqual(await planCounts(nextId), [1, 4], "the quote save created the refreshed plan");
+  assert.equal((await generatedEvents(nextId)).length, 0, "the refresh is covered by the quote save event");
+  const { rows: saves } = await admin.query(`SELECT 1 FROM app.audit_event WHERE event_type = 'quote.draft.saved'
+    AND subject_ref = $1 AND payload->'references'->>'jobId' = $2`, [nextId, draftJob]);
+  assert.equal(saves.length, 1, "the quote save appended its own event for the refreshed revision");
+  await read();
+  assert.equal((await generatedEvents(nextId)).length, 0);
 });
