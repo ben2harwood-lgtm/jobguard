@@ -17,12 +17,14 @@ async function execute(request: Request, params: Promise<{ id: string }>, write:
       if (!process.env.AUTH_ALLOWED_ORIGIN) return NextResponse.json({ code: "FORBIDDEN" }, { status: 403, headers });
       const { application, session } = await authenticateLinkedPractice(pool, token);
       // Linked owner lookup already verified the single owner membership and the exact practice pair.
-      await resolveVerifiedTenantContext(application.provider, {
+      const tenantId = session.memberships[0]!.tenantId;
+      const verified = await resolveVerifiedTenantContext(application.provider, {
         sessionToken: jar.get("jobguard_session")?.value,
-        requestedTenantId: session.memberships[0]!.tenantId,
+        requestedTenantId: tenantId,
         csrfToken: request.headers.get("x-csrf-token") ?? undefined,
         origin: request.headers.get("origin") ?? undefined,
       }, application.allowedOrigin);
+      if (verified.tenantId !== tenantId) return NextResponse.json({ code: "FORBIDDEN" }, { status: 403, headers });
     } else {
       await enforcePracticePair(pool, token);
     }

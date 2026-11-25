@@ -36,6 +36,7 @@ beforeEach(() => {
   failure.mockReturnValue(null);
   linked.mockResolvedValue({ application: { provider: "identity-provider", allowedOrigin: phoneOrigin },
     session: { memberships: [{ tenantId }] } });
+  verify.mockResolvedValue({ tenantId });
   read.mockResolvedValue({ version: "v2-chase-view.v1", enabled: false, items: [] });
   command.mockResolvedValue({ captured: 0, revision: 1 });
 });
@@ -64,6 +65,10 @@ describe("V2-K4 authenticated route", () => {
       csrfToken, origin: phoneOrigin }, phoneOrigin);
     expect(verify.mock.invocationCallOrder[0]).toBeLessThan(command.mock.invocationCallOrder[0]!);
     expect(command).toHaveBeenCalledWith("practice-token", jobId, input);
+  });
+  it("refuses a write when the verified context names a different firm", async () => {
+    verify.mockResolvedValue({ tenantId: "e2020000-0000-4000-8000-000000000099" });
+    expect((await POST(request(), params)).status).toBe(403); expect(command).not.toHaveBeenCalled();
   });
   it("rejects a write with no configured browser origin", async () => {
     vi.stubEnv("AUTH_ALLOWED_ORIGIN", "");
