@@ -1,6 +1,8 @@
 # JobGuard V2 overnight Codex queue (24 to 25 Nov 2026)
 
-> **25 Nov 01:10 UK: no new pieces go to Codex tonight beyond Q20 (BH1) and K3's repair (#935).** Everything else waits for the morning.
+> **25 Nov 08:20 UK: Ben's standing repair rule is in force (rule 24).** Held pieces restart under it. Rules 24 to 28 apply to every piece from now on. K2A (Q04) waits for Astra.
+>
+> Earlier note (25 Nov 01:10 UK): no new pieces went to Codex overnight beyond Q20 (BH1) and K3's repair (#935).
 
 Ben, 24 Nov 21:25 UK: "Keep jobguard v2 building on codex desktop all night." Builder: desktop Codex on Ben's Mac (`codex exec`), at most two builds at a time. A Claude session checks each PR; the builder never checks its own work. Only Ben merges RED or T2.
 
@@ -19,6 +21,8 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | 1 | Q03 | V2-D5B-M product picker and Materials screen (resume from the kept base merge; Briefs half D5B-B waits for D4A) | ★★ | M | now | merge of D3 #912 + D4 #916 + D5A #914 | none | T1 | high |
 | 1b | Q18 | V2-CI2 automatic guard for the audit-chain rule (safety, protects every piece below) | ★★ | S | now | `v2/main` | none | T1 | low |
 | 1c | Q20 | V2-BH1 shared sign-in helper for V2 browser tests (test helper only; stops tonight's repeated sign-in failures, rule 22) | ★★ | XS | now | `v2/main` | none | T1 | low |
+| 1d | Q21 | RULES-T, one "Rules met" PR template (jobguard; base `main`, after #915 merges) | ★★ | XS | after #915 | `main` | none | T1 | low |
+| 1e | Q22 | CI-RV, RED PRs need an other-vendor review naming the current head (base `main`) | ★★★ | S | after Astra | `main` | none | T2 | low |
 | 2 | Q12 | V2-F6 customer approves an extra by link | ★★★ | M | now | `v2/main` | 2018 | RED | low |
 | 2b | Q19 | V2-F6T browser and phone proof for F6 (test files only; #923 waits for it) | ★★ | S | now | `codex/sandbox/v2-f6` @ d7fabdf6 | none | T1 | low |
 | 3 | Q13 | V2-K4 automatic chasing of quotes and invoices | ★★★ | S–M | now | `v2/main` | 2019 | RED | low |

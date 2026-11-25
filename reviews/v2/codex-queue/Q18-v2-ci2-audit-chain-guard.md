@@ -5,6 +5,12 @@ Tier: T1 (tooling and CI only, no app behaviour). Migration: none. Astra: no. Us
 
 > **Rules this piece must meet.** AGENTS.md rev 3.0, BUILD_PLAN.md and `01-RULES.md`; Ben's build rules checklist `reviews/v2/codex-queue/02-BUILD-RULES-CHECKLIST.md` (version 1.1, in this repo on branch `claude/project-thread-cw5qv5`).
 
+## Astra conditions, approved by Ben (25 Nov 08:13 UK). These override the scope below where they differ.
+- **The guard is a pointer, not a judge.** A search inside one method gives false positives, such as the watchdog idempotency helper (`packages/db/src/watchdog.ts` lines 129 to 150 on main), and misses ledger writes made through `SELECT app.post_*` (`packages/db/src/ledger.ts`). The static scan therefore **lists** the commands a PR changes that write business state, and posts that list for review. It fails only when a listed command has neither an exemption line with a reason nor matching evidence (next point).
+- **Evidence per command (rule 25).** The guard checks that the PR's seed tests name each listed command in a case that asserts all three: the event, the replay, and the rollback.
+- **Prove the guard catches the gap.** Add a deliberately broken fixture (a command with no audit append) and show the guard fails on it. Only after that is the guard made a required check, with Ben's merge of this PR.
+- **Positive CI fixture.** Include the real stacked pair from #932, a Codex E3 branch on a Claude-named D3 base, so the scope selection doesn't skip it (see the CI1 scope finding, comment 7153704124).
+
 ## Goal
 CI fails a V2 PR when a repository method writes data (INSERT, UPDATE or DELETE on a firm table) but its transaction has no `appendAuditBatch` call, so the audit-chain rule (AGENTS.md §5.7) is checked by a machine, not only by a reviewer.
 

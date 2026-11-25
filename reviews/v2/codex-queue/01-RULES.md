@@ -47,3 +47,27 @@
    - which database a session or proof routine will run on (rules 16 and 22).
 
    A builder who finds the packet relies on a field or session that doesn't exist **stops at round 1 and reports it**. It never invents another binding (title, position, free text). This is a planner miss, not a builder round.
+24. **Standing repair rule (Ben, 25 Nov 08:13 UK: "I agree on all").** It replaces the case-by-case "needs Ben's OK for another round" for small and medium findings.
+   - **Counting rounds.** A round is one **reviewer return against a frozen build head** (Astra condition 3), not a fix commit. Record the reviewed head in each return.
+   - **P2 or lower:** fixed without asking, for up to **two extra rounds** beyond the normal cap. Each fix round goes back to an independent check.
+   - **Still stops for Ben:** any P1 or P0, anything beyond those two extra rounds, and any change that widens grants, RLS, auth or main's money paths.
+   - **Never cleared by the cap.** A reachable money, integrity, isolation or session defect in the intended release keeps the packet **held** at any severity, even in practice mode. It uses the extra rounds if it is P2. Otherwise it goes to Ben with the finding, severity, affected journey and proposed disposition. Ben can authorise a bounded repair or withdraw the packet. The cap limits time spent and never clears a defect.
+   - **Lower-impact findings** that remain after the rounds go to LATER as one line, with an owner.
+25. **Audit-chain evidence, not just a search (Astra condition 1).** For each command a PR adds or changes that writes business state, the PR shows **synthetic database evidence** that the command:
+   - appends the expected audit event;
+   - appends nothing on an exact replay;
+   - rolls back the row and the event together on a forced failure.
+
+   The CI guard (Q18) only **points at** commands to review. Its finding is not proof either way. Helpers that aren't business events, such as watchdog idempotency, and ledger writes through `SELECT app.post_*` are classified by the reviewer, not by the search.
+26. **One "Rules met" checklist, with evidence bound to the reviewed head (Astra condition 2).**
+   - **One list.** `02-BUILD-RULES-CHECKLIST.md` is the only list. Each applicable rule in the PR's "Rules met" section points to a file and either an **executed** test or a review receipt. Say which kind it is: "source inspection" or "executed test". N/A needs a reason.
+   - **Binding evidence to a head.** Evidence is tied to a head through the CI run or review comment that names that head. Don't write the current SHA into a tracked repo file, because that creates a self-reference.
+27. **RED packets: reviewed head and other vendor first (Astra order note).**
+   - A RED PR is ready only when an independent review names its **current head SHA**.
+   - That review must come from the **other vendor**. Desktop Codex and the GitHub Codex bot count as **one vendor**, and a Claude builder's own session doesn't count.
+   - If the head moves, the review must be redone against the new head.
+28. **Vibe Control (aac-studio) rules source (Astra condition 4).**
+   - **The rules file.** One authoritative rules file, imported from Ben's real dated Mac text (SIMPLICITY_RULE rev 2, WORKING_AGREEMENT §4 and §5, ALL_BUILDS_LOOP) once it's available, plus a pointer file for the other agent.
+   - **The ledger.** It records VC-1 and VC-2 with heads, owners and evidence. The repo's builder and checker policy is kept separate from the ledger's existing launch decision, which allows a fresh same-family session with the independence flag false.
+   - **Writers.** The one-Studio-builder limit stays until it is reconciled explicitly.
+   - **Until the rules file lands,** Vibe Control builders follow this file and the checklist.

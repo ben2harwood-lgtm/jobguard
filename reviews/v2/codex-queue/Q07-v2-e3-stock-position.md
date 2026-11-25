@@ -6,6 +6,13 @@ Tier: **RED** (new table). Migration **2014**. Astra: yes. Rework risk: **high**
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-e3.
 **Starts:** now. **Base:** D3's branch `claude/project-thread-8zze8p` (#912). Draft PR against it. Merge D3 again when it moves. Do not edit D3's files; read its enquiry lines and stock set aside.
 
+> **Ben's decision, 25 Nov 08:13 UK ("I agree on all"), from the #932 finding in handoff comment 7153703390.** If a line's **product or pack size** changes, that clears the line's delivered stock **and** its set-aside packs. Both follow the same rule.
+> - The old receipts keep their history against the old product. They stop counting as stock for the new product, which starts at 0 available.
+> - The builder can re-confirm the same count for the new product with one deliberate action. That action is audited and never automatic.
+> - Changes that leave product and pack size alone (notes, quantity or delivery date) keep all stock.
+> - Tests: tiles changed to oak with 6 needed and 4 tile packs received shows **0 available, 6 short**; a notes-only edit keeps 4; re-confirming after the change shows 4; set-aside packs behave the same way.
+> - Built in **PR #937**. This packet's earlier lines about keying deliveries to the editable line are superseded.
+
 ## Dry-check against the code (planner, 25 Nov 00:10 UK)
 **Verified, with decisions made.**
 - **Delivery key:** key each delivery to D3's material line `(job_id, scope_item_id, line_key)` (`app.v2_material_line`, 2006). The set-aside packs come from D3's repository (`setAsidePacks`, a whole-number string).

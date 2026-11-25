@@ -6,6 +6,8 @@ Tier: **RED** (who can read; new table). Migration **2017**. Astra: yes (build w
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-k2, section 2A item 7.
 **Starts when:** R2 has pushed `codex/sandbox/v2-c3`. **Base:** `codex/sandbox/v2-c4` (#903) with the new c3 merged in. Draft PR against `codex/sandbox/v2-c4`.
 
+> **Held for Astra's verdict (Ben, 25 Nov 08:13 UK).** K2A doesn't start until Astra gives a plan verdict. That includes web Codex's question about whether a builder-only feed replaces the customer and crew feeds. Customer and crew feeds also need V2-SX and C3C.
+
 
 > **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
 

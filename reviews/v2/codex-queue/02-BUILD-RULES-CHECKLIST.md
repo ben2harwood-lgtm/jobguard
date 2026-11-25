@@ -31,3 +31,9 @@ For JobGuard (jobguard repo, AGENTS.md rev 3.0) and Vibe Control (aac-studio, LE
 16. **Review by the other vendor at the exact head.** Claude-built work gets a Codex review, and Codex-built work gets a Claude check. Never review your own work. "Source inspected", "test executed" and "independently verified" are different claims. Missing evidence is a hold.
 17. **One build plus up to two repairs.** A third round needs Ben's OK, and only for a finding that is **serious** (money, security or tenant boundary, lost data, broken main journey) **and** reachable by a real user today. Everything else goes on LATER.
 18. **Only Ben merges T2 and RED.** No approving, merging, deploying or spending by any agent.
+
+## V2 additions approved by Ben, 25 Nov 08:13 UK (01-RULES rules 24 to 28)
+- **Repairs.** A round is one reviewer return on a frozen head. P2-or-lower findings are fixed without asking, for up to two extra rounds. P1 and P0 stop for Ben. Money, integrity, isolation and session defects keep the packet held. Leftover lower findings go to LATER, each with an owner.
+- **Audit evidence.** Each changed command shows its event, a replay that adds nothing, and an atomic rollback, all on the synthetic database. The CI guard only points at commands.
+- **Rules met.** Use this one list. Each rule gives a file plus an executed test or review receipt, labelled as which it is. N/A needs a reason. Evidence is bound to the head by the CI or review record, never by a SHA written into a repo file.
+- **RED PRs.** A RED PR needs an other-vendor review that names the current head. Desktop and GitHub Codex count as one vendor.
