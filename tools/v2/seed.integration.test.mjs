@@ -1708,6 +1708,60 @@ test("V2-E2: a reply pasted from a call answers the fact on screen, and each kin
   }
 });
 
+test("V2-E2: applying waits on the same fact lock as a new request, so no newer request slips in between", async () => {
+  const { factReplies, fact } = await replySetup();
+  const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Key under the mat?" } });
+  const pasted = replyCommand({ action: "paste", commandId: randomUUID(), factId, expectedFactVersion: 1, answer: { arrangement: "Yes" } });
+  await factReplies.command(jobId, pasted);
+  const holder = await admin.connect();
+  let settled = false;
+  try {
+    await holder.query("BEGIN");
+    await holder.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 2013))", [`${DEMO_TENANT_ID}:fact:${factId}`]);
+    const applying = factReplies.command(jobId, replyCommand({ action: "apply", replyId: pasted.commandId, expectedFactVersion: 1 }))
+      .finally(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(settled, false, "apply must wait for the fact lock that request() holds");
+    await holder.query("COMMIT");
+    assert.equal((await applying).factVersion, 2);
+  } finally { holder.release(); }
+});
+
+test("V2-E2: a link transaction may seal exactly one received event, carrying the stored reply's own content", async () => {
+  const { fact, request } = await replySetup();
+  const sent = await request(await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Parking on the drive?" } }));
+  const hash = createHash("sha256").update(tokenOf(sent)).digest("hex");
+  const replyId = randomUUID();
+  const digest = "a".repeat(64);
+  const client = await runtime.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows: [{ saved }] } = await client.query("SELECT app.v2_fact_reply_receive($1, $2, $3, $4::jsonb) AS saved",
+      [hash, replyId, digest, JSON.stringify({ arrangement: "Yes, on the left" })]);
+    assert.equal(saved.status, "recorded");
+    const event = (hashes, extra = {}) => JSON.stringify([{ id: randomUUID(), version: "audit.v1", actorRef: `reply_link:${saved.requestId}`,
+      eventType: "v2.fact_reply.received", subjectType: "job", subjectRef: saved.jobId, payload: { references: {
+        commandId: replyId, replyId, requestId: saved.requestId, factId: saved.factId, factVersion: String(saved.factVersion),
+        source: "reply_link", current: String(saved.current), ...extra }, hashes, classifications: { action: "operational" } } }]);
+    const append = async body => {
+      await client.query("SAVEPOINT attempt");
+      try { await client.query("SELECT id FROM app.append_audit($1::jsonb)", [body]); await client.query("RELEASE SAVEPOINT attempt"); return true; }
+      catch (error) { await client.query("ROLLBACK TO SAVEPOINT attempt"); assert.equal(error.code, "42501", error.message); return false; }
+    };
+    // Other content for the same reply is refused, then the true event seals once and only once.
+    assert.equal(await append(event({ request: "b".repeat(64) })), false);
+    assert.equal(await append(event({ request: digest }, { factVersion: "9" })), false);
+    assert.equal(await append(event({ request: digest })), true);
+    assert.equal(await append(event({ request: digest })), false);
+    await client.query("SELECT app.v2_fact_reply_close()");
+    await client.query("COMMIT");
+  } catch (error) { await client.query("ROLLBACK"); throw error; }
+  finally { client.release(); }
+  const sealed = (await replyEvents("v2.fact_reply.received")).filter(entry => entry.payload.references.replyId === replyId);
+  assert.equal(sealed.length, 1);
+  await replyChain(DEMO_TENANT_ID);
+});
+
 test("V2-E2: expired and cancelled links are refused plainly, and failed token attempts are limited", async () => {
   const { factReplies, fact, request } = await replySetup();
   const factId = await fact({ owner: { kind: "customer" }, detail: { kind: "access", need: "Is the side gate unlocked?" } });

@@ -262,7 +262,7 @@ export class FactReplyRepository {
         throw error;
       }
       if (saved.status === "recorded" && !saved.replayed) {
-        // Only the scope's one received reply may enter the chain (policy v2_fact_reply_link_audit).
+        // Only the scope's one received reply may enter the chain (policy v2_fact_reply_link_audit_write, which consumes the allowance).
         await appendAuditBatch(drizzle(client) as TenantTransaction, [{ id: randomUUID(), version: "audit.v1",
           actorRef: `reply_link:${saved.requestId}`, eventType: "v2.fact_reply.received", subjectType: "job",
           subjectRef: saved.jobId, payload: { references: { commandId: saved.replyId, replyId: saved.replyId,
@@ -460,9 +460,12 @@ export class FactReplyRepository {
     input: Of<"apply">, actorId: string, digest: string): Promise<FactReplyReceipt> {
     const { $client } = database;
     const tenantId = context.tenantId;
-    const { rows: [found] } = await $client.query<{ requestId: string | null }>(`SELECT request_id AS "requestId"
-      FROM app.v2_fact_reply WHERE (tenant_id, job_id, id) = ($1, $2, $3)`, [tenantId, jobId, input.replyId]);
+    const { rows: [found] } = await $client.query<{ requestId: string | null; factId: string }>(`SELECT request_id AS "requestId",
+      fact_id AS "factId" FROM app.v2_fact_reply WHERE (tenant_id, job_id, id) = ($1, $2, $3)`, [tenantId, jobId, input.replyId]);
     if (!found) throw new PracticeAccessError("NOT_FOUND");
+    // The fact lock first, as request() and paste() take it: no newer request can commit
+    // between the currentness check below and the answer write.
+    await this.lock($client, tenantId, `fact:${found.factId}`);
     await this.lock($client, tenantId, found.requestId ?? input.replyId);
     const { rows: [reply] } = await $client.query<ReplyRow>(`SELECT ${replyColumns}
       FROM app.v2_fact_reply a LEFT JOIN app.v2_fact_reply_applied p ON (p.tenant_id, p.job_id, p.reply_id) = (a.tenant_id, a.job_id, a.id)

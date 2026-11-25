@@ -182,7 +182,8 @@ BEGIN
     tenant_id uuid,
     job_id uuid,
     request_id uuid,
-    reply_id uuid
+    reply_id uuid,
+    audited boolean NOT NULL DEFAULT false
   );
   -- Failed token attempts, for a coarse limit. Times only: no hash, address or token.
   CREATE UNLOGGED TABLE IF NOT EXISTS control_plane.v2_fact_reply_failure (
@@ -383,7 +384,7 @@ BEGIN
       CASE WHEN kind = 'crew_availability' THEN (answer->>'available')::boolean END, free, d)
     RETURNING * INTO saved;
     -- The audit sealer reads the tenant from this setting; the scope row decides
-    -- which single event may be appended (policy v2_fact_reply_link_audit).
+    -- which single event may be appended (policy v2_fact_reply_link_audit_write, which consumes the allowance).
     PERFORM set_config('app.tenant_id', r.tenant_id::text, true);
     UPDATE control_plane.v2_fact_reply_scope SET reply_id = saved.id WHERE transaction_id = pg_current_xact_id_if_assigned();
     RETURN jsonb_build_object('status', 'recorded', 'replayed', false, 'replyId', saved.id, 'jobId', saved.job_id,
@@ -404,6 +405,7 @@ BEGIN
   -- The link has no signed-in member, so the existing sealer finds no request
   -- binding. Allow it exactly one event: the received reply this transaction's
   -- scope recorded, with that job as subject and that reply as command.
+  -- Reading a sealed row back checks the scope only.
   CREATE OR REPLACE FUNCTION app.v2_fact_reply_audit_tenant(event_type text, subject_type text, subject_ref text,
     command_ref text) RETURNS uuid
     LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $f$
@@ -414,12 +416,44 @@ BEGIN
   $f$;
   REVOKE ALL ON FUNCTION app.v2_fact_reply_audit_tenant(text, text, text, text) FROM PUBLIC;
   GRANT EXECUTE ON FUNCTION app.v2_fact_reply_audit_tenant(text, text, text, text) TO jobguard_audit_writer;
+  -- Writing one consumes the allowance in the same statement, and the event must
+  -- carry the stored reply's own references and request hash. A second append,
+  -- or one with other content, is refused even before the scope is closed.
+  CREATE OR REPLACE FUNCTION app.v2_fact_reply_audit_take(event_type text, subject_type text, subject_ref text,
+    payload jsonb) RETURNS uuid
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $f$
+  DECLARE s control_plane.v2_fact_reply_scope; a app.v2_fact_reply;
+  BEGIN
+    SELECT * INTO s FROM control_plane.v2_fact_reply_scope
+    WHERE transaction_id = pg_current_xact_id_if_assigned() AND reply_id IS NOT NULL AND NOT audited FOR UPDATE;
+    IF NOT FOUND OR event_type IS DISTINCT FROM 'v2.fact_reply.received' OR subject_type IS DISTINCT FROM 'job'
+        OR subject_ref IS DISTINCT FROM s.job_id::text THEN
+      RETURN NULL;
+    END IF;
+    SELECT * INTO a FROM app.v2_fact_reply WHERE (tenant_id, job_id, id) = (s.tenant_id, s.job_id, s.reply_id);
+    IF NOT FOUND OR payload->'references'->>'commandId' IS DISTINCT FROM a.id::text
+        OR payload->'references'->>'replyId' IS DISTINCT FROM a.id::text
+        OR payload->'references'->>'requestId' IS DISTINCT FROM a.request_id::text
+        OR payload->'references'->>'factId' IS DISTINCT FROM a.fact_id::text
+        OR payload->'references'->>'factVersion' IS DISTINCT FROM a.fact_version::text
+        OR payload->'references'->>'source' IS DISTINCT FROM a.source
+        OR payload->'hashes'->>'request' IS DISTINCT FROM a.request_digest::text THEN
+      RETURN NULL;
+    END IF;
+    UPDATE control_plane.v2_fact_reply_scope SET audited = true WHERE transaction_id = s.transaction_id;
+    RETURN s.tenant_id;
+  END $f$;
+  REVOKE ALL ON FUNCTION app.v2_fact_reply_audit_take(text, text, text, jsonb) FROM PUBLIC;
+  GRANT EXECUTE ON FUNCTION app.v2_fact_reply_audit_take(text, text, text, jsonb) TO jobguard_audit_writer;
   DROP POLICY IF EXISTS v2_fact_reply_link_audit ON app.audit_event;
-  CREATE POLICY v2_fact_reply_link_audit ON app.audit_event TO jobguard_audit_writer
+  DROP POLICY IF EXISTS v2_fact_reply_link_audit_read ON app.audit_event;
+  CREATE POLICY v2_fact_reply_link_audit_read ON app.audit_event FOR SELECT TO jobguard_audit_writer
     USING (tenant_id = app.v2_fact_reply_audit_tenant(app.lp11_audit_event_type(audit_event), subject_type, subject_ref,
-      payload->'references'->>'commandId'))
-    WITH CHECK (tenant_id = app.v2_fact_reply_audit_tenant(app.lp11_audit_event_type(audit_event), subject_type, subject_ref,
       payload->'references'->>'commandId'));
+  DROP POLICY IF EXISTS v2_fact_reply_link_audit_write ON app.audit_event;
+  CREATE POLICY v2_fact_reply_link_audit_write ON app.audit_event FOR INSERT TO jobguard_audit_writer
+    WITH CHECK (tenant_id = app.v2_fact_reply_audit_take(app.lp11_audit_event_type(audit_event), subject_type, subject_ref,
+      payload));
 END
 $v2$;
 COMMIT;
