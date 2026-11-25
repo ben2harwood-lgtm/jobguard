@@ -11,6 +11,7 @@
         "tools/v2/bootstrap.mjs",
         "tools/v2/firm-lock/FL-5.checks.mjs",
         "tools/v2/firm-lock/pending/FL-5.json",
+        "tools/v2/seed.integration.test.mjs",
         "tools/v2/migrations/2051_v2_firm_lock_supplier_feed_rest.proof.json",
         "tools/v2/migrations/2051_v2_firm_lock_supplier_feed_rest.sql"
       ]

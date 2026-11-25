@@ -63,7 +63,8 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT FROM pg_policy WHERE polrelid = 'app.sandbox_adapter_receipt'::regclass AND polname = 'v2_practice_firm') THEN
     CREATE POLICY v2_practice_firm ON app.sandbox_adapter_receipt AS RESTRICTIVE FOR ALL TO jobguard_runtime
-      USING (EXISTS (SELECT FROM app.sandbox_run r WHERE (r.tenant_id,r.id)=(sandbox_adapter_receipt.tenant_id,sandbox_adapter_receipt.run_id)));
+      USING (EXISTS (SELECT FROM app.sandbox_run r WHERE (r.tenant_id,r.id)=(sandbox_adapter_receipt.tenant_id,sandbox_adapter_receipt.run_id))
+        AND EXISTS (SELECT FROM app.sandbox_work w WHERE (w.tenant_id,w.id)=(sandbox_adapter_receipt.tenant_id,sandbox_adapter_receipt.work_id)));
   END IF;
   IF NOT EXISTS (SELECT FROM pg_policy WHERE polrelid = 'app.sandbox_run_event'::regclass AND polname = 'v2_practice_firm') THEN
     CREATE POLICY v2_practice_firm ON app.sandbox_run_event AS RESTRICTIVE FOR ALL TO jobguard_runtime

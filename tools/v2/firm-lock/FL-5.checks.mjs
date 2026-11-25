@@ -31,6 +31,7 @@ export function register(helpers) {
 
   test("FL-5: populated sandbox parent and all three children stay within their firm", async () => {
     const { firmA, firmB, firmBReal } = await contexts();
+    await helpers.fl5SecondFirmJob();
     const runs = [];
     const client = await admin.connect();
     try {
