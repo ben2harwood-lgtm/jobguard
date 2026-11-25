@@ -250,17 +250,17 @@ function inspectTrain({ cwd, event, branch, base, target, comparison, eventName,
   }
 }
 
-/** The blob id of a path at a commit, or null when the path is absent there. */
-function blobAt(git, revision, file) {
+/** A path's full tree entry at a commit (mode, type and object id), or null when the path is absent there. */
+function entryAt(git, revision, file) {
   const listing = git(["ls-tree", "-z", "--end-of-options", revision, "--", file]).split("\0").filter(Boolean);
-  const match = listing.length === 1 ? /^\d+ blob ([0-9a-f]{40})\t/su.exec(listing[0]) : null;
+  const match = listing.length === 1 ? /^(\d+ \w+ [0-9a-f]{40})\t/su.exec(listing[0]) : null;
   return match ? match[1] : null;
 }
 
 /**
- * The newest main commit this head merged that its base does not have yet, or null.
- * Null for main itself, when origin/main is unavailable, or when the head brings no new main commits
- * (so a branch that only reverts a file to an old main version gets no exemption).
+ * The newest main commit this head merged that its base does not have yet, and the main commit the base
+ * already had (prior), or null. Null for main itself, when origin/main is unavailable, or when the head
+ * brings no new main commits.
  */
 function mergedMainSide(git, branch, base, target) {
   if (branch === "main" || !base) return null;
@@ -271,7 +271,8 @@ function mergedMainSide(git, branch, base, target) {
   if (!side || !fork || side === fork) return null;
   try { git(["merge-base", "--is-ancestor", "--end-of-options", side, fork]); return null; }
   catch (error) { if (error.status !== 1) throw error; }
-  return side;
+  const prior = mergeBase(side, fork);
+  return prior ? { side, prior } : null;
 }
 
 export function inspectLane({ cwd = process.cwd(), env = process.env, argv = [], config } = {}) {
@@ -348,7 +349,14 @@ export function inspectLane({ cwd = process.cwd(), env = process.env, argv = [],
   // V2-SYNC-0: a merge of main into a long-lived base (v2/main) brings main's own files. A committed path whose
   // blob at the head is exactly main's blob at the merged main commit is main's change, not this lane's.
   const mainSide = comparison === "merge-base" ? mergedMainSide(git, branch, base, target) : null;
-  const fromMain = (file) => mainSide !== null && !uncommitted.has(file) && blobAt(git, target, file) === blobAt(git, mainSide, file);
+  // Exempt only when main itself changed the path in the newly merged range (prior -> side), and the head holds
+  // exactly main's entry: same mode, type and object, or the same deletion. Merging an unrelated main commit
+  // never exempts reverting, deleting or re-moding a base-only change.
+  const fromMain = (file) => {
+    if (mainSide === null || uncommitted.has(file)) return false;
+    const theirs = entryAt(git, mainSide.side, file);
+    return theirs !== entryAt(git, mainSide.prior, file) && entryAt(git, target, file) === theirs;
+  };
   const mergeMainFiles = [...files].filter((file) => !lanePathAllowed(name, lane, file) && fromMain(file));
   const violations = [...files].filter((file) => !lanePathAllowed(name, lane, file) && !mergeMainFiles.includes(file));
   if (violations.length) throw new Error(`Lane ${name} cannot edit:\n${violations.map((file) => JSON.stringify(file)).join("\n")}`);
@@ -364,7 +372,7 @@ export function inspectLane({ cwd = process.cwd(), env = process.env, argv = [],
     if (order.length) throw migrationFailure(order);
   }
   return { lane: name, branch, event: eventName, base, head: target, comparison, files: [...files].sort(),
-    ...(mainSide !== null && { mergeMain: { mainSide, files: mergeMainFiles.sort() } }) };
+    ...(mainSide !== null && { mergeMain: { mainSide: mainSide.side, files: mergeMainFiles.sort() } }) };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

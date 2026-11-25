@@ -184,3 +184,31 @@ test("uncommitted edits to a merged main file are checked as the lane's own", (t
   const f = syncFixture(t); f.commit("tools/new.mjs"); f.write("packages/db/protected.txt", "local edit\n");
   assert.throws(() => inspectLane({ cwd: f.cwd, config: syncPolicy, env: { LANE_BASE_REF: f.v2 } }), /cannot edit/u);
 });
+// Codex P1/P2 on #984: merging an unrelated main commit must not exempt a revert, a deletion or a mode change.
+test("after an unrelated main merge, reverting a base-only change to main's old version still fails", (t) => {
+  const f = fixture(t);
+  f.git("switch", "-c", "v2", f.base); const v2 = f.commit("packages/db/protected.txt", "v2's change\n");
+  f.git("switch", "main"); const main = f.commit("README.md", "unrelated main change\n");
+  f.git("update-ref", "refs/remotes/origin/main", main);
+  f.git("switch", "-C", "codex/ci-repair", v2); f.git("merge", "--no-ff", "--no-edit", "main");
+  const head = f.commit("packages/db/protected.txt", "initial\n");
+  assert.throws(() => f.pr(head, v2), /cannot edit:(\n"README\.md")?\n"packages\/db\/protected\.txt"/u);
+});
+test("after an unrelated main merge, deleting a base-only file still fails", (t) => {
+  const f = syncFixture(t); f.git("rm", "-q", "packages/db/migrations/2001_v2_only.sql"); const head = f.commit();
+  assert.throws(() => f.pr(head, f.v2), /cannot edit:\n"packages\/db\/migrations\/2001_v2_only\.sql"/u);
+});
+test("a deletion main made passes as merge-main", (t) => {
+  const f = fixture(t);
+  f.git("switch", "-c", "v2", f.base); const v2 = f.commit("tools/v2.txt");
+  f.git("switch", "main"); f.git("rm", "-q", "packages/db/protected.txt"); const main = f.commit();
+  f.git("update-ref", "refs/remotes/origin/main", main);
+  f.git("switch", "-C", "codex/ci-repair", v2); f.git("merge", "--no-ff", "--no-edit", "main");
+  assert.deepEqual(f.pr(f.git("rev-parse", "HEAD"), v2).mergeMain.files, ["packages/db/protected.txt"]);
+});
+test("a mode or type change to a merged main file is the lane's own edit and still fails", (t) => {
+  const f = syncFixture(t);
+  f.git("update-index", "--chmod=+x", "packages/db/protected.txt"); f.git("commit", "-q", "-m", "mode change");
+  const head = f.git("rev-parse", "HEAD");
+  assert.throws(() => f.pr(head, f.v2), /cannot edit:\n"packages\/db\/protected\.txt"/u);
+});
