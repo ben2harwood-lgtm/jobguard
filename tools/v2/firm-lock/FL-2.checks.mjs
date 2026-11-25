@@ -153,6 +153,42 @@ async function contractorFixture({ admin, withTenant }, context, digest) {
   });
 }
 
+// fixture: the final-account and fee-illustration commands are fenced on V2. Their practice bridges
+// accept only the jobguard_synthetic_demo database (REQUEST_BINDING_REFUSED and MODE_FORBIDDEN here),
+// and a V2 no_charge switch-live writes job_activation_terms, never cap_snapshot (only the older
+// synthetic activation routines 0012/0095/0723 do). Only the seed admin connection writes these
+// synthetic rows, bound to firm A's real seeded activation, accepted quote and scope. Firm B has no
+// activated job, and a fixture-written job_activation is refused by the trial-admission guard, so
+// firm B proves the absence of firm A's rows only. Every read proof uses runtime.
+async function moneyFixture({ admin, withTenant, assert }, context, jobId) {
+  return withTenant(admin, context, async db => {
+    const sql = (text, values) => db.$client.query(text, values);
+    const { rows: [base] } = await sql(`SELECT a.id AS activation, a.fee_policy_version AS policy, q.id AS quote, q.net_value_pence AS net,
+      (SELECT s.id FROM app.scope_identity s WHERE (s.tenant_id,s.job_id)=(j.tenant_id,j.id) ORDER BY s.id LIMIT 1) AS scope
+      FROM app.job j JOIN app.job_activation a ON (a.tenant_id,a.job_id)=(j.tenant_id,j.id)
+      JOIN app.quote_version q ON (q.tenant_id,q.job_id,q.id)=(j.tenant_id,j.id,j.baseline_quote_version_id)
+      WHERE j.tenant_id=$1 AND j.id=$2`, [context.tenantId, jobId]);
+    assert.ok(base?.scope, "money fixture binds to firm A's real activation, accepted quote and scope");
+    const tenant = context.tenantId, draft = randomUUID(), revision = randomUUID(), h = hash(`FL-2:${jobId}`);
+    await sql(`INSERT INTO app.cap_snapshot(id,tenant_id,job_id,activation_id,baseline_quote_version_id,accepted_net_value_pence,
+      currency,recovery_cap_pence,fee_policy_version,illustrative) VALUES($1,$2,$3,$4,$5,$6,'GBP',app.reference_recovery_cap($6),$7,true)`,
+    [randomUUID(), tenant, jobId, base.activation, base.quote, base.net, base.policy]);
+    await sql("INSERT INTO app.final_account_draft(id,tenant_id,job_id) VALUES($1,$2,$3)", [draft, tenant, jobId]);
+    await sql(`INSERT INTO app.final_account_revision(id,tenant_id,job_id,final_account_draft_id,revision,source_hash,baseline_quote_version_id,
+      currency,tax_policy_version,net_pence,tax_pence,total_pence,issue_blocked,findings)
+      VALUES($1,$2,$3,$4,1,$5,$6,'GBP','candidate_m1_standard_v1',100,20,120,false,'[]')`, [revision, tenant, jobId, draft, h, base.quote]);
+    await sql(`INSERT INTO app.final_account_line(id,tenant_id,job_id,final_account_revision_id,line_kind,source_id,scope_item_id,
+      commercial_revision_id,description,net_pence,ordinal) VALUES($1,$2,$3,$4,'baseline',$5,$6,$7,'Fictional FL-2 final line',100,1)`,
+    [randomUUID(), tenant, jobId, revision, randomUUID(), base.scope, randomUUID()]);
+    await sql("UPDATE app.final_account_draft SET current_revision_id=$1,revision=1 WHERE tenant_id=$2 AND id=$3", [revision, tenant, draft]);
+    // The CHECK constraints pin the retained recovery-18800.v1 illustration values.
+    await sql(`INSERT INTO app.fee_illustration_source(tenant_id,job_id,command_id,source_version,accepted_net_pence,eligible_net_pence,
+      gross_landed_pence,base_obligation_pence,base_settled_pence,prior_posting_pence,statement_issued_count,ledger_entry_count,source_ids)
+      VALUES($1,$2,$3,'recovery-18800.v1',1880000,282000,338400,7900,0,20300,1,1,$4::uuid[])`,
+    [tenant, jobId, randomUUID(), [randomUUID(), randomUUID()]]);
+  });
+}
+
 export function register(helpers) {
   const { test, assert, admin, runtime, withTenant, contexts } = helpers;
   let prepared;
@@ -165,12 +201,15 @@ export function register(helpers) {
       fixtures.push(await contractorFixture(helpers, firm, row.key.slice("practice:".length)));
     }
     const { rows: [own] } = await withTenant(runtime, context.firmA, db => db.$client.query(
-      "SELECT j.id, app.current_actor() AS actor FROM app.job j JOIN app.cap_snapshot c ON (c.tenant_id,c.job_id)=(j.tenant_id,j.id) WHERE j.status='live' AND NOT EXISTS (SELECT FROM app.final_account_draft d WHERE (d.tenant_id,d.job_id)=(j.tenant_id,j.id)) AND NOT EXISTS (SELECT FROM app.fee_illustration_source f WHERE (f.tenant_id,f.job_id)=(j.tenant_id,j.id)) ORDER BY j.id LIMIT 1"));
-    assert.ok(own, "positive control: seeded firm A has a live job and cap");
-    // Exercise the existing V2 application commands where they work; no fixture writer replaces them.
-    await new FinalAccountCommandService(runtime).assemble(context.firmA, { version: "final-account.assemble.v1",
-      commandId: randomUUID(), actorMembershipId: own.actor, jobId: own.id, expectedRevision: 0 });
-    await new FeeIllustrationRepository(runtime).create(context.firmA, own.id, randomUUID());
+      "SELECT j.id, app.current_actor() AS actor FROM app.job j JOIN app.job_activation_terms t ON (t.tenant_id,t.job_id)=(j.tenant_id,j.id) WHERE j.status='live' AND NOT EXISTS (SELECT FROM app.final_account_draft d WHERE (d.tenant_id,d.job_id)=(j.tenant_id,j.id)) AND NOT EXISTS (SELECT FROM app.fee_illustration_source f WHERE (f.tenant_id,f.job_id)=(j.tenant_id,j.id)) ORDER BY j.id LIMIT 1"));
+    assert.ok(own, "positive control: seeded firm A has a live job with V2 activation terms");
+    // The existing application commands are fenced on V2; prove the refusal before using the fixture.
+    await assert.rejects(new FinalAccountCommandService(runtime).assemble(context.firmA, { version: "final-account.assemble.v1",
+      commandId: randomUUID(), actorMembershipId: own.actor, jobId: own.id, expectedRevision: 0 }),
+    error => error.code === "42501" && error.message === "REQUEST_BINDING_REFUSED");
+    await assert.rejects(new FeeIllustrationRepository(runtime).create(context.firmA, own.id, randomUUID()),
+      error => error.code === "42501" && error.message === "MODE_FORBIDDEN");
+    await moneyFixture(helpers, context.firmA, own.id);
     return { context, fixtures, liveJob: own.id };
   })();
 
@@ -194,6 +233,8 @@ export function register(helpers) {
     for (const table of ["final_account_draft", "final_account_revision", "final_account_line", "cap_snapshot", "fee_illustration_source"]) {
       const { rowCount } = await withTenant(runtime, context.firmA, db => db.$client.query(`SELECT job_id FROM app.${table} WHERE job_id=$1`, [liveJob]));
       assert.ok(rowCount > 0, `${table}: a real positive control, never an empty-table pass`);
+      const other = await withTenant(runtime, context.firmB, db => db.$client.query(`SELECT job_id FROM app.${table} WHERE job_id=$1`, [liveJob]));
+      assert.equal(other.rowCount, 0, `${table}: firm B sees none of firm A's rows`);
     }
   });
   registerFirmChecks({ ...helpers, contexts: async () => (await prepare()).context }, "FL-2", families);
