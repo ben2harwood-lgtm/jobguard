@@ -17,9 +17,9 @@ function runScript(block) {
 }
 
 test("CI has concurrent core/web jobs behind an always-running checks gate", () => {
-  assert.deepEqual(Object.keys(jobs).sort(), ["checks", "core", "core-checks", "core-db", "dependency-review", "secrets", "web", "web-shards"]);
+  assert.deepEqual(Object.keys(jobs).sort(), ["checks", "core", "core-checks", "core-db", "dependency-review", "secrets", "v2-seed", "web", "web-shards"]);
   const needs = jobs.checks.match(/^    needs: \[([^\]]+)\]$/m)?.[1].split(",").map((name) => name.trim());
-  assert.deepEqual(needs?.sort(), ["core", "dependency-review", "secrets", "web"]);
+  assert.deepEqual(needs?.sort(), ["core", "dependency-review", "secrets", "v2-seed", "web"]);
   assert.match(jobs.checks, /^    if: \$\{\{ always\(\) \}\}$/m);
   assert.match(jobs.checks, /^    timeout-minutes: 5$/m);
   assert.equal((jobs.checks.match(/^      - /gm) ?? []).length, 1);
@@ -68,7 +68,7 @@ test("web retains Playwright failure evidence with a pinned upload action", () =
 });
 
 for (const [gate, dependencies] of Object.entries({
-  checks: resultEnv,
+  checks: { ...resultEnv, V2_SEED: "v2-seed" },
   core: { CORE_CHECKS: "core-checks", CORE_DB: "core-db" },
   web: { WEB_SHARDS: "web-shards" },
 })) test(`the actual ${gate} aggregate shell fails closed for every dependency result`, () => {
@@ -81,7 +81,9 @@ for (const [gate, dependencies] of Object.entries({
     assert.ok(body.includes(`${envName}: \${{ needs.${job}.result }}`));
   }
   const script = runScript(body);
-  const success = Object.fromEntries(Object.keys(dependencies).map((name) => [name, "success"]));
+  // The checks gate also needs to know whether this run is a V2 run; here it is one.
+  const scope = gate === "checks" ? { V2_SEED_REQUIRED: "true" } : {};
+  const success = { ...scope, ...Object.fromEntries(Object.keys(dependencies).map((name) => [name, "success"])) };
   function execute(env) {
     const result = spawnSync("bash", ["--noprofile", "--norc", "-e", "-u", "-o", "pipefail", "-c", script], { env, encoding: "utf8" });
     assert.ifError(result.error);
@@ -101,7 +103,44 @@ for (const [gate, dependencies] of Object.entries({
     delete missing[name];
     assert.equal(execute(missing).status, 1, `${name} absent`);
   }
-  assert.equal(execute({}).status, 1, "all results absent");
+  assert.equal(execute(scope).status, 1, "all results absent");
+  assert.equal(execute({}).status, 1, "all results and scope absent");
+});
+
+const v2Scope = "github.event_name == 'pull_request' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-')) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main'";
+
+test("v2-seed runs the V2 seed suite only for V2 pull requests and v2/main pushes", () => {
+  const body = jobs["v2-seed"];
+  assert.ok(body.includes(`    if: \${{ ${v2Scope} }}\n`));
+  assert.ok(jobs.checks.includes(`          V2_SEED_REQUIRED: \${{ ${v2Scope} }}\n`));
+  assert.ok(workflow.includes("  push:\n    branches: [main, v2/main]\n"));
+  assert.doesNotMatch(body, /^    needs:/m);
+  assert.match(body, /^    runs-on: ubuntu-latest$/m);
+  assert.ok(body.includes("actions/checkout@v4.2.2\n        with: { fetch-depth: 0, persist-credentials: false }\n      - name: Verify the candidate SHA\n"));
+  assert.ok(body.includes("pnpm/action-setup@v4.1.0\n        with: { version: 10.28.1, run_install: false }"));
+  assert.ok(body.includes("actions/setup-node@v4.0.3\n        with: { node-version: 24.15.0, cache: pnpm }"));
+  assert.ok(body.includes("run: pnpm install --frozen-lockfile\n"));
+  const script = body.slice(body.indexOf("      - name: Run the V2 seed suite"));
+  assert.ok(script.includes('"JOBGUARD_V2_BACKEND=embedded"'));
+  assert.ok(script.includes("setsid node tools/v2/start.mjs"));
+  assert.ok(script.includes("JOBGUARD_ENV=synthetic_demo node --test tools/v2/seed.integration.test.mjs"));
+  assert.ok(script.includes("clean=(env -i "));
+  assert.doesNotMatch(script, /\$\{\{|DATABASE_URL|JOBGUARD_V2_BACKEND=docker|continue-on-error/);
+});
+
+test("the checks gate requires v2-seed success on V2 runs and a skip everywhere else", () => {
+  const script = runScript(jobs.checks);
+  const passing = Object.fromEntries(Object.keys(resultEnv).map((name) => [name, "success"]));
+  const execute = (env) => spawnSync("bash", ["--noprofile", "--norc", "-e", "-u", "-o", "pipefail", "-c", script], { env, encoding: "utf8" }).status;
+  assert.equal(execute({ ...passing, V2_SEED_REQUIRED: "false", V2_SEED: "skipped" }), 0, "main and other runs skip v2-seed");
+  for (const value of ["success", "failure", "cancelled", "", "Skipped"]) {
+    assert.equal(execute({ ...passing, V2_SEED_REQUIRED: "false", V2_SEED: value }), 1, `non-V2 run with v2-seed=${JSON.stringify(value)}`);
+  }
+  for (const required of ["", "True", "1", "yes"]) {
+    assert.equal(execute({ ...passing, V2_SEED_REQUIRED: required, V2_SEED: "success" }), 1, `scope ${JSON.stringify(required)}`);
+    assert.equal(execute({ ...passing, V2_SEED_REQUIRED: required, V2_SEED: "skipped" }), 1, `scope ${JSON.stringify(required)}`);
+  }
+  assert.equal(execute({ ...passing, V2_SEED: "skipped" }), 1, "scope absent");
 });
 
 test("only superseded PR runs cancel; main never cancels in progress", () => {
