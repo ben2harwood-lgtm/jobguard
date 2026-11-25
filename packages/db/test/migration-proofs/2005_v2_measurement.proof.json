@@ -1,0 +1,6 @@
+{
+  "migration": "2005_v2_measurement.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

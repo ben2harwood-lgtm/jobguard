@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-e1": {
+      "branches": ["claude/project-thread-vur4ba"],
+      "note": "RED. V2 open facts: what each job is still waiting to hear, logged by hand. Never moves plan dates, stock, scope, cost or orders; a choice that may change price is only flagged for chunk F. The validator includes config/lanes/v2-e1.json implicitly. Stacked on v2-d1 (codex/sandbox/v2-d1); merges after D3, D4 and B1A.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/api/src/workspace/open-fact.application.ts",
+        "packages/db/migration-notes/2009_v2_open_fact.md",
+        "packages/db/migrations/2009_v2_open_fact.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-open-fact-repository.ts",
+        "packages/db/test/migration-proofs/2009_v2_open_fact.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
