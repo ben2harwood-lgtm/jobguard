@@ -10,11 +10,11 @@ permissions:
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-# CI_MAC_RUNNER (repo variable, e.g. "mac-vm") sends the short jobs to Ben's self-hosted Linux runners.
+# CI_MAC_RUNNER (repo variable, e.g. "mac-vm") sends the short jobs (gates, v2-seed, bundle) to Ben's self-hosted Linux runners.
 # Empty or unset, or a pull request from a fork: everything stays on GitHub-hosted runners.
 jobs:
   core-checks:
-    runs-on: ${{ vars.CI_MAC_RUNNER != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_MAC_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4.2.2

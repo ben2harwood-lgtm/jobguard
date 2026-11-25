@@ -42,8 +42,7 @@ test("core and web retain their commands, setup pins and candidate SHA guards", 
   for (const name of ["core-checks", "core-db", "web-shards"]) {
     const body = jobs[name];
     // Playwright 1.55.1 cannot install chromium on 26.04, so the browser job stays on 24.04.
-    if (name === "core-checks") assert.ok(body.includes(macOrHosted));
-    else assert.match(body, name === "web-shards" ? /^    runs-on: ubuntu-24\.04$/m : /^    runs-on: ubuntu-latest$/m);
+    assert.match(body, name === "web-shards" ? /^    runs-on: ubuntu-24\.04$/m : /^    runs-on: ubuntu-latest$/m);
     assert.match(body, /^    timeout-minutes: 90$/m);
     assert.doesNotMatch(body, /^    needs:/m);
     assert.ok(body.includes("actions/checkout@v4.2.2\n        with: { fetch-depth: 0, persist-credentials: false }\n      - name: Verify the candidate SHA\n"));
