@@ -1305,6 +1305,19 @@ test("regenerating keeps the builder's edits where they still fit and flags a pa
   assert.deepEqual(Object.fromEntries(["neededPacks", "calculatedPacks", "builderPacks", "packsClash"]
     .map(key => [key, enquiryLine(view, "tiles")[key]])), { neededPacks: "8", calculatedPacks: "8", builderPacks: "10", packsClash: true });
 
+  // Reconfirming the same count against the new sum changes the quantity, so the enquiry is out of date.
+  await line(tilingId, "tiles", { packsOverride: "10" });
+  const reconfirmed = await read();
+  assert.equal(reconfirmed.enquiry.current, false);
+  assert.deepEqual(reconfirmed.enquiry.outOfDate, [{ scopeItemId: tilingId, lineKey: "tiles",
+    changed: ["packs_override"], quantities: true }]);
+  view = await generate();
+  assert.equal(view.enquiry.version, reconfirmed.enquiry.version + 1);
+  assert.deepEqual(Object.fromEntries(["neededPacks", "calculatedPacks", "builderPacks", "packsClash"]
+    .map(key => [key, enquiryLine(view, "tiles")[key]])), { neededPacks: "10", calculatedPacks: "8", builderPacks: "10", packsClash: false });
+  await line(tilingId, "tiles", { packsOverride: "10" });
+  assert.equal((await read()).enquiry.current, true, "the same count against the same sum stays current");
+
   await line(tilingId, "tiles", { packsOverride: "9" });
   view = await generate();
   assert.equal(enquiryLine(view, "tiles").neededPacks, "9");
