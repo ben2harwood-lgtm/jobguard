@@ -5,7 +5,7 @@ import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import type { WorkPlan } from "./v2-work-plan-repository.js";
 import { editRamsSections, RamsError, ramsCommandV1, ramsDraftV1, ramsHash, ramsReadyToSign, ramsSections,
-  type RamsDraft } from "./v2-rams-draft.js";
+  ramsJobV1, type RamsDraft, type RamsJob } from "./v2-rams-draft.js";
 
 export class RamsRepository {
   constructor(private readonly pool: Pool) {}
@@ -26,7 +26,8 @@ export class RamsRepository {
     });
   }
 
-  async command(context: VerifiedTenantContext, jobId: string, sessionId: string, raw: unknown, plan: WorkPlan): Promise<RamsDraft> {
+  async command(context: VerifiedTenantContext, jobId: string, sessionId: string, raw: unknown, plan: WorkPlan,
+    job: RamsJob): Promise<RamsDraft> {
     this.requireMode();
     const parsed = ramsCommandV1.safeParse(raw);
     if (!parsed.success) throw new RamsError("RAMS_INVALID_COMMAND");
@@ -91,6 +92,7 @@ export class RamsRepository {
         actorMembershipId: editor.id, recordedAt,
         signedBy: command.action === "sign" ? editor.id : null, signedAt: command.action === "sign" ? recordedAt : null,
         signedName: command.action === "sign" ? command.signerName : null,
+        job: ramsJobV1.parse(job),
       };
       await client.query(`INSERT INTO app.v2_rams_draft
         (tenant_id,job_id,command_id,revision,quote_revision_id,plan_version,request_hash,snapshot,actor_membership_id)

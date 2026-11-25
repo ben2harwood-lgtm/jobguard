@@ -18,26 +18,32 @@ export class RamsApplication {
     }
     return this.access.job(jobId);
   }
-  async read(jobId: string) {
-    const { context, membershipId, digest } = await this.authorize(jobId);
+  private async job({ context, membershipId, digest }: Awaited<ReturnType<RamsApplication["authorize"]>>, jobId: string) {
     const job = await new JobRepository(this.pool).readWorkspace(context, ["job:view"], jobId);
     const parties = await new JobPartiesRepository(this.pool).view(context, membershipId, jobId, digest);
     const site = parties.current?.site;
     const address = site ? [...site.addressLines, site.town, site.postcode].filter(Boolean).join(", ") : "Site address not recorded";
+    return { title: job.title, address };
+  }
+  async read(jobId: string) {
+    const access = await this.authorize(jobId);
+    const { context } = access;
+    const job = await this.job(access, jobId);
     const plan = await this.plans.open(context, jobId);
     const drafts = await this.drafts.read(context, jobId);
     const latest = drafts.at(-1);
     return { canSign: !!latest && latest.status === "draft" && ramsReadyToSign(latest.sections), version: "rams-screen.v1" as const, environment: "synthetic_demo" as const, warning: ramsWarning,
-      job: { title: job.title, address },
+      job,
       plan: { quoteRevisionId: plan.quoteRevisionId, planVersion: plan.version }, drafts };
   }
   async command(jobId: string, raw: unknown) {
-    const { context } = await this.authorize(jobId);
+    const access = await this.authorize(jobId);
+    const { context } = access;
     const parsed = ramsCommandV1.safeParse(raw);
     if (!parsed.success) throw new RamsError("RAMS_INVALID_COMMAND");
     if (!this.sessionId) throw new PracticeAccessError("UNAUTHENTICATED");
     const plan = await this.plans.open(context, jobId);
-    return this.drafts.command(context, jobId, this.sessionId, parsed.data, plan);
+    return this.drafts.command(context, jobId, this.sessionId, parsed.data, plan, await this.job(access, jobId));
   }
 }
 export { RamsError };

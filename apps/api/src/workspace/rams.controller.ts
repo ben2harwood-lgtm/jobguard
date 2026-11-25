@@ -46,10 +46,12 @@ export class RamsController {
       const token = cookieToken(request);
       const session = await identity.session(token);
       if (session.memberships.length !== 1) throw new AuthError("TENANT_FORBIDDEN");
-      await resolveVerifiedTenantContext(identity.provider, {
-        sessionToken: token, requestedTenantId: session.memberships[0]!.tenantId,
+      const tenantId = session.memberships[0]!.tenantId;
+      const verified = await resolveVerifiedTenantContext(identity.provider, {
+        sessionToken: token, requestedTenantId: tenantId,
         csrfToken: request.headers["x-csrf-token"], origin: request.headers.origin,
       }, identity.allowedOrigin);
+      if (verified.tenantId !== tenantId) throw new AuthError("TENANT_FORBIDDEN");
       return await this.execute(request, id, true, body);
     } catch (error) {
       if (error instanceof ZodError) throw new HttpException({ code: "FORBIDDEN" }, 403);

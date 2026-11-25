@@ -19,11 +19,13 @@ async function handle(request: Request, context: { params: Promise<{ id: string 
       const token = (await cookies()).get("jobguard_session")?.value;
       const session = await identity.session(token);
       if (session.memberships.length !== 1) throw new AuthError("TENANT_FORBIDDEN");
-      await resolveVerifiedTenantContext(identity.provider, {
-        sessionToken: token, requestedTenantId: session.memberships[0]!.tenantId,
+      const tenantId = session.memberships[0]!.tenantId;
+      const verified = await resolveVerifiedTenantContext(identity.provider, {
+        sessionToken: token, requestedTenantId: tenantId,
         csrfToken: request.headers.get("x-csrf-token") ?? undefined,
         origin: request.headers.get("origin") ?? undefined,
       }, identity.allowedOrigin);
+      if (verified.tenantId !== tenantId) throw new AuthError("TENANT_FORBIDDEN");
     }
     const sessionId = (await cookies()).get("jg_session")?.value;
     const app = new RamsApplication(syntheticPool(), sessionId);

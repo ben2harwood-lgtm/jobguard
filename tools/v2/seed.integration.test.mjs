@@ -970,6 +970,36 @@ test("Q06 RAMS: hazards, completion, signing, persistence and plan regeneration 
   await verifyTenantChain(f.context.tenantId);
 });
 
+test("Q06 RAMS: a signed version keeps the site address it was signed with after a later correction", async () => {
+  const f = await ramsFixture();
+  const { parties } = createWorkspaceApplication({ pool: runtime, sessionId: f.sessionId });
+  const customer = { version: "customer.v1", type: "person", name: "Fictional RAMS Customer",
+    email: "rams-customer@jobguard-v2.invalid", phone: "+447700900043" };
+  const saveSite = async line => {
+    const view = await parties.view({ sessionId: f.sessionId }, f.draftJob);
+    await parties.command({ sessionId: f.sessionId }, f.draftJob, {
+      version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+      expectedJobRevision: view.jobRevision, expectedBindingId: view.currentIds?.bindingId ?? null, customer, customerRef: null,
+      site: { version: "site.v1", addressLines: [line], town: "Sampleford", postcode: "ZY1 0AA" },
+      savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+      payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+    });
+  };
+  await saveSite("44 Make-Believe Mews");
+  let draft = await f.run("generate");
+  assert.equal(draft.job.address, "44 Make-Believe Mews, Sampleford, ZY1 0AA");
+  for (const section of draft.sections.filter(section => section.required)) {
+    draft = await f.run("edit", { sectionKey: section.key, text: "Fictional site-specific details checked by the builder." });
+  }
+  const signed = await f.run("sign", { checkedAllSections: true, signerName: "Fictional Builder" });
+  assert.deepEqual(signed.job, draft.job);
+  await saveSite("45 Make-Believe Mews");
+  const view = await f.app.read(f.draftJob);
+  assert.equal(view.job.address, "45 Make-Believe Mews, Sampleford, ZY1 0AA", "the screen shows the corrected job details");
+  assert.deepEqual(view.drafts.find(row => row.revision === signed.revision), signed, "the signed version is unchanged");
+  assert.equal(view.drafts.find(row => row.revision === signed.revision).job.address, "44 Make-Believe Mews, Sampleford, ZY1 0AA");
+});
+
 test("Q06 RAMS: each generate/edit/sign audits once; replay, stale input and forced audit failures", async () => {
   const f = await ramsFixture();
   const failing = { async connect() {
@@ -987,7 +1017,7 @@ test("Q06 RAMS: each generate/edit/sign audits once; replay, stale input and for
       expectedPlanVersion: plan.version, ...extra };
     const before = (await ramsEvents(f.draftJob)).length;
     const rowCount = (await ramsRows(f.draftJob)).length;
-    await assert.rejects(new RamsRepository(failing).command(f.context, f.draftJob, f.sessionId, command, plan), { code: "FORCED" });
+    await assert.rejects(new RamsRepository(failing).command(f.context, f.draftJob, f.sessionId, command, plan, view.job), { code: "FORCED" });
     assert.equal((await ramsRows(f.draftJob)).length, rowCount, `${action} snapshot rolls back`);
     assert.equal((await ramsEvents(f.draftJob)).length, before, `${action} audit rolls back`);
     const saved = await f.app.command(f.draftJob, command);

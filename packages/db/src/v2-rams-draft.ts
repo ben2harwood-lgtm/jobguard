@@ -17,6 +17,8 @@ export const ramsCommandV1 = z.discriminatedUnion("action", [
   z.strictObject({ ...envelope, action: z.literal("sign"), checkedAllSections: z.literal(true), signerName: z.string().trim().min(1).max(100) }),
 ]);
 export type RamsCommand = z.infer<typeof ramsCommandV1>;
+export const ramsJobV1 = z.strictObject({ title: z.string().max(500), address: z.string().max(1_000) });
+export type RamsJob = z.infer<typeof ramsJobV1>;
 export const ramsSectionV1 = z.strictObject({
   key: z.string(), heading: z.string(), text: z.string(), sourceHash: z.string(),
   edited: z.boolean(), needsReview: z.boolean(), required: z.boolean(),
@@ -26,6 +28,8 @@ export const ramsDraftV1 = z.strictObject({
   quoteRevisionId: uuid, planVersion: revision, status: z.enum(["draft", "signed"]),
   sections: z.array(ramsSectionV1), actorMembershipId: uuid, recordedAt: z.string(),
   signedBy: uuid.nullable(), signedAt: z.string().nullable(), signedName: z.string().nullable(),
+  // The job title and site address as shown on this version, so a signed version keeps them after a later correction.
+  job: ramsJobV1.optional(),
 });
 export type RamsDraft = z.infer<typeof ramsDraftV1>;
 export type RamsSection = z.infer<typeof ramsSectionV1>;

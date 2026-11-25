@@ -86,8 +86,8 @@ export function RamsScreen({ jobId }: { jobId: string }) {
         <h1>Risk assessment, method statement and construction phase plan</h1>
         <p className="rams-warning">{screen?.warning}</p>
         <p>Practice sandbox — synthetic data; nothing is sent or charged</p>
-        <p>{screen?.job.title}</p>
-        <p>{screen?.job.address}</p>
+        <p>{(draft.job ?? screen?.job)?.title}</p>
+        <p>{(draft.job ?? screen?.job)?.address}</p>
         <p>Version {draft.documentVersion} · <Tag>{draft.status === "signed" ? "Signed — read-only" : "Draft — check before use"}</Tag></p>
         <p>Based on work plan version {draft.planVersion}</p>
         {stale && <Note tone="warning">The plan has changed. Generate a new draft. This saved version is unchanged.</Note>}
