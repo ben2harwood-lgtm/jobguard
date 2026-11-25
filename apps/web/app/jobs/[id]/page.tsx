@@ -1,3 +1,5 @@
+import DesignedLayout from "../../(designed)/layout";
+import { PilotJobs } from "../../(designed)/pilot-jobs";
 import { MerchantOrder } from "../../ui/merchant-order";
 import { cookies } from "next/headers";
 import { jobRecordProposalV1 } from "@jobguard/core";
@@ -13,7 +15,13 @@ export default async function JobPage({ params, searchParams }: {
   searchParams: Promise<{ company?: string }>;
 }) {
   const { id } = await params, { company } = await searchParams;
-  if (!company) return <><WorkspaceShell jobId={id}/>{process.env.JOBGUARD_ENV === "synthetic_demo" && <MerchantOrder key={id} jobId={id}/>}</>;
+  const mode = process.env.JOBGUARD_ENV;
+  if (!company || mode === "pilot_no_charge") return <>
+    {mode === "pilot_no_charge"
+      ? <DesignedLayout><PilotJobs screen="review" jobId={id}/></DesignedLayout>
+      : <WorkspaceShell jobId={id}/>}
+    {mode === "synthetic_demo" && <MerchantOrder key={id} jobId={id}/>}
+  </>;
   // A tenant selection is never authority. Reauthenticate the company session,
   // then let the same CH-4 owner/job/track boundary authorize this saved job.
   // A server component has its own copy of these modules, so it must not create or reuse

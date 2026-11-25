@@ -23,7 +23,7 @@ describe("ENT-14 enterprise gate", () => {
     });
   it("preserves existing no-charge small-builder and synthetic decision behavior", () => {
     const proposed = { id: "D04", policyVersion: "fixture", status: "proposed" } as const;
-    expect(() => requireApprovedDecision("pilot_no_charge", "D04", proposed)).not.toThrow();
+    expect(() => requireApprovedDecision("pilot_no_charge", "D04", proposed)).toThrow(PolicyGateDeniedError);
     expect(() => requireApprovedDecision("synthetic_demo", "D04", proposed, "enterprise_real_data")).not.toThrow();
   });
   it("binds fictional signature, review and dated founder evidence to exact versions", () => {

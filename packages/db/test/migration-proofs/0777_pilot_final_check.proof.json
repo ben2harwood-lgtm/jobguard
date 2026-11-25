@@ -1,0 +1,661 @@
+{
+  "migration": "0777_pilot_final_check.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-pilot-final-check",
+        "description": "G1-gated pilot Final Check uses a dedicated shadow credential and protected lock request to reach the existing certificate path.",
+        "title": "Pilot Final Check worker authority",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Bind the dedicated non-owner shadow login to the exact job from the protected pilot lock request.",
+          "LP-12": "Recheck the immutable lock and current approved terms before processing or publishing a certificate."
+        },
+        "sources": [
+          "packages/db/migrations/0777_pilot_final_check.sql"
+        ],
+        "tests": [
+          "packages/db/test/pilot-final-check.integration.test.ts",
+          "apps/api/src/pilot-ingress.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-pilot-final-check",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Keep worker scope exact and builder and queue logins outside the hidden path."
+        },
+        "downstream": "G1-gated pilot Final Check uses a dedicated shadow credential and protected lock request to reach the existing certificate path.",
+        "path": "ap-pilot-final-check",
+        "title": "Pilot Final Check worker authority",
+        "cards": [
+          "LP-11",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-11": "Bind the dedicated non-owner shadow login to the exact job from the protected pilot lock request.",
+          "LP-12": "Recheck the immutable lock and current approved terms before processing or publishing a certificate."
+        },
+        "sources": [
+          "packages/db/migrations/0777_pilot_final_check.sql"
+        ],
+        "tests": [
+          "packages/db/test/pilot-final-check.integration.test.ts",
+          "apps/api/src/pilot-ingress.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "role|jobguard_pilot_final_check|super=f,inherit=f,createrole=f,createdb=f,login=f,replication=f,bypassrls=f,connlimit=-1,settings=",
+        "group": "a-pilot-final-check"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_final_check_login()|jobguard_migration",
+        "group": "a-pilot-final-check"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_final_check_login()|jobguard_pilot_final_check|EXECUTE|-",
+        "group": "a-pilot-final-check"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_final_check_login()|jobguard_session_lookup|EXECUTE|-",
+        "group": "a-pilot-final-check"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_final_check_login()",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_pilot_final_check",
+          "jobguard_session_lookup"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_final_check_approved(uuid,uuid)|jobguard_migration",
+        "group": "a-pilot-final-check"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_final_check_approved(uuid,uuid)|jobguard_session_lookup|EXECUTE|-",
+        "group": "a-pilot-final-check"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_final_check_approved(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_session_lookup"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.lp11_shadow_job_tenant",
+          "app.pilot_final_check_login"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.request_pilot_final_check_on_lock()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.pilot_final_check_binding",
+          "infrastructure.final_check_request"
+        ],
+        "staticCalls": [
+          "app.pilot_final_account_owner"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_final_check_requests()|jobguard_migration",
+        "group": "a-pilot-final-check"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_final_check_requests()|jobguard_pilot_final_check|EXECUTE|-",
+        "group": "a-pilot-final-check"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_final_check_requests()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_pilot_final_check"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.pilot_final_check_login"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_final_check_ack(uuid,uuid,uuid,uuid)|jobguard_migration",
+        "group": "a-pilot-final-check"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_final_check_ack(uuid,uuid,uuid,uuid)|jobguard_pilot_final_check|EXECUTE|-",
+        "group": "a-pilot-final-check"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_final_check_ack(uuid,uuid,uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_pilot_final_check"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "infrastructure.final_check_request"
+        ],
+        "staticCalls": [
+          "app.pilot_final_check_login"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.guard_pilot_final_check_manifest()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.pilot_final_check_approved",
+          "app.pilot_final_check_login"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.guard_pilot_final_check_certificate()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_check_worker",
+          "app.pilot_final_check_login"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.lp11_bind_shadow_job(uuid,uuid)",
+        "owner": "jobguard_session_lookup",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration",
+          "jobguard_shadow"
+        ],
+        "definitionSha256": "4d90ae1019eb6c90dc40e58adcb02655f4adacca0b9e3453d92ee0518db9506c",
+        "staticWrites": [
+          "control_plane.lp11_shadow_scope"
+        ],
+        "staticCalls": [
+          "app.lp11_policy_tenant"
+        ]
+      },
+      "after": {
+        "identity": "function:app.lp11_bind_shadow_job(uuid,uuid)",
+        "owner": "jobguard_session_lookup",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_migration",
+          "jobguard_shadow"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "control_plane.lp11_shadow_scope"
+        ],
+        "staticCalls": [
+          "app.lp11_policy_tenant",
+          "app.pilot_final_check_approved",
+          "app.pilot_final_check_login"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.final_check_require_worker(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_check_job_terms"
+        ]
+      },
+      "after": {
+        "identity": "function:app.final_check_require_worker(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_check_job_terms",
+          "app.lp11_bind_shadow_job",
+          "app.pilot_final_check_approved",
+          "app.pilot_final_check_login"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": {
+        "identity": "function:app.final_check_worker(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": "c4290a61e0b1acd3136b3b895cabe705a086f32eabd20e1bffbd07bc3b064716",
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_check_context",
+          "app.final_check_job_terms",
+          "app.final_check_require_worker",
+          "app.lp11_bind_shadow_job"
+        ]
+      },
+      "after": {
+        "identity": "function:app.final_check_worker(uuid,uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": false,
+        "searchPath": "search_path=pg_catalog, app",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.final_check_context",
+          "app.final_check_job_terms",
+          "app.final_check_require_worker",
+          "app.lp11_bind_shadow_job",
+          "app.pilot_final_check_login"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "control_plane.pilot_final_check_binding|pilot_final_check_binding_select|PERMISSIVE|SELECT|jobguard_migration|b58a2b2c2ec57908"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "control_plane.pilot_final_check_binding|pilot_final_check_binding_insert|PERMISSIVE|INSERT|jobguard_migration|4b7e00a498ea7c36"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.pilot_final_check_terms_approval|pilot_terms_worker|PERMISSIVE|SELECT|jobguard_migration|2ade272a3751fe5d"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.final_account_lock|pilot_final_check_request_after_lock|app.request_pilot_final_check_on_lock|AFTER INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.final_check_manifest|a_pilot_final_check_manifest|app.guard_pilot_final_check_manifest|BEFORE INSERT|O"
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.final_account_lock_check|a0_pilot_final_check_certificate|app.guard_pilot_final_check_certificate|BEFORE INSERT|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_final_check_login",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_pilot_final_check=X/jobguard_migration,jobguard_session_lookup=X/jobguard_migration}",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_final_check_approved",
+        "args": "t uuid, j uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_session_lookup=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "request_pilot_final_check_on_lock",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_final_check_requests",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_pilot_final_check=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_final_check_ack",
+        "args": "t uuid, j uuid, l uuid, m uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_pilot_final_check=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "guard_pilot_final_check_manifest",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "guard_pilot_final_check_certificate",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "pilot_final_check_binding",
+        "relowner": "jobguard_migration",
+        "relacl": "{jobguard_migration=arwdDxt/jobguard_migration}",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "pilot_final_check_binding_pkey",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "relations",
+      "before": null,
+      "after": {
+        "nspname": "control_plane",
+        "relname": "pilot_final_check_binding_manifest_id_key",
+        "relowner": "jobguard_migration",
+        "relacl": null,
+        "relrowsecurity": false,
+        "relforcerowsecurity": false
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "control_plane",
+        "tablename": "pilot_final_check_binding",
+        "policyname": "pilot_final_check_binding_select",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "app.pilot_final_check_login()",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "control_plane",
+        "tablename": "pilot_final_check_binding",
+        "policyname": "pilot_final_check_binding_insert",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "INSERT",
+        "qual": null,
+        "with_check": "(tenant_id = app.lp11_policy_tenant())"
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "pilot_final_check_terms_approval",
+        "policyname": "pilot_terms_worker",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "(app.pilot_final_check_login() AND (tenant_id = app.lp11_shadow_job_tenant(NULL::uuid, NULL::text, 'audit'::text)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "rows",
+      "before": null,
+      "after": {
+        "table": "control_plane.pilot_final_check_binding",
+        "data": []
+      }
+    }
+  ],
+  "tenancy": []
+}

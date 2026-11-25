@@ -1687,6 +1687,10 @@ it("SERIOUS-B5 upgrades from 0164 without rewriting data, historical PDF hashes 
  expect((withProofs.rows["app.command_type_registry"] as { command_type: string }[])
   .filter(row => row.command_type === "CloseAbandonedSiteVisit")).toEqual([abandonedSiteVisitRegistryRow]);
  // Sort only committed expected values using the server collation, never select live objects as allowances.
+ withProofs.rows["app.command_type_registry"] = (await f.admin.query(
+  "SELECT jsonb_agg(value ORDER BY value::text) data FROM jsonb_array_elements($1::jsonb)",
+  [JSON.stringify(withProofs.rows["app.command_type_registry"])],
+ )).rows[0].data;
  if (proofs.length) for (const [section, fields] of [
   ["routines", ["nspname", "proname", "args"]], ["relations", ["nspname", "relname"]],
   ["policies", ["schemaname", "tablename", "policyname"]],

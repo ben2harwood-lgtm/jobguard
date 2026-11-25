@@ -1,3 +1,4 @@
+import { requireG1ForPilot } from "@jobguard/config";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { DEMO_MEMBERSHIP_ID, FinalAccountLockRepository, FinalAccountCommandService, VariationRepository, PracticeInvoiceRepository, practiceMaterialPool } from "@jobguard/db";
@@ -37,6 +38,7 @@ export class FinalAccountLockApplication {
    price:c.price?{...c.price,confirmedByMembershipId:DEMO_MEMBERSHIP_ID,rateProvenance:{kind:"human_entered",sourceRef:"synthetic://final-review",sourceHash:"8".repeat(64),rateVersion:"builder-price-v1"}}:null});
  }
  async issueInvoice(jobId:string,raw:unknown){
+  requireG1ForPilot(process.env.JOBGUARD_ENV, process.env);
   const auth=await this.access.job(jobId),{version:_version,...c}=input(lockBoundInvoiceCommandV1,raw);
   await new FinalAccountLockRepository(practiceMaterialPool(this.pool,auth.digest)).issueInvoice(auth.context,{...c,jobId,actorMembershipId:DEMO_MEMBERSHIP_ID});
   return {version:1 as const,environment:"synthetic_demo" as const,jobId,invoices:await this.invoices.list(auth.context,jobId)};

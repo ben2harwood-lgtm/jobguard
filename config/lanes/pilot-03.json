@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "pilot-03": {
+      "branches": [
+        "codex/sandbox/pilot-03"
+      ],
+      "note": "RED identity and commercial email ports with deterministic fixture delivery. The lane guard grants this manifest (config/lanes/pilot-03.json) implicitly.",
+      "allow": [
+        "apps/api/src/auth/identity-email.test.ts",
+        "apps/api/src/auth/identity-email.ts",
+        "apps/api/src/effects/commercial-email.test.ts",
+        "apps/api/src/effects/commercial-email.ts",
+        "apps/api/src/effects/fake-email.ts"
+      ]
+    }
+  }
+}

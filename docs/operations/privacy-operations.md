@@ -181,3 +181,62 @@ M5-11 requires CI PostgreSQL fresh/upgrade, tenancy and LP-0 checks plus the
 independent RED review. Live session/consent revocation, provider disconnection,
 actual erasure, restore/native rehearsals and policy approval remain unimplemented
 release gates. The feature flag cannot activate them.
+
+## PILOT-09 operator handoff and notice drafts
+
+Use `privacy-command.v2` in the isolated synthetic database. Open a request for the
+verified tenant and subject. For contractor residents and clients, obtain that
+controller's instruction before review and execution. Record separate `verify`
+commands for `identity` and `authority`, then use the returned fact IDs in
+`review`. Keep the verification evidence, reviewed release scope and any
+controller instruction in the restricted operator record. Use the current
+revision for each command. Send the reviewed output only through an approved
+recipient verification and delivery process after D07 and D12 approval.
+
+| Pilot data | What the operator reconciles |
+|---|---|
+| Builder identity and tenant membership | Persisted identity and membership, invitations and sessions. Keep access to unrelated firms intact. |
+| Customer portal | Job-party binding, contacts, invites, portal grants and sessions, quote snapshots, acceptance receipts and proof references. Revoke grants and sessions before releasing a disposition. |
+| Job capture and evidence | Server records, uploaded original object versions, derived transcripts and previews, import staging, signed links, indexes and caches. Verify each location and version. |
+| Commercial and audit records | Accepted documents, posted entries and sealed audit receipts. Record any retention basis, restrictions and review date in the restricted case record. |
+| Execution and processing | Approval, outbox, queue, provider attempt and reconciliation records. Fence new dispatch, cancel undelivered work and mark uncertain attempts for reconciliation. Review service-provider copies and restricted logs. |
+| Backup and restore | Snapshot, WAL and object version sets. Confirm the owner and expiry of each copy. Keep a separate restricted restore register and verify its replay before lifting access or dispatch fences. |
+| Hidden records | Select only the in-scope material after identity and authority review. Before releasing any selected signal, record `data_subject_access` or `export` through `app.record_shadow_disclosure` using an authorised shadow role. This durably records pre-lock fee ineligibility, including for coalesced group members. A failed or uncommitted disclosure record blocks the release. |
+
+Record an expiry as complete only after the owner verifies disposition of the
+exact copy. On restore, keep user access and outbound execution fenced. Apply
+the restricted register from outside the restored backup, then verify that
+revoked sessions and object grants stay unusable and cancelled work stays
+undeliverable. Reconcile uncertain provider attempts before releasing dispatch.
+
+Run `node --test tools/pilot-privacy-rehearsal.test.mjs` for the operator
+exercise. The fixtures use a provisional two-day backup retention window and
+fake verification, object, queue, snapshot and disclosure ports. The test
+checks scoped export of reviewed fields, version tracking, dispatch and access
+fences, confirmed backup expiry and replay of the separate restore register.
+The existing PostgreSQL privacy and shadow persistence tests exercise the
+request commands and the real fee-ineligibility routine against synthetic
+records. The shadow persistence suite also runs the operator export and access
+exercise with the real disclosure port and checks that only the selected
+fixture signal becomes ineligible. The operator exercise has no deployment or
+public route. Its receipt and register exist only for that fixture run.
+
+The [builder notice draft](../contracts/pilot-builder-privacy-notice-draft.md)
+and [homeowner notice draft](../contracts/pilot-homeowner-privacy-notice-draft.md)
+are unapproved material for Ben and the solicitor under PILOT-15/16.
+
+### Article 14 route for review
+
+For information obtained from a builder or another indirect source, the
+responsible controller records the source, affected subject and the date the
+information was obtained. Under proposed D12, a contractor gives the notice to
+its residents and clients as controller. For the small-builder track, obtain
+the solicitor's confirmation of who gives it and the contact route. Give the
+approved notice within a reasonable period and at most one month after
+obtaining the information, or sooner at first communication with the subject or
+first disclosure to another recipient, as applicable. Give the approved direct
+collection notice when collecting information through the portal. Keep a
+restricted receipt with the notice version, channel, date and evidence of
+delivery. Refer missed deadlines, missing contact routes and potential
+exemptions to the data/legal owner for a recorded decision. Rehearse with
+fictional records and no delivery. Keep G1 closed pending approval.

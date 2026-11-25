@@ -1,0 +1,150 @@
+{
+  "migration": "0773_pilot_capture_track.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-pilot-capture-binding",
+        "description": "The pilot capture trigger checks that the current protected request is a real, unscoped binding for the capture tenant. The predicate returns a boolean and does not disclose the binding record.",
+        "title": "Private pilot capture binding predicate",
+        "cards": [
+          "LP-6a",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6a": "Reuse the protected request binding to verify the tenant and credential kind for pilot capture.",
+          "LP-12": "Keep the predicate under the binding owner with its sole non-owner EXECUTE grant to jobguard_migration."
+        },
+        "sources": [
+          "packages/db/migrations/0773_pilot_capture_track.sql"
+        ],
+        "tests": [
+          "apps/web/app/lib/pilot-workspace-server.test.ts",
+          "packages/db/test/lp-0-grant-freeze.integration.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "id": "a-pilot-capture-binding",
+        "kind": "identity",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "Keep EXECUTE limited to the binding owner and the migration-owned trigger caller."
+        },
+        "downstream": "The pilot capture trigger checks that the current protected request is a real, unscoped binding for the capture tenant. The predicate returns a boolean and does not disclose the binding record.",
+        "path": "ap-pilot-capture-binding",
+        "title": "Private pilot capture binding predicate",
+        "cards": [
+          "LP-6a",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-6a": "Reuse the protected request binding to verify the tenant and credential kind for pilot capture.",
+          "LP-12": "Keep the predicate under the binding owner with its sole non-owner EXECUTE grant to jobguard_migration."
+        },
+        "sources": [
+          "packages/db/migrations/0773_pilot_capture_track.sql"
+        ],
+        "tests": [
+          "apps/web/app/lib/pilot-workspace-server.test.ts",
+          "packages/db/test/lp-0-grant-freeze.integration.test.ts"
+        ],
+        "gaps": []
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_capture_real_binding(uuid)|jobguard_migration|EXECUTE|-",
+        "group": "a-pilot-capture-binding"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_capture_real_binding(uuid)|jobguard_binding_owner",
+        "group": "a-pilot-capture-binding"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_capture_real_binding(uuid)",
+        "owner": "jobguard_binding_owner",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": ["jobguard_migration"],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": ["app.lp6_bound_request"]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.stamp_pilot_capture_track()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": true,
+        "extension": null,
+        "reachable": false,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [],
+        "definitionSha256": null,
+        "staticWrites": ["app.job_commercial_track"],
+        "staticCalls": ["app.current_actor", "app.current_tenant", "app.pilot_capture_real_binding"]
+      }
+    },
+    {
+      "section": "triggers",
+      "before": null,
+      "after": "app.job_record_proposal|pilot_capture_track|app.stamp_pilot_capture_track|AFTER INSERT|O"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_capture_real_binding",
+        "args": "t uuid",
+        "proowner": "jobguard_binding_owner",
+        "proacl": "{jobguard_binding_owner=X/jobguard_binding_owner,jobguard_migration=X/jobguard_binding_owner}",
+        "prosecdef": true,
+        "proconfig": ["search_path=pg_catalog, pg_temp"]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "stamp_pilot_capture_track",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": ["search_path=pg_catalog, pg_temp"]
+      }
+    }
+  ],
+  "tenancy": []
+}

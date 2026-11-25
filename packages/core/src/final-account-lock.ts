@@ -50,9 +50,9 @@ export function parseFinalAccountLockCommand(raw: unknown): FinalAccountLockComm
 }
 
 /** The caller supplies server-read sources; commands cannot supply hashes or timestamps. */
-export function createFinalAccountLockSnapshot(raw: unknown) {
+export function createFinalAccountLockSnapshot(raw: unknown, approvedTermsVersion: string = FINAL_CHECK_TERMS_VERSION) {
     const lock = createLockSnapshot(raw);
-    if (lock.snapshot.declaration !== FINAL_ACCOUNT_DECLARATION || lock.snapshot.declarationVersion !== FINAL_ACCOUNT_DECLARATION_VERSION || lock.snapshot.onboardingTermsVersion !== FINAL_CHECK_TERMS_VERSION)
+    if (lock.snapshot.declaration !== FINAL_ACCOUNT_DECLARATION || lock.snapshot.declarationVersion !== FINAL_ACCOUNT_DECLARATION_VERSION || lock.snapshot.onboardingTermsVersion !== approvedTermsVersion)
         throw new FinalAccountLockError("INVALID_FINAL_ACCOUNT_LOCK_INPUT");
     return freezeShadow({ ...lock,
         captureRegisterHash: hashLockCaptureRegister(lock.snapshot.captureRegister),

@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./dist/index.js"
+    },
+    "./test/pilot-approval": {
+      "types": "./src/policy-gates.pilot-test-fixture.ts",
+      "import": "./dist/policy-gates.pilot-test-fixture.js"
     }
   },
   "types": "./src/index.ts",

@@ -1,0 +1,1691 @@
+{
+  "migration": "0778_pilot_commercial_email.sql",
+  "lp0": [
+    {
+      "section": "authorityPaths",
+      "before": null,
+      "after": {
+        "id": "ap-pilot-commercial-email",
+        "title": "Pilot commercial email worker",
+        "description": "A checked worker rotates opaque outbox signals and validates current document and recipient authority within the existing bound claim transaction.",
+        "cards": [
+          "LP-10",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-10": "Use a dedicated worker login and exact committed delivery claims.",
+          "LP-12": "Keep source reads tenant scoped and worker credentials free of table grants."
+        },
+        "sources": [
+          "packages/db/migrations/0778_pilot_commercial_email.sql"
+        ],
+        "tests": [
+          "packages/db/test/pilot-customer-portal.integration.test.ts"
+        ],
+        "gaps": [
+          "Independent RED review and deployment-specific evidence remain required."
+        ]
+      }
+    },
+    {
+      "section": "groups",
+      "before": null,
+      "after": {
+        "title": "Pilot commercial email worker",
+        "cards": [
+          "LP-10",
+          "LP-12"
+        ],
+        "responsibilities": {
+          "LP-10": "Use a dedicated worker login and exact committed delivery claims.",
+          "LP-12": "Keep source reads tenant scoped and worker credentials free of table grants."
+        },
+        "sources": [
+          "packages/db/migrations/0778_pilot_commercial_email.sql"
+        ],
+        "tests": [
+          "packages/db/test/pilot-customer-portal.integration.test.ts"
+        ],
+        "gaps": [
+          "Independent RED review and deployment-specific evidence remain required."
+        ],
+        "id": "pilot-commercial-email",
+        "kind": "authority",
+        "status": "approved_current",
+        "target": {
+          "state": "review_at_card",
+          "note": "A checked worker rotates opaque outbox signals and validates current document and recipient authority within the existing bound claim transaction."
+        },
+        "downstream": "A checked worker rotates opaque outbox signals and validates current document and recipient authority within the existing bound claim transaction.",
+        "path": "ap-pilot-commercial-email"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_email_signals()|jobguard_worker|EXECUTE|-",
+        "group": "pilot-commercial-email"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_email_signals()|jobguard_migration",
+        "group": "pilot-commercial-email"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_email_signals()",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_worker"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [
+          "infrastructure.outbox_signal"
+        ],
+        "staticCalls": [
+          "app.lp10_assert_worker",
+          "outbound_control.claims_enabled"
+        ]
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "acl|routine|function:app.pilot_email_action_current(uuid)|jobguard_worker|EXECUTE|-",
+        "group": "pilot-commercial-email"
+      }
+    },
+    {
+      "section": "entries",
+      "before": null,
+      "after": {
+        "key": "owner|routine|function:app.pilot_email_action_current(uuid)|jobguard_migration",
+        "group": "pilot-commercial-email"
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "identity": "function:app.pilot_email_action_current(uuid)",
+        "owner": "jobguard_migration",
+        "securityDefiner": true,
+        "searchPath": "search_path=pg_catalog, pg_temp",
+        "returnsTrigger": false,
+        "extension": null,
+        "reachable": true,
+        "runtimeExecute": false,
+        "publicExecute": false,
+        "otherExecute": [
+          "jobguard_worker"
+        ],
+        "definitionSha256": null,
+        "staticWrites": [],
+        "staticCalls": [
+          "app.customer_portal_current",
+          "app.lp10_action_author",
+          "app.lp10_lock_action"
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.quote_send|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.quote_document_version|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.quote_draft|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job_party_current|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job_party_binding|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_revision|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_portal_grant|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.job_commercial_track|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.contractor_party_binding|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.acceptance_event|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.customer_invoice|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.final_account_revision|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": "app.final_account_draft|pilot_email_worker_read|PERMISSIVE|SELECT|jobguard_migration|ea676e6d7e4c0be4"
+    }
+  ],
+  "upgrade": [
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_email_signals",
+        "args": "",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_worker=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "routines",
+      "before": null,
+      "after": {
+        "nspname": "app",
+        "proname": "pilot_email_action_current",
+        "args": "p_action uuid",
+        "proowner": "jobguard_migration",
+        "proacl": "{jobguard_migration=X/jobguard_migration,jobguard_worker=X/jobguard_migration}",
+        "prosecdef": true,
+        "proconfig": [
+          "search_path=pg_catalog, pg_temp"
+        ]
+      }
+    },
+    {
+      "section": "rows",
+      "before": {
+        "table": "app.command_type_registry",
+        "data": [
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "IssueClientApproval",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_email",
+            "permission_rule": "contractor",
+            "completion_adapter": "client_link"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "confirm_proposal_review",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "review"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "customer_credit_note.issue",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "credit"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "customer_invoice.issue",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_invoice_delivery",
+            "permission_rule": "owner",
+            "completion_adapter": "invoice"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "customer_payment.record",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "payment"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "customer_payment.reverse",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "payment_reversal"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "job.adopt_in_flight",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "import"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "job.adopt_in_flight_v3",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "import_v3"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "job.discard_draft",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "discard"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "job.switch_live",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "activation"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "managed_recovery.elect",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "managed_recovery"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "purchase_order.place",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_purchase_order",
+            "permission_rule": "owner",
+            "completion_adapter": "purchase_order"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "purchase_order.send.dark",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_merchant_order",
+            "permission_rule": "owner",
+            "completion_adapter": "purchase_order"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "purchase_order.simulate",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_purchase_order",
+            "permission_rule": "owner",
+            "completion_adapter": "purchase_order"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.acceptance.attest",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "acceptance"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.acceptance_cancelled",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "disposition"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.declined",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "disposition"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.issue",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_quote_delivery",
+            "permission_rule": "owner",
+            "completion_adapter": "quote_send"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.send",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_quote_delivery",
+            "permission_rule": "owner",
+            "completion_adapter": "quote_send"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.superseded",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "disposition"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "recovery.follow_up.approve_reminder",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_recovery_message",
+            "permission_rule": "owner",
+            "completion_adapter": "message"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "recovery.message.approve",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_recovery_message",
+            "permission_rule": "owner",
+            "completion_adapter": "message"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "recovery.terms.approve",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_terms"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "synthetic.settlement",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "settlement"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "operational",
+            "command_type": "synthetic.lock",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "synthetic_lock_noop"
+          },
+          {
+            "version": "decision-resolution-command.v1",
+            "audit_class": "operational",
+            "command_type": "finding.resolve",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "finding"
+          },
+          {
+            "version": "duplicate-disposition.v1",
+            "audit_class": "commercial",
+            "command_type": "ResolveDuplicateCandidates",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "duplicate_disposition"
+          },
+          {
+            "version": "end-check.v1",
+            "audit_class": "operational",
+            "command_type": "EndCheck",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "contractor_job_finish"
+          },
+          {
+            "version": "rate-suggestion-accept.v1",
+            "audit_class": "operational",
+            "command_type": "rate.suggestion_accept",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "rate_suggestion_acceptance"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "commercial",
+            "command_type": "IssueLockBoundInvoice",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_invoice_delivery",
+            "permission_rule": "owner",
+            "completion_adapter": "lock_invoice"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "commercial",
+            "command_type": "ResolveDuplicateCandidates",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "duplicate_disposition"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "AddFinalReviewExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "builder_capture"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "ApproveExtraStep",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "ClientDecideExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "CloseAbandonedSiteVisit",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "site_visit"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "CompleteSiteVisit",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "site_visit"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "ConfirmPrompt",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "JobSource.customer_message",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "source_intake"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "JobSource.diary",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "source_intake"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "LateSource.import",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "source_intake"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "LogBuilderExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "builder_capture"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "LogSiteExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "MarkDuplicate",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "PriceExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RecordClientInstruction",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RecordExtraProceed",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "extra_proceed"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RecordOfficeExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RecordSiteSupervisorQuery",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "site_supervisor_query"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RejectExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "ReviseExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RevokeClientApproval",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "StartSiteVisit",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "site_visit"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "SubmitExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "UnlinkDuplicate",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "WithdrawExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "commercial_integrity.review",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "operational_record"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "inbox.seed",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "inbox_seed"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "job.parties",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "job_parties"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "prevention.check",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "prevention"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "proof.complete",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "proof"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.follow_up.advance",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_follow_up_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.follow_up.cancel",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_follow_up_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.follow_up.open_review",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_follow_up_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.follow_up.schedule",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_follow_up_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.message.advance",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_message_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.message.preview",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_message_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.message.reconcile",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_message_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.message.revoke",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_message_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "synthetic_demo.seed",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "operational_record"
+          }
+        ]
+      },
+      "after": {
+        "table": "app.command_type_registry",
+        "data": [
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "IssueClientApproval",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_email",
+            "permission_rule": "contractor",
+            "completion_adapter": "client_link"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "confirm_proposal_review",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "review"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "customer_credit_note.issue",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "credit"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "customer_invoice.issue",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_invoice_delivery",
+            "permission_rule": "owner",
+            "completion_adapter": "invoice"
+          },
+          {
+            "command_type": "customer_invoice.send",
+            "version": "command.v1",
+            "permission_rule": "owner",
+            "lock_adapter": "route_before_begin",
+            "completion_adapter": "invoice",
+            "audit_class": "commercial",
+            "outbox_class": "fake_invoice_delivery"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "customer_payment.record",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "payment"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "customer_payment.reverse",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "payment_reversal"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "job.adopt_in_flight",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "import"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "job.adopt_in_flight_v3",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "import_v3"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "job.discard_draft",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "discard"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "job.switch_live",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "activation"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "managed_recovery.elect",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "managed_recovery"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "purchase_order.place",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_purchase_order",
+            "permission_rule": "owner",
+            "completion_adapter": "purchase_order"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "purchase_order.send.dark",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_merchant_order",
+            "permission_rule": "owner",
+            "completion_adapter": "purchase_order"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "purchase_order.simulate",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_purchase_order",
+            "permission_rule": "owner",
+            "completion_adapter": "purchase_order"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.acceptance.attest",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "acceptance"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.acceptance_cancelled",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "disposition"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.declined",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "disposition"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.issue",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_quote_delivery",
+            "permission_rule": "owner",
+            "completion_adapter": "quote_send"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.send",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_quote_delivery",
+            "permission_rule": "owner",
+            "completion_adapter": "quote_send"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "quote.superseded",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "disposition"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "recovery.follow_up.approve_reminder",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_recovery_message",
+            "permission_rule": "owner",
+            "completion_adapter": "message"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "recovery.message.approve",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_recovery_message",
+            "permission_rule": "owner",
+            "completion_adapter": "message"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "recovery.terms.approve",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_terms"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "operational",
+            "command_type": "synthetic.lock",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "synthetic_lock_noop"
+          },
+          {
+            "version": "command.v1",
+            "audit_class": "commercial",
+            "command_type": "synthetic.settlement",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "settlement"
+          },
+          {
+            "version": "decision-resolution-command.v1",
+            "audit_class": "operational",
+            "command_type": "finding.resolve",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "finding"
+          },
+          {
+            "version": "duplicate-disposition.v1",
+            "audit_class": "commercial",
+            "command_type": "ResolveDuplicateCandidates",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "duplicate_disposition"
+          },
+          {
+            "version": "end-check.v1",
+            "audit_class": "operational",
+            "command_type": "EndCheck",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "contractor_job_finish"
+          },
+          {
+            "version": "rate-suggestion-accept.v1",
+            "audit_class": "operational",
+            "command_type": "rate.suggestion_accept",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "rate_suggestion_acceptance"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "AddFinalReviewExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "builder_capture"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "ApproveExtraStep",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "ClientDecideExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "CloseAbandonedSiteVisit",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "site_visit"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "CompleteSiteVisit",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "site_visit"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "ConfirmPrompt",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "commercial",
+            "command_type": "IssueLockBoundInvoice",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": "fake_invoice_delivery",
+            "permission_rule": "owner",
+            "completion_adapter": "lock_invoice"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "JobSource.customer_message",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "source_intake"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "JobSource.diary",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "source_intake"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "LateSource.import",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "source_intake"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "LogBuilderExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "builder_capture"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "LogSiteExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "MarkDuplicate",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "PriceExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RecordClientInstruction",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RecordExtraProceed",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "extra_proceed"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RecordOfficeExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RecordSiteSupervisorQuery",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "site_supervisor_query"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RejectExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "commercial",
+            "command_type": "ResolveDuplicateCandidates",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "duplicate_disposition"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "ReviseExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "RevokeClientApproval",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "StartSiteVisit",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "site_visit"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "SubmitExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "UnlinkDuplicate",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "contractor_extra"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "WithdrawExtra",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "contractor",
+            "completion_adapter": "extra_chain"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "commercial_integrity.review",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "operational_record"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "inbox.seed",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "inbox_seed"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "job.parties",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "job_parties"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "prevention.check",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "prevention"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "proof.complete",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "active_member",
+            "completion_adapter": "proof"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.follow_up.advance",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_follow_up_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.follow_up.cancel",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_follow_up_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.follow_up.open_review",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_follow_up_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.follow_up.schedule",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_follow_up_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.message.advance",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_message_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.message.preview",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_message_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.message.reconcile",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_message_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "recovery.message.revoke",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "recovery_message_marker"
+          },
+          {
+            "version": "repository-command.v1",
+            "audit_class": "operational",
+            "command_type": "synthetic_demo.seed",
+            "lock_adapter": "route_before_begin",
+            "outbox_class": null,
+            "permission_rule": "owner",
+            "completion_adapter": "operational_record"
+          }
+        ]
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "quote_send",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "quote_document_version",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "quote_draft",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job_party_current",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job_party_binding",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_revision",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_portal_grant",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "job_commercial_track",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "contractor_party_binding",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "acceptance_event",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "customer_invoice",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "final_account_revision",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    },
+    {
+      "section": "policies",
+      "before": null,
+      "after": {
+        "schemaname": "app",
+        "tablename": "final_account_draft",
+        "policyname": "pilot_email_worker_read",
+        "permissive": "PERMISSIVE",
+        "roles": "{jobguard_migration}",
+        "cmd": "SELECT",
+        "qual": "((current_database() ~ '^jobguard_pilot(_[a-z0-9]+)*$'::text) AND (current_database() !~ '^jobguard_pilot_(queue|restore)(_|$)'::text) AND (tenant_id = ( SELECT app.lp11_worker_tenant(NULL::uuid) AS lp11_worker_tenant)))",
+        "with_check": null
+      }
+    }
+  ],
+  "tenancy": []
+}
