@@ -77,7 +77,7 @@ export function V2PaymentSchedule({ jobId }: { jobId: string }) {
     {view?.schedule ? <>
       <ol>{view.schedule.stages.map((stage, index) => <li key={index}>
         {stage.trigger.kind === "date"
-          ? <span>{stage.label} — £{stage.amount} ex-VAT, due from {stage.trigger.date}; amount fixed when invoiced</span>
+          ? <span>{stage.label} — £{stage.amount} ex-VAT · due from {stage.trigger.date}; amount fixed when invoiced</span>
           : <strong>{stage.label} — £{stage.amount} ex-VAT</strong>}
         <p>{stage.frozen ? "Due now · amount fixed" : stage.status === "due" ? "Due now" : "Planned"} · {
           stage.trigger.kind === "acceptance" ? "On acceptance" : stage.trigger.kind === "date" ? stage.trigger.date : `On task done: ${stage.trigger.taskKey}`}</p>
