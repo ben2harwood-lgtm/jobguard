@@ -12,7 +12,10 @@ import { GET, POST } from "./route";
 const jobId = "11111111-1111-4111-8111-111111111111";
 const params = { params: Promise.resolve({ id: jobId }) };
 const url = `https://fictional.invalid/api/v2-backend/jobs/${jobId}/attendance`;
-const post = (body: unknown) => new Request(url, { method: "POST", body: typeof body === "string" ? body : JSON.stringify(body) });
+const allowed = "https://v2.jobguard.invalid";
+const internal = `http://127.0.0.1:3400/api/v2-backend/jobs/${jobId}/attendance`;
+const post = (body: unknown, headers: Record<string, string> = { origin: allowed }) => new Request(internal,
+  { method: "POST", headers, body: typeof body === "string" ? body : JSON.stringify(body) });
 const command = { version: "v2-site-attendance-command.v1", commandId: jobId, day: "2026-11-25", person: { kind: "builder" },
   expectedVersion: 0, onSite: true, note: null };
 
@@ -24,6 +27,10 @@ beforeEach(() => {
   list.mockResolvedValue({ version: "v2-site-attendance.v1" });
   record.mockResolvedValue({ revision: 1 });
   failure.mockReturnValue(null);
+});
+beforeEach(() => {
+  vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", allowed);
+  vi.stubEnv("NODE_ENV", "production");
 });
 afterEach(() => { vi.unstubAllEnvs(); });
 
@@ -52,6 +59,21 @@ describe("V2-F8 attendance route", () => {
     expect(response.status).toBe(201);
     expect(record).toHaveBeenCalledWith(jobId, command);
     expect((await POST(post("{not json"), params)).status).toBe(400);
+  });
+
+  it("accepts only a configured origin on a tap, through an internal request URL", async () => {
+    vi.stubEnv("JOBGUARD_LOCAL_V2", "1");
+    expect((await POST(post(command), params)).status).toBe(201);
+    const refusals = [{}, { origin: "https://elsewhere.invalid" }, { origin: "http://127.0.0.1:3400" },
+      { origin: "https://elsewhere.invalid", "x-forwarded-host": "v2.jobguard.invalid", "x-forwarded-proto": "https" }];
+    for (const headers of refusals) {
+      const response = await POST(post(command, headers), params);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ code: "ORIGIN_FORBIDDEN" });
+    }
+    vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "");
+    expect((await POST(post(command), params)).status).toBe(403);
+    expect(record).toHaveBeenCalledTimes(1);
   });
 
   it("refuses without a session with a typed code, and passes on access refusals", async () => {

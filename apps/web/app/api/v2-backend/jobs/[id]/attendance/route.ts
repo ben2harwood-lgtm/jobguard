@@ -2,6 +2,7 @@ import { SiteAttendanceError } from "@jobguard/db";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { hasSyntheticSession, practiceFailure } from "../../../../../lib/synthetic-server";
+import { isTrustedBrowserOrigin } from "../../../../contractor/origin";
 import { workspaceApplication } from "../../../../../lib/workspace-server";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +50,8 @@ export async function GET(_request: Request, { params }: Route) {
 export async function POST(request: Request, { params }: Route) {
   const refused = await signedIn();
   if (refused) return refused;
+  // Rule 21: configured origins only, never the request URL or forwarded headers.
+  if (!isTrustedBrowserOrigin(request)) return failure("ORIGIN_FORBIDDEN", 403);
   let body: unknown;
   try { body = await request.json(); } catch { return failure("SITE_ATTENDANCE_INVALID", 400); }
   try {
