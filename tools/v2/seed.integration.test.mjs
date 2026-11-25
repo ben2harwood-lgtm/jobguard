@@ -1486,6 +1486,9 @@ test("D4B is immutable, fake-only, forced-RLS and invisible to the second firm f
     FROM pg_class WHERE oid = $1::regclass`, [table]);
   assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
     identity_access: false, worker_access: false, infra_access: false });
+  const firmLock = await admin.query(`SELECT permissive, cmd, roles FROM pg_policies
+    WHERE schemaname = 'app' AND tablename = 'v2_crew_brief_translation' AND policyname = 'v2_practice_firm'`);
+  assert.deepEqual(firmLock.rows, [{ permissive: "RESTRICTIVE", cmd: "ALL", roles: ["jobguard_runtime"] }]);
   const select = `SELECT * FROM ${table} WHERE job_id = $1`;
   assert.ok((await sql(ownerContext, select, [jobId])).rowCount > 0);
   assert.equal((await runtime.query(select, [jobId])).rowCount, 0);

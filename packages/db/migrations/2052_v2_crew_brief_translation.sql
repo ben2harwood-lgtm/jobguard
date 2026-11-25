@@ -33,6 +33,13 @@ BEGIN
       SELECT FROM app.job j WHERE (j.tenant_id, j.id) =
         (v2_crew_brief_translation.tenant_id, v2_crew_brief_translation.job_id)
     ));
+  IF NOT EXISTS (SELECT FROM pg_policy
+    WHERE polrelid = 'app.v2_crew_brief_translation'::regclass AND polname = 'v2_practice_firm'
+  ) THEN
+    CREATE POLICY v2_practice_firm ON app.v2_crew_brief_translation AS RESTRICTIVE FOR ALL TO jobguard_runtime
+      USING (EXISTS (SELECT FROM app.job j WHERE (j.tenant_id, j.id) =
+        (v2_crew_brief_translation.tenant_id, v2_crew_brief_translation.job_id)));
+  END IF;
   REVOKE ALL ON app.v2_crew_brief_translation FROM PUBLIC;
   GRANT SELECT, INSERT ON app.v2_crew_brief_translation TO jobguard_runtime;
 END
