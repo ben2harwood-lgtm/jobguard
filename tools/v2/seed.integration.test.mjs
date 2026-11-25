@@ -774,3 +774,124 @@ test("each recorded plan edit appends one audit event in its transaction, and a 
     "SELECT 1 FROM app.audit_event WHERE subject_ref = $1", [draftJob]));
   assert.equal(rowCount, 0, "the second firm cannot see the edit events");
 });
+
+// V2-K10: read-only profit, leak pair and access boundaries. Reuse suite sign-in.
+async function k10PricedJob() {
+  const { draftJob, lines, save } = await draftForPlan();
+  const { sessionId, cookies } = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId });
+  await save(1, lines.map((line, index) => ({ ...line, unitRatePence: index === 0 ? 1840000 : 0 })));
+  const party = await app.parties.view({ sessionId }, draftJob);
+  await app.parties.command({ sessionId }, draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: party.jobRevision, expectedBindingId: null,
+    customer: { version: "customer.v1", type: "person", name: "Fictional K10 Customer",
+      email: "k10@jobguard-v2.invalid", phone: "+447700900042" }, customerRef: null,
+    site: { version: "site.v1", addressLines: ["10 Fictional Lane"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const { view: { documentId, documentVersion, contentHash } } = await app.quote.preview(draftJob, {
+    version: "quote-preview-command.v1", recipient: "k10@jobguard-v2.invalid",
+  });
+  await app.quote.issue(draftJob, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId, contentHash, recipient: "k10@jobguard-v2.invalid" });
+  await json(await request(`/api/jobs/${draftJob}/quotes/delivery/execute`, {
+    cookies, body: { version: "quote-execute-command.v1", documentId, mode: "success" },
+  }));
+  await app.quote.accept(draftJob, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
+    documentId, documentVersion, documentHash: contentHash,
+    statedCustomerName: "Fictional K10 Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  await app.quote.activate(draftJob, switchLive());
+  const variationId = randomUUID();
+  const proposed = await app.variation.command(draftJob, { version: "variation-command.v1", action: "propose",
+    proposalId: variationId, scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null,
+    description: "Fictional approved extra", captureText: "Fictional extra agreed by builder",
+    price: { quantity: "1", unit: "item", unitRatePence: 125000, direction: "addition" } });
+  await app.variation.command(draftJob, { version: "variation-command.v1", action: "approve",
+    variationId, revisionId: proposed.variations.find(item => item.id === variationId).currentRevisionId,
+    approvalId: randomUUID(), attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+  const { documentId: costDocument } = await app.supplierDocuments.intake(draftJob, {
+    version: "supplier-document-intake.v1", commandId: randomUUID(), fixtureId: "materials-B-invoice",
+    channel: "picker", expectedRevision: 0,
+  });
+  await app.supplierDocuments.confirm(draftJob, { version: "supplier-fact-correction.v1", commandId: randomUUID(),
+    documentId: costDocument, documentType: "invoice", quantity: "1", unitPricePence: 910000,
+    netPence: 910000, expectedRevision: 0, disposition: "manual_transcription" });
+  return { draftJob, costDocument, app };
+}
+
+test("K10 exact stored figures, complete hidden-finding pair, no write on repeated reads, second firm and roles refused", async () => {
+  const { cookies, sessionId } = await signIn("builder");
+  const plain = await k10PricedJob(), planted = await k10PricedJob();
+  const { context, membershipId } = await authenticatePracticeSession(runtime, sessionId);
+  // Test setup alone writes a held finding; the read runs with the unprivileged builder pool.
+  await admin.query(`INSERT INTO app.shadow_commercial_signal
+    (tenant_id,job_id,id,work_id,signal_type,detector_kind,detector_version,evidence_cutoff_at,
+     description,estimated_value_pence,confidence_band,state)
+    VALUES($1,$2,$3,$4,'possible_extra','deterministic','k10.fixture.v1',clock_timestamp(),
+     'K10 hidden money canary',99999999,'low','held_for_final_check')`,
+  [context.tenantId, planted.draftJob, randomUUID(), randomUUID()]);
+  const read = async (id, options = { cookies }) => {
+    const response = await request(`/api/jobs/${id}/profit-so-far`, options);
+    assert.match(response.headers.get("cache-control"), /no-store/u);
+    return json(response);
+  };
+  const auditCount = async () => (await admin.query("SELECT count(*)::int n FROM app.audit_event")).rows[0].n;
+  const before = await auditCount();
+  const response = await read(plain.draftJob);
+  assert.deepEqual(response, await read(planted.draftJob));
+  assert.deepEqual(await read(plain.draftJob), response);
+  assert.equal(await auditCount(), before, "reads must not append audit events");
+  assert.equal(response.quoted, "18400.00"); assert.equal(response.approvedExtras, "1250.00");
+  assert.equal(response.jobTotal, "19650.00"); assert.equal(response.recordedCosts, "9100.00");
+  assert.equal(response.leftInBudget, "10550.00"); assert.equal(response.spentPercent, "46.31");
+  assert.equal(response.taxBasis, "ex-VAT"); assert.equal(response.notice, "Costs recorded so far only.");
+  assert.doesNotMatch(JSON.stringify(response), /hidden|canary|forecast|99999999/iu);
+  const stranger = await signIn("second-builder");
+  const path = `/api/jobs/${plain.draftJob}/profit-so-far`;
+  assert.equal((await request(path, { cookies: stranger.cookies })).status, 404);
+  assert.equal((await request(path, { cookies: "jg_customer_session=fictional-customer-token" })).status, 401);
+  // A live non-owner session may not read the builder's money, even if ownership were unchanged.
+  try {
+    await admin.query("UPDATE app.membership SET role='operative' WHERE tenant_id=$1 AND id=$2", [context.tenantId, membershipId]);
+    const refused = await request(path, { cookies });
+    assert.ok([401, 404].includes(refused.status));
+    assert.doesNotMatch(await refused.text(), /18400|9100|10550/u);
+  } finally {
+    await admin.query("UPDATE app.membership SET role='owner' WHERE tenant_id=$1 AND id=$2", [context.tenantId, membershipId]);
+  }
+  // A fresh draft has no accepted price and no percentage, despite its priced working scope.
+  const draft = await draftForPlan();
+  const noPrice = await read(draft.draftJob);
+  assert.equal(noPrice.spentPercent, null); assert.equal(noPrice.jobTotal, null);
+  assert.match(noPrice.summary, /No accepted price yet/u);
+  // Only the latest confirmed facts count; unconfirmed documents and repeated intake do not add spend.
+  await plain.app.supplierDocuments.intake(plain.draftJob, { version: "supplier-document-intake.v1",
+    commandId: randomUUID(), fixtureId: "materials-320-invoice", channel: "picker", expectedRevision: 1 });
+  assert.deepEqual(await read(plain.draftJob), response);
+  await plain.app.supplierDocuments.confirm(plain.draftJob, { version: "supplier-fact-correction.v1", commandId: randomUUID(),
+    documentId: plain.costDocument, documentType: "invoice", quantity: "1", unitPricePence: 900000,
+    netPence: 900000, expectedRevision: 1, disposition: "manual_transcription" });
+  assert.equal((await read(plain.draftJob)).recordedCosts, "9000.00");
+  const { documentId: replacement } = await plain.app.supplierDocuments.intake(plain.draftJob, {
+    version: "supplier-document-intake.v1", commandId: randomUUID(), fixtureId: "materials-B-revised-invoice",
+    channel: "picker", expectedRevision: 2,
+  });
+  await plain.app.supplierDocuments.confirm(plain.draftJob, { version: "supplier-fact-correction.v1", commandId: randomUUID(),
+    documentId: replacement, documentType: "invoice", quantity: "8", unitPricePence: 2000,
+    netPence: 16000, expectedRevision: 0, disposition: "source_verified" });
+  const facts = (await plain.app.supplierDocuments.view(plain.draftJob)).state.facts;
+  await plain.app.thingsToCheck.supersede(plain.draftJob, { version: "supplier-bill-supersession.v1", commandId: randomUUID(),
+    originalFactRevisionId: facts.find(fact => fact.document_id === plain.costDocument).confirmed.id,
+    replacementFactRevisionId: facts.find(fact => fact.document_id === replacement).confirmed.id, expectedRevision: 0 });
+  assert.equal((await read(plain.draftJob)).recordedCosts, "160.00", "do not count a replaced invoice twice");
+  const { documentId: credit } = await plain.app.supplierDocuments.intake(plain.draftJob, {
+    version: "supplier-document-intake.v1", commandId: randomUUID(), fixtureId: "materials-B-credit",
+    channel: "picker", expectedRevision: 3,
+  });
+  await plain.app.supplierDocuments.confirm(plain.draftJob, { version: "supplier-fact-correction.v1", commandId: randomUUID(),
+    documentId: credit, documentType: "credit", quantity: "1", unitPricePence: 5000,
+    netPence: 5000, expectedRevision: 0, disposition: "manual_transcription" });
+  assert.equal((await read(plain.draftJob)).recordedCosts, "110.00", "supplier credits reduce recorded spend");
+});

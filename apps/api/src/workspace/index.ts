@@ -133,3 +133,6 @@ export { NoticeFixtureApplication, assertNoticeFixtureMode, noticeFixtureFailure
 
 export { InterimDraftApplication, interimDraftFailure } from "../interim-draft.application.js";
 export { ConnectorPromotionApplication } from "../connectors/promotion.application.js";
+
+// V2-K10: read-only builder budget.
+export { V2JobProfitApplication } from "./v2-job-profit.application.js";

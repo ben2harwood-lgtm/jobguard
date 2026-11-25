@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-k10": {
+      "branches": [
+        "codex/sandbox/v2-k10"
+      ],
+      "note": "RED. Read-only V2 builder profit from accepted quote, approved extras and confirmed supplier costs. No migration or data-changing command.",
+      "allow": [
+        "packages/core/src/v2-job-profit.ts",
+        "packages/core/src/v2-job-profit.test.ts",
+        "packages/core/src/index.ts",
+        "packages/db/src/v2-job-profit-repository.ts",
+        "packages/db/src/index.ts",
+        "apps/api/src/workspace/v2-job-profit.application.ts",
+        "apps/api/src/workspace/v2-job-profit.application.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/profit-so-far/route.ts",
+        "apps/web/app/ui/v2-job-profit.tsx",
+        "apps/web/app/ui/workspace-shell.tsx",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/k10.phone.test.mjs",
+        "apps/web/app/ui/v2-job-profit.test.tsx"
+      ]
+    }
+  }
+}
