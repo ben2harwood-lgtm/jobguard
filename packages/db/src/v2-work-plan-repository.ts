@@ -36,7 +36,22 @@ const planSource = z.strictObject({
 type PlanSource = z.infer<typeof planSource>;
 type PlanKey = [tenantId: string, jobId: string, quoteRevisionId: string];
 type PlanRow = { template_key: string; previous_plan_revision_id: string | null };
-type CurrentDraft = { current_revision_id: string | null; status: string; accepted_quote_version_id: string | null };
+type PlanHead = {
+  quoteRevisionId: string | null;
+  jobStatus: string;
+  acceptedDocumentId: string | null;
+  acceptedNetPence: string | null;
+  activationId: string | null;
+};
+type ApprovedVariation = {
+  scopeItemId: string;
+  revisionId: string;
+  approvalId: string;
+  description: string;
+  quantity: string;
+  unit: string;
+  signedDeltaPence: number;
+};
 type EditReceipt = { commandId: string; quoteRevisionId: string; version: number; actorMembershipId: string; recordedAt: Date };
 
 export class WorkPlanError extends Error {
@@ -52,19 +67,29 @@ export class WorkPlanRepository {
 
   async generate(context: VerifiedTenantContext, source: PlanSource) {
     const { jobId, quoteRevisionId } = planSource.parse(source);
-    return withTenant(this.pool, context, database => this.generatePlan(database, [context.tenantId, jobId, quoteRevisionId]));
+    return withTenant(this.pool, context, async database => {
+      const head = await this.planHead(database.$client, context.tenantId, jobId, true);
+      if (!head) throw new WorkPlanError("QUOTE_REVISION_NOT_FOUND");
+      this.checkFrozenRevision(head, quoteRevisionId);
+      return this.generatePlan(database, [context.tenantId, jobId, quoteRevisionId], head);
+    });
   }
 
   async read(context: VerifiedTenantContext, source: PlanSource) {
     const { jobId, quoteRevisionId } = planSource.parse(source);
-    return withTenant(this.pool, context, ({ $client }) => this.readPlan($client, [context.tenantId, jobId, quoteRevisionId]));
+    return withTenant(this.pool, context, async ({ $client }) => {
+      const head = await this.planHead($client, context.tenantId, jobId);
+      if (!head) return null;
+      this.checkFrozenRevision(head, quoteRevisionId);
+      return this.readPlan($client, [context.tenantId, jobId, quoteRevisionId], head);
+    });
   }
 
-  async openDraft(context: VerifiedTenantContext, jobId: string) {
+  async open(context: VerifiedTenantContext, jobId: string) {
     return withTenant(this.pool, context, async database => {
-      const draft = await this.lockDraft(database.$client, context.tenantId, jobId);
-      this.requireDraft(draft);
-      return this.generatePlan(database, [context.tenantId, jobId, draft.current_revision_id]);
+      const head = await this.planHead(database.$client, context.tenantId, jobId, true);
+      this.requireCurrentRevision(head);
+      return this.generatePlan(database, [context.tenantId, jobId, head.quoteRevisionId], head);
     });
   }
 
@@ -72,8 +97,8 @@ export class WorkPlanRepository {
   async refreshDraft(client: PoolClient, key: PlanKey, previousRevisionId: string) {
     const prior = await this.planRow(client, [key[0], key[1], previousRevisionId]);
     if (!prior || prior.template_key !== this.template.key) return;
-    const draft = await this.lockDraft(client, key[0], key[1]);
-    if (draft && this.isDraft(draft)) await this.insertPlan(client, key, previousRevisionId);
+    const head = await this.planHead(client, key[0], key[1]);
+    if (head && this.isDraft(head)) await this.insertPlan(client, key, previousRevisionId);
   }
 
   async edit(context: VerifiedTenantContext, jobId: string, sessionId: string, input: WorkPlanEdit) {
@@ -85,13 +110,13 @@ export class WorkPlanRepository {
       const { rows: [editor] } = await client.query<{ id: string | null }>("SELECT app.v2_work_plan_editor($1) AS id", [digest]);
       if (!editor?.id) throw new WorkPlanError("WORK_PLAN_EDITOR_REQUIRED");
 
-      const draft = await this.lockDraft(client, key[0], jobId);
+      const head = await this.planHead(client, key[0], jobId, true);
       const receipt = await this.replay(client, key, editor.id, command);
       if (receipt) return receipt;
-      this.requireDraft(draft);
-      if (draft.current_revision_id !== command.quoteRevisionId) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
+      this.requireCurrentRevision(head);
+      if (head.quoteRevisionId !== command.quoteRevisionId) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
 
-      const plan = await this.generatePlan(database, key);
+      const plan = await this.generatePlan(database, key, head);
       if (plan.version !== command.expectedVersion) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
       const existing = plan.tasks.some(task => task.scopeItemId === command.scopeItemId && task.key === command.taskKey);
       const { position, trade, durationMinutes } = command.changes;
@@ -145,31 +170,49 @@ export class WorkPlanRepository {
     return saved;
   }
 
-  private async lockDraft(client: PoolClient, tenantId: string, jobId: string) {
-    const { rows: [head] } = await client.query<CurrentDraft>(`
-      SELECT d.current_revision_id, j.status, j.accepted_quote_version_id FROM app.quote_draft d
-      JOIN app.job j ON (j.tenant_id, j.id) = (d.tenant_id, d.job_id)
-      WHERE (d.tenant_id, d.job_id) = ($1, $2) FOR UPDATE OF d
+  private async planHead(client: PoolClient, tenantId: string, jobId: string, lockDraft = false) {
+    if (lockDraft) {
+      // Read lifecycle facts after waiting for any concurrent quote save or plan edit.
+      await client.query(`SELECT 1 FROM app.quote_draft WHERE (tenant_id, job_id) = ($1, $2) FOR UPDATE`, [tenantId, jobId]);
+    }
+    // Cancellation clears the job's active acceptance pointer. Its immutable acceptance still anchors the plan.
+    const { rows: [head] } = await client.query<PlanHead>(`
+      SELECT CASE WHEN q.id IS NULL THEN d.current_revision_id ELSE q.quote_revision_id END AS "quoteRevisionId",
+        j.status AS "jobStatus", q.id AS "acceptedDocumentId", q.snapshot->>'netPence' AS "acceptedNetPence",
+        a.id AS "activationId"
+      FROM app.job j
+      LEFT JOIN app.quote_draft d ON (d.tenant_id, d.job_id) = (j.tenant_id, j.id)
+      LEFT JOIN app.job_activation a ON (a.tenant_id, a.job_id) = (j.tenant_id, j.id)
+      LEFT JOIN app.quote_document_version q ON (q.tenant_id, q.job_id, q.id) = (j.tenant_id, j.id,
+        COALESCE(a.accepted_document_id, j.accepted_quote_version_id, (
+          SELECT x.document_id FROM app.quote_acceptance x WHERE (x.tenant_id, x.job_id) = (j.tenant_id, j.id)
+          ORDER BY x.recorded_at DESC, x.document_version DESC, x.id DESC LIMIT 1
+        )))
+      WHERE (j.tenant_id, j.id) = ($1, $2)
     `, [tenantId, jobId]);
     return head;
   }
 
-  private isDraft(draft: CurrentDraft) {
-    return (draft.status === "draft" || draft.status === "quoting") && !draft.accepted_quote_version_id;
+  private isDraft(head: PlanHead) {
+    return !head.acceptedDocumentId && (head.jobStatus === "draft" || head.jobStatus === "quoting");
   }
 
-  private requireDraft(draft: CurrentDraft | undefined): asserts draft is CurrentDraft & { current_revision_id: string } {
-    if (!draft?.current_revision_id) throw new WorkPlanError("QUOTE_REVISION_NOT_FOUND");
-    if (!this.isDraft(draft)) throw new WorkPlanError("WORK_PLAN_DRAFT_REQUIRED");
+  private requireCurrentRevision(head: PlanHead | undefined): asserts head is PlanHead & { quoteRevisionId: string } {
+    if (!head?.quoteRevisionId) throw new WorkPlanError("QUOTE_REVISION_NOT_FOUND");
+    if (!head.acceptedDocumentId && !this.isDraft(head)) throw new WorkPlanError("WORK_PLAN_DRAFT_REQUIRED");
   }
 
-  private async generatePlan(database: TenantTransaction, key: PlanKey) {
+  private checkFrozenRevision(head: PlanHead, revisionId: string) {
+    if (head.acceptedDocumentId && head.quoteRevisionId !== revisionId) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
+  }
+
+  private async generatePlan(database: TenantTransaction, key: PlanKey, head: PlanHead) {
     const { $client: client } = database;
-    // Opening or editing a plan creates it at most once. A quote-save refresh inserts through
+    // Opening, generating or editing a plan creates it at most once. A quote-save refresh inserts through
     // refreshDraft instead, which quote.draft.saved already covers, so it appends nothing here.
     const tasks = await this.insertPlan(client, key, null);
     if (tasks) await this.recordGenerated(database, key, tasks);
-    const plan = await this.readPlan(client, key);
+    const plan = await this.readPlan(client, key, head);
     if (!plan) throw new WorkPlanError("QUOTE_REVISION_NOT_FOUND");
     return plan;
   }
@@ -244,7 +287,21 @@ export class WorkPlanRepository {
     return { scope, tasks };
   }
 
-  private async readPlan(client: PoolClient, key: PlanKey) {
+  private async approvedVariations(client: PoolClient, [tenantId, jobId]: PlanKey) {
+    const { rows } = await client.query<Omit<ApprovedVariation, "signedDeltaPence"> & { signedDeltaPence: string }>(`
+      SELECT DISTINCT ON (a.variation_id) r.scope_item_id AS "scopeItemId", r.id AS "revisionId", a.id AS "approvalId",
+        r.description, r.quantity_decimal AS quantity, r.unit, r.signed_delta_pence AS "signedDeltaPence"
+      FROM app.variation_approval a JOIN app.variation_revision r
+        ON (r.tenant_id, r.job_id, r.variation_id, r.id, r.revision, r.content_hash)
+         = (a.tenant_id, a.job_id, a.variation_id, a.revision_id, a.revision, a.content_hash)
+      WHERE (a.tenant_id, a.job_id) = ($1, $2)
+        AND r.signed_delta_pence = a.signed_delta_pence
+      ORDER BY a.variation_id, a.revision DESC
+    `, [tenantId, jobId]);
+    return rows.map(row => ({ ...row, signedDeltaPence: Number(row.signedDeltaPence) }));
+  }
+
+  private async readPlan(client: PoolClient, key: PlanKey, head: PlanHead) {
     const plan = await this.planRow(client, key);
     if (!plan) return null;
     if (plan.template_key !== this.template.key) throw new WorkPlanError("WORK_PLAN_TEMPLATE_UNAVAILABLE");
@@ -275,11 +332,18 @@ export class WorkPlanRepository {
     // Compare the refresh before applying edits made on this revision.
     const refreshed = previous && inherited.length !== edits.length
       ? applyWorkPlanEdits(base.scope, base.tasks, inherited) : current;
-    return { jobId: key[1], quoteRevisionId: key[2], templateKey: plan.template_key,
+    const agreement = head.acceptedDocumentId ? {
+      documentId: head.acceptedDocumentId,
+      netPence: head.acceptedNetPence === null ? null : Number(head.acceptedNetPence),
+      approvedVariations: await this.approvedVariations(client, key),
+    } : null;
+    const state = head.activationId ? "live" as const : agreement ? "accepted" as const : "draft" as const;
+    return { jobId: key[1], quoteRevisionId: key[2], templateKey: plan.template_key, state, agreement,
+      activationId: head.activationId,
       version: edits.length - inherited.length, tasks: current.tasks, unplanned: current.unplanned,
       scopeItems: [...current.sources].map(([scopeItemId, details]) => ({ scopeItemId, ...details })),
       changes: compareWorkPlanTasks(previous, refreshed) };
   }
 }
 
-export type WorkPlan = Awaited<ReturnType<WorkPlanRepository["openDraft"]>>;
+export type WorkPlan = Awaited<ReturnType<WorkPlanRepository["open"]>>;

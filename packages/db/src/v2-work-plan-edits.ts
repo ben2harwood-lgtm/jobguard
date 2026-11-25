@@ -5,6 +5,8 @@ const taskChanges = z.strictObject({
   position: z.number().int().min(1).max(2_147_483_647).optional(),
   durationMinutes: z.number().int().min(1).max(2_147_483_647).optional(),
   trade: z.string().trim().min(1).max(100).optional(),
+  scheduledDate: z.iso.date().nullable().optional(),
+  assignee: z.string().trim().min(1).max(100).nullable().optional(),
 }).refine(changes => Object.values(changes).some(value => value !== undefined));
 
 export const customWorkPlanTaskKey = "custom-scope-item";
@@ -32,6 +34,8 @@ export type WorkPlanTask = {
   materialNeeds: readonly string[];
   proofPoints: readonly string[];
   customerChoices: readonly string[];
+  scheduledDate?: string | null;
+  assignee?: string | null;
   needsReview?: true;
 };
 
@@ -74,9 +78,10 @@ export function applyWorkPlanEdits(scope: WorkPlanScopeRow[], baseTasks: WorkPla
         durationMinutes: changes.durationMinutes, position: changes.position, dependsOn: [],
         materialNeeds: [], proofPoints: [], customerChoices: [] };
     }
-    const { position, trade, durationMinutes } = changes;
+    const { position, trade, durationMinutes, scheduledDate, assignee } = changes;
     const { needsReview: _needsReview, ...prior } = task;
-    const next: WorkPlanTask = { ...prior, trade: trade ?? task.trade, durationMinutes: durationMinutes ?? task.durationMinutes };
+    const next: WorkPlanTask = { ...prior, trade: trade ?? task.trade, durationMinutes: durationMinutes ?? task.durationMinutes,
+      ...(scheduledDate !== undefined && { scheduledDate }), ...(assignee !== undefined && { assignee }) };
     if (scopeChanged(item.source, edit.source)) next.needsReview = true;
     if (index >= 0) tasks.splice(index, 1);
     tasks.splice(position === undefined ? index : position - 1, 0, next);
