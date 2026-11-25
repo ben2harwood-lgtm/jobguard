@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-mock-walk": {
+      "branches": [
+        "claude/project-thread-ln7u5f"
+      ],
+      "note": "V2-B1-MOCK: local V2 Walk and Check-the-walk mock-ups and Playwright screenshots.",
+      "allow": [
+        "apps/web/app/(designed)/v2-mock-walk/fixture.ts",
+        "apps/web/app/(designed)/v2-mock-walk/page.tsx",
+        "apps/web/app/(designed)/v2-mock-walk/walk-mock.tsx",
+        "apps/web/e2e/artifacts/v2-mock-walk/check-the-walk-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/check-the-walk-360.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/check-the-walk-after-a-move-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/check-the-walk-after-a-move-360.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/check-the-walk-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/check-the-walk-empty-360.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/check-the-walk-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/check-the-walk-problem-360.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-360.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-camera-refused-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-camera-refused-360.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-empty-360.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-microphone-refused-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-microphone-refused-360.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-no-signal-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-no-signal-360.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-mock-walk/walk-problem-360.png",
+        "apps/web/e2e/v2-mock-walk.spec.ts",
+        "apps/web/playwright.v2-mock-walk.config.ts"
+      ]
+    }
+  }
+}
