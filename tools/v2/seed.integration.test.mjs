@@ -15,6 +15,9 @@ import { joineryTemplate } from "./fixtures/joinery-template.mjs";
 // V2-PX
 import { createHash } from "node:crypto";
 import { uploadPracticePhoto } from "./test/practice-photo.mjs";
+// V2-FL
+import { readdirSync } from "node:fs";
+import { firmLockCatalog, firmLockFailures, pendingTables } from "./firm-lock/guard.mjs";
 
 const { settings } = validateSettings({});
 const origin = settings.AUTH_ALLOWED_ORIGIN;
@@ -1004,4 +1007,45 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   const before = await policyCount();
   await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   assert.equal(await policyCount(), before);
+});
+
+// V2-FL (Q35 to Q39): the firm-lock guard, then every slice's firm A/B checks in name order.
+
+test("FL guard: every job-bound table runtime can touch is firm-locked or named in a pending slice", async () => {
+  const failures = await firmLockFailures(admin);
+  assert.deepEqual(failures, [], "not firm-locked:\n" +
+    failures.map(row => `  ${row.relation} (${row.kind}): ${row.problems.join("; ")}`).join("\n"));
+});
+
+test("FL guard: every pending table is still in the catalog and still unlocked", async () => {
+  const catalog = new Map((await firmLockCatalog(admin)).map(row => [row.relation, row]));
+  const stale = [...pendingTables()].filter(([table]) => !catalog.has(table) || catalog.get(table).firm_policy)
+    .map(([table, slice]) => `${slice}: ${table}`);
+  assert.deepEqual(stale, [], "a slice locked its tables but kept its pending file, or a table left the catalog");
+});
+
+let firmContexts;
+const firmLockHelpers = {
+  test, assert, admin, runtime, withTenant,
+  contexts: () => firmContexts ??= (async () => {
+    await pxLiveJob(); // a fresh live job for firm A, so quote, party and activation rows exist
+    const builder = await signIn("builder");
+    const outsider = await signIn("second-builder");
+    return {
+      firmA: (await authenticatePracticeSession(runtime, builder.sessionId)).context,
+      firmB: (await authenticatePracticeSession(runtime, outsider.sessionId)).context,
+      firmBReal: outsider.realContext,
+    };
+  })(),
+};
+for (const file of readdirSync(new URL("./firm-lock/", import.meta.url)).filter(name => /^FL-.*\.checks\.mjs$/u.test(name)).sort()) {
+  (await import(`./firm-lock/${file}`)).register(firmLockHelpers);
+}
+
+test("FL-1: the core firm lock migration is safe to run twice", async () => {
+  const policies = async () => (await admin.query(
+    "SELECT polrelid::regclass::text AS t, pg_get_expr(polqual, polrelid) AS q FROM pg_policy WHERE polname = 'v2_practice_firm' ORDER BY 1")).rows;
+  const before = await policies();
+  await admin.query(readFileSync(new URL("./migrations/2047_v2_firm_lock_core.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await policies(), before);
 });
