@@ -1,6 +1,6 @@
 # Q39 · V2-FL-5: firm lock, supplier, practice feed, inbox, sandbox, watchdog, worm, synthetic and simulated
 
-**Builder:** web Codex (lane W). **Base:** `codex/sandbox/v2-fl1` (FL-1, Q35) as soon as it's pushed. **Branch:** `codex/sandbox/v2-fl5`. **PR:** draft into `codex/sandbox/v2-fl1`, so CI1 runs; retarget to v2/main after FL-1 merges. **Migration: 2051.** Planner: Fable thread. Runs in parallel with the other FL slices.
+**Builder:** desktop Codex (lane A; no web Codex runner, 25 Nov). **Base:** `codex/sandbox/v2-fl1` (FL-1, Q35) as soon as it's pushed. **Branch:** `codex/sandbox/v2-fl5`. **PR:** draft into `codex/sandbox/v2-fl1`, so CI1 runs; retarget to v2/main after FL-1 merges. **Migration: 2051.** Planner: Fable thread. Runs in parallel with the other FL slices.
 
 ## Shared rules for every FL slice (FL-1 to FL-5)
 - **Why.** V2's two linked practice firms share one tenant (`11111111-…`). Main's tenant RLS doesn't separate them. Only `v2_practice_firm` policies do. The Q35 catalog run (report: `/mnt/project-files/jobguard-v2/v2-fl-catalog-stop-2026-11-25.md`, read on PX #964 @ b1b0bf11) found 282 `app` tables with `tenant_id` + `job_id`. 24 are locked, and **162 are unlocked and readable by `jobguard_runtime`**. A further 16 indirect tables are unlocked and readable.
