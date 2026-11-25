@@ -1,5 +1,5 @@
 import { requirePilotG1 } from "@jobguard/config";
-import { EvidenceService, pilotEvidenceStorage, PilotJobRepository, ProofCommandService, VariationRepository, withTenant, type VerifiedTenantContext } from "@jobguard/db";
+import { EvidenceService, extraPhotoCommandV1, pilotEvidenceStorage, PilotJobRepository, ProofCommandService, VariationPhotoService, VariationRepository, withTenant, type VerifiedTenantContext } from "@jobguard/db";
 import type { Pool } from "pg";
 import { z } from "zod";
 import type { PilotJobAccess } from "./pilot-job-access.js";
@@ -71,7 +71,15 @@ export function pilotJobContinuation(pool: Pool, context: VerifiedTenantContext,
     },
     extras: async (jobId: string) => {
       await access(jobId);
-      return { version: 1 as const, jobId, variations: (await variations.read(context, jobId)).variations };
+      const rows = (await variations.read(context, jobId)).variations;
+      const photos = await VariationPhotoService.forPilot(pool, jobId).list(context);
+      return { version: 1 as const, jobId, variations: rows.map(row => ({ ...row, photos: photos
+        .filter(photo => photo.variationId === row.id)
+        .map(({ variationId: _variation, ...photo }) => photo) })) };
+    },
+    saveExtraPhoto: async (jobId: string, raw: unknown) => {
+      await access(jobId, true);
+      return VariationPhotoService.forPilot(pool, jobId).save(context, parse(extraPhotoCommandV1, raw));
     },
     logExtra: async (jobId: string, raw: unknown) => {
       const actor = await access(jobId, true);
