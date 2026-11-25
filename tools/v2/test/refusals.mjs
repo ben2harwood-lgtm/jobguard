@@ -72,7 +72,7 @@ export async function assertBuilderPositive({ request, signIn, route, expect = r
   return true;
 }
 
-async function assertRefusal(response, denyList, { emptyJobs = false, sessionCase = false } = {}) {
+async function assertRefusal(response, denyList, { emptyJobs = false, sessionCase = false, nestCode } = {}) {
   const text = await response.text();
   let body;
   try { body = JSON.parse(text); } catch { assert.fail("refusal must be typed JSON"); }
@@ -87,7 +87,10 @@ async function assertRefusal(response, denyList, { emptyJobs = false, sessionCas
   assert.ok((sessionCase ? [401] : [401, 403, 404]).includes(response.status), `expected typed refusal, got ${response.status}`);
   assertNoKeys(body, denyList);
   assertNoAmounts(body);
-  assert.ok(refusalCodes.has(body?.code), "refusal must contain an allowed typed code");
+  if (nestCode) {
+    assert.equal(response.status, 403, "expected exact Nest refusal status 403");
+    assert.equal(body?.code, nestCode, "expected exact Nest refusal code for this CSRF step");
+  } else assert.ok(refusalCodes.has(body?.code), "refusal must contain an allowed typed code");
   return { status: response.status, code: body.code };
 }
 
@@ -115,14 +118,18 @@ export async function assertBuilderRouteRefuses({ request, signIn, route, expect
     ["a", {}],
     ["b-format", { cookies: "jg_session=fictional-invalid; jobguard_session=fictional-invalid" }],
     ["b-unknown-uuid", { cookies: `jg_session=${unknownSession}; jobguard_session=${unknownSession}` }],
-    ["d-real", { cookies: second.signedIn }],
+    ...(route.transport === "api" ? [
+      ["d-real-no-csrf", { cookies: second.signedIn }, "ORIGIN_FORBIDDEN"],
+      ["d-real-csrf", { cookies: second.signedIn, csrf: second.csrfToken }, "SYNTHETIC_WORKFLOW_ONLY"],
+    ] : [["d-real", { cookies: second.signedIn }]]),
     ["d-practice", { cookies: second.cookies }],
   ];
   const observed = [];
-  for (const [name, credentials] of cases) {
+  for (const [name, credentials, nestCode] of cases) {
     try {
+      if (name === "d-real-csrf") assert.ok(credentials.csrf, "second firm's own CSRF token required");
       observed.push({ case: name, ...await checkRequest(request, route, credentials, denyList, undefined,
-        { emptyJobs: route.list && name.startsWith("d-"), sessionCase: route.list && !name.startsWith("d-") }) });
+        { emptyJobs: route.list && name.startsWith("d-"), sessionCase: route.list && !name.startsWith("d-"), nestCode }) });
     } catch (error) { throw new Error(`SX ${route.path} ${name}: ${error.message}`, { cause: error }); }
   }
   return observed;

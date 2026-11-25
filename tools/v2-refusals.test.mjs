@@ -6,7 +6,7 @@ import { assertBuilderPositive, assertBuilderRouteRefuses, assertCapabilityConfi
 // Deterministic helper checks; real authorization is proved by the V2 seed suite.
 const builder = { cookies: "jobguard_session=real; jg_session=practice", csrfToken: "csrf" };
 const second = { signedIn: "jobguard_session=second", cookies: "jobguard_session=second; jg_session=second-practice",
-  realContext: { tenantId: "other-tenant" } };
+  csrfToken: "second-csrf", realContext: { tenantId: "other-tenant" } };
 const sessions = () => guardCachedSignIn(name => Promise.resolve(name === "builder" ? builder : second));
 const route = { path: "/api/jobs/job", expect: body => assert.equal(body.job.id, "job") };
 const refused = () => Response.json({ code: "UNAUTHENTICATED" }, { status: 401 });
@@ -42,6 +42,43 @@ test("SX runs positive first, then missing, two invalid values and both second-f
 test("SX never counts universal refusals or a wrong positive body", async () => {
   for (const request of [async () => refused(), async () => Response.json({ job: { id: "wrong" } })]) {
     await assert.rejects(check(request), /planner miss/u);
+  }
+});
+test("SX Nest d-real proves CSRF refusal then business refusal with the second firm's own token", async () => {
+  const calls = [];
+  const request = requests((_path, options) => options.cookies === second.signedIn
+    ? Response.json({ code: options.csrf ? "SYNTHETIC_WORKFLOW_ONLY" : "ORIGIN_FORBIDDEN" }, { status: 403 })
+    : refused(), calls);
+  const observed = await assertBuilderRouteRefuses({ request, signIn: sessions(), route: { ...route, transport: "api" } });
+  assert.deepEqual(calls.filter(call => call.cookies === second.signedIn).map(call => call.csrf), [undefined, second.csrfToken]);
+  assert.deepEqual(observed.filter(row => row.case.startsWith("d-real")), [
+    { case: "d-real-no-csrf", status: 403, code: "ORIGIN_FORBIDDEN" },
+    { case: "d-real-csrf", status: 403, code: "SYNTHETIC_WORKFLOW_ONLY" },
+  ]);
+});
+test("SX Nest d-real requires the exact status and code at each step and still checks leaks", async () => {
+  for (const [csrf, status, body] of [
+    [false, 403, { code: "SYNTHETIC_WORKFLOW_ONLY" }],
+    [true, 403, { code: "ORIGIN_FORBIDDEN" }],
+    [true, 401, { code: "SYNTHETIC_WORKFLOW_ONLY" }],
+    [true, 403, { code: "FORBIDDEN" }],
+    [true, 403, { code: "SYNTHETIC_WORKFLOW_ONLY", totalPence: 500 }],
+    [false, 403, { code: "ORIGIN_FORBIDDEN", message: "£5" }],
+  ]) {
+    const request = requests((_path, options) => {
+      if (options.cookies !== second.signedIn) return refused();
+      return Boolean(options.csrf) === csrf ? Response.json(body, { status })
+        : Response.json({ code: options.csrf ? "SYNTHETIC_WORKFLOW_ONLY" : "ORIGIN_FORBIDDEN" }, { status: 403 });
+    });
+    await assert.rejects(assertBuilderRouteRefuses({ request, signIn: sessions(), route: { ...route, transport: "api" } }),
+      /exact Nest refusal|forbidden field|monetary value/u);
+  }
+});
+test("SX Nest-only codes remain forbidden on web routes and other Nest cases", async () => {
+  for (const code of ["ORIGIN_FORBIDDEN", "SYNTHETIC_WORKFLOW_ONLY"]) {
+    await assert.rejects(check(requests(() => Response.json({ code }, { status: 403 }))), /allowed typed code/u);
+    await assert.rejects(assertBuilderRouteRefuses({ request: requests(() => Response.json({ code }, { status: 403 })),
+      signIn: sessions(), route: { ...route, transport: "api" } }), /allowed typed code/u);
   }
 });
 for (const status of [200, 400, 405, 500, 503]) {

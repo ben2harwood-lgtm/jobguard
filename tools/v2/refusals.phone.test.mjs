@@ -91,7 +91,7 @@ before(async () => {
   browser = await chromium.launch({ executablePath: process.env.V2_TEST_CHROMIUM });
   const builder = await signIn("builder");
   await signIn("second-builder");
-  route = { path: `/api/v2-backend/jobs/${builder.jobId}`, expect: body => assert.equal(body.job.id, builder.jobId) };
+  route = { path: `/api/v2-backend/jobs/${builder.jobId}`, transport: "api", expect: body => assert.equal(body.job.id, builder.jobId) };
 });
 after(async () => browser?.close());
 for (const width of [360, 1280]) {
