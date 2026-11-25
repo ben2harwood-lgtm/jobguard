@@ -1022,6 +1022,10 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
     { agreed_at: new Date().toISOString(), agreed_by: "Fictional customer" },
     { agree_command_id: randomUUID() }, { link_version: 2 },
     { cancelled_at: new Date().toISOString(), cancel_command_id: randomUUID(), cancel_fingerprint: "f", link_version: 2 },
+    // Codex P1 (209d838): a pending link cannot carry a photo locator that is not this job's own verified evidence.
+    { photos: [{ id: randomUUID(), objectKey: `tenants/${DEMO_TENANT_ID}/uploads/${randomUUID()}/original`,
+      objectVersionId: "v1", sha256: "a".repeat(64), contentType: "image/jpeg" }] },
+    { photos: [{ id: randomUUID() }] }, { photos: {} },
   ]) {
     await assert.rejects(withTenant(runtime, auth.context, db => insertCopy(db, changes)),
       error => error.code === "42501" && error.message === "LINK_UNAVAILABLE");

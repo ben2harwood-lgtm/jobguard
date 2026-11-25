@@ -17,6 +17,8 @@
         "apps/web/app/lib/v2-extra-link-server.ts",
         "apps/web/app/v2/jobs/[id]/extra-links/page.tsx",
         "apps/web/app/v2/jobs/[id]/extra-links/view.tsx",
+        "apps/web/proxy.test.ts",
+        "apps/web/proxy.ts",
         "packages/core/src/watchdog.ts",
         "packages/db/migration-notes/2018_customer_extra_links.md",
         "packages/db/src/index.ts",

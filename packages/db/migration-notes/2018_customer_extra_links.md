@@ -116,3 +116,9 @@ Repair (Codex P1, 25 Nov): a BEFORE INSERT guard, `app.v2_f6_guard_insert`,
 refuses any new link that is not pristine (link_version 1, no cancel or
 agreement fields). Without it, same-firm runtime could insert a link that was
 already "agreed" and skip `app.v2_f6_agree`, its checks and its audit event.
+
+Repair (Codex P1 on 209d838): the insert guard also checks every saved photo.
+Each entry must have exactly the five locator fields and match, field for
+field, an original, server-verified, uninvalidated image evidence object of
+the link's own tenant and job; duplicates are refused. The anonymous photo
+endpoint can then never read another job's object by a copied locator.

@@ -68,6 +68,22 @@ BEGIN
   OR NEW.cancel_fingerprint IS NOT NULL OR NEW.agreed_at IS NOT NULL OR NEW.agreed_by IS NOT NULL
   OR NEW.agree_command_id IS NOT NULL OR NEW.agree_fingerprint IS NOT NULL
  THEN RAISE EXCEPTION 'LINK_UNAVAILABLE' USING ERRCODE='42501'; END IF;
+ -- Every saved photo locator must be this job's own verified, valid image evidence,
+ -- copied exactly, so the anonymous photo endpoint can never read another job's object.
+ IF jsonb_typeof(NEW.photos)<>'array' OR EXISTS(
+  SELECT FROM jsonb_array_elements(NEW.photos) p
+  WHERE jsonb_typeof(p)<>'object'
+   OR (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(p) k)
+      <>ARRAY['contentType','id','objectKey','objectVersionId','sha256']
+   OR NOT EXISTS(SELECT FROM app.evidence_object e
+    WHERE e.tenant_id=NEW.tenant_id AND e.job_id=NEW.job_id AND e.id::text=p->>'id' AND e.kind='original'
+     AND e.object_key=p->>'objectKey' AND e.object_version_id=p->>'objectVersionId'
+     AND e.sha256=p->>'sha256' AND e.content_type=p->>'contentType'
+     AND e.content_type IN('image/jpeg','image/png','image/webp') AND e.server_verified_at IS NOT NULL
+     AND NOT EXISTS(SELECT FROM app.evidence_invalidation i WHERE (i.tenant_id,i.evidence_id)=(e.tenant_id,e.id))))
+  OR (SELECT count(*) FROM jsonb_array_elements(NEW.photos))
+     <>(SELECT count(DISTINCT p->>'id') FROM jsonb_array_elements(NEW.photos) p)
+ THEN RAISE EXCEPTION 'LINK_UNAVAILABLE' USING ERRCODE='42501'; END IF;
  RETURN NEW;
 END $$;
 ALTER FUNCTION app.v2_f6_guard_insert() OWNER TO jobguard_migration;
