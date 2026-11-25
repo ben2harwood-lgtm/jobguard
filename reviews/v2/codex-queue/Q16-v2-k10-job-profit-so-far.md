@@ -6,6 +6,8 @@ Tier: **RED** (money; hidden findings). No table (read-only); stop and report if
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-k10, section 2B item 26.
 **Starts when:** R2 has pushed c3. **Base:** that c3 head.
 
+> **c3 audit gap (standard line, coordinator ruling 25 Nov 00:09 UK).** c3's plan read creates a plan with no audit event. That is a known c2/c3 gap, and its fix waits for Ben. This piece **reads or links to the plan only**: build against c3 as it is, and **keep out of `packages/db/src/v2-work-plan-repository.ts`** (and every other c2/c3 file). Do not hold on this gap. Put this line in the PR body: "Inherits c3's plan-creation audit gap; needs c3 re-merged after the c2/c3 fix." 
+
 ## Goal
 A plain line for the builder only: "Quoted £18,400, extras £1,250, spent £9,100 so far (46% of £19,650), £10,550 left in the budget." (ex-VAT; corrected 22:25 UK)
 

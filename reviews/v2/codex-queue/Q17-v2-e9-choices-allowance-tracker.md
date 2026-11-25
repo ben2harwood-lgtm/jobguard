@@ -24,7 +24,7 @@ Each customer choice (tiles, sanitaryware, worktop, paint) has an allowance (for
 ## Scope
 - Table: allowance per choice (E1 customer-choice fact, allowance amount and basis per unit or total, decide-by date, chosen item and price). Commands with one audit event each.
 - Over allowance: draft one variation for the difference through the existing variation-draft route, linked to the choice; the builder reviews it. Under or equal: nothing drafted.
-- A late choice (past decide-by) is flagged to the builder and on the plan if a task depends on it.
+- A late choice (past decide-by) is flagged to the builder **in E9's Money section only**. The on-plan flag is cut to a later piece, **E9P**: the c2/c3 plan read (`work-plan.application.ts`, `v2-work-plan-repository.ts`) has no hook for a customer-choice deadline, and E9 may not edit c2/c3 or mount on the Plan screen.
 - Never changes the accepted quote or any committed price.
 
 ## Acceptance cases added (Web Codex acceptance findings, frm-management-layer#3 comment 7145931890 (24 Nov 22:12 UK), folded in by the planner 22:25 UK)

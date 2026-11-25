@@ -9,6 +9,8 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 
 > **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
 
+> **c3 audit gap (standard line, coordinator ruling 25 Nov 00:09 UK).** c3's plan read creates a plan with no audit event. That is a known c2/c3 gap, and its fix waits for Ben. This piece **reads or links to the plan only**: build against c3 as it is, and **keep out of `packages/db/src/v2-work-plan-repository.ts`** (and every other c2/c3 file). Do not hold on this gap. Put this line in the PR body: "Inherits c3's plan-creation audit gap; needs c3 re-merged after the c2/c3 fix." 
+
 ## Dry-check against the code (planner, 25 Nov 00:20 UK): verified with re-scoping; the mock-up passed (#930 at ff4d3366)
 What exists on c3, and what this means for each section of the update:
 - **Plan:** tasks have no "done" status (fields are position, durationMinutes, trade, scheduledDate and assignee; done arrives with F1). So **"This week" lists the tasks whose `scheduledDate` falls in that week, and the builder edits the wording** to say what actually got done. "Next week" lists the following week's tasks the same way.

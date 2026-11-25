@@ -6,6 +6,8 @@ Tier: **RED** (new table; proof for the Final Check). Migration **2015**. Astra:
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-f1, plus section 2B item 20 (one-tap photo).
 **Starts:** now. **Base:** D4's branch `claude/project-thread-btt9d2` (#916). Draft PR against it. Merge D4 again when it moves (its audit fix D4A may land later). Do not edit D4's files.
 
+> **c3 audit gap (standard line, coordinator ruling 25 Nov 00:09 UK).** c3's plan read creates a plan with no audit event. That is a known c2/c3 gap, and its fix waits for Ben. This piece **reads or links to the plan only**: build against c3 as it is, and **keep out of `packages/db/src/v2-work-plan-repository.ts`** (and every other c2/c3 file). Do not hold on this gap. Put this line in the PR body: "Inherits c3's plan-creation audit gap; needs c3 re-merged after the c2/c3 fix." 
+
 ## Dry-check against the code (planner, 25 Nov 00:20 UK): verified with re-scoping; the mock-up passed (#930 at ff4d3366)
 - **Who presses:** there is no crew sign-in or crew link on V2 yet, and assignees are free text until C3C. So in this piece **the builder** presses Done, Blocked or Changed on a trade's brief (D4 #916), recording on the trade's behalf. A crew member pressing from their own link comes later, after C3C.
 - **Where it's recorded:** in F1's own table, shown on the brief. **No diary write.** The existing diary intake (0505 and 0539) has never been exercised on the V2 database. Writing to it is a later small piece (F1-D), after a probe shows it works on V2.

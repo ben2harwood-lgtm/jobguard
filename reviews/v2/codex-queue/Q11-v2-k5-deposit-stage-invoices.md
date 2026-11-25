@@ -9,6 +9,8 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 
 > **Customer link rule (01-RULES rule 16):** copy the existing customer job link's anonymous-access database check, not F6's (#923); recorded customer agreements are immutable to the app role; seed proofs pass in the full V2 suite without tripping the sign-in rate limit.
 
+> **c3 audit gap (standard line, coordinator ruling 25 Nov 00:09 UK).** c3's plan read creates a plan with no audit event. That is a known c2/c3 gap, and its fix waits for Ben. This piece **reads or links to the plan only**: build against c3 as it is, and **keep out of `packages/db/src/v2-work-plan-repository.ts`** (and every other c2/c3 file). Do not hold on this gap. Put this line in the PR body: "Inherits c3's plan-creation audit gap; needs c3 re-merged after the c2/c3 fix." 
+
 ## Change, 24 Nov 23:25 UK: cut to K5A (payment schedule only)
 Codex stopped correctly. On c3, `apps/api/src/customer-invoice.controller.ts` has no draft route: `POST jobs/:id/customer-invoices` only **issues**, and the practice issue path needs a final-account revision, the Final Check and the full final-account amount. So a deposit or stage invoice can't go through it unchanged. This packet is now **K5A: the payment schedule, with no invoices**. **K5B** (drafting and issuing a stage or deposit invoice) needs a new, properly scoped invoice route on the money path. That's a separate RED packet, it goes to Astra before anyone builds it, and it isn't in tonight's queue.
 
