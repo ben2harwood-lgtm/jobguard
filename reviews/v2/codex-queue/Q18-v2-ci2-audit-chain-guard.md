@@ -1,7 +1,7 @@
 # Q18 · V2-CI2: automatic guard for the audit-chain rule
 
-Tier: T1 (tooling and CI only, no app behaviour). Migration: none. Astra: no. Usefulness **high** (stops the most-missed rule of 24 Nov reaching review), effort **S**. Rework risk: **low**.
-**Starts:** now. **Base:** `v2/main`. Draft PR against `v2/main`. Plan: Ben, 24 Nov 21:36 UK ("make sure every future piece is built [to the rules]... see if we can strengthen it").
+Tier: **T2** (CI change, corrected 25 Nov 12:20 UK: planner miss, it was mislabelled T1). Stacked on **#917's branch** (`claude/project-thread-qfah0w`), because it adds to the CI workflow #917 introduces. Migration: none. Astra: no. Usefulness **high** (stops the most-missed rule of 24 Nov reaching review), effort **S**. Rework risk: **low**.
+**Starts:** now. **Base:** #917's branch `claude/project-thread-qfah0w` (corrected 25 Nov 12:20 UK). Draft PR against it, retargeted to `v2/main` after #917 merges. Plan: Ben, 24 Nov 21:36 UK ("make sure every future piece is built [to the rules]... see if we can strengthen it").
 
 > **Rules this piece must meet.** AGENTS.md rev 3.0, BUILD_PLAN.md and `01-RULES.md`; Ben's build rules checklist `reviews/v2/codex-queue/02-BUILD-RULES-CHECKLIST.md` (version 1.1, in this repo on branch `claude/project-thread-cw5qv5`).
 

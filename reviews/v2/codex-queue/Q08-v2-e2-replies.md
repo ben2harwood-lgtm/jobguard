@@ -4,7 +4,7 @@
 
 Tier: **RED** (new table; outside answers). Migration **2013**. Astra: yes. Rework risk: **high** (E1 is in review).
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-e2.
-**Starts:** PARKED (25 Nov 01:10 UK, planner miss, one round left). Restart tomorrow from this rewritten packet; Ben decides on rounds. Was: now. **Base:** E1's branch `claude/project-thread-vur4ba` (#919). Draft PR against it. Merge E1 again when it moves. Do not edit E1's files, except the one `commandIn` extraction described below; answer facts through E1's commands.
+**Starts:** PARKED (25 Nov 12:20 UK: second planner miss, recipient binding; all three runs used, so it **needs Ben's allowance for another round**). Earlier park: 25 Nov 01:10 UK, planner miss. Restart tomorrow from this rewritten packet; Ben decides on rounds. Was: now. **Base:** E1's branch `claude/project-thread-vur4ba` (#919). Draft PR against it. Merge E1 again when it moves. Do not edit E1's files, except the one `commandIn` extraction described below; answer facts through E1's commands.
 
 ## Dry-check against the code (planner, 25 Nov 00:15 UK): verified with one change; the mock-up passed (#930)
 - **E1's answer needs a signed-in builder.** E1 (#919) has `v2-open-fact-command.v1` with actions `log`, `answer`, `cancel` and `mark_out_of_date`, each with `expectedVersion`. Its repository refuses without a signed-in editor (`OPEN_FACT_EDITOR_REQUIRED`), so the no-sign-in reply page **cannot** call E1's `answer` itself, and you may not edit E1.
@@ -55,6 +55,46 @@ Checked on #919: E1 stores **no answer options**.
   - each kind's reply maps to E1's answer schema and passes E1's own parser;
   - "something else" is refused when the request doesn't allow it.
 - **Unchanged:** the `commandIn` one-transaction apply described above, migration 2013, rules 16, 18 and 21 to 23.
+
+## Who a reply may come from: recipient binding (planner, 25 Nov 12:20 UK; this overrides "verified recipient" wording above)
+**Dry-check against the code** (rule 23; E1 #919 @ 799635dc, v2/main @ bade747e):
+- **E1 doesn't record recipients.** Its fact owner is `{kind: customer|builder}` or `{kind: merchant|crew_member, name: text(120)}` (`v2-open-fact-repository.ts` lines 17 to 20). Migration 2009 has `owner_kind` and `owner_name` only.
+- **Merchants have no contact details.** `app.merchant` (0031) has `id` and `name` only.
+- **Crew have no identity until C3C.**
+- **Seed emails are free text.** The seed's tiler and decorator emails appear only inside capture text (seed lines 97 and 98). Never parse them.
+- **The customer does have a real record.** The job's parties (0095: `app.job_party_current` → `app.job_party_binding` → `app.customer_revision`) carry the customer's email, and the seed asserts `parties.current.customer.email`.
+- D3 and D4 are not on E1's base, so E2 doesn't use them.
+
+**Contract, by recipient:**
+
+| Recipient | Source | What the request stores |
+|---|---|---|
+| Customer | The **existing job party record**, not a new one | `job_party_binding.id`, `customer_revision_id` and that revision's email |
+| Merchant or crew | A new E2-owned table, `app.v2_reply_recipient` (migration 2013) | That recipient's id |
+
+**Customer.** If the job's current party binding or customer revision changes, an open request becomes out of date, and its reply is kept but not applied (the same rule as fact versions). A `customer_choice` fact may only be sent to the customer.
+
+**Merchant or crew.** Each `app.v2_reply_recipient` row holds:
+- `tenant_id`, `job_id`, `id`;
+- `role` (`merchant` or `crew_member`);
+- `display_name`, which must equal the E1 fact's `owner_name` exactly, so a request refuses when the fact's owner kind or name doesn't match;
+- an optional `merchant_id`, a foreign key to `app.merchant(tenant_id, id)` when the builder picks a known merchant (the name is copied, not retyped);
+- `contact_email`, practice only, which must end `.invalid`;
+- `recorded_by`, `recorded_at`.
+
+The table follows the usual rules:
+- RLS forced, runtime SELECT/INSERT only, immutable. A correction is a new row.
+- One builder command, `v2.reply_recipient.recorded`, appends one audit event, with no email in the payload (a hash only).
+
+**What "verified" means in this piece:** recorded by the signed-in builder for this job. The UI labels it "Recorded by you". It is **not** identity-verified. Real crew identity comes with C3C, and real merchant contacts later.
+
+**Sending.** The reply token goes only to the bound contact, via the local catcher. The request stores the recipient id or binding id and its version in its digest.
+
+**Tests:**
+- **Matching:** a customer request uses the party record's email; a merchant fact refuses a recipient with another name or role; a crew fact refuses a customer recipient.
+- **Changes after sending:** changing the job's customer revision makes an open customer request out of date; a corrected recipient makes a new request.
+- **Boundaries:** a non-`.invalid` email is refused; second-firm isolation for the new table; the audit payload has no email.
+- **Seed:** recipients are created through the command, never parsed from capture text.
 
 ## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
 The no-sign-in reply page is a **new route file you own**: `apps/web/app/reply/[token]/page.tsx`, which is V2 only and returns 404 when the flag is off. **One mount is allowed**, in `apps/web/app/(designed)/jobs/[id]/work/page.tsx` only: one import line plus one element, rendered only when `process.env.JOBGUARD_LOCAL_V2 === "1"`. Add that file to your lane file with the note `"mount only, owned by main (live Work tab)"`. Change nothing else in that file. It is used only for the builder's "Replies received: apply?" section, which goes in a new component file you own. This overrides any other line in this packet or brief about editing screen files.

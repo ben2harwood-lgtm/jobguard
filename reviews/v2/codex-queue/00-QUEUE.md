@@ -19,7 +19,7 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | Order | Packet | Piece | Use | Effort | Starts when | Base | Migration | Tier | Rework risk |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | Q03 | V2-D5B-M product picker and Materials screen (resume from the kept base merge; Briefs half D5B-B waits for D4A) | ★★ | M | now | merge of D3 #912 + D4 #916 + D5A #914 | none | T1 | high |
-| 1b | Q18 | V2-CI2 automatic guard for the audit-chain rule (safety, protects every piece below) | ★★ | S | now | `v2/main` | none | T1 | low |
+| 1b | Q18 | V2-CI2 automatic guard for the audit-chain rule (safety, protects every piece below) | ★★ | S | now | #917 branch | none | T2 | low |
 | 1c | Q20 | V2-BH1 shared sign-in helper for V2 browser tests (test helper only; stops tonight's repeated sign-in failures, rule 22) | ★★ | XS | now | `v2/main` | none | T1 | low |
 | 1d | Q21 | RULES-T, one "Rules met" PR template (jobguard; base `main`, after #915 merges) | ★★ | XS | after #915 | `main` | none | T1 | low |
 | 1e | Q22 | CI-RV, RED PRs need an other-vendor review naming the current head (base `main`) | ★★★ | S | after Astra | `main` | none | T2 | low |
@@ -37,7 +37,7 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | 12 | Q09 | V2-F1 Done, Blocked, Changed on a brief | ★★ | M | **parked** (25 Nov 00:55 UK): waits for D4A + task key on #916, Ben's OK (mock-up passed; builder presses, no photos, no diary write) | D4 #916 | 2015 | RED | high |
 | 13 | Q10 | V2-F8 who was on site today | ★ | S | **parked: C3C crew binding** | V2-F1 branch | 2016 | RED | high |
 | 14 | Q06 | V2-K9 RAMS and construction phase plan draft | ★★ | M | now (mock-up passed #930) | new c3 | 2011 | RED | medium |
-| 15 | Q08 | V2-E2 replies to open facts | ★ | M | **parked** (25 Nov 01:10 UK, planner miss; rewritten for tomorrow, Ben decides rounds) | E1 #919 | 2013 | RED | high |
+| 15 | Q08 | V2-E2 replies to open facts | ★ | M | **parked**: recipient binding rewritten 25 Nov 12:20 UK; needs Ben's allowance for another round | E1 #919 | 2013 | RED | high |
 | 16 | Q07 | V2-E3 stock position | ★ | M | now | D3 #912 | 2014 | RED | high |
 | 17 | Q02 | V2-E5A same-firm double-booking warning (multi-crew, later) | ★ | S | **parked: C3C crew binding** | `codex/sandbox/v2-c3` | none | T1 | medium |
 
