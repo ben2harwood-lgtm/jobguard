@@ -67,7 +67,7 @@ Every piece below was dry-checked against the current code (rule 23). None needs
 | B2 | Q23 | V2-D5B-B Briefs screen | **desktop Codex** (lane A, slot 2) | #916 @ f7aacf55d, PR into v2/main | none | T1 |
 | B3 | Q24 | V2-K3-F Friday filter keeps measurements and times | **Codex** (web Codex now, or lane A when a slot frees) | `codex/sandbox/v2-k3` | none | T1 |
 | B4 | Q25 | V2-F6-UX Check again, and photo ticks reset | **Codex** (web Codex now, or lane A) | `codex/sandbox/v2-f6t` | none | T1 |
-| B5 | Q26 | V2-SX crew and customer test sessions | **Opus thread** (needs a live V2 database while building) | `v2/main` | 2024 (V2 bootstrap file) | RED (Claude plan check asked) |
+| B5 | Q26 | V2-SX **rev 4**: refusal proof through V2's own links (no portal or crew sign-ins; rev 3 stopped at both stop points) | **Codex** (desktop or web; seed tests run on CI) | `v2/main` | none (2024 freed) | T1 tests, with a Claude RED plan check before ready |
 
 Already moving, so don't duplicate: CI2 #947, phone-test sign-in #950, E2 #949, E9 #948. Every later batch (C to H) and the full list to the end of V2 are in `reviews/v2/V2-completion-roadmap.md`. Migration numbers 2025 to 2045 are reserved there; next free is 2046.
 

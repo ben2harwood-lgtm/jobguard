@@ -1,4 +1,61 @@
-# Q26 · V2-SX: crew and customer test sessions on the V2 practice database
+# Q26 · V2-SX revision 4: who is refused on V2, proven through V2's own access paths (no portal or crew sign-ins)
+
+> **Revision 4 (planner, 25 Nov 16:35 UK).** This replaces revisions 1 to 3 below, which are kept only as history. The SX builder stopped at both plan-check stop points with no code written (`/mnt/project-files/jobguard-v2/v2-sx-stop-report-2026-11-25.md`). The planner checked its findings line by line against v2/main @ 63f3af5ab, and they hold. **Needs a separate Claude RED plan check before it's called ready.** It changes what the refusal proof means, even though it only adds tests.
+
+**Tier:** T1 (test helper and tests only; no product code, no migration, no grant, no change to any main file). **Builder:** desktop Codex or web Codex. No database is needed before building: the tests are seed tests that CI1 runs, and lane B may run them too. **Base:** `v2/main`. **Branch:** `codex/sandbox/v2-sx`. **PR:** draft into `v2/main`. Rules 1 to 28 apply, with a "Rules met" list in the PR body.
+
+## Why the old design can't work (each point checked by the planner)
+1. **Every V2 builder screen and command runs only in the shared practice tenant through a linked practice session.**
+   - Capture refuses any other tenant: `apps/api/src/capture/capture.application.ts` line 13 (`requested_tenant_id!==DEMO_TENANT_ID` gives `TENANT_FORBIDDEN`), and `apps/api/src/workspace/workspace.service.ts` line 17 does the same.
+   - `DEMO_TENANT_ID` is `11111111-…` (`packages/db/src/demo-seed.ts` line 12).
+   - The seed enters it through `enterLinkedPracticeCompany` (`tools/v2/seed.mjs` lines 33 to 57).
+   - So a "separate V2 test firm" with its own tenant would be a firm no V2 piece can open. That rules out the stop report's options A and B.
+2. **A customer portal session needs a real owner or finance membership in the job's tenant.**
+   - `app.customer_portal_issuer` (`0765_lp11_bound_tenant_rls.sql` line 2386) calls `app.bind_request('real',digest,t)` at line 2394 (the function is defined in `0562_lp6a_request_binding.sql` line 104).
+   - A builder's real membership is only in their own sign-up tenant (owner row created at `0765` lines 2181 to 2187), never in the shared practice tenant.
+   - Giving them one would be a new membership in a tenant both practice firms share. **Rejected:** it would cut across firm isolation.
+3. **Crew sign-ins are operative memberships, and main allows those only on the contractor track.**
+   - `app.mon8_operative_write_guard` (`0549_contractor_feature_guards.sql` line 779) calls `app.mon8_require_operative_agreement` (line 757) on every operative insert.
+   - The invitation path also checks `operative_roles` (`0765` lines 2170 to 2175).
+   - **Rejected:** putting the practice tenant on the contractor track would change every practice test, and routing around the guard would weaken a deliberate main rule.
+4. **Extra-link customers** (`identity.extra_customer_use`) redeem only contractor extra-approval links. **Out of scope:** V2's F6 has its own link (`app.v2_f6_agree`, #923 migration 2018 line 121).
+
+## Decision
+On V2, customers and crew **never get a main sign-in**. They reach V2 only through V2's own capability links, as plan section 3 already says ("My brief: Trade, by link"; "Your choices" and "Your handover pack" are customer pages). The links are F6's agreement link, E2's reply token, K3's local inbox, and later My brief (F7), K2 feeds, Your choices and the handover pack. Real portal and crew sign-ins come back with the hosted pilot, on main's own MON-5 and MON-8 paths, not in V2.
+
+The refusal proof on V2 is therefore:
+- **(a) no session:** a builder route with no `jg_session` is refused;
+- **(b) invalid session:** a made-up cookie is refused;
+- **(c) signed out:** a builder session after sign-out, with the same cookie reused, is refused;
+- **(d) second firm:** the second firm's real sign-in is refused (the helper already exists: `signIn("second-builder")`, `tools/v2/seed.integration.test.mjs` line 154);
+- **(e) capability on a builder route:** a valid V2 capability link or token, sent as cookie, header or query to a builder route, is refused, and the builder route never accepts it as a session;
+- **(f) capability scope:** a capability for job X or link Y can't read job Z, link W, or any builder-only field.
+
+## What to build
+1. `tools/v2/test/refusals.mjs` exports `assertBuilderRouteRefuses(request, { path, method, body })`. It runs cases (a) to (d) above and checks each one:
+   - the status is 401, 403 or 404;
+   - the body has no field from a given deny-list (for example `profit`, `margin`, `amount`, `price`, `finding`);
+   - the database-side check passes (an optional callback, for counting rows).
+
+   It reuses the seed test's `signIn` and request helpers. **Move them into `tools/v2/test/session.mjs` only if BH1 (#936) hasn't already.** If it has, import BH1's.
+2. Seed tests in `tools/v2/seed.integration.test.mjs`, using the helper on every builder route on v2/main today: the work-plan route (c4, if it's on your base; otherwise the plan application through its route on `codex/sandbox/v2-c4`, in a follow-up) and the quote routes the seed uses.
+3. Case (e) and (f) helpers, `assertCapabilityConfined(capability, { allowedPath, builderPaths })`. **Each capability piece calls this in its own tests:** F6 (#923, a follow-up into `codex/sandbox/v2-f6t`), E2 (#949), K3 (#935), and later F7, K2, Your choices and the handover pack. Add a line to `01-RULES.md` through the planner: "Every V2 capability link proves (e) and (f) with `assertCapabilityConfined`."
+4. **K10-R** becomes a test-only follow-up on K10's branch `codex/sandbox/v2-k10` (#931). It calls `assertBuilderRouteRefuses` on `apps/web/app/api/jobs/[id]/profit-so-far/route.ts` (`GET`, reading `jg_session` at line 13) with the deny-list `profit, margin, cost, amount`. It also calls `assertCapabilityConfined` with an F6 link once F6 has merged. Until then it covers cases (a) to (d), which is the refusal proof K10 was missing.
+
+## Who this unblocks, and the new dependencies
+- **K10-R:** now, cases (a) to (d), on #931. Case (e) follows after F6.
+- **F1 crew presses:** the crew presses from their own link in **F7 My brief** (C3C plus capability). F1 stays builder-pressed.
+- **K2 feeds:** a crew or customer feed is a capability URL (a K2 follow-up after C3C), with no session.
+- **F8 and E5A:** need C3C crew **records** (Q28), not sessions. Both can start once C3C merges.
+
+## Done when
+- The helper and seed tests pass in CI1, three runs in a row with no rate-limit trips (rule 16c).
+- No file under `packages/db/migrations/` or `tools/v2/migrations/` changes, and no grant, role or policy changes.
+- A Claude check on the frozen head, and the RED plan check verdict is recorded.
+
+---
+
+## History: revision 3 and earlier (superseded, kept for the record)
 
 > **Released 25 Nov 14:55 UK (planner).** **Builder:** a Claude Opus thread. It needs a running V2 database while building, so it isn't for Codex's sandbox. **Base:** `v2/main` @ 63f3af5ab or later. Re-checked: c1 to c3, CI1 and the B1 mock-ups merged at 12:12 UK and don't touch the session routines below or `2001_practice_quote.sql`. **Branch:** `claude/<thread>`. **PR:** draft into `v2/main`. RED. The earlier plan checks (r1 to r3) left no planning hold. Because Ben approved Claude plan checks in place of Astra's (12:50 UK), a fresh Claude RED plan check of this exact text is requested on frm-management-layer#3. Build now; the PR isn't ready until that verdict and its conditions are in. Rules 1 to 28 apply, with a "Rules met" list in the PR body. Unblocks K10-R, F1 crew presses, K2 feeds, F8 and E5A.
 
