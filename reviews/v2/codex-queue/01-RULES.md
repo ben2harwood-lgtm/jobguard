@@ -81,3 +81,4 @@
      `/api/v2-backend/*` is a **fallback** rewrite (`apps/web/next.config.mjs` line 12), so a real `route.ts` there is a Next boundary, not a proxy to Nest.
    - **Capability links.** Every piece that adds a V2 capability link or token (customer, crew or merchant) calls `assertCapabilityConfined` for cases (e) and (f).
    - **Helper not on your base yet** (SX not merged): put "Rule 29: pending V2-SX" in the PR's "Rules met" list, and add the calls in one test-only commit after SX merges and you re-merge `v2/main`. The PR is not called ready until they're there.
+   - **Nest routes (added 25 Nov 17:55 UK, SX #965).** Case d-real runs twice: with no CSRF token it expects 403 `ORIGIN_FORBIDDEN`, and with the second firm's own token it expects 403 `SYNTHETIC_WORKFLOW_ONLY`. Those two codes are allowed for Nest transport only.
