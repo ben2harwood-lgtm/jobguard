@@ -8,6 +8,13 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 
 > **c3 audit gap (standard line, coordinator ruling 25 Nov 00:09 UK).** c3's plan read creates a plan with no audit event. That is a known c2/c3 gap, and its fix waits for Ben. This piece **reads or links to the plan only**: build against c3 as it is, and **keep out of `packages/db/src/v2-work-plan-repository.ts`** (and every other c2/c3 file). Do not hold on this gap. Put this line in the PR body: "Inherits c3's plan-creation audit gap; needs c3 re-merged after the c2/c3 fix." 
 
+## Who creates the brief (planner, 25 Nov 17:00 UK, answering the Codex finding on #953)
+**D5B-B (Q23, #954) owns brief creation in the app.** It adds `POST /api/v2-backend/jobs/[id]/crew-briefs`, which calls D4's `crewBriefs.generate`, and the "Make brief" button. F1 must not add a second creation path. So:
+- **F1's seed tests** make the brief directly through D4's application (`workspace.crewBriefs.generate`, `apps/api/src/workspace/crew-brief.application.ts`) in test setup.
+- **F1's browser test** does the same in its `before()`, through the application and not the screen. Then it opens Brief progress.
+- **"No trade briefs yet"** on Brief progress is the correct empty state. Add one line under it: "Make a brief on the Briefs card first." Link to the Work tab only once D5B-B has merged into your branch. Until then, show the text only.
+- **Merge order for Ben:** D5B-B #954, then F1 #953. A builder can then make a brief and press Done, Blocked or Changed with screens only. Put this in the PR body.
+
 ## Release check (planner, 25 Nov 14:55 UK, rule 23; overrides older lines in this packet)
 - **The task key is in.** On #916 @ f7aacf55d, `CrewBriefContent.tasks[].taskKey` is saved (`v2-crew-brief-repository.ts` line 40) and filled from the plan task's key (line 276). The schema label is still `v2-crew-brief.v1`, so there is no v2 label to test for. Instead, **refuse a press when the saved task has no `taskKey`**, with "This brief needs regenerating". Match only on `(brief trade + version, scopeItemId, taskKey)`, never on title or position.
 - **How briefs are read:** through `workspace.crewBriefs.read(jobId, { version: "v2-crew-brief-query.v1", trade })` (D4's application). F1 adds its **own** route `apps/web/app/api/v2-backend/jobs/[id]/brief-progress/route.ts`. It returns D4's brief plus F1's progress rows, and takes the three press commands behind the rule-21 origin check. Don't add a crew-briefs route: D5B-B (Q23) owns `crew-briefs/` and is being built at the same time.
