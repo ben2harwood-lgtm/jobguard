@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-b1b": {
+      "branches": [
+        "codex/sandbox/v2-b1b"
+      ],
+      "note": "Q32 V2-B1B T1. Stacked on #920; review only commits after its head. apps/web/app/(designed)/jobs/[id]/work/page.tsx: mount only. Shared seed suite: own B1B block only. No migration.",
+      "allow": [
+        "apps/api/src/watchdog-registry.test.ts",
+        "apps/web/app/(designed)/jobs/[id]/walk/page.tsx",
+        "apps/web/app/(designed)/jobs/[id]/walk/walk-state.test.ts",
+        "apps/web/app/(designed)/jobs/[id]/walk/walk-state.ts",
+        "apps/web/app/(designed)/jobs/[id]/walk/walk.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
+        "apps/web/app/api/v2-backend/jobs/[id]/walk/route.test.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/walk/route.ts",
+        "apps/web/next.config.mjs",
+        "packages/core/src/watchdog.ts",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/walk.browser.test.mjs"
+      ]
+    }
+  }
+}

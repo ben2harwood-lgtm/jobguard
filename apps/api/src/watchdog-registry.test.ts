@@ -75,7 +75,7 @@ function routeKeys(files: ReadonlyMap<string, string>): string[] {
   for (const file of files.keys()) {
     if (!/(?:^|\/)app\/api\/.*\/route\.ts$/u.test(file)) continue;
     const route = "/api/" + file.split("/app/api/")[1]!.replace(/\/route\.ts$/u, "");
-    if (!/^\/api\/(?:jobs|decisions|recovery-cases|customer-portal|contractor\/(?:jobs|work-order-imports|work-orders))(?:\/|$)/u.test(route)
+    if (!/^\/api\/(?:v2-backend\/jobs|jobs|decisions|recovery-cases|customer-portal|contractor\/(?:jobs|work-order-imports|work-orders))(?:\/|$)/u.test(route)
       && route !== "/api/accounting-exports/[sourceId]/route-change") continue;
     for (const verb of routeVerbs(file, read)) keys.push(routeKey(verb, route));
   }
@@ -266,6 +266,18 @@ describe("CH-2 command coverage and lock order", () => {
     const classified = Object.keys(jobMutationRegistry).filter(key => key.startsWith("/api/") && !key.includes("#") || /^(?:PUT|PATCH|DELETE) \/api\//u.test(key));
     expect(found.filter(key => classified.includes(key))).toEqual(classified.sort());
     expect(Object.hasOwn(jobMutationRegistry, "/api/jobs/[id]/unclassified-site-message")).toBe(false);
+  });
+  it("classifies B1B and discovers unclassified V2 backend job mutations", () => {
+    const route = "/api/v2-backend/jobs/[id]/walk";
+    const unknown = "/api/v2-backend/jobs/[id]/future-write";
+    const found = routeKeys(new Map([
+      [`/x/app${route}/route.ts`, "export async function GET() {} export async function POST() {}"],
+      [`/x/app${unknown}/route.ts`, "export async function POST() {}"],
+    ]));
+    expect(found).toEqual([unknown, route]);
+    expect(jobMutationRegistry[route]).toBe("pre_live_allowed");
+    expect(() => assertClassified([route], jobMutationRegistry)).not.toThrow();
+    expect(() => assertClassified(found, jobMutationRegistry)).toThrow(unknown);
   });
   it("discovers every mutation verb and export form, so an unclassified PATCH, PUT or DELETE fails", () => {
     const run = (source: string, extra: Record<string, string> = {}) => routeVerbs("/x/app/api/jobs/[id]/route.ts", file => file === "/x/app/api/jobs/[id]/route.ts" ? source : extra[file]).sort();

@@ -1201,3 +1201,48 @@ test("forced walk policies hide sessions and entries and reject every change fro
   // A walk sends nothing.
   assert.equal(await outboxRows(), outboxBefore);
 });
+
+// Q32 / V2-B1B: the web adapter uses B1A's two commands unchanged.
+// Force a failure AFTER the audit append as well as the business insert, in the same transaction.
+const b1bRollbackPool = pool => ({
+  async connect() {
+    const client = await pool.connect();
+    const query = client.query.bind(client);
+    client.query = async (sql, ...args) => {
+      const result = await query(sql, ...args);
+      if (typeof sql === "string" && sql.includes("app.append_audit(")) {
+        throw Object.assign(new Error("B1B forced failure after audit append"), { code: "B1B_FORCED" });
+      }
+      return result;
+    };
+    const release = client.release.bind(client);
+    client.release = (...args) => { client.query = query; return release(...args); };
+    return client;
+  },
+});
+
+test("B1B start and record append once, exact replays append nothing, and rows and events roll back together", async () => {
+  const { owner, walk } = await walkSetup();
+  const failingWalk = walkWorkspace({ pool: b1bRollbackPool(runtime), sessionId: owner.sessionId }).walk;
+  const sessionId = walkId();
+  const start = { version: "v2-walk-session-command.v1", sessionId, deviceStartedAt: new Date().toISOString() };
+  await assert.rejects(failingWalk.start(jobId, start), { code: "B1B_FORCED" });
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_walk_session WHERE id = $1", [sessionId])).rows[0].n, 0);
+  assert.equal((await walkAudit("v2_walk.session_started", sessionId)).length, 0);
+  const session = await walk.start(jobId, start);
+  assert.deepEqual(await walk.start(jobId, start), session);
+  assert.equal((await walkAudit("v2_walk.session_started", sessionId)).length, 1);
+
+  const note = entryCommand(sessionId, 1, { kind: "note", text: "Fictional B1B walk rollback proof" }, new Date());
+  await assert.rejects(failingWalk.record(jobId, note), { code: "B1B_FORCED" });
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_walk_entry WHERE session_id = $1", [sessionId])).rows[0].n, 0);
+  assert.equal((await walkAudit("v2_walk.entry_recorded", sessionId)).length, 0);
+  const saved = await walk.record(jobId, note);
+  assert.deepEqual(await walk.record(jobId, note), saved);
+  const events = await walkAudit("v2_walk.entry_recorded", sessionId);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].payload.references.commandId, note.commandId);
+  assert.equal(events[0].actorRef, `membership:${owner.membershipId}`);
+  assert.ok(!JSON.stringify(events).includes(note.entry.text));
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_walk_entry WHERE session_id = $1", [sessionId])).rows[0].n, 1);
+});
