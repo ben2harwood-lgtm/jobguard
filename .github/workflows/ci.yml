@@ -3,7 +3,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [main]
+    branches: [main, v2/main]
 permissions:
   contents: read
   pull-requests: read
@@ -135,8 +135,57 @@ jobs:
           if [ "${WEB_SHARDS:-}" != "success" ]; then
             exit 1
           fi
+  v2-seed:
+    # V2's database seed suite, against V2's own embedded PostgreSQL on loopback.
+    # It runs only for V2 pull requests and pushes to v2/main; main is unaffected.
+    # Keep this condition identical to V2_SEED_REQUIRED in the checks gate.
+    if: ${{ github.event_name == 'pull_request' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-')) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Verify the candidate SHA
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          actual_sha=$(git rev-parse HEAD)
+          printf 'Candidate SHA: %s\n' "$actual_sha"
+          test "$actual_sha" = "$EXPECTED_SHA"
+      - uses: pnpm/action-setup@v4.1.0
+        with: { version: 10.28.1, run_install: false }
+      - uses: actions/setup-node@v4.0.3
+        with: { node-version: 24.15.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Run the V2 seed suite against the embedded local stack
+        # The launcher refuses inherited endpoints and proxies, so it and the suite get a
+        # cleared environment. If its local-only checks refuse to start, this step fails.
+        run: |
+          store_dir=$(pnpm store path --silent)
+          clean=(env -i "PATH=$PATH" "HOME=$HOME" "LANG=C.UTF-8" "npm_config_store_dir=$store_dir"
+            "COREPACK_ENABLE_DOWNLOAD_PROMPT=0" "JOBGUARD_V2_BACKEND=embedded")
+          log="$RUNNER_TEMP/v2-launcher.log"
+          "${clean[@]}" setsid node tools/v2/start.mjs >"$log" 2>&1 &
+          launcher=$!
+          stop() { kill -TERM -- "-$launcher" 2>/dev/null || true; wait "$launcher" 2>/dev/null || true; }
+          trap stop EXIT
+          deadline=$((SECONDS + 1200))
+          until grep -q '^JobGuard V2 API: ' "$log"; do
+            if ! kill -0 "$launcher" 2>/dev/null; then
+              cat "$log"; echo "The V2 launcher refused to start or exited early." >&2; exit 1
+            fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              cat "$log"; echo "The V2 launcher did not become ready in 20 minutes." >&2; exit 1
+            fi
+            sleep 5
+          done
+          tail -n 20 "$log"
+          status=0
+          "${clean[@]}" JOBGUARD_ENV=synthetic_demo node --test tools/v2/seed.integration.test.mjs || status=$?
+          if [ "$status" -ne 0 ]; then tail -n 200 "$log"; fi
+          exit "$status"
   checks:
-    needs: [core, web, secrets, dependency-review]
+    needs: [core, web, secrets, dependency-review, v2-seed]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -147,12 +196,24 @@ jobs:
           WEB: ${{ needs.web.result }}
           SECRETS: ${{ needs.secrets.result }}
           DEPENDENCY_REVIEW: ${{ needs.dependency-review.result }}
+          V2_SEED: ${{ needs.v2-seed.result }}
+          V2_SEED_REQUIRED: ${{ github.event_name == 'pull_request' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-')) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main' }}
         run: |
           printf 'core: %s\nweb: %s\nsecrets: %s\ndependency-review: %s\n' "${CORE:-}" "${WEB:-}" "${SECRETS:-}" "${DEPENDENCY_REVIEW:-}"
+          printf 'v2-seed: %s\nv2-seed required: %s\n' "${V2_SEED:-}" "${V2_SEED_REQUIRED:-}"
+          # V2 runs must pass the seed suite; every other run must have skipped it.
+          if [ "${V2_SEED_REQUIRED:-}" = "true" ]; then
+            expected_v2_seed=success
+          elif [ "${V2_SEED_REQUIRED:-}" = "false" ]; then
+            expected_v2_seed=skipped
+          else
+            exit 1
+          fi
           if [ "${CORE:-}" != "success" ] ||
              [ "${WEB:-}" != "success" ] ||
              [ "${SECRETS:-}" != "success" ] ||
-             [ "${DEPENDENCY_REVIEW:-}" != "success" ]; then
+             [ "${DEPENDENCY_REVIEW:-}" != "success" ] ||
+             [ "${V2_SEED:-}" != "$expected_v2_seed" ]; then
             exit 1
           fi
   secrets:

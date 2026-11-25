@@ -1,0 +1,6 @@
+{
+  "migration": "2004_v2_plan_disposition.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
