@@ -9,6 +9,8 @@ const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta
 // Fail on a changed layout rather than silently treating an absent block as valid.
 const jobs = Object.fromEntries([...workflow.slice(workflow.indexOf("\njobs:\n") + 7).matchAll(/^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|(?![\s\S]))/gm)]
   .map(([, name, body]) => [name, body]));
+// Short jobs may run on the self-hosted runners named by CI_MAC_RUNNER; forks and an unset variable stay hosted.
+const macOrHosted = "    runs-on: ${{ vars.CI_MAC_RUNNER != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_MAC_RUNNER || 'ubuntu-latest' }}\n";
 const resultEnv = { CORE: "core", WEB: "web", SECRETS: "secrets", DEPENDENCY_REVIEW: "dependency-review" };
 function runScript(block) {
   const match = block.match(/^        run: \|\n((?:^          .*\n)+)/m);
@@ -40,7 +42,8 @@ test("core and web retain their commands, setup pins and candidate SHA guards", 
   for (const name of ["core-checks", "core-db", "web-shards"]) {
     const body = jobs[name];
     // Playwright 1.55.1 cannot install chromium on 26.04, so the browser job stays on 24.04.
-    assert.match(body, name === "web-shards" ? /^    runs-on: ubuntu-24\.04$/m : /^    runs-on: ubuntu-latest$/m);
+    if (name === "core-checks") assert.ok(body.includes(macOrHosted));
+    else assert.match(body, name === "web-shards" ? /^    runs-on: ubuntu-24\.04$/m : /^    runs-on: ubuntu-latest$/m);
     assert.match(body, /^    timeout-minutes: 90$/m);
     assert.doesNotMatch(body, /^    needs:/m);
     assert.ok(body.includes("actions/checkout@v4.2.2\n        with: { fetch-depth: 0, persist-credentials: false }\n      - name: Verify the candidate SHA\n"));
@@ -115,7 +118,7 @@ test("v2-seed runs the V2 seed suite only for V2 pull requests and v2/main pushe
   assert.ok(jobs.checks.includes(`          V2_SEED_REQUIRED: \${{ ${v2Scope} }}\n`));
   assert.ok(workflow.includes("  push:\n    branches: [main, v2/main]\n"));
   assert.doesNotMatch(body, /^    needs:/m);
-  assert.match(body, /^    runs-on: ubuntu-latest$/m);
+  assert.ok(body.includes(macOrHosted));
   assert.ok(body.includes("actions/checkout@v4.2.2\n        with: { fetch-depth: 0, persist-credentials: false }\n      - name: Verify the candidate SHA\n"));
   assert.ok(body.includes("pnpm/action-setup@v4.1.0\n        with: { version: 10.28.1, run_install: false }"));
   assert.ok(body.includes("actions/setup-node@v4.0.3\n        with: { node-version: 24.15.0, cache: pnpm }"));
