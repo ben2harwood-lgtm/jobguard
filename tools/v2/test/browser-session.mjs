@@ -38,6 +38,9 @@ export async function signInOnce(browser, { jobTitle = "Occupied-home kitchen sp
     assert.equal(verified.status(), 200, "Code verification must succeed");
     const { csrfToken } = await verified.json();
     assert.ok(typeof csrfToken === "string" && csrfToken, "Verification must return a CSRF token");
+    step = "finish sign-in navigation";
+    await page.waitForURL(url => !url.pathname.startsWith("/sign-in"));
+    await page.waitForLoadState("load");
     step = "enter practice";
     await page.evaluate(async token => {
       const response = await fetch("/api/auth/practice", {
