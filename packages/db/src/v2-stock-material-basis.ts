@@ -19,18 +19,19 @@ export function nextStockMaterialBasis(prior: StockMaterialBasis | undefined, ch
   const product = changes.product === undefined ? prior?.product ?? null : changes.product;
   const packSize = changes.packSize === undefined ? prior?.packSize ?? null : changes.packSize;
   const complete = product !== null && packSize !== null;
-  const same = complete && prior?.since != null && product === prior.product && prior.packSize !== null &&
-    packSize.unit === prior.packSize.unit && packQuantity(packSize.quantity) === packQuantity(prior.packSize.quantity);
-  // The existing full edit form echoes the old stock figure. A material change does not confirm that
-  // those packs fit the new product. An explicit stock edit or a fresh quantity can confirm it later.
+  const productChanged = prior?.product != null && prior.product !== product;
+  const packChanged = prior?.packSize != null && (packSize === null || prior.packSize.unit !== packSize.unit ||
+    packQuantity(prior.packSize.quantity) !== packQuantity(packSize.quantity));
+  const replaced = productChanged || packChanged;
+  // Filling an unknown product or pack for the first time preserves the builder's entry.
+  // Replacing a known part invalidates it, including while a line is still incomplete.
   const entered = changes.setAsidePacks;
   const stockOnly = entered !== undefined && Object.keys(changes).length === 1;
-  let confirmedSetAside = "0";
-  if (complete && !prior) confirmedSetAside = entered ?? "0";
-  if (same) {
-    confirmedSetAside = prior.confirmedSetAside;
-    if (entered !== undefined && (stockOnly || entered !== prior.lastEnteredSetAside)) confirmedSetAside = entered;
+  let confirmedSetAside = replaced ? "0" : prior?.confirmedSetAside ?? "0";
+  if (!replaced && entered !== undefined && (stockOnly || entered !== prior?.lastEnteredSetAside)) {
+    confirmedSetAside = entered;
   }
-  return { product, packSize, since: complete ? (same ? prior.since : revision) : null,
+  const since = complete ? (replaced ? revision : prior?.since ?? revision) : null;
+  return { product, packSize, since,
     confirmedSetAside, lastEnteredSetAside: entered ?? prior?.lastEnteredSetAside ?? "0" };
 }

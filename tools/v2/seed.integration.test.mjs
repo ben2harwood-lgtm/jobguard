@@ -1508,3 +1508,14 @@ test("V2-E3 retains actual receipts through note edits and never counts delivere
   const reloaded = await json(await request(`/api/jobs/${jobId}/stock`, { cookies: owner.cookies }));
   assert.deepEqual(position(reloaded), position(newPack));
 });
+
+test("V2-E3 counts the declared set-aside after completing an initially partial material line", async () => {
+  const { stock, line, tilingId } = await stockSetup();
+  const key = "partial-" + randomUUID();
+  const position = async () => (await stock.read(jobId, stockQuery)).lines.find(item => item.lineKey === key);
+  await line(tilingId, key, { product: "Fictional tile", setAsidePacks: "4", wastageMultiplier: "1" });
+  assert.equal((await position()).requiredPacks, null);
+  await line(tilingId, key, { packSize: { quantity: "1", unit: "m²" } });
+  assert.deepEqual(pick(await position(), ["setAsidePacks", "receivedPacks", "availablePacks", "shortPacks"]), {
+    setAsidePacks: "4", receivedPacks: "0", availablePacks: "4", shortPacks: "2" });
+});
