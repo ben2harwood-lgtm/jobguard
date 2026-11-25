@@ -9,6 +9,9 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 ## Dry-check against the code (planner, 25 Nov 00:20 UK): **parked until C3C**
 "One tap per person" and "a crew member sees only their own days" both need a real crew identity. On V2 the assignee is free text and crew members can't sign in yet. Don't build until C3C (crew binding) exists.
 
+## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
+**No mount is allowed.** F8 is parked until C3C, and the screen wording will be set when it is released. This overrides any other line in this packet or brief about editing screen files.
+
 ## Goal
 One tap per person per day on the job's diary, with **no location tracking**, to feed the diary and later daywork sheets.
 

@@ -19,6 +19,9 @@ What exists on c3, and what this means for each section of the update:
 - **Event names (rule 18):** `v2.friday_update.prepared`, `.edited` and `.sent_to_catcher`.
 - **Migration:** `packages/db/migrations/2021_...sql`.
 
+## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
+The builder's preview-and-edit page is a **new route file you own**: `apps/web/app/(designed)/jobs/[id]/friday-update/page.tsx`, which is V2 only. **One mount is allowed**, in `apps/web/app/(designed)/jobs/[id]/overview/page.tsx` only: one import line plus one element, rendered only when `process.env.JOBGUARD_LOCAL_V2 === "1"`. Add that file to your lane file with the note `"mount only, owned by main (live Overview tab)"`. Change nothing else in that file. It is used only for a "Friday update" link. This overrides any other line in this packet or brief about editing screen files.
+
 ## Goal
 Once a week the builder previews and sends the customer a short update: what got done, photos marked customer-visible, what's next, decisions needed, and anything the customer must buy and by when.
 

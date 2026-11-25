@@ -14,6 +14,9 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 - **Event names (rule 18):** `v2.fact_reply.requested`, `.received`, `.cancelled` and `.applied_by_builder`. Don't use "accepted" or "completed".
 - **Migration:** `packages/db/migrations/2013_...sql`.
 
+## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
+The no-sign-in reply page is a **new route file you own**: `apps/web/app/reply/[token]/page.tsx`, which is V2 only and returns 404 when the flag is off. **One mount is allowed**, in `apps/web/app/(designed)/jobs/[id]/work/page.tsx` only: one import line plus one element, rendered only when `process.env.JOBGUARD_LOCAL_V2 === "1"`. Add that file to your lane file with the note `"mount only, owned by main (live Work tab)"`. Change nothing else in that file. It is used only for the builder's "Replies received: apply?" section, which goes in a new component file you own. This overrides any other line in this packet or brief about editing screen files.
+
 ## Goal
 A reply from a customer, merchant or crew member is tied safely to firm, job, verified recipient, the one open fact it may answer, the request version, an expiry and a way to cancel.
 

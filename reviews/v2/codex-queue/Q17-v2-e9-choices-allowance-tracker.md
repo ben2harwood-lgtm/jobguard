@@ -15,6 +15,9 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 - **Back under the allowance:** close the open proposal with the builder's `action: "reject"`. Never send `"approve"`.
 - If the builder can't reject their own proposal on this base, stop and report.
 
+## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
+**One mount is allowed**, in `apps/web/app/(designed)/jobs/[id]/money/page.tsx` only: one import line plus one element, rendered only when `process.env.JOBGUARD_LOCAL_V2 === "1"`. Add that file to your lane file with the note `"mount only, owned by main (live Money tab)"`. Change nothing else in that file. The builder's choices and allowances section goes in a new component file you own. No other screen file may be touched. This overrides any other line in this packet or brief about editing screen files.
+
 ## Goal
 Each customer choice (tiles, sanitaryware, worktop, paint) has an allowance (for example tiles at £25/m²) and a "decide by" date. If the choice goes over the allowance, a variation is **drafted** for the difference, never committed.
 

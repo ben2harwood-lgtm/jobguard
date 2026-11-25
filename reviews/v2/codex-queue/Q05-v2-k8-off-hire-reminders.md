@@ -9,6 +9,9 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 ## Dry-check against the code (planner, 25 Nov 00:10 UK)
 **Verified, with one change.** c3 tasks have **no "done" status** (task fields are position, durationMinutes, trade, scheduledDate and assignee only; done arrives with F1). So the reminder fires when **every linked task's `scheduledDate` has passed** (date only; a linked task with no date never fires it), **or** when a builder-set "needed until" date on the hire item has passed. Link tasks by their c3 key `(quote_revision_id, scope_item_id, template_task_key)`. Put the migration where c3 and D3 put theirs: `packages/db/migrations/2010_...sql` plus a note and proof file.
 
+## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
+**One mount is allowed**, in `apps/web/app/(designed)/jobs/[id]/work/page.tsx` only: one import line plus one element, rendered only when `process.env.JOBGUARD_LOCAL_V2 === "1"`. Add that file to your lane file with the note `"mount only, owned by main (live Work tab)"`. Change nothing else in that file. Your own component goes in a new file you own. No other screen file may be touched. This overrides any other line in this packet or brief about editing screen files.
+
 ## Goal
 The builder records hired items on a job and is reminded to off-hire them when the work that needs them is done, so they stop paying for idle scaffold.
 

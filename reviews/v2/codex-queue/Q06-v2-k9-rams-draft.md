@@ -13,6 +13,9 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 - **Event names (rule 18):** `v2.rams_draft.generated`, `.section_edited` and `.signed` are all fine. Don't use "approved" or "completed".
 - **Migration:** `packages/db/migrations/2011_...sql`.
 
+## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
+The printable RAMS page is a **new route file you own**: `apps/web/app/(designed)/jobs/[id]/rams/page.tsx`, which is V2 only and returns 404 when the V2 flag is off. **One mount is allowed**, in `apps/web/app/(designed)/jobs/[id]/work/page.tsx` only: one import line plus one element, rendered only when `process.env.JOBGUARD_LOCAL_V2 === "1"`. Add that file to your lane file with the note `"mount only, owned by main (live Work tab)"`. Change nothing else in that file. It is used only for a "RAMS draft" link to that page. This overrides any other line in this packet or brief about editing screen files.
+
 ## Goal
 From the job's scope, template and plan, JobGuard fills a draft risk assessment, method statement and construction phase plan that the builder completes and signs. **JobGuard never certifies it** (plan section 5 "Who decides").
 

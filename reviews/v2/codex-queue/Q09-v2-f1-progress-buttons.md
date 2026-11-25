@@ -14,6 +14,9 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 - **Event names (rule 18):** `v2.progress.done_recorded`, `.blocked_recorded` and `.changed_recorded`. Never use "completed" (0758 refuses it).
 - **Migration:** `packages/db/migrations/2015_...sql`.
 
+## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
+There is no Briefs screen yet (D5B-B waits for D4A). So F1 adds its own small **"Brief progress" page as a new route file you own**: `apps/web/app/(designed)/jobs/[id]/brief-progress/page.tsx`, which is V2 only. It lists D4's briefs read-only, with the three buttons. **One mount is allowed**, in `apps/web/app/(designed)/jobs/[id]/work/page.tsx` only: one import line plus one element, rendered only when `process.env.JOBGUARD_LOCAL_V2 === "1"`. Add that file to your lane file with the note `"mount only, owned by main (live Work tab)"`. Change nothing else in that file. It is used only for a "Brief progress" link. D5B-B will take this view over later. This overrides any other line in this packet or brief about editing screen files.
+
 ## Goal
 On a trade's current brief, three actions: Done, Blocked (with a reason) and Changed (what changed on site). Each can carry proof photos attached to the right work item, and each writes into the existing job diary.
 

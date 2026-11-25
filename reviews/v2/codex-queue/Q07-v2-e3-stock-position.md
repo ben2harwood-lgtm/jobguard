@@ -12,6 +12,9 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 - **Goods receipt:** don't reuse main's `goodsReceiptV1`, because it needs a supplier document from the fixture intake. Keep the delivery table separate; the reason is now recorded here.
 - **Migration path:** `packages/db/migrations/2014_...sql`.
 
+## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
+**No mount is allowed.** E3 adds no screen: it is data, commands and the read API only, with no file under `apps/web/app/(designed)/`. Showing stock is a later screen piece. This overrides any other line in this packet or brief about editing screen files.
+
 ## Goal
 A delivery date is only a forecast. Only a confirmed delivery or goods receipt puts stock on site.
 
