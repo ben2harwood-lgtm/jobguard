@@ -11,7 +11,11 @@ export function register(helpers) {
       assert.equal(firmA.tenantId, firmB.tenantId);
       const { rows: [progress] } = await query(firmA, `SELECT p.* FROM app.scope_progress p
         JOIN app.job j ON (j.tenant_id,j.id)=(p.tenant_id,p.job_id)
-        WHERE j.status='live' AND p.stage IN ('not_started','complete') ORDER BY p.job_id,p.scope_item_id LIMIT 1`);
+        WHERE j.status='live' AND p.stage IN ('not_started','complete')
+          -- An earlier seed case closes the shared job's work; use a job whose work is still open (ch4_require_open).
+          AND coalesce((SELECT w.kind FROM app.job_work_state_event w WHERE (w.tenant_id,w.job_id)=(p.tenant_id,p.job_id)
+            AND w.kind IN ('closed','reopened') ORDER BY w.sequence DESC LIMIT 1),'') <> 'closed'
+        ORDER BY p.job_id,p.scope_item_id LIMIT 1`);
       assert.ok(progress, "positive control requires a firm A live job with progress");
       assert.equal((await query(firmB, "SELECT id FROM app.job WHERE id=$1", [progress.job_id])).rowCount, 0);
       assert.equal((await query(firmB, "SELECT scope_item_id FROM app.scope_progress WHERE job_id=$1", [progress.job_id])).rowCount, 0);
@@ -23,6 +27,12 @@ export function register(helpers) {
       return { firmA, firmB, progress };
     })();
   }
+
+  // Report the observed refusal (error code and the routine's own code word only, never row data).
+  const refused = t => error => {
+    t.diagnostic(`firm B refused: ${error.code} ${error.message}`);
+    return ["42501", "P0002"].includes(error.code);
+  };
 
   async function transition(context, progress) {
     // Inspect the attempted write in the same transaction, then ALWAYS roll back.
@@ -76,22 +86,21 @@ export function register(helpers) {
     assert.deepEqual(after, progress);
   });
 
-  test.todo("FL-F parties: firm B must not obtain firm A's party snapshot (tenant-only definer; fix packet required)", async () => {
+  test.todo("FL-F parties: firm B must not obtain firm A's party snapshot (tenant-only definer; fix packet required)", async t => {
     const { firmB, progress } = await targets();
     await assert.rejects(query(firmB, "SELECT app.require_current_job_parties($1,$2)", [firmB.tenantId, progress.job_id]),
-      error => ["42501", "P0002"].includes(error.code));
+      refused(t));
   });
 
-  test.todo("FL-F lifecycle: firm B must not discover/lock firm A's live job (tenant-only definer; fix packet required)", async () => {
+  test.todo("FL-F lifecycle: firm B must not discover/lock firm A's live job (tenant-only definer; fix packet required)", async t => {
     const { firmB, progress } = await targets();
-    await assert.rejects(query(firmB, "SELECT app.require_watchdog_live($1)", [progress.job_id]),
-      error => ["42501", "P0002"].includes(error.code));
+    await assert.rejects(query(firmB, "SELECT app.require_watchdog_live($1)", [progress.job_id]), refused(t));
   });
 
-  test.todo("FL-F progress: firm B must not transition firm A's progress (tenant-only definer; fix packet required)", async () => {
+  test.todo("FL-F progress: firm B must not transition firm A's progress (tenant-only definer; fix packet required)", async t => {
     const { firmA, firmB, progress } = await targets();
     try {
-      await assert.rejects(transition(firmB, progress), error => ["42501", "P0002"].includes(error.code));
+      await assert.rejects(transition(firmB, progress), refused(t));
     } finally {
       const { rows: [after] } = await query(firmA, "SELECT * FROM app.scope_progress WHERE job_id=$1 AND scope_item_id=$2", [progress.job_id, progress.scope_item_id]);
       assert.deepEqual(after, progress, "cross-firm probe also rolled back");
