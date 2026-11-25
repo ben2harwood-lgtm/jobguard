@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
@@ -891,4 +891,73 @@ test("opening the plan screen creates the plan with one audit event; a quote-sav
   assert.equal(saves.length, 1, "the quote save appended its own event for the refreshed revision");
   await read();
   assert.equal((await generatedEvents(nextId)).length, 0);
+});
+
+// V2-E9 flow check (first commit, main's variation code only): an unpriced builder extra is
+// priced by revise with a deterministic revision id, and the revise replays exactly.
+function e9Uuid(namespace, name) {
+  const bytes = createHash("sha1").update(Buffer.from(namespace.replaceAll("-", ""), "hex")).update(name).digest().subarray(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+// A fresh accepted and live job of the E9 block's own (the seeded job is closed by an earlier test).
+async function e9LiveJob() {
+  const fixture = await draftForPlan();
+  const { cookies } = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: fixture.sessionId });
+  const partyView = await app.parties.view({ sessionId: fixture.sessionId }, fixture.draftJob);
+  await app.parties.command({ sessionId: fixture.sessionId }, fixture.draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: partyView.jobRevision, expectedBindingId: null,
+    customer: { version: "customer.v1", type: "person", name: "Fictional Choices Customer",
+      email: "customer@jobguard-v2.invalid", phone: "+447700900042" }, customerRef: null,
+    site: { version: "site.v1", addressLines: ["47 Make-Believe Mews"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const { view } = await app.quote.preview(fixture.draftJob, { version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid" });
+  await app.quote.issue(fixture.draftJob, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId: view.documentId, contentHash: view.contentHash, recipient: "customer@jobguard-v2.invalid" });
+  await json(await request(`/api/jobs/${fixture.draftJob}/quotes/delivery/execute`, { cookies,
+    body: { version: "quote-execute-command.v1", documentId: view.documentId, mode: "success" } }));
+  await app.quote.accept(fixture.draftJob, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
+    documentId: view.documentId, documentVersion: view.documentVersion, documentHash: view.contentHash,
+    statedCustomerName: "Fictional Choices Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  await fixture.read();
+  await app.quote.activate(fixture.draftJob, switchLive());
+  return { ...fixture, app };
+}
+
+test("e9 flow: an unpriced builder extra is priced by revise with a deterministic id, and the revise replays exactly", async () => {
+  const { draftJob: jobId, app: { variation } } = await e9LiveJob();
+  const vary = (action, fields) => variation.command(jobId, { version: "variation-command.v1", action, ...fields });
+  const proposalId = e9Uuid(DEMO_TENANT_ID, `e9-flow-check:${jobId}:excess`);
+  const revisionId = e9Uuid(proposalId, "price");
+  const propose = { proposalId, scopeItemId: e9Uuid(proposalId, "scope"), existingScopeItemId: null, lineageParentScopeItemId: null,
+    description: "Tiles over allowance", captureText: "Customer chose tiles above the allowance", price: null };
+  const proposed = await vary("propose", propose);
+  const draft = proposed.variations.find(item => item.id === proposalId);
+  assert.equal(draft.currentRevisionId, null, "propose without a price creates an unpriced draft");
+  assert.deepEqual(await vary("propose", propose), proposed, "an exact propose retry replays");
+
+  const revise = { variationId: proposalId, revisionId, expectedRevisionId: null, description: "Tiles over allowance",
+    price: { quantity: "6", unit: "m2", unitRatePence: 600, direction: "addition" } };
+  const priced = await vary("revise", revise);
+  const pricedDraft = priced.variations.find(item => item.id === proposalId);
+  assert.equal(pricedDraft.currentRevisionId, revisionId, "revise accepts the deterministic revision id");
+  assert.deepEqual(pricedDraft.revisions.map(r => [r.id, r.revision, r.signedDeltaPence, r.approved, r.rejected]),
+    [[revisionId, pricedDraft.revisions[0].revision, 3600, false, false]]);
+  const revisionRows = async () => (await admin.query(`SELECT count(*)::int AS n FROM app.variation_revision WHERE variation_id = $1`, [proposalId])).rows[0].n;
+  const eventRows = async () => (await admin.query(`SELECT count(*)::int AS n FROM app.audit_event WHERE subject_ref = $1 OR subject_ref = $2`, [proposalId, revisionId])).rows[0].n;
+  const [revisionsBefore, eventsBefore] = [await revisionRows(), await eventRows()];
+  assert.equal(revisionsBefore, 1);
+
+  assert.deepEqual(await vary("revise", revise), priced, "an exact revise replay returns the same workspace");
+  assert.equal(await revisionRows(), revisionsBefore, "the replay adds no revision");
+  assert.equal(await eventRows(), eventsBefore, "the replay appends no audit event");
+  await assert.rejects(vary("revise", { ...revise, price: { ...revise.price, unitRatePence: 700 } }),
+    { message: "VARIATION_COMMAND_CONFLICT" }, "the same revision id with different content is refused");
 });

@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-e9": {
+      "branches": ["claude/project-thread-2k8989"],
+      "note": "RED. V2-E9 customer choices and allowance tracker (Q17). Commit 1 is the flow-check seed test only, using main's variation code unchanged. Never lists apps/api/src/variation/variation.application.ts or packages/db/src/variation-repository.ts. The validator includes config/lanes/v2-e9.json implicitly.",
+      "allow": [
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
