@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-c3b": {
+      "branches": [
+        "claude/project-thread-wovdup"
+      ],
+      "note": "RED. Approved extras join the accepted V2 work plan as Unplanned scope until the builder plans them. Money is never recalculated. The validator includes config/lanes/v2-c3b.json implicitly. Stacked on v2-c3 (codex/sandbox/v2-c3).",
+      "allow": [
+        "packages/db/migration-notes/2020_v2_plan_variation_scope.md",
+        "packages/db/migrations/2020_v2_plan_variation_scope.sql",
+        "packages/db/src/v2-work-plan-edits.ts",
+        "packages/db/src/v2-work-plan-repository.ts",
+        "packages/db/test/migration-proofs/2020_v2_plan_variation_scope.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

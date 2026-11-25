@@ -111,3 +111,24 @@ Repair2 local validation (working tree based on ccdf8ddbe2807c31184e1397949a5780
   HTTPS phone mode. Record actual counts against the resulting committed head;
   no Mac/browser pass or new head is claimed here. Independent RED recheck and
   required CI remain the router's gates.
+
+Repair (Codex P1, 25 Nov): a BEFORE INSERT guard, `app.v2_f6_guard_insert`,
+refuses any new link that is not pristine (link_version 1, no cancel or
+agreement fields). Without it, same-firm runtime could insert a link that was
+already "agreed" and skip `app.v2_f6_agree`, its checks and its audit event.
+
+Repair (Codex P1 on 209d838): the insert guard also checks every saved photo.
+Each entry must have exactly the five locator fields and match, field for
+field, an original, server-verified, uninvalidated image evidence object of
+the link's own tenant and job; duplicates are refused. The anonymous photo
+endpoint can then never read another job's object by a copied locator.
+
+Repair (Codex P1 and P2 on 29ded0c): an agreement now needs its own audit
+event to commit. `v2_f6_require_agree_audit` is a deferred constraint trigger
+(enabled ALWAYS) that runs at commit when `agreed_at` is first set, and refuses
+with `LINK_AGREEMENT_UNAUDITED` unless the same transaction holds the
+`v2.customer_extra_link.agreed` event for that link and command. A narrow
+SELECT policy lets its migration-owned definer read only those events. A direct
+runtime call of `app.v2_f6_agree` without the audit therefore rolls back.
+`app.v2_f6_open` also refuses a link whose saved description differs from its
+revision, so the customer always sees the wording the builder will approve.

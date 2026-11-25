@@ -46,6 +46,19 @@ describe("Next 16 proxy retains the customer-cookie API boundary", () => {
     }
   });
 
+  const capability = `${"a".repeat(64)}.${"b".repeat(64)}`;
+  it.each([`/api/v2/extra-links/${capability}`, `/api/v2/extra-links/${capability}/photos/11111111-1111-4111-8111-111111111111`])(
+    "lets a customer-cookie browser reach the V2 extra-link capability endpoint %s", path => {
+      for (const method of ["GET", "POST"]) {
+        expect(proxy(request(path, "jobguard_customer=fictional", method)).headers.get("x-middleware-next")).toBe("1");
+      }
+    });
+  it.each(["/api/v2/extra-links", `/api/v2/extra-links/${capability}/`, `/api/v2/extra-links/${capability}/photos`,
+    `/api/v2/extra-links/${capability}/other`, "/api/v2/extra-links/not-a-capability", "/api/jobs/x/extra-links"])(
+    "still denies customer cookies on %s", async path => {
+      expect(proxy(request(path, "jobguard_customer=fictional")).status).toBe(401);
+    });
+
   it.each([undefined, "jg_session=legacy", "jobguard_session=builder"])("leaves builder authentication to the route for %s", cookie => {
     expect(proxy(request("/api/jobs", cookie)).headers.get("x-middleware-next")).toBe("1");
   });
