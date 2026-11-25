@@ -25,4 +25,5 @@
    - A piece that adds a **new page** (customer, crew or printable) waits for its checked clickable mock-up (V2-M2 for K3, E2, K9 and F1).
    - A piece that only adds a small builder-only section, control or warning inside an existing screen needs no separate mock-up. It uses existing components and puts 360 and 1280 px screenshots in its PR for the checker.
    - Photo cases that need customer-visible proof photos wait for V2-PX. Build the rest and mark those cases "waits for V2-PX".
+20. **One job total (planner, 25 Nov 00:20 UK, after the K10 check #931 comment 7148340619).** Every V2 piece that shows or splits "the job total" uses one rule: **the accepted quote revision plus every approved variation, whatever its origin** (builder-logged or JobGuard-found). Draft, proposed, rejected and unapproved variations are left out, and so is any finding still hidden under the disclosure rules. An approved JobGuard-found extra has already been disclosed and agreed, so it is part of the price. Use the existing approved-variation query, not a new filter. Amounts use exact decimal strings and the existing money helpers.
 
