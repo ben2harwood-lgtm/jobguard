@@ -11,6 +11,16 @@ Read `01-RULES.md` (rules 1 to 28) and `02-BUILD-RULES-CHECKLIST.md` first. A "R
 - The mock-up is on v2/main: `apps/web/app/(designed)/v2-mock/work-mock.tsx` (Briefs section), with screenshots `e2e/artifacts/v2-mock/briefs-*.png` (filled, empty, problem). Match it.
 - F1 (Q09) is being built at the same time and owns `brief-progress/`. Don't touch it.
 
+## Correction (planner, 25 Nov 15:40 UK, rule-23 miss found by the coordinator; overrides the route and screen lines below)
+`CrewBriefRepository.read` returns only briefs that already exist (`DISTINCT ON (trade)` over `app.v2_crew_brief`, line 94 onwards). So a job with a plan but no briefs yet would show no cards. The work-plan web route (`api/v2-backend/jobs/[id]/work-plan/route.ts`) is only on c4's branch `codex/sandbox/v2-c4`, **not** on this base (#916 @ f7aacf55d). So:
+- The GET in your `crew-briefs/route.ts` returns `{ trades, briefs }`:
+  - `trades`: the distinct `task.trade` values, in plan order, from `workspace.workPlan.read(jobId, { version: "work-plan-query.v1" })` (`apps/api/src/workspace/work-plan.application.ts` line 19, on this base).
+  - `briefs`: `workspace.crewBriefs.read(...)`.
+  Map `QUOTE_REVISION_NOT_FOUND` to the screen's empty state ("Accept a quote to plan the work first").
+- The screen shows **one card per planned trade**. A trade with no brief shows "No brief yet" and "Make brief". A trade with a brief shows it and "Make a new version". A brief whose trade is no longer in the plan still shows, marked "No longer in the plan".
+- Don't import or copy c4's work-plan route or `work-plan.tsx`. Call the application from your own route.
+- Test the route with: no quote (empty state); a plan with two trades and no briefs (two "No brief yet" cards); one brief made; and a brief for a trade dropped from the plan.
+
 ## What to build (files you own)
 1. `apps/web/app/api/v2-backend/jobs/[id]/crew-briefs/route.ts` and its `route.test.ts`:
    - GET (read, `?trade=`) and GET export (`?trade=&export=internal`) call `crewBriefs.read` and `crewBriefs.exportInternal`. Use `cache-control: no-store`.
