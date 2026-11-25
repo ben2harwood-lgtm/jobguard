@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-mock": {
+      "branches": [
+        "codex/sandbox/v2-mock"
+      ],
+      "note": "Local V2 Work mock-up and Playwright screenshots.",
+      "allow": [
+        "apps/web/app/(designed)/designed-ui.tsx",
+        "apps/web/app/(designed)/v2-mock/fixture.ts",
+        "apps/web/app/(designed)/v2-mock/page.tsx",
+        "apps/web/app/(designed)/v2-mock/work-mock.tsx",
+        "apps/web/e2e/artifacts/v2-mock/briefs-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/briefs-360.png",
+        "apps/web/e2e/artifacts/v2-mock/briefs-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/briefs-empty-360.png",
+        "apps/web/e2e/artifacts/v2-mock/briefs-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/briefs-problem-360.png",
+        "apps/web/e2e/artifacts/v2-mock/materials-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/materials-360.png",
+        "apps/web/e2e/artifacts/v2-mock/materials-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/materials-empty-360.png",
+        "apps/web/e2e/artifacts/v2-mock/materials-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/materials-problem-360.png",
+        "apps/web/e2e/artifacts/v2-mock/measurements-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/measurements-360.png",
+        "apps/web/e2e/artifacts/v2-mock/measurements-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/measurements-empty-360.png",
+        "apps/web/e2e/artifacts/v2-mock/measurements-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/measurements-problem-360.png",
+        "apps/web/e2e/artifacts/v2-mock/plan-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/plan-360.png",
+        "apps/web/e2e/artifacts/v2-mock/plan-empty-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/plan-empty-360.png",
+        "apps/web/e2e/artifacts/v2-mock/plan-problem-1280.png",
+        "apps/web/e2e/artifacts/v2-mock/plan-problem-360.png",
+        "apps/web/e2e/v2-mock.spec.ts",
+        "apps/web/playwright.v2-mock.config.ts"
+      ]
+    }
+  }
+}
