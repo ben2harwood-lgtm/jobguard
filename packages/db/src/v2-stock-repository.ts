@@ -89,7 +89,7 @@ export class StockRepository {
           delivery.lineKey === line.lineKey && delivery.materialLineRevision >= since &&
           delivery.materialLineRevision < line.version).map(delivery => delivery.packsReceived);
         return { scopeItemId: line.scopeItemId, lineKey: line.lineKey, product: line.product,
-          ...stockPosition(basis?.confirmedSetAside ?? "0",
+          ...stockPosition(basis && since != null ? basis.confirmedSetAside : "0",
             line.calculation.status === "calculated" ? line.calculation.grossPacks : null, receipts) };
       });
       return { jobId, lines, deliveries };

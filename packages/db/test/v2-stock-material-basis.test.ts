@@ -28,4 +28,20 @@ describe("stock follows the confirmed product and pack basis", () => {
     expect(nextStockMaterialBasis(basis, { packSize: ceramic.packSize }, 3).since).toBe(3);
     expect(nextStockMaterialBasis(basis, { packSize: { quantity: "2", unit: "m" } }, 3).since).toBe(3);
   });
+  it("preserves declared packs when completing the first basis across different edits", () => {
+    const initial = nextStockMaterialBasis(undefined, { product: ceramic.product, setAsidePacks: "4" }, 0);
+    expect(initial.since).toBeNull();
+    const completed = nextStockMaterialBasis(initial, { packSize: ceramic.packSize }, 1);
+    expect(completed).toMatchObject({ since: 1, confirmedSetAside: "4" });
+    expect(nextStockMaterialBasis(completed, ceramic, 2).confirmedSetAside).toBe("4");
+
+    const packFirst = nextStockMaterialBasis(undefined, { packSize: ceramic.packSize, setAsidePacks: "4" }, 0);
+    expect(nextStockMaterialBasis(packFirst, { product: ceramic.product }, 1)).toMatchObject({ since: 1, confirmedSetAside: "4" });
+  });
+  it("cannot carry provisional set-aside across a substitution before the first complete basis", () => {
+    const initial = nextStockMaterialBasis(undefined, { product: ceramic.product, setAsidePacks: "4" }, 0);
+    const replacement = nextStockMaterialBasis(initial, { product: "Oak flooring", setAsidePacks: "4" }, 1);
+    const completed = nextStockMaterialBasis(replacement, { packSize: ceramic.packSize }, 2);
+    expect(completed).toMatchObject({ since: 2, confirmedSetAside: "0" });
+  });
 });
