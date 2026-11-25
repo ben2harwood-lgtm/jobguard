@@ -17,6 +17,7 @@
         "apps/web/app/api/v2/replies/route.ts",
         "apps/web/app/lib/v2-fact-reply-server.ts",
         "apps/web/app/reply/[token]/page.tsx",
+        "apps/web/app/reply/[token]/view.test.tsx",
         "apps/web/app/reply/[token]/view.tsx",
         "apps/web/app/ui/v2-fact-replies.test.tsx",
         "apps/web/app/ui/v2-fact-replies.tsx",

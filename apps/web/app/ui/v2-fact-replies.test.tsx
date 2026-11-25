@@ -9,3 +9,10 @@ it("shows the practice boundary and a loading state", () => {
   expect(html).toContain("nothing real is sent");
   expect(html).toContain("Loading replies");
 });
+it("records pasted availability only from an explicit yes or no", async () => {
+  const { pastedAnswer } = await import("./v2-fact-replies");
+  expect(pastedAnswer("crew_availability", "yes")).toEqual({ available: true });
+  expect(pastedAnswer("crew_availability", "no")).toEqual({ available: false });
+  for (const text of ["I am available", "can do", "not sure", ""]) expect(pastedAnswer("crew_availability", text)).toBeNull();
+  expect(pastedAnswer("access", "  Side gate  ")).toEqual({ arrangement: "Side gate" });
+});

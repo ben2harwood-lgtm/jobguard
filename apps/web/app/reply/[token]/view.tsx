@@ -6,8 +6,9 @@ import { Card, Head, Note } from "../../(designed)/designed-ui";
 type Answer = { choice: string } | { other: string } | { deliveryDate: string } | { available: boolean } | { arrangement: string };
 const who = { customer: "you", merchant: "your merchant", crew_member: "you" } as const;
 
-function shown(answer: Record<string, string | boolean>) {
+export function shown(answer: Record<string, string | boolean>) {
   if ("choice" in answer) return String(answer.choice);
+  if (typeof answer.other === "string") return answer.other;
   if ("deliveryDate" in answer) return new Date(`${answer.deliveryDate}T12:00:00Z`).toLocaleDateString("en-GB",
     { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
   if ("available" in answer) return answer.available ? "Yes, I can" : "No, I can't";

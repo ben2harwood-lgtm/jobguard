@@ -14,6 +14,16 @@ function answerText(answer: Record<string, unknown>) {
   return String(answer.arrangement);
 }
 
+// What a pasted reply records. Availability is picked as yes or no, never guessed from free text.
+export function pastedAnswer(kind: Fact["kind"], pasted: string): Answer | null {
+  const text = pasted.trim();
+  if (!text) return null;
+  if (kind === "customer_choice") return { other: text };
+  if (kind === "merchant_delivery_date") return { deliveryDate: text };
+  if (kind === "crew_availability") return text === "yes" || text === "no" ? { available: text === "yes" } : null;
+  return { arrangement: text };
+}
+
 function ownerLabel(fact: Fact) {
   return fact.owner.kind === "customer" ? "the customer" : "name" in fact.owner ? fact.owner.name : "you";
 }
@@ -111,9 +121,7 @@ function FactAsk({ fact, view, busy, link, send, shown }: { fact: Fact; view: Fa
     shown(result?.replyPath ?? null);
   }
   function paste() {
-    const answer: Answer | null = !pasted.trim() ? null : fact.kind === "customer_choice" ? { other: pasted.trim() }
-      : fact.kind === "merchant_delivery_date" ? { deliveryDate: pasted.trim() }
-        : fact.kind === "crew_availability" ? { available: pasted.trim().toLowerCase().startsWith("y") } : { arrangement: pasted.trim() };
+    const answer = pastedAnswer(fact.kind, pasted);
     if (answer) void send({ action: "paste", factId: fact.id, expectedFactVersion: fact.version, answer },
       "Could not save the pasted reply. Check it and try again.").then(saved => { if (saved) setPasted(""); });
   }
@@ -139,8 +147,12 @@ function FactAsk({ fact, view, busy, link, send, shown }: { fact: Fact; view: Fa
     {(role === "customer" || recipient) && <button type="button" disabled={busy || (choice && (labels.length < 2 || labels.length > 6))}
       onClick={() => void ask()}>Send link to {role === "customer" ? view.customer.email ?? "the customer" : recipient!.contactEmail}</button>}
     <form onSubmit={event => { event.preventDefault(); paste(); }}>
-      <label>Paste a reply you got by phone or WhatsApp{fact.kind === "merchant_delivery_date" ? " (date, YYYY-MM-DD)"
-        : fact.kind === "crew_availability" ? " (yes or no)" : ""} <input value={pasted} onChange={event => setPasted(event.target.value)}/></label>
+      {fact.kind === "crew_availability"
+        ? <label>Reply you got by phone or WhatsApp <select value={pasted} onChange={event => setPasted(event.target.value)}>
+          <option value="">Choose…</option><option value="yes">Yes, available</option><option value="no">No, not available</option>
+        </select></label>
+        : <label>Paste a reply you got by phone or WhatsApp{fact.kind === "merchant_delivery_date" ? " (date, YYYY-MM-DD)" : ""}
+          {" "}<input value={pasted} onChange={event => setPasted(event.target.value)}/></label>}
       {" "}<button type="submit" disabled={busy || !pasted.trim()}>Save pasted reply</button>
     </form>
   </article>;
