@@ -70,10 +70,10 @@ export const rams: RamsSection[] = [
     "Keep the sink usable for the household at the end of each visit.",
   ] },
   { key: "sequence", title: "Sequence of work", lines: [
-    "1. Prepare and tile the splashback (Tiler).",
-    "2. Prepare hall walls and woodwork (Decorator).",
-    "3. Grout the splashback (Tiler).",
-    "4. Paint hall walls and woodwork (Decorator).",
+    "Prepare and tile the splashback (Tiler).",
+    "Prepare hall walls and woodwork (Decorator).",
+    "Grout the splashback (Tiler).",
+    "Paint hall walls and woodwork (Decorator).",
   ] },
   { key: "welfare", title: "Site rules and welfare", lines: [
     "Ring the front bell on arrival.",

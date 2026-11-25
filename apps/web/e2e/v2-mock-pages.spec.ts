@@ -102,6 +102,10 @@ test("V2 Friday update, reply page, RAMS draft and My brief are clickable in eve
   await expect(main).not.toContainText("hall walls prepared");
   await expect(main).not.toContainText("damp patch");
   await expect(main).not.toContainText("£");
+  // Each decision links to the reply page, so K3 and E2 agree on how a customer answers.
+  await main.getByRole("button", { name: "Answer this question" }).click();
+  await expect(nav.getByRole("button", { name: "Reply page" })).toHaveAttribute("aria-current", "page");
+  await expect(main.getByRole("heading", { name: /hall radiator off the wall/ })).toBeVisible();
 
   // E2 reply page: one question, answer once, then "already answered"; changed question; expired link.
   await nav.getByRole("button", { name: "Reply page" }).click();
@@ -138,11 +142,15 @@ test("V2 Friday update, reply page, RAMS draft and My brief are clickable in eve
   await main.getByLabel(/I have checked every section/).check();
   await expect(sign).toBeDisabled();
   await expect(main.getByText("Complete Nearest A&E and First aider on site before you sign.")).toBeVisible();
+  // An editor left open when signing closes, so a signed version cannot change.
+  await main.getByRole("button", { name: "Edit Occupied home" }).click();
   await main.getByLabel("Nearest A&E").fill("Rowan General Hospital (fictional)");
   await main.getByLabel("First aider on site").fill("Jordan Hale");
   await sign.click();
   await expect(main.getByText("Signed · version 1")).toBeVisible();
   await expect(main.getByRole("button", { name: /^Edit / })).toHaveCount(0);
+  await expect(main.getByRole("button", { name: "Save in preview" })).toHaveCount(0);
+  await expect(main.getByRole("textbox", { name: "Occupied home" })).toHaveCount(0);
   await expect(main.getByLabel("Nearest A&E")).toHaveAttribute("readonly", "");
   await main.getByRole("button", { name: "Preview a plan change" }).click();
   await expect(main.getByText("Draft · version 2")).toBeVisible();
@@ -154,6 +162,7 @@ test("V2 Friday update, reply page, RAMS draft and My brief are clickable in eve
   // F1 My brief: Blocked needs a reason, Changed records only, Done carries proof references; no signal sends nothing.
   await nav.getByRole("button", { name: "My brief" }).click();
   await expect(page.locator("#sidebar, .rr-mobile-nav")).toHaveCount(0);
+  await expect(main.getByRole("article", { name: "Illustrative kitchen photo" })).toBeVisible();
   const tile = main.locator("section.card").filter({ has: page.getByRole("heading", { name: "Prepare and tile the splashback" }) });
   const grout = main.locator("section.card").filter({ has: page.getByRole("heading", { name: "Grout the splashback" }) });
   await tile.getByRole("button", { name: "Blocked" }).click();
@@ -163,6 +172,7 @@ test("V2 Friday update, reply page, RAMS draft and My brief are clickable in eve
   await tile.getByLabel("What would unblock it? (optional)").fill("Tiles arrive at 11:00.");
   await blocked.click();
   await expect(main.getByRole("article", { name: "Blocked: Prepare and tile the splashback" })).toContainText("Materials not here · Tiles arrive at 11:00.");
+  await expect(main.getByText("Nothing was sent to the builder or written to the job diary.")).toBeVisible();
   await grout.getByRole("button", { name: "Changed" }).click();
   await expect(grout.getByText("This does not change the scope, the price or any order.")).toBeVisible();
   await grout.getByLabel("What changed on site?").fill("Customer asked for grey grout on the window return.");

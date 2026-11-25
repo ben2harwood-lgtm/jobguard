@@ -74,7 +74,7 @@ function EditLines({ label, lines, save, cancel }: { label: string; lines: strin
 
 type Sent = { version: number; sentVersion: number | null };
 
-function UpdateSections({ sections, photos }: { sections: UpdateSection[]; photos: Photo[] }) {
+function UpdateSections({ sections, photos, answer }: { sections: UpdateSection[]; photos: Photo[]; answer: () => void }) {
   const [done, ...rest] = sections;
   const visible = photos.filter(photo => photo.customerVisible);
   return <>
@@ -82,7 +82,14 @@ function UpdateSections({ sections, photos }: { sections: UpdateSection[]; photo
     <Card title="Photos">
       {visible.length ? visible.map(photo => <PhotoCard key={photo.id} photo={photo}/>) : <p className="card-body">No photos this week.</p>}
     </Card>
-    {rest.map(section => <Card key={section.key} title={section.title}><Lines lines={section.lines} empty={section.empty}/></Card>)}
+    {rest.map(section => <Card key={section.key} title={section.title}>
+      {section.key === "decisions" && section.lines.length
+        ? section.lines.map(line => <article className="card-body" key={line}>
+          <p>{line}</p>
+          <div className="form-actions"><button type="button" className="btn primary" onClick={answer}>Answer this question</button></div>
+        </article>)
+        : <Lines lines={section.lines} empty={section.empty}/>}
+    </Card>)}
   </>;
 }
 
@@ -128,12 +135,12 @@ function FridayUpdate({ sections, setSections, photos, setPhotos, sent, setSent,
   </div>;
 }
 
-function CustomerMessage({ sections, photos }: { sections: UpdateSection[]; photos: Photo[] }) {
+function CustomerMessage({ sections, photos, answer }: { sections: UpdateSection[]; photos: Photo[]; answer: () => void }) {
   return <div className="form">
     <Card title="Your Friday update" sub={`${firm} · 24 Rowan Close · ${week}`}>
       <p className="card-body">Hello Alex, here is this week’s update on your kitchen splashback and hall.</p>
     </Card>
-    <UpdateSections sections={sections} photos={photos}/>
+    <UpdateSections sections={sections} photos={photos} answer={answer}/>
     <p className="card-body">Questions? Reply to this message or call {firm}.</p>
   </div>;
 }
@@ -196,6 +203,8 @@ function RamsDraft({ rams, setRams }: { rams: Rams; setRams: (rams: Rams) => voi
   function sign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSign) return;
+    // Signing closes any open editor so a signed version can never change.
+    setEditing(null);
     setRams({ ...rams, signedBy: name.trim() });
   }
 
@@ -225,9 +234,9 @@ function RamsDraft({ rams, setRams }: { rams: Rams; setRams: (rams: Rams) => voi
         {rams.clash && section.key === "sequence" && <Tag tone="amber">Check: plan changed</Tag>}
       </div>}
       {rams.clash && section.key === "sequence" && <p className="card-body">{rams.clash}</p>}
-      {editing === section.key
+      {editing === section.key && !signed
         ? <EditLines label={section.title} lines={section.lines} cancel={() => setEditing(null)}
-            save={lines => { setRams({ ...rams, sections: rams.sections.map(row => row.key === section.key ? { ...row, lines } : row),
+            save={lines => { if (signed) return; setRams({ ...rams, sections: rams.sections.map(row => row.key === section.key ? { ...row, lines } : row),
               edited: [...new Set([...rams.edited, section.key])] }); setEditing(null); }}/>
         : <Lines lines={section.lines} empty="Nothing in this section yet."/>}
       {section.toComplete && <div className="card-body form">
@@ -317,10 +326,12 @@ function MyBrief({ view, progress, setProgress }: { view: string; progress: Prog
         <p><strong>Access</strong> · {brief.access}</p>
         <p><strong>Proof needed</strong> · {brief.proof}</p>
       </div>
+      <PhotoCard photo={{ id: "brief", label: brief.photoLabel, src: brief.photo, customerVisible: false }}><p>Photo of the work area, from the builder.</p></PhotoCard>
     </Card>
     {tilerTasks.map(task => <TaskCard key={`${view}-${task.id}`} task={task} progress={progress} offline={offline} open={task.id === "t1" ? open : null}
       record={row => setProgress(rows => [...rows, { ...row, id: `u${rows.length + 1}` }])}/>)}
-    <Card title="Your updates" sub="Each one is written to the job diary for the builder.">
+    <Card title="Your updates" sub="In the real page, each one goes to the builder and into the job diary.">
+      {progress.length > 0 && <div className="card-body" role="status"><Note><strong>Mock only.</strong> Nothing was sent to the builder or written to the job diary.</Note></div>}
       {progress.length ? progress.map(row => <article className="card-body" key={row.id} aria-label={`${row.kind}: ${label(row)}`}>
         <div className="job-caption"><Tag tone={row.kind === "Done" ? "green" : row.kind === "Blocked" ? "amber" : "blue"}>{row.kind}</Tag><Tag tone="green">Sent in preview</Tag></div>
         <p>{label(row)}{row.note && ` · ${row.note}`}</p>
@@ -356,7 +367,7 @@ export function PagesMock() {
 
   if (byLink(screen, view)) {
     if (screen === "Friday update") return <LinkPage controls={controls} kicker="MESSAGE TO THE CUSTOMER" title="Friday update"
-      text="As the customer sees it. Fictional job · mock only, nothing is sent."><CustomerMessage sections={sections} photos={photos}/></LinkPage>;
+      text="As the customer sees it. Fictional job · mock only, nothing is sent."><CustomerMessage sections={sections} photos={photos} answer={() => choose("Reply page", "Example")}/></LinkPage>;
     if (screen === "Reply page") {
       const kind: Kind = view === "Merchant question" ? "merchant" : "customer";
       const question = questions[kind];
