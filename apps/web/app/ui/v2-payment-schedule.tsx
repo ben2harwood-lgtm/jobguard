@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import type { PaymentScheduleView } from "@jobguard/db";
+import type { PaymentScheduleView } from "@jobguard/api/workspace";
 
 type StageDraft = { label: string; kind: "percentage" | "fixed"; value: string;
   trigger: "acceptance" | "date" | "task"; date: string; task: string };

@@ -1,5 +1,6 @@
 // V2-K5A: builder-only working payment schedule.
 import { PaymentScheduleApplication } from "./payment-schedule.application.js";
+export type { PaymentScheduleView } from "@jobguard/db";
 import { CommercialIntegrityV3Application } from "../commercial-integrity-v3.application.js";
 import { PaymentFeeApplication } from "../payment-fee.application.js";
 import { OidcApplication } from "../auth/sso/oidc.application.js";
