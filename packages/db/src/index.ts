@@ -22,6 +22,7 @@ export * from "./outbox.js";
 export * from "./capture-repository.js";
 export * from "./review-repository.js";
 export * from "./quote-repository.js";
+export * from "./v2-work-plan-repository.js";
 export * from "./quote-document-repository.js";
 export * from "./acceptance-repository.js";
 export * from "./activation-repository.js";

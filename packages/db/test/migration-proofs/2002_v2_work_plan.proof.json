@@ -1,0 +1,6 @@
+{
+  "migration": "2002_v2_work_plan.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
