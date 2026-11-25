@@ -23,7 +23,7 @@ For JobGuard (jobguard repo, AGENTS.md rev 3.0) and Vibe Control (aac-studio, LE
 13. **Run the tests through the repo's own runner** (the V2 seed suite on real PostgreSQL for anything with a table). Run typecheck, lint and lane lint against the real base.
     - New seed or browser proofs must pass inside the full suite, not only alone, and must not trip the sign-in rate limit (reuse the suite's shared sign-in).
     - Browser leak checks (no off-origin requests, no hidden data) look only inside the page's main content, with the Next.js dev indicator turned off.
-    - **V2 browser sign-in (V2 addition, 25 Nov):** reuse the one named pattern (`signInOnce` from `tools/v2/test/browser-session.mjs` once Q20 merges; until then copy K5A's `before()` block in `tools/v2/payment-schedule.browser.test.mjs`). Origin from `V2_TEST_ORIGIN`, HTTPS phone origin only (the secure cookie isn't sent over HTTP), sign in once per file and reuse `storageState`. See 01-RULES rule 22.
+    - **V2 browser sign-in (V2 addition, 25 Nov):** reuse the one named pattern (`signInOnce` from `tools/v2/test/browser-session.mjs` once Q20 merges; until then copy K5A's `before()` block in `tools/v2/payment-schedule.browser.test.mjs`). Origin from `V2_TEST_ORIGIN`, HTTPS phone origin only (the secure cookie isn't sent over HTTP), sign in once per file and reuse `storageState`. **Wait for the post-Verify navigation to finish before the first `page.evaluate`, or use `page.request`.** A browser proof counts only after **three passes in a row on fresh stacks**. See 01-RULES rule 22.
 
 ## Hand-off
 14. **PR body, at the exact head SHA:** commands actually run with counts, the invariants touched, migrations, known limits, and "Rework risk: low/medium/high".

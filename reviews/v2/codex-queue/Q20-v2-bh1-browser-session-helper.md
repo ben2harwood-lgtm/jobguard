@@ -20,11 +20,18 @@ export async function signInOnce(browser, { jobTitle } = {})
   // enters practice (POST /api/auth/practice, linked-practice-company.v1, enter),
   // finds jobId through GET /api/jobs?tenantId=DEMO_TENANT_ID by title
   // (default "Occupied-home kitchen splashback and hall decorating"),
-  // closes its own context, and throws a clear named error at the step that failed.
+  // After Verify, WAITS for the navigation to finish (waitForURL off /sign-in, then the
+  // "You're signed in." heading, then waitForLoadState("networkidle")) before any page.evaluate.
+  // Prefer page.request.post/get (with the x-csrf-token header) for the practice and jobs calls,
+  // so nothing runs inside a page that is navigating. K5A's original block raced here
+  // ("Execution context was destroyed"); do not copy that race.
+  // Closes its own context, and throws a clear named error at the step that failed.
 export async function v2Context(browser, storageState, width) // viewport {width, height: 900}, ignoreHTTPSErrors
 ```
 
 ## Tests
+- **Three passes in a row, each on a fresh stack** (fresh bootstrap and seed, new browser). Paste all three outputs in the PR. One pass followed by a failure is a fail.
+- A regression check for the race: run `signInOnce` 10 times in a loop on one stack with no failures.
 - `tools/v2/test/browser-session.browser.test.mjs`. On the HTTPS phone origin: `signInOnce` returns a job id, and a context built from its `storageState` opens `/jobs/<id>/money` signed in at 360 and 1280 px, with one sign-in request in total.
 - A unit check that `v2Origin()` refuses an unset or `http:` origin.
 
