@@ -33,11 +33,11 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | 8 | Q16 | V2-K10 job profit so far | ★★ | S | R2 has pushed c3 | new c3 | none | RED | medium |
 | 9 | Q01 | V2-D1R1 audit append on measurement saves (safety fix) | ★ | S | R2 has pushed c3 | `codex/sandbox/v2-d1` | none | RED | low |
 | 10 | Q05 | V2-K8 off-hire reminders | ★★ | S | R2 has pushed c3 | new c3 | 2010 | RED | medium |
-| 11 | Q17 | V2-E9 customer choices and PC sums tracker | ★★★ | M | **parked** (25 Nov 01:10 UK, planner miss; rewritten for tomorrow, Ben decides rounds) | E1 #919 | 2022 | RED | high |
+| 11 | Q17 | V2-E9 customer choices and PC sums tracker | ★★★ | M | **building** (Opus thread, #948, from 25 Nov 13:00 UK; flow seed test first) | E1 #919 | 2022 | RED | high |
 | 12 | Q09 | V2-F1 Done, Blocked, Changed on a brief | ★★ | M | **parked** (25 Nov 00:55 UK): waits for D4A + task key on #916, Ben's OK (mock-up passed; builder presses, no photos, no diary write) | D4 #916 | 2015 | RED | high |
 | 13 | Q10 | V2-F8 who was on site today | ★ | S | **parked: C3C crew binding** | V2-F1 branch | 2016 | RED | high |
 | 14 | Q06 | V2-K9 RAMS and construction phase plan draft | ★★ | M | now (mock-up passed #930) | new c3 | 2011 | RED | medium |
-| 15 | Q08 | V2-E2 replies to open facts | ★ | M | **parked**: recipient binding rewritten 25 Nov 12:20 UK; needs Ben's allowance for another round | E1 #919 | 2013 | RED | high |
+| 15 | Q08 | V2-E2 replies to open facts | ★ | M | **building** (Opus thread, Ben ran the allowance at about 12:25 UK 25 Nov; RED conditions in Q08) | E1 #919 | 2013 | RED | high |
 | 16 | Q07 | V2-E3 stock position | ★ | M | now | D3 #912 | 2014 | RED | high |
 | 17 | Q02 | V2-E5A same-firm double-booking warning (multi-crew, later) | ★ | S | **parked: C3C crew binding** | `codex/sandbox/v2-c3` | none | T1 | medium |
 
