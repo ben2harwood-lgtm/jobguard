@@ -1,9 +1,10 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
-import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
+import { appendAuditBatch } from "./audit.js";
+import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "./tenant-context.js";
 import { splashbackDecoratingTemplate } from "./v2-splashback-decorating-template.js";
-import { applyWorkPlanEdits, compareWorkPlanTasks, customWorkPlanTaskKey, workPlanEditV1, workPlanScopeSource,
+import { applyWorkPlanEdits, compareWorkPlanTasks, customWorkPlanTaskKey, workPlanEditV1,
   type WorkPlanEdit, type WorkPlanEditRow, type WorkPlanScopeRow } from "./v2-work-plan-edits.js";
 
 export { customWorkPlanTaskKey, workPlanEditV1, workPlanQueryV1, type WorkPlanEdit } from "./v2-work-plan-edits.js";
@@ -66,11 +67,11 @@ export class WorkPlanRepository {
 
   async generate(context: VerifiedTenantContext, source: PlanSource) {
     const { jobId, quoteRevisionId } = planSource.parse(source);
-    return withTenant(this.pool, context, async ({ $client }) => {
-      const head = await this.planHead($client, context.tenantId, jobId, true);
+    return withTenant(this.pool, context, async database => {
+      const head = await this.planHead(database.$client, context.tenantId, jobId, true);
       if (!head) throw new WorkPlanError("QUOTE_REVISION_NOT_FOUND");
       this.checkFrozenRevision(head, quoteRevisionId);
-      return this.generatePlan($client, [context.tenantId, jobId, quoteRevisionId], head);
+      return this.generatePlan(database, [context.tenantId, jobId, quoteRevisionId], head);
     });
   }
 
@@ -85,10 +86,10 @@ export class WorkPlanRepository {
   }
 
   async open(context: VerifiedTenantContext, jobId: string) {
-    return withTenant(this.pool, context, async ({ $client }) => {
-      const head = await this.planHead($client, context.tenantId, jobId, true);
+    return withTenant(this.pool, context, async database => {
+      const head = await this.planHead(database.$client, context.tenantId, jobId, true);
       this.requireCurrentRevision(head);
-      return this.generatePlan($client, [context.tenantId, jobId, head.quoteRevisionId], head);
+      return this.generatePlan(database, [context.tenantId, jobId, head.quoteRevisionId], head);
     });
   }
 
@@ -103,7 +104,8 @@ export class WorkPlanRepository {
   async edit(context: VerifiedTenantContext, jobId: string, sessionId: string, input: WorkPlanEdit) {
     const command = workPlanEditV1.parse(input);
     const key: PlanKey = [context.tenantId, jobId, command.quoteRevisionId];
-    return withTenant(this.pool, context, async ({ $client: client }) => {
+    return withTenant(this.pool, context, async database => {
+      const { $client: client } = database;
       const digest = createHash("sha256").update(sessionId).digest("hex");
       const { rows: [editor] } = await client.query<{ id: string | null }>("SELECT app.v2_work_plan_editor($1) AS id", [digest]);
       if (!editor?.id) throw new WorkPlanError("WORK_PLAN_EDITOR_REQUIRED");
@@ -114,7 +116,7 @@ export class WorkPlanRepository {
       this.requireCurrentRevision(head);
       if (head.quoteRevisionId !== command.quoteRevisionId) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
 
-      const plan = await this.generatePlan(client, key, head);
+      const plan = await this.generatePlan(database, key, head);
       if (plan.version !== command.expectedVersion) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
       const existing = plan.tasks.some(task => task.scopeItemId === command.scopeItemId && task.key === command.taskKey);
       const { position, trade, durationMinutes } = command.changes;
@@ -132,8 +134,25 @@ export class WorkPlanRepository {
           expected_version + 1 AS version, actor_membership_id AS "actorMembershipId", recorded_at AS "recordedAt"
       `, [...key, command.commandId, command.scopeItemId, command.taskKey, command.expectedVersion,
         JSON.stringify(command.changes), editor.id]);
+      // A replay returned above, so each recorded edit appends exactly one event in this transaction.
+      await this.audit(database, editor.id, jobId, command, saved!.version);
       return saved;
     });
+  }
+
+  private audit(database: TenantTransaction, actor: string, jobId: string, command: WorkPlanEdit, planVersion: number) {
+    const changed = Object.entries(command.changes).filter(([, value]) => value !== undefined)
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    return appendAuditBatch(database, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor}`,
+      eventType: "v2_work_plan.edited", subjectType: "job", subjectRef: jobId,
+      payload: {
+        references: { commandId: command.commandId, quoteRevisionId: command.quoteRevisionId,
+          scopeItemId: command.scopeItemId, taskKey: command.taskKey,
+          expectedVersion: String(command.expectedVersion), planVersion: String(planVersion),
+          changedFields: changed.map(([field]) => field).join("/") },
+        hashes: { changes: createHash("sha256").update(JSON.stringify(Object.fromEntries(changed))).digest("hex") },
+        classifications: { action: "operational" },
+      } }]);
   }
 
   private async replay(client: PoolClient, key: PlanKey, actor: string, command: WorkPlanEdit) {
@@ -187,8 +206,12 @@ export class WorkPlanRepository {
     if (head.acceptedDocumentId && head.quoteRevisionId !== revisionId) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
   }
 
-  private async generatePlan(client: PoolClient, key: PlanKey, head: PlanHead) {
-    await this.insertPlan(client, key, null);
+  private async generatePlan(database: TenantTransaction, key: PlanKey, head: PlanHead) {
+    const { $client: client } = database;
+    // Opening, generating or editing a plan creates it at most once. A quote-save refresh inserts through
+    // refreshDraft instead, which quote.draft.saved already covers, so it appends nothing here.
+    const tasks = await this.insertPlan(client, key, null);
+    if (tasks) await this.recordGenerated(database, key, tasks);
     const plan = await this.readPlan(client, key, head);
     if (!plan) throw new WorkPlanError("QUOTE_REVISION_NOT_FOUND");
     return plan;
@@ -202,7 +225,20 @@ export class WorkPlanRepository {
       WHERE (tenant_id, job_id, id) = ($1, $2, $3)
       ON CONFLICT (tenant_id, job_id, quote_revision_id) DO NOTHING
     `, [...key, this.template.key, previousPlanRevisionId]);
-    if (created.rowCount) await this.insertTasks(client, key);
+    return created.rowCount ? this.insertTasks(client, key) : null;
+  }
+
+  // The plan is derived by rule from the quote revision, so the system rule is the actor.
+  // A replay inserts nothing above and appends nothing here.
+  private recordGenerated(database: TenantTransaction, [, jobId, quoteRevisionId]: PlanKey,
+    tasks: readonly { scope_item_id: string; template_task_key: string }[]) {
+    return appendAuditBatch(database, [{ id: randomUUID(), version: "audit.v1", actorRef: "system:v2-work-plan",
+      eventType: "v2_work_plan.generated", subjectType: "job", subjectRef: jobId,
+      payload: {
+        references: { quoteRevisionId, templateKey: this.template.key, taskCount: String(tasks.length) },
+        hashes: { tasks: createHash("sha256").update(JSON.stringify(tasks)).digest("hex") },
+        classifications: { action: "operational" },
+      } }]);
   }
 
   private async insertTasks(client: PoolClient, key: PlanKey) {
@@ -220,6 +256,7 @@ export class WorkPlanRepository {
       FROM ROWS FROM (jsonb_to_recordset($4) AS (scope_item_id uuid, template_task_key text))
         WITH ORDINALITY AS task(scope_item_id, template_task_key, position)
     `, [...key, JSON.stringify(tasks)]);
+    return tasks;
   }
 
   private async planRow(client: PoolClient, key: PlanKey) {
@@ -232,7 +269,8 @@ export class WorkPlanRepository {
 
   private async loadTasks(client: PoolClient, key: PlanKey) {
     const { rows: scope } = await client.query<WorkPlanScopeRow>(`
-      SELECT l.scope_item_id, ${workPlanScopeSource("l")} AS source, t.template_task_key
+      SELECT l.scope_item_id, jsonb_build_object('description', l.description, 'category', l.category,
+        'quantity', l.quantity_decimal, 'unit', l.unit) AS source, t.template_task_key
       FROM app.quote_line l LEFT JOIN app.v2_work_plan_task t
         USING (tenant_id, job_id, quote_revision_id, scope_item_id)
       WHERE (l.tenant_id, l.job_id, l.quote_revision_id) = ($1, $2, $3) AND l.included
@@ -276,7 +314,8 @@ export class WorkPlanRepository {
         FROM history h JOIN app.v2_work_plan p ON (p.tenant_id, p.job_id, p.quote_revision_id)
           = ($1, $2, h.previous_plan_revision_id)
       )
-      SELECT e.scope_item_id, e.template_task_key, e.quote_revision_id, e.changes, ${workPlanScopeSource("l")} AS source
+      SELECT e.scope_item_id, e.template_task_key, e.quote_revision_id, e.changes, jsonb_build_object('description', l.description, 'category', l.category,
+        'quantity', l.quantity_decimal, 'unit', l.unit) AS source
       FROM history h JOIN app.v2_work_plan_edit e ON (e.tenant_id, e.job_id, e.quote_revision_id) = ($1, $2, h.quote_revision_id)
       JOIN app.quote_line l ON (l.tenant_id, l.job_id, l.quote_revision_id, l.scope_item_id)
         = (e.tenant_id, e.job_id, e.quote_revision_id, e.scope_item_id)
