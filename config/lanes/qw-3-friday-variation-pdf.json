@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "qw-3-friday-variation-pdf": {
+      "branches": [
+        "claude/qw-3-friday-variation-pdf"
+      ],
+      "note": "QW-3: weekly extras register and PDF, week closes Friday 18:00 UK time (practice mode, read only, no migration). T2: independent check, Ben merges.",
+      "allow": [
+        "apps/api/src/variation-register.application.ts",
+        "apps/api/src/variation-register.application.test.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/variation-register/route.ts",
+        "apps/web/app/api/variation-register/route.test.ts",
+        "apps/web/app/api/variation-register/pdf/route.ts",
+        "packages/core/src/index.ts",
+        "packages/core/src/variation-register.ts",
+        "packages/core/src/variation-register.test.ts",
+        "packages/db/src/index.ts",
+        "packages/db/src/variation-register-repository.ts",
+        "packages/db/test/variation-register.integration.test.ts"
+      ]
+    }
+  }
+}
