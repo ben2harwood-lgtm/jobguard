@@ -69,6 +69,9 @@ const proofStatementReplayCase = { key: "proof.statement", registry: ["/api/jobs
 // QW-1 extra photos run the evidence begin/finalize commands through their own pilot service. Exact replay
 // of begin and finalize and a changed-request conflict execute in variation-photo-service.integration.test.ts.
 const extraPhotoReplayCase = { key: "/api/jobs/[id]/variations/photos", registry: ["/api/jobs/[id]/variations/photos"] };
+// QW-4 snag commands are answered once by their checked routines (app.snag_command) and the evidence finalize command. Exact
+// replay and a changed-request conflict for add, events and photo finalize execute in snag-list.integration.test.ts.
+const snagReplayCase = { key: "/api/jobs/[id]/snags", registry: ["/api/jobs/[id]/snags", "/api/jobs/[id]/snags/[snagId]/events", "/api/jobs/[id]/snags/[snagId]/photos"] };
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); await h.boot();
 }, 120000);
 afterAll(async () => { await h.stop(); vi.unstubAllEnvs(); });
@@ -87,7 +90,7 @@ describe("every watchdog_live_only command is covered by this contract", () => {
   });
   it("covers every watchdog_live_only registry key (web routes, dynamic actions, commands and Nest routes), and no stale key", () => {
     const liveOnly = Object.entries(jobMutationRegistry).filter(([, phase]) => phase === "watchdog_live_only").map(([key]) => key).sort();
-    const covered = new Set([...cases, clientReplayCase, supplierLineReplayCase, proofStatementReplayCase, extraPhotoReplayCase].flatMap(c => c.registry));
+    const covered = new Set([...cases, clientReplayCase, supplierLineReplayCase, proofStatementReplayCase, extraPhotoReplayCase, snagReplayCase].flatMap(c => c.registry));
     expect(liveOnly.filter(key => !covered.has(key))).toEqual([]);
     expect([...covered].filter(key => !liveOnly.includes(key)).sort()).toEqual([]);
   });
