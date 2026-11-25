@@ -1,7 +1,11 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+
+// The PDF text check needs poppler's pdftotext on the test host. Skip, and say
+// why, where it is missing rather than pass without reading the PDF.
+const hasPdftotext = spawnSync("pdftotext", ["-v"]).error === undefined;
 
 test("the signed RAMS prints every section and the signature without the app shell", async ({ page }, testInfo) => {
   // The HTTPS RAMS journey signs a real seeded draft. This isolated document
@@ -32,6 +36,7 @@ test("the signed RAMS prints every section and the signature without the app she
       <p>Signed — read-only</p>${sections.join("")}<section><h2>Builder signature</h2><p>${signature}</p></section>
       </article></div></section></div></main><nav class="rr-mobile-nav">Mobile navigation</nav></div></div>
     </body></html>`);
+  test.skip(!hasPdftotext, "pdftotext (poppler-utils) is not installed on this host");
   const path = testInfo.outputPath("signed-rams.pdf");
   await page.pdf({ path, format: "A4", printBackground: true });
   await testInfo.attach("signed RAMS", { path, contentType: "application/pdf" });
