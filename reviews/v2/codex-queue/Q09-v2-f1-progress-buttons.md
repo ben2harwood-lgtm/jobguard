@@ -4,9 +4,23 @@
 
 Tier: **RED** (new table; proof for the Final Check). Migration **2015**. Astra: yes. Rework risk: **high** (D4 is in review and has a pending audit fix).
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-f1, plus section 2B item 20 (one-tap photo).
-**Starts:** PARKED (25 Nov 00:55 UK). Waits for D4A plus the task key on #916, which needs Ben's OK for a third D4 round. Was: now. **Base:** D4's branch `claude/project-thread-btt9d2` (#916). Draft PR against it. Merge D4 again when it moves (its audit fix D4A may land later). Do not edit D4's files.
+**Starts:** NOW (released 25 Nov 14:55 UK; see the release section below, which overrides the base, PR and diary lines elsewhere). **Builder:** desktop Codex, lane A. **Base:** D4's branch `claude/project-thread-btt9d2` (#916) at `f7aacf55d` or later, which has D4A and `taskKey`. **Branch:** `codex/sandbox/v2-f1`. **PR:** draft **into `v2/main`** (not into D4's branch), so CI1's V2 seed job runs. Do not edit D4's files.
 
 > **c3 audit gap (standard line, coordinator ruling 25 Nov 00:09 UK).** c3's plan read creates a plan with no audit event. That is a known c2/c3 gap, and its fix waits for Ben. This piece **reads or links to the plan only**: build against c3 as it is, and **keep out of `packages/db/src/v2-work-plan-repository.ts`** (and every other c2/c3 file). Do not hold on this gap. Put this line in the PR body: "Inherits c3's plan-creation audit gap; needs c3 re-merged after the c2/c3 fix." 
+
+## Release check (planner, 25 Nov 14:55 UK, rule 23; overrides older lines in this packet)
+- **The task key is in.** On #916 @ f7aacf55d, `CrewBriefContent.tasks[].taskKey` is saved (`v2-crew-brief-repository.ts` line 40) and filled from the plan task's key (line 276). The schema label is still `v2-crew-brief.v1`, so there is no v2 label to test for. Instead, **refuse a press when the saved task has no `taskKey`**, with "This brief needs regenerating". Match only on `(brief trade + version, scopeItemId, taskKey)`, never on title or position.
+- **How briefs are read:** through `workspace.crewBriefs.read(jobId, { version: "v2-crew-brief-query.v1", trade })` (D4's application). F1 adds its **own** route `apps/web/app/api/v2-backend/jobs/[id]/brief-progress/route.ts`. It returns D4's brief plus F1's progress rows, and takes the three press commands behind the rule-21 origin check. Don't add a crew-briefs route: D5B-B (Q23) owns `crew-briefs/` and is being built at the same time.
+- **No database is needed before building.** Write the repository and migration `2015`, then prove them with seed tests added to `tools/v2/seed.integration.test.mjs`:
+  - Done, Blocked and Changed are each recorded once, and a replay appends nothing;
+  - a forced failure after the insert leaves neither row nor event;
+  - a second firm can't read or press;
+  - a press on a task with no `taskKey` is refused;
+  - Changed leaves scope, price and orders unchanged.
+  CI1 runs these. Mac lane B may too. Don't wait for a local PostgreSQL.
+- **The plan is read only.** Keep out of every c1 to c3 file and D4's files. The "c3 audit gap" line above is no longer needed, because c1 to c3 merged into v2/main with the audit fix at 12:12 UK.
+- **Browser:** add `tools/v2/brief-progress.browser.test.mjs` at 360 and 1280 px, plus phone mode, following rule 22, with three passes on fresh stacks in CI or lane B.
+- **Plan check:** RED, so a Claude plan check is requested on frm-management-layer#3 in place of Astra's (Ben, 12:50 UK). Building starts now; the PR isn't called ready until the verdict and its conditions are in.
 
 ## Dry-check against the code (planner, 25 Nov 00:20 UK): verified with re-scoping; the mock-up passed (#930 at ff4d3366)
 - **Who presses:** there is no crew sign-in or crew link on V2 yet, and assignees are free text until C3C. So in this piece **the builder** presses Done, Blocked or Changed on a trade's brief (D4 #916), recording on the trade's behalf. A crew member pressing from their own link comes later, after C3C.

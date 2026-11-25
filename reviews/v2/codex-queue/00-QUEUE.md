@@ -34,7 +34,7 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | 9 | Q01 | V2-D1R1 audit append on measurement saves (safety fix) | ★ | S | R2 has pushed c3 | `codex/sandbox/v2-d1` | none | RED | low |
 | 10 | Q05 | V2-K8 off-hire reminders | ★★ | S | R2 has pushed c3 | new c3 | 2010 | RED | medium |
 | 11 | Q17 | V2-E9 customer choices and PC sums tracker | ★★★ | M | **building** (Opus thread, #948, from 25 Nov 13:00 UK; flow seed test first) | E1 #919 | 2022 | RED | high |
-| 12 | Q09 | V2-F1 Done, Blocked, Changed on a brief | ★★ | M | **parked** (25 Nov 00:55 UK): waits for D4A + task key on #916, Ben's OK (mock-up passed; builder presses, no photos, no diary write) | D4 #916 | 2015 | RED | high |
+| 12 | Q09 | V2-F1 Done, Blocked, Changed on a brief | ★★ | M | **now** (released 25 Nov 14:55 UK; D4A + taskKey are on #916 @ f7aacf55d). **Desktop Codex.** PR into v2/main | D4 #916 | 2015 | RED | medium |
 | 13 | Q10 | V2-F8 who was on site today | ★ | S | **parked: C3C crew binding** | V2-F1 branch | 2016 | RED | high |
 | 14 | Q06 | V2-K9 RAMS and construction phase plan draft | ★★ | M | now (mock-up passed #930) | new c3 | 2011 | RED | medium |
 | 15 | Q08 | V2-E2 replies to open facts | ★ | M | **building** (Opus thread, Ben ran the allowance at about 12:25 UK 25 Nov; RED conditions in Q08) | E1 #919 | 2013 | RED | high |
@@ -46,6 +46,19 @@ Every RED packet also needs Astra's plan check before the PR is called ready (ru
 Why this order: the three "now" pieces at the top (F6, K4, K6) are the review's biggest time savers and sit on merged code, so they can't be wasted by a later repair. Money and customer pieces on the new c3 come next as soon as R2 lands. Pieces stacked on unchecked branches (E9, F1, E2, E3) go after, because they carry the most redo risk. Multi-crew planning (E5A, and E4 to E6 outside this queue) goes last.
 
 V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
+
+## Batch released 25 Nov 14:55 UK (planner; Ben: "why is nothing coding?")
+Every piece below was dry-checked against the current code (rule 23). None needs a database before building: their database proof is in seed tests or browser tests that CI1 or Mac lane B run. Open each PR **into `v2/main` or a `codex/sandbox/v2-*` branch**, so CI1's seed job runs.
+
+| Order | Packet | Piece | Builder | Base | Migration | Tier |
+|---|---|---|---|---|---|---|
+| B1 | Q09 | V2-F1 Done, Blocked, Changed on a brief | **desktop Codex** (lane A, slot 1) | #916 @ f7aacf55d, PR into v2/main | 2015 | RED (Claude plan check asked) |
+| B2 | Q23 | V2-D5B-B Briefs screen | **desktop Codex** (lane A, slot 2) | #916 @ f7aacf55d, PR into v2/main | none | T1 |
+| B3 | Q24 | V2-K3-F Friday filter keeps measurements and times | **Codex** (web Codex now, or lane A when a slot frees) | `codex/sandbox/v2-k3` | none | T1 |
+| B4 | Q25 | V2-F6-UX Check again, and photo ticks reset | **Codex** (web Codex now, or lane A) | `codex/sandbox/v2-f6t` | none | T1 |
+| B5 | Q26 | V2-SX crew and customer test sessions | **Opus thread** (needs a live V2 database while building) | `v2/main` | 2024 (V2 bootstrap file) | RED (Claude plan check asked) |
+
+Already moving, so don't duplicate: CI2 #947, phone-test sign-in #950, E2 #949, E9 #948. Next batch after this one: V2-PX (Opus), K10-R (after SX), K5A-1 (after #929 and #931), K1 share (after D5B-B).
 
 ## Dry-checked against the code (25 Nov 00:10 UK)
 Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, since 00:15 UK **K9 (Q06) and E2 (Q08)**, and since 00:20 UK **K3 (Q15) and F1 (Q09)** with re-scoping. All four mock-ups passed in #930, each with a dated note at the top of its packet. Re-scoped: **K2 → K2A** (builder-only feed). Parked: **E5A** and **F8**, both waiting for C3C. They get checked before they're released.
