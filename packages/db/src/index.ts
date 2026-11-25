@@ -238,3 +238,7 @@ export { closeOutboundWorkerPool, outboundWorkerPool } from "./worker-pool.js";
 export { assertV2Recipient, captureV2Delivery } from "./v2-local-catcher.js";
 
 export { V2FilesystemStorage, isV2FileVersion } from "@jobguard/storage";
+
+// V2-K8: builder-only hire records.
+export * from "./v2-hire.js";
+export * from "./v2-hire-repository.js";

@@ -774,3 +774,128 @@ test("each recorded plan edit appends one audit event in its transaction, and a 
     "SELECT 1 FROM app.audit_event WHERE subject_ref = $1", [draftJob]));
   assert.equal(rowCount, 0, "the second firm cannot see the edit events");
 });
+
+// V2-K8: hire persistence, audit, replay, failure and firm boundary proofs.
+const hireCommand = (action, hireId, expectedVersion, extra = {}) => ({
+  version: "hire-command.v1", commandId: randomUUID(), hireId, expectedVersion, action, ...extra,
+});
+const hireEvents = async job => (await admin.query(`SELECT actor_ref,payload,event_type FROM app.audit_event
+  WHERE subject_ref=$1 AND event_type LIKE 'v2.hire.%' ORDER BY sequence`, [job])).rows;
+const hireDetails = { kind: "scaffold", supplier: "Fictional scaffold hire", bookedFrom: "2026-01-01",
+  weeklyCost: "125.01", neededUntil: null };
+
+test("V2-K8: every hire command persists one audit event, replays nothing, and refuses stale or changed requests", async t => {
+  const catcher = t.mock.method(console, "info");
+  const { draftJob, sessionId, read, edit } = await draftForPlan();
+  let plan = await read();
+  const task = plan.tasks[0];
+  await edit(planEdit(plan, task, { scheduledDate: "2026-01-02" }));
+  plan = await read();
+  const app = createWorkspaceApplication({ pool: runtime, sessionId }).hires;
+  const before = await counts();
+  const id = randomUUID();
+  const link = { quoteRevisionId: plan.quoteRevisionId, scopeItemId: task.scopeItemId, templateTaskKey: task.key };
+  const commands = [hireCommand("add", id, 0, { details: hireDetails }),
+    hireCommand("edit", id, 1, { details: { ...hireDetails, weeklyCost: "130.02" } }),
+    hireCommand("link", id, 2, { tasks: [link] }), hireCommand("request_off_hire", id, 3), hireCommand("off_hire", id, 4)];
+  for (const [index, command] of commands.entries()) {
+    const receipt = await app.command(draftJob, command);
+    assert.equal(receipt.itemVersion, index + 1);
+    assert.deepEqual(await app.command(draftJob, command), receipt);
+    await Promise.all([app.command(draftJob, command), app.command(draftJob, command)]);
+    const events = await hireEvents(draftJob);
+    assert.equal(events.length, index + 1);
+    const event = events.at(-1);
+    assert.equal(event.actor_ref, `membership:${receipt.actorMembershipId}`);
+    assert.equal(event.event_type, `v2.hire.${command.action}`);
+    assert.equal(event.payload.references.commandId, command.commandId);
+    assert.equal("version" in event.payload.references, false);
+    assert.doesNotMatch(JSON.stringify(event.payload), /Fictional scaffold|125.01|130.02/u);
+    await assert.rejects(app.command(draftJob, { ...command, ...(command.details
+      ? { details: { ...command.details, supplier: "Changed fictional supplier" } } : { expectedVersion: 99 }) }), { code: "HIRE_COMMAND_CONFLICT" });
+    if (index === 2) {
+      const view = await app.list(draftJob);
+      assert.equal(view.items[0].reminder, true);
+      assert.equal(view.items[0].neededAfter, "2026-01-02");
+      assert.equal(view.items[0].weeklyCost, "130.02");
+      assert.deepEqual((await createWorkspaceApplication({ pool: runtime, sessionId }).hires.list(draftJob)).items, view.items);
+    }
+  }
+  const view = await app.list(draftJob);
+  assert.equal(view.items[0].status, "off_hire");
+  assert.equal(view.items[0].reminder, false);
+  await assert.rejects(app.command(draftJob, hireCommand("edit", id, 1, { details: hireDetails })), { code: "HIRE_VERSION_CONFLICT" });
+  await assert.rejects(app.command(draftJob, hireCommand("edit", id, 5, { details: hireDetails })), { code: "HIRE_INVALID" });
+  assert.equal((await counts()).sends, before.sends, "no local catcher action is created");
+  assert.equal(catcher.mock.calls.filter(call => call.arguments.some(value => typeof value === "string" && value.includes("v2.delivery.captured"))).length, 0);
+  await verifyTenantChain(DEMO_TENANT_ID);
+});
+
+test("V2-K8: audit failure rolls back add, edit, link and both status commands", async () => {
+  const { HireRepository } = await import("../../packages/db/dist/index.js");
+  const { draftJob, sessionId, read } = await draftForPlan();
+  const plan = await read();
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const hires = createWorkspaceApplication({ pool: runtime, sessionId }).hires;
+  const failing = { async connect() {
+    const client = await runtime.connect();
+    const query = client.query.bind(client), release = client.release.bind(client);
+    client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+      ? Promise.reject(Object.assign(new Error("forced audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+    client.release = (...args) => { client.query = query; return release(...args); };
+    return client;
+  } };
+  const id = randomUUID();
+  const commands = [hireCommand("add", id, 0, { details: hireDetails }),
+    hireCommand("edit", id, 1, { details: { ...hireDetails, supplier: "Fictional replacement" } }),
+    hireCommand("link", id, 2, { tasks: [{ quoteRevisionId: plan.quoteRevisionId,
+      scopeItemId: plan.tasks[0].scopeItemId, templateTaskKey: plan.tasks[0].key }] }),
+    hireCommand("request_off_hire", id, 3), hireCommand("off_hire", id, 4)];
+  for (const [index, command] of commands.entries()) {
+    await assert.rejects(new HireRepository(failing).command(context, draftJob, sessionId, command), { code: "FORCED" });
+    assert.equal((await admin.query("SELECT 1 FROM app.v2_hire_revision WHERE command_id=$1", [command.commandId])).rowCount, 0);
+    assert.equal((await hireEvents(draftJob)).length, index);
+    await hires.command(draftJob, command);
+  }
+});
+
+test("V2-K8: forced RLS, least privilege, second firm, wrong-job links and V2-only access", async () => {
+  const { draftJob, sessionId, read } = await draftForPlan();
+  const plan = await read();
+  const outsider = await signIn("second-builder");
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const app = createWorkspaceApplication({ pool: runtime, sessionId }).hires;
+  const command = hireCommand("add", randomUUID(), 0, { details: hireDetails });
+  await app.command(draftJob, command);
+  const { rows: [acl] } = await admin.query(`SELECT relforcerowsecurity AS forced,relrowsecurity AS enabled,
+    pg_get_userbyid(relowner) AS owner,has_table_privilege('jobguard_runtime',oid,'SELECT') AS read,
+    has_table_privilege('jobguard_runtime',oid,'INSERT') AS insert,
+    has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS mutate
+    FROM pg_class WHERE oid='app.v2_hire_revision'::regclass`);
+  assert.deepEqual(acl, { forced: true, enabled: true, owner: "jobguard_migration", read: true, insert: true, mutate: false });
+  for (const scope of [context, outsider.realContext]) {
+    const query = (sql, values) => withTenant(runtime, scope, db => db.$client.query(sql, values));
+    assert.equal((await query("SELECT * FROM app.v2_hire_revision WHERE job_id=$1", [draftJob])).rowCount, 0);
+    await assert.rejects(query(`INSERT INTO app.v2_hire_revision
+      (tenant_id,job_id,hire_id,item_version,command_id,request,state,actor_membership_id)
+      SELECT $1,$2,$3,1,$4,$5,$6,$7`, [DEMO_TENANT_ID, draftJob, randomUUID(), randomUUID(),
+      JSON.stringify(command), JSON.stringify({ ...hireDetails, tasks: [], status: "on_hire", offHireDate: null }), randomUUID()]), { code: "42501" });
+    for (const sql of ["UPDATE app.v2_hire_revision SET item_version=9", "DELETE FROM app.v2_hire_revision"]) {
+      await assert.rejects(query(sql), { code: "42501" });
+    }
+  }
+  assert.equal((await runtime.query("SELECT * FROM app.v2_hire_revision")).rowCount, 0);
+  await assert.rejects(createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).hires.list(draftJob), { code: "NOT_FOUND" });
+  const other = await draftForPlan(); const otherPlan = await other.read();
+  await assert.rejects(app.command(draftJob, hireCommand("link", command.hireId, 1, { tasks: [{
+    quoteRevisionId: otherPlan.quoteRevisionId, scopeItemId: otherPlan.tasks[0].scopeItemId,
+    templateTaskKey: otherPlan.tasks[0].key }] })), { code: "HIRE_TASK_NOT_FOUND" });
+  assert.equal((await hireEvents(draftJob)).length, 1);
+  for (const [local, mode] of [["0", "synthetic_demo"], ["1", "pilot_no_charge"], ["1", "production_billing"]]) {
+    process.env.JOBGUARD_LOCAL_V2 = local; process.env.JOBGUARD_ENV = mode;
+    try { await assert.rejects(app.list(draftJob), { code: "SYNTHETIC_MODE_REQUIRED" });
+      await assert.rejects(app.command(draftJob, command), { code: "SYNTHETIC_MODE_REQUIRED" });
+    } finally { process.env.JOBGUARD_LOCAL_V2 = "1"; process.env.JOBGUARD_ENV = "synthetic_demo"; }
+  }
+  assert.ok(plan.tasks.length);
+});
