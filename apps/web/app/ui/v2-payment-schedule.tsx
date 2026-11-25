@@ -76,9 +76,13 @@ export function V2PaymentSchedule({ jobId }: { jobId: string }) {
     {view && <p>Accepted quote total: £{view.acceptedTotal} ex-VAT</p>}
     {view?.schedule ? <>
       <ol>{view.schedule.stages.map((stage, index) => <li key={index}>
-        <strong>{stage.label} — £{stage.amount} ex-VAT</strong><p>{stage.status === "due" ? "Due now" : "Planned"} · {
+        {stage.trigger.kind === "date"
+          ? <span>{stage.label} — £{stage.amount} ex-VAT, due from {stage.trigger.date}; amount fixed when invoiced</span>
+          : <strong>{stage.label} — £{stage.amount} ex-VAT</strong>}
+        <p>{stage.frozen ? "Due now · amount fixed" : stage.status === "due" ? "Due now" : "Planned"} · {
           stage.trigger.kind === "acceptance" ? "On acceptance" : stage.trigger.kind === "date" ? stage.trigger.date : `On task done: ${stage.trigger.taskKey}`}</p>
-        {stage.status === "planned" && stage.trigger.kind === "task" && <button type="button" disabled={busy}
+        {stage.triggerRemoved && <p role="status">Trigger task removed from the plan. This stage stays in the total.</p>}
+        {stage.status === "planned" && stage.trigger.kind === "task" && !stage.triggerRemoved && <button type="button" disabled={busy}
           onClick={() => { if (stage.trigger.kind === "task") void confirmTask(stage.trigger.scopeItemId, stage.trigger.taskKey); }}>
           Confirm task done for this schedule
         </button>}
@@ -86,7 +90,9 @@ export function V2PaymentSchedule({ jobId }: { jobId: string }) {
       <p>Extras approved before the schedule was set: £{view.schedule.extrasBeforeSchedule} ex-VAT — for a later invoice or the final account.</p>
       <p>Extras since the schedule was set: £{view.schedule.extrasSinceSchedule} ex-VAT</p>
       <p>Extras outside the stages: £{view.schedule.unscheduledExtras} ex-VAT — for a later invoice or the final account.</p>
-      <p>Stages already due stay fixed. Extras are shared across planned stages in proportion to their amounts; the last takes the remainder.</p>
+      {view.schedule.unscheduledExtras !== "0.00" && view.schedule.stages.every(stage => stage.status === "due") &&
+        <p>£{view.schedule.unscheduledExtras} approved after the last stage was due. It goes on the final account (ex-VAT).</p>}
+      <p>Stages already due stay fixed at the amount shown when they became due. Extras are shared across planned stages in proportion to their amounts; the last takes the remainder.</p>
     </> : view && <form onSubmit={event => { event.preventDefault(); void save(); }}>
       <p>Set this schedule once for the accepted quote. The last stage takes the remainder. Percentage-only splits must total 100%.</p>
       {stages.map((stage, index) => <fieldset key={index} style={{ minWidth: 0, marginBottom: 16 }}>

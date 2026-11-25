@@ -67,6 +67,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
   // V2-K5A: payment schedule working records only.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2012_v2_payment_schedule.sql", import.meta.url), "utf8"));
+  // V2-K5A-2: custom-task triggers and frozen due amounts.
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2046_v2_payment_stage_due.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

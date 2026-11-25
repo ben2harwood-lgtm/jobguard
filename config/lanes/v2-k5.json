@@ -3,9 +3,10 @@
   "lanes": {
     "v2-k5": {
       "branches": [
-        "codex/sandbox/v2-k5"
+        "codex/sandbox/v2-k5",
+        "claude/project-thread-ek9rje-k5a-2"
       ],
-      "note": "RED money: K5A practice payment schedule only. No invoices, final-account changes or sends. The lane file grants itself implicitly.",
+      "note": "RED money: K5A practice payment schedule only. No invoices, final-account changes or sends. The lane file grants itself implicitly. K5A-2 (migration 2046): stages on custom-scope-item tasks and frozen due amounts. The only edit to packages/db/src/v2-work-plan-repository.ts (c2/c3, merged on v2/main) is the readEffectivePlan extraction: read calls it, no behaviour change.",
       "allow": [
         "apps/api/openapi.json",
         "apps/api/src/app.module.ts",
@@ -21,12 +22,16 @@
         "apps/web/app/ui/v2-payment-schedule.tsx",
         "packages/core/src/watchdog.ts",
         "packages/db/migration-notes/2012_v2_payment_schedule.md",
+        "packages/db/migration-notes/2046_v2_payment_stage_due.md",
         "packages/db/migrations/2012_v2_payment_schedule.sql",
+        "packages/db/migrations/2046_v2_payment_stage_due.sql",
         "packages/db/src/index.ts",
         "packages/db/src/v2-payment-schedule-repository.ts",
         "packages/db/src/v2-payment-schedule.test.ts",
         "packages/db/src/v2-payment-schedule.ts",
+        "packages/db/src/v2-work-plan-repository.ts",
         "packages/db/test/migration-proofs/2012_v2_payment_schedule.proof.json",
+        "packages/db/test/migration-proofs/2046_v2_payment_stage_due.proof.json",
         "packages/db/test/purchase-order-audit.integration.test.ts",
         "tools/v2/bootstrap.mjs",
         "tools/v2/payment-schedule.browser.test.mjs",
