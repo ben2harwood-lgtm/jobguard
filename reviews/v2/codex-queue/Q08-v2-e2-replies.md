@@ -6,15 +6,23 @@ Tier: **RED** (new table; outside answers). Migration **2013**. Astra: yes. Rewo
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-e2.
 **Starts:** now. **Base:** E1's branch `claude/project-thread-vur4ba` (#919). Draft PR against it. Merge E1 again when it moves. Do not edit E1's files; answer facts through E1's commands.
 
+## Dry-check against the code (planner, 25 Nov 00:15 UK): verified with one change; the mock-up passed (#930)
+- **E1's answer needs a signed-in builder.** E1 (#919) has `v2-open-fact-command.v1` with actions `log`, `answer`, `cancel` and `mark_out_of_date`, each with `expectedVersion`. Its repository refuses without a signed-in editor (`OPEN_FACT_EDITOR_REQUIRED`), so the no-sign-in reply page **cannot** call E1's `answer` itself, and you may not edit E1.
+- **So the reply page records the reply in E2's own table** (answer, fact version it answered, source `reply_link`, time). The builder then sees "Reply received: apply?", and **the builder's press** calls E1's `answer` with the fact's current `expectedVersion`. A pasted WhatsApp or phone reply works the same way with source `pasted_by_builder`. E1's own `source` stays `builder_logged`; the reply source lives only in E2's table.
+- **Older versions:** a reply to an older fact version is kept as out of date and offered to the builder as out of date, never applied automatically.
+- **Customer link rule (rule 16):** the reply page copies the existing customer job link's anonymous-access check, not F6's.
+- **Event names (rule 18):** `v2.fact_reply.requested`, `.received`, `.cancelled` and `.applied_by_builder`. Don't use "accepted" or "completed".
+- **Migration:** `packages/db/migrations/2013_...sql`.
+
 ## Goal
 A reply from a customer, merchant or crew member is tied safely to firm, job, verified recipient, the one open fact it may answer, the request version, an expiry and a way to cancel.
 
 ## Scope
 - Table of reply requests: fact (E1), recipient (role and contact as recorded), request version, single-use reply token stored as a hash, expiry, cancelled. Builder creates and cancels (audit event each).
-- A reply page by token (V2 only, no sign-in): shows only that one question and its options, records the answer once, and applies it to E1's fact through E1's command.
+- A reply page by token (V2 only, no sign-in): shows only that one question and its options, records the answer once in E2's own table. The builder then applies it to E1's fact through E1's `answer` command (see the dry-check note).
 - Requests are "sent" **only to the local catcher**. Also allow the builder to paste a reply received by WhatsApp or phone as the answer (plan section 9 point 3), recorded with source "pasted by builder".
 - Answer from a request for an older fact version: kept as out of date, not applied. Expired or cancelled token: refused plainly.
 
 ## Done when
-- A duplicate reply applies once; a reply to an old request is kept as out of date and not applied; another firm's token or fact is refused; expired and cancelled tokens are refused.
+- A duplicate reply is recorded once and can be applied once; a reply to an old request is kept as out of date and not applied; another firm's token or fact is refused; expired and cancelled tokens are refused.
 - The catcher holds exactly one message per request; nothing goes anywhere else. Audit events for create, cancel and applied answer. CI green apart from Vercel.

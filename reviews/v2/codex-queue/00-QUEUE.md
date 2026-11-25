@@ -29,8 +29,8 @@ Take the next piece in Order whose "Starts when" is true. If it isn't true yet, 
 | 11 | Q17 | V2-E9 customer choices and PC sums tracker | ★★★ | M | now | E1 #919 | 2022 | RED | high |
 | 12 | Q09 | V2-F1 Done, Blocked, Changed on a brief | ★★ | M | V2-M2 mock-up checked (photo refs only) | D4 #916 | 2015 | RED | high |
 | 13 | Q10 | V2-F8 who was on site today | ★ | S | V2-F1 pushed | V2-F1 branch | 2016 | RED | high |
-| 14 | Q06 | V2-K9 RAMS and construction phase plan draft | ★★ | M | V2-M2 mock-up checked | new c3 | 2011 | RED | medium |
-| 15 | Q08 | V2-E2 replies to open facts | ★ | M | V2-M2 mock-up checked | E1 #919 | 2013 | RED | high |
+| 14 | Q06 | V2-K9 RAMS and construction phase plan draft | ★★ | M | now (mock-up passed #930) | new c3 | 2011 | RED | medium |
+| 15 | Q08 | V2-E2 replies to open facts | ★ | M | now (mock-up passed #930) | E1 #919 | 2013 | RED | high |
 | 16 | Q07 | V2-E3 stock position | ★ | M | now | D3 #912 | 2014 | RED | high |
 | 17 | Q02 | V2-E5A same-firm double-booking warning (multi-crew, later) | ★ | S | **parked: C3C crew binding** | `codex/sandbox/v2-c3` | none | T1 | medium |
 
@@ -41,7 +41,7 @@ Why this order: the three "now" pieces at the top (F6, K4, K6) are the review's 
 V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 
 ## Dry-checked against the code (25 Nov 00:10 UK)
-Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, each with a dated note at the top of its packet. Re-scoped: **K2 → K2A** (builder-only feed). Parked: **E5A** (waits for C3C). Not yet dry-checked: the pieces waiting on V2-M2 (K3, E2, K9, F1, F8). They get checked before they're released.
+Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, and since 00:15 UK **K9 (Q06) and E2 (Q08)**, whose mock-ups passed in #930, each with a dated note at the top of its packet. Re-scoped: **K2 → K2A** (builder-only feed). Parked: **E5A** (waits for C3C). Not yet dry-checked: K3 and F1 (their mock-ups are being repaired) and F8. They get checked before they're released.
 
 ## Migration numbers (one list; checked against every branch 24 Nov 22:15 UK)
 2001 practice quote (main) · 2002 to 2005 c-chain and d1 · 2006 D3 #912 · 2007 D4 #916 · 2008 B1A #920 · 2009 E1 #919 · 2010 K8 · 2011 K9 · 2012 K5 · 2013 E2 · 2014 E3 · 2015 F1 · 2016 F8 · 2017 K2 · 2018 F6 #923 · 2019 K4 · **2020 C3B #922** · 2021 K3 · 2022 E9 · **2023 K6A** (moved from 2020) · next free: **2024**. A builder that needs a number not listed here stops and asks; it never takes the next one itself.

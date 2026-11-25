@@ -6,6 +6,13 @@ Tier: **RED** (new table; safety document). Migration **2011**. Astra: yes. Rewo
 Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to others' files). Plan: V2 build plan rev 1.3 (PR #915). Piece v2-k9, section 2B item 22.
 **Starts when:** R2 has pushed c3. **Base:** that c3 head. Draft PR against `codex/sandbox/v2-c3`.
 
+## Dry-check against the code (planner, 25 Nov 00:15 UK): verified; the mock-up passed (#930, comment 7148010905)
+- **Template and tasks on c3:** the template key is `splashback-decorating.v1` (`packages/db/src/v2-splashback-decorating-template.ts`). The task keys are `prepare-splashback`, `tile-splashback`, `prepare-hall` and `paint-hall`, with trades `tiler` and `decorator`.
+- **Hazard data:** key the hazard file by `(templateKey, templateTaskKey)`. A task with no entry (for example a custom task) shows "No standard hazards listed: add your own" and is never left blank.
+- **Plan version:** store the plan version each draft was made from. That is the latest `expected_version` in `app.v2_work_plan_edit` for that plan. A later plan edit then makes a new draft.
+- **Event names (rule 18):** `v2.rams_draft.generated`, `.section_edited` and `.signed` are all fine. Don't use "approved" or "completed".
+- **Migration:** `packages/db/migrations/2011_...sql`.
+
 ## Goal
 From the job's scope, template and plan, JobGuard fills a draft risk assessment, method statement and construction phase plan that the builder completes and signs. **JobGuard never certifies it** (plan section 5 "Who decides").
 
@@ -18,4 +25,5 @@ From the job's scope, template and plan, JobGuard fills a draft risk assessment,
 
 ## Done when
 - The splashback and hall job gets a draft listing tile-cutting dust and occupied-home controls; the builder edits one section and signs; a later plan change makes a new draft and leaves the signed one untouched.
-- Replay, stale version, second-firm and audit tests as in the rules. Playwright 360/1280 + phone-mode run. CI green apart from Vercel.
+- **Printed PDF check** (from the mock-up check): print the page to PDF with Playwright (`page.pdf`) and check the PDF text. It must contain the warning "Prepared by JobGuard from your plan. You must check and complete it. It is not a certificate.", every section heading and the signature line. It must contain no app menu or navigation.
+- Replay, stale version, second-firm and audit tests as in the rules. Playwright 360/1280 + phone-mode run, checks scoped to main content (rule 17). CI green apart from Vercel.
