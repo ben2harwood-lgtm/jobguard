@@ -69,6 +69,8 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2007_v2_crew_brief.sql", import.meta.url), "utf8"));
   // V2-F1: after D4, before seed.
   await client.query(readFileSync(new URL("../../packages/db/migrations/2015_v2_brief_progress.sql", import.meta.url), "utf8"));
+  // V2-F1-P: 2053 precedes the final firm-lock bootstrap (2054 when integrated).
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2053_v2_brief_progress_photo.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);

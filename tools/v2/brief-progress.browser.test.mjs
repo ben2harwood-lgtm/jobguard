@@ -108,7 +108,7 @@ for (const width of [360, 1280]) {
     const foreign = [];
     try {
       const page = await context.newPage();
-      page.on("request", request => { if (new URL(request.url()).origin !== origin) foreign.push(request.url()); });
+      page.on("request", request => { if (!request.url().startsWith("data:") && new URL(request.url()).origin !== origin) foreign.push(request.url()); });
       await page.goto(`${origin}/jobs/${jobId}/brief-progress`);
       const main = page.getByRole("main");
       await expect(main.getByRole("heading", { name: "Brief progress", exact: true })).toBeVisible();
@@ -120,12 +120,15 @@ for (const width of [360, 1280]) {
       await expect(task).toBeVisible();
       await expect(main.getByText("Loading brief progress…")).toHaveCount(0);
       const recordedBefore = await task.getByRole("listitem").count();
+      const photosBefore = await task.getByRole("img", { name: "Generated practice progress photo" }).count();
       await expect(task.getByRole("button", { name: "Blocked", exact: true })).toBeDisabled();
       await expect(task.getByRole("button", { name: "Changed", exact: true })).toBeDisabled();
       for (const kind of ["Done", "Blocked", "Changed"]) {
-        if (kind !== "Done") await note.fill(`F1 ${width} fictional ${kind.toLowerCase()} reason`);
+        if (kind !== "Changed") await task.getByRole("checkbox", { name: "Attach generated practice photo" }).check();
+        if (kind !== "Done") await note.fill(`F1 ${width} fictional ${kind.toLowerCase()} reason${kind === "Blocked" ? ": no power" : ""}`);
         const [response] = await Promise.all([
-          page.waitForResponse(response => response.url().endsWith(`/api/jobs/${jobId}/brief-progress`) && response.request().method() === "POST"),
+          page.waitForResponse(response => response.url().endsWith(`/api/jobs/${jobId}/brief-progress`) && response.request().method() === "POST"
+            && response.request().postDataJSON().version !== "v2-brief-progress-photo-command.v1"),
           task.getByRole("button", { name: kind, exact: true }).click(),
         ]);
         assert.equal(response.status(), 200, await response.text());
@@ -136,8 +139,12 @@ for (const width of [360, 1280]) {
       await expect(task).toContainText(`F1 ${width} fictional changed reason`);
       await page.reload();
       await expect(task.getByRole("listitem")).toHaveCount(recordedBefore + 3);
+      await expect(task).toContainText(": no power");
       await expect(main).toContainText("does not verify completion");
-      await expect(main.locator("img, input[type=file]")).toHaveCount(0);
+      await expect(task.getByRole("img", { name: "Generated practice progress photo" })).toHaveCount(photosBefore + 2);
+      await expect(task.getByText("Photo verified · file integrity checked", { exact: true })).toHaveCount(photosBefore + 2);
+      for (const image of await task.getByRole("img").all()) expect(await image.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+      await expect(main.locator("input[type=file]")).toHaveCount(0);
       assert.doesNotMatch(await main.innerText(), /£|success fee|shadow signal|hidden finding/iu);
       assert.equal(await main.evaluate(element => element.scrollWidth > element.clientWidth), false);
       const another = await v2Context(browser, storageState, width);
@@ -147,7 +154,7 @@ for (const width of [360, 1280]) {
         await expect(reopened.getByRole("main")).toContainText(`F1 ${width} fictional changed reason`);
       } finally { await another.close(); }
       assert.deepEqual(foreign, []);
-      if (process.env.V2_TEST_SCREENSHOTS) await main.screenshot({ path: `${process.env.V2_TEST_SCREENSHOTS}/v2-f1-brief-progress-${width}.png` });
+      if (process.env.V2_TEST_SCREENSHOTS) await main.screenshot({ path: `${process.env.V2_TEST_SCREENSHOTS}/v2-f1p-brief-progress-${width}.png` });
     } finally { await context.close(); }
   });
 }

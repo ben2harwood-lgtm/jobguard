@@ -48,6 +48,8 @@ beforeAll(async () => {
         "_v2_plan_disposition.sql", "_v2_measurement.sql", "_v2_crew_brief.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     // V2-F1: defer the additive V2-only schema in the previous-schema rehearsal.
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") && String(values?.[0]).endsWith("_v2_brief_progress.sql")) return { rows: [{}], rowCount: 1 };
+    // V2-F1-P: photo extension follows the V2 progress table, absent in this rehearsal.
+    if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") && String(values?.[0]).endsWith("_v2_brief_progress_photo.sql")) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
