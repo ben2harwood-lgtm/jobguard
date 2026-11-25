@@ -8,7 +8,7 @@ vi.mock("../../../../../lib/workspace-server", () => ({ workspaceApplication: wo
 import { POST } from "./route";
 const raw = () => ({ version: "log-site-extra.v1", commandId: crypto.randomUUID(), note: "Fictional note", description: "Fictional extra" });
 const post = (body: string, origin: string | undefined = "https://app.fictional.invalid", headers: Record<string, string> = {}, query = "") => POST(new Request(`https://app.fictional.invalid/api/contractor/jobs/ignored/site-extras${query}`, { method: "POST", headers: { "content-type": "application/json", ...(origin ? { origin } : {}), ...headers }, body }), { params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000001" }) });
-beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_URL", "app.fictional.invalid"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", ""); log.mockReset(); workspace.mockClear(); log.mockResolvedValue({ version: "site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: crypto.randomUUID(), extraId: crypto.randomUUID(), state: "logged" }); });
+beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://app.fictional.invalid"); log.mockReset(); workspace.mockClear(); log.mockResolvedValue({ version: "site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: crypto.randomUUID(), extraId: crypto.randomUUID(), state: "logged" }); });
 afterEach(() => vi.unstubAllEnvs());
 describe("ENT-3a thin Next adapter", () => {
  it("[A8] passes only the parsed body and path ID, ignoring tenant/member/role in headers and query", async () => {

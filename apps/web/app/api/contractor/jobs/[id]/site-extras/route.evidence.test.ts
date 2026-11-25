@@ -8,7 +8,7 @@ import { POST } from "./route";
 const photoId = "00000000-0000-4000-8000-0000000000aa", shown = "c".repeat(64);
 const v3 = (extra: Record<string, unknown> = {}) => ({ version: "log-site-extra.v3", commandId: crypto.randomUUID(), note: "Fictional note", description: "Fictional extra", ...extra });
 const post = (body: string, origin: string | undefined = "https://app.fictional.invalid") => POST(new Request("https://app.fictional.invalid/api/contractor/jobs/ignored/site-extras", { method: "POST", headers: { "content-type": "application/json", ...(origin ? { origin } : {}) }, body }), { params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000001" }) });
-beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_URL", "app.fictional.invalid"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", ""); log.mockReset(); workspace.mockClear(); log.mockResolvedValue({ version: "site-extra-logged.v3" }); });
+beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://app.fictional.invalid"); log.mockReset(); workspace.mockClear(); log.mockResolvedValue({ version: "site-extra-logged.v3" }); });
 afterEach(() => vi.unstubAllEnvs());
 const forbidden = ["evidenceId", "residentConfirmationEvidenceId", "confirmationId", "document", "documentText", "documentSha256", "contentHash", "contentSha256", "content", "label", "statement", "residentName", "name", "signature", "signedAt", "confirmedAt", "confirmedBy", "evidenceType", "contentType", "sha256", "photoSha256", "photo", "objectKey", "objectVersionId", "uploadId", "tenantId", "membershipId", "role", "commandType", "grantId"];
 

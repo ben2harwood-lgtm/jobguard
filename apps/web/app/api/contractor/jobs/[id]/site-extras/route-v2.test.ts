@@ -9,7 +9,7 @@ const v1 = () => ({ version: "log-site-extra.v1", commandId: crypto.randomUUID()
 const v2 = () => ({ ...v1(), version: "log-site-extra.v2", siteVisitId: crypto.randomUUID() });
 const post = (body: unknown) => POST(new Request("https://app.fictional.invalid/api/contractor/jobs/ignored/site-extras", { method: "POST", headers: { "content-type": "application/json", origin: "https://app.fictional.invalid" }, body: JSON.stringify(body) }), { params: Promise.resolve({ id: job }) });
 const logged = () => ({ version: "site-extra-logged.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job, extraId: crypto.randomUUID(), state: "logged" });
-beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_URL", "app.fictional.invalid"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", ""); log.mockReset(); workspace.mockClear(); log.mockResolvedValue(logged()); });
+beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://app.fictional.invalid"); log.mockReset(); workspace.mockClear(); log.mockResolvedValue(logged()); });
 afterEach(() => vi.unstubAllEnvs());
 describe("ENT-3b the site-extras route accepts both body versions", () => {
  it("[B17-SIDE] a version 1 body and a version 2 body are both accepted, each reaches the service parsed as its own version, and both answer 201 with the same shape", async () => {

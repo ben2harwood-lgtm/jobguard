@@ -5,7 +5,7 @@ jobs only. This host change does not approve real customers, live providers or m
 
 1. Create or sign into a Cloudflare account. Select Workers Free under Workers &
    Pages; do not enable paid Workers, Images, R2 or other paid services. This is a
-   **Worker**, not a Pages static export. Keep the Vercel project and `vercel.json`.
+   **Worker**, not a Pages static export. JobGuard no longer deploys to Vercel.
 
 2. Keep the exact dependency pins (`@opennextjs/cloudflare` 1.20.12 and Wrangler
    4.151.1) and the committed lockfile. Before connecting automatic deployment,
@@ -26,8 +26,8 @@ jobs only. This host change does not approve real customers, live providers or m
 4. The Worker uses the existing `pg` 8.16.3 driver through `nodejs_compat` TCP sockets.
    Use the provider's public TLS PostgreSQL endpoint and certificate validation.
    Do not use localhost or a private network endpoint. Keep database roles, RLS and
-   transactions as they are. Worker pools are fresh and close connections on release;
-   Vercel keeps its existing pooling. No Hyperdrive or database replacement is needed.
+   transactions as they are. Worker pools are fresh and close connections on release.
+   No Hyperdrive or database replacement is needed.
 
 5. In Workers & Pages, connect this GitHub repository with repository root as the
    build root. Select Node 24 and pnpm 10.28.1. Install with
@@ -81,12 +81,12 @@ jobs only. This host change does not approve real customers, live providers or m
     to `JOBGUARD_ALLOWED_ORIGINS` and update `AUTH_ALLOWED_ORIGIN` before testing sign-in
     there. A single identity origin is supported. Keep the old deployment available.
 
-11. To roll back, restore the saved DNS records to the last working Vercel deployment
-    and restore its matching identity/allowed-origin settings. The Vercel build still
-    runs the original `bootstrap:demo` and web build. Confirm Vercel account access is
-    restored first: an account still reporting “Account is blocked” cannot serve as a
-    proven rollback. Keep the Cloudflare Worker archived/disabled rather than deleting
-    it. This piece introduces no database migration to reverse.
+11. To roll back, open the Worker's **Deployments** tab and roll back to the last working
+    version (or run `wrangler rollback` from a trusted checkout). Worker settings and secrets
+    stay as they are. If DNS was changed, restore the saved records. There is no Vercel
+    fallback: that account is blocked and JobGuard no longer deploys there. Keep an old
+    Worker archived/disabled rather than deleting it. This piece introduces no database
+    migration to reverse.
 
 Sources checked 31 October 2026: [OpenNext setup](https://opennext.js.org/cloudflare/get-started),
 [database connections](https://opennext.js.org/cloudflare/howtos/db),

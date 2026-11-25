@@ -9,7 +9,7 @@ vi.mock("../../lib/synthetic-server", () => ({ syntheticPool: () => ({}) }));
 import { POST } from "./route";
 const post = (url: string, headers: Record<string, string>) => POST(new Request(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: "{}" }));
 
-beforeEach(() => { vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_URL", "app.example.com"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", ""); application.start.mockClear(); application.command.mockClear(); });
+beforeEach(() => { vi.stubEnv("VERCEL", "1"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://app.example.com"); application.start.mockClear(); application.command.mockClear(); });
 afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("contractor POST same-origin gate", () => {

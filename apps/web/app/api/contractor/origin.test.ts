@@ -4,6 +4,7 @@ import { isTrustedBrowserOrigin, trustedOrigins } from "./origin";
 const request = (origin: string | null, url: string, headers: Record<string, string> = {}) =>
   new Request(url, { method: "POST", headers: { ...(origin === null ? {} : { origin }), ...headers } });
 const vercel = { VERCEL: "1", VERCEL_URL: "app-abc123.vercel.app", VERCEL_BRANCH_URL: "app-git-branch.vercel.app", VERCEL_PROJECT_PRODUCTION_URL: "app.example.com" };
+const configured = { VERCEL: "1", JOBGUARD_ALLOWED_ORIGINS: "https://app.example.com" };
 const cloudflare = { JOBGUARD_HOSTING: "cloudflare", CF_PAGES_URL: "https://jobguard-demo.fictional.workers.dev", JOBGUARD_ALLOWED_ORIGINS: "https://demo.example.org" };
 
 describe("trusted browser origins come from server configuration only", () => {
@@ -25,9 +26,15 @@ describe("trusted browser origins come from server configuration only", () => {
       expect(trustedOrigins(env, "http://localhost:3000/api/contractor")).toEqual([]);
     }
   });
-  it("is built from Vercel system variables and JOBGUARD_ALLOWED_ORIGINS, ignoring junk entries", () => {
-    expect(trustedOrigins({ ...vercel, JOBGUARD_ALLOWED_ORIGINS: "https://demo.example.org, not a url ,ftp://x.example,https://demo.example.org/path" }, "https://app.example.com/api/contractor").sort())
-      .toEqual(["https://app-abc123.vercel.app", "https://app-git-branch.vercel.app", "https://app.example.com", "https://demo.example.org"].sort());
+  it("is built from JOBGUARD_ALLOWED_ORIGINS only, ignoring junk entries and Vercel system variables", () => {
+    expect(trustedOrigins({ ...vercel, JOBGUARD_ALLOWED_ORIGINS: "https://demo.example.org, not a url ,ftp://x.example,https://demo.example.org/path" }, "https://app.example.com/api/contractor"))
+      .toEqual(["https://demo.example.org"]);
+  });
+  it("no longer trusts Vercel deployment hostnames", () => {
+    expect(trustedOrigins(vercel, "https://app-abc123.vercel.app/api/contractor")).toEqual([]);
+    for (const origin of ["https://app-abc123.vercel.app", "https://app-git-branch.vercel.app", "https://app.example.com"]) {
+      expect(isTrustedBrowserOrigin(request(origin, "https://app-abc123.vercel.app/api/contractor"), vercel)).toBe(false);
+    }
   });
   it.each(["development", "test"])("adds loopback origins on the server's own port only when unhosted in %s", NODE_ENV => {
     expect(trustedOrigins({ NODE_ENV }, "http://localhost:3000/api/contractor").sort()).toEqual(["http://127.0.0.1:3000", "http://[::1]:3000", "http://localhost:3000"].sort());
@@ -70,10 +77,10 @@ describe("trusted browser origins come from server configuration only", () => {
     ["the opaque null Origin", "null", {}],
     ["a missing Origin", null, {}],
   ])("rejects %s", (_name, origin, headers) => {
-    expect(isTrustedBrowserOrigin(request(origin, "https://app.example.com/api/contractor", headers), vercel)).toBe(false);
+    expect(isTrustedBrowserOrigin(request(origin, "https://app.example.com/api/contractor", headers), configured)).toBe(false);
   });
-  it.each(["https://app.example.com", "https://app-abc123.vercel.app", "https://app-git-branch.vercel.app"])("accepts %s on Vercel whatever forwarded headers say", origin => {
-    expect(isTrustedBrowserOrigin(request(origin, "https://app.example.com/api/contractor", { "x-forwarded-host": "evil.example", "x-forwarded-proto": "http" }), vercel)).toBe(true);
+  it("accepts the configured origin whatever forwarded headers say", () => {
+    expect(isTrustedBrowserOrigin(request("https://app.example.com", "https://app.example.com/api/contractor", { "x-forwarded-host": "evil.example", "x-forwarded-proto": "http" }), configured)).toBe(true);
   });
   it.each(["development", "test"])("accepts the local %s origins the browser really uses, and no other port or host", NODE_ENV => {
     const local = (origin: string | null, port = "3000") => isTrustedBrowserOrigin(request(origin, `http://localhost:${port}/api/contractor`), { NODE_ENV });

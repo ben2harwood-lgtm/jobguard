@@ -2,7 +2,8 @@
 // X-Forwarded-Host / X-Forwarded-Proto (and Host) are supplied by the caller and must not define what counts as "same origin".
 //
 //  * JOBGUARD_ALLOWED_ORIGINS: comma-separated origins for custom domains or self-hosting (https://demo.example.org).
-//  * Vercel system variables VERCEL_URL, VERCEL_BRANCH_URL and VERCEL_PROJECT_PRODUCTION_URL (hostnames set by the platform).
+//  * Vercel system variables (VERCEL_URL and friends) are NOT trusted: JobGuard no longer deploys to Vercel. VERCEL=1 still counts as
+//    "hosted" below, so a stray Vercel build can never fall back to loopback origins.
 //  * CF_PAGES_URL: exact HTTPS deployment URL; Workers custom routes use JOBGUARD_ALLOWED_ORIGINS.
 //  * Explicit development/test mode, only when NOT hosted: loopback hosts on the server's own port.
 //    Production-build browser tests must explicitly list their origin in JOBGUARD_ALLOWED_ORIGINS.
@@ -22,10 +23,6 @@ export function trustedOrigins(env: Env, serverUrl: string): string[] {
     const origin = trimmed ? originOf(trimmed) : null;
     // An origin has no path: ignore entries that carry one so a typo cannot widen the list.
     if (origin && trimmed.replace(/\/+$/u, "") === origin) origins.add(origin);
-  }
-  for (const host of [env.VERCEL_URL, env.VERCEL_BRANCH_URL, env.VERCEL_PROJECT_PRODUCTION_URL]) {
-    const origin = host && !/[\s/@]/u.test(host) ? originOf(`https://${host}`) : null;
-    if (origin) origins.add(origin);
   }
   const cloudflareUrl = env.CF_PAGES_URL?.trim();
   const cloudflareOrigin = cloudflareUrl ? originOf(cloudflareUrl) : null;
