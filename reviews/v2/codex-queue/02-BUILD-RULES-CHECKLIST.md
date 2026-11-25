@@ -38,3 +38,4 @@ For JobGuard (jobguard repo, AGENTS.md rev 3.0) and Vibe Control (aac-studio, LE
 - **Rules met.** Use this one list. Each rule gives a file plus an executed test or review receipt, labelled as which it is. N/A needs a reason. Evidence is bound to the head by the CI or review record, never by a SHA written into a repo file.
 - **RED PRs.** A RED PR needs an other-vendor review that names the current head. Desktop and GitHub Codex count as one vendor.
 - [ ] Rule 29: every new GET `route.ts` under `api/v2-backend/` calls `assertBuilderRouteRefuses` (positive control first, cases a, b and d, typed codes) and is appended to `builderGetRoutes` for case c. Every new capability link calls `assertCapabilityConfined`. If SX isn't merged yet: "pending V2-SX", and the PR isn't ready.
+- [ ] Rule 30: any new `v2_*` job table has its bootstrap line above 2054 and a firm A/B read check; any newly runtime-readable main job table is locked.

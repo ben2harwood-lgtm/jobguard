@@ -66,6 +66,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | C16 | Q41 | V2-D4B translated crew briefs, fake translator only (Ben: paid service later) | **desktop Codex** | #954 `codex/sandbox/v2-d5b-b` | 2052 | RED |
 | D5 | Q42 | V2-B1C walk check and correct: "needs room" tray, re-file a photo, original kept | **desktop Codex** | `codex/sandbox/v2-b1b` #957 | 2029 | RED |
 | D3 | Q43 | V2-F1-P photo on Done, Blocked or Changed | **desktop Codex** | `codex/sandbox/v2-f1` #953 (PX #964 before merge) | 2053 | RED |
+| C17 | Q44 | V2-FL-6 lock every V2-owned job table, last bootstrap line (rule 30) | **desktop Codex** | `codex/sandbox/v2-fl1` #966 | 2054 | RED tenancy |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Codex** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
@@ -86,7 +87,7 @@ Already moving, so don't duplicate: CI2 #947, phone-test sign-in #950, E2 #949, 
 Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, since 00:15 UK **K9 (Q06) and E2 (Q08)**, and since 00:20 UK **K3 (Q15) and F1 (Q09)** with re-scoping. All four mock-ups passed in #930, each with a dated note at the top of its packet. Re-scoped: **K2 → K2A** (builder-only feed). Parked: **E5A** and **F8**, both waiting for C3C. They get checked before they're released.
 
 ## Migration numbers (one list; checked against every branch 24 Nov 22:15 UK)
-2001 practice quote (main) · 2002 to 2005 c-chain and d1 · 2006 D3 #912 · 2007 D4 #916 · 2008 B1A #920 · 2009 E1 #919 · 2010 K8 · 2011 K9 · 2012 K5 · 2013 E2 · 2014 E3 · 2015 F1 · 2016 F8 · 2017 K2 · 2018 F6 #923 · 2019 K4 · **2020 C3B #922** · 2021 K3 · 2022 E9 · **2023 K6A** (moved from 2020) · **2024 V2-SX** (crew and customer test sessions, V2 bootstrap file, Astra first) · 2025 to 2045 reserved in `reviews/v2/V2-completion-roadmap.md` · **2046 K5A-2** · **2047 to 2051 V2-FL-1 to FL-5** · **2052 D4B** · **2053 F1-P** · next free: **2054**. A builder that needs a number not listed here stops and asks; it never takes the next one itself.
+2001 practice quote (main) · 2002 to 2005 c-chain and d1 · 2006 D3 #912 · 2007 D4 #916 · 2008 B1A #920 · 2009 E1 #919 · 2010 K8 · 2011 K9 · 2012 K5 · 2013 E2 · 2014 E3 · 2015 F1 · 2016 F8 · 2017 K2 · 2018 F6 #923 · 2019 K4 · **2020 C3B #922** · 2021 K3 · 2022 E9 · **2023 K6A** (moved from 2020) · **2024 V2-SX** (crew and customer test sessions, V2 bootstrap file, Astra first) · 2025 to 2045 reserved in `reviews/v2/V2-completion-roadmap.md` · **2046 K5A-2** · **2047 to 2051 V2-FL-1 to FL-5** · **2052 D4B** · **2053 F1-P** · **2054 FL-6** · next free: **2055**. A builder that needs a number not listed here stops and asks; it never takes the next one itself.
 
 ## Not in this queue, and why
 - **New piece found by the C5 builder:** once scope is confirmed the app can't add a line to a priced quote, so prompts can only remind or be dismissed. "Add a line to a priced quote" (v2-c6) is its own later piece, on the quote track; not tonight.
@@ -96,8 +97,9 @@ Verified and released: **K8 (Q05), E9 (Q17), E3 (Q07)**, since 00:15 UK **K9 (Q0
 
 ## Lane A order (25 Nov 18:20 UK)
 Web Codex has no runner, so desktop Codex lane A is the single Codex lane. It has at most 4 builds on the Mac at once, shared with Vibe Control. Building now: FL-F (Q40) and D4B (Q41). Next, in this order as slots free:
-1. FL-2 (Q36)
-2. FL-3 (Q37)
+1. FL-6 (Q44), small and unblocks every V2 branch meeting FL-1
+2. FL-2 (Q36), repair round
+3. FL-3 (Q37), passed
 3. F1-P (Q43)
 4. FL-4 (Q38)
 5. FL-5 (Q39)
