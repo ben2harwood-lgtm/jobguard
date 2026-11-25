@@ -18,9 +18,16 @@ test("real contractor replaces receipted tiles, then explicitly confirms packs o
   await measured.getByRole("button", { name: /^(Confirm|Change) measurement /u }).click();
   await measured.getByLabel("Measured quantity").fill("6");
   await measured.getByLabel("Unit", { exact: true }).fill("m2");
-  await measured.getByRole("button", { name: "Confirm measurement", exact: true }).click();
-  await expect(measured.getByText("Confirmed", { exact: true })).toBeVisible();
+  async function submit(button, endpoint) {
+    const [response] = await Promise.all([
+      page.waitForResponse(r => new URL(r.url()).pathname === endpoint && r.request().method() === "POST"),
+      button.click(),
+    ]);
+    assert.ok(response.ok(), endpoint + " returned " + response.status() + ": " + (await response.text()).slice(0, 300));
+  }
+  await submit(measured.getByRole("button", { name: "Confirm measurement", exact: true }), "/api/v2-backend/jobs/" + jobId + "/measurements");
   await page.reload();
+  await expect(measured.getByText("Confirmed", { exact: true })).toBeVisible();
   async function api(url, body) {
     const response = await page.evaluate(async ({url, body, csrfToken}) => {
       const r = await fetch(url, body === undefined ? { cache: "no-store" } : {
@@ -45,7 +52,7 @@ test("real contractor replaces receipted tiles, then explicitly confirms packs o
   await materials.getByLabel(/Confirmed usable whole packs/u).fill("2");
   await materials.getByLabel("Supplier", { exact: true }).fill("Fictional merchant");
   await materials.getByLabel("Needed by", { exact: true }).fill("2026-12-01");
-  await materials.getByRole("button", { name: "Save material", exact: true }).click();
+  await submit(materials.getByRole("button", { name: "Save material", exact: true }), d3);
   await expect(row(tiles)).toContainText("6 packs including allowance · 2 on site · 4 short");
   const {lineKey} = (await api(d3)).lines.find(line => line.product === tiles);
   const deliveryId = randomUUID();
@@ -65,7 +72,7 @@ test("real contractor replaces receipted tiles, then explicitly confirms packs o
     const article = row(product);
     await article.getByRole("button", { name: "Edit material " + product }).click();
     if (replacement) await article.getByLabel("Product", { exact: true }).fill(replacement);
-    await article.getByRole("button", { name: "Save material", exact: true }).click();
+    await submit(article.getByRole("button", { name: "Save material", exact: true }), d3);
     await expect(row(replacement ?? product).getByRole("button", {name: "Edit material " + (replacement ?? product)})).toBeVisible();
   }
   await save(tiles, oak);
@@ -76,7 +83,7 @@ test("real contractor replaces receipted tiles, then explicitly confirms packs o
   await page.reload();
   await checkStock(oak, "0", "0", "0", "6");
   async function generate(expected) {
-    await materials.getByRole("button", { name: /^(View|Regenerate) enquiry$/u }).click();
+    await submit(materials.getByRole("button", { name: /^(View|Regenerate) enquiry$/u }), d3);
     await expect(materials.getByRole("region", {name: "Stock enquiry"}).getByText(oak, { exact: false })).toContainText(expected + " packs requested");
   }
   await generate("6");
@@ -84,7 +91,7 @@ test("real contractor replaces receipted tiles, then explicitly confirms packs o
   if (shots) await page.screenshot({path: join(shots, "replacement-360.png"), fullPage: true});
   await row(oak).getByRole("button", {name: "Confirm set-aside packs"}).click();
   await row(oak).getByLabel("Whole packs set aside for this product").fill("2");
-  await row(oak).getByRole("button", {name: "Confirm pack count"}).click();
+  await submit(row(oak).getByRole("button", {name: "Confirm pack count"}), d3);
   await expect(row(oak)).toContainText("6 packs including allowance · 2 on site · 4 short");
   await page.setViewportSize({width: 1280, height: 900});
   await page.reload();
