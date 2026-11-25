@@ -47,7 +47,7 @@ beforeAll(async () => {
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
         // V2-K3 is installed separately by the checked local bootstrap.
         "_v2_friday_update.sql",
-        "_v2_plan_disposition.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -62,6 +62,7 @@ beforeAll(async () => {
   const legacy = await fixture();
   upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
   await migrate(admin);
+  expect((await admin.query("SELECT to_regprocedure('app.v2_work_plan_edit_scope_check()') AS scope_check")).rows[0].scope_check).toBeNull();
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();
