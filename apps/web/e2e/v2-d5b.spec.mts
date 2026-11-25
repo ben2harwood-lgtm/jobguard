@@ -103,11 +103,56 @@ test("D5B-M measurements to products to unsent enquiry, persisted with stale and
     await expect(card(page).getByRole("status").filter({ hasText: "Material saved." })).toBeVisible();
     await page.reload();
     await expect(card(page).locator("section").filter({ has: page.getByRole("heading", { name: "Customer-supplied items", exact: true }) }).getByRole("article").filter({ hasText: `Fictional tiles ${width}` })).toBeVisible();
+
+    // The saved command distinguishes confirming stock for these goods from
+    // saving notes. A replacement must clear stock even when the next count is identical.
+    const stockChanges: Record<string, unknown>[] = [];
+    const record = (request: import("@playwright/test").Request) => {
+      if (request.method() === "POST" && new URL(request.url()).pathname === path) {
+        const body = request.postDataJSON();
+        if (body.changes) stockChanges.push(body.changes);
+      }
+    };
+    page.on("request", record);
+    try {
+      async function confirmStock(target: typeof row, previous: string) {
+        await target.getByRole("button", { name: "Confirm set-aside packs" }).click();
+        const count = target.getByLabel("Whole packs set aside for this product");
+        await expect(count).toHaveValue(previous);
+        await count.fill("1");
+        await target.getByRole("button", { name: "Confirm pack count" }).click();
+        await expect(count).toHaveCount(0);
+        expect(stockChanges.at(-1)).toEqual({ setAsidePacks: "1" });
+      }
+      await confirmStock(row, "0");
+      await row.getByRole("button", { name: `Edit material Fictional tiles ${width}` }).click();
+      await row.getByLabel("Enquiry notes").fill("Same product, confirmed stock");
+      await row.getByLabel("Pack size", { exact: true }).fill("2.00");
+      await row.getByRole("button", { name: "Save material" }).click();
+      await expect(row.getByText("Same product, confirmed stock")).toBeVisible();
+      expect(stockChanges.at(-1)).not.toHaveProperty("setAsidePacks");
+      await row.getByRole("button", { name: `Edit material Fictional tiles ${width}` }).click();
+      const product = width === 360 ? "Fictional replacement tiles" : `Fictional tiles ${width}`;
+      if (width === 360) await row.getByLabel("Product", { exact: true }).fill(product);
+      else await row.getByLabel("Pack size", { exact: true }).fill("3");
+      await row.getByRole("button", { name: "Save material" }).click();
+      const replacement = card(page).getByRole("article").filter({ has: page.getByRole("heading", { name: product, exact: true }) });
+      await expect(replacement.getByRole("button", { name: "Confirm set-aside packs" })).toBeVisible();
+      expect(stockChanges.at(-1)).toHaveProperty("setAsidePacks", "0");
+      await page.reload();
+      await confirmStock(replacement, "0");
+      await page.reload();
+      await replacement.getByRole("button", { name: "Confirm set-aside packs" }).click();
+      await expect(replacement.getByLabel("Whole packs set aside for this product")).toHaveValue("1");
+      await capture(page, "stock-confirmed", width);
+      await replacement.getByRole("button", { name: "Cancel", exact: true }).click();
+    } finally { page.off("request", record); }
   }
   // A measured scope can have a material whose pack size is still unknown.
   const pendingProduct = `Fictional pending pack ${randomUUID()}`;
   await card(page).getByLabel("Add product for").selectOption(scopeItemId);
   await card(page).getByLabel("Product", { exact: true }).fill(pendingProduct);
+  await card(page).getByLabel(/Confirmed usable whole packs/u).fill("2");
   await card(page).getByRole("button", { name: "Save material", exact: true }).click();
   await expect(card(page).getByText("Material saved.", { exact: true })).toBeVisible();
   await page.reload();
@@ -122,6 +167,13 @@ test("D5B-M measurements to products to unsent enquiry, persisted with stale and
   await page.reload();
   await expect(pendingRow).toContainText("Waiting for merchant pack details");
   await expect(pendingRow).toContainText("Enter the pack size");
+  // Completing an initially unknown pack is distinct from replacing a known pack.
+  await pendingRow.getByRole("button", { name: `Edit material ${pendingProduct}` }).click();
+  await pendingRow.getByLabel("Pack size", { exact: true }).fill("1");
+  await pendingRow.getByLabel("Pack unit", { exact: true }).fill("m2");
+  await pendingRow.getByRole("button", { name: "Save material", exact: true }).click();
+  await pendingRow.getByRole("button", { name: "Confirm set-aside packs" }).click();
+  await expect(pendingRow.getByLabel("Whole packs set aside for this product")).toHaveValue("2");
   expect(outbound).toEqual([]);
 });
 

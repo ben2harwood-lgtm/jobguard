@@ -22,6 +22,31 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
   return data;
 }
 
+const wholePacks = /^(0|[1-9][0-9]{0,8})$/u;
+function decimalValue(value: string) {
+  return value.includes(".") ? value.replace(/0+$/u, "").replace(/\.$/u, "") : value;
+}
+
+function SetAsideForm({ line, busy, save, cancel }: {
+  line: Line; busy: boolean; save: (changes: Changes) => void; cancel: () => void;
+}) {
+  const [packs, setPacks] = useState(line.setAsidePacks);
+  const [invalid, setInvalid] = useState(false);
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!wholePacks.test(packs.trim())) { setInvalid(true); return; }
+    save({ setAsidePacks: packs.trim() });
+  }
+  return <form className="form" onSubmit={submit}>
+    <p>{line.product} · {line.packSize?.quantity} {line.packSize?.unit} per pack</p>
+    <label>Whole packs set aside for this product<input inputMode="numeric" maxLength={9}
+      disabled={busy} value={packs} onChange={event => { setPacks(event.target.value); setInvalid(false); }}/></label>
+    {invalid && <p role="alert">Enter a whole number of packs from 0 to 999999999.</p>}
+    <div className="form-actions"><button type="button" className="btn" disabled={busy} onClick={cancel}>Cancel</button>
+      <button className="btn primary" disabled={busy}>Confirm pack count</button></div>
+  </form>;
+}
+
 function ProductForm({ line, busy, save, cancel }: {
   line?: Line; busy: boolean; save: (changes: Changes) => void; cancel: () => void;
 }) {
@@ -35,11 +60,16 @@ function ProductForm({ line, busy, save, cancel }: {
     if ([quantity, allowance].some(v => v && (!positive.test(v) || !/[1-9]/u.test(v))) || Boolean(quantity) !== Boolean(unit)) {
       setInvalid("Use positive decimals with up to six places. A pack size needs its unit too."); return;
     }
-    if (!/^(0|[1-9][0-9]{0,8})$/u.test(value("stock")) || (value("override") && !/^[1-9][0-9]{0,8}$/u.test(value("override")))) {
+    if ((!line && !wholePacks.test(value("stock"))) || (value("override") && !/^[1-9][0-9]{0,8}$/u.test(value("override")))) {
       setInvalid("Enter whole packs. A corrected pack count must be above zero."); return;
     }
+    const changedProduct = line?.product != null && line.product !== (value("product") || null);
+    const changedPack = line?.packSize != null &&
+      (line.packSize.unit !== unit || decimalValue(line.packSize.quantity) !== decimalValue(quantity));
     save({ product: value("product") || null, packSize: quantity ? { quantity, unit } : null,
-      wastageMultiplier: allowance || null, setAsidePacks: value("stock"), supplier: value("supplier") || null,
+      wastageMultiplier: allowance || null,
+      ...(!line ? { setAsidePacks: value("stock") } : changedProduct || changedPack ? { setAsidePacks: "0" } : {}),
+      supplier: value("supplier") || null,
       neededBy: value("neededBy") || null, suppliedBy: value("suppliedBy") === "customer" ? "customer" : "builder",
       notes: value("notes") || null, removed: false,
       ...((value("override") || null) !== (line?.packsOverride ?? null) || fields.get("confirmOverride") === "on"
@@ -54,8 +84,9 @@ function ProductForm({ line, busy, save, cancel }: {
         <label>Pack unit<input name="packUnit" maxLength={40} defaultValue={line?.packSize?.unit ?? ""}/></label>
       </div>
       <label>Firm's wastage multiplier (1.10 includes 10%)<input name="allowance" inputMode="decimal" maxLength={40} defaultValue={line?.wastageMultiplier ?? ""}/></label>
-      <label>Confirmed usable whole packs set aside for this job<input name="stock" inputMode="numeric" maxLength={9} defaultValue={line?.setAsidePacks ?? "0"}/></label>
-      <p>Only count this product in a compatible batch.</p>
+      {line ? <p>Changing the product or pack clears its set-aside count. Save the change, then confirm the packs on site for the new product.</p>
+        : <><label>Confirmed usable whole packs set aside for this job<input name="stock" inputMode="numeric" maxLength={9} defaultValue="0"/></label>
+          <p>Only count this product in a compatible batch.</p></>}
       <div className="field-pair">
         <label>Supplier<input name="supplier" maxLength={200} defaultValue={line?.supplier ?? ""}/></label>
         <label>Needed by<input name="neededBy" type="date" defaultValue={line?.neededBy ?? ""}/></label>
@@ -76,7 +107,7 @@ function ProductForm({ line, busy, save, cancel }: {
 export function Materials({ jobId }: { jobId: string }) {
   const path = `/api/v2-backend/jobs/${encodeURIComponent(jobId)}/materials`;
   const [view, setView] = useState<View>();
-  const [editing, setEditing] = useState<{ scopeItemId: string; lineKey: string } | null>(null);
+  const [editing, setEditing] = useState<{ scopeItemId: string; lineKey: string; stock?: boolean } | null>(null);
   const [problem, setProblem] = useState<{ message: string; reload?: boolean } | null>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -118,6 +149,8 @@ export function Materials({ jobId }: { jobId: string }) {
   }
   function row(line: Line) {
     const calculation = line.calculation;
+    const saveLine = (changes: Changes) => void command({ version: "v2-material-line-command.v1",
+      scopeItemId: line.scopeItemId, lineKey: line.lineKey, expectedVersion: line.version, changes });
     return <article className="card-body form" key={identity(line)}>
       <h4>{line.product ?? "Product needed"}</h4><p>{title(line.scopeItemId)}</p>
       <p>{line.measurement?.confirmed ? `${line.measurement.quantity} ${line.measurement.unit} confirmed` : "Measurement needs confirmation"}</p>
@@ -127,10 +160,12 @@ export function Materials({ jobId }: { jobId: string }) {
         {calculation.packsClash && <Note tone="warning">Clashing edit · The inputs changed. Calculated need is {calculation.calculatedPacks} packs. Review your corrected pack count before using the enquiry.</Note>}
       </> : <p>{reasons[calculation.reason]}</p>}
       {line.notes && <p>{line.notes}</p>}
-      {editing && identity(editing) === identity(line) ? <ProductForm line={line} busy={blocked} cancel={() => setEditing(null)}
-        save={changes => void command({ version: "v2-material-line-command.v1", scopeItemId: line.scopeItemId,
-          lineKey: line.lineKey, expectedVersion: line.version, changes })}/>
-        : <div><button type="button" className="btn small" disabled={blocked} onClick={() => setEditing(line)}>Edit material {line.product ?? "product"}</button></div>}
+      {editing && identity(editing) === identity(line) ? (editing.stock
+        ? <SetAsideForm line={line} busy={blocked} cancel={() => setEditing(null)} save={saveLine}/>
+        : <ProductForm line={line} busy={blocked} cancel={() => setEditing(null)} save={saveLine}/>)
+        : <div className="form-actions"><button type="button" className="btn small" disabled={blocked} onClick={() => setEditing(line)}>Edit material {line.product ?? "product"}</button>
+          {line.product && line.packSize && <button type="button" className="btn small" disabled={blocked}
+            onClick={() => setEditing({ scopeItemId: line.scopeItemId, lineKey: line.lineKey, stock: true })}>Confirm set-aside packs</button>}</div>}
     </article>;
   }
   const enquiry = view?.enquiry;
