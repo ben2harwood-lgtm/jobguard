@@ -1,4 +1,4 @@
-// Run against the checked V2 server, after seed.integration.test.mjs.
+// Run against a fresh checked V2 stack (rule 22). Setup switches the seeded job live itself.
 // Authenticate once and reuse the stored browser session at both viewport sizes.
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
@@ -76,10 +76,25 @@ async function v2Context(browser, storageState, width) {
   return browser.newContext({ viewport: { width, height: 900 }, ignoreHTTPSErrors: true, storageState });
 }
 
+const seededJobTitle="Occupied-home kitchen splashback and hall decorating";
 let browser,origin,storageState;
 before(async()=>{
  browser=await launchV2Browser();
- ({origin,storageState}=await signInOnce(browser));
+ let csrfToken,jobId;
+ ({origin,storageState,csrfToken,jobId}=await signInOnce(browser,{jobTitle:seededJobTitle}));
+ // The tray only offers live jobs. On a fresh stack the seeded job is accepted, so switch it live
+ // with the same practice call F6T uses. A repeat of the switch returns the same activation.
+ const context=await v2Context(browser,storageState,1280);
+ try{
+  const page=await context.newPage();await page.goto(origin+"/inbound-mail");
+  const status=await page.evaluate(async({jobId,csrfToken})=>{
+   const response=await fetch(`/api/jobs/${jobId}/quotes/activation`,{method:"POST",
+    headers:{"content-type":"application/json","x-csrf-token":csrfToken},
+    body:JSON.stringify({version:"practice-activation-command.v1",commandId:crypto.randomUUID(),scenario:"no_charge"})});
+   return response.status;
+  },{jobId,csrfToken});
+  assert.equal(status,200,"switching the seeded job live must succeed");
+ }finally{await context.close();}
 });
 after(async()=>{await browser?.close();});
 for(const width of [360,1280])test(`K6A tray and manual dismissal at ${width}px`,async()=>{
@@ -100,7 +115,9 @@ for(const width of [360,1280])test(`K6A tray and manual dismissal at ${width}px`
   await catchInvoice.click();
   const card=main.getByRole("article").filter({has:page.getByRole("heading",{name:subject})});
   await expect(card.getByText("Needs a job",{exact:true})).toBeVisible();
-  await card.getByLabel("Choose a job").selectOption({index:1});
+  const choose=card.getByLabel("Choose a job");
+  await expect(choose.locator("option",{hasText:seededJobTitle})).toHaveCount(1);
+  await choose.selectOption({label:(await choose.locator("option",{hasText:seededJobTitle}).textContent()).trim()});
   await card.getByRole("button",{name:"File to job",exact:true}).click();
   await expect(card.getByText("Filed",{exact:true})).toBeVisible();
   await expect(card.getByRole("link",{name:"Open supplier documents and three-way check"})).toBeVisible();

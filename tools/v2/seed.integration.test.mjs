@@ -708,6 +708,37 @@ test("existing Switch live activates a plan once and only approved variation rev
   assert.deepEqual(await workPlan.read(jobId, planQuery), updated);
 });
 
+// The test above closes the seeded job's work, and the demo practice cannot reopen it.
+// Later pieces that need open work on an accepted quote make their own job here.
+async function acceptedPracticeJob() {
+  const { draftJob, lines, save } = await draftForPlan();
+  const { sessionId, cookies } = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId });
+  await save(1, lines);
+  const party = await app.parties.view({ sessionId }, draftJob);
+  await app.parties.command({ sessionId }, draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: party.jobRevision, expectedBindingId: null,
+    customer: { version: "customer.v1", type: "person", name: "Fictional Accepted Customer",
+      email: "customer@jobguard-v2.invalid", phone: "+447700900043" }, customerRef: null,
+    site: { version: "site.v1", addressLines: ["12 Fictional Lane"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const { view: { documentId, documentVersion, contentHash } } = await app.quote.preview(draftJob, {
+    version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid",
+  });
+  await app.quote.issue(draftJob, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId, contentHash, recipient: "customer@jobguard-v2.invalid" });
+  await json(await request(`/api/jobs/${draftJob}/quotes/delivery/execute`, {
+    cookies, body: { version: "quote-execute-command.v1", documentId, mode: "success" },
+  }));
+  await app.quote.accept(draftJob, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
+    documentId, documentVersion, documentHash: contentHash,
+    statedCustomerName: "Fictional Accepted Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  return draftJob;
+}
+
 const editEvents = async jobRef => (await admin.query(`SELECT tenant_id, actor_ref, payload FROM app.audit_event
   WHERE subject_type = 'job' AND subject_ref = $1 AND event_type = 'v2_work_plan.edited' ORDER BY sequence`, [jobRef])).rows;
 
@@ -898,6 +929,8 @@ test("opening the plan screen creates the plan with one audit event; a quote-sav
 
 // V2-K6A: routing, atomic intake/audit and firm isolation on the real V2 seed.
 // Reuse the full suite's owner and second-firm sessions; do not request more codes.
+// The seeded job keeps the fixture merchant requirements; K6A works on its own open job.
+const k6SeededJob = () => jobId;
 test("K6A forwards fixtures, holds real files, replays once and isolates both firms", async t => {
   const previousV2=process.env.JOBGUARD_LOCAL_V2;
   process.env.JOBGUARD_LOCAL_V2="1";
@@ -906,6 +939,7 @@ test("K6A forwards fixtures, holds real files, replays once and isolates both fi
   const { V2InboundMailRepository } = await import("../../packages/db/dist/index.js");
   const { createWorkspaceApplication } = await import("../../apps/api/dist/workspace/index.js");
   assert.ok(owner && other, "reuse the suite's authenticated owner and second-firm sessions");
+  const jobId = await acceptedPracticeJob();
   const auth = await authenticatePracticeSession(runtime,owner.sessionId);
   const second = await authenticatePracticeSession(runtime,other.sessionId);
   const repo = new V2InboundMailRepository(runtime);
@@ -1051,15 +1085,21 @@ test("K6A forwards fixtures, holds real files, replays once and isolates both fi
       await db.$client.query("UPDATE app.job SET status='live' WHERE tenant_id=$1 AND id=$2",[auth.context.tenantId,secondJob]);
       await db.$client.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')",
         [auth.context.tenantId,scopeId,secondJob]);
-      await db.$client.query("SELECT set_config('app.practice_material_digest',practice_session_digest,true) FROM app.job WHERE tenant_id=$1 AND id=$2",
-        [auth.context.tenantId,jobId]);
-      const requirement = await db.$client.query(`INSERT INTO app.material_requirement(tenant_id,id,job_id,scope_item_id,sku_id,quantity_decimal,unit,revision)
-        SELECT r.tenant_id,$2,$3,$4,r.sku_id,'1',r.unit,1
-        FROM app.material_requirement r JOIN app.merchant_sku s ON(s.tenant_id,s.id)=(r.tenant_id,r.sku_id)
-        JOIN app.merchant m ON(m.tenant_id,m.id)=(s.tenant_id,s.merchant_id)
-        WHERE r.tenant_id=$1 AND r.job_id=$5 AND m.name='Fictional Teacup Tile Merchant' LIMIT 1`,
-        [auth.context.tenantId,randomUUID(),secondJob,scopeId,jobId]);
-      assert.equal(requirement.rowCount,1);
+      const ownScopeId = randomUUID();
+      await db.$client.query("INSERT INTO app.scope_identity(tenant_id,id,job_id,state) VALUES($1,$2,$3,'confirmed')",
+        [auth.context.tenantId,ownScopeId,jobId]);
+      // Both open jobs need the same fixture merchant's tiles, copied from the seeded job.
+      for (const [target, scope] of [[jobId, ownScopeId], [secondJob, scopeId]]) {
+        await db.$client.query("SELECT set_config('app.practice_material_digest',practice_session_digest,true) FROM app.job WHERE tenant_id=$1 AND id=$2",
+          [auth.context.tenantId,target]);
+        const requirement = await db.$client.query(`INSERT INTO app.material_requirement(tenant_id,id,job_id,scope_item_id,sku_id,quantity_decimal,unit,revision)
+          SELECT r.tenant_id,$2,$3,$4,r.sku_id,'1',r.unit,1
+          FROM app.material_requirement r JOIN app.merchant_sku s ON(s.tenant_id,s.id)=(r.tenant_id,r.sku_id)
+          JOIN app.merchant m ON(m.tenant_id,m.id)=(s.tenant_id,s.merchant_id)
+          WHERE r.tenant_id=$1 AND r.job_id=$5 AND m.name='Fictional Teacup Tile Merchant' LIMIT 1`,
+          [auth.context.tenantId,randomUUID(),target,scope,k6SeededJob()]);
+        assert.equal(requirement.rowCount,1);
+      }
     });
     const beforeView = await repo.view(auth);
     assert.ok([jobId,secondJob].every(id=>beforeView.jobs.some(job=>job.id===id)));
