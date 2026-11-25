@@ -62,6 +62,10 @@ try {
   }
   process.env.AUTH_CODE_SECRET = authSecret();
   await client.query(readFileSync(new URL("./migrations/2001_practice_quote.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2002_v2_work_plan.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2003_v2_work_plan_edits.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
+
   // V2-K4: local-only chasing tables, after the checked V2 boundary.
   await client.query(readFileSync(new URL("./migrations/2019_automatic_chasing.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
