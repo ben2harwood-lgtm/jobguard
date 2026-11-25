@@ -8,6 +8,7 @@
       "note": "RED. V2-F1 builder-recorded brief progress. work/page.tsx: mount only, owned by main (live Work tab). Base origin/v2/main; D4 inherited as directed.",
       "allow": [
         "packages/db/src/v2-brief-progress-repository.ts",
+        "packages/db/src/v2-crew-brief-repository.ts",
         "packages/db/src/v2-brief-progress.test.ts",
         "packages/db/migrations/2015_v2_brief_progress.sql",
         "packages/db/migration-notes/2015_v2_brief_progress.md",

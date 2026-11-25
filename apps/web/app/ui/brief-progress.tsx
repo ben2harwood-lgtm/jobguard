@@ -33,7 +33,7 @@ export function BriefProgressView({ jobId }: { jobId: string }) {
     <p>Notes are for your records. To bill for extra work, use Log an extra. JobGuard checks your records against your final bill after you complete it.</p>
     {error && <p role="alert">{error}</p>}
     {!view && !error && <p>Loading brief progress…</p>}
-    {view && !view.briefs.length && <p>No trade briefs yet. Generate a brief before recording progress.</p>}
+    {view && !view.briefs.length && <p>No trade briefs yet. Make a brief on the Briefs card first.</p>}
     {view?.briefs.map(brief => <section key={brief.trade} aria-label={`${brief.trade} brief`}>
       <Card title={brief.trade} sub={`Brief revision ${brief.version} · ${brief.content.accessWindow}`}>
       {!brief.current && <p>This brief needs regenerating</p>}

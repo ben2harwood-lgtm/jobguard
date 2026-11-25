@@ -1565,6 +1565,34 @@ test("F1 second firm cannot read, press, insert, update or delete; grants are fo
   assert.equal((await runtime.query(`SELECT * FROM ${table} WHERE job_id=$1`, [jobId])).rowCount, 0);
 });
 
+// Codex P2 on #953: a plan edit after the page loaded must not let a press land on the outdated brief.
+test("F1 refuses a press on a brief the plan has outdated since it loaded, then records on the regenerated brief", async () => {
+  const { owner, crewBriefs, command } = await f1Setup();
+  const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+  const loaded = await app.briefProgress.read(jobId);
+  const brief = loaded.briefs.find(item => item.trade === "tiler");
+  assert.equal(brief.current, true);
+  const task = brief.content.tasks.at(-1);
+  const head = () => app.briefProgress.read(jobId).then(view => Math.max(0, ...view.progress
+    .filter(row => row.trade === "tiler" && row.scopeItemId === task.scopeItemId && row.taskKey === task.taskKey)
+    .map(row => row.version)));
+  const plan = await app.workPlan.read(jobId, planQuery);
+  const planned = plan.tasks.find(item => item.scopeItemId === task.scopeItemId && item.key === task.taskKey);
+  await app.workPlan.edit(jobId, planEdit(plan, planned, { durationMinutes: planned.durationMinutes + 15 }));
+  const outdated = progressCommand(brief, task, { expectedVersion: await head() });
+  const rows = () => admin.query("SELECT 1 FROM app.v2_brief_progress WHERE command_id=$1", [outdated.commandId]);
+  await assert.rejects(app.briefProgress.record(jobId, outdated), { code: "BRIEF_PROGRESS_REGENERATE" });
+  assert.equal((await rows()).rowCount, 0);
+  assert.deepEqual(await progressEvents(outdated.commandId), []);
+  assert.equal((await app.briefProgress.read(jobId)).briefs.find(item => item.trade === "tiler").current, false);
+  const regenerated = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: brief.version,
+    accessWindow: brief.content.accessWindow }));
+  const fresh = regenerated.content.tasks.find(item => item.scopeItemId === task.scopeItemId && item.taskKey === task.taskKey);
+  const saved = await app.briefProgress.record(jobId, progressCommand(regenerated, fresh, { expectedVersion: await head() }));
+  assert.equal(saved.briefVersion, regenerated.version);
+  assert.equal((await progressEvents(saved.commandId)).length, 1);
+});
+
 // V2-F1: preserve the existing job-stage boundary and historical reads.
 test("F1 refuses non-live and closed job presses without rows or audit", async () => {
   const owner = await signIn("builder");

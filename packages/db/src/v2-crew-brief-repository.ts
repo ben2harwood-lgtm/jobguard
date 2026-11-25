@@ -108,6 +108,16 @@ export class CrewBriefRepository {
     });
   }
 
+  // read()'s freshness test, for a caller in its own transaction that already
+  // holds the job's quote-draft lock (brief progress), so the plan cannot move under it.
+  async isCurrentOn(client: PoolClient, tenantId: string, jobId: string, trade: string, briefVersion: number) {
+    const row = await this.revision(client, tenantId, jobId, trade, briefVersion - 1);
+    if (!row) return false;
+    const tasks = await this.planTasks(client, tenantId, jobId).catch(() => null);
+    const rebuilt = tasks && await this.compose(client, tasks, row.trade, row.accessWindow, row.photoIds).catch(() => null);
+    return rebuilt !== null && canonical(rebuilt) === canonical(row.content);
+  }
+
   async generate(context: VerifiedTenantContext, jobId: string, sessionId: string, input: CrewBriefCommand) {
     const parsed = crewBriefCommandV1.safeParse(input);
     if (!parsed.success) throw new CrewBriefError("CREW_BRIEF_INVALID_COMMAND");

@@ -5,6 +5,7 @@ import { appendAuditBatch } from "./audit.js";
 import { PracticeAccessError } from "./practice-session.js";
 import { withTenant, type VerifiedTenantContext } from "./tenant-context.js";
 import { requireLiveJob } from "./watchdog.js";
+import { CrewBriefRepository } from "./v2-crew-brief-repository.js";
 
 const uuid = z.uuid().transform(value => value.toLowerCase());
 const revision = z.number().int().min(0).max(2_147_483_646);
@@ -77,6 +78,10 @@ export class BriefProgressRepository {
       if (brief.content.tasks.some(task => !task.taskKey)) throw new BriefProgressError("BRIEF_PROGRESS_REGENERATE");
       const tasks = brief.content.tasks.filter(task => task.scopeItemId === command.scopeItemId && task.taskKey === command.taskKey);
       if (tasks.length !== 1) throw new BriefProgressError("BRIEF_PROGRESS_TASK_NOT_FOUND");
+      // A plan edit since the page loaded makes this brief outdated; recheck under the lock.
+      if (!await new CrewBriefRepository(this.pool).isCurrentOn($client, context.tenantId, jobId, command.trade, command.briefVersion)) {
+        throw new BriefProgressError("BRIEF_PROGRESS_REGENERATE");
+      }
       const task = [context.tenantId, jobId, command.trade, command.scopeItemId, command.taskKey];
       const { rows: [head] } = await $client.query<{ current: number }>(`SELECT COALESCE(max(expected_version) + 1, 0) AS current
         FROM app.v2_brief_progress WHERE (tenant_id, job_id, trade, scope_item_id, task_key) = ($1, $2, $3, $4, $5)`, task);
