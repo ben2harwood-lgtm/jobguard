@@ -28,9 +28,52 @@ describe("V2-K3 safe customer content", () => {
     expect(message).toContain("Your Friday update · week of Monday 11 January 2027");
     expect(message).not.toContain("2027-01-11");
   });
-  it("has identical empty wording regardless of excluded private data", () => {
+  it("keeps empty wording when no titles were dropped", () => {
     expect(fridayMessage({ week, content: fridayContentFromPlan(week, []) })).toContain("No photos this week.");
-    expect(fridayContentFromPlan(week, [{ title: "£500", scheduledDate: week }])).toEqual(fridayContentFromPlan(week, []));
+    expect(fridayMessage({ week, content: fridayContentFromPlan(week, []) })).toContain("No work scheduled this week.");
+  });
+  it.each(["Fit 2.40 m worktop", "Lay 12.50m² tiles", "Start 09.30am", "Start 09.30 pm", "Deliver 10:15"])("keeps measurements and times in plans and edits: %s", title => {
+    expect(fridayContentFromPlan(week, [{ title, scheduledDate: week }]).thisWeek).toEqual([title]);
+    expect(fridayContentV1.safeParse({ schema: "friday-content.v1", thisWeek: [title], nextWeek: [title], photos: [] }).success).toBe(true);
+  });
+  it.each(["mm", "cm", "m", "m2", "m²", "m3", "kg", "g", "l", "ltr", "litre", "litres", "metre", "metres", "sqm", "sq m", "lm"])("keeps the allowed measurement unit %s", unit => {
+    for (const gap of ["", " "]) {
+      const title = `Fit 2.40${gap}${unit} worktop`;
+      expect(fridayContentFromPlan(week, [{ title, scheduledDate: week }]).thisWeek).toEqual([title]);
+    }
+  });
+  it.each(["Worktop £120", "Extra 120.00", "2.40", "50p sundries", "GBP 30", "2.40 metres at 120.00", "2.40 materials", "2.40miles", "Start 19.30am", "Start 09.60pm", "Extra 120,00", "USD 30", "EUR 30"])("drops money or ambiguous decimals from plans and refuses edits: %s", title => {
+    const content = fridayContentFromPlan(week, [{ title, scheduledDate: week }, { title, scheduledDate: "2026-11-30" }]);
+    expect(content.thisWeek).not.toContain(title);
+    expect(content.nextWeek).not.toContain(title);
+    for (const section of ["thisWeek", "nextWeek"])
+      expect(fridayContentV1.safeParse({ schema: "friday-content.v1", thisWeek: [], nextWeek: [], photos: [], [section]: [title] }).success).toBe(false);
+  });
+  it("warns for each affected week instead of claiming there is no scheduled work", () => {
+    const content = fridayContentFromPlan(week, [
+      { title: "£500", scheduledDate: week }, { title: "50p sundries", scheduledDate: "2026-11-30" },
+    ]);
+    expect(content.thisWeek).toEqual(["Some work this week has been left out of this update. Please check before sending."]);
+    expect(content.nextWeek).toEqual(["Some work next week has been left out of this update. Please check before sending."]);
+    expect(fridayContentV1.safeParse(content).success).toBe(true);
+    const message = fridayMessage({ week, content });
+    expect(message).not.toContain("No work scheduled this week.");
+    expect(message).not.toContain("Nothing planned for next week yet.");
+  });
+  it("keeps safe titles alongside one warning and ignores dropped titles outside the week", () => {
+    const content = fridayContentFromPlan(week, [
+      { title: "Fit 2.40 m worktop", scheduledDate: week }, { title: "£500", scheduledDate: week },
+      { title: "GBP 30", scheduledDate: week }, { title: "£500", scheduledDate: "2026-12-07" },
+    ]);
+    expect(content.thisWeek).toEqual(["Fit 2.40 m worktop", "Some work this week has been left out of this update. Please check before sending."]);
+    expect(content.nextWeek).toEqual([]);
+  });
+  it("reserves room for the warning at the thirty-line limit", () => {
+    const tasks = Array.from({ length: 30 }, (_, i) => ({ title: `Task ${i}`, scheduledDate: week }));
+    const content = fridayContentFromPlan(week, [...tasks, { title: "£500", scheduledDate: week }]);
+    expect(content.thisWeek).toHaveLength(30);
+    expect(content.thisWeek.slice(0, 29)).toEqual(tasks.slice(0, 29).map(task => task.title));
+    expect(content.thisWeek[29]).toBe("Some work this week has been left out of this update. Please check before sending.");
   });
   it.each(["£10", "GBP 10", "10.00", "100 pence", "20 pounds", "$10", "€2"])("refuses amounts in edited text: %s", value => {
     expect(fridayContentV1.safeParse({ schema: "friday-content.v1", thisWeek: [value], nextWeek: [], photos: [] }).success).toBe(false);
