@@ -1,3 +1,5 @@
+// V2-E3: stock position.
+import { StockApplication } from "./stock.application.js";
 import { CommercialIntegrityV3Application } from "../commercial-integrity-v3.application.js";
 import { PaymentFeeApplication } from "../payment-fee.application.js";
 import { OidcApplication } from "../auth/sso/oidc.application.js";
@@ -110,6 +112,8 @@ export function createWorkspaceApplication(dependencies: { pool: Pool; sessionId
   const successFees = new SuccessFeeApplication(dependencies.pool,dependencies.sessionId);
   const attribution = new RecoveryAttributionApplication(dependencies.pool,dependencies.sessionId);
   return Object.freeze({ measurements: new MeasurementApplication(dependencies.pool, dependencies.sessionId),
+    // V2-E3: data and commands only.
+    stock: new StockApplication(dependencies.pool, dependencies.sessionId),
     materialsEnquiry: new MaterialsApplication(dependencies.pool, dependencies.sessionId), workPlan: new WorkPlanApplication(dependencies.pool, dependencies.sessionId), commercialIntegrityV3: Object.freeze({
     family: (jobId:string) => commercialIntegrityV3.family(dependencies.sessionId,jobId),
     view: (jobId:string,query:unknown) => commercialIntegrityV3.view(dependencies.sessionId,jobId,query),

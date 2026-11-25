@@ -1,0 +1,6 @@
+{
+  "migration": "2014_v2_stock.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}

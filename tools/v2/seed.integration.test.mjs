@@ -1284,3 +1284,188 @@ test("forced materials policies hide lines and enquiries and reject changes from
     assert.equal((await runtime.query(select, [DEMO_TENANT_ID, jobId])).rowCount, 0, table);
   }
 });
+
+// V2-E3: stock commands, forecasts vs receipts, audit atomicity and firm boundary.
+const stockQuery = { version: "v2-stock-query.v1" };
+async function stockSetup() {
+  const setup = await materialsSetup();
+  const lineKey = "stock-" + randomUUID();
+  await setup.measure(setup.tilingId, "6", "m²");
+  await setup.line(setup.tilingId, lineKey, { ...tilesLine, packSize: { quantity: "1", unit: "m²" },
+    wastageMultiplier: "1", setAsidePacks: "1" });
+  const { stock } = createWorkspaceApplication({ pool: runtime, sessionId: setup.owner.sessionId });
+  const forecast = () => ({ version: "v2-stock-command.v1", action: "add_forecast", commandId: randomUUID(),
+    deliveryId: randomUUID(), scopeItemId: setup.tilingId, lineKey, expectedVersion: 0,
+    supplier: "Fictional Stock Merchant", packsExpected: "5", forecastDate: "2026-12-07" });
+  return { ...setup, stock, lineKey, forecast };
+}
+const stockEvents = async commandId => (await admin.query(`SELECT version,actor_ref AS "actorRef",event_type AS "eventType",payload
+  FROM app.audit_event WHERE subject_type='job' AND subject_ref=$1 AND payload->'references'->>'commandId'=$2`,
+[jobId, commandId])).rows;
+
+async function stockAuditProof(stock, command, owner, expectedType) {
+  const saved = await stock.execute(jobId, command);
+  const [event] = await stockEvents(command.commandId);
+  assert.equal((await stockEvents(command.commandId)).length, 1);
+  assert.equal(event.actorRef, `membership:${owner.membershipId}`);
+  assert.equal(event.eventType, expectedType);
+  assert.equal("version" in event.payload.references, false);
+  assert.equal(event.payload.references.commandId, command.commandId);
+  assert.equal(event.payload.references.deliveryId, command.deliveryId);
+  assert.equal(event.payload.references.deliveryVersion, String(saved.version));
+  assert.doesNotMatch(JSON.stringify(event.payload), /Fictional Stock Merchant|packsExpected|forecastDate|hidden|financial/u);
+  assert.deepEqual(await stock.execute(jobId, command), saved);
+  assert.deepEqual(await Promise.all([stock.execute(jobId, command), stock.execute(jobId, command)]), [saved, saved]);
+  assert.equal((await stockEvents(command.commandId)).length, 1, "exact replays append nothing");
+  return saved;
+}
+
+test("V2-E3 forecasts and confirmed dates add no stock; three of five received plus one set aside gives four of six", async () => {
+  const { stock, owner, lineKey, forecast } = await stockSetup();
+  const effects = await effectCounts();
+  const add = forecast();
+  const added = await stockAuditProof(stock, add, owner, "v2.stock.forecast_added");
+  assert.equal(added.status, "forecast");
+  assert.equal(added.packsReceived, "0");
+  const position = async () => (await stock.read(jobId, stockQuery)).lines.find(line => line.lineKey === lineKey);
+  assert.deepEqual(pick(await position(), ["availablePacks", "requiredPacks", "shortPacks"]), {
+    availablePacks: "1", requiredPacks: "6", shortPacks: "5" });
+  const confirm = { version: add.version, action: "confirm_date", commandId: randomUUID(), deliveryId: add.deliveryId,
+    expectedVersion: 1, confirmedDate: "2026-12-08" };
+  const dated = await stockAuditProof(stock, confirm, owner, "v2.stock.date_confirmed");
+  assert.equal(dated.status, "date_confirmed");
+  assert.equal(dated.confirmedDate, "2026-12-08");
+  assert.equal((await position()).availablePacks, "1");
+  const receive = { version: add.version, action: "record_receipt", commandId: randomUUID(), deliveryId: add.deliveryId,
+    expectedVersion: 2, packsReceived: "3" };
+  const received = await stockAuditProof(stock, receive, owner, "v2.stock.receipt_recorded");
+  assert.equal(received.packsReceived, "3");
+  assert.equal(received.receivedByMembershipId, owner.membershipId);
+  assert.ok(received.receivedAt instanceof Date);
+  assert.deepEqual(pick(await position(), ["receivedPacks", "availablePacks", "requiredPacks", "shortPacks"]), {
+    receivedPacks: "3", availablePacks: "4", requiredPacks: "6", shortPacks: "2" });
+  // Read API is the same application path; reload and a fresh application retain the persisted quantities.
+  const path = `/api/jobs/${jobId}/stock`;
+  const httpRead = await json(await request(path, { cookies: owner.cookies }));
+  assert.deepEqual(await json(await request(path, { cookies: owner.cookies })), httpRead);
+  assert.deepEqual(httpRead.lines.find(line => line.lineKey === lineKey), await position());
+  assert.deepEqual((await createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId }).stock.read(jobId, stockQuery)),
+    await stock.read(jobId, stockQuery));
+  const rest = { ...receive, commandId: randomUUID(), expectedVersion: 3, packsReceived: "2" };
+  await json(await request(path, { cookies: owner.cookies, body: rest }));
+  assert.deepEqual(pick(await position(), ["availablePacks", "shortPacks"]), { availablePacks: "6", shortPacks: "0" });
+  // Even after subsequent receipts, replay returns the exact earlier partial receipt.
+  assert.deepEqual(await stock.execute(jobId, receive), received);
+  const other = { ...forecast(), supplier: "Fictional Second Merchant", packsExpected: "2" };
+  await stock.execute(jobId, other);
+  assert.equal((await position()).availablePacks, "6", "another forecast does not inflate stock");
+  await stock.execute(jobId, { ...receive, commandId: randomUUID(), deliveryId: other.deliveryId, expectedVersion: 1, packsReceived: "1" });
+  assert.equal((await position()).availablePacks, "7", "actual receipts from two suppliers sum once");
+  assert.deepEqual(await effectCounts(), effects, "no orders, messages, schedules or money effects");
+  await verifyTenantChain(DEMO_TENANT_ID);
+});
+
+test("V2-E3 refuses stale, changed replay, over-receipt and invalid transitions; races have one winner", async () => {
+  const { stock, owner, forecast } = await stockSetup();
+  const add = forecast();
+  await stock.execute(jobId, add);
+  await assert.rejects(stock.execute(jobId, { ...add, supplier: "Another" }), { code: "STOCK_COMMAND_CONFLICT" });
+  await assert.rejects(stock.execute(jobId, { ...add, commandId: randomUUID() }), { code: "STOCK_VERSION_CONFLICT" });
+  await assert.rejects(stock.execute(jobId, { ...add, commandId: randomUUID(), expectedVersion: 1 }), { code: "STOCK_INVALID_TRANSITION" });
+  const receipt = { version: add.version, action: "record_receipt", commandId: randomUUID(), deliveryId: add.deliveryId,
+    expectedVersion: 1, packsReceived: "3" };
+  const race = await Promise.allSettled([stock.execute(jobId, receipt), stock.execute(jobId, { ...receipt, commandId: randomUUID() })]);
+  assert.equal(race.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal(race.find(result => result.status === "rejected").reason.code, "STOCK_VERSION_CONFLICT");
+  const over = { ...receipt, commandId: randomUUID(), expectedVersion: 2, packsReceived: "3" };
+  await assert.rejects(stock.execute(jobId, over), { code: "STOCK_RECEIPT_EXCEEDS_EXPECTED" });
+  assert.equal((await stockEvents(over.commandId)).length, 0);
+  await assert.rejects(stock.execute(jobId, { version: add.version, action: "confirm_date", commandId: randomUUID(),
+    deliveryId: add.deliveryId, expectedVersion: 2, confirmedDate: "2026-12-08" }), { code: "STOCK_INVALID_TRANSITION" });
+  await assert.rejects(stock.execute(jobId, { ...forecast(), lineKey: "not-a-material-line" }), { code: "NOT_FOUND" });
+  const anonymous = createWorkspaceApplication({ pool: runtime }).stock;
+  await assert.rejects(anonymous.read(jobId, stockQuery), { code: "UNAUTHENTICATED" });
+  await assert.rejects(anonymous.execute(jobId, forecast()), { code: "UNAUTHENTICATED" });
+  await assert.rejects(stock.read(jobId, { version: "wrong-query" }), { code: "STOCK_INVALID_QUERY" });
+
+  await assert.rejects(stock.execute(jobId, { ...receipt, commandId: randomUUID(), expectedVersion: 2, packsReceived: "0" }),
+    { code: "STOCK_INVALID_COMMAND" });
+  await json(await request(`/api/jobs/${jobId}/stock`, { cookies: owner.cookies, body: over }), 400);
+  assert.equal((await request(`/api/jobs/${jobId}/stock`)).status, 401);
+});
+
+test("V2-E3 each command rolls its inserted delivery back if audit append fails", async () => {
+  const { stock, owner, forecast } = await stockSetup();
+  const failing = {
+    async connect() {
+      const client = await runtime.connect();
+      const query = client.query.bind(client);
+      client.query = (sql, ...rest) => typeof sql === "string" && sql.includes("app.append_audit(")
+        ? Promise.reject(Object.assign(new Error("forced E3 audit failure"), { code: "FORCED" })) : query(sql, ...rest);
+      const release = client.release.bind(client);
+      client.release = (...args) => { client.query = query; return release(...args); };
+      return client;
+    },
+  };
+  const add = forecast();
+  const commands = [add,
+    { version: add.version, action: "confirm_date", commandId: randomUUID(), deliveryId: add.deliveryId,
+      expectedVersion: 1, confirmedDate: "2026-12-08" },
+    { version: add.version, action: "record_receipt", commandId: randomUUID(), deliveryId: add.deliveryId,
+      expectedVersion: 2, packsReceived: "3" }];
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const { StockRepository } = await import("../../packages/db/dist/index.js");
+  // Bypass the access facade only for fault injection; authority is still checked by the repository transaction.
+  const brokenRepository = new StockRepository(failing);
+  for (const command of commands) {
+    await assert.rejects(brokenRepository.execute(context, jobId, owner.sessionId, command), { code: "FORCED" });
+    assert.equal((await admin.query("SELECT 1 FROM app.v2_stock_delivery WHERE command_id=$1", [command.commandId])).rowCount, 0);
+    assert.equal((await stockEvents(command.commandId)).length, 0, "row and audit roll back together");
+    await stock.execute(jobId, command);
+    assert.equal((await stockEvents(command.commandId)).length, 1);
+  }
+  await verifyTenantChain(context.tenantId);
+});
+
+test("V2-E3 FORCE RLS and runtime privileges deny second-firm select, insert, update and delete", async () => {
+  const { stock, owner, forecast } = await stockSetup();
+  const add = forecast();
+  await stock.execute(jobId, add);
+  const outsider = await signIn("second-builder");
+  const other = createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).stock;
+  await assert.rejects(other.read(jobId, stockQuery), { code: "NOT_FOUND" });
+  await assert.rejects(other.execute(jobId, forecast()), { code: "NOT_FOUND" });
+  await json(await request(`/api/jobs/${jobId}/stock`, { cookies: outsider.cookies }), 404);
+  await json(await request(`/api/jobs/${jobId}/stock`, { cookies: outsider.cookies, body: forecast() }), 404);
+  const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced,
+    relowner::regrole::text AS owner, has_table_privilege('jobguard_runtime',oid,'SELECT') AS can_read,
+    has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate,
+    has_table_privilege('jobguard_identity',oid,'SELECT,INSERT,UPDATE,DELETE') AS identity_access,
+    has_table_privilege('jobguard_worker',oid,'SELECT,INSERT,UPDATE,DELETE') AS worker_access,
+    has_table_privilege('jobguard_infrastructure',oid,'SELECT,INSERT,UPDATE,DELETE') AS infra_access
+    FROM pg_class WHERE oid='app.v2_stock_delivery'::regclass`);
+  assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_read: true, can_insert: true, can_mutate: false,
+    identity_access: false, worker_access: false, infra_access: false });
+  const { context } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const { context: own } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const { StockRepository } = await import("../../packages/db/dist/index.js");
+  await assert.rejects(new StockRepository(runtime).execute(own, jobId, outsider.sessionId, forecast()),
+    { code: "STOCK_EDITOR_REQUIRED" });
+  const query = (scope, sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+  const select = "SELECT * FROM app.v2_stock_delivery WHERE (tenant_id,job_id)=($1,$2)";
+  assert.ok((await query(own, select, [DEMO_TENANT_ID, jobId])).rowCount > 0);
+  const row = (await admin.query("SELECT * FROM app.v2_stock_delivery WHERE command_id=$1", [add.commandId])).rows[0];
+  const fields = Object.keys(row);
+  const insert = `INSERT INTO app.v2_stock_delivery (${fields.join(',')}) VALUES (${fields.map((_, index) => '$' + (index + 1)).join(',')})`;
+  const params = fields.map(field => field === "delivery_id" || field === "command_id" ? randomUUID() : row[field]);
+  for (const scope of [outsider.realContext, context]) {
+    assert.equal((await query(scope, select, [DEMO_TENANT_ID, jobId])).rowCount, 0);
+    await assert.rejects(query(scope, insert, params), { code: "42501", message: /row-level security policy/u });
+    await assert.rejects(query(scope, "UPDATE app.v2_stock_delivery SET packs_received=1 WHERE job_id=$1", [jobId]), { code: "42501" });
+    await assert.rejects(query(scope, "DELETE FROM app.v2_stock_delivery WHERE job_id=$1", [jobId]), { code: "42501" });
+  }
+  await assert.rejects(query(own, "UPDATE app.v2_stock_delivery SET supplier='Changed' WHERE job_id=$1", [jobId]), { code: "42501" });
+  await assert.rejects(query(own, "DELETE FROM app.v2_stock_delivery WHERE job_id=$1", [jobId]), { code: "42501" });
+  assert.equal((await runtime.query(select, [DEMO_TENANT_ID, jobId])).rowCount, 0);
+});
