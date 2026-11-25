@@ -44,8 +44,8 @@ function signIn(localPart) {
   return sessions.get(localPart);
 }
 
-async function openSession(localPart) {
-  const input = { email: localPart + "@jobguard-v2.invalid", purpose: "signin" };
+async function openSession(localPart, purpose = "signin") {
+  const input = { email: localPart + "@jobguard-v2.invalid", purpose };
   const { fixtureCode } = await json(await request("/api/auth/request", {
     body: { version: "identity-request.v1", ...input },
   }));
@@ -970,7 +970,7 @@ test("K10 exact stored figures, complete hidden-finding pair, no write on repeat
   const stranger = await signIn("second-builder");
   const path = `/api/jobs/${plain.draftJob}/profit-so-far`;
   assert.equal((await request(path, { cookies: stranger.cookies })).status, 404);
-  // Real crew and customer session refusals wait for V2-SX; this suite has no such sessions.
+  // Cases (a) to (d) are in the K10-R test below; capability-link refusal waits for F6 (SX rev 4).
   // A fresh draft has no accepted price and no percentage, despite its priced working scope.
   const draft = await draftForPlan();
   const noPrice = await read(draft.draftJob);
@@ -1011,4 +1011,47 @@ test("K10 invalid customer cookie is refused", async () => {
   const refused = await request(`/api/jobs/${draftJob}/profit-so-far`, { cookies: "jg_customer_session=fictional-customer-token" });
   assert.equal(refused.status, 401);
   assert.doesNotMatch(await refused.text(), /quoted|recordedCosts|spentPercent/u);
+});
+
+// K10-R: SX revision 4 cases (a) to (d), inline until the shared V2-SX helper
+// (tools/v2/test/refusals.mjs, assertBuilderRouteRefuses) lands and absorbs this.
+const k10Deny = /profit|margin|cost|amount|quoted|spent|leftInBudget|jobTotal|approvedExtras|£|pence/iu;
+async function assertBuilderRouteRefuses({ path, deny, signedOut, secondFirm }) {
+  const cases = {
+    "(a) no session": undefined,
+    "(b) invalid session": `jg_session=${randomUUID()}`,
+    "(c) signed out": signedOut,
+    "(d) second firm": secondFirm,
+  };
+  for (const [name, cookies] of Object.entries(cases)) {
+    const response = await request(path, { cookies });
+    assert.ok([401, 403, 404].includes(response.status), `${name}: ${response.status}`);
+    assert.match(response.headers.get("cache-control") ?? "", /no-store/u, name);
+    assert.doesNotMatch(await response.text(), deny, `${name} must not return money fields`);
+  }
+}
+
+test("K10-R the job profit route refuses no session, an invalid session, a signed-out session and the second firm", async () => {
+  const { draftJob } = await draftForPlan();
+  const path = `/api/jobs/${draftJob}/profit-so-far`;
+  const owner = await signIn("builder");
+  assert.match(JSON.stringify(await json(await request(path, { cookies: owner.cookies }))), /recordedCosts/u);
+  // A separate fictional firm signs up, proves its session reads its own job, then signs out.
+  // Only catcher addresses may sign up on V2; the fictional tiler has no other session here.
+  const leaver = await openSession("tiler", "signup");
+  const { capture } = createWorkspaceApplication({ pool: runtime, sessionId: leaver.sessionId });
+  const own = await capture.create({ contractVersion: "job_capture_v1", requested_tenant_id: DEMO_TENANT_ID,
+    captureId: randomUUID(), fixtureId: "v2-c2-draft-editing",
+    source: { kind: "text", text: "JOB: K10-R fictional sign-out job\nITEM: Fit a shelf | QTY: 1 | UNIT: item | RATE: £95.00" } });
+  const ownPath = `/api/jobs/${own.jobId}/profit-so-far`;
+  await json(await request(ownPath, { cookies: leaver.cookies }));
+  await json(await request("/api/auth/signout", { cookies: leaver.cookies, csrf: leaver.csrfToken, body: {} }));
+  const after = await request(ownPath, { cookies: leaver.cookies });
+  assert.ok([401, 403, 404].includes(after.status), `signed out on own job: ${after.status}`);
+  assert.doesNotMatch(await after.text(), k10Deny);
+  const outsider = await signIn("second-builder");
+  const auditBefore = (await admin.query("SELECT count(*)::int n FROM app.audit_event")).rows[0].n;
+  await assertBuilderRouteRefuses({ path, deny: k10Deny, signedOut: leaver.cookies, secondFirm: outsider.cookies });
+  assert.equal((await admin.query("SELECT count(*)::int n FROM app.audit_event")).rows[0].n, auditBefore,
+    "refused reads write nothing");
 });
