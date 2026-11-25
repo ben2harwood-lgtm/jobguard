@@ -65,6 +65,7 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2002_v2_work_plan.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2003_v2_work_plan_edits.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2020_v2_plan_variation_scope.sql", import.meta.url), "utf8"));
 
   // V2-K6A: dedicated local inbound fixture routing.
   await client.query(readFileSync(new URL("./migrations/2023_v2_inbound_mail.sql", import.meta.url), "utf8"));
