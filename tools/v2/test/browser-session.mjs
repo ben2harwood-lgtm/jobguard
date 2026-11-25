@@ -50,12 +50,17 @@ export async function signInOnce(browser, { jobTitle = "Occupied-home kitchen sp
       if (!response.ok) throw new Error(`practice:${response.status}`);
     }, csrfToken);
     step = "find seeded job";
-    const { DEMO_TENANT_ID } = await import("../../../packages/db/dist/index.js");
-    const jobs = await page.evaluate(async tenantId => {
-      const response = await fetch(`/api/jobs?tenantId=${tenantId}`);
+    // Use the signed-in workspace's own tenant, as WALK-3.spec.ts does, so the
+    // helper never reads fixture constants from the database package.
+    const jobs = await page.evaluate(async () => {
+      const session = await fetch("/api/session");
+      if (!session.ok) throw new Error(`session:${session.status}`);
+      const tenantId = (await session.json()).tenants?.[0]?.id;
+      if (!tenantId) throw new Error("session:no-tenant");
+      const response = await fetch(`/api/jobs?tenantId=${encodeURIComponent(tenantId)}`);
       if (!response.ok) throw new Error(`jobs:${response.status}`);
       return (await response.json()).jobs;
-    }, DEMO_TENANT_ID);
+    });
     const jobId = jobs.find(job => job.title.includes(jobTitle))?.id;
     assert.ok(jobId, `The seeded job must appear in Jobs: ${jobTitle}`);
     step = "save session";
