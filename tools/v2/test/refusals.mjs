@@ -43,7 +43,7 @@ export const builderGetRoutes = [
 ];
 
 export function bindBuilderRoutes({ jobId, tenantId }) {
-  return builderGetRoutes.map(route => ({ ...route,
+  return builderGetRoutes.map(route => ({ ...route, tenantId,
     path: route.path.replaceAll("{jobId}", jobId).replaceAll("{tenantId}", tenantId),
     expect: body => route.expect(body, { jobId, tenantId }),
   }));
@@ -120,14 +120,19 @@ export async function assertBuilderRouteRefuses({ request, signIn, route, expect
     ["b-unknown-uuid", { cookies: `jg_session=${unknownSession}; jobguard_session=${unknownSession}` }],
     ...(route.transport === "api" ? [
       ["d-real-no-csrf", { cookies: second.signedIn }, "ORIGIN_FORBIDDEN"],
-      ["d-real-csrf", { cookies: second.signedIn, csrf: second.csrfToken }, "SYNTHETIC_WORKFLOW_ONLY"],
+      // Re-ruled 18:25 UK: own CSRF token plus x-tenant-id for the job's firm stops at the tenant gate.
+      ["d-real-csrf", { cookies: second.signedIn, csrf: second.csrfToken, tenantId: route.tenantId }, "TENANT_FORBIDDEN"],
     ] : [["d-real", { cookies: second.signedIn }]]),
     ["d-practice", { cookies: second.cookies }],
   ];
   const observed = [];
   for (const [name, credentials, nestCode] of cases) {
     try {
-      if (name === "d-real-csrf") assert.ok(credentials.csrf, "second firm's own CSRF token required");
+      if (name === "d-real-csrf") {
+        assert.ok(credentials.csrf, "second firm's own CSRF token required");
+        assert.ok(credentials.tenantId && credentials.tenantId !== second.realContext.tenantId,
+          "x-tenant-id must name the job's firm, not the second firm");
+      }
       observed.push({ case: name, ...await checkRequest(request, route, credentials, denyList, undefined,
         { emptyJobs: route.list && name.startsWith("d-"), sessionCase: route.list && !name.startsWith("d-"), nestCode }) });
     } catch (error) { throw new Error(`SX ${route.path} ${name}: ${error.message}`, { cause: error }); }

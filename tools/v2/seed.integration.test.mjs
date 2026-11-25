@@ -108,12 +108,12 @@ import { assertBuilderPositive, assertBuilderRouteRefuses, assertSignedOutBuilde
 const sxCachedSignIn = signIn;
 signIn = guardCachedSignIn(sxCachedSignIn);
 let sxRoutes;
-async function sxRequest(path, { transport, method, body, cookies, csrf } = {}) {
+async function sxRequest(path, { transport, method, body, cookies, csrf, tenantId } = {}) {
   const target = transport === "api" ? settings.NEXT_PUBLIC_API_URL : origin;
   return fetch(target + path, {
     method: method ?? (body === undefined ? "GET" : "POST"), redirect: "manual",
     headers: { origin, "content-type": "application/json", ...(cookies && { cookie: cookies }),
-      ...(csrf && { "x-csrf-token": csrf }) },
+      ...(csrf && { "x-csrf-token": csrf }), ...(tenantId && { "x-tenant-id": tenantId }) },
     ...(body !== undefined && { body: JSON.stringify(body) }),
   });
 }
