@@ -4,7 +4,7 @@
     "v2-d3-stock-projection": {
       "branches": ["codex/sandbox/v2-d3-stock-projection"],
       "note": "D3 aligns the enquiry projection and override calculation with the E3 material basis approved by Ben.",
-      "allow": ["packages/db/src/v2-materials-enquiry-repository.ts", "tools/v2/seed.integration.test.mjs"]
+      "allow": ["packages/db/src/v2-materials-enquiry-repository.ts", "packages/db/src/v2-stock-material-basis.ts", "tools/v2/seed.integration.test.mjs"]
     }
   }
 }
