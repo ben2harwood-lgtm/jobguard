@@ -60,8 +60,8 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 | D8 | **E5A** same-firm double-booking warning (Q02) | ★ | S | A | C3C | none | T1 |
 | D9 | **F8** who was on site today (Q10) | ★ | S | A | F1, C3C | 2016 | RED |
 | D10 | **SYNC-1** (Q45) merge main into v2/main (diary, photos on variations, Friday PDF, snag list, handover page, pack calculator) | ★★★ | M | O | Ben merges milestone one plus the QW PRs | none | T2 |
-| D11 | **C3B-1** c4 sends the extra's version number when an extra's plan task is edited, so a stale edit is refused (follow-up from #922, merged 25 Nov) | ★★ | S | A | c4 #903, #922 | none | T1 |
-| D12 | **C3B-2** record whether a £0 extra adds or removes work, so a free addition can be planned (follow-up from #922) | ★ | S | A | #922 | 2055 | RED |
+| D11 | **C3B-1** c4 sends the extra's version number when an extra's plan task is edited, so a stale edit is refused (follow-up from #922, merged 25 Nov). Packet Q47 | ★★ | S | A | c4 #903, #922 | none | T1 |
+| D12 | **C3B-2** record whether a £0 extra adds or removes work, so a free addition can be planned (follow-up from #922). Packet Q48, stacked on Q47 | ★ | S | A | #922 | 2055 | RED |
 
 ## Batch E: about 27 to 29 Nov, changes and money
 | # | Piece | Use | Size | Lane | Waits on | Mig | Tier |
