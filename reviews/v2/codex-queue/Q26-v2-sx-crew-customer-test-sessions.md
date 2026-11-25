@@ -1,4 +1,61 @@
-# Q26 · V2-SX revision 4: who is refused on V2, proven through V2's own access paths (no portal or crew sign-ins)
+# Q26 · V2-SX revision 5: who is refused on V2, on a fixed list of routes
+
+> **Revision 5 (planner, 25 Nov 16:15 UK; planner miss in revision 4).** Revision 4 asked for "every builder route", which a scan of `app/api` can't do:
+> - 161 method and path pairs come up, most of them main-only routes with no V2 fixture. An empty body gets a 400 before the job check (for example `retention-record.application.ts` lines 19 to 32), and a random id gets a 404. Neither proves anything.
+> - `/api/v2-backend/*` is a Next **rewrite** (`apps/web/next.config.mjs` lines 1 to 13), not a `route.ts`.
+>
+> **This section replaces revision 4's "What to build" items 1 and 2.** Revision 4's decision, cases (a) to (f), items 3 and 4, and its dependencies all still stand. **Round count:** this resumes the held round 1 of 3. The kept uncommitted draft may be reused.
+
+## Routes, fixed list (each one already reads the seeded job with a valid fixture in `tools/v2/seed.integration.test.mjs` lines 104 to 133; GET only)
+Next routes, through the web origin. `jobId` is the seeded job.
+1. `GET /api/jobs?tenantId=<DEMO_TENANT_ID>` (line 79). Refused means `jobs` is `[]`, not an error.
+2. `GET /api/jobs/<jobId>`
+3. `GET /api/jobs/<jobId>/proposal`
+4. `GET /api/jobs/<jobId>/parties`
+5. `GET /api/jobs/<jobId>/materials`
+6. `GET /api/jobs/<jobId>/quotes`
+7. `GET /api/jobs/<jobId>/quotes/delivery`
+8. `GET /api/jobs/<jobId>/quotes/acceptance`
+
+The V2 API (Nest), called **directly** at `settings.NEXT_PUBLIC_API_URL` (plain mode, `http://127.0.0.1:3401`, `tools/v2/settings.mjs` lines 11 and 36):
+
+9. `GET /jobs/<jobId>`, from `apps/api/src/workspace/workspace.controller.ts` line 9. It reads `jg_session` at line 16 and maps codes to 401, 403 or 404 at line 19.
+10. `GET /jobs/<jobId>/fee-illustration`, from `fee-illustration.controller.ts` line 14.
+
+**Write routes (POST) are out of SX.** Each writing piece already proves its own refusal with its command's fixture. A shared POST list would need a valid body per route, and that is the trap revision 4 fell into.
+
+## Rule that makes a refusal count (planner, binding)
+- **A positive control comes first.** For each route, the builder's own session must get **200 with the expected body** (for example the job id, or `jobs.length === 1`), from the same request helper, path and transport. Without that, the route is listed as "not testable on this base", which fails the test. A refusal is never counted on a route the builder can't open.
+- **A refusal must be typed.** The status is 401, 403 or 404 **and** the JSON `code` is one of `UNAUTHENTICATED`, `TENANT_FORBIDDEN` or `NOT_FOUND`. For route 1, `jobs` is `[]`. A 400, a 5xx, an HTML 404 or a missing body fails.
+- **No fields leak.** A refused body contains none of: `jobs[0]`, `title`, `customer`, `email`, `totalPence`, `amount`, `price`, `profit`, `margin`, `finding`.
+
+## The rewrite path (`/api/v2-backend/*`)
+The rewrite is a transport, not a boundary: in phone mode it forwards to the same Nest routes 9 and 10 (`next.config.mjs` line 12 to `127.0.0.1:3401`). CI1 runs plain mode (`.github/workflows/ci.yml` lines 160 to 186, `start.mjs` with no phone flag), so the boundary is proven on routes 9 and 10 directly.
+- **Also add a phone-mode check** `tools/v2/refusals.phone.test.mjs`, run by Mac lane B. It isn't in CI. First, a positive control that the builder's `GET /api/v2-backend/jobs/<jobId>` returns 200 with the job id, which proves the proxy is there. Then cases (a) to (d) on that path.
+- A 404 without that positive control is "proxy missing" and fails the test, never "refused".
+
+## Helper, and BH1
+**Don't wait for BH1 (#936, still open at 6edfa7400).**
+- Write `tools/v2/test/refusals.mjs` as plain functions that **take** the caller's `request` and `signIn`: `assertBuilderRouteRefuses({ request, signIn, route, expect })`. It doesn't import or create any session helper. It works with the seed test's own `signIn` (lines 41 to 77) today, and with BH1's helper after #936 merges.
+- **Don't create `tools/v2/test/session.mjs`.** That file belongs to BH1.
+
+## Cases, and the order that avoids the sign-in rate limit
+The rate limit is one code per email per 60 s and at most 10 recent (`apps/api/src/auth/auth-provider.ts` line 83). The seed has exactly two identities (line 137 asserts `identities: 2`), so add **no** new identity.
+- **(a) no session:** no cookies.
+- **(b) invalid session:** `jg_session=fictional-invalid` plus `jobguard_session=fictional-invalid`.
+- **(d) second firm:** the cached `signIn("second-builder")`.
+- **(c) signed out:** this goes in **one test placed last in the file**, with the comment `// must stay the last test: it signs the cached builder out`. It takes the cached `signIn("builder")` cookies and runs the positive control first. Then it calls `POST /api/auth/signout` (`apps/web/app/api/auth/signout/route.ts` line 5, which revokes the real session and clears both cookies). Then it **reuses the old cookie values** on routes 2 and 9 and expects a typed refusal.
+
+## Done when (replaces revision 4's)
+- Routes 1 to 10 each pass their positive control and cases (a) to (d), in CI1. Three CI runs in a row pass with no 429.
+- Lane B's phone-mode file passes three times in a row.
+- No file under `packages/db/migrations/` or `tools/v2/migrations/` changes, and no grant, role, policy or `next.config.mjs` change.
+- A Claude check on the frozen head, and the plan-check verdict is recorded.
+
+---
+
+## Revision 4 (decision and cases still in force)
+
 
 > **Revision 4 (planner, 25 Nov 16:35 UK).** This replaces revisions 1 to 3 below, which are kept only as history. The SX builder stopped at both plan-check stop points with no code written (`/mnt/project-files/jobguard-v2/v2-sx-stop-report-2026-11-25.md`). The planner checked its findings line by line against v2/main @ 63f3af5ab, and they hold. **Needs a separate Claude RED plan check before it's called ready.** It changes what the refusal proof means, even though it only adds tests.
 
