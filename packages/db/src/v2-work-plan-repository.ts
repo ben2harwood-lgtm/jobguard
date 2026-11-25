@@ -52,7 +52,7 @@ export class WorkPlanRepository {
 
   async generate(context: VerifiedTenantContext, source: PlanSource) {
     const { jobId, quoteRevisionId } = planSource.parse(source);
-    return withTenant(this.pool, context, ({ $client }) => this.generatePlan($client, [context.tenantId, jobId, quoteRevisionId]));
+    return withTenant(this.pool, context, database => this.generatePlan(database, [context.tenantId, jobId, quoteRevisionId]));
   }
 
   async read(context: VerifiedTenantContext, source: PlanSource) {
@@ -61,10 +61,10 @@ export class WorkPlanRepository {
   }
 
   async openDraft(context: VerifiedTenantContext, jobId: string) {
-    return withTenant(this.pool, context, async ({ $client }) => {
-      const draft = await this.lockDraft($client, context.tenantId, jobId);
+    return withTenant(this.pool, context, async database => {
+      const draft = await this.lockDraft(database.$client, context.tenantId, jobId);
       this.requireDraft(draft);
-      return this.generatePlan($client, [context.tenantId, jobId, draft.current_revision_id]);
+      return this.generatePlan(database, [context.tenantId, jobId, draft.current_revision_id]);
     });
   }
 
@@ -91,7 +91,7 @@ export class WorkPlanRepository {
       this.requireDraft(draft);
       if (draft.current_revision_id !== command.quoteRevisionId) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
 
-      const plan = await this.generatePlan(client, key);
+      const plan = await this.generatePlan(database, key);
       if (plan.version !== command.expectedVersion) throw new WorkPlanError("WORK_PLAN_VERSION_CONFLICT");
       const existing = plan.tasks.some(task => task.scopeItemId === command.scopeItemId && task.key === command.taskKey);
       const { position, trade, durationMinutes } = command.changes;
@@ -163,8 +163,12 @@ export class WorkPlanRepository {
     if (!this.isDraft(draft)) throw new WorkPlanError("WORK_PLAN_DRAFT_REQUIRED");
   }
 
-  private async generatePlan(client: PoolClient, key: PlanKey) {
-    await this.insertPlan(client, key, null);
+  private async generatePlan(database: TenantTransaction, key: PlanKey) {
+    const { $client: client } = database;
+    // Opening or editing a plan creates it at most once. A quote-save refresh inserts through
+    // refreshDraft instead, which quote.draft.saved already covers, so it appends nothing here.
+    const tasks = await this.insertPlan(client, key, null);
+    if (tasks) await this.recordGenerated(database, key, tasks);
     const plan = await this.readPlan(client, key);
     if (!plan) throw new WorkPlanError("QUOTE_REVISION_NOT_FOUND");
     return plan;
@@ -178,7 +182,20 @@ export class WorkPlanRepository {
       WHERE (tenant_id, job_id, id) = ($1, $2, $3)
       ON CONFLICT (tenant_id, job_id, quote_revision_id) DO NOTHING
     `, [...key, this.template.key, previousPlanRevisionId]);
-    if (created.rowCount) await this.insertTasks(client, key);
+    return created.rowCount ? this.insertTasks(client, key) : null;
+  }
+
+  // The plan is derived by rule from the quote revision, so the system rule is the actor.
+  // A replay inserts nothing above and appends nothing here.
+  private recordGenerated(database: TenantTransaction, [, jobId, quoteRevisionId]: PlanKey,
+    tasks: readonly { scope_item_id: string; template_task_key: string }[]) {
+    return appendAuditBatch(database, [{ id: randomUUID(), version: "audit.v1", actorRef: "system:v2-work-plan",
+      eventType: "v2_work_plan.generated", subjectType: "job", subjectRef: jobId,
+      payload: {
+        references: { quoteRevisionId, templateKey: this.template.key, taskCount: String(tasks.length) },
+        hashes: { tasks: createHash("sha256").update(JSON.stringify(tasks)).digest("hex") },
+        classifications: { action: "operational" },
+      } }]);
   }
 
   private async insertTasks(client: PoolClient, key: PlanKey) {
@@ -196,6 +213,7 @@ export class WorkPlanRepository {
       FROM ROWS FROM (jsonb_to_recordset($4) AS (scope_item_id uuid, template_task_key text))
         WITH ORDINALITY AS task(scope_item_id, template_task_key, position)
     `, [...key, JSON.stringify(tasks)]);
+    return tasks;
   }
 
   private async planRow(client: PoolClient, key: PlanKey) {
