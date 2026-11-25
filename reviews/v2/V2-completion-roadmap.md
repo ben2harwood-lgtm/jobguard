@@ -114,10 +114,13 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 - Big ideas A, C, D, E and F.
 
 ## Migration numbers reserved
-2025 PX (V2 bootstrap), 2026 G0, 2027 C3C, 2028 F2, 2029 B1C, 2030 E7, 2031 F3, 2032 F4, 2033 F7, 2034 K5B, 2035 K6B, 2036 DV1, 2037 C6, 2038 E4, 2039 E5, 2040 E6, 2041 My brief, 2042 G1, 2043 G2/G3, 2044 G8, 2045 G9. 2046 K5A-2 (Q34). 2047 V2-FL firm-lock sweep (Q35). **Next free: 2048.** A builder whose piece turns out not to need its number leaves it unused. A builder that needs a number not listed here stops and asks.
+2025 PX (V2 bootstrap), 2026 G0, 2027 C3C, 2028 F2, 2029 B1C, 2030 E7, 2031 F3, 2032 F4, 2033 F7, 2034 K5B, 2035 K6B, 2036 DV1, 2037 C6, 2038 E4, 2039 E5, 2040 E6, 2041 My brief, 2042 G1, 2043 G2/G3, 2044 G8, 2045 G9. 2046 K5A-2 (Q34). 2047 to 2051 V2-FL-1 to FL-5 firm-lock slices (Q35 to Q39). **Next free: 2052.** A builder whose piece turns out not to need its number leaves it unused. A builder that needs a number not listed here stops and asks.
 
 ## Throughput check
 That's 46 pieces over 10 days, about 5 released a day. Lane A runs two at a time, W one or two, and O three or four threads at once. B tests every PR. Batches overlap: the next batch's packets are written while the current one builds. **The real limit is merging.** About 25 PRs are already waiting on Ben, and each stacked piece needs its base merged first. **Settled (Ben, 25 Nov 12:10 UK, "Merge everything to unlock everything"):** the "Merge all ready PRs" thread merges continuously once CI is green and the review is clean. Ben merges by hand only for releases and deploys. No daily merge slot is needed.
 
 ## Change, 25 Nov 16:35 UK: V2-SX revision 4
 Customers and crew never get a main sign-in on V2. They reach it only through V2 capability links (F6, E2, K3, F7 My brief, K2 feeds, Your choices, handover pack). Each capability piece proves its own confinement with SX's `assertCapabilityConfined`. D1 K10-R needs only SX rev 4 (cases a to d), and D8 E5A and D9 F8 need only C3C. Migration 2024 is freed.
+
+## Change, 25 Nov 17:50 UK: plan checks go to Astra; Codex builds as much as it safely can
+Ben, 17:38 UK: from now on, plan checks go to Astra on frm-management-layer#3, not Claude threads. Keep desktop and web Codex coding alongside Opus. Every new packet names Codex as builder unless it needs a live V2 database while building or a security boundary design. The V2-FL sweep is split into FL-1 (Opus, guard test plus core) and FL-2 to FL-5 plus FL-F (Codex).

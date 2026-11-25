@@ -48,7 +48,13 @@
         "reviews/v2/codex-queue/Q32-v2-b1b-walk-screen.md",
         "reviews/v2/codex-queue/Q33-v2-sx-r-existing-v2-backend-routes.md",
         "reviews/v2/codex-queue/Q34-v2-k5a-2-custom-task-stages-frozen-due.md",
-        "reviews/v2/codex-queue/Q35-v2-fl-firm-lock-sweep.md"
+        "reviews/v2/codex-queue/Q35-v2-fl-firm-lock-sweep.md",
+        "reviews/v2/codex-queue/Q35-v2-fl1-firm-lock-guard-and-core.md",
+        "reviews/v2/codex-queue/Q36-v2-fl2-firm-lock-money.md",
+        "reviews/v2/codex-queue/Q37-v2-fl3-firm-lock-orders-site.md",
+        "reviews/v2/codex-queue/Q38-v2-fl4-firm-lock-recovery.md",
+        "reviews/v2/codex-queue/Q39-v2-fl5-firm-lock-supplier-feed-rest.md",
+        "reviews/v2/codex-queue/Q40-v2-flf-definer-function-review.md"
       ]
     }
   }
