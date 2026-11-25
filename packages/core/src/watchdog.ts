@@ -165,6 +165,8 @@ export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   "/api/jobs/[id]/purchase-orders/merchant-order": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/placement": "watchdog_live_only",
   "/api/jobs/[id]/purchase-orders/revisions": "watchdog_live_only",
+  // V2-K8: practice hire records; the repository has no live-job guard and sends, books or charges nothing.
+  "/api/jobs/[id]/hires": "pre_live_allowed",
   "/api/jobs/[id]/quotes/acceptance/disposition": "pre_live_allowed",
   "/api/jobs/[id]/quotes/acceptance": "pre_live_allowed",
   "/api/jobs/[id]/quotes/activation": "pre_live_allowed",
