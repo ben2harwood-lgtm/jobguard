@@ -1588,3 +1588,86 @@ test("V2-E3 FORCE RLS and runtime privileges deny second-firm select, insert, up
   await assert.rejects(query(own, "DELETE FROM app.v2_stock_delivery WHERE job_id=$1", [jobId]), { code: "42501" });
   assert.equal((await runtime.query(select, [DEMO_TENANT_ID, jobId])).rowCount, 0);
 });
+
+test("V2-E3 retains actual receipts through note edits and never counts delivered tiles as replacement flooring", async () => {
+  const { stock, owner, line, tilingId, lineKey, forecast } = await stockSetup();
+  await line(tilingId, lineKey, { setAsidePacks: "0" });
+  const add = forecast();
+  await stock.execute(jobId, add);
+  await stock.execute(jobId, { version: add.version, action: "record_receipt",
+    commandId: randomUUID(), deliveryId: add.deliveryId, expectedVersion: 1, packsReceived: "4" });
+  const read = () => stock.read(jobId, stockQuery);
+  const position = view => view.lines.find(item => item.scopeItemId === tilingId && item.lineKey === lineKey);
+  await line(tilingId, lineKey, { notes: "Fictional rear entrance" });
+  assert.deepEqual(pick(position(await read()), ["receivedPacks", "availablePacks", "shortPacks"]), {
+    receivedPacks: "4", availablePacks: "4", shortPacks: "2" });
+  await line(tilingId, lineKey, { packSize: { quantity: "1.00", unit: "m²" }, supplier: "Fictional yard" });
+  assert.equal(position(await read()).availablePacks, "4", "equivalent packs still count");
+  await line(tilingId, lineKey, { setAsidePacks: "2" });
+  assert.equal(position(await read()).availablePacks, "6");
+  await line(tilingId, lineKey, { product: "Fictional engineered oak flooring", setAsidePacks: "2" });
+  const after = await read();
+  assert.equal(after.deliveries.find(item => item.deliveryId === add.deliveryId).packsReceived, "4");
+  assert.deepEqual(pick(position(after), ["product", "receivedPacks", "availablePacks", "shortPacks"]), {
+    product: "Fictional engineered oak flooring", receivedPacks: "0", availablePacks: "0", shortPacks: "6" });
+  await line(tilingId, lineKey, { product: "Fictional engineered oak flooring", notes: "Fictional note", setAsidePacks: "2" });
+  assert.equal(position(await read()).setAsidePacks, "0", "a full-form echo cannot reclaim tile stock");
+  await line(tilingId, lineKey, { setAsidePacks: "2" });
+  assert.equal(position(await read()).availablePacks, "2", "explicit fresh confirmation for oak");
+  const oak = forecast();
+  await stock.execute(jobId, oak);
+  await stock.execute(jobId, { version: oak.version, action: "record_receipt", commandId: randomUUID(),
+    deliveryId: oak.deliveryId, expectedVersion: 1, packsReceived: "3" });
+  assert.equal(position(await read()).availablePacks, "5", "only the oak receipt and confirmed oak packs count");
+  await line(tilingId, lineKey, { packSize: { quantity: "2", unit: "m²" } });
+  const newPack = await read();
+  assert.equal(newPack.deliveries.find(item => item.deliveryId === oak.deliveryId).packsReceived, "3");
+  assert.deepEqual(pick(position(newPack), ["setAsidePacks", "receivedPacks", "requiredPacks", "shortPacks"]), {
+    setAsidePacks: "0", receivedPacks: "0", requiredPacks: "3", shortPacks: "3" });
+  const reloaded = await json(await request(`/api/jobs/${jobId}/stock`, { cookies: owner.cookies }));
+  assert.deepEqual(position(reloaded), position(newPack));
+});
+
+test("V2-E3 counts the declared set-aside after completing an initially partial material line", async () => {
+  const { stock, line, tilingId } = await stockSetup();
+  const key = "partial-" + randomUUID();
+  const position = async () => (await stock.read(jobId, stockQuery)).lines.find(item => item.lineKey === key);
+  await line(tilingId, key, { product: "Fictional tile", setAsidePacks: "4", wastageMultiplier: "1" });
+  assert.equal((await position()).requiredPacks, null);
+  await line(tilingId, key, { packSize: { quantity: "1", unit: "m²" } });
+  assert.deepEqual(pick(await position(), ["setAsidePacks", "receivedPacks", "availablePacks", "shortPacks"]), {
+    setAsidePacks: "4", receivedPacks: "0", availablePacks: "4", shortPacks: "2" });
+});
+
+test("V2-E3 retains early receipts through first completion but never across a partial substitution", async () => {
+  const { stock, line, tilingId, forecast } = await stockSetup();
+  const lineKey = "early-receipt-" + randomUUID();
+  const edit = changes => line(tilingId, lineKey, changes);
+  async function receive(count) {
+    const add = { ...forecast(), lineKey, packsExpected: count };
+    await stock.execute(jobId, add);
+    await stock.execute(jobId, { version: add.version, action: "record_receipt", commandId: randomUUID(),
+      deliveryId: add.deliveryId, expectedVersion: 1, packsReceived: count });
+    return add.deliveryId;
+  }
+  const read = () => stock.read(jobId, stockQuery);
+  const position = async () => (await read()).lines.find(item => item.lineKey === lineKey);
+  await edit({ notes: "Awaiting product" });
+  const unknown = await receive("1");
+  await edit({ product: "Fictional tile", wastageMultiplier: "1", setAsidePacks: "0" });
+  const tiles = await receive("4");
+  assert.equal((await position()).receivedPacks, "0");
+  const packSize = { quantity: "1", unit: "m²" };
+  await edit({ packSize });
+  assert.equal((await position()).receivedPacks, "4", "only the named tile receipt counts after completion");
+  await edit({ packSize: null });
+  const provisional = await receive("2");
+  await edit({ product: "Fictional oak" });
+  const oak = await receive("3");
+  await edit({ packSize });
+  const final = await read();
+  assert.equal(final.lines.find(item => item.lineKey === lineKey).receivedPacks, "3");
+  for (const [id, count] of [[unknown, "1"], [tiles, "4"], [provisional, "2"], [oak, "3"]]) {
+    assert.equal(final.deliveries.find(item => item.deliveryId === id).packsReceived, count);
+  }
+});

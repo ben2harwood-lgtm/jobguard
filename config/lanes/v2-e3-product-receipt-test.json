@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-e3-product-receipt-test": {
+      "branches": [
+        "codex/sandbox/v2-e3-product-receipt-test"
+      ],
+      "note": "V2-E3 stock read correction and synthetic acceptance on the direct parent #932. Existing immutable revisions and receipts only.",
+      "allow": [
+        "packages/db/src/v2-stock-material-basis.ts",
+        "packages/db/src/v2-stock-repository.ts",
+        "packages/db/test/v2-stock-material-basis.test.ts",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
