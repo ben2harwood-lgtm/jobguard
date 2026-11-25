@@ -1,23 +1,36 @@
-// Run against the checked V2 seed, using either web or HTTPS phone-mode origin.
+// Run against the checked V2 seed on the launcher's HTTPS phone-mode origin.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { chromium, expect } from "../../apps/web/node_modules/@playwright/test/index.mjs";
-const origin = process.env.V2_TEST_ORIGIN;
-assert.ok(origin, "Set V2_TEST_ORIGIN to the V2 launcher's web or HTTPS phone origin");
-let browser, ownerState;
+// Copied from V2-BH1 at 3e9fad3b (not merged); only the inline DB import path differs.
+function v2Origin() {
+  const origin = process.env.V2_TEST_ORIGIN;
+  assert.ok(origin, "V2_TEST_ORIGIN must name the launcher's HTTPS phone origin");
+  const url = new URL(origin);
+  assert.equal(url.protocol, "https:", "V2_TEST_ORIGIN must use HTTPS for Secure session cookies");
+  return url.origin;
+}
+
+const origin = v2Origin();
+let browser, ownerState, jobId;
 before(async () => {
   browser = await chromium.launch({ executablePath: process.env.V2_TEST_CHROMIUM });
-  const owner = await browser.newContext({ ignoreHTTPSErrors: true });
+  const setup = await browser.newContext({ ignoreHTTPSErrors: true });
   try {
-    await signIn(owner);
-    ownerState = await owner.storageState();
-  } finally { await owner.close(); }
+    // Next's own dev-tools action disables the indicator before any pages open.
+    // This is a dev-launcher proof; do not hide DOM nodes or change app config.
+    const disabled = await setup.request.post(`${origin}/__nextjs_disable_dev_indicator`);
+    assert.equal(disabled.status(), 204, "The test stack must disable the Next.js dev indicator");
+  } finally { await setup.close(); }
+  const session = await signInOnce(browser);
+  ownerState = session.storageState;
+  jobId = session.jobId;
 });
 after(async () => browser?.close());
-// Browser fetch preserves secure local-session cookies on loopback HTTP too.
+// Browser fetch uses the saved Secure session on the HTTPS phone origin.
 const requestPages = new WeakMap();
 async function request(context, path, data) {
   let page = requestPages.get(context);
@@ -50,32 +63,67 @@ async function screenshot(page, state, width) {
   await mkdir(process.env.V2_TEST_SCREENSHOTS, { recursive: true });
   await page.screenshot({ path: join(process.env.V2_TEST_SCREENSHOTS, `f6-${state}-${width}.png`), fullPage: true });
 }
-async function signIn(context) {
-  // Use the browser's sign-in and practice-entry path, including secure-cookie
-  // handling. APIRequestContext does not send secure cookies over local HTTP.
-  const page = await context.newPage();
+// K5A #929 at 7560b597: one page sign-in, then enter practice with its CSRF token.
+async function signInOnce(browser, { jobTitle = "Occupied-home kitchen splashback and hall decorating" } = {}) {
+  const origin = v2Origin();
+  let context;
+  let step = "create context";
   try {
-    await page.goto(origin + "/sign-in");
+    context = await browser.newContext({ ignoreHTTPSErrors: true });
+    const page = await context.newPage();
+    step = "open sign-in";
+    await page.goto(`${origin}/sign-in`);
+    step = "request code";
     await page.getByLabel("Fictional email address").fill("builder@jobguard-v2.invalid");
     await page.getByLabel("What do you want to do?").selectOption("signin");
-    await page.getByRole("button", { name: "Request code", exact: true }).click();
+    await page.getByRole("button", { name: "Request code" }).click();
     const code = page.getByTestId("fixture-code");
     await expect(code).toHaveText(/^[0-9]{8}$/u);
     await page.getByLabel("Eight-digit code").fill(await code.textContent());
-    await page.getByRole("button", { name: "Verify code", exact: true }).click();
-    await expect(page).toHaveURL(origin + "/practice-company");
-    assert.ok((await context.cookies()).some(cookie => cookie.name === "jg_session"));
-  } finally { await page.close(); }
+    step = "verify code";
+    const [verified] = await Promise.all([
+      page.waitForResponse(`${origin}/api/auth/verify`),
+      page.getByRole("button", { name: "Verify code" }).click(),
+    ]);
+    assert.equal(verified.status(), 200, "Code verification must succeed");
+    const { csrfToken } = await verified.json();
+    assert.ok(typeof csrfToken === "string" && csrfToken, "Verification must return a CSRF token");
+    step = "finish sign-in navigation";
+    await page.waitForURL(url => !url.pathname.startsWith("/sign-in"));
+    await page.waitForLoadState("load");
+    step = "enter practice";
+    await page.evaluate(async token => {
+      const response = await fetch("/api/auth/practice", {
+        method: "POST", headers: { "content-type": "application/json", "x-csrf-token": token },
+        body: JSON.stringify({ version: "linked-practice-company.v1", action: "enter" }),
+      });
+      if (!response.ok) throw new Error(`practice:${response.status}`);
+    }, csrfToken);
+    step = "find seeded job";
+    const { DEMO_TENANT_ID } = await import("../../packages/db/dist/index.js");
+    const jobs = await page.evaluate(async tenantId => {
+      const response = await fetch(`/api/jobs?tenantId=${tenantId}`);
+      if (!response.ok) throw new Error(`jobs:${response.status}`);
+      return (await response.json()).jobs;
+    }, DEMO_TENANT_ID);
+    const jobId = jobs.find(job => job.title.includes(jobTitle))?.id;
+    assert.ok(jobId, `The seeded job must appear in Jobs: ${jobTitle}`);
+    step = "save session";
+    return { origin, storageState: await context.storageState(), csrfToken, jobId };
+  } catch (cause) {
+    const error = new Error(`V2 browser session failed at ${step}`, { cause });
+    error.name = "V2BrowserSessionError";
+    throw error;
+  } finally {
+    await context?.close();
+  }
 }
+
 for (const width of [360, 1280]) {
   test(`V2-F6 customer agreement without photos at ${width}px, including local catcher and builder approval`, { timeout: 120000 }, async () => {
     const owner = await browser.newContext({ viewport: { width, height: 800 }, ignoreHTTPSErrors: true, storageState: ownerState });
     const customer = await browser.newContext({ viewport: { width, height: 800 }, ignoreHTTPSErrors: true });
     try {
-      const jobs = await get(owner, "/api/jobs?tenantId=11111111-1111-4111-8111-111111111111");
-      const job = jobs.jobs.find(job => /Occupied-home kitchen splashback and hall decorating/u.test(job.title));
-      assert.ok(job, "Run the checked V2 fictional job seed first");
-      const jobId = job.id;
       await post(owner, `/api/jobs/${jobId}/quotes/activation`, { version: "practice-activation-command.v1", commandId: randomUUID(), scenario: "no_charge" });
       const description = `F6 browser splashback ${width} ${randomUUID()}`;
       const privateNote = `Builder-only note ${randomUUID()}`;
@@ -94,25 +142,26 @@ for (const width of [360, 1280]) {
       assert.ok(link);
       const customerPage = await customer.newPage(), foreign = [];
       customerPage.on("request", req => { if (new URL(req.url()).origin !== new URL(origin).origin) foreign.push(req.url()); });
+      const main = customerPage.getByRole("main");
       await customerPage.goto(origin + link);
-      await expect(customerPage.getByRole("heading", { name: description })).toBeVisible();
-      await expect(customerPage.getByText("£125.00", { exact: true })).toBeVisible();
-      await expect(customerPage.getByText(/margin|hidden finding|other job/iu)).toHaveCount(0);
-      await expect(customerPage.getByText(privateNote, { exact: false })).toHaveCount(0);
-      await expect(customerPage.locator("main strong")).toHaveText(["£125.00"]);
+      await expect(main.getByRole("heading", { name: description })).toBeVisible();
+      await expect(main.getByText("£125.00", { exact: true })).toBeVisible();
+      await expect(main.getByText(/margin|hidden finding|other job/iu)).toHaveCount(0);
+      await expect(main.getByText(privateNote, { exact: false })).toHaveCount(0);
+      await expect(main.locator("strong")).toHaveText(["£125.00"]);
       assert.ok(await customerPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
-      await expect(customerPage.getByRole("heading", { level: 2 })).toHaveCount(1);
-      await expect(customerPage.getByRole("img")).toHaveCount(0);
-      await expect(customerPage.getByText("Variation version 1", { exact: true })).toBeVisible();
+      await expect(main.getByRole("heading", { level: 2 })).toHaveCount(1);
+      await expect(main.getByRole("img")).toHaveCount(0);
+      await expect(main.getByText("Variation version 1", { exact: true })).toBeVisible();
       const customerView = await get(customer, link.replace("/customer/change/", "/api/v2/extra-links/"));
       assert.deepEqual(customerView.photoIds, []);
       assert.deepEqual(Object.keys(customerView).sort(), ["version", "environment", "jobId", "revisionId", "variationVersion", "amount", "description", "photoIds", "expectedVersion", "agreedAt"].sort());
       await screenshot(customerPage, "review", width);
-      await customerPage.getByLabel("Your name").fill("Fictional customer");
-      await customerPage.getByRole("button", { name: "I agree", exact: true }).click();
-      await expect(customerPage.getByRole("status")).toContainText("Agreement recorded");
+      await main.getByLabel("Your name").fill("Fictional customer");
+      await main.getByRole("button", { name: "I agree", exact: true }).click();
+      await expect(main.getByRole("status")).toContainText("Agreement recorded");
       await customerPage.reload();
-      await expect(customerPage.getByRole("status")).toContainText("Agreement recorded");
+      await expect(main.getByRole("status")).toContainText("Agreement recorded");
       assert.ok(await customerPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
       await screenshot(customerPage, "agreed", width);
       const pending = await get(owner, `/api/jobs/${jobId}/variations`);
@@ -136,16 +185,16 @@ for (const width of [360, 1280]) {
       const staleLink = await localInbox.getByRole("link", { name: "Open customer link" }).getAttribute("href");
       assert.ok(staleLink);
       await customerPage.goto(origin + staleLink);
-      await expect(customerPage.getByText("£250.00", { exact: true })).toBeVisible();
-      await customerPage.getByLabel("Your name").fill("Fictional stale customer");
+      await expect(main.getByText("£250.00", { exact: true })).toBeVisible();
+      await main.getByLabel("Your name").fill("Fictional stale customer");
       const newRevision = randomUUID();
       await post(owner, `/api/jobs/${jobId}/variations`, { version: "variation-command.v1", action: "revise",
         variationId: staleId, revisionId: newRevision, expectedRevisionId: oldRevision,
         description: staleDescription, price: { quantity: "1", unit: "item", unitRatePence: 35000, direction: "addition" } });
-      await customerPage.getByRole("button", { name: "I agree", exact: true }).click();
-      await expect(customerPage.getByRole("alert")).toHaveText("Agreement refused. Ask the builder for a fresh link.");
-      await expect(customerPage.getByRole("status")).toHaveCount(0);
-      await expect(customerPage.getByText("£350.00", { exact: true })).toHaveCount(0);
+      await main.getByRole("button", { name: "I agree", exact: true }).click();
+      await expect(main.getByRole("alert")).toHaveText("Agreement refused. Ask the builder for a fresh link.");
+      await expect(main.getByRole("status")).toHaveCount(0);
+      await expect(main.getByText("£350.00", { exact: true })).toHaveCount(0);
       await screenshot(customerPage, "stale-refused", width);
       const saved = await get(owner, `/api/jobs/${jobId}/extra-links`);
       const staleLinks = saved.links.filter(l => l.variationId === staleId);
