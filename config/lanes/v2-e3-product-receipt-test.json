@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-e3-product-receipt-test": {
+      "branches": [
+        "codex/sandbox/v2-e3-product-receipt-test"
+      ],
+      "note": "T1 synthetic E3 stock acceptance regression on the direct parent #932.",
+      "allow": [
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

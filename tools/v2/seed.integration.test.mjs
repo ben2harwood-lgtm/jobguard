@@ -1469,3 +1469,22 @@ test("V2-E3 FORCE RLS and runtime privileges deny second-firm select, insert, up
   await assert.rejects(query(own, "DELETE FROM app.v2_stock_delivery WHERE job_id=$1", [jobId]), { code: "42501" });
   assert.equal((await runtime.query(select, [DEMO_TENANT_ID, jobId])).rowCount, 0);
 });
+
+test("V2-E3 retains actual receipts through note edits and never counts delivered tiles as replacement flooring", async () => {
+  const { stock, line, tilingId, lineKey, forecast } = await stockSetup();
+  await line(tilingId, lineKey, { setAsidePacks: "0" });
+  const add = forecast();
+  await stock.execute(jobId, add);
+  await stock.execute(jobId, { version: add.version, action: "record_receipt",
+    commandId: randomUUID(), deliveryId: add.deliveryId, expectedVersion: 1, packsReceived: "4" });
+  const read = () => stock.read(jobId, stockQuery);
+  const position = view => view.lines.find(item => item.scopeItemId === tilingId && item.lineKey === lineKey);
+  await line(tilingId, lineKey, { notes: "Fictional rear entrance" });
+  assert.deepEqual(pick(position(await read()), ["receivedPacks", "availablePacks", "shortPacks"]), {
+    receivedPacks: "4", availablePacks: "4", shortPacks: "2" });
+  await line(tilingId, lineKey, { product: "Fictional engineered oak flooring" });
+  const after = await read();
+  assert.equal(after.deliveries.find(item => item.deliveryId === add.deliveryId).packsReceived, "4");
+  assert.deepEqual(pick(position(after), ["product", "receivedPacks", "availablePacks", "shortPacks"]), {
+    product: "Fictional engineered oak flooring", receivedPacks: "0", availablePacks: "0", shortPacks: "6" });
+});
