@@ -42,8 +42,8 @@ export const assessments = {
     reason: "Bound tenant only; 0749 lines 87-108; success discloses live status and acquires the job lock.",
   },
   "app.transition_scope_progress": {
-    classification: "gap", proof: "FL-F progress", jobRows: "scope_progress",
-    reason: "Bound tenant only; 0749 lines 9-30; updates by tenant/job/scope with no firm comparison.",
+    classification: "refused as probed; other paths unclear", proof: "FL-F progress (observed refusal)", jobRows: "scope_progress",
+    reason: "Body checks the tenant only (0749 lines 9-30), but the scope_progress write guard (0765) runs the work-state authorization (practice-session job ownership). Live: firm B refused 42501 WORK_STATE_FORBIDDEN, row unchanged. Not a safety proof for other callers or paths.",
   },
   "app.job_saved_firm_name": {
     classification: "safe", proof: "source inspection: 0757 lines 46-71", jobRows: "job",

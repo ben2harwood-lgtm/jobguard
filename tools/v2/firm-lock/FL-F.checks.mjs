@@ -97,7 +97,8 @@ export function register(helpers) {
     await assert.rejects(query(firmB, "SELECT app.require_watchdog_live($1)", [progress.job_id]), refused(t));
   });
 
-  test.todo("FL-F progress: firm B must not transition firm A's progress (tenant-only definer; fix packet required)", async t => {
+  // Observed refusal on the live run: the 0765 scope_progress write guard's work-state authorization.
+  test("FL-F progress: firm B is refused when transitioning firm A's progress, and the row is unchanged", async t => {
     const { firmA, firmB, progress } = await targets();
     try {
       await assert.rejects(transition(firmB, progress), refused(t));
