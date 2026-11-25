@@ -1519,3 +1519,34 @@ test("V2-E3 counts the declared set-aside after completing an initially partial 
   assert.deepEqual(pick(await position(), ["setAsidePacks", "receivedPacks", "availablePacks", "shortPacks"]), {
     setAsidePacks: "4", receivedPacks: "0", availablePacks: "4", shortPacks: "2" });
 });
+
+test("D3 enquiries deduct only stock confirmed for the current product and pack", async () => {
+  const { materials, tilingId, measure, line, generate } = await materialsSetup();
+  await measure(tilingId, "6", "m²");
+  const key = "enquiry-" + randomUUID();
+  const edit = changes => line(tilingId, key, changes);
+  const read = async () => (await materials.read(jobId, materialsQuery)).lines.find(item => item.lineKey === key);
+  await edit({ product: "Fictional ceramic tile", supplier: "Fictional merchant", neededBy: "2026-12-07",
+    notes: "Keep dry", wastageMultiplier: "1", setAsidePacks: "4" });
+  assert.equal((await read()).calculation.status, "needs_input");
+  await edit({ packSize: { quantity: "1", unit: "m²" } });
+  const first = await generate();
+  assert.equal(enquiryLine(first, key).neededPacks, "2");
+  await edit({ product: "Fictional oak", setAsidePacks: "4", packsOverride: "7" });
+  const replaced = await read();
+  assert.deepEqual([replaced.setAsidePacks, replaced.calculation.calculatedPacks,
+    replaced.calculation.neededPacks, replaced.calculation.packsClash], ["0", "6", "7", false]);
+  assert.equal(replaced.notes, "Keep dry");
+  assert.equal("stockBasis" in replaced, false);
+  assert.equal((await materials.read(jobId, materialsQuery)).enquiry.current, false);
+  assert.equal(enquiryLine(await generate(), key).neededPacks, "7");
+  await edit({ notes: "Still dry", setAsidePacks: "4", packsOverride: null });
+  assert.equal(enquiryLine(await generate(), key).neededPacks, "6");
+  await edit({ setAsidePacks: "4" });
+  assert.equal(enquiryLine(await generate(), key).neededPacks, "2");
+  await edit({ packSize: { quantity: "1.00", unit: "m²" } });
+  assert.equal((await read()).setAsidePacks, "4");
+  await edit({ packSize: { quantity: "2", unit: "m²" } });
+  const last = enquiryLine(await generate(), key);
+  assert.deepEqual([last.setAsidePacksUsed, last.calculatedPacks, last.neededPacks], ["0", "3", "3"]);
+});
