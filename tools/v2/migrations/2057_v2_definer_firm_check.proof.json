@@ -1,0 +1,12 @@
+{
+  "packet": "V2-FL-FX (firm check inside two definers FL-F found leaking)",
+  "migration": "2057_v2_definer_firm_check.sql",
+  "database": "jobguard_v2_local",
+  "routines": [
+    "app.require_current_job_parties(uuid,uuid)",
+    "app.require_watchdog_live(uuid)"
+  ],
+  "change": "job lookup also applies 2001's app.job firm rule; another firm's job reads as missing",
+  "ownerGrantsSettings": "unchanged",
+  "tests": "tools/v2/firm-lock/FL-FX.checks.mjs via tools/v2/seed.integration.test.mjs"
+}
