@@ -15,6 +15,47 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 - **Back under the allowance:** close the open proposal with the builder's `action: "reject"`. Never send `"approve"`.
 - If the builder can't reject their own proposal on this base, stop and report.
 
+## Writing the draft safely without touching main's variation code (planner decision, 25 Nov 01:00 UK, E9's last round)
+The variation command is main's live money path. **Do not extract, refactor or edit** `apps/api/src/variation/variation.application.ts` or `packages/db/src/variation-repository.ts`. E9 instead relies on what those files already guarantee, which the planner checked on v2/main @ bade747e:
+- `propose` → `logBuilderExtra` claims a `command_receipt` with `commandId = proposalId`. An exact retry replays, and a retry with the same id but different content refuses (`COMMAND_CONFLICT`).
+- `reject` is idempotent on `rejectionId`: it locks the variation row, returns the prior rejection, and uses `ON CONFLICT DO NOTHING`.
+- `approve` needs the exact current priced revision, and a rejected variation can't be approved.
+
+**Design.**
+1. **Deterministic ids.** Derive them with UUID v5 from a fixed E9 namespace:
+   - `proposalId = v5(tenant, choice id, choice version, "excess")`
+   - `revisionId = v5(proposalId, "price")`
+   - `rejectionId = v5(proposalId, "superseded")`
+
+   The same choice version always produces the same draft. A retry replays and never creates a second one.
+2. **Intent first.** E9's own transaction saves the choice version plus an intent row `(choice version, action propose|withdraw, variation id, state pending)` and its audit event, then commits. Only then does it call the variation command. A second E9 transaction marks the intent `done`.
+3. **Reconcile on every read and command.** Any `pending` intent is finished before anything else:
+   - variation exists and matches → mark the intent done;
+   - otherwise → call the command again with the same ids.
+
+   Nothing is orphaned and nothing is duplicated.
+4. **Stale excess.** When a choice changes, or drops back to equal or under:
+   - **Withdraw first.** E9 withdraws the old draft (`reject` with its fixed `rejectionId` on the current revision) **before** it commits the new choice version as current. An old excess therefore can't stay approvable.
+   - **If the builder already approved the old draft,** the reject refuses. E9 then records the new choice and shows "Approved extra no longer matches this choice: raise a credit if needed". It never changes an approved variation.
+   - **Then propose.** A new excess gets a new draft from the new version's ids.
+5. **Reason code.** Main's reject writes the fixed reason `customer_did_not_approve`. E9's intent row keeps the true reason, `superseded_by_choice_change`, linked to the rejection id, and the tracker shows E9's reason. This is a question for Astra (below). It is not a reason to edit main.
+
+**Tests (seed suite, real PostgreSQL).** Force a failure at each seam:
+- after the intent commits;
+- after propose;
+- before the intent is marked done.
+
+Each must end, after a retry or read, with exactly one variation, one receipt and one audit event per step. Also test:
+- over → equal after a draft exists: the draft is rejected and can't be approved;
+- the builder approves, then the choice changes: the approval stands, the warning shows, and there is no second draft;
+- an id clash with different content refuses;
+- the same choice version proposed twice concurrently gives one variation;
+- second-firm isolation.
+
+**Lane:** E9's lane file must **not** list the two variation files above. If the design can't be met without changing them, stop and report.
+
+**Planner note for Astra (RED plan check, with E9's verdict):** Is main's fixed reject reason acceptable for a draft withdrawn by a choice change, given that E9 records the true reason? The alternative, a reason parameter on main's reject, would be its own RED packet and is not part of E9.
+
 ## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
 **One mount is allowed**, in `apps/web/app/(designed)/jobs/[id]/money/page.tsx` only: one import line plus one element, rendered only when `process.env.JOBGUARD_LOCAL_V2 === "1"`. Add that file to your lane file with the note `"mount only, owned by main (live Money tab)"`. Change nothing else in that file. The builder's choices and allowances section goes in a new component file you own. No other screen file may be touched. This overrides any other line in this packet or brief about editing screen files.
 
