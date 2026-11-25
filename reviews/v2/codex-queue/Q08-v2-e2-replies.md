@@ -96,6 +96,17 @@ The table follows the usual rules:
 - **Boundaries:** a non-`.invalid` email is refused; second-firm isolation for the new table; the audit payload has no email.
 - **Seed:** recipients are created through the command, never parsed from capture text.
 
+## Plan-check conditions (RED plan check, frm-management-layer#3 comment 7163003823, 25 Nov 12:53Z; verdict GO WITH CONDITIONS; folded in by planner 13:20 UK; these override anything above)
+A separate Claude thread did this check in place of Astra's, on Ben's word to the coordinator. Astra may still object there. E2 stays parked until Ben grants its extra round.
+1. **Check twice.** Validate the binding id plus the customer revision (or the `v2_reply_recipient` row) when the reply is recorded, and again when the builder applies it. If either check fails, the reply is out of date. Pin `tenant_id` and `job_id` in the same row.
+2. **Practice only.** Keep "Recorded by you". The `.invalid` rule is a database CHECK constraint (`contact_email LIKE '%.invalid'`), not only zod. The command refuses outside V2 (`current_database()='jobguard_v2_local'`). Real merchant and crew contacts are a later RED packet.
+3. **No-sign-in write.** The reply write goes only through one narrow SECURITY DEFINER token function, modelled on F6's `app.v2_f6_agree` (#923, migration 2018 L121-142: owner jobguard_migration, REVOKE ALL FROM PUBLIC, grant only to the runtime role), using the customer job link's anonymous check (rule 16a).
+4. **Immutable replies.** No runtime UPDATE or DELETE on recorded replies or recipient rows (rule 16b), with an executed test that both are refused.
+5. **One pinned recipient.** Each request stores one `v2_reply_recipient` row id. A newer correction row never re-points an open request; it only makes the old request out of date.
+6. **Merchant name enforced by the database.** When `merchant_id` is set, use a composite foreign key `(tenant_id, merchant_id, display_name) REFERENCES app.merchant(tenant_id, id, name)`. Planner checked: 0031 already has `UNIQUE(tenant_id,id,name)`, so no change to main is needed.
+7. **Hash note.** The migration notes say the email hash in the audit payload is a reference, not anonymisation.
+8. **Token.** Single use. Failed attempts are rate-limited, reusing the customer link's existing limiter if one fits, otherwise a per-request attempt counter in the same row. The token never appears in logs, errors or the audit payload. There is a test for each of these.
+
 ## Screen files and mounts (planner, 25 Nov 00:25 UK; copy this wording verbatim into the builder's brief)
 The no-sign-in reply page is a **new route file you own**: `apps/web/app/reply/[token]/page.tsx`, which is V2 only and returns 404 when the flag is off. **One mount is allowed**, in `apps/web/app/(designed)/jobs/[id]/work/page.tsx` only: one import line plus one element, rendered only when `process.env.JOBGUARD_LOCAL_V2 === "1"`. Add that file to your lane file with the note `"mount only, owned by main (live Work tab)"`. Change nothing else in that file. It is used only for the builder's "Replies received: apply?" section, which goes in a new component file you own. This overrides any other line in this packet or brief about editing screen files.
 
