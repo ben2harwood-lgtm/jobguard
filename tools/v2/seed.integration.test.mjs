@@ -1066,7 +1066,8 @@ test("C3C: a task can never be assigned to another firm's crew record, even past
   assert.equal((await read()).version, plan.version, "nothing was recorded");
 });
 
-test("audit-chain: packages/db/src/v2-work-plan-repository.ts#WorkPlanRepository.edit (assigneeRef)", async () => {
+// Covers the assigneeRef path of the edit command (V2-C3C).
+test("audit-chain: packages/db/src/v2-work-plan-repository.ts#WorkPlanRepository.edit", async () => {
   const { draftJob, sessionId, read, edit } = await draftForPlan();
   const { context } = await authenticatePracticeSession(runtime, sessionId);
   const sam = await crewApp(sessionId).record(crewCommand());
