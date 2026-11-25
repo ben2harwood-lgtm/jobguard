@@ -42,7 +42,22 @@
   - An approval whose id isn't in any frozen row's `counted_approval_ids` is treated as arriving **after** every frozen due fact, whatever its `created_at`, so it goes to the stages not yet due.
   - If no stage is left, show "£X approved after the last stage was due. It goes on the final account", as an exact decimal and **ex-VAT** (K5A's labels).
   - Rule 20's job total is unchanged: the accepted quote plus every approved variation.
-- **Date-triggered stages** have no command at the moment they become due, so they aren't frozen here. They keep today's `created_at` ordering. The only race left is an approval transaction that spans UK midnight on the stage date. That's logged to **LATER (P3), owned by K5B**: when an invoice is drafted for a stage, K5B freezes its amount. **Plan-check question:** is that acceptable for practice use?
+- **Date-triggered stages** have no command at the moment they become due, so they aren't frozen here. They keep today's `created_at` ordering. The only race left is an approval transaction that spans UK midnight on the stage date. That's logged to **LATER (P3), owned by K5B**: when an invoice is drafted for a stage, K5B freezes its amount. **Plan-check answer (comment 7167877784): acceptable for practice**, with conditions D1 to D3 below.
+
+## Plan-check conditions (GO WITH CONDITIONS, frm-management-layer#3 comment 7167877784, 25 Nov). All must hold before merge.
+1. **One snapshot per frozen row.** `amount_pence` and `counted_approval_ids` come from the same approval row set, read once and used for both. Never two queries.
+2. **Place approvals by the frozen rows.** Each approval is placed by the first frozen row whose `counted_approval_ids` holds it. Only approvals no frozen row counts use `created_at`. Add a three-stage test where an approval is in row k's set but not row k-1's, and check it lands between due facts k-1 and k.
+3. **The money adds up.** On every read, frozen amounts + not-yet-due amounts + any "approved after the last stage" line = rule 20's job total (accepted quote plus every approved variation, ex-VAT). Assert this in each race test, and cross-check against K10.
+4. **A removed trigger task stays visible.** If a stage's trigger task leaves the effective plan, `recordTaskDone` refuses, and the stage shows "trigger task removed from the plan". Its amount stays in the total. Test it.
+5. **Migration 2046 is limited.** It only drops 2012's FK to `app.v2_work_plan_task` and adds the `quote_line` FK, plus the new table. Grants and policies on `v2_payment_schedule_task_done` stay byte-identical. Same `DO $v2$` wrapper and fence. Test it on a database already holding K5A rows, then run it twice.
+6. **Lock order.** `set` and `recordTaskDone` take the existing per-tenant advisory lock before reading approvals or the effective plan. No new lock order.
+7. **The work-plan extraction changes nothing.** `readEffectivePlan` is the only edit to `v2-work-plan-repository.ts`. The lane file entry says so, and c2/c3's existing tests pass unchanged.
+8. **Audit.** `v2.billing_stage.due_frozen` carries references only (stage index, command id, revision, a hash of the counted ids). One event per frozen row, in the same transaction, none on replay (rule 25).
+
+Date stages:
+- **D1.** A date stage's amount reads "due from <date>; amount fixed when invoiced", never styled like a frozen stage.
+- **D2.** K5B freezes every stage amount (date stages too) in the same transaction it drafts an invoice, and refuses to draft from an unfrozen projection. This is written into the K5B section of Q11.
+- **D3.** Unit test the midnight case: an approval created at 23:59:59 the day before the stage date, read at 00:00:01 and after commit. It documents the known gap.
 
 ## Tests (seed tests in `tools/v2/seed.integration.test.mjs`, plus unit tests for the projection)
 - A stage on a `custom-scope-item` task can be set, triggered and frozen.

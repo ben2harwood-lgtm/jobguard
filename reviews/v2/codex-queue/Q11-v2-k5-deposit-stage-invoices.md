@@ -14,6 +14,9 @@ Rules: `01-RULES.md` (audit chain, catcher only, shared files, no edits to other
 ## Change, 24 Nov 23:25 UK: cut to K5A (payment schedule only)
 Codex stopped correctly. On c3, `apps/api/src/customer-invoice.controller.ts` has no draft route: `POST jobs/:id/customer-invoices` only **issues**, and the practice issue path needs a final-account revision, the Final Check and the full final-account amount. So a deposit or stage invoice can't go through it unchanged. This packet is now **K5A: the payment schedule, with no invoices**. **K5B** (drafting and issuing a stage or deposit invoice) needs a new, properly scoped invoice route on the money path. That's a separate RED packet, it goes to Astra before anyone builds it, and it isn't in tonight's queue.
 
+## K5B condition carried from the K5A-2 plan check (frm-management-layer#3 comment 7167877784, 25 Nov)
+When K5B drafts an invoice for any stage, **including date stages**, it freezes that stage's amount in the **same transaction** as the draft, using K5A-2's `app.v2_payment_stage_due` rules (one approval snapshot for amount and counted ids). It **refuses to draft from an unfrozen projection**. This closes the date-stage midnight race left open by K5A-2. The K5B packet must carry this word for word and test it.
+
 ## Goal (K5A)
 The builder sets a payment split on the accepted quote (for example 30/40/30, or a fixed deposit then stages). JobGuard shows what is due, when and for how much, and flags a stage as "due now" when its trigger happens. Nothing is drafted, issued or sent.
 
