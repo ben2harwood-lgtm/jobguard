@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-e3-product-seed": {
+      "branches": [
+        "codex/sandbox/v2-e3-product-seed"
+      ],
+      "note": "T2 verification-only child of the V2-E3 product receipt repair. Carries the reviewed V2-CI1 seed workflow and matching CI tests without altering product or seed fixtures.",
+      "allow": [
+        ".github/workflows/ci.yml",
+        "tools/ci-workflow.test.mjs"
+      ]
+    }
+  }
+}
