@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { FridayCommand, FridayContent, FridaySnapshot } from "@jobguard/api/workspace";
 import { Card, Head, Note, Shell, Tag } from "../../../designed-ui";
+import { FridayShare } from "./share";
 
 const notice = "Practice sandbox — synthetic data; nothing is sent or charged";
 const empty = { thisWeek: "No work scheduled this week.", nextWeek: "Nothing planned for next week yet." };
@@ -96,6 +97,7 @@ export function FridayUpdateScreen({ jobId }: { jobId: string }) {
           </>}
         </div>
       </Card>}
+      <FridayShare message={message} sentAt={snapshot?.sentAt}/>
       {snapshot && !preview && <>
         {(["thisWeek", "nextWeek"] as const).map(key => <Fragment key={key}><Card title={key === "thisWeek" ? "This week" : "Next week"}>
           <div className="card-body">

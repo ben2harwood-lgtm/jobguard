@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-k1": {
+      "branches": ["codex/sandbox/v2-k1"],
+      "note": "T1. Client-only Friday update sharing. screen.tsx: mount only, owned by K3. No database or server changes.",
+      "allow": [
+        "apps/web/app/(designed)/jobs/[id]/friday-update/screen.tsx",
+        "apps/web/app/(designed)/jobs/[id]/friday-update/share.tsx",
+        "apps/web/app/(designed)/jobs/[id]/friday-update/share-targets.ts",
+        "apps/web/app/(designed)/jobs/[id]/friday-update/share.test.tsx",
+        "apps/web/playwright.v2-k1.config.ts",
+        "apps/web/v2-browser/friday-share.browser.ts"
+      ]
+    }
+  }
+}
