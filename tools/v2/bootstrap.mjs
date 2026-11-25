@@ -65,6 +65,7 @@ try {
   await client.query(readFileSync(new URL("../../packages/db/migrations/2002_v2_work_plan.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2003_v2_work_plan_edits.sql", import.meta.url), "utf8"));
   await client.query(readFileSync(new URL("../../packages/db/migrations/2004_v2_plan_disposition.sql", import.meta.url), "utf8"));
+  await client.query(readFileSync(new URL("../../packages/db/migrations/2020_v2_plan_variation_scope.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
