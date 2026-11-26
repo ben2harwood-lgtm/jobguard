@@ -122,3 +122,18 @@ describe("K5A-2 frozen due stages", () => {
     expect(sum(committed)).toBe(10700);
   });
 });
+
+// V2-K5A-1: origin is not a replay input; extras from builder_logged, final_review and jobguard_catch all count.
+describe("K5A-1 every approved extra counts", () => {
+  it("replays a fact set built from three origins to the full total, a later revision replacing the earlier one", () => {
+    const facts = [due(0),
+      { kind: "extra" as const, variationId: "builder_logged", pence: 700, at: "2026-11-24T13:00:00.000Z" },
+      { kind: "extra" as const, variationId: "final_review", pence: 800, at: "2026-11-24T13:01:00.000Z" },
+      { kind: "extra" as const, variationId: "jobguard_catch", pence: 900, at: "2026-11-24T13:02:00.000Z" },
+      { kind: "extra" as const, variationId: "jobguard_catch", pence: 1500, at: "2026-11-24T13:03:00.000Z" }];
+    const result = replayPaymentSchedule(10000, stages, facts, now);
+    expect(result.extrasSinceSchedule).toBe(3000);
+    expect(result.amounts[0]).toBe(3000);
+    expect(result.amounts.reduce((a, b) => a + b, 0) + result.unscheduledExtras).toBe(13000);
+  });
+});

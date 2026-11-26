@@ -1565,6 +1565,116 @@ test("K5A-2 frozen rows: second firm can't read or write, runtime can't update o
   assert.deepEqual(await catalog(), first, "2046 reruns without changing saved rows, grants, policies or keys");
 });
 
+// V2-K5A-1 (Q51): the schedule counts every approved extra, whatever its origin, the same way job profit does.
+// Test administrator fixture only: give a builder-logged extra another small-builder origin. Origin is NOT NULL
+// and immutable (0053), and the Final Check path that raises jobguard_catch extras is out of scope here.
+async function k5a1SetOrigin(variationId, origin) {
+  const client = await admin.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL session_replication_role = replica");
+    await client.query("UPDATE app.variation SET origin=$2 WHERE id=$1", [variationId, origin]);
+    await client.query("UPDATE app.extra_origin SET kind=$2 WHERE variation_id=$1", [variationId, origin]);
+    await client.query("COMMIT");
+  } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+}
+async function k5a1Propose(app, jobId, unitRatePence) {
+  const proposalId = randomUUID();
+  const proposed = await app.variation.command(jobId, { version: "variation-command.v1", action: "propose", proposalId,
+    scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null, description: "Fictional K5A-1 extra",
+    captureText: "Fictional K5A-1 extra requested", price: { quantity: "1", unit: "item", unitRatePence, direction: "addition" } });
+  return { variationId: proposalId, revisionId: proposed.variations.find(item => item.id === proposalId).currentRevisionId };
+}
+const k5a1Approve = (app, jobId, variationId, revisionId) => app.variation.command(jobId, { version: "variation-command.v1",
+  action: "approve", variationId, revisionId, approvalId: randomUUID(),
+  attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+// Straight from variation_approval and variation_revision, as K10 #931 lines 20 to 26 read it.
+async function k5a1LatestApproved(jobId) {
+  const { rows: [row] } = await admin.query(`SELECT coalesce(sum(r.signed_delta_pence),0)::bigint AS pence
+    FROM app.variation_approval a JOIN app.variation_revision r ON (r.tenant_id,r.job_id,r.id)=(a.tenant_id,a.job_id,a.revision_id)
+    WHERE a.job_id=$1 AND NOT EXISTS (SELECT 1 FROM app.variation_approval newer
+      WHERE (newer.tenant_id,newer.job_id,newer.variation_id)=(a.tenant_id,a.job_id,a.variation_id) AND newer.revision>a.revision)`, [jobId]);
+  return BigInt(row.pence);
+}
+
+test("K5A-1 every approved extra moves only stages not yet due, whatever its origin; revisions replace, declines add nothing", async () => {
+  const { app, draftJob, sessionId } = await k5AcceptedJob();
+  await app.quote.activate(draftJob, switchLive());
+  const view = await app.paymentSchedule.read(draftJob);
+  await app.paymentSchedule.set(draftJob, k5Command(view, [{ kind: "acceptance" }, { kind: "date", date: "2099-01-01" }, { kind: "date", date: "2099-02-01" }]));
+  const start = await app.paymentSchedule.read(draftJob);
+  assert.deepEqual(start.schedule.stages.map(stage => stage.status), ["due", "planned", "planned"]);
+  const firstStage = start.schedule.stages[0].amount;
+  const addsUp = async expectedExtrasPence => {
+    const read = await app.paymentSchedule.read(draftJob);
+    assert.equal(read.schedule.stages[0].amount, firstStage, "a stage already due never moves");
+    const staged = read.schedule.stages.reduce((sum, stage) => sum + k5Pence(stage.amount), 0n) + k5Pence(read.schedule.unscheduledExtras);
+    assert.equal(staged, k5Pence(read.acceptedTotal) + expectedExtrasPence, "stages add up to accepted net plus all extras, to the penny");
+    assert.equal(k5Pence(read.schedule.extrasTotal), await k5a1LatestApproved(draftJob));
+    assert.equal(k5Pence(read.schedule.extrasTotal), k5Pence(read.schedule.extrasBeforeSchedule) + k5Pence(read.schedule.extrasSinceSchedule));
+    return read;
+  };
+  let expected = 0n;
+  const extras = [];
+  for (const [index, origin] of ["builder_logged", "final_review", "jobguard_catch"].entries()) {
+    const pence = 700 + index * 100;
+    const extra = await k5a1Propose(app, draftJob, pence);
+    if (origin !== "builder_logged") await k5a1SetOrigin(extra.variationId, origin);
+    await k5a1Approve(app, draftJob, extra.variationId, extra.revisionId);
+    assert.equal((await admin.query("SELECT origin FROM app.variation WHERE id=$1", [extra.variationId])).rows[0].origin, origin);
+    expected += BigInt(pence);
+    await addsUp(expected);
+    extras.push(extra);
+  }
+  // A second approved revision of the jobguard_catch extra replaces the first; it is never added twice.
+  const catchExtra = extras[2], revisionId = randomUUID();
+  await app.variation.command(draftJob, { version: "variation-command.v1", action: "revise", variationId: catchExtra.variationId,
+    revisionId, expectedRevisionId: catchExtra.revisionId, description: "Fictional K5A-1 extra, revised",
+    price: { quantity: "1", unit: "item", unitRatePence: 1500, direction: "addition" } });
+  await addsUp(expected, "an unapproved revision adds nothing");
+  await k5a1Approve(app, draftJob, catchExtra.variationId, revisionId);
+  expected += 1500n - 900n;
+  await addsUp(expected);
+  // A declined extra adds nothing.
+  const declined = await k5a1Propose(app, draftJob, 4200);
+  await app.variation.command(draftJob, { version: "variation-command.v1", action: "reject", variationId: declined.variationId,
+    revisionId: declined.revisionId, rejectionId: randomUUID() });
+  const final = await addsUp(expected);
+  assert.equal(final.schedule.extrasSinceSchedule, "30.00");
+  // Rule 30: the second firm sees no schedule for this firm's job.
+  const outsider = await signIn("second-builder");
+  await assert.rejects(createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).paymentSchedule.read(draftJob), { code: "NOT_FOUND" });
+  assert.ok((await createWorkspaceApplication({ pool: runtime, sessionId }).paymentSchedule.read(draftJob)).schedule, "positive control");
+});
+
+test("K5A-1 frozen stages keep their amount, and count a newly counted origin only if approved before they froze", async () => {
+  const { app, draftJob } = await k5AcceptedJob();
+  await app.quote.activate(draftJob, switchLive());
+  const view = await app.paymentSchedule.read(draftJob), task = view.tasks[0];
+  const set = k5Command(view, [{ kind: "acceptance" }, { kind: "task", scopeItemId: task.scopeItemId, taskKey: task.taskKey }, { kind: "date", date: "2099-02-01" }]);
+  await app.paymentSchedule.set(draftJob, set);
+  const before = await k5a1Propose(app, draftJob, 1100);
+  await k5a1SetOrigin(before.variationId, "jobguard_catch");
+  await k5a1Approve(app, draftJob, before.variationId, before.revisionId);
+  const [counted] = (await admin.query("SELECT id FROM app.variation_approval WHERE variation_id=$1", [before.variationId])).rows;
+  const done = { version: "payment-schedule-task-done.v1", commandId: randomUUID(), jobId: draftJob,
+    quoteRevisionId: view.quoteRevisionId, expectedVersion: 1, scopeItemId: task.scopeItemId, taskKey: task.taskKey };
+  await app.paymentSchedule.set(draftJob, done);
+  const frozen = (await frozenRows(draftJob, done.commandId)).find(row => row.stage_index === 1);
+  assert.ok(frozen, "the task stage froze when it became due");
+  assert.ok(frozen.counted.includes(counted.id), "the catch extra approved before the stage froze is in its counted ids");
+  const at = await app.paymentSchedule.read(draftJob);
+  const after = await k5a1Propose(app, draftJob, 1300);
+  await k5a1SetOrigin(after.variationId, "final_review");
+  await k5a1Approve(app, draftJob, after.variationId, after.revisionId);
+  const [late] = (await admin.query("SELECT id FROM app.variation_approval WHERE variation_id=$1", [after.variationId])).rows;
+  const read = await app.paymentSchedule.read(draftJob);
+  assert.equal(read.schedule.stages[1].amount, at.schedule.stages[1].amount, "a frozen stage is never re-split");
+  assert.equal(k5Pence(read.schedule.stages[2].amount), k5Pence(at.schedule.stages[2].amount) + 1300n);
+  assert.ok(!(await frozenRows(draftJob, done.commandId)).find(row => row.stage_index === 1).counted.includes(late.id));
+  await assertScheduleAddsUp(read);
+});
+
 // V2-C3C (Q28, migration 2027): firm-owned crew records and assigneeRef on work-plan-edit.v1.
 const crewTable = "app.v2_crew_contact";
 const crewCommand = (changes = {}) => ({ version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(),

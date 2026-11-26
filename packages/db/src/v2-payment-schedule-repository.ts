@@ -6,6 +6,7 @@ import { withTenant, type TenantTransaction, type VerifiedTenantContext } from "
 import { initialStageAmounts, paymentScheduleSetV1, paymentScheduleTaskDoneV1, PaymentScheduleError, pounds, projectPaymentSchedule,
   replayPaymentSchedule, type FrozenStage, type PaymentStage, type ScheduleFact } from "./v2-payment-schedule.js";
 import { WorkPlanRepository } from "./v2-work-plan-repository.js";
+import { approvedExtrasTotal } from "./v2-approved-extras.js";
 
 type Saved = { tenant_id: string; command_id: string; quote_revision_id: string; job_id: string; stages: PaymentStage[];
   actor_membership_id: string; recorded_at: Date; recorded_order: string; expected_version: number };
@@ -35,7 +36,9 @@ export class PaymentScheduleRepository {
       // A trigger task that left the effective plan stays visible; its amount stays in the total.
       const stages = projected.stages.map(stage => ({ ...stage, triggerRemoved: stage.status === "planned" &&
         stage.trigger.kind === "task" && !hasTask(tasks, stage.trigger.scopeItemId, stage.trigger.taskKey) }));
-      return { ...base, schedule: { ...projected, stages,
+      // V2-K5A-1 read-only check: the shared rule's total, which equals extras before plus since the schedule.
+      const extrasTotal = pounds(await approvedExtrasTotal(client, context.tenantId, jobId));
+      return { ...base, schedule: { ...projected, stages, extrasTotal,
         version: await this.currentVersion(client, context.tenantId, jobId, saved.quote_revision_id), commandId: saved.command_id, actorMembershipId: saved.actor_membership_id,
         recordedAt: saved.recorded_at.toISOString() } };
     });
@@ -203,8 +206,8 @@ export class PaymentScheduleRepository {
       FROM app.variation_approval a JOIN app.variation_revision r
         ON (r.tenant_id,r.job_id,r.variation_id,r.id,r.revision,r.content_hash,r.signed_delta_pence)
          = (a.tenant_id,a.job_id,a.variation_id,a.revision_id,a.revision,a.content_hash,a.signed_delta_pence)
-      JOIN app.variation v ON (v.tenant_id,v.job_id,v.id)=(a.tenant_id,a.job_id,a.variation_id)
-      WHERE (a.tenant_id,a.job_id)=($1,$2) AND v.origin IN ('builder_logged','final_review')
+      -- V2-K5A-1: every approved extra counts, whatever its origin (including none), as in job profit.
+      WHERE (a.tenant_id,a.job_id)=($1,$2)
       ORDER BY a.created_at,a.variation_id,a.revision,a.id`, [tenantId, jobId])).rows;
     const initial = new Map<string, number>();
     // One read: the frozen amount and its counted ids come from this same row set (plan-check condition 1).

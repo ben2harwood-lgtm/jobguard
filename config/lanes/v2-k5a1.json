@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-k5a1": {
+      "branches": [
+        "claude/project-thread-trp08u-k5a1"
+      ],
+      "note": "RED Q51 V2-K5A-1: the payment schedule counts every approved extra, whatever its origin. No migration. Base claude/project-thread-ek9rje-k5a-2 (K5A-2 #961, stacked on K5 #929). K5A-1 mount, owned by K5 #929: packages/db/src/v2-payment-schedule-repository.ts origin filter removed and read-only extrasTotal only. K5A-1 mount, owned by K5 #929: packages/db/src/v2-payment-schedule.test.ts one appended describe. K5A-1 mount, owned by K5A-2 #961: tools/v2/seed.integration.test.mjs two appended tests and helpers. K5A-1 mount, owned by core index: packages/db/src/index.ts one export line.",
+      "allow": [
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-approved-extras.ts",
+        "packages/db/src/v2-payment-schedule-repository.ts",
+        "packages/db/src/v2-payment-schedule.test.ts",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
