@@ -188,6 +188,35 @@ describe("continuous spoken quotes", () => {
     expect(rows(text)).toEqual([["strip out the old kitchen", "1", "item", null], ["fit six base units", "1", "item", 60000]]);
     expect(result.questions.map(q => q.question.value)).toContain("Check “fit six base units”: six hundred pounds is kept as the price for the whole line, not for each.");
   });
+  // Independent check, 26 Nov: these two read as £50 and £20 before, with no question.
+  it("reads a price each as the unit price for the spoken count", () => {
+    const text = "fit six doors at fifty pounds each";
+    const result = citations(text);
+    expect(rows(text)).toEqual([["fit six doors", "6", "doors", 5000]]);
+    expect(cited(text, result.lines[0]!)).toBe("fifty pounds");
+    const line = result.lines[0]!;
+    expect(Number(line.quantity.value) * line.unitPricePence.value!).toBe(30000);
+  });
+  it("keeps spoken pence with the pounds in one amount", () => {
+    const text = "supply and fit one door at twenty pounds and fifty pence";
+    expect(rows(text)).toEqual([["supply and fit one door", "1", "door", 2050]]);
+    expect(cited(text, citations(text).lines[0]!)).toBe("twenty pounds and fifty pence");
+  });
+  it.each(["supply and fit one door at £20 and 50p", "supply and fit one door at twenty pounds 50", "fit the door at twenty pounds and fifty five hundred pence"])(
+    "leaves a partly read amount open with a price question: %s", text => {
+      const result = citations(text);
+      expect(result.lines.map(line => line.unitPricePence.value)).toEqual([null]);
+      expect(result.questions.map(q => q.question.value)).toContain(`Confirm price: ${text}`);
+    });
+  it("leaves a per-item price open when the count or the price position is not clear", () => {
+    const noCount = citations("strip out the old kitchen hang the doors at fifty pounds each");
+    expect(noCount.lines[1]!.quantity.value).toBeNull();
+    expect(noCount.lines[1]!.unitPricePence.value).toBe(5000);
+    expect(noCount.questions.map(q => q.question.value)).toContain("Confirm how many: “hang the doors” is priced at fifty pounds each.");
+    const middle = citations("strip out the old kitchen fit six doors at fifty pounds each side");
+    expect(middle.lines[1]!.unitPricePence.value).toBeNull();
+    expect(middle.questions.some(q => q.question.value.startsWith("Confirm price: fit six doors"))).toBe(true);
+  });
   it("does not split where the verb belongs to the clause, and refuses malformed spoken amounts", () => {
     expect(rows("paint the walls and then paint the ceiling")).toEqual([["paint the walls", "1", "item", null], ["paint the ceiling", "1", "item", null]]);
     expect(rows("clear the loft ready to fit the boards paint the walls").map(row => row[0])).toEqual(["clear the loft ready to fit the boards", "paint the walls"]);

@@ -45,7 +45,10 @@ const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3,
   ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
 const numberWord = `(?:${Object.keys(numberWords).sort((a, b) => b.length - a.length).join("|")})`;
-const spokenAmount = new RegExp(`(?<![\\p{L}\\p{N}])(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid)(?![\\p{L}\\p{N}])`, "giu");
+const spokenAmount = new RegExp(`(?<![\\p{L}\\p{N}])(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid)(?:\\s+(?:and\\s+)?${numberWord}(?:[\\s-]+${numberWord})?\\s+(?:pence|p))?(?![\\p{L}\\p{N}])`, "giu");
+// Pence left over once every amount is read ("£20 and 50p"), or a number right after an amount ("20 pounds 50").
+const loosePence = new RegExp(`(?:^|[^\\p{L}])(?:pence|p)(?![\\p{L}\\p{N}])|\\d+p(?![\\p{L}\\p{N}])`, "iu");
+const numberAfter = new RegExp(`^\\s+(?:and\\s+)?(?:\\d|${numberWord}(?![\\p{L}]))`, "iu");
 /** Whole pounds from number words, or null when the words are not one well-formed amount. */
 export function spokenPounds(words: string): number | null {
   let totalValue = 0, group = 0, last: "unit" | "ten" | "hundred" | "thousand" | null = null;
@@ -67,8 +70,12 @@ function amounts(value: string): Amount[] {
   const found: Amount[] = [...value.matchAll(priceLiteral)].map(match => ({ text: match[0], index: match.index,
     pence: exactRate(`£${match[0].replace(/£|,|\s*(?:pounds|quid)/giu, "")}`) }));
   for (const match of value.matchAll(spokenAmount)) {
-    const pounds = spokenPounds(match[0]);
-    found.push({ text: match[0], index: match.index, pence: pounds === null ? null : pounds * 100 });
+    // "twenty pounds and fifty pence": the pence words are part of the same amount.
+    const [poundWords, penceWords] = match[0].split(/(?<=pounds|quid)\s+(?:and\s+)?/iu);
+    const pounds = spokenPounds(poundWords!);
+    const pence = penceWords === undefined ? 0 : spokenPounds(penceWords.replace(/\s+(?:pence|p)$/iu, ""));
+    found.push({ text: match[0], index: match.index,
+      pence: pounds === null || pence === null || pence > 99 ? null : pounds * 100 + pence });
   }
   return found.sort((a, b) => a.index - b.index);
 }
@@ -144,14 +151,17 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
   return { chunks: cleaned, notes, title };
 }
 
-function plainPrice(chunk: Cell): (Cell & { pence: number }) | null {
+function plainPrice(chunk: Cell): (Cell & { pence: number; at: number }) | null {
   const matches = amounts(chunk.value);
   if (matches.length !== 1 || matches[0]!.text === chunk.value || matches[0]!.pence === null || total.test(chunk.value)
     || /\b(?:about|around|roughly|approximately)\b/iu.test(chunk.value)) return null;
   const match = matches[0]!;
+  const rest = chunk.value.slice(match.index + match.text.length);
+  // Never keep part of an amount: unread pence or a trailing number leaves the price open for a question.
+  if (loosePence.test(chunk.value.slice(0, match.index) + " " + rest) || numberAfter.test(rest)) return null;
   const originals = amounts(chunk.originalValue ?? chunk.value);
   if (originals.length !== 1 || originals[0]!.text !== match.text) return null;
-  return { value: match.text, start: chunk.start + originals[0]!.index, pence: match.pence! };
+  return { value: match.text, start: chunk.start + originals[0]!.index, pence: match.pence!, at: match.index };
 }
 
 const spokenCount: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
@@ -200,31 +210,38 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
   if (!items.length) {
     const draft = plainDraft(text);
     if (draft.chunks.length && workClause(text.trimStart())) plainTitle = draft.title;
-    // One spoken item with its own price ("supply and fit one door for three hundred pounds") is a priced line too.
+    // One spoken item with a stated price ("supply and fit one door for three hundred pounds") is a line too; an unclear price stays open.
     const single = draft.chunks.length === 1 && workClause(text.trimStart()) && draft.chunks[0]!.start === text.length - text.trimStart().length
-      && plainPrice(draft.chunks[0]!) !== null;
+      && amounts(draft.chunks[0]!.value).length > 0;
     if (draft.chunks.length >= 2 || single) {
       plainTitle = draft.title;
       questions[0] = question("Confirm disposal and waste allowance");
       questions.push(...draft.notes.map(question));
       lines = draft.chunks.map(chunk => {
-        const rate = plainPrice(chunk);
+        const found = plainPrice(chunk);
+        const after = found ? chunk.value.slice(found.at + found.value.length) : "";
+        // "fit six doors at fifty pounds each": the price is for one of the counted items.
+        const each = /^\s+(?:each|apiece|a piece|per\s+[\p{L}-]+)$/iu.test(after);
+        // A per-item word anywhere else is not read, so the price stays open rather than becoming a line price.
+        const rate = found && (each || !/\b(?:each|apiece|per)\b/iu.test(chunk.value)) ? found : null;
         if (!rate && amounts(chunk.value).length) questions.push(question(`Confirm price: ${chunk.value.slice(0, 450)}`));
         const rateValue = rate ? rate.pence : null;
         // A trailing stated price is separate from the work description, and so is the "for" before it.
-        const description = rate && chunk.value.endsWith(rate.value)
-          ? chunk.value.slice(0, -rate.value.length).trimEnd().replace(/\s+(?:for|at)$/iu, "") : chunk.value;
+        const description = rate && (each || !after)
+          ? chunk.value.slice(0, rate.at).trimEnd().replace(/\s+(?:for|at)$/iu, "") : chunk.value;
         const kept = description.slice(0, 500);
         if (kept.length < description.length) questions.push(question(`Confirm the description for ${kept.slice(0, 160)}; it is longer than one description and was shortened`));
         // A spoken count is kept when no price is stated, or when the price is for one. A price for several is a line price.
         const counted = chunk.inferred ? null : spokenQuantity(kept);
-        if (counted && rate && counted.count > 1) {
+        if (each && !counted) questions.push(question(`Confirm how many: “${kept.slice(0, 200)}” is priced at ${rate!.value} each.`));
+        if (counted && rate && !each && counted.count > 1) {
           questions.push(question(`Check “${kept.slice(0, 200)}”: ${rate.value} is kept as the price for the whole line, not for each.`));
         }
-        const keepCount = counted && (!rate || counted.count === 1);
+        const keepCount = counted && (!rate || each || counted.count === 1);
         return {
           description: { value: kept, provenance: chunk.inferred ? { kind: "inferred", note: "Work description assembled around the customer and site clause; check the original source" } : extracted(chunk.start, kept.length) },
           quantity: keepCount ? { value: String(counted.count), provenance: { kind: "inferred", note: `Spoken as “${counted.said}”; confirm before quoting` } }
+            : each ? { value: null, provenance: defaulted("Priced each, but the count was not read; confirm how many") }
             : { value: "1", provenance: defaulted("One item per draft line; confirm before quoting") },
           unit: keepCount ? { value: counted.unit, provenance: extracted(chunk.start + counted.unitStart, counted.unit.length) }
             : { value: "item", provenance: defaulted("Draft work item; confirm before quoting") },
