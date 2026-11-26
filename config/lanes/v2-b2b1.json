@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-b2b1": {
+      "branches": [
+        "claude/project-thread-c2o10m"
+      ],
+      "note": "V2-B2B1 rework 1: encrypted on-device photo store and cleanup contract, synthetic adapter only, camera stays held (practice only, RED).",
+      "allow": [
+        "apps/mobile/src/capture-upload.ts",
+        "apps/mobile/src/encrypted-media.test.ts",
+        "apps/mobile/src/encrypted-media.ts",
+        "apps/mobile/src/lifecycle-contracts.ts"
+      ]
+    }
+  }
+}

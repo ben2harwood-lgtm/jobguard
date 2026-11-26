@@ -250,6 +250,39 @@ function inspectTrain({ cwd, event, branch, base, target, comparison, eventName,
   }
 }
 
+/** A path's full tree entry at a commit (mode, type and object id), or null when the path is absent there. */
+function entryAt(git, revision, file) {
+  const listing = git(["ls-tree", "-z", "--end-of-options", revision, "--", file]).split("\0").filter(Boolean);
+  const match = listing.length === 1 ? /^(\d+ \w+ [0-9a-f]{40})\t/su.exec(listing[0]) : null;
+  return match ? match[1] : null;
+}
+
+/**
+ * The newest main commit this head merged that its base does not have yet, and the main commit the base
+ * already had (prior), or null. Null for main itself, when origin/main is unavailable, or when the head
+ * brings no new main commits.
+ */
+function mergedMainSide(git, branch, base, target) {
+  if (branch === "main" || !base) return null;
+  let main;
+  try { main = git(["rev-parse", "--verify", "-q", "--end-of-options", "refs/remotes/origin/main^{commit}"]).trim(); } catch { return null; }
+  // --all: a commit merged into both main and the base after the sync gives main and the head two best common
+  // ancestors (criss-cross). Only one that the base doesn't already hold can be the merged main side; any ambiguity
+  // means nothing is exempt.
+  const mergeBases = (a, b) => { try { return git(["merge-base", "--all", "--end-of-options", a, b]).split("\n").filter(Boolean); } catch { return []; } };
+  const inFork = (commit, fork) => {
+    try { git(["merge-base", "--is-ancestor", "--end-of-options", commit, fork]); return true; }
+    catch (error) { if (error.status !== 1) throw error; return false; }
+  };
+  const forks = mergeBases(base, target);
+  if (forks.length !== 1) return null;
+  const [fork] = forks;
+  const sides = mergeBases(main, target).filter((commit) => !inFork(commit, fork));
+  if (sides.length !== 1) return null;
+  const [side] = sides, priors = mergeBases(side, fork);
+  return priors.length === 1 ? { side, prior: priors[0] } : null;
+}
+
 export function inspectLane({ cwd = process.cwd(), env = process.env, argv = [], config } = {}) {
   const git = (args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], maxBuffer: 16 * 1024 * 1024 });
   const commit = (ref) => {
@@ -315,12 +348,25 @@ export function inspectLane({ cwd = process.cwd(), env = process.env, argv = [],
   const files = new Set(splitPaths(comparison === "initial-tree"
     ? git(["ls-tree", "-r", "--name-only", "-z", target])
     : git(["diff", "--no-renames", "--name-only", "-z", ...(comparison === "merge-base" ? [`${base}...${target}`] : [base, target]), "--"])));
+  const uncommitted = new Set();
   if (eventName === "local") {
     for (const args of [["diff", "--no-renames", "--name-only", "-z", "--cached", "HEAD", "--"], ["diff", "--no-renames", "--name-only", "-z", "--"], ["ls-files", "--others", "--exclude-standard", "-z"]]) {
-      for (const file of splitPaths(git(args))) files.add(file);
+      for (const file of splitPaths(git(args))) { files.add(file); uncommitted.add(file); }
     }
   }
-  const violations = [...files].filter((file) => !lanePathAllowed(name, lane, file));
+  // V2-SYNC-0: a merge of main into a long-lived base (v2/main) brings main's own files. A committed path whose
+  // blob at the head is exactly main's blob at the merged main commit is main's change, not this lane's.
+  const mainSide = comparison === "merge-base" ? mergedMainSide(git, branch, base, target) : null;
+  // Exempt only when main itself changed the path in the newly merged range (prior -> side), and the head holds
+  // exactly main's entry: same mode, type and object, or the same deletion. Merging an unrelated main commit
+  // never exempts reverting, deleting or re-moding a base-only change.
+  const fromMain = (file) => {
+    if (mainSide === null || uncommitted.has(file)) return false;
+    const theirs = entryAt(git, mainSide.side, file);
+    return theirs !== entryAt(git, mainSide.prior, file) && entryAt(git, target, file) === theirs;
+  };
+  const mergeMainFiles = [...files].filter((file) => !lanePathAllowed(name, lane, file) && fromMain(file));
+  const violations = [...files].filter((file) => !lanePathAllowed(name, lane, file) && !mergeMainFiles.includes(file));
   if (violations.length) throw new Error(`Lane ${name} cannot edit:\n${violations.map((file) => JSON.stringify(file)).join("\n")}`);
   if (comparison !== "initial-tree" && [...files].some((file) => MIGRATION_PATH.test(file))) {
     const scope = ["--", "packages/db/migrations/"];
@@ -329,10 +375,23 @@ export function inspectLane({ cwd = process.cwd(), env = process.env, argv = [],
       for (const file of splitPaths(git(["diff", "--no-renames", "--diff-filter=A", "--name-only", "-z", "--cached", "HEAD", ...scope]))) added.add(file);
       for (const file of splitPaths(git(["ls-files", "--others", "--exclude-standard", "-z", ...scope]))) added.add(file);
     }
-    const order = migrationOrderViolations(splitPaths(git(["ls-tree", "-r", "--name-only", "-z", base, ...scope])), [...added]);
+    // Migrations main already has, byte for byte, keep main's numbers; only this lane's own migrations are ordered,
+    // and none of them may share a number with an imported main migration.
+    const imported = [...added].filter((file) => fromMain(file)), own = [...added].filter((file) => !fromMain(file));
+    const baseMigrations = splitPaths(git(["ls-tree", "-r", "--name-only", "-z", base, ...scope])).filter((file) => MIGRATION_PATH.test(file));
+    const order = migrationOrderViolations(baseMigrations, own);
+    // Imported numbers must also be unique against the base's and the lane's own (the runner refuses repeats).
+    const claimed = new Map([...baseMigrations, ...own].filter((file) => MIGRATION_PATH.test(file)).map((file) => [MIGRATION_PATH.exec(file)[1], file]));
+    const seenImported = new Map();
+    for (const file of imported.filter((path) => MIGRATION_PATH.test(path)).sort()) {
+      const n = MIGRATION_PATH.exec(file)[1], clash = claimed.get(n) ?? seenImported.get(n);
+      if (clash && clash !== file) order.push(`${JSON.stringify(clash)} shares number ${n} with ${JSON.stringify(file)} from main`);
+      seenImported.set(n, file);
+    }
     if (order.length) throw migrationFailure(order);
   }
-  return { lane: name, branch, event: eventName, base, head: target, comparison, files: [...files].sort() };
+  return { lane: name, branch, event: eventName, base, head: target, comparison, files: [...files].sort(),
+    ...(mainSide !== null && { mergeMain: { mainSide: mainSide.side, files: mergeMainFiles.sort() } }) };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
