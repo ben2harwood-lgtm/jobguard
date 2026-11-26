@@ -2372,7 +2372,7 @@ test("PX: the photo lock migration is safe to run twice", async () => {
 // must stay the last test: it signs the cached builder out
 // Later packets append GET routes to builderGetRoutes in test/refusals.mjs.
 test("SX signed-out builder cannot reuse the old real or practice cookies", async t => {
-  assert.ok(sxRoutes?.length >= 9, "all mandatory positive controls must have passed");
+  assert.ok(sxRoutes?.length >= 13, "all mandatory positive controls must have passed");
   await assertSignedOutBuilderRefuses({ request: sxRequest, signIn, routes: sxRoutes,
     record: (route, result) => t.diagnostic(`SX ${route.transport ?? "web"} ${route.path} c: ${result.status} ${result.code}`),
   });

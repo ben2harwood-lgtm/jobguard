@@ -40,6 +40,12 @@ export const builderGetRoutes = [
   { path: "/api/jobs/{jobId}/quotes/acceptance", expect: body => { assert.ok(body.activeAcceptance); assert.equal(body.activeAcceptance.documentId, body.currentDocument.id); } },
   { path: "/jobs/{jobId}", transport: "api", expect: (body, { jobId }) => assert.equal(body.job.id, jobId) },
   { path: "/jobs/{jobId}/fee-illustration", transport: "api", optional: true, expect: body => { assert.equal(body.version, "fee-illustration-response.v1"); assert.ok(body.source); assert.ok(body.result); } },
+  // V2-SX-R (Q33): the real Next V2 routes built before rule 29 (c4 #903, d5a #914, d5b #925). The positive
+  // controls hold for the seeded job in any later state, because the signed-out case re-runs them at the end.
+  { path: "/api/v2-backend/jobs/{jobId}/work-plan", expect: body => { assert.equal(typeof body.version, "number"); assert.ok(Array.isArray(body.tasks)); assert.equal(typeof body.state, "string"); } },
+  { path: "/api/v2-backend/jobs/{jobId}/measurements", expect: body => { assert.ok(Array.isArray(body.items) && body.items.length); assert.ok(body.items.every(item => typeof item.scopeItemId === "string")); } },
+  { path: "/api/v2-backend/jobs/{jobId}/materials", expect: (body, { jobId }) => { assert.equal(body.jobId, jobId); assert.ok(Array.isArray(body.lines)); assert.ok(body.scope.length); } },
+  { path: "/api/v2-backend/jobs/{jobId}/quote-prompts", expect: body => assert.equal(body.version, "v2-quote-prompts.v1") },
 ];
 
 export function bindBuilderRoutes({ jobId, tenantId }) {
