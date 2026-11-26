@@ -1,5 +1,5 @@
 {
-  "migration": "2021_v2_walk_record.sql",
+  "migration": "2028_v2_walk_record.sql",
   "lp0": [],
   "upgrade": [],
   "tenancy": []
