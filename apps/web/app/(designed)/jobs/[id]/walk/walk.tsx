@@ -78,18 +78,22 @@ export function Walk({ jobId }: { jobId: string }) {
     try {
       const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify(command) });
-      if (response.status === 409 && command.action === "record") {
+      if (response.status === 409 && (command.action === "record" || command.action === "file")) {
         const refused: { code?: string } = await response.json().catch(() => ({}));
         if (refused.code === "WALK_VERSION_CONFLICT") {
-          // Another tab or phone took this slot. Retrying can never succeed: reload the walk and put the content back.
+          // Another tab or phone got there first. Retrying can never succeed: reload the walk and drop the stale command.
           const refreshed = await fetch(endpoint, { cache: "no-store" });
           if (refreshed.ok) setSessions((await refreshed.json() as { sessions: SessionView[] }).sessions);
+          setPending(null);
+          if (command.action === "file") {
+            setProblem("Another device filed this photo first. Check its room, then file it again if it is wrong.");
+            return;
+          }
           const restored = restoreEntry(command.entry);
           if (restored?.room !== undefined) setRoom(restored.room);
           if (restored?.note !== undefined) setNote(restored.note);
           if (restored?.quantity !== undefined) setQuantity(restored.quantity);
           if (restored?.unit !== undefined) setUnit(restored.unit);
-          setPending(null);
           setProblem("Another device saved to this walk first. Check the walk order, then add your entry again.");
           return;
         }
