@@ -26,8 +26,11 @@ export async function GET(_request: Request, { params }: Route) {
   try {
     const { id } = await params;
     const { workPlan, quote } = await workspaceApplication();
-    const { state, tasks, unplanned, quoteRevisionId, version, changes } =
+    const { state, tasks, unplanned, quoteRevisionId, version, changes, scopeItems } =
       await workPlan.read(id, { version: "work-plan-query.v1" });
+    // An edit to an approved extra must name the approved revision this plan was read from.
+    const variationRevisions = Object.fromEntries(scopeItems.flatMap(item =>
+      item.variationRevisionId ? [[item.scopeItemId, item.variationRevisionId]] : []));
     let acceptanceCancelled = false;
     if (state === "accepted") {
       const acceptance = await quote.acceptanceView(id);
@@ -35,7 +38,7 @@ export async function GET(_request: Request, { params }: Route) {
       acceptanceCancelled = !acceptance.activeAcceptance && lastAcceptance?.kind === "acceptance_cancelled";
     }
     return NextResponse.json({ state, tasks, unplanned: unplanned.map(item => ({ ...item, key: customWorkPlanTaskKey })),
-      quoteRevisionId, version, changes, acceptanceCancelled },
+      quoteRevisionId, version, changes, acceptanceCancelled, variationRevisions },
       { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return planFailure(error);

@@ -1,23 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, Empty, Note, Tag, shortDate } from "../../../designed-ui";
 import { JOB_SAVED_EVENT } from "../../../../ui/job-page-fetch";
 
 // The work-plan route's JSON, as this card reads it. Client code keeps server packages out.
 type Task = {
   key: string; scopeItemId: string; title: string; trade: string; durationMinutes: number; position: number;
-  scheduledDate?: string | null; assignee?: string | null; needsReview?: true;
+  scheduledDate?: string | null; assignee?: string | null; assigneeRef?: string | null; needsReview?: true;
 };
 type PlanView = {
   state: "draft" | "accepted" | "live"; tasks: Task[]; quoteRevisionId: string; version: number;
   changes: { added: Task[]; changed: { before: Task; after: Task }[]; removed: Task[] };
   acceptanceCancelled: boolean;
   unplanned: { scopeItemId: string; title: string; key: string }[];
+  // Approved extras: the approved variation revision each scope item was planned from.
+  variationRevisions?: Record<string, string>;
 };
 type TaskChanges = Partial<Pick<Task, "position" | "durationMinutes" | "trade" | "scheduledDate" | "assignee">>;
 type EditableTask = Pick<Task, "title" | "key" | "scopeItemId"> &
-  Partial<Pick<Task, "trade" | "position" | "durationMinutes" | "scheduledDate" | "assignee">>;
+  Partial<Pick<Task, "trade" | "position" | "durationMinutes" | "scheduledDate" | "assignee" | "assigneeRef">>;
 type Problem = { message: string; reload?: boolean };
 
 class PlanRequestError extends Error {}
@@ -34,22 +36,32 @@ async function requestPlan<T>(path: string, body?: unknown): Promise<T> {
   return data;
 }
 
-function editFields(event: FormEvent<HTMLFormElement>): TaskChanges {
-  const fields = new FormData(event.currentTarget);
+// The assignee goes only when the user changed it, so a linked crew member stays assigned.
+export function editFields(fields: FormData, task: EditableTask): TaskChanges {
+  const assignee = String(fields.get("assignee") ?? "").trim();
   return {
     position: Number(fields.get("position")),
     trade: String(fields.get("trade")).trim(),
     durationMinutes: Number(fields.get("duration")),
     scheduledDate: String(fields.get("day")) || null,
-    assignee: String(fields.get("assignee")).trim() || null,
+    ...(assignee !== (task.assignee ?? "").trim() && { assignee: assignee || null }),
   };
+}
+
+// An approved extra's edit names the approved revision it was planned from.
+// The expected version is the one the form opened on, so a later re-read cannot hide another edit.
+export function editCommand(plan: PlanView, task: EditableTask, changes: TaskChanges, expectedVersion = plan.version) {
+  const variationRevisionId = plan.variationRevisions?.[task.scopeItemId];
+  return { version: "work-plan-edit.v1", quoteRevisionId: plan.quoteRevisionId,
+    expectedVersion, taskKey: task.key, scopeItemId: task.scopeItemId, changes,
+    ...(variationRevisionId && { variationRevisionId }) } as const;
 }
 
 function TaskForm({ task, positions, busy, save, cancel }: {
   task: EditableTask; positions: number; busy: boolean;
   save: (changes: TaskChanges) => void; cancel: () => void;
 }) {
-  return <form className="form" onSubmit={event => { event.preventDefault(); save(editFields(event)); }}>
+  return <form className="form" onSubmit={event => { event.preventDefault(); save(editFields(new FormData(event.currentTarget), task)); }}>
     <fieldset disabled={busy} className="field-pair" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <label>Trade<input name="trade" defaultValue={task.trade} maxLength={100} required/></label>
       <label>Position<select name="position" defaultValue={task.position ?? positions}>
@@ -57,7 +69,8 @@ function TaskForm({ task, positions, busy, save, cancel }: {
       </select></label>
       <label>Duration (minutes)<input name="duration" type="number" min={1} max={2147483647} defaultValue={task.durationMinutes} required/></label>
       <label>Day<input name="day" type="date" defaultValue={task.scheduledDate ?? ""}/></label>
-      <label>Assignee<input name="assignee" defaultValue={task.assignee ?? ""} maxLength={100}/></label>
+      <label>Assignee<input name="assignee" defaultValue={task.assignee ?? ""} maxLength={100}
+        placeholder={task.assigneeRef ? "Crew member assigned" : undefined}/></label>
     </fieldset>
     <div className="form-actions">
       <button type="button" className="btn" onClick={cancel} disabled={busy}>Cancel</button>
@@ -80,6 +93,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
   const inFlight = useRef(false);
   const editReplay = useRef<{ payload: string; commandId: string }>(null);
   const activationId = useRef<string>(null);
+  const openedVersion = useRef<number>(null);
 
   // Each read takes a number; only the newest read may replace the card.
   const reads = useRef(0);
@@ -130,8 +144,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
     setBusy(true);
     setProblem(null);
     setNotice("");
-    const command = { version: "work-plan-edit.v1", quoteRevisionId: plan.quoteRevisionId,
-      expectedVersion: plan.version, taskKey: task.key, scopeItemId: task.scopeItemId, changes } as const;
+    const command = editCommand(plan, task, changes, openedVersion.current ?? plan.version);
     const payload = JSON.stringify(command);
     if (editReplay.current?.payload !== payload) editReplay.current = { payload, commandId: crypto.randomUUID() };
     try {
@@ -185,7 +198,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
       ? <TaskForm task={task} positions={(plan?.tasks.length ?? 0) + Number(!existing)} busy={busy}
           save={changes => void save(task, changes)} cancel={() => { setEditing(null); setProblem(null); }}/>
       : <button type="button" className="btn small" aria-label={`${action} ${task.title}`} disabled={busy || problem?.reload}
-          onClick={() => { setEditing(taskId(task)); setNotice(""); setProblem(null); }}>{action}</button>;
+          onClick={() => { openedVersion.current = plan?.version ?? null; setEditing(taskId(task)); setNotice(""); setProblem(null); }}>{action}</button>;
   }
 
   return <Card title="Plan" id="work-plan">
@@ -207,7 +220,7 @@ export function WorkPlan({ jobId }: { jobId: string }) {
         plan.changes.changed.some(row => taskId(row.after) === taskId(task));
       return <article className="card-body" key={taskId(task)}>
         <h3>{task.position}. {task.title}</h3>
-        <p>{task.trade} · {task.durationMinutes} min · {shortDate(task.scheduledDate ?? "") || "Day to set"}{task.assignee && ` · ${task.assignee}`}</p>
+        <p>{task.trade} · {task.durationMinutes} min · {shortDate(task.scheduledDate ?? "") || "Day to set"}{task.assignee ? ` · ${task.assignee}` : task.assigneeRef ? " · Crew member assigned" : ""}</p>
         <div className="job-caption">
           <Tag tone={task.scheduledDate ? "green" : "amber"}>{task.scheduledDate ? "Scheduled" : "Planned"}</Tag>
           {changed && <Tag tone="amber">Changed since last quote revision</Tag>}
