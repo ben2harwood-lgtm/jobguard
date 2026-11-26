@@ -37,8 +37,46 @@ const workWord = /^(?:rip|remove|strip|take|clear|fit|install|supply|new|replace
 const timing = /^(?:(?:should|will) take|takes?|timing|(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:days?|weeks?))\b/iu;
 const overallPrice = /^(?:(?:should|will) be\s+)?(?:about|around|roughly|approximately)\s+(?:£?\d)/iu;
 const workClause = (value: string) => workWord.test(value) || /^woodwork\s+in\s+gloss\b/iu.test(value);
-const total = /\b(?:in total|altogether|all in)\b/iu;
+const total = /\b(?:in total|altogether|all in|for the whole job|for the lot|for everything)\b/iu;
 const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?|(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,2})?\s+(?:pounds|quid))(?=$|[^\p{L}\p{N}.,]|[.,](?:\s|$))/giu;
+
+// Spoken amounts ("two hundred pounds", "a thousand and fifty quid"): the words are the cited price.
+const numberWords: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const numberWord = `(?:${Object.keys(numberWords).sort((a, b) => b.length - a.length).join("|")})`;
+const spokenAmount = new RegExp(`(?<![\\p{L}\\p{N}])(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid)(?![\\p{L}\\p{N}])`, "giu");
+/** Whole pounds from number words, or null when the words are not one well-formed amount. */
+export function spokenPounds(words: string): number | null {
+  let totalValue = 0, group = 0, last: "unit" | "ten" | "hundred" | "thousand" | null = null;
+  for (const word of words.toLowerCase().replace(/\s+(?:pounds|quid)$/u, "").split(/[\s-]+/u)) {
+    if (word === "and") { if (last !== "hundred" && last !== "thousand") return null; continue; }
+    if (word === "a") { if (last !== null) return null; group = 1; last = "unit"; continue; }
+    if (word === "hundred") { if ((last !== "unit" && last !== "ten") || group === 0 || group > 99) return null; group *= 100; last = "hundred"; continue; }
+    if (word === "thousand") { if (last === null || last === "thousand" || totalValue) return null; totalValue = (group || 1) * 1000; group = 0; last = "thousand"; continue; }
+    const value = numberWords[word];
+    if (value === undefined) return null;
+    if (value >= 20 && value % 10 === 0 && value < 100) { if (group % 100) return null; group += value; last = "ten"; continue; }
+    if (last === "unit" || (last === "ten" && value >= 10) || (group % 100 && last !== "ten")) return null;
+    group += value; last = "unit";
+  }
+  return last === null ? null : totalValue + group;
+}
+type Amount = { text: string; index: number; pence: number | null };
+function amounts(value: string): Amount[] {
+  const found: Amount[] = [...value.matchAll(priceLiteral)].map(match => ({ text: match[0], index: match.index,
+    pence: exactRate(`£${match[0].replace(/£|,|\s*(?:pounds|quid)/giu, "")}`) }));
+  for (const match of value.matchAll(spokenAmount)) {
+    const pounds = spokenPounds(match[0]);
+    found.push({ text: match[0], index: match.index, pence: pounds === null ? null : pounds * 100 });
+  }
+  return found.sort((a, b) => a.index - b.index);
+}
+// Continuous speech has no punctuation, so a new work item also starts at one of these verbs
+// unless the word before it ties it to the clause (for example "the", "to" or "and").
+const spokenVerb = /^(?:strip|rip|remove|fit|install|hang|paint|plaster|skim|tile|lay|build|replace|repair|fix|wire|plumb|prepare|sand|prime|clear|supply|render|decorate|re-?hang|re-?fit)\b/iu;
+const tiedBefore = /(?:^|\s)(?:the|a|an|to|and|or|of|for|with|then|will|can|please|also|we|i|you|need|needs|want|wants|and\s+then|be|it|them)$/iu;
+const wholeJobTail = new RegExp(`(?:£?\\d[\\d,.]*\\s*(?:pounds|quid)?|(?:a|${numberWord})(?:[\\s-]+(?:and\\s+)?(?:${numberWord}|hundred|thousand))*\\s+(?:pounds|quid))\\s+(?:for the whole job|for the lot|for everything|all in|in total|altogether)$`, "iu");
 
 /** Deterministic local draft helper, not an accuracy claim. A builder must check
  * every line. Offsets always refer to the untouched source, including prices.
@@ -47,8 +85,15 @@ const priceLiteral = /(?<![\p{L}\p{N}£.,])(?:£(?:0|[1-9]\d{0,10}|[1-9]\d{0,2}(
 function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cell | null } {
   const chunks: Cell[] = [], notes: string[] = [];
   const add = (start: number, end: number) => {
-    const raw = text.slice(start, end), value = raw.trim();
-    if (value) chunks.push({ value, start: start + raw.length - raw.trimStart().length });
+    // "paint the walls and then paint the ceiling": the "and" before "then" joins the items, it is not work.
+    const raw = text.slice(start, end), value = raw.trim().replace(/\s+and$/iu, "");
+    if (!value) return;
+    const at = start + raw.length - raw.trimStart().length;
+    const tail = wholeJobTail.exec(value);
+    if (tail && tail.index > 0 && workClause(value.slice(0, tail.index).trim())) {
+      const head = value.slice(0, tail.index).trimEnd();
+      chunks.push({ value: head, start: at }, { value: tail[0], start: at + tail.index });
+    } else chunks.push({ value, start: at });
   };
   const party = suggestCapturePartyClause(text);
   let start = 0;
@@ -60,10 +105,19 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
       add(start, i); start = i + 1;
     } else {
       const separator = char === "," ? "," : /^(?: and | then )/iu.exec(text.slice(i, i + 6))?.[0];
-      if (!separator) continue;
+      if (!separator) {
+        // Continuous speech: "strip out the old kitchen fit six base units" starts a new item at "fit".
+        if (/\s/u.test(char) && !/\s/u.test(text[i - 1] ?? " ") && spokenVerb.test(text.slice(i + 1))
+          && !tiedBefore.test(text.slice(start, i)) && text.slice(start, i).trim().split(/\s+/u).length >= 2) {
+          add(start, i); start = i + 1;
+        }
+        continue;
+      }
       const next = text.slice(i + separator.length).trimStart();
       // Keep the disposal phrase attached to the removal it describes.
       if (separator.trim().toLowerCase() === "and" && /^take it away\b/iu.test(next)) continue;
+      // "supply and fit one door" is one item.
+      if (separator.trim().toLowerCase() === "and" && /(?:^|\s)supply$/iu.test(text.slice(start, i)) && /^(?:fit|install)\b/iu.test(next)) continue;
       if (workClause(next) || timing.test(next) || overallPrice.test(next) || /^(?:about\s+)?(?:£?\d|in total\b|altogether\b|all in\b)/iu.test(next) && total.test(next.split(/[,;.!?\r\n]/u)[0]!)) {
         add(start, i); start = i + separator.length; i = start - 1;
       }
@@ -90,13 +144,25 @@ function plainDraft(text: string): { chunks: Cell[]; notes: string[]; title: Cel
   return { chunks: cleaned, notes, title };
 }
 
-function plainPrice(chunk: Cell): Cell | null {
-  const matches = [...chunk.value.matchAll(priceLiteral)];
-  if (matches.length !== 1 || matches[0]![0] === chunk.value || total.test(chunk.value) || /\b(?:about|around|roughly|approximately)\b/iu.test(chunk.value)) return null;
+function plainPrice(chunk: Cell): (Cell & { pence: number }) | null {
+  const matches = amounts(chunk.value);
+  if (matches.length !== 1 || matches[0]!.text === chunk.value || matches[0]!.pence === null || total.test(chunk.value)
+    || /\b(?:about|around|roughly|approximately)\b/iu.test(chunk.value)) return null;
   const match = matches[0]!;
-  const originals = [...(chunk.originalValue ?? chunk.value).matchAll(priceLiteral)];
-  if (originals.length !== 1 || originals[0]![0] !== match[0]) return null;
-  return { value: match[0], start: chunk.start + originals[0]!.index };
+  const originals = amounts(chunk.originalValue ?? chunk.value);
+  if (originals.length !== 1 || originals[0]!.text !== match.text) return null;
+  return { value: match.text, start: chunk.start + originals[0]!.index, pence: match.pence! };
+}
+
+const spokenCount: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, twenty: 20 };
+/** "fit six base units": the stated count and what it counts. Only right after the item's verb. */
+function spokenQuantity(description: string): { count: number; said: string; unit: string; unitStart: number } | null {
+  const match = /^(?:[\p{L}-]+(?:\s+and\s+[\p{L}-]+)?)\s+(\d{1,4}|[a-z]+)\s+((?:[\p{L}-]+\s+){0,2}[\p{L}-]+)$/iu.exec(description);
+  if (!match || !spokenVerb.test(description)) return null;
+  const count = /^\d+$/u.test(match[1]!) ? Number(match[1]) : spokenCount[match[1]!.toLowerCase()];
+  if (!count || match[2]!.length > 40 || /^(?:the|a|an|of|for|and|in|on|out|up|off|down)\b/iu.test(match[2]!)) return null;
+  return { count, said: match[1]!, unit: match[2]!, unitStart: description.length - match[2]!.length };
 }
 
 /** Structured synthetic recipe parser, NOT a live model or natural-language
@@ -134,23 +200,34 @@ export function parseCaptureFixture(sourceId: string, text: string): JobRecordPr
   if (!items.length) {
     const draft = plainDraft(text);
     if (draft.chunks.length && workClause(text.trimStart())) plainTitle = draft.title;
-    if (draft.chunks.length >= 2) {
+    // One spoken item with its own price ("supply and fit one door for three hundred pounds") is a priced line too.
+    const single = draft.chunks.length === 1 && workClause(text.trimStart()) && draft.chunks[0]!.start === text.length - text.trimStart().length
+      && plainPrice(draft.chunks[0]!) !== null;
+    if (draft.chunks.length >= 2 || single) {
       plainTitle = draft.title;
       questions[0] = question("Confirm disposal and waste allowance");
       questions.push(...draft.notes.map(question));
       lines = draft.chunks.map(chunk => {
         const rate = plainPrice(chunk);
-        if (!rate && [...chunk.value.matchAll(priceLiteral)].length) questions.push(question(`Confirm price: ${chunk.value.slice(0, 450)}`));
-        const rateValue = rate ? exactRate(`£${rate.value.replace(/£|,|\s*(?:pounds|quid)/giu, "")}`) : null;
-        // A trailing stated price is separate from the work description.
+        if (!rate && amounts(chunk.value).length) questions.push(question(`Confirm price: ${chunk.value.slice(0, 450)}`));
+        const rateValue = rate ? rate.pence : null;
+        // A trailing stated price is separate from the work description, and so is the "for" before it.
         const description = rate && chunk.value.endsWith(rate.value)
-          ? chunk.value.slice(0, -rate.value.length).trimEnd() : chunk.value;
+          ? chunk.value.slice(0, -rate.value.length).trimEnd().replace(/\s+(?:for|at)$/iu, "") : chunk.value;
         const kept = description.slice(0, 500);
         if (kept.length < description.length) questions.push(question(`Confirm the description for ${kept.slice(0, 160)}; it is longer than one description and was shortened`));
+        // A spoken count is kept when no price is stated, or when the price is for one. A price for several is a line price.
+        const counted = chunk.inferred ? null : spokenQuantity(kept);
+        if (counted && rate && counted.count > 1) {
+          questions.push(question(`Check “${kept.slice(0, 200)}”: ${rate.value} is kept as the price for the whole line, not for each.`));
+        }
+        const keepCount = counted && (!rate || counted.count === 1);
         return {
           description: { value: kept, provenance: chunk.inferred ? { kind: "inferred", note: "Work description assembled around the customer and site clause; check the original source" } : extracted(chunk.start, kept.length) },
-          quantity: { value: "1", provenance: defaulted("One item per draft line; confirm before quoting") },
-          unit: { value: "item", provenance: defaulted("Draft work item; confirm before quoting") },
+          quantity: keepCount ? { value: String(counted.count), provenance: { kind: "inferred", note: `Spoken as “${counted.said}”; confirm before quoting` } }
+            : { value: "1", provenance: defaulted("One item per draft line; confirm before quoting") },
+          unit: keepCount ? { value: counted.unit, provenance: extracted(chunk.start + counted.unitStart, counted.unit.length) }
+            : { value: "item", provenance: defaulted("Draft work item; confirm before quoting") },
           unitPricePence: { value: rateValue, provenance: rateValue !== null && rate
             ? extracted(rate.start, rate.value.length) : defaulted("Rate not stated exactly; never invented") },
         };
