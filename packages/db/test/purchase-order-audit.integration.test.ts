@@ -45,7 +45,7 @@ beforeAll(async () => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration")
       && ["_dark_merchant_order.sql", "_order_attestation_session.sql", "_manual_attestation_synthetic_gate.sql",
         "_lp11_bound_tenant_rls.sql", "_lp12_narrow_owners.sql", "_v2_work_plan.sql", "_v2_work_plan_edits.sql",
-        "_v2_plan_disposition.sql", "_v2_measurement.sql", "_v2_crew_brief.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_v2_plan_disposition.sql", "_v2_plan_variation_scope.sql", "_v2_measurement.sql", "_v2_crew_brief.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     // V2-F1: defer the additive V2-only schema in the previous-schema rehearsal.
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") && String(values?.[0]).endsWith("_v2_brief_progress.sql")) return { rows: [{}], rowCount: 1 };
     // V2-F1-P: photo extension follows the V2 progress table, absent in this rehearsal.
@@ -64,6 +64,7 @@ beforeAll(async () => {
   const legacy = await fixture();
   upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
   await migrate(admin);
+  expect((await admin.query("SELECT to_regprocedure('app.v2_work_plan_edit_scope_check()') AS scope_check")).rows[0].scope_check).toBeNull();
   expect((await admin.query("SELECT to_regclass('app.v2_measurement') AS measurement")).rows[0].measurement).toBeNull();
   expect((await admin.query("SELECT to_regclass('app.v2_crew_brief') AS brief")).rows[0].brief).toBeNull();
   // V2-F1 stays absent outside the dedicated V2 database.
