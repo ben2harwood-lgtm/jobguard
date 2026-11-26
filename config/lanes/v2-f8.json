@@ -2,7 +2,9 @@
   "version": 2,
   "lanes": {
     "v2-f8": {
-      "branches": ["claude/project-thread-3xq8e0"],
+      "branches": [
+        "claude/project-thread-3xq8e0"
+      ],
       "note": "RED. Q10 V2-F8: who was on site today (migration 2016). Builder taps per crew record or Me; no location stored. F8 mount: card only (records/page.tsx). Crew self-view waits for F7.",
       "allow": [
         "apps/api/src/workspace/application.ts",
@@ -20,7 +22,8 @@
         "packages/db/src/v2-site-attendance-repository.ts",
         "packages/db/test/migration-proofs/2016_v2_site_attendance.proof.json",
         "tools/v2/bootstrap.mjs",
-        "tools/v2/seed.integration.test.mjs"
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/test/refusals.mjs"
       ]
     }
   }
