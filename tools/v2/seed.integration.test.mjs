@@ -1484,7 +1484,7 @@ test("V2-K2A: create, refresh and revoke each persist one audit event, replay no
   for (const response of [gone, never, malformed]) {
     assert.equal(response.status, 404);
     assert.equal(response.headers.get("cache-control"), "no-store");
-    assert.equal(await response.text(), "Not found");
+    assert.deepEqual(await response.json(), { code: "NOT_FOUND" });
   }
   // After revoking, a new link can be made, and the old one stays off.
   const again = await feeds.command(draftJob, feedCommand("create", randomUUID(), 0));
@@ -1598,6 +1598,45 @@ test("V2-K2A: forced RLS, least privilege, owner-run reader, second firm and V2-
     } finally { process.env.JOBGUARD_LOCAL_V2 = "1"; process.env.JOBGUARD_ENV = "synthetic_demo"; }
   }
   assert.equal(typeof await feeds.calendar(made.token), "string");
+});
+
+// Rule 29 (V2-SX) cases (e) and (f): the calendar link is a bearer capability. It reads its own saved copy only,
+// a revoked link and another job's feed refuse, and the token is never accepted as a builder credential.
+import { assertCapabilityConfined } from "./test/refusals.mjs";
+async function calendarCapabilityRequest(path, { method, body, cookies, headers } = {}) {
+  const response = await fetch(origin + path, { method: method ?? "GET", redirect: "manual",
+    headers: { origin, ...(body !== undefined && { "content-type": "application/json" }), ...(cookies && { cookie: cookies }), ...headers },
+    ...(body !== undefined && { body: JSON.stringify(body) }) });
+  if (response.status !== 200 || !response.headers.get("content-type")?.startsWith("text/calendar")) return response;
+  // The real iCalendar body, re-shaped as JSON (property name to value) so the helper's field check reads every property.
+  const text = await response.text();
+  assert.doesNotMatch(text, /£|\d+\.\d{2}\b/u);
+  const calendar = {}, events = [];
+  for (const line of unfoldIcs(text)) {
+    const [, name, value] = /^([A-Z][A-Z0-9-]*)(?:;[^:]*)?:(.*)$/u.exec(line);
+    if (name === "BEGIN" && value === "VEVENT") events.push({});
+    else if (name !== "BEGIN" && name !== "END") (events.at(-1) ?? calendar)[name] = value;
+  }
+  return Response.json({ calendar, events });
+}
+test("V2-K2A rule 29: the calendar link reads only its own copy and is never a builder credential", async () => {
+  const { draftJob, feeds } = await datedFeedJob();
+  const first = await feeds.command(draftJob, feedCommand("create", randomUUID(), 0));
+  await feeds.command(draftJob, feedCommand("revoke", first.feedId, 1));
+  const live = await feeds.command(draftJob, feedCommand("create", randomUUID(), 0));
+  const feedRows = async () => (await admin.query("SELECT count(*)::int AS n FROM app.v2_calendar_feed_revision")).rows[0];
+  await assertCapabilityConfined({ request: calendarCapabilityRequest, value: live.token }, {
+    allowedPath: feedFile(live.token),
+    allowedDenyList: ["price", "amount", "cost", "margin", "profit", "pence", "email", "phone", "customer", "finding", "photo"],
+    // The link names no job, so another job is reachable only through the builder's routes, which refuse it.
+    forbiddenPaths: [{ kind: "other_job", path: `/api/jobs/${jobId}/calendar-feeds` },
+      { kind: "other_link", path: feedFile(first.token) }],
+    builderPaths: [{ path: `/api/jobs/${draftJob}/calendar-feeds` }, { path: `/api/jobs/${jobId}/calendar-feeds` },
+      { path: `/api/jobs/${draftJob}` }, { path: `/api/jobs/${draftJob}/parties` },
+      { path: `/api/jobs/${draftJob}/calendar-feeds`, method: "POST", body: feedCommand("revoke", live.feedId, 1), checkDatabase: feedRows }],
+  });
+  assert.equal((await feeds.list(draftJob)).feeds.find(feed => feed.feedId === live.feedId).revoked, false);
+  await feeds.command(draftJob, feedCommand("revoke", live.feedId, 1));
 });
 
 // must stay the last test: it signs the cached builder out

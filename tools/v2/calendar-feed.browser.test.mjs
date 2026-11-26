@@ -130,7 +130,7 @@ test("V2-K2A: make, use and turn off the builder calendar link at 360 and 1280px
         await expect(panel.getByRole("button", { name: "Make calendar link", exact: true })).toBeVisible();
         const gone = await anonymous.request.get(link);
         assert.equal(gone.status(), 404);
-        assert.equal(await gone.text(), "Not found");
+        assert.deepEqual(await gone.json(), { code: "NOT_FOUND" });
       } finally { await anonymous.close(); }
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       assert.deepEqual(external, []);

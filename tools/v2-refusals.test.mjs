@@ -18,11 +18,12 @@ function requests(refusal = refused, calls = []) {
 }
 const check = request => assertBuilderRouteRefuses({ request, signIn: sessions(), route });
 
-test("SX fixed list binds all ten GETs, retaining direct API transport", () => {
+test("SX fixed list binds all ten GETs plus later packets' routes, retaining direct API transport", () => {
   const routes = bindBuilderRoutes({ jobId: "saved-id", tenantId: "practice-id" });
-  assert.equal(builderGetRoutes.length, 10);
+  assert.equal(builderGetRoutes.length, 11);
+  assert.equal(routes[10].path, "/api/jobs/saved-id/calendar-feeds");
   assert.ok(routes.every(route => !route.path.includes("{")));
-  assert.deepEqual(routes.slice(8).map(route => route.transport), ["api", "api"]);
+  assert.deepEqual(routes.slice(8, 10).map(route => route.transport), ["api", "api"]);
   assert.equal(routes[0].path, "/api/jobs?tenantId=practice-id");
   assert.equal(routes[9].optional, true);
   for (const route of routes.slice(0, 9)) assert.equal(route.optional, undefined);

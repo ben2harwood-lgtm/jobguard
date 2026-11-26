@@ -4,7 +4,8 @@ export const dynamic = "force-dynamic";
 // V2-K2A bearer link for calendar apps, which fetch it from their own servers with no cookie or origin.
 // The token is the only authority: no session is read, and the token is never logged.
 const base = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow" };
-const notFound = () => new Response("Not found", { status: 404, headers: { ...base, "Content-Type": "text/plain; charset=utf-8" } });
+// Every failure is the same typed 404 (rule 29 refusal shape): unknown, malformed, revoked and non-practice alike.
+const notFound = () => Response.json({ code: "NOT_FOUND" }, { status: 404, headers: base });
 export async function GET(_request: Request, { params }: { params: Promise<{ file: string }> }) {
   try {
     if (process.env.JOBGUARD_ENV !== "synthetic_demo" || process.env.JOBGUARD_LOCAL_V2 !== "1") return notFound();

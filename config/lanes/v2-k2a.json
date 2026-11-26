@@ -25,7 +25,9 @@
         "packages/db/test/v2-calendar-feed.test.ts",
         "tools/v2/bootstrap.mjs",
         "tools/v2/calendar-feed.browser.test.mjs",
-        "tools/v2/seed.integration.test.mjs"
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/test/refusals.mjs",
+        "tools/v2-refusals.test.mjs"
       ],
       "test": "tools/v2/calendar-feed.browser.test.mjs"
     }
