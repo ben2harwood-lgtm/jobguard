@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-b2t1": {
+      "branches": [
+        "claude/project-thread-jh4bou"
+      ],
+      "note": "V2-B2 follow-up (Codex P2 on 3f106d72, jobguard #979 comment 4700699882): a pending media cleanup tombstone keeps the logout hold. Against v2/main. The validator includes config/lanes/v2-b2t1.json implicitly.",
+      "allow": [
+        "apps/mobile/src/lifecycle-contracts.ts",
+        "apps/mobile/src/encrypted-media.test.ts"
+      ]
+    }
+  }
+}
