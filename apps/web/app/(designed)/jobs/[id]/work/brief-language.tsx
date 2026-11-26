@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
-import type { CrewBrief, CrewBriefTranslation, CrewBriefTranslationCommand } from "@jobguard/db";
-import { briefDisplayText, briefLanguages, type Lang } from "../../../../lib/brief-display-text";
+import { briefDisplayText, briefLanguages, type CrewBrief, type CrewBriefTranslation, type CrewBriefTranslationCommand,
+  type Lang } from "../../../../lib/brief-display-text";
 
 export function BriefLanguage({ path, brief }: { path: string; brief: CrewBrief & { current?: boolean } }) {
   const [language, setLanguage] = useState<Lang | "">("");
