@@ -32,7 +32,11 @@ export async function GET(request: Request, { params }: Route) {
       if (error instanceof WorkPlanError && error.code === "QUOTE_REVISION_NOT_FOUND") return null;
       throw error;
     });
-    const trades = [...new Set(plan?.tasks.map(task => task.trade) ?? [])]
+    // Codex P2 4702417612: D4's brief generator builds tasks from quote lines only, so a trade whose tasks are all
+    // approved extras would offer "Make brief" and then fail. Offer only trades the generator can make (LATER: briefs
+    // gain approved extras, roadmap LATER list).
+    const extraScope = new Set((plan?.scopeItems ?? []).filter(item => item.variationRevisionId).map(item => item.scopeItemId));
+    const trades = [...new Set(plan?.tasks.filter(task => !extraScope.has(task.scopeItemId)).map(task => task.trade) ?? [])]
       .filter(trade => !query.data.trade || trade === query.data.trade);
     return reply({ trades, briefs: await crewBriefs.read(id, query.data),
       ...(plan ? {} : { code: "QUOTE_REVISION_NOT_FOUND" }) });
