@@ -85,7 +85,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 | F4 | **E8** Tomorrow screen plus the 6pm crew list (catcher only) | ★★★ | M | A | E4, M3, C3C | none | RED |
 | F5 | **B2B** real camera photos into the resumable upload (encrypted pending) | ★★ | M | O | b2b1 #924, PX | none | RED |
 | F6 | **B2C** kill and resume an offline capture | ★★ | M | O | B2B | none | RED |
-| F7 | **My brief** for a crew member by link (Done, Blocked, Changed from their own link) | ★★★ | M | O | C3C, F1, M2 #930 | 2041 | RED |
+| F7 | **My brief** for a crew member by link (Done, Blocked, Changed from their own link). Packet Q52 (V2-F7M), stacked on F2 #991; crew photo by link is later F7M-P | ★★★ | M | O | C3C, F1, M2 #930 | 2041 | RED |
 
 ## Batch G: about 1 to 3 Dec, close-out
 | # | Piece | Use | Size | Lane | Waits on | Mig | Tier |

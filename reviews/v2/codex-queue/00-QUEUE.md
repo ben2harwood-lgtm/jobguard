@@ -74,6 +74,7 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D14 | Q49 | V2-F2 a task that needs a proof photo stays open until the photo is verified (derived status, no migration) | **Opus** | F1-P #974 `codex/sandbox/v2-f1p` | none (2028 kept) | RED |
 | D15 | Q50 | V2-B1E "Take photo" on the walk, through the shared upload path unchanged (live jobs only; pre-live is later B1E-2) | **Opus** | B1C #973 `codex/sandbox/v2-b1c` | none | RED |
 | D16 | Q51 | V2-K5A-1 the payment schedule counts every approved extra (drops the origin filter; same rule as K10) | **Opus** | K5A-2 #961 `claude/project-thread-ek9rje-k5a-2` | none | RED money |
+| D17 | Q52 | V2-F7M "My brief" for a crew member by their own link: Done, Blocked, Changed into F1's progress stream (no photos by link yet) | **Opus** | F2 #991 `claude/project-thread-trp08u` | 2041 | RED |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
