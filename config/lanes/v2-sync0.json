@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sync0": {
+      "branches": [
+        "claude/project-thread-ctngmn-sync0"
+      ],
+      "note": "V2-SYNC-0 (T2, tooling only): lane lint passes a merge of main into a long-lived base as merge-main, only for committed paths whose blob equals the merged main commit's, and skips only those migrations in the order check. Unblocks Q45 V2-SYNC-1 (#980). Ben approved this tool change on 25 Nov 21:16 UK.",
+      "allow": [
+        "tools/agent-lane-boundary-lint.mjs",
+        "tools/agent-lane-boundary.test.mjs"
+      ]
+    }
+  }
+}
