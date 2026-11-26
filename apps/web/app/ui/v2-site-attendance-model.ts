@@ -19,6 +19,9 @@ export type AttendanceCommand = {
   person: AttendancePerson["person"]; expectedVersion: number; onSite: boolean; note: string | null;
 };
 
+/** Card copy (Astra plan check, 26 Nov). The record also holds who tapped, when, and an optional note. */
+export const ATTENDANCE_COPY = "Mark who was on site today. Attendance does not use GPS or device location.";
+
 const personKey = (kind: "crew" | "builder", ref: string) => `${kind}:${ref}`;
 
 /** "Me" first, then the firm's crew records in their saved order. */

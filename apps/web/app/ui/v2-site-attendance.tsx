@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "./practice-receipts.module.css";
-import { attendancePeople, attendanceRefusal, currentTap, siteAttendanceScreenV1, tapCommand, weekSummary,
+import { ATTENDANCE_COPY, attendancePeople, attendanceRefusal, currentTap, siteAttendanceScreenV1, tapCommand, weekSummary,
   type AttendanceCommand, type AttendancePerson, type SiteAttendanceScreen } from "./v2-site-attendance-model";
 
 /** V2-F8: who was on site today. The builder taps each person; no location is collected. */
@@ -39,7 +39,7 @@ export function SiteAttendanceCard({ jobId }: { jobId: string }) {
 
   return <section id="site-attendance" className={styles.panel} aria-labelledby="site-attendance-title" aria-busy={busy} data-testid="site-attendance">
     <h2 id="site-attendance-title">On site today</h2>
-    <p>Tap each person who is on site today. Only the day is recorded, never where anyone is.</p>
+    <p>{ATTENDANCE_COPY}</p>
     {error && <p role="alert">{error}</p>}
     {pending.current && !busy && <button type="button" onClick={() => pending.current && void send(pending.current)}>Retry the same tap</button>}
     {screen && <>

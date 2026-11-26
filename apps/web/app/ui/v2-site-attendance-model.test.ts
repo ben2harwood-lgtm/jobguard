@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attendancePeople, attendanceRefusal, currentTap, dayLabel, siteAttendanceScreenV1, tapCommand, weekSummary,
+import { ATTENDANCE_COPY, attendancePeople, attendanceRefusal, currentTap, dayLabel, siteAttendanceScreenV1, tapCommand, weekSummary,
   type SiteAttendanceScreen } from "./v2-site-attendance-model";
 
 const me = "11111111-1111-4111-8111-111111111111";
@@ -51,6 +51,11 @@ describe("V2-F8 on-site card helpers", () => {
     expect(week[1]).toEqual({ day: days[1], label: "Yesterday", names: [] });
     expect(week[2]!.names).toEqual(["Removed crew record"]);
     expect(week[2]!.label).toBe("Mon 23 Nov");
+  });
+
+  it("says plainly that no GPS or device location is used, without claiming only the day is kept", () => {
+    expect(ATTENDANCE_COPY).toBe("Mark who was on site today. Attendance does not use GPS or device location.");
+    expect(ATTENDANCE_COPY).not.toMatch(/only the day/iu);
   });
 
   it("labels plain days without a time-zone shift", () => {

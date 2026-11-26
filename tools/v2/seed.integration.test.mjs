@@ -1451,7 +1451,10 @@ test("F8: a replayed tap counts once, an edit is the next revision, and the day 
   assert.equal(view.days.length, 7);
   assert.equal(view.days[0], today);
   const mine = view.records.filter(entry => entry.day === today);
+  // Astra's conditions: one row per person per job and London day, from the latest revision, which keeps the undo.
+  assert.equal(mine.filter(entry => entry.crewId === sam.crewId).length, 1);
   assert.deepEqual(mine.find(entry => entry.crewId === sam.crewId), { ...undo, recordedAt: undo.recordedAt });
+  assert.equal(mine.find(entry => entry.crewId === sam.crewId).onSite, false);
   assert.equal(mine.find(entry => entry.personKind === "builder").personRef, view.me);
   assert.equal(me.personRef, view.me);
   assert.ok(view.crew.some(crew => crew.crewId === sam.crewId && crew.displayName === "Sam Attendance"));
