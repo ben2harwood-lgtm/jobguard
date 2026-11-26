@@ -1,7 +1,7 @@
-# 2022 · V2 open facts
+# 2028 · V2 open facts
 
-The checked V2 bootstrap applies this migration after 2021 (and after the D3,
-D4 and B1A migrations once those pieces merge; it is renumbered above them). The shared runner leaves databases without
+The checked V2 bootstrap applies this migration after the base's V2 migrations (2027 at this restack) and after the D3,
+D4 and B1A migrations once those pieces merge; it is renumbered above them. The shared runner leaves databases without
 both the V2 name and the firm policy untouched.
 
 No backfill is needed. A job starts with no open facts.

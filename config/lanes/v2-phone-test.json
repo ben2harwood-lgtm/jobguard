@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-phone-test": {
+      "branches": ["claude/project-thread-ek9rje-phone-test"],
+      "note": "Test-only fix. The shared V2 phone test signed up the owner the launcher already seeds (429 at 360 px). Sign in once and reuse the session at both widths.",
+      "allow": [
+        "tools/v2/phone.test.mjs"
+      ]
+    }
+  }
+}
