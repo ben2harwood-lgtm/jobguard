@@ -1,6 +1,6 @@
 # 2030 · V2 reminders for unanswered replies
 
-The checked V2 bootstrap applies this migration after 2023 (E2 replies). The
+The checked V2 bootstrap applies this migration after 2029 (E2 replies, renumbered from 2023). The
 shared runner leaves databases without the V2 name, the firm policy or E2's
 request table untouched.
 

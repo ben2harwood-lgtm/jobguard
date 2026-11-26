@@ -1,6 +1,6 @@
 # 2023 · V2 replies
 
-The checked V2 bootstrap applies this migration after 2022 (E1 open facts). The shared runner
+The checked V2 bootstrap applies this migration after 2028 (E1 open facts). The shared runner
 leaves databases without both the V2 name and the firm policy untouched, and
 every token function refuses outside `jobguard_v2_local`.
 

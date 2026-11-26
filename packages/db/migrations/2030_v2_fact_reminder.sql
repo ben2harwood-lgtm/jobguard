@@ -51,7 +51,7 @@ BEGIN
   ALTER TABLE app.v2_fact_reminder ENABLE ROW LEVEL SECURITY;
   ALTER TABLE app.v2_fact_reminder FORCE ROW LEVEL SECURITY;
 
-  -- Builder access: the same firm and job-visibility rule as 2023.
+  -- Builder access: the same firm and job-visibility rule as E2 (2029).
   DROP POLICY IF EXISTS v2_fact_reminder_run_runtime ON app.v2_fact_reminder_run;
   CREATE POLICY v2_fact_reminder_run_runtime ON app.v2_fact_reminder_run TO jobguard_runtime
     USING (tenant_id = (SELECT app.lp11_policy_tenant()) AND EXISTS (
