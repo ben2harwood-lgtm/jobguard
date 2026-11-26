@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-fl4": {
+      "branches": [
+        "codex/sandbox/v2-fl4"
+      ],
+      "note": "RED tenancy. Q38 / V2-FL-4: migration 2050 restricts the 35 recovery tables to the practice firm through the existing job visibility rule. No new web workflow. Direct parent: codex/sandbox/v2-fl1.",
+      "allow": [
+        "packages/db/migration-notes/2050_v2_firm_lock_recovery.md",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/FL-4.checks.mjs",
+        "tools/v2/firm-lock/pending/FL-4.json",
+        "tools/v2/migrations/2050_v2_firm_lock_recovery.proof.json",
+        "tools/v2/migrations/2050_v2_firm_lock_recovery.sql"
+      ]
+    }
+  }
+}

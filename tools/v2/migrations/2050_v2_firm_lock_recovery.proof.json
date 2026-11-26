@@ -1,7 +1,7 @@
 {
-  "slice": "FL-4",
-  "packet": "Q38",
-  "note": "Copied from reviews/v2/codex-queue/Q38-v2-fl4-firm-lock-recovery.md at a3f4c1462. The slice deletes this file when it locks these tables.",
+  "packet": "Q38 / V2-FL-4 (RED, firm lock, recovery)",
+  "migration": "2050_v2_firm_lock_recovery.sql",
+  "database": "jobguard_v2_local",
   "tables": [
     "app.managed_recovery_election",
     "app.managed_recovery_pursuit",
@@ -38,5 +38,9 @@
     "app.recovery_follow_up_advance",
     "app.recovery_follow_up_owner",
     "app.recovery_timeline_signal"
-  ]
+  ],
+  "policies": "RESTRICTIVE v2_practice_firm FOR ALL TO jobguard_runtime; 32 direct job joins, two full follow-up/run parent joins and one timeline parent join",
+  "runtimeGrants": "unchanged",
+  "tests": "tools/v2/firm-lock/FL-4.checks.mjs (8 integration tests loaded by tools/v2/seed.integration.test.mjs)",
+  "execution": "Database evidence pending CI1; this file describes proof obligations, not an executed result"
 }
