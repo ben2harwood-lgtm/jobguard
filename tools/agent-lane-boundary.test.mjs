@@ -131,3 +131,104 @@ test("repository policy maps each declared branch to one scope and registers the
   assert.throws(() => selectLane(actual, work), /exactly one/u);
   assert.ok(actual.lanes['ci-repair'].allow.filter((path) => path.startsWith("apps/") || path.startsWith("packages/")).every((path) => path.endsWith("/package.json") || ["apps/web/playwright.config.ts", "apps/web/tsconfig.json"].includes(path)));
 });
+
+// V2-SYNC-0: a merge of main into a long-lived base branch (v2/main) passes main's own files as merge-main.
+function syncFixture(t) {
+  const f = fixture(t);
+  f.git("switch", "-c", "v2", f.base);
+  const v2 = f.commit("packages/db/migrations/2001_v2_only.sql", "SELECT 2001;\n");
+  f.git("switch", "main");
+  f.write("packages/db/protected.txt", "main's change\n");
+  f.write("config/lanes/main-piece.json", "{}\n");
+  const main = f.commit("packages/db/migrations/0100_main_piece.sql", "SELECT 100;\n");
+  f.git("update-ref", "refs/remotes/origin/main", main);
+  f.git("switch", "-C", "codex/ci-repair", v2);
+  f.git("merge", "--no-ff", "--no-edit", "main");
+  return { ...f, v2, main };
+}
+const syncPolicy = structuredClone(policy);
+syncPolicy.lanes.repair.allow = ["tools/**", "packages/db/migrations/2002_lane_own.sql", "packages/db/migrations/0101_lane_low.sql"];
+
+test("a merge of main passes main's identical files, lane files and migrations as merge-main", (t) => {
+  const f = syncFixture(t), head = f.commit("tools/new.mjs");
+  const result = inspectLane({ cwd: f.cwd, config: syncPolicy, env: { LANE_BASE_REF: f.v2 } });
+  assert.deepEqual(result.mergeMain.files, ["config/lanes/main-piece.json", "packages/db/migrations/0100_main_piece.sql", "packages/db/protected.txt"]);
+  assert.equal(result.mergeMain.mainSide, f.main);
+  assert.deepEqual(f.pr(head, f.v2).mergeMain.files.length, 3);
+});
+test("a merged main file changed afterwards is the lane's own edit and still fails", (t) => {
+  const f = syncFixture(t), head = f.commit("packages/db/protected.txt", "edited after the merge\n");
+  assert.throws(() => f.pr(head, f.v2), /cannot edit:\n"packages\/db\/protected\.txt"/u);
+});
+test("a new low-numbered migration that main doesn't have still fails migration order", (t) => {
+  const f = syncFixture(t); f.commit("packages/db/migrations/0101_lane_low.sql", "SELECT 101;\n");
+  assert.throws(() => inspectLane({ cwd: f.cwd, config: syncPolicy, env: { LANE_BASE_REF: f.v2 } }), /0101_lane_low\.sql" must be numbered above 2001/u);
+  const g = syncFixture(t); g.commit("packages/db/migrations/2002_lane_own.sql", "SELECT 2002;\n");
+  assert.equal(inspectLane({ cwd: g.cwd, config: syncPolicy, env: { LANE_BASE_REF: g.v2 } }).mergeMain.files.length, 3);
+});
+test("a main migration edited after the merge is not exempt from the lane or from ordering", (t) => {
+  const f = syncFixture(t); f.commit("packages/db/migrations/0100_main_piece.sql", "SELECT 'changed';\n");
+  assert.throws(() => inspectLane({ cwd: f.cwd, config: syncPolicy, env: { LANE_BASE_REF: f.v2 } }), /cannot edit:\n"packages\/db\/migrations\/0100_main_piece\.sql"/u);
+});
+test("without origin/main, or without new main commits, nothing is exempt", (t) => {
+  const f = syncFixture(t); f.commit("tools/new.mjs"); f.git("update-ref", "-d", "refs/remotes/origin/main");
+  assert.throws(() => inspectLane({ cwd: f.cwd, config: syncPolicy, env: { LANE_BASE_REF: f.v2 } }), /cannot edit/u);
+  // A branch that only puts a base-branch file back to main's old version brings no main commits.
+  const g = fixture(t);
+  g.git("switch", "-c", "v2", g.base); const v2 = g.commit("packages/db/protected.txt", "v2's change\n");
+  g.git("update-ref", "refs/remotes/origin/main", g.base);
+  g.git("switch", "-C", "codex/ci-repair", v2); const head = g.commit("packages/db/protected.txt", "initial\n");
+  assert.throws(() => g.pr(head, v2), /cannot edit:\n"packages\/db\/protected\.txt"/u);
+});
+test("uncommitted edits to a merged main file are checked as the lane's own", (t) => {
+  const f = syncFixture(t); f.commit("tools/new.mjs"); f.write("packages/db/protected.txt", "local edit\n");
+  assert.throws(() => inspectLane({ cwd: f.cwd, config: syncPolicy, env: { LANE_BASE_REF: f.v2 } }), /cannot edit/u);
+});
+// Codex P1/P2 on #984: merging an unrelated main commit must not exempt a revert, a deletion or a mode change.
+test("after an unrelated main merge, reverting a base-only change to main's old version still fails", (t) => {
+  const f = fixture(t);
+  f.git("switch", "-c", "v2", f.base); const v2 = f.commit("packages/db/protected.txt", "v2's change\n");
+  f.git("switch", "main"); const main = f.commit("README.md", "unrelated main change\n");
+  f.git("update-ref", "refs/remotes/origin/main", main);
+  f.git("switch", "-C", "codex/ci-repair", v2); f.git("merge", "--no-ff", "--no-edit", "main");
+  const head = f.commit("packages/db/protected.txt", "initial\n");
+  assert.throws(() => f.pr(head, v2), /cannot edit:(\n"README\.md")?\n"packages\/db\/protected\.txt"/u);
+});
+test("after an unrelated main merge, deleting a base-only file still fails", (t) => {
+  const f = syncFixture(t); f.git("rm", "-q", "packages/db/migrations/2001_v2_only.sql"); const head = f.commit();
+  assert.throws(() => f.pr(head, f.v2), /cannot edit:\n"packages\/db\/migrations\/2001_v2_only\.sql"/u);
+});
+test("a deletion main made passes as merge-main", (t) => {
+  const f = fixture(t);
+  f.git("switch", "-c", "v2", f.base); const v2 = f.commit("tools/v2.txt");
+  f.git("switch", "main"); f.git("rm", "-q", "packages/db/protected.txt"); const main = f.commit();
+  f.git("update-ref", "refs/remotes/origin/main", main);
+  f.git("switch", "-C", "codex/ci-repair", v2); f.git("merge", "--no-ff", "--no-edit", "main");
+  assert.deepEqual(f.pr(f.git("rev-parse", "HEAD"), v2).mergeMain.files, ["packages/db/protected.txt"]);
+});
+test("a mode or type change to a merged main file is the lane's own edit and still fails", (t) => {
+  const f = syncFixture(t);
+  f.git("update-index", "--chmod=+x", "packages/db/protected.txt"); f.git("commit", "-q", "-m", "mode change");
+  const head = f.git("rev-parse", "HEAD");
+  assert.throws(() => f.pr(head, f.v2), /cannot edit:\n"packages\/db\/protected\.txt"/u);
+});
+// Codex P2 on #984 (8cca1161): an imported main migration still counts for duplicate numbers.
+test("a lane migration sharing a number with an imported main migration still fails", (t) => {
+  const f = fixture(t);
+  f.git("switch", "-c", "v2", f.base); const v2 = f.commit("packages/db/migrations/2001_base.sql", "SELECT 2001;\n");
+  f.git("switch", "main"); const main = f.commit("packages/db/migrations/3000_main.sql", "SELECT 3000;\n");
+  f.git("update-ref", "refs/remotes/origin/main", main);
+  f.git("switch", "-C", "codex/ci-repair", v2); f.git("merge", "--no-ff", "--no-edit", "main");
+  const config = structuredClone(policy); config.lanes.repair.allow = ["tools/**", "packages/db/migrations/3000_task.sql"];
+  f.commit("packages/db/migrations/3000_task.sql", "SELECT 'task';\n");
+  assert.throws(() => inspectLane({ cwd: f.cwd, config, env: { LANE_BASE_REF: v2 } }), /3000_task\.sql" shares number 3000 with "packages\/db\/migrations\/3000_main\.sql" from main/u);
+});
+// Codex P2 on #984 (14330a99): an imported main migration can't reuse a number the base already has.
+test("an imported main migration sharing a number with a base migration still fails", (t) => {
+  const f = fixture(t);
+  f.git("switch", "-c", "v2", f.base); const v2 = f.commit("packages/db/migrations/2001_base.sql", "SELECT 2001;\n");
+  f.git("switch", "main"); const main = f.commit("packages/db/migrations/2001_main.sql", "SELECT 'main';\n");
+  f.git("update-ref", "refs/remotes/origin/main", main);
+  f.git("switch", "-C", "codex/ci-repair", v2); f.git("merge", "--no-ff", "--no-edit", "main"); f.commit("tools/new.mjs");
+  assert.throws(() => inspectLane({ cwd: f.cwd, config: policy, env: { LANE_BASE_REF: v2 } }), /2001_base\.sql" shares number 2001 with "packages\/db\/migrations\/2001_main\.sql" from main/u);
+});
