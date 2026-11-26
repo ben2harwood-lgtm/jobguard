@@ -66,6 +66,10 @@ const supplierLineReplayCase = { key: "/api/jobs/[id]/supplier-lines", registry:
 // generic dispatcher. Its exact replay, changed-request conflict and cross-kind ID
 // conflicts execute in real-gap-proof-by-trade.integration.test.ts.
 const proofStatementReplayCase = { key: "proof.statement", registry: ["/api/jobs/[id]/proof#answer_statement", "command:proof.statement"] };
+// V2-F1 brief progress needs the V2 schema, which only tools/v2/bootstrap.mjs applies, so this
+// legacy-id harness cannot run it. Its exact replay, changed-request conflict and same-id
+// other-job conflict execute in tools/v2/seed.integration.test.mjs ("F1 Done, Blocked and Changed").
+const briefProgressReplayCase = { key: "v2-brief-progress-repository.ts#record", registry: ["/api/jobs/[id]/brief-progress"] };
 beforeAll(async () => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); await h.boot();
 }, 120000);
 afterAll(async () => { await h.stop(); vi.unstubAllEnvs(); });
@@ -80,11 +84,11 @@ describe("every watchdog_live_only command is covered by this contract", () => {
   });
 
   it("has a case for every guarded command (the registry's command list)", () => {
-    expect(caseKeys.slice().sort()).toEqual([...watchdogCommandGuards, ...watchdogRoutineGuards].map(entry => `${entry.file}#${entry.method}`).sort());
+    expect([...caseKeys, briefProgressReplayCase.key].sort()).toEqual([...watchdogCommandGuards, ...watchdogRoutineGuards].map(entry => `${entry.file}#${entry.method}`).sort());
   });
   it("covers every watchdog_live_only registry key (web routes, dynamic actions, commands and Nest routes), and no stale key", () => {
     const liveOnly = Object.entries(jobMutationRegistry).filter(([, phase]) => phase === "watchdog_live_only").map(([key]) => key).sort();
-    const covered = new Set([...cases, clientReplayCase, supplierLineReplayCase, proofStatementReplayCase].flatMap(c => c.registry));
+    const covered = new Set([...cases, clientReplayCase, supplierLineReplayCase, proofStatementReplayCase, briefProgressReplayCase].flatMap(c => c.registry));
     expect(liveOnly.filter(key => !covered.has(key))).toEqual([]);
     expect([...covered].filter(key => !liveOnly.includes(key)).sort()).toEqual([]);
   });
