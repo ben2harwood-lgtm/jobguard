@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-sx": {
+      "branches": ["codex/sandbox/v2-sx"],
+      "note": "T1. Q26 revision 5: test-only refusal helpers and V2 seed proofs. No product, migration, policy or grant changes.",
+      "allow": [
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/test/refusals.mjs",
+        "tools/v2-refusals.test.mjs",
+        "tools/v2/refusals.phone.test.mjs"
+      ]
+    }
+  }
+}
