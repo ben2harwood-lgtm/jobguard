@@ -1673,6 +1673,34 @@ test("C3C: two crew records with the same name get separate assignments, and old
   assert.equal((await assignedEvents(draftJob)).length, 3);
 });
 
+test("D5B-B with C3C: a brief shows the assigned crew record's name and goes out of date when it changes", async () => {
+  const { crewBriefs, workPlan, command } = await briefSetup();
+  const latest = async () => (await crewBriefs.read(jobId, { ...briefQuery, trade: "tiler" }))[0];
+  const crew = crewApp((await signIn("builder")).sessionId);
+  const sam = await crew.record(crewCommand());
+  const alex = await crew.record(crewCommand({ displayName: "Alex Fictional", phone: "07700900789" }));
+  const assign = async assigneeRef => {
+    const plan = await workPlan.read(jobId, planQuery);
+    await workPlan.edit(jobId, planEdit(plan, plan.tasks.find(task => task.key === "tile-splashback"), { assigneeRef }));
+  };
+  const owner = brief => brief.content.tasks.find(task => task.taskKey === "tile-splashback").owner;
+  await assign(sam.crewId);
+  const forSam = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: (await latest())?.version ?? 0 }));
+  assert.equal(owner(forSam), "Sam Fictional");
+  assert.doesNotMatch(JSON.stringify(forSam.content), /07700|@crew/u, "only the name reaches the brief");
+  assert.equal((await latest()).current, true);
+  await assign(alex.crewId);
+  assert.equal((await latest()).current, false, "a reassignment marks the brief out of date");
+  const forAlex = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: forSam.version }));
+  assert.equal(forAlex.version, forSam.version + 1);
+  assert.equal(owner(forAlex), "Alex Fictional");
+  await crew.record(crewCommand({ crewId: alex.crewId, expectedRevision: 1, displayName: "Alex Corrected",
+    phone: "07700900789" }));
+  assert.equal((await latest()).current, false, "a name correction marks the brief out of date");
+  assert.equal(owner(await crewBriefs.generate(jobId, command("tiler", { expectedVersion: forAlex.version }))),
+    "Alex Corrected");
+});
+
 test("C3C: a task can never be assigned to another firm's crew record, even past the app check", async () => {
   const { draftJob, sessionId, read, edit } = await draftForPlan();
   const outsider = await signIn("second-builder");
