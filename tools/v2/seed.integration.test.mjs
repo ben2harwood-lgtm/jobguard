@@ -1527,9 +1527,9 @@ async function f1Setup() {
     expectedVersion: 0, accessWindow: "F1 fictional mornings", photoIds: [], ...fields });
   return { owner, crewBriefs: app.crewBriefs, command };
 }
-before(async () => {
-  const { draftJob } = await draftForPlan();
-  jobId = draftJob;
+// An accepted, live job with a current tiler brief, through normal commands.
+async function f1LiveJob() {
+  const { draftJob: jobId } = await draftForPlan();
   const owner = await signIn("builder");
   const { parties, quote, workPlan, crewBriefs } = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
   const party = await parties.view({ sessionId: owner.sessionId }, jobId);
@@ -1554,7 +1554,9 @@ before(async () => {
   await workPlan.read(jobId, planQuery);
   await quote.activate(jobId, switchLive());
   await crewBriefs.generate(jobId, (await f1Setup()).command("tiler"));
-});
+  return jobId;
+}
+before(async () => { jobId = await f1LiveJob(); });
 // V2-F1 · own block: real application + database/audit/isolation proofs.
 const progressEvents = commandId => admin.query(`SELECT actor_ref, event_type, payload FROM app.audit_event
   WHERE subject_ref = $1 AND event_type LIKE 'v2.progress.%'
@@ -1577,9 +1579,11 @@ test("F1 Done, Blocked and Changed append once with exact audit, and replay or c
   assert.ok(brief.content.tasks.length >= 2, "two tasks may share a scope identity");
   const task = brief.content.tasks[0];
   const snapshot = await f1CommercialSnapshot();
+  let recorded;
   for (const [index, kind] of ["done", "blocked", "changed"].entries()) {
     const command = progressCommand(brief, task, { kind, expectedVersion: index,
       note: kind === "done" ? "" : `F1 fictional ${kind} reason` });
+    recorded = command;
     const before = await app.briefProgress.read(jobId);
     const [first, replay] = await Promise.all([app.briefProgress.record(jobId, command), app.briefProgress.record(jobId, command)]);
     assert.deepEqual(replay, first);
@@ -1598,6 +1602,11 @@ test("F1 Done, Blocked and Changed append once with exact audit, and replay or c
     await assert.rejects(app.briefProgress.record(jobId, { ...command, note: "changed replay" }), { code: "BRIEF_PROGRESS_COMMAND_CONFLICT" });
     assert.equal((await progressEvents(command.commandId)).length, 1);
   }
+  // The same command ID on another live job conflicts and adds nothing there.
+  const otherJob = await f1LiveJob();
+  await assert.rejects(app.briefProgress.record(otherJob, recorded), { code: "BRIEF_PROGRESS_COMMAND_CONFLICT" });
+  assert.equal((await app.briefProgress.read(otherJob)).progress.length, 0);
+  assert.equal((await progressEvents(recorded.commandId)).length, 1);
   assert.deepEqual(await f1CommercialSnapshot(), snapshot, "no scope, price, order or completion writes");
   const otherTask = brief.content.tasks[1];
   assert.equal(otherTask.scopeItemId, task.scopeItemId);
