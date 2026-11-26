@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const app = vi.hoisted(() => ({ read: vi.fn(), start: vi.fn(), record: vi.fn(), fileWalkPhoto: vi.fn(), compose: vi.fn(), failure: vi.fn() }));
+const app = vi.hoisted(() => ({ read: vi.fn(), start: vi.fn(), record: vi.fn(), fileWalkPhoto: vi.fn(), uploadPhoto: vi.fn(), jobLive: vi.fn(), compose: vi.fn(), failure: vi.fn() }));
 vi.mock("../../../../../lib/workspace-server", () => ({ workspaceApplication: app.compose }));
 vi.mock("../../../../../lib/synthetic-server", () => ({ practiceFailure: app.failure }));
 // Exercise B1A's real command schemas; persistence is tested by the full V2 seed suite.
 vi.mock("../../../../../../../../packages/db/src/audit.js", () => ({}));
 vi.mock("../../../../../../../../packages/db/src/tenant-context.js", () => ({}));
 vi.mock("../../../../../../../../packages/db/src/practice-session.js", () => ({}));
-vi.mock("@jobguard/api/workspace", async () => import("../../../../../../../../packages/db/src/v2-walk-repository.js"));
+vi.mock("@jobguard/api/workspace", async () => ({ ...await import("../../../../../../../../packages/db/src/v2-walk-repository.js"),
+  // V2-B1E: the photo command schema only.
+  ...await import("../../../../../../../../apps/api/src/workspace/walk-photo-command.js") }));
 import { WalkError } from "../../../../../../../../packages/db/src/v2-walk-repository";
 import { GET, POST } from "./route";
 
@@ -26,7 +28,7 @@ beforeEach(() => {
   vi.stubEnv("JOBGUARD_LOCAL_V2", "1"); vi.stubEnv("JOBGUARD_ENV", "synthetic_demo");
   vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", origin); vi.stubEnv("NODE_ENV", "production");
   for (const name of ["VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL", "CF_PAGES_URL"]) vi.stubEnv(name, "");
-  app.compose.mockResolvedValue({ walk: app }); app.read.mockResolvedValue([]); app.failure.mockReturnValue(null);
+  app.compose.mockResolvedValue({ walk: app }); app.read.mockResolvedValue([]); app.jobLive.mockResolvedValue(true); app.failure.mockReturnValue(null);
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -35,7 +37,7 @@ describe("B1B walk route", () => {
     app.read.mockResolvedValue([{ sessionId, entries: [] }]);
     const response = await GET(new Request(`${origin}/?sessionId=${sessionId}`), context);
     expect(response.status).toBe(200); expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toEqual({ sessions: [{ sessionId, entries: [] }] });
+    expect(await response.json()).toEqual({ sessions: [{ sessionId, entries: [] }], jobLive: true });
     expect(app.read).toHaveBeenCalledWith("job", { version: "v2-walk-query.v1", sessionId });
   });
   it.each([start, record])("dispatches $action through the checked application at an internal HTTP URL", async command => {
@@ -112,6 +114,32 @@ describe("B1C filing route", () => {
   it("keeps filings disabled outside V2", async () => {
     vi.stubEnv("JOBGUARD_LOCAL_V2", "0");
     expect((await POST(request(filing), context)).status).toBe(404);
+    expect(app.compose).not.toHaveBeenCalled();
+  });
+});
+
+// V2-B1E: "Take photo" uploads through the walk application only, on a live job.
+describe("B1E walk photo upload", () => {
+  const photo = { action: "photo", version: "v2-walk-photo-command.v1", commandId, fixture: "completion-photo" };
+  it("dispatches the photo command and returns the upload state", async () => {
+    app.uploadPhoto.mockResolvedValue({ photoId: commandId, state: "verified" });
+    const response = await POST(request(photo), context);
+    expect(response.status).toBe(200); expect(await response.json()).toEqual({ photoId: commandId, state: "verified" });
+    const { action: _action, ...command } = photo;
+    expect(app.uploadPhoto).toHaveBeenCalledWith("job", command);
+  });
+  it("maps the shared live-job refusal to 409 JOB_NOT_LIVE", async () => {
+    app.uploadPhoto.mockRejectedValue(Object.assign(new Error("JOB_NOT_LIVE"), { code: "JOB_NOT_LIVE" }));
+    const response = await POST(request(photo), context);
+    expect(response.status).toBe(409); expect(await response.json()).toEqual({ code: "JOB_NOT_LIVE" });
+  });
+  it.each([{ fixture: "camera" }, { commandId: "not-a-uuid" }, { bytes: "AAAA" }, { photoId: commandId }])
+    ("refuses malformed photo commands", async extra => {
+      expect((await POST(request({ ...photo, ...extra }), context)).status).toBe(400);
+      expect(app.compose).not.toHaveBeenCalled();
+    });
+  it.each([null, "https://foreign.invalid"])("refuses photo origin %s", async from => {
+    expect((await POST(request(photo, from), context)).status).toBe(403);
     expect(app.compose).not.toHaveBeenCalled();
   });
 });

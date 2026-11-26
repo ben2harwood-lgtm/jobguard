@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { needsRoom, filingLabel, roomSummaryEntries, currentRoom, newEntry, nextCaptureOrder, validMeasurement, type EntryView } from "./walk-state";
+import { needsRoom, filingLabel, roomSummaryEntries, currentRoom, newEntry, nextCaptureOrder, validMeasurement, type EntryView, newPhotoEntry, walkPhotoAction, walkPhotoLabel } from "./walk-state";
 
 const row = (captureOrder: number, room: string, deviceCapturedAt: string) =>
   ({ captureOrder, room, kind: "room", deviceCapturedAt } as EntryView);
@@ -42,5 +42,21 @@ describe("B1C needs-room helpers", () => {
       photo("no_room"), photo("waiting")];
     expect(roomSummaryEntries(rows, "Hall")).toEqual(rows.slice(0, 2));
     expect(roomSummaryEntries(rows, "Kitchen")).toEqual([rows[2]]);
+  });
+});
+
+describe("V2-B1E take photo", () => {
+  it("offers Take photo only on a live job, and explains the practice limit otherwise", () => {
+    expect(walkPhotoAction(true, false)).toEqual({ enabled: true, note: "Takes a generated practice photo. Real camera photos come later." });
+    expect(walkPhotoAction(true, true).enabled).toBe(false);
+    expect(walkPhotoAction(false, false)).toEqual({ enabled: false, note: "Photos can be added once the job is live (practice limit)" });
+    expect(walkPhotoAction(null, false).enabled).toBe(false);
+  });
+  it.each([[undefined, "Photo not uploaded"], ["not_uploaded", "Photo not uploaded"], ["pending", "Photo upload pending"],
+    ["quarantined", "Photo being checked"], ["verified", "Photo verified · file integrity checked"], ["rejected", "Photo rejected"]] as const)(
+    "labels photo state %s", (state, label) => expect(walkPhotoLabel(state)).toBe(label));
+  it("builds a photo entry at the next capture order", () => {
+    const command = newPhotoEntry("s", [row(1, "Hall", "2026-11-26T10:00:00.000Z")], "p", "c", "2026-11-26T10:01:00.000Z");
+    expect(command).toMatchObject({ captureOrder: 2, expectedVersion: 0, commandId: "c", entry: { kind: "photo", photoId: "p" } });
   });
 });

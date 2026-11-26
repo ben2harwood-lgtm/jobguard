@@ -74,7 +74,7 @@ async function signInOnce(browser, { jobTitle = "Occupied-home kitchen splashbac
 }
 
 const origin = v2Origin();
-let browser, storageState, jobId;
+let browser, storageState, jobId, csrfToken;
 before(async () => {
   browser = await launchV2Browser();
   const setup = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -83,7 +83,7 @@ before(async () => {
     const disabled = await setup.request.post(`${origin}/__nextjs_disable_dev_indicator`);
     assert.equal(disabled.status(), 204, "The test stack must disable the Next.js dev indicator");
   } finally { await setup.close(); }
-  ({ storageState, jobId } = await signInOnce(browser));
+  ({ storageState, jobId, csrfToken } = await signInOnce(browser));
   if (process.env.V2_TEST_SCREENSHOTS) await mkdir(process.env.V2_TEST_SCREENSHOTS, { recursive: true });
 });
 after(async () => browser?.close());
@@ -109,7 +109,8 @@ for (const [width, phone] of [[360, false], [1280, false], [390, true]]) {
       const saved = walk.getByRole("list", { name: "Saved walk entries" });
       await expect(saved.getByTestId("walk-entry")).toHaveCount(1);
       await expect(walk.getByRole("button", { name: "Take photo", exact: true })).toBeDisabled();
-      await expect(walk.getByText("Photos arrive in the next update", { exact: true })).toBeVisible();
+      // V2-B1E: the seeded job is accepted but not live, so the shared upload rule keeps photos off.
+      await expect(walk.getByText("Photos can be added once the job is live (practice limit)", { exact: true })).toBeVisible();
       assert.equal(await walk.locator('input[type="file"],audio,video').count(), 0);
 
       // Let the server commit, then lose the response. Retry must replay the exact command.
@@ -220,6 +221,45 @@ for (const [width, phone] of [[360, false], [1280, false], [390, true]]) {
       const { sessions } = await read.json();
       assert.equal(sessions[0].entries[0].filingVersion, 2);
       assert.equal(sessions[0].entries[0].originalRoomCaptureOrder, null);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    } finally { await context.close(); }
+  });
+}
+
+// V2-B1E runs last: it switches the seeded job live (practice, no charge), then takes a practice photo.
+for (const [width, phone] of [[360, false], [1280, false], [390, true]]) {
+  test(`B1E Take photo files a verified practice photo at ${width}px${phone ? " phone mode" : ""}`, { timeout: 120_000 }, async () => {
+    const context = await browser.newContext({ viewport: { width, height: 900 }, ignoreHTTPSErrors: true,
+      storageState, isMobile: phone, hasTouch: phone });
+    try {
+      const page = await context.newPage();
+      const endpoint = `${origin}/api/v2-backend/jobs/${jobId}/walk`;
+      if (!(await (await context.request.get(endpoint)).json()).jobLive) {
+        const live = await context.request.post(`${origin}/api/jobs/${jobId}/quotes/activation`, {
+          headers: { origin, "x-csrf-token": csrfToken },
+          data: { version: "practice-activation-command.v1", commandId: crypto.randomUUID(), scenario: "no_charge" } });
+        assert.equal(live.status(), 200, await live.text());
+      }
+      const sessionId = crypto.randomUUID();
+      for (const command of [{ action: "start", version: "v2-walk-session-command.v1", sessionId, deviceStartedAt: new Date().toISOString() },
+        { action: "record", version: "v2-walk-entry-command.v1", sessionId, commandId: crypto.randomUUID(), captureOrder: 1,
+          expectedVersion: 0, deviceCapturedAt: new Date().toISOString(), entry: { kind: "room", room: "Kitchen" } }]) {
+        const response = await context.request.post(endpoint, { headers: { origin }, data: command });
+        assert.equal(response.status(), 200, await response.text());
+      }
+      await page.goto(`${origin}/jobs/${jobId}/walk`);
+      const walk = page.getByRole("main").getByRole("region", { name: "Walk the job", exact: true });
+      await walk.getByLabel("Walk session", { exact: true }).selectOption(sessionId);
+      await expect(walk.getByText("Takes a generated practice photo. Real camera photos come later.", { exact: true })).toBeVisible();
+      await walk.getByRole("button", { name: "Take photo", exact: true }).click();
+      const saved = walk.getByRole("list", { name: "Saved walk entries" });
+      await expect(saved.getByTestId("walk-photo-state")).toHaveText("Photo verified · file integrity checked");
+      await page.reload();
+      await walk.getByLabel("Walk session", { exact: true }).selectOption(sessionId);
+      await expect(saved.getByTestId("walk-photo-state")).toHaveText("Photo verified · file integrity checked");
+      if (process.env.V2_TEST_SCREENSHOTS) await page.screenshot({
+        path: `${process.env.V2_TEST_SCREENSHOTS}/v2-b1e-photo-${width}${phone ? "-phone" : ""}.png`, fullPage: true });
+      assert.equal(await walk.locator('input[type="file"],audio,video').count(), 0);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     } finally { await context.close(); }
   });

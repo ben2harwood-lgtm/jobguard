@@ -1843,3 +1843,65 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   assert.equal(await policyCount(), before);
 });
+
+// ---- V2-B1E (Q50): "Take photo" on the walk, through the shared live-job upload path, unchanged ----
+const b1eAudit = photoId => admin.query(`SELECT event_type, actor_ref FROM app.audit_event
+  WHERE event_type LIKE 'v2.walk_photo.%' AND payload->'references'->>'uploadCommandId' = $1 ORDER BY sequence`, [photoId]).then(r => r.rows);
+test("B1E Take photo on a live job: one verified upload and one photo entry, retries add nothing, other jobs and firms are refused", async () => {
+  const { jobId: liveJob, sessionId: ownerSession } = await pxLiveJob();
+  const walk = walkWorkspace({ pool: runtime, sessionId: ownerSession }).walk;
+  const outsider = await signIn("second-builder");
+  const { context: outsiderContext } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  assert.equal(await walk.jobLive(liveJob), true);
+  const sessionId = walkId(), now = new Date();
+  await walk.start(liveJob, { version: "v2-walk-session-command.v1", sessionId, deviceStartedAt: now.toISOString() });
+  await walk.record(liveJob, entryCommand(sessionId, 1, { kind: "room", room: "Kitchen" }, now));
+  const photo = { version: "v2-walk-photo-command.v1", commandId: walkId(), fixture: "completion-photo" };
+  const uploaded = await walk.uploadPhoto(liveJob, photo);
+  assert.deepEqual(uploaded, { photoId: photo.commandId, state: "verified" });
+  const entry = entryCommand(sessionId, 2, { kind: "photo", photoId: photo.commandId }, now);
+  const saved = await walk.record(liveJob, entry);
+  // A retry resends the same ids: still one upload, one entry and one event of each kind.
+  assert.deepEqual(await walk.uploadPhoto(liveJob, photo), uploaded);
+  assert.deepEqual(await walk.record(liveJob, entry), saved);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.evidence_upload WHERE id = $1", [photo.commandId])).rows[0].n, 1);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_walk_entry WHERE photo_id = $1", [photo.commandId])).rows[0].n, 1);
+  assert.deepEqual((await b1eAudit(photo.commandId)).map(event => event.event_type).sort(), ["v2.walk_photo.attached", "v2.walk_photo.finalized"]);
+  // A walk photo is never a stage-proof upload: no scope on the upload or its evidence object.
+  assert.deepEqual((await admin.query(`SELECT u.scope_item_id AS upload, e.scope_item_id AS evidence FROM app.evidence_upload u
+    JOIN app.evidence_object e ON (e.tenant_id, e.upload_id) = (u.tenant_id, u.id) WHERE u.id = $1`, [photo.commandId])).rows,
+  [{ upload: null, evidence: null }]);
+  const [read] = await walk.read(liveJob, { ...walkQuery, sessionId });
+  const photoEntry = read.entries.find(item => item.kind === "photo");
+  assert.equal(photoEntry.photo.state, "verified");
+  assert.equal(photoEntry.linkedRoom, "Kitchen");
+  // A photo id from another job is refused, and no entry is written.
+  const elsewhere = await pxLiveJob();
+  const foreignPhoto = { ...photo, commandId: walkId() };
+  await walkWorkspace({ pool: runtime, sessionId: elsewhere.sessionId }).walk.uploadPhoto(elsewhere.jobId, foreignPhoto);
+  const elsewhereSession = walkId();
+  await walk.start(elsewhere.jobId, { version: "v2-walk-session-command.v1", sessionId: elsewhereSession, deviceStartedAt: now.toISOString() });
+  await walk.record(elsewhere.jobId, entryCommand(elsewhereSession, 1, { kind: "photo", photoId: foreignPhoto.commandId }, now));
+  const reused = entryCommand(sessionId, 3, { kind: "photo", photoId: foreignPhoto.commandId }, now);
+  await assert.rejects(walk.record(liveJob, reused), error => ["WALK_PHOTO_REFUSED", "V2_WALK_PHOTO_OTHER_JOB"].includes(error.code ?? error.message));
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_walk_entry WHERE command_id = $1", [reused.commandId])).rowCount, 0);
+  // Rule 30 A/B: the second firm reads neither the photo nor the entry, through the app or as jobguard_runtime.
+  const outsiderWalk = walkWorkspace({ pool: runtime, sessionId: outsider.sessionId }).walk;
+  await assert.rejects(outsiderWalk.read(liveJob, walkQuery), { code: "NOT_FOUND" });
+  await assert.rejects(outsiderWalk.uploadPhoto(liveJob, { ...photo, commandId: walkId() }), { code: "NOT_FOUND" });
+  for (const table of ["app.evidence_upload", "app.v2_walk_entry"]) {
+    assert.equal((await withTenant(runtime, outsiderContext, db => db.$client.query(`SELECT 1 FROM ${table} WHERE job_id = $1`, [liveJob]))).rowCount, 0, table);
+  }
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_walk_entry WHERE job_id = $1", [liveJob])).rowCount, 2, "positive control");
+});
+
+test("B1E Take photo on a job that isn't live is refused with JOB_NOT_LIVE, with no upload and no entry", async () => {
+  const { draftJob, sessionId: ownerSession } = await draftForPlan();
+  const walk = walkWorkspace({ pool: runtime, sessionId: ownerSession }).walk;
+  assert.equal(await walk.jobLive(draftJob), false);
+  const photo = { version: "v2-walk-photo-command.v1", commandId: walkId(), fixture: "completion-photo" };
+  await assert.rejects(walk.uploadPhoto(draftJob, photo), error => (error.code ?? error.message) === "JOB_NOT_LIVE");
+  assert.equal((await admin.query("SELECT 1 FROM app.evidence_upload WHERE id = $1", [photo.commandId])).rowCount, 0);
+  assert.equal((await admin.query("SELECT 1 FROM app.v2_walk_entry WHERE photo_id = $1", [photo.commandId])).rowCount, 0);
+  assert.deepEqual(await b1eAudit(photo.commandId), []);
+});

@@ -1,7 +1,10 @@
 import type { WalkEntryCommand, WalkEntryView, WalkSession } from "@jobguard/api/workspace";
 
+export type PhotoState = NonNullable<WalkEntryView["photo"]>["state"];
 export type EntryView = Omit<WalkEntryView, "deviceCapturedAt" | "serverReceivedAt" | "photo"> & {
   deviceCapturedAt: string; serverReceivedAt: string;
+  // V2-B1E: the photo's verification, read live from its upload.
+  photo?: { state: PhotoState; verifiedAt: string | null } | null;
 };
 export type SessionView = Omit<WalkSession, "deviceStartedAt" | "serverReceivedAt"> & {
   deviceStartedAt: string; serverReceivedAt: string; entries: EntryView[];
@@ -42,4 +45,22 @@ export function filingLabel(entry: EntryView) {
   return entry.link === "filed"
     ? `Filed under ${entry.linkedRoom} (taken in ${entry.originalLinkedRoom ?? "no room"})`
     : entry.link === "linked" ? entry.linkedRoom ?? "Room link needs checking" : "Room link needs checking";
+}
+
+// V2-B1E: "Take photo" uses the shared upload path unchanged, which takes photos on a live job only (option 1).
+export function walkPhotoAction(jobLive: boolean | null, blocked: boolean) {
+  if (jobLive === false) return { enabled: false, note: "Photos can be added once the job is live (practice limit)" };
+  if (jobLive === null) return { enabled: false, note: "Checking whether photos can be added…" };
+  return { enabled: !blocked, note: "Takes a generated practice photo. Real camera photos come later." };
+}
+
+export function walkPhotoLabel(state: PhotoState | undefined) {
+  return { not_uploaded: "Photo not uploaded", pending: "Photo upload pending", quarantined: "Photo being checked",
+    verified: "Photo verified · file integrity checked", rejected: "Photo rejected" }[state ?? "not_uploaded"];
+}
+
+export function newPhotoEntry(sessionId: string, entries: readonly EntryView[], photoId: string,
+  commandId: string, deviceCapturedAt: string): WalkEntryCommand {
+  return { version: "v2-walk-entry-command.v1", sessionId, commandId,
+    captureOrder: nextCaptureOrder(entries), expectedVersion: 0, deviceCapturedAt, entry: { kind: "photo", photoId } };
 }
