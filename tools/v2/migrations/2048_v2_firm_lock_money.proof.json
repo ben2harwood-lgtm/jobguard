@@ -1,7 +1,7 @@
 {
-  "slice": "FL-2",
-  "packet": "Q36",
-  "note": "Copied from reviews/v2/codex-queue/Q36-v2-fl2-firm-lock-money.md at a3f4c1462. The slice deletes this file when it locks these tables.",
+  "packet": "Q36 / V2-FL-2 (RED)",
+  "migration": "2048_v2_firm_lock_money.sql",
+  "database": "jobguard_v2_local",
   "tables": [
     "app.billing_allocation_run",
     "app.billing_application_event",
@@ -37,5 +37,8 @@
     "app.final_account_revision",
     "app.final_account_scope_disposition",
     "app.extra_client_link_closure"
-  ]
+  ],
+  "policies": "RESTRICTIVE v2_practice_firm FOR ALL TO jobguard_runtime; 33 direct job joins and extra_client_link_closure through extra_client_link on (tenant_id, link_id)",
+  "runtimeGrants": "unchanged",
+  "tests": "tools/v2/seed.integration.test.mjs loads tools/v2/firm-lock/FL-2.checks.mjs; execution pending CI1"
 }

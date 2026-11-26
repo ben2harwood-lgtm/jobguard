@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-fl2": {
+      "branches": [
+        "codex/sandbox/v2-fl2"
+      ],
+      "note": "RED tenancy. Q36 V2-FL-2: restrictive firm locks on the 34 money/extra/final-account tables; no web workflow.",
+      "allow": [
+        "packages/db/migration-notes/2048_v2_firm_lock_money.md",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/firm-lock/FL-2.checks.mjs",
+        "tools/v2/firm-lock/pending/FL-2.json",
+        "tools/v2/migrations/2048_v2_firm_lock_money.proof.json",
+        "tools/v2/migrations/2048_v2_firm_lock_money.sql"
+      ]
+    }
+  }
+}
