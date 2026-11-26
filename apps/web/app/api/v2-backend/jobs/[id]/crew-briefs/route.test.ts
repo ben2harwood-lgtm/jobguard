@@ -34,6 +34,12 @@ describe("V2-D5B-B crew briefs boundary", () => {
     }
     expect(mocks.workspace).not.toHaveBeenCalled();
   });
+  it("does not offer a trade whose only tasks are approved extras, which the brief generator cannot make", async () => {
+    mocks.plan.mockResolvedValue({ tasks: [{ trade: "tiler", scopeItemId: "q1" }, { trade: "electrician", scopeItemId: "x1" },
+      { trade: "decorator", scopeItemId: "x1" }, { trade: "decorator", scopeItemId: "q2" }],
+    scopeItems: [{ scopeItemId: "q1" }, { scopeItemId: "q2" }, { scopeItemId: "x1", variationRevisionId: "r1" }] });
+    expect(await (await get()).json()).toEqual({ trades: ["tiler", "decorator"], briefs: [] });
+  });
   it("discovers two trades in plan order before any briefs exist, without returning the plan's other fields", async () => {
     mocks.plan.mockResolvedValue({ tasks: [{ trade: "tiler", amount: 123 }, { trade: "decorator" }, { trade: "tiler" }], hidden: "excluded" });
     const response = await get();
