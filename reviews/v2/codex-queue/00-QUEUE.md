@@ -81,6 +81,10 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D21 | Q56 | V2-G2 handover pack: builder ticks what goes in, previews, saves frozen numbered versions with source versions; no amounts | **Opus** | G1 #996 `claude/project-thread-trp08u-g1` | 2043 | RED |
 | D22 | Q57 | V2-G3 release a saved handover version by customer link after site completion; acknowledge receipt only; newer version shown | **Opus** | G2 (Q56) PR, once open | 2058 | RED |
 | D23 | Q58 | V2-K5B-1 draft deposit or stage invoice from the frozen stage (date stages frozen in the same transaction); nothing issued or sent | **Opus** | K5A-1 #992 `claude/project-thread-trp08u-k5a1` | 2034 | RED money |
+| D24 | Q59 | V2-SQ1 "Talk through a quote": one press starts the on-device mic; typing always there; refused mic says how to allow it | **Opus** | spoken-quote parser PR (builder's) | none | T2 |
+| D25 | Q60 | V2-SQ2 split and combine keep known prices; price box per row; running total says incomplete; whole-job figure shown, never spread | **Opus** | SQ1 (Q59) PR | none | RED money |
+| D26 | Q61 | V2-SQ3 proof: untouched transcripts → saved quote that reopens unchanged, desktop and 360 px; Ben's phone checklist | **Opus** | SQ2 (Q60) PR | none | T1 |
+| D27 | Q62 | V2-SQ4 Tommy demo journeys (#918 @ 32decb2c1, read only) vs V2 routes: On V2 / On a V2 PR / Missing; specs for journeys V2 covers | **Opus** | v2/main | none | T1 |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 
