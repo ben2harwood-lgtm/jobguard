@@ -13,7 +13,7 @@ vi.mock("../../../../../../lib/synthetic-server", () => ({ syntheticPool: stub.p
 import { POST } from "./route";
 const workerId = randomUUID();
 const call = (request: Request) => POST(request, { params: Promise.resolve({ workerId }) });
-beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_URL", "app.example.com"); vi.clearAllMocks(); for (const fn of Object.values(stub.application)) fn.mockResolvedValue({ state: "owner" }); });
+beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://app.example.com"); vi.clearAllMocks(); for (const fn of Object.values(stub.application)) fn.mockResolvedValue({ state: "owner" }); });
 afterEach(() => vi.unstubAllEnvs());
 it.each(["pilot_no_charge", "production_billing", "", undefined, "SYNTHETIC_DEMO", " synthetic_demo"])("[PW19] mode %s refuses before pool creation", async mode => {
  if (mode === undefined) delete process.env.JOBGUARD_ENV; else process.env.JOBGUARD_ENV = mode;

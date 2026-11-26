@@ -7,7 +7,7 @@ import { POST } from "./route";
 const job = "00000000-0000-4000-8000-000000000001";
 const raw = () => ({ version: "start-site-visit.v1", commandId: crypto.randomUUID() });
 const post = (body: string, origin: string | undefined = "https://app.fictional.invalid", headers: Record<string, string> = {}, query = "") => POST(new Request(`https://app.fictional.invalid/api/contractor/jobs/ignored/site-visits/start${query}`, { method: "POST", headers: { "content-type": "application/json", ...(origin ? { origin } : {}), ...headers }, body }), { params: Promise.resolve({ id: job }) });
-beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("VERCEL_URL", "app.fictional.invalid"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", ""); startVisit.mockReset(); workspace.mockClear(); startVisit.mockResolvedValue({ version: "site-visit-started.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job, visitId: crypto.randomUUID(), startedAt: "2026-10-13T09:00:00.000000Z" }); });
+beforeEach(() => { vi.stubEnv("JOBGUARD_ENV", "synthetic_demo"); vi.stubEnv("VERCEL", "1"); vi.stubEnv("JOBGUARD_ALLOWED_ORIGINS", "https://app.fictional.invalid"); startVisit.mockReset(); workspace.mockClear(); startVisit.mockResolvedValue({ version: "site-visit-started.v1", environment: "synthetic_demo", realExternalActions: 0, jobId: job, visitId: crypto.randomUUID(), startedAt: "2026-10-13T09:00:00.000000Z" }); });
 afterEach(() => vi.unstubAllEnvs());
 describe("ENT-3b thin Next adapter: start a visit", () => {
  it("[B17] passes only the parsed body and the path ID, ignoring tenant, member and role in headers and query", async () => {
