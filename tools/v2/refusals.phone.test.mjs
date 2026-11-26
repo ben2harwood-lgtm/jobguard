@@ -76,22 +76,28 @@ async function signInOnce(browser, localPart) {
 
 // Fresh jar for EVERY request: missing and capability cases cannot inherit the
 // builder's Secure cookies. Copy explicit cookies unchanged, including after logout.
-async function request(path, { cookies, csrf, method = "GET", body } = {}, width = 360) {
+async function request(path, { cookies, csrf, tenantId, method = "GET", body } = {}, width = 360) {
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width, height: 800 } });
   try {
     const response = await context.request.fetch(origin + path, {
       method, maxRedirects: 0,
-      headers: { origin, ...(cookies && { cookie: cookies }), ...(csrf && { "x-csrf-token": csrf }) },
+      headers: { origin, ...(cookies && { cookie: cookies }), ...(csrf && { "x-csrf-token": csrf }),
+        ...(tenantId && { "x-tenant-id": tenantId }) },
       ...(body !== undefined && { data: body }),
     });
-    return new Response(await response.body(), { status: response.status(), headers: response.headers() });
+    // headersArray keeps each Set-Cookie separate; headers() joins them with newlines.
+    const headers = new Headers();
+    for (const { name, value } of await response.headersArray()) headers.append(name, value);
+    return new Response(await response.body(), { status: response.status(), headers });
   } finally { await context.close(); }
 }
 before(async () => {
   browser = await chromium.launch({ executablePath: process.env.V2_TEST_CHROMIUM });
   const builder = await signIn("builder");
   await signIn("second-builder");
-  route = { path: `/api/v2-backend/jobs/${builder.jobId}`, transport: "api", expect: body => assert.equal(body.job.id, builder.jobId) };
+  const { DEMO_TENANT_ID } = await import("../../packages/db/dist/index.js");
+  // d-real-csrf names the job's firm so the second firm is refused at membership.
+  route = { path: `/api/v2-backend/jobs/${builder.jobId}`, transport: "api", tenantId: DEMO_TENANT_ID, expect: body => assert.equal(body.job.id, builder.jobId) };
 });
 after(async () => browser?.close());
 for (const width of [360, 1280]) {
