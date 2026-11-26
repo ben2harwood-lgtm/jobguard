@@ -43,8 +43,8 @@ export type CrewBriefContent = {
     durationMinutes: number;
     visit: string | null;
     owner: string | null;
-    // The firm's crew record when the task is assigned to one; owner then holds its current name.
-    ownerRef: string | null;
+    // C3C's linked crew record, only when the task is assigned to one (older briefs stay byte-identical).
+    ownerRef?: string;
     proofNeeded: string[];
   }[];
   photos: { evidenceId: string; scopeItemId: string | null; contentType: string }[];
@@ -306,20 +306,25 @@ export class CrewBriefRepository {
     `, [plan.tenantId, plan.jobId, photoIds]);
     const photos = photoIds.map(id => found.find(photo => photo.evidenceId === id));
     if (photos.some(photo => !photo)) throw new CrewBriefError("CREW_BRIEF_PHOTO_NOT_FOUND");
-    // Current name of each linked crew record (the firm policy limits rows to this firm's crew).
+    // A task assigned to a crew record (C3C assigneeRef) shows that record's latest name, so a
+    // reassignment or a name correction changes the brief and marks the old one out of date.
     const refs = [...new Set(tasks.flatMap(task => task.assigneeRef ? [task.assigneeRef] : []))];
-    const { rows: crew } = refs.length ? await client.query<{ crewId: string; name: string }>(`
-      SELECT DISTINCT ON (crew_id) crew_id AS "crewId", display_name AS name FROM app.v2_crew_contact
-      WHERE tenant_id = $1 AND crew_id = ANY($2::uuid[]) ORDER BY crew_id, revision DESC
+    const { rows: crew } = refs.length ? await client.query<{ crewId: string; displayName: string }>(`
+      SELECT DISTINCT ON (crew_id) crew_id AS "crewId", display_name AS "displayName"
+      FROM app.v2_crew_contact WHERE tenant_id = $1 AND crew_id = ANY($2::uuid[])
+      ORDER BY crew_id, revision DESC
     `, [plan.tenantId, refs]) : { rows: [] };
+    const crewName = new Map(crew.map(row => [row.crewId, row.displayName]));
+    const owner = (task: (typeof tasks)[number]) =>
+      task.assigneeRef ? crewName.get(task.assigneeRef) ?? null : task.assignee ?? null;
     return {
       version: "v2-crew-brief.v1", trade, quoteRevisionId: plan.quoteRevisionId, accessWindow,
       tasks: tasks.map((task, index) => {
         const source = plan.sources.get(task.scopeItemId)!;
         return { position: index + 1, scopeItemId: task.scopeItemId, taskKey: task.key, title: task.title,
           scope: { description: source.description, quantity: source.quantity, unit: source.unit },
-          durationMinutes: task.durationMinutes, visit: task.scheduledDate ?? null, owner: task.assigneeRef ? crew.find(entry => entry.crewId === task.assigneeRef)?.name ?? null : task.assignee ?? null,
-          ownerRef: task.assigneeRef ?? null,
+          durationMinutes: task.durationMinutes, visit: task.scheduledDate ?? null, owner: owner(task),
+          ...(task.assigneeRef && { ownerRef: task.assigneeRef }),
           proofNeeded: [...task.proofPoints] };
       }),
       photos: photos as CrewBriefContent["photos"],

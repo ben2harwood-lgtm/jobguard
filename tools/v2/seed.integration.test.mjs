@@ -1385,11 +1385,11 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
     tasks: [
       { position: 1, scopeItemId: tilingId, taskKey: "prepare-splashback", title: "Prepare the splashback surface",
         scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
-        durationMinutes: 60, visit: visit("prepare-splashback"), owner: assignee("prepare-splashback"), ownerRef: null,
+        durationMinutes: 60, visit: visit("prepare-splashback"), owner: assignee("prepare-splashback"),
         proofNeeded: ["Photo of the prepared surface"] },
       { position: 2, scopeItemId: tilingId, taskKey: "tile-splashback", title: "Fit and grout the splashback",
         scope: { description: "Fit and grout kitchen splashback tiles", quantity: "6", unit: "m2" },
-        durationMinutes: 240, visit: visit("tile-splashback"), owner: assignee("tile-splashback"), ownerRef: null,
+        durationMinutes: 240, visit: visit("tile-splashback"), owner: assignee("tile-splashback"),
         proofNeeded: ["Photo of the finished splashback"] },
     ],
     photos: [{ evidenceId: tilerPhoto, scopeItemId: tilingId, contentType: "image/jpeg" }],
