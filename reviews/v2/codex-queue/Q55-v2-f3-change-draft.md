@@ -15,7 +15,7 @@
    - the **material needs** named by those tasks (the template's `materialNeeds`).
 
    Pack counts aren't drafted: the V2 materials list (D3/D5) isn't on this base. F4 handles orders.
-3. **Pending stays separate.** Until the variation is approved, the draft shows only in a "Pending changes" card, never in agreed scope, the plan or a brief. After approval, C3B (#922, merged) already joins the approved extra to the plan as its own scope item. F3 then offers "Add the extra time to the plan", which posts C3B's own plan edit (`variationRevisionId` set) with the drafted minutes. That is one press, made by the builder.
+3. **Pending stays separate.** Until the variation is approved, the draft shows only in a "Pending changes" card, never in agreed scope, the plan or a brief. After approval, F3 offers "Add the extra time to the plan": one press by the builder that makes an ordinary plan edit on each **existing** task (its duration plus the drafted minutes), one edit per drafted task, each with a stable command id. **Correction, builder #995, 26 Nov 17:30 UK:** C3B's approved scope joins only new-scope extras (it filters `onQuote`), so an existing-scope variation never becomes a plan extra, and an edit naming `variationRevisionId` would be refused.
 4. **A revised quantity is a new revision of the same variation.** It goes through the existing "revise" action, gets a new F3 record for the new revision, and needs a fresh F6 link. An F6 link for the old revision is refused by F6 already.
 
 ## Dry-check against `codex/sandbox/v2-f6` @ 9f9c6e088 (rule 23)
@@ -55,15 +55,15 @@
    - `list(context, jobId)`: each draft with its variation state (draft, priced, approved or rejected), whether an F6 link exists for that revision, and whether its time is on the plan yet (a C3B plan edit names the revision).
 5. **Application and route.** `ChangeDraftApplication` (same access as `V2CustomerExtraLinkApplication`); route `apps/web/app/api/jobs/[id]/change-drafts/route.ts` (GET list, POST preview, confirm or revise), with F6's gates; watchdog line `"/api/jobs/[id]/change-drafts": "pre_live_allowed"` (a draft isn't site work, as F6's route isn't).
 6. **Screen** `apps/web/app/v2/jobs/[id]/changes/page.tsx` plus `view.tsx`, linked from F6's extra-links page:
-   - **Change a quantity:** pick a quote line, enter the new total. The draft shows "Extra 0.8 m² at £X per m² = £Y (you confirm the rate)", "Extra time: Fit and grout the splashback +60 min", "Will need more: Tiles, Adhesive, Grout". Confirm saves it as a priced variation.
-   - **Pending changes:** each draft with its state. "Send for approval" opens F6's create-link for that exact revision. After approval, "Add the extra time to the plan" posts C3B's plan edit with the drafted minutes.
+   - **Change a quantity:** pick a quote line, enter the new total. The draft shows "Extra 0.8 m² at £X per m² = £Y (you confirm the rate)", "Extra time: Fit and grout the splashback +90 min", "Will need more: Tiles, Adhesive, Grout". Confirm saves it as a priced variation.
+   - **Pending changes:** each draft with its state. "Send for approval" opens F6's create-link for that exact revision. After approval, "Add the extra time to the plan" makes the ordinary plan edits (reading 3).
    - The agreed scope and the plan never show a pending draft.
    - Text comes from pure helpers tested with `renderToStaticMarkup` (no jsdom).
 7. **Lane** `config/lanes/v2-f3.json`. Mounts are each noted: `variation-repository.ts` (only if the transaction overload is needed; owned by main), F6's `extra-links/view.tsx` (one link), `index.ts` exports, `bootstrap.mjs` (one line), `seed.integration.test.mjs` (tests appended), `purchase-order-audit.integration.test.ts` (the `_v2_change_draft.sql` stem and one "table absent" check), and `watchdog.ts` (one line, owned by main).
 
 ## Tests
 - **Seed tests** (appended):
-  1. **Done-when case.** On the practice job, the splashback line goes from 2.4 to 3.2 m². The preview shows 0.8 m² at the line's rate, +60 min on "Fit and grout the splashback", and "Tiles, Adhesive, Grout". The builder confirms. There's now one priced existing-scope variation with `signed_delta_pence` = 0.8 × the rate, half-even, and one F3 draft bound to its revision. Agreed scope, the plan and the tiler's brief are unchanged. An F6 link for that revision shows that exact amount. After the customer agrees, one press adds +60 min to the plan through C3B, and the brief then shows it as outdated.
+  1. **Done-when case.** On the practice job, the splashback line goes from 2.4 to 3.2 m². The preview shows 0.8 m² at the line's rate, +90 min on "Fit and grout the splashback" (240 × 0.8 ÷ 2.4 = 80, rounded up to 90; the built tests use the seeded quantities, where the formula gives +60), and "Tiles, Adhesive, Grout". The builder confirms. There's now one priced existing-scope variation with `signed_delta_pence` = 0.8 × the rate, half-even, and one F3 draft bound to its revision. Agreed scope, the plan and the tiler's brief are unchanged. An F6 link for that revision shows that exact amount. After the customer agrees, one press adds +60 min to the plan through C3B, and the brief then shows it as outdated.
   2. Revise to 3.0 m²: a new revision and a new draft. The old F6 link is refused (F6's rule), and a fresh link shows the new amount.
   3. An omission (2.4 to 2.0) drafts a negative delta and 0 minutes.
   4. Refusals: an unpriced line without a builder rate; the same quantity; a line from a superseded quote revision; another job's line; a non-owner membership. Each writes nothing, and no variation exists after a refused confirm.
@@ -79,5 +79,5 @@
 - Only a quantity change on one quote line is drafted. A new kind of work is still an ordinary "Log an extra".
 
 ## Done when
-- On the practice job, changing the splashback from 2.4 to 3.2 m² drafts the price, the extra time and the materials together. Confirm makes one priced variation through the existing path. It stays out of agreed scope and the plan until approved. The F6 link shows that exact version and amount. After approval, one press puts the extra time on the plan.
+- On the practice job, changing the splashback from 2.4 to 3.2 m² drafts the price, the extra time and the materials together. Confirm makes one priced variation through the existing path. It stays out of agreed scope and the plan until approved. The F6 link shows that exact version and amount. After approval, one press puts the extra time on the existing tasks.
 - CI1 is green, and the Codex check is clean or answered.
