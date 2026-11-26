@@ -248,3 +248,6 @@ export { assertPilotConnection } from "./pilot-connection.js";
 
 export { PilotJobRepository } from "./pilot-job-repository.js";
 export * from "./snag-repository.js";
+
+// V2-C3C crew records.
+export * from "./v2-crew-contact-repository.js";
