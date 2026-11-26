@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { offlineCaptureItemV1, planOfflineCaptureUploadV1, transitionOfflineCaptureV1 } from "@jobguard/core";
 import { inlineAttachmentV1, MobileClientError, type LocalData } from "./lifecycle-contracts";
+import { receiptFor, type EncryptedMediaStore } from "./encrypted-media";
 import type { NativeAuthority, WorkspaceDocument } from "./workspace-document";
 
 export interface NativeCaptureTransport {
@@ -56,7 +57,20 @@ export function captureViews(data: LocalData) {
 type DigestBytes = (bytes: Uint8Array<ArrayBuffer>) => Promise<string>;
 export class NativeCaptureUpload {
  constructor(private readonly document: WorkspaceDocument, private readonly authority: NativeAuthority,
-  private readonly transport: NativeCaptureTransport, private readonly sha256: DigestBytes) {}
+  private readonly transport: NativeCaptureTransport, private readonly sha256: DigestBytes,
+  private readonly media?: EncryptedMediaStore) {}
+
+ /** Inline fixtures keep their original path; encrypted media is read one stored chunk at a time. */
+ private async source(data: LocalData, uploadId: string) {
+  const record = data.media.find(m => m.mediaId === uploadId);
+  if (record) {
+   if (!this.media) throw new MobileClientError("MOBILE_DENIED");
+   return { ...await this.media.source(record), encrypted: true };
+  }
+  const bytes = decode(data.files.find(f => f.id === uploadId)!.base64);
+  return { byteLength: bytes.length, sha256: () => this.sha256(bytes), encrypted: false,
+   read: async (start: number, end: number) => bytes.slice(start, end) };
+ }
 
  async keep(raw: unknown) {
   const value = input.parse(raw);
@@ -89,22 +103,27 @@ export class NativeCaptureUpload {
   const uploadId = guid.parse(rawUploadId);
   const partition = this.document.partition;
   await this.authority.assertCurrent(partition);
-  return this.document.transaction(async (data, checkpoint) => {
+  let verifiedMedia = false;
+  const views = await this.document.transaction(async (data, checkpoint) => {
    const index = data.captures.findIndex(c => c.item.uploadId === uploadId);
    const capture = data.captures[index];
    if (!capture?.upload) throw new MobileClientError("MOBILE_DENIED");
    let { item, upload } = capture;
    const updated = () => ({ ...data, captures: data.captures.map((saved, i) => i === index ? { item, upload } : saved) });
-   const finish = () => ({ data: updated(), result: captureViews(updated()) });
+   // A verified encrypted photo becomes its receipt in the SAME write; bytes and key are deleted only after it commits.
+   const settled = () => source?.encrypted && item.status === "verified" ? receiptFor(updated(), uploadId) : updated();
+   const finish = () => { const next = settled(); verifiedMedia = next.media.some(m => m.mediaId === uploadId && m.state === "verified_receipt");
+    return { data: next, result: captureViews(next) }; };
+   let source: Awaited<ReturnType<NativeCaptureUpload["source"]>> | null = null;
    if (item.status !== "local_only" && item.status !== "uploading") return finish();
-   const bytes = decode(data.files.find(f => f.id === uploadId)!.base64);
-   const currentClientSha256 = await this.sha256(bytes);
+   source = await this.source(data, uploadId);
+   const currentClientSha256 = await source.sha256();
    let status: z.infer<typeof statusReply> | null = null;
    let checkedAtMs = 0;
    const plan = () => planOfflineCaptureUploadV1({ version: "offline-capture-upload.v1", item, online: true,
     nowMs: checkedAtMs, currentClientSha256, deviceBytesSent: upload.nextOffset,
     server: status && upload.serverExpiresAtMs !== null ? { status, expiresAtMs: upload.serverExpiresAtMs } : null });
-   if (plan().step === "conflict" || bytes.length !== item.byteLength) {
+   if (plan().step === "conflict" || source.byteLength !== item.byteLength) {
     item = transitionOfflineCaptureV1(item, { type: "conflict" });
     return finish();
    }
@@ -157,8 +176,9 @@ export class NativeCaptureUpload {
     if (step.step === "review") { item = transitionOfflineCaptureV1(item, { type: "server_rejected" }); break; }
     await saveProgress();
     if (step.step === "append") {
-     const end = step.offset + Math.min(step.byteLength, chunkBytes);
-     const reply = await send("append", { offset: step.offset, bytes: bytes.slice(step.offset, end) }, appendReply);
+     const bytes = await source.read(step.offset, step.offset + Math.min(step.byteLength, chunkBytes));
+     const end = step.offset + bytes.length;
+     const reply = await send("append", { offset: step.offset, bytes }, appendReply);
      if (!reply || reply.nextOffset !== end) break;
      status = { ...status, nextOffset: reply.nextOffset };
      continue;
@@ -176,5 +196,8 @@ export class NativeCaptureUpload {
    }
    return finish();
   });
+  // Receipt is durable at this point. A failed deletion is retried by EncryptedMediaStore.cleanup().
+  if (verifiedMedia) await this.media?.cleanup().catch(() => undefined);
+  return views;
  }
 }
