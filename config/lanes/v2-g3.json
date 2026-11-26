@@ -5,7 +5,7 @@
       "branches": [
         "claude/project-thread-trp08u-g3"
       ],
-      "note": "RED Q57 V2-G3 release a saved handover version by customer link and Acknowledge receipt (receipt only). Release needs site completion, never the financial lock. Migration 2058 (number final at merge). Base claude/project-thread-trp08u-g2 (G2 #998). G3 mount, owned by core index: packages/db/src/index.ts and apps/api/src/workspace/index.ts one export line each. G3 mount, owned by main: packages/core/src/watchdog.ts one registry line. G3 mount, owned by G2 #998: apps/web/app/ui/v2-handover.tsx the HandoverReleases mount in the version history (replacing G2's 'comes next' line) and its card subtitle; the repository's version list is read, not changed. G3 mount, owned by SYNC-1 #980: tools/v2/bootstrap.mjs one migration line after 2043; packages/db/test/purchase-order-audit.integration.test.ts the _v2_handover_release.sql stem and one table-absent check; tools/v2/seed.integration.test.mjs one import line and own appended cases.",
+      "note": "RED Q57 V2-G3 release a saved handover version by customer link and Acknowledge receipt (receipt only). Release needs site completion, never the financial lock. Migration 2058 (number final at merge). Base claude/project-thread-trp08u-g2 (G2 #998). G3 mount, owned by core index: packages/db/src/index.ts and apps/api/src/workspace/index.ts one export line each. G3 mount, owned by main: packages/core/src/watchdog.ts one registry line. G3 mount, owned by G2 #998: apps/web/app/ui/v2-handover.tsx the HandoverReleases mount in the version history (replacing G2's 'comes next' line) and its card subtitle; the repository's version list is read, not changed. G3 mount, owned by SYNC-1 #980: tools/v2/bootstrap.mjs one migration line after 2043; packages/db/test/purchase-order-audit.integration.test.ts the _v2_handover_release.sql stem and one table-absent check; tools/v2/seed.integration.test.mjs one import line and own appended cases. G3 mount, owned by main: apps/web/proxy.ts the exact /api/v2/handover exception (token-authorized receipt; Codex P2) and its proxy.test.ts cases.",
       "allow": [
         "apps/api/src/workspace/handover-release.application.test.ts",
         "apps/api/src/workspace/handover-release.application.ts",
@@ -21,6 +21,8 @@
         "apps/web/app/ui/v2-handover-release-label.tsx",
         "apps/web/app/ui/v2-handover-release.tsx",
         "apps/web/app/ui/v2-handover.tsx",
+        "apps/web/proxy.test.ts",
+        "apps/web/proxy.ts",
         "packages/core/src/watchdog.ts",
         "packages/db/migration-notes/2058_v2_handover_release.md",
         "packages/db/migrations/2058_v2_handover_release.sql",
