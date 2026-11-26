@@ -49,28 +49,67 @@ export async function firmLockCatalog(admin) {
   return rows;
 }
 
-// The body of each EXISTS ( ... ) in a policy expression, with its parentheses balanced.
-function existsBodies(expression) {
-  const bodies = [];
-  for (let start = expression.indexOf("EXISTS ("); start !== -1; start = expression.indexOf("EXISTS (", start + 1)) {
-    let depth = 0;
-    for (let i = start + "EXISTS ".length; i < expression.length; i += 1) {
-      if (expression[i] === "(") depth += 1;
-      if (expression[i] === ")" && --depth === 0) { bodies.push(expression.slice(start + "EXISTS (".length, i)); break; }
-    }
+// A small parser for pg_get_expr output. A lock only counts when its joins are mandatory: the expression
+// must be nothing but EXISTS joins combined with AND, and each join nothing but column equalities.
+const squash = text => text.replace(/\s+/gu, " ").replace(/\( /gu, "(").replace(/ \)/gu, ")").trim();
+
+function closeOf(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i += 1) {
+    if (text[i] === "(") depth += 1;
+    if (text[i] === ")" && --depth === 0) return i;
   }
-  return bodies;
+  return -1;
 }
 
-// The foreign keys into job-bound parents that no EXISTS matches on every column (empty when all are).
+function unwrap(text) {
+  let out = text.trim();
+  while (out.startsWith("(") && closeOf(out, 0) === out.length - 1) out = out.slice(1, -1).trim();
+  return out;
+}
+
+// Split on a keyword at parenthesis depth 0 only.
+function splitTop(text, keyword) {
+  const parts = [];
+  let depth = 0;
+  let last = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === "(") depth += 1;
+    else if (text[i] === ")") depth -= 1;
+    else if (depth === 0 && text.startsWith(` ${keyword} `, i)) { parts.push(text.slice(last, i)); last = i + keyword.length + 2; }
+  }
+  return [...parts, text.slice(last)].map(unwrap);
+}
+
+/** The EXISTS joins of a lock as [{ parent, pairs: [[child, parentKey]] }], or null when any part is optional or extra. */
+export function mandatoryJoins(expression, table) {
+  const joins = [];
+  for (const conjunct of splitTop(unwrap(squash(expression)), "AND")) {
+    const exists = conjunct.match(/^EXISTS \(SELECT FROM (\S+) (\w+) WHERE (.*)\)$/u);
+    if (!exists || closeOf(conjunct, "EXISTS ".length) !== conjunct.length - 1) return null;
+    const [, parent, alias, where] = exists;
+    const pairs = [];
+    for (const condition of splitTop(unwrap(where), "AND")) {
+      const equal = condition.match(/^(\w+)\.(\w+) = (\w+)\.(\w+)$/u);
+      if (!equal || equal[1] !== alias || equal[3] !== table) return null;
+      pairs.push([equal[4], equal[2]]);
+    }
+    joins.push({ parent, pairs });
+  }
+  return joins;
+}
+
+const samePairs = (a, b) => a.length === b.length && a.every(([c, k]) => b.some(([c2, k2]) => c === c2 && k === k2));
+
+// app.job's own lock, exactly as 2001 writes it.
+const ROOT_LOCK = "((practice_session_digest IS NULL) OR (app.current_firm_profile_key() = ('practice:'::text || (practice_session_digest)::text)))";
+
+// The foreign keys into job-bound parents that no mandatory join matches exactly (empty when all are).
 // Each must read a firm-locked parent: a row naming two jobs (job_link) needs both to be visible.
-function unmatchedParentKeys(row, table, using, jobBound, lockedParents) {
-  const bodies = existsBodies(using);
+function unmatchedParentKeys(row, joins, jobBound, lockedParents) {
   const keys = (row.foreign_keys ?? []).filter(({ parent }) => jobBound.has(parent));
-  const matched = keys.filter(({ parent, pairs }) => lockedParents.has(parent) && bodies.some(body => {
-    const from = body.match(/^\s*SELECT\s+FROM (\S+) (\w+)\s+WHERE /u);
-    return from?.[1] === parent && pairs.every(([child, key]) => body.includes(`(${from[2]}.${key} = ${table}.${child})`));
-  }));
+  const matched = keys.filter(({ parent, pairs }) => lockedParents.has(parent)
+    && joins.some(join => join.parent === parent && samePairs(join.pairs, pairs)));
   // A key whose columns sit inside a matched key is covered by it (job_link's job ids sit inside its binding keys).
   const covered = ({ pairs }) => matched.some(other => pairs.every(([child]) => other.pairs.some(([c]) => c === child)));
   return keys.filter(key => !covered(key)).map(({ parent, pairs }) => `${parent}(${pairs.map(([child]) => child).join(", ")})`);
@@ -89,13 +128,17 @@ export function lockProblems(row, lockedParents = new Set(), jobBound = lockedPa
   if (JSON.stringify(policy.roles) !== JSON.stringify(["jobguard_runtime"])) problems.push("v2_practice_firm is not for jobguard_runtime only");
   const using = policy.using ?? "";
   const table = row.relation.replace(/^app\./u, "");
-  const joinsJob = new RegExp(`EXISTS \\(\\s*SELECT\\s+FROM app\\.job j\\s+WHERE \\(\\(j\\.tenant_id = ${table}\\.tenant_id\\) AND \\(j\\.id = ${table}\\.job_id\\)\\)\\)`, "u");
-  if (row.kind === "direct" && !joinsJob.test(using)) problems.push("v2_practice_firm does not join app.job on (tenant_id, job_id)");
+  const joins = row.kind === "root" ? [] : mandatoryJoins(using, table);
+  if (joins === null) problems.push("v2_practice_firm is not only mandatory EXISTS joins on column equalities (an OR or extra condition)");
+  if (row.kind === "direct" && joins && !(joins.length === 1 && joins[0].parent === "app.job"
+    && samePairs(joins[0].pairs, [["tenant_id", "tenant_id"], ["job_id", "id"]]))) {
+    problems.push("v2_practice_firm does not join app.job on (tenant_id, job_id)");
+  }
   // app.job is the root: 2001's rule compares the job's own practice digest with the session's firm.
-  if (row.kind === "root" && !/app\.current_firm_profile_key\(\)/u.test(using)) problems.push("app.job's v2_practice_firm does not check the session's firm");
+  if (row.kind === "root" && squash(using) !== squash(ROOT_LOCK)) problems.push("app.job's v2_practice_firm is not 2001's firm rule");
   // An indirect lock must reach the job through a firm-locked parent it has a foreign key to, on that key's every column.
-  if (row.kind === "indirect") {
-    const unmatched = unmatchedParentKeys(row, table, using, jobBound, lockedParents);
+  if (row.kind === "indirect" && joins) {
+    const unmatched = unmatchedParentKeys(row, joins, jobBound, lockedParents);
     if (unmatched.length > 0) problems.push(`v2_practice_firm does not join every job-bound parent on its full key: ${unmatched.join("; ")}`);
   }
   if (policy.check !== null && policy.check !== using) problems.push("v2_practice_firm has a different WITH CHECK");

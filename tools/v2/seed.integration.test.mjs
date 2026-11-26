@@ -1163,7 +1163,7 @@ test("FL guard: every pending table is still in the catalog and still unlocked",
   assert.deepEqual(stale, [], "a slice locked its tables but kept its pending file, or a table left the catalog");
 });
 
-test("FL guard: an indirect lock must match every job-bound parent's full key", async () => {
+test("FL guard: a lock must be mandatory joins on every job-bound parent's full key", async () => {
   const catalog = await firmLockCatalog(admin);
   const locked = new Set(catalog.filter(row => row.firm_policy).map(row => row.relation));
   const jobBound = new Set(catalog.map(row => row.relation));
@@ -1180,6 +1180,13 @@ test("FL guard: an indirect lock must match every job-bound parent's full key", 
   const binding = side => `(EXISTS ( SELECT\n   FROM app.job_party_binding b\n  WHERE ((b.tenant_id = job_link.tenant_id) AND (b.job_id = job_link.${side}_job_id) AND (b.id = job_link.${side}_binding_id))))`;
   assert.match(check("app.job_link", binding("predecessor")).join(), /successor_job_id, successor_binding_id/u);
   assert.match(check("app.job_link", binding("successor")).join(), /predecessor_job_id, predecessor_binding_id/u);
+  // Codex r4: an OR alternative makes the join optional, so it doesn't lock anything.
+  const optional = "v2_practice_firm is not only mandatory EXISTS joins on column equalities (an OR or extra condition)";
+  const diary = check("app.job_diary_entry").length === 0 && catalog.find(entry => entry.relation === "app.job_diary_entry").firm_policy.using;
+  assert.ok(diary, "the real 2047 direct policy passes");
+  assert.ok(check("app.job_diary_entry", `(${diary} OR true)`).includes(optional));
+  assert.ok(check("app.job_link", `(${binding("predecessor")} OR ${binding("successor")})`).includes(optional));
+  assert.ok(check("app.job_diary_entry", diary.replace("(j.id = job_diary_entry.job_id)", "((j.id = job_diary_entry.job_id) OR true)")).includes(optional));
   assert.notDeepEqual(lockProblems(catalog.find(entry => entry.relation === "app.finding_suppression"), new Set(), jobBound), [],
     "a parent without its own firm lock doesn't count");
 });
