@@ -10,6 +10,7 @@
         "apps/web/app/(designed)/designed-ui.tsx",
         "apps/web/app/(designed)/jobs-screens.tsx",
         "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/work-plan.test.tsx",
         "apps/web/app/(designed)/jobs/[id]/work/work-plan.tsx",
         "apps/web/app/(designed)/v2-mock/fixture.ts",
         "apps/web/app/(designed)/v2-mock/page.tsx",
