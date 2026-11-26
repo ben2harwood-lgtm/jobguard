@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calendarFeedCommandV1, calendarFeedSnapshot, calendarFeedTokenHash, calendarFeedTokenPattern, icsFold, icsText,
+import { calendarFeedAddress, calendarFeedCommandV1, calendarFeedSnapshot, calendarFeedTokenHash, calendarFeedTokenPattern, icsFold, icsText,
   newCalendarFeedToken, renderCalendarFeed, type CalendarFeedSnapshot } from "../src/v2-calendar-feed.js";
 
 const id = "44444444-4444-4444-8444-444444444444";
@@ -79,6 +79,12 @@ describe("V2-K2A calendar feed", () => {
     ] }, null);
     expect(snapshot.tasks).toEqual([{ quoteRevisionId: id, scopeItemId: id, templateTaskKey: "a", title: "Dated",
       trade: "Tiling", date: "2026-12-01", durationMinutes: 60, assignee: "Tess" }]);
+  });
+
+  it("formats the site address like the quote PDF, keeping a flat or unit number", () => {
+    const site = { addressLines: ["42 Make-Believe Mews"], town: "Sampleford", postcode: "ZY1 0AA" };
+    expect(calendarFeedAddress(site)).toBe("42 Make-Believe Mews, Sampleford, ZY1 0AA");
+    expect(calendarFeedAddress({ ...site, unit: "Flat 3" })).toBe("Flat 3, 42 Make-Believe Mews, Sampleford, ZY1 0AA");
   });
 
   it("makes 256-bit URL-safe tokens and refuses commands that do not fit their action", () => {

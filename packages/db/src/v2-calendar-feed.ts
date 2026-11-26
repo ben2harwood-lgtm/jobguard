@@ -41,6 +41,10 @@ export function calendarFeedSnapshot(plan: { quoteRevisionId: string; tasks: rea
       date: task.scheduledDate, durationMinutes: task.durationMinutes, assignee: task.assignee ?? null })) });
 }
 
+/** The job's site as one line, in the quote PDF's order, including a flat or unit number. */
+export const calendarFeedAddress = (site: { unit?: string | undefined; addressLines: readonly string[]; town: string; postcode: string }) =>
+  [site.unit, ...site.addressLines, site.town, site.postcode].filter(Boolean).join(", ");
+
 // RFC 5545 3.3.11: backslash, semicolon, comma and line breaks are escaped. Other control characters are dropped.
 export const icsText = (value: string) => value.replace(/\r\n|\r|\n/gu, "\n")
   // eslint-disable-next-line no-control-regex

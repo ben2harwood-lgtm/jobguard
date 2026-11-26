@@ -1,4 +1,4 @@
-import { CalendarFeedError, CalendarFeedRepository, PracticeAccessError, calendarFeedCommandV1, calendarFeedSnapshot,
+import { CalendarFeedError, CalendarFeedRepository, PracticeAccessError, calendarFeedAddress, calendarFeedCommandV1, calendarFeedSnapshot,
   renderCalendarFeed } from "@jobguard/db";
 import type { Pool } from "pg";
 import { JobPartiesApplication } from "../job-parties.application.js";
@@ -25,8 +25,7 @@ export class CalendarFeedApplication {
   private async snapshot(jobId: string) {
     const plan = await new WorkPlanApplication(this.pool, this.sessionId).read(jobId, { version: "work-plan-query.v1" });
     const site = (await new JobPartiesApplication(this.pool).view({ sessionId: this.sessionId! }, jobId)).current?.site;
-    const address = site ? [...site.addressLines, site.town, site.postcode].join(", ") : null;
-    return calendarFeedSnapshot(plan, address);
+    return calendarFeedSnapshot(plan, site ? calendarFeedAddress(site) : null);
   }
   async list(jobId: string) {
     const { context } = await this.authorize(jobId);
