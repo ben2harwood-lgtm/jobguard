@@ -1,0 +1,25 @@
+{
+  "packet": "Q27 / V2-PX (photo lock)",
+  "migration": "2025_v2_evidence_firm_lock.sql",
+  "database": "jobguard_v2_local",
+  "tables": [
+    "app.evidence_upload",
+    "app.evidence_object",
+    "app.synthetic_evidence_original",
+    "app.evidence_link",
+    "app.job_photo_purpose",
+    "app.evidence_pack",
+    "app.evidence_pack_revision",
+    "app.evidence_pack_attachment_approval",
+    "app.extra_evidence_pack",
+    "app.signed_evidence_export",
+    "app.customer_invoice_evidence",
+    "app.final_account_proof",
+    "app.proof_application_response",
+    "app.evidence_invalidation",
+    "app.synthetic_evidence_chunk"
+  ],
+  "policies": "RESTRICTIVE v2_practice_firm FOR ALL TO jobguard_runtime: row visible and writable only when its job (or its evidence or upload) is visible to the signed-in firm",
+  "runtimeGrants": "unchanged",
+  "tests": "tools/v2/seed.integration.test.mjs: V2-PX photo lock cases"
+}
