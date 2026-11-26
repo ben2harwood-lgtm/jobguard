@@ -1370,6 +1370,7 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   const before = await policyCount();
   await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   assert.equal(await policyCount(), before);
+});
 
 // V2-F8 (Q10, migration 2016): who was on site today. The builder taps each person; no location is stored.
 const attendanceTable = "app.v2_site_attendance";
