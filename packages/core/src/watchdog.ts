@@ -16,6 +16,8 @@ export type JobCommandPhase = "pre_live_allowed" | "watchdog_live_only" | "post_
 export const jobMutationRegistry: Readonly<Record<string, JobCommandPhase>> = {
   // V2-F1: site observations only; never completion proof.
   "/api/jobs/[id]/brief-progress": "watchdog_live_only",
+  // V2-F7M: issuing or cancelling a crew link records no site fact; crew presses check live themselves.
+  "/api/jobs/[id]/crew-links": "pre_live_allowed",
   // Practice-only accounting route approval; checked export authority remains mandatory.
   "/api/accounting-exports/[sourceId]/route-change": "post_live_billing",
   "/api/jobs/[id]/recovery-cases/[caseId]/billability": "post_live_billing",

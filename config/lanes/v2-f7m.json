@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-f7m": {
+      "branches": [
+        "claude/project-thread-trp08u-f7m"
+      ],
+      "note": "RED Q52 V2-F7M crew link: one trade brief by link, no sign-in, no prices; presses are observations the builder confirms. Migration 2041 (number final at merge). Base claude/project-thread-trp08u @ 11b9abbb7. F7M mount, owned by F1 #953: apps/web/app/ui/brief-progress.tsx mounts the Crew links card only. F7M mount, owned by F1 #953: apps/api/src/workspace/application.ts and index.ts one composition line and one export line. F7M mount, owned by core index: packages/db/src/index.ts one export line. F7M mount, owned by F1 #953: packages/core/src/watchdog.ts one registry line for /api/jobs/[id]/crew-links. F7M mount, owned by F1 #953: tools/v2/bootstrap.mjs one migration line; packages/db/test/purchase-order-audit.integration.test.ts deferred-migration entry only. F7M mount, owned by F1 #953: tools/v2/seed.integration.test.mjs and tools/v2/brief-progress.browser.test.mjs own appended cases and two import lines.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/crew-link.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/web/app/api/jobs/[id]/crew-links/route.test.ts",
+        "apps/web/app/api/jobs/[id]/crew-links/route.ts",
+        "apps/web/app/api/v2/brief/route.test.ts",
+        "apps/web/app/api/v2/brief/route.ts",
+        "apps/web/app/brief/[token]/page.tsx",
+        "apps/web/app/brief/[token]/view.tsx",
+        "apps/web/app/lib/v2-crew-link-server.ts",
+        "apps/web/app/ui/brief-progress.tsx",
+        "apps/web/app/ui/crew-links.tsx",
+        "apps/web/app/ui/v2-crew-link-label.test.tsx",
+        "apps/web/app/ui/v2-crew-link-label.ts",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/2041_v2_crew_link.md",
+        "packages/db/migrations/2041_v2_crew_link.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-crew-link-repository.ts",
+        "packages/db/test/migration-proofs/2041_v2_crew_link.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/brief-progress.browser.test.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

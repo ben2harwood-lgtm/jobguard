@@ -199,3 +199,44 @@ test("F2 a pending proof photo holds the task open until it is verified", { time
     if (process.env.V2_TEST_SCREENSHOTS) await page.getByRole("main").screenshot({ path: `${process.env.V2_TEST_SCREENSHOTS}/v2-f2-brief-progress-360.png` });
   } finally { await context.close(); }
 });
+
+// V2-F7M (Q52): a crew member opens their link signed out at 360px, presses Done, and the builder confirms it.
+test("F7M crew link: no sign-in, one trade's brief, Done reaches the builder who confirms it", { timeout: 120_000 }, async () => {
+  const sessionId = storageState.cookies.find(cookie => cookie.name === "jg_session")?.value;
+  const app = createWorkspaceApplication({ pool, sessionId });
+  let current = (await app.briefProgress.read(jobId)).briefs.find(item => item.trade === "tiler");
+  if (!current.current) current = await app.crewBriefs.generate(jobId, { version: "v2-crew-brief-command.v1", commandId: randomUUID(),
+    trade: "tiler", expectedVersion: current.version, accessWindow: current.content.accessWindow, photoIds: [] });
+  const crew = await app.crewContacts.record({ version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(),
+    expectedRevision: 0, displayName: "Ria Fictional", trade: "tiler", phone: "07700 900321", email: "ria@crew.jobguard-v2.invalid" });
+  const { token } = await app.crewLinks.command(jobId, { version: "v2-crew-link-command.v1", action: "issue", commandId: randomUUID(), crewId: crew.crewId });
+  const task = current.content.tasks[0];
+  const crewContext = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 360, height: 780 } });
+  try {
+    const page = await crewContext.newPage();
+    const response = await page.goto(`${origin}/brief/${token}`);
+    assert.equal(response.headers()["cache-control"]?.includes("no-store"), true);
+    const main = page.getByTestId("crew-brief-page");
+    await expect(main.getByRole("heading", { name: "Your tiler brief" })).toBeVisible();
+    await expect(main).not.toContainText("£");
+    await expect(main).not.toContainText("Make-Believe");
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, "no sideways scroll at 360px");
+    const card = main.locator("section.card").filter({ has: page.getByRole("heading", { name: task.title, exact: true }) }).first();
+    await card.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(main.getByRole("article", { name: `Done: ${task.title}` })).toContainText("Done sent to the builder");
+    if (process.env.V2_TEST_SCREENSHOTS) await page.screenshot({ path: `${process.env.V2_TEST_SCREENSHOTS}/v2-f7m-crew-brief-360.png`, fullPage: true });
+    await page.goto(`${origin}/brief/not-a-real-link`);
+    await expect(page.getByTestId("crew-brief-page")).toContainText("This link has expired, was cancelled or was replaced.");
+  } finally { await crewContext.close(); }
+  const context = await v2Context(browser, storageState, 360);
+  try {
+    const page = await context.newPage();
+    await page.goto(`${origin}/jobs/${jobId}/brief-progress`);
+    const links = page.getByRole("region", { name: "Crew links" });
+    const press = links.getByRole("article", { name: "Done by Ria Fictional, by link" }).last();
+    await expect(press.getByTestId("crew-press-state")).toHaveText("Not confirmed yet");
+    await press.getByRole("button", { name: "Confirm" }).click();
+    await expect(press.getByTestId("crew-press-state")).toHaveText("Confirmed");
+    if (process.env.V2_TEST_SCREENSHOTS) await links.screenshot({ path: `${process.env.V2_TEST_SCREENSHOTS}/v2-f7m-crew-links-360.png` });
+  } finally { await context.close(); }
+});

@@ -52,6 +52,8 @@ beforeAll(async () => {
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") && String(values?.[0]).endsWith("_v2_brief_progress.sql")) return { rows: [{}], rowCount: 1 };
     // V2-F1-P: photo extension follows the V2 progress table, absent in this rehearsal.
     if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") && String(values?.[0]).endsWith("_v2_brief_progress_photo.sql")) return { rows: [{}], rowCount: 1 };
+    // V2-F7M: the crew link follows the V2 progress and crew tables, absent in this rehearsal.
+    if (sql.startsWith("SELECT 1 FROM public.jobguard_schema_migration") && String(values?.[0]).endsWith("_v2_crew_link.sql")) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -68,6 +70,7 @@ beforeAll(async () => {
   await migrate(admin);
   expect((await admin.query("SELECT to_regprocedure('app.v2_work_plan_edit_scope_check()') AS scope_check")).rows[0].scope_check).toBeNull();
   expect((await admin.query("SELECT to_regclass('app.v2_measurement') AS measurement")).rows[0].measurement).toBeNull();
+  expect((await admin.query("SELECT to_regclass('app.v2_crew_link') AS link")).rows[0].link).toBeNull();
   expect((await admin.query("SELECT to_regclass('app.v2_crew_brief') AS brief")).rows[0].brief).toBeNull();
   // V2-F1 stays absent outside the dedicated V2 database.
   expect((await admin.query("SELECT to_regclass('app.v2_brief_progress') AS progress")).rows[0].progress).toBeNull();

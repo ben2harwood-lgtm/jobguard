@@ -10,6 +10,9 @@ import { M1_QUOTE_POLICY } from "../../packages/core/dist/index.js";
 import { CrewBriefRepository, DEMO_TENANT_ID, MeasurementRepository, WorkPlanRepository, authenticatePracticeSession, verifyAuditChain, withTenant } from "../../packages/db/dist/index.js";
 // V2-C3C
 import { CrewContactRepository } from "../../packages/db/dist/index.js";
+// V2-F7M
+import { CrewLinkRepository } from "../../packages/db/dist/index.js";
+import { CrewLinkPageApplication } from "../../apps/api/dist/workspace/index.js";
 import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-targets.mjs";
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
@@ -1949,6 +1952,163 @@ test("F2 proof holds the task open: missing, pending then verified with no new r
   await assert.rejects(new BriefProgressRepository(runtime).read(foreignContext, jobId), { code: "NOT_FOUND" });
   assert.ok((await new BriefProgressRepository(runtime).read(context, jobId)).tasks.length > 0, "positive control");
   await verifyTenantChain(context.tenantId);
+});
+
+// V2-F7M own block (Q52, migration 2041): crew links show one trade's brief and record observations for the builder to confirm.
+const f7m = {
+  async setup(trade = "tiler") {
+    const { owner, crewBriefs, command } = await f1Setup();
+    const app = createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId });
+    let brief = (await app.briefProgress.read(jobId)).briefs.find(item => item.trade === "tiler");
+    if (!brief.current) brief = await crewBriefs.generate(jobId, command("tiler", { expectedVersion: brief.version,
+      accessWindow: brief.content.accessWindow }));
+    const crew = await app.crewContacts.record({ version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(),
+      expectedRevision: 0, displayName: "Ria Fictional", trade, phone: "07700 900321", email: "ria@crew.jobguard-v2.invalid" });
+    const issue = (fields = {}) => app.crewLinks.command(jobId, { version: "v2-crew-link-command.v1", action: "issue",
+      commandId: randomUUID(), crewId: crew.crewId, ...fields });
+    return { owner, app, brief, crew, issue, page: new CrewLinkPageApplication(runtime) };
+  },
+  press: (token, brief, task, fields = {}) => ({ version: "v2-crew-link-press.v1", token, commandId: randomUUID(),
+    briefVersion: brief.version, scopeItemId: task.scopeItemId, taskKey: task.taskKey, kind: "done", note: "", ...fields }),
+  rows: commandId => admin.query("SELECT * FROM app.v2_crew_progress WHERE command_id = $1", [commandId]).then(r => r.rows),
+  events: commandId => admin.query(`SELECT actor_ref, event_type FROM app.audit_event WHERE subject_ref = $1
+    AND payload->'references'->>'commandId' = $2`, [jobId, commandId]).then(r => r.rows),
+};
+
+test("F7M a link shows only its trade's unpriced brief; presses record once, replay, and the builder confirms them", async () => {
+  const { app, brief, crew, page } = await f7m.setup();
+  const command = { version: "v2-crew-link-command.v1", action: "issue", commandId: randomUUID(), crewId: crew.crewId };
+  const made = await app.crewLinks.command(jobId, command);
+  assert.match(made.token, /^[A-Za-z0-9_-]{43}$/u);
+  const replay = await app.crewLinks.command(jobId, command);
+  assert.equal(replay.token, null, "the token is shown once");
+  assert.equal(replay.linkId, made.linkId);
+  assert.deepEqual((await f7m.events(command.commandId)).map(e => e.event_type), ["v2.crew_link.issued"]);
+  const stored = (await admin.query("SELECT token_hash FROM app.v2_crew_link WHERE id = $1", [made.linkId])).rows[0];
+  assert.equal(stored.token_hash, createHash("sha256").update(made.token).digest("hex"), "only the hash is stored");
+  const view = await page.open(made.token);
+  assert.equal(view.trade, "tiler");
+  assert.equal(view.crewName, "Ria Fictional");
+  assert.equal(view.brief.version, brief.version);
+  assert.equal(view.brief.changed, false);
+  assert.deepEqual(view.brief.tasks.map(task => [task.scopeItemId, task.taskKey]),
+    brief.content.tasks.map(task => [task.scopeItemId, task.taskKey]));
+  const text = JSON.stringify(view);
+  for (const hidden of ["£", "price", "amount", "customer@", "Make-Believe", "07700", "@crew.", made.token]) {
+    assert.ok(!text.includes(hidden), `the crew page must not carry ${hidden}`);
+  }
+  const f1Before = (await admin.query("SELECT count(*)::int AS n FROM app.v2_brief_progress WHERE job_id = $1", [jobId])).rows[0].n;
+  const task = brief.content.tasks[0];
+  for (const kind of ["done", "blocked", "changed"]) {
+    const press = f7m.press(made.token, brief, task, { kind, note: kind === "done" ? "" : `F7M fictional ${kind}` });
+    const first = await page.receive(press);
+    assert.equal(first.replayed, false);
+    assert.equal((await page.receive(press)).replayed, true);
+    await assert.rejects(page.receive({ ...press, note: "F7M other body" }), { code: "CREW_LINK_REFUSED" });
+    assert.equal((await f7m.rows(press.commandId)).length, 1);
+    assert.deepEqual(await f7m.events(press.commandId), [{ actor_ref: `crew_link:${made.linkId}`, event_type: "v2.crew_progress.recorded" }]);
+  }
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_brief_progress WHERE job_id = $1", [jobId])).rows[0].n,
+    f1Before, "a crew press is an observation, never a builder progress record");
+  const latest = (await page.open(made.token)).brief.tasks.find(row => row.taskKey === task.taskKey && row.scopeItemId === task.scopeItemId).latest;
+  assert.equal(latest.kind, "changed");
+  const presses = (await app.crewLinks.read(jobId)).presses.filter(row => row.linkId === made.linkId);
+  assert.deepEqual(presses.map(row => [row.kind, row.confirmed]), [["done", false], ["blocked", false], ["changed", false]]);
+  // Confirm is an ordinary builder F1 press.
+  const head = Math.max(0, ...(await app.briefProgress.read(jobId)).progress.filter(row => row.trade === "tiler"
+    && row.scopeItemId === task.scopeItemId && row.taskKey === task.taskKey).map(row => row.version));
+  const changed = presses.at(-1);
+  await app.briefProgress.record(jobId, progressCommand(brief, task, { kind: "changed", note: changed.note, expectedVersion: head }));
+  assert.deepEqual((await app.crewLinks.read(jobId)).presses.filter(row => row.linkId === made.linkId).map(row => row.confirmed),
+    [false, false, true]);
+  const listed = (await app.crewLinks.read(jobId)).links.find(row => row.linkId === made.linkId);
+  assert.deepEqual([listed.cancelled, listed.replaced], [false, false]);
+});
+
+test("F7M one refusal for unknown, cancelled, expired, replaced and edited-crew links; other tasks refuse and stale briefs say so", async () => {
+  const { app, brief, crew, issue, page } = await f7m.setup();
+  const task = brief.content.tasks[0];
+  const refused = async (token, extra = {}) => {
+    await assert.rejects(page.open(token), { code: "CREW_LINK_REFUSED" });
+    const press = f7m.press(token, brief, task, extra);
+    await assert.rejects(page.receive(press), { code: "CREW_LINK_REFUSED" });
+    assert.deepEqual(await f7m.rows(press.commandId), []);
+    assert.deepEqual(await f7m.events(press.commandId), []);
+  };
+  await refused("not-a-real-link");
+  const cancelled = await issue();
+  const cancel = { version: "v2-crew-link-command.v1", action: "cancel", commandId: randomUUID(), linkId: cancelled.linkId };
+  await app.crewLinks.command(jobId, cancel);
+  assert.equal((await app.crewLinks.command(jobId, cancel)).replayed, true);
+  await refused(cancelled.token);
+  // Expired: issued 20 days ago for one day, through the repository's clock.
+  const { context } = await authenticatePracticeSession(runtime, (await f1Setup()).owner.sessionId);
+  const { owner } = await f1Setup();
+  const old = await new CrewLinkRepository(runtime, () => Date.now() - 20 * 86_400_000).command(context, jobId, owner.sessionId,
+    { version: "v2-crew-link-command.v1", action: "issue", commandId: randomUUID(), crewId: crew.crewId, expiresInDays: 1 });
+  await refused(old.token);
+  // A newer link for the same crew member and trade replaces the older one.
+  const older = await issue(), newer = await issue();
+  await refused(older.token);
+  assert.equal((await page.open(newer.token)).status, "open");
+  // Editing the crew record (new revision) retires its links.
+  await app.crewContacts.record({ version: "crew-contact.v1", commandId: randomUUID(), crewId: crew.crewId, expectedRevision: 1,
+    displayName: "Ria Fictional", trade: "tiler", phone: "07700 900322", email: "ria@crew.jobguard-v2.invalid" });
+  await refused(newer.token);
+  const live = await issue();
+  // A task outside this trade's brief is refused; a wrong brief version is stale.
+  const outside = f7m.press(live.token, brief, { scopeItemId: randomUUID(), taskKey: task.taskKey });
+  await assert.rejects(page.receive(outside), { code: "CREW_LINK_REFUSED" });
+  await assert.rejects(page.receive(f7m.press(live.token, { version: brief.version + 1 }, task)), { code: "CREW_LINK_STALE" });
+  // Another firm's crew member never gets a link.
+  const outsider = await signIn("second-builder");
+  const foreign = await createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).crewContacts.record({
+    version: "crew-contact.v1", commandId: randomUUID(), crewId: randomUUID(), expectedRevision: 0, displayName: "Other Firm",
+    trade: "tiler", phone: "07700 900999", email: "other@crew.jobguard-v2.invalid" });
+  await assert.rejects(issue({ crewId: foreign.crewId }), { code: "CREW_LINK_CREW_UNAVAILABLE" });
+  await assert.rejects(createWorkspaceApplication({ pool: runtime, sessionId: outsider.sessionId }).crewLinks.read(jobId),
+    { code: "NOT_FOUND" });
+  // A plan edit after the brief: the page says changed and presses are stale until the brief is regenerated.
+  const plan = await app.workPlan.read(jobId, planQuery);
+  const planned = plan.tasks.find(item => item.scopeItemId === task.scopeItemId && item.key === task.taskKey);
+  await app.workPlan.edit(jobId, planEdit(plan, planned, { durationMinutes: planned.durationMinutes + 5 }));
+  assert.equal((await page.open(live.token)).brief.changed, true);
+  await assert.rejects(page.receive(f7m.press(live.token, brief, task)), { code: "CREW_LINK_STALE" });
+});
+
+test("F7M tables are forced, append only and closed to the runtime and the second firm", async () => {
+  const { brief, issue } = await f7m.setup();
+  const made = await issue();
+  await new CrewLinkPageApplication(runtime).receive(f7m.press(made.token, brief, brief.content.tasks[0]));
+  const owner = await signIn("builder"), outsider = await signIn("second-builder");
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const { context: shared } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  const query = (scope, sql, args) => withTenant(runtime, scope, db => db.$client.query(sql, args));
+  const acl = async table => (await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced,
+    has_table_privilege('jobguard_runtime',oid,'INSERT') AS can_insert,
+    has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate
+    FROM pg_class WHERE oid=$1::regclass`, [table])).rows[0];
+  assert.deepEqual(await acl("app.v2_crew_link"), { forced: true, can_insert: true, can_mutate: false });
+  assert.deepEqual(await acl("app.v2_crew_link_cancel"), { forced: true, can_insert: true, can_mutate: false });
+  assert.deepEqual(await acl("app.v2_crew_progress"), { forced: true, can_insert: false, can_mutate: false });
+  for (const fn of ["v2_crew_link_scope_open(text)", "v2_crew_link_view(app.v2_crew_link)", "v2_crew_link_audit_take(text,text,text,jsonb)"]) {
+    const { rows } = await admin.query("SELECT to_regprocedure($1) AS oid", [`app.${fn}`]);
+    if (rows[0].oid) assert.equal((await admin.query("SELECT has_function_privilege('jobguard_runtime',$1,'EXECUTE') AS ok",
+      [rows[0].oid])).rows[0].ok, false, `${fn} is internal`);
+  }
+  for (const table of ["app.v2_crew_link", "app.v2_crew_progress"]) {
+    for (const scope of [shared, outsider.realContext]) {
+      assert.equal((await query(scope, `SELECT * FROM ${table} WHERE job_id=$1`, [jobId])).rowCount, 0);
+    }
+    assert.ok((await query(context, `SELECT * FROM ${table} WHERE job_id=$1`, [jobId])).rowCount > 0);
+    for (const sql of [`UPDATE ${table} SET trade='x' WHERE job_id=$1`, `DELETE FROM ${table} WHERE job_id=$1`]) {
+      await assert.rejects(query(context, sql, [jobId]), { code: "42501" });
+    }
+  }
+  await assert.rejects(query(context, `INSERT INTO app.v2_crew_progress (tenant_id,job_id,command_id,crew_link_id,trade,brief_version,
+    scope_item_id,task_key,kind,note,seen_head,request_digest) VALUES ($1,$2,$3,$4,'tiler',0,$5,'x','done','',0,$6)`,
+  [DEMO_TENANT_ID, jobId, randomUUID(), made.linkId, randomUUID(), "0".repeat(64)]), { code: "42501" });
+  await assert.rejects(admin.query("UPDATE app.v2_crew_link SET expires_at = expires_at WHERE id = $1", [made.linkId]));
 });
 
 // V2-F1: preserve the existing job-stage boundary and historical reads.
