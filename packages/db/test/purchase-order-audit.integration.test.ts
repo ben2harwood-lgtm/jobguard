@@ -54,7 +54,9 @@ beforeAll(async () => {
         // 0782 (QW-4 snag list) uses the LP-11 bound-tenant policy, so it is deferred with LP-11.
         "_snag_list.sql",
         // V2-C3C
-        "_v2_crew_contact.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
+        "_v2_crew_contact.sql",
+        // V2-G1
+        "_v2_snag_register.sql"].some(stem => String(values?.[0]).endsWith(stem))) return { rows: [{}], rowCount: 1 };
     return admin.query(sql, values);
   } } as Pick<Pool, "query">);
   await admin.query("INSERT INTO control_plane.tenant(id) VALUES($1)", [DEMO_TENANT_ID]);
@@ -70,6 +72,8 @@ beforeAll(async () => {
   upgradeRevisionId = (await legacy.orders.revise(legacy.job, legacy.input)).id;
   await migrate(admin);
   expect((await admin.query("SELECT to_regprocedure('app.v2_work_plan_edit_scope_check()') AS scope_check")).rows[0].scope_check).toBeNull();
+  // V2-G1: the snag register stays absent outside the V2 database.
+  expect((await admin.query("SELECT to_regclass('app.v2_snag_owner') AS owner")).rows[0].owner).toBeNull();
 }, 60000);
 afterAll(async () => {
   await closeTestPools(runtime, admin); await postgres?.stop();

@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-g1": {
+      "branches": [
+        "claude/project-thread-trp08u-g1"
+      ],
+      "note": "RED Q53 V2-G1 snag register beside main QW-4: crew owner, which person fixed and checked (never the same), agreed outstanding. Migration 2042 (number final at merge). Base claude/project-thread-ctngmn (SYNC-1 #980) @ bfd158609. Main snag tables and routines unchanged. G1 mount, owned by core index: packages/db/src/index.ts and apps/api/src/workspace/index.ts one export line each. G1 mount, owned by main: packages/core/src/watchdog.ts one registry line. G1 mount, owned by main: apps/web/app/(designed)/jobs/[id]/records/page.tsx one Snags link (local V2 only). G1 mount, owned by SYNC-1 #980: tools/v2/bootstrap.mjs one migration line after 2056; packages/db/test/purchase-order-audit.integration.test.ts the _v2_snag_register.sql stem and one table-absent check; tools/v2/seed.integration.test.mjs own appended cases.",
+      "allow": [
+        "apps/api/src/workspace/index.ts",
+        "apps/api/src/workspace/snag-register.application.test.ts",
+        "apps/api/src/workspace/snag-register.application.ts",
+        "apps/web/app/(designed)/jobs/[id]/records/page.tsx",
+        "apps/web/app/(designed)/jobs/[id]/snags/page.tsx",
+        "apps/web/app/api/jobs/[id]/snag-register/route.test.ts",
+        "apps/web/app/api/jobs/[id]/snag-register/route.ts",
+        "apps/web/app/ui/v2-snag-register-label.test.tsx",
+        "apps/web/app/ui/v2-snag-register-label.ts",
+        "apps/web/app/ui/v2-snag-register.tsx",
+        "packages/core/src/watchdog.ts",
+        "packages/db/migration-notes/2042_v2_snag_register.md",
+        "packages/db/migrations/2042_v2_snag_register.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-snag-register-repository.ts",
+        "packages/db/test/migration-proofs/2042_v2_snag_register.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/snag-register.browser.test.mjs"
+      ]
+    }
+  }
+}

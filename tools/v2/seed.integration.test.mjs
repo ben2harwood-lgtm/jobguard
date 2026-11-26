@@ -1105,6 +1105,139 @@ test("a snag is recorded, revised and marked fixed on the V2 practice job, and t
   }
 });
 
+// V2-G1 (Q53, migration 2042): the snag register. Owner, who fixed and who checked (never the same person), agreed outstanding.
+const g1Tables = ["app.v2_snag_owner", "app.v2_snag_event_person", "app.v2_snag_agreed"];
+const g1 = {
+  path: () => `/api/jobs/${jobId}/snag-register`,
+  async crew(owner, displayName, trade) {
+    return createWorkspaceApplication({ pool: runtime, sessionId: owner.sessionId }).crewContacts.record({ version: "crew-contact.v1",
+      commandId: randomUUID(), crewId: randomUUID(), expectedRevision: 0, displayName, trade, phone: `07700 900${String(Math.floor(Math.random() * 900) + 100)}`,
+      email: `${displayName.toLowerCase().replace(/\W+/gu, ".")}@crew.jobguard-v2.invalid` });
+  },
+  async add(owner, title, fields = {}) {
+    const snagId = randomUUID();
+    await json(await request(`/api/jobs/${jobId}/snags`, { cookies: owner.cookies, csrf: owner.csrfToken,
+      body: { version: "snag.v1", action: "add", commandId: randomUUID(), snagId, title, ...fields } }));
+    return snagId;
+  },
+  post: (owner, body, status = 200) => request(g1.path(), { cookies: owner.cookies, csrf: owner.csrfToken, body }).then(response => json(response, status)),
+  event: (snagId, action, person, commandId = randomUUID()) => ({ version: "v2-snag-event-command.v1", commandId, snagId, action, person }),
+  snag: (register, snagId) => register.snags.find(row => row.id === snagId),
+  mainEvents: async snagId => (await admin.query("SELECT sequence, kind FROM app.snag_event WHERE snag_id=$1 ORDER BY sequence", [snagId])).rows,
+};
+
+test("G1 done when: crew owner and due date; fixed by Jordan; Jordan refused as checker with no main event; Sam checks", async () => {
+  const owner = await signIn("builder");
+  const jordan = await g1.crew(owner, "Jordan Fictional", "joiner"), sam = await g1.crew(owner, "Sam Fictional", "decorator");
+  const snagId = await g1.add(owner, "Refit the hall door stop", { dueOn: "2026-12-04" });
+  await g1.post(owner, { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: jordan.crewId });
+  await g1.post(owner, g1.event(snagId, "mark_fixed", { kind: "crew", crewId: jordan.crewId }));
+  const refused = await g1.post(owner, g1.event(snagId, "mark_checked", { kind: "crew", crewId: jordan.crewId }), 409);
+  assert.equal(refused.code, "V2_SNAG_CHECKER_IS_FIXER");
+  assert.deepEqual(await g1.mainEvents(snagId), [{ sequence: 1, kind: "fixed" }], "the refused check left no main event");
+  const register = await g1.post(owner, g1.event(snagId, "mark_checked", { kind: "crew", crewId: sam.crewId }));
+  const snag = g1.snag(register, snagId);
+  assert.deepEqual([snag.title, snag.dueOn, snag.state], ["Refit the hall door stop", "2026-12-04", "checked"]);
+  assert.deepEqual(snag.owner, { crewId: jordan.crewId, name: "Jordan Fictional", trade: "joiner" });
+  assert.deepEqual([snag.people[1].name, snag.people[2].name], ["Jordan Fictional", "Sam Fictional"]);
+  const reread = g1.snag(await json(await request(g1.path(), { cookies: owner.cookies })), snagId);
+  assert.deepEqual(reread, snag);
+  const events = (await admin.query(`SELECT event_type FROM app.audit_event WHERE subject_ref=$1 AND event_type LIKE 'v2.snag.%'
+    AND payload->'references'->>'snagId'=$2 ORDER BY sequence`, [jobId, snagId])).rows.map(row => row.event_type);
+  assert.deepEqual(events, ["v2.snag.owner_set", "v2.snag.event_person", "v2.snag.event_person"]);
+});
+
+test("G1 agreed outstanding reads back and clears; a checked snag cannot be agreed; owner refusals and fallback", async () => {
+  const owner = await signIn("builder"), second = await signIn("second-builder");
+  const snagId = await g1.add(owner, "Touch up the hall skirting", { assigneeLabel: "Dave (sparky)" });
+  let register = await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: true, note: "visit agreed with Alex" });
+  assert.equal(g1.snag(register, snagId).agreed.note, "visit agreed with Alex");
+  register = await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: false, note: null });
+  assert.equal(g1.snag(register, snagId).agreed, null);
+  // Owner: another firm's crew record and an unknown id are refused; clearing falls back to main's label.
+  const foreign = await g1.crew(second, "Other Firm Crew", "tiler");
+  for (const crewId of [foreign.crewId, randomUUID()]) {
+    assert.equal((await g1.post(owner, { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId }, 409)).code, "V2_SNAG_CREW_UNAVAILABLE");
+  }
+  const mine = await g1.crew(owner, "Riley Fictional", "painter");
+  register = await g1.post(owner, { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: mine.crewId });
+  assert.equal(g1.snag(register, snagId).owner.name, "Riley Fictional");
+  register = await g1.post(owner, { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: null });
+  assert.deepEqual([g1.snag(register, snagId).owner, g1.snag(register, snagId).assigneeLabel], [null, "Dave (sparky)"]);
+  // The builder fixes, a crew member checks: then nothing is outstanding.
+  await g1.post(owner, g1.event(snagId, "mark_fixed", { kind: "builder" }));
+  assert.equal((await g1.post(owner, g1.event(snagId, "mark_checked", { kind: "builder" }), 409)).code, "V2_SNAG_CHECKER_IS_FIXER");
+  await g1.post(owner, g1.event(snagId, "mark_checked", { kind: "crew", crewId: mine.crewId }));
+  assert.equal((await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: true, note: "late" }, 409)).code,
+    "V2_SNAG_NOTHING_OUTSTANDING");
+});
+
+test("G1 replay and conflict; main's own route still works and shows person not recorded", async () => {
+  const owner = await signIn("builder");
+  const sam = await g1.crew(owner, "Sam Replay", "decorator");
+  const snagId = await g1.add(owner, "Fictional sticking drawer");
+  const fixed = g1.event(snagId, "mark_fixed", { kind: "builder" });
+  const first = await g1.post(owner, fixed);
+  assert.deepEqual(await g1.post(owner, fixed), first);
+  assert.equal((await g1.post(owner, { ...fixed, person: { kind: "crew", crewId: sam.crewId } }, 409)).code, "V2_SNAG_COMMAND_CONFLICT");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_snag_event_person WHERE snag_id=$1", [snagId])).rows[0].n, 1);
+  // Reopen and fix again through main's own route: no person row, and the register says so.
+  await g1.post(owner, g1.event(snagId, "reopen", { kind: "builder" }));
+  await json(await request(`/api/jobs/${jobId}/snags/${snagId}/events`, { cookies: owner.cookies, csrf: owner.csrfToken,
+    body: { version: "snag-event.v1", commandId: randomUUID(), action: "mark_fixed" } }));
+  const snag = g1.snag(await json(await request(g1.path(), { cookies: owner.cookies })), snagId);
+  assert.deepEqual(snag.people[3], { kind: "unknown" });
+  assert.equal(snag.state, "fixed");
+});
+
+test("G1 tables are forced, append only, firm-locked; person rows bind their own snag; main's snag schema is unchanged", async () => {
+  const owner = await signIn("builder"), second = await signIn("second-builder");
+  const snagId = await g1.add(owner, "Fictional loose tile");
+  const other = await g1.add(owner, "Fictional cracked tile");
+  await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: true, note: "agreed" });
+  await g1.post(owner, { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: null });
+  await g1.post(owner, g1.event(snagId, "mark_fixed", { kind: "builder" }));
+  const { context } = await authenticatePracticeSession(runtime, owner.sessionId);
+  const { context: shared } = await authenticatePracticeSession(runtime, second.sessionId);
+  const query = (scope, sql, args) => withTenant(runtime, scope, db => db.$client.query(sql, args));
+  for (const table of g1Tables) {
+    const { rows: [acl] } = await admin.query(`SELECT relrowsecurity AND relforcerowsecurity AS forced, relowner::regrole::text AS owner,
+      has_table_privilege('jobguard_runtime',oid,'SELECT,INSERT') AS can_write,
+      has_table_privilege('jobguard_runtime',oid,'UPDATE,DELETE,TRUNCATE') AS can_mutate FROM pg_class WHERE oid=$1::regclass`, [table]);
+    assert.deepEqual(acl, { forced: true, owner: "jobguard_migration", can_write: true, can_mutate: false });
+    assert.ok(await visibleRows(context, table) > 0, `${table}: the owning firm reads its rows`);
+    for (const scope of [shared, second.realContext]) assert.equal(await visibleRows(scope, table), 0, `${table}: hidden from the second firm`);
+    for (const sql of [`UPDATE ${table} SET job_id=job_id WHERE job_id=$1`, `DELETE FROM ${table} WHERE job_id=$1`]) {
+      await assert.rejects(query(context, sql, [jobId]), { code: "42501" });
+      await assert.rejects(admin.query(sql, [jobId]));
+    }
+  }
+  // A person row for another snag's event (no such event on that snag) is refused.
+  await assert.rejects(admin.query(`INSERT INTO app.v2_snag_event_person (tenant_id, job_id, snag_id, event_sequence, person_kind, firm_key, command_id)
+    SELECT tenant_id, job_id, $2, event_sequence, person_kind, firm_key, $3 FROM app.v2_snag_event_person WHERE snag_id = $1`,
+  [snagId, other, randomUUID()]));
+  // Main's snag routines and columns are byte-identical to a fresh read of 0782 + 2056: compare before and after a 2042 rerun.
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT jsonb_agg(pg_get_functiondef(p.oid) ORDER BY p.proname) FROM pg_proc p WHERE p.pronamespace='app'::regnamespace AND p.proname LIKE 'snag\\_%') functions,
+    (SELECT jsonb_agg(c.relname || '.' || a.attname || ':' || format_type(a.atttypid, a.atttypmod) ORDER BY c.relname, a.attnum)
+      FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid WHERE c.relnamespace='app'::regnamespace AND c.relname LIKE 'snag%'
+      AND a.attnum > 0 AND NOT a.attisdropped) columns,
+    (SELECT count(*)::int FROM pg_policy WHERE polname LIKE 'v2_snag_%') policies,
+    (SELECT count(*)::int FROM pg_trigger WHERE tgname LIKE 'v2_snag_%') triggers`)).rows[0];
+  const before = await catalog();
+  assert.ok(before.functions.length >= 4 && !before.functions.some(text => /v2_snag/u.test(text)), "no main snag routine names the V2 register");
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2042_v2_snag_register.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before, "2042 reruns without change and never touches main's snag schema");
+  assert.ok(!before.columns.some(column => column.startsWith("v2_")), "no V2 column on main's snag tables");
+  // Rule 29: GET refuses no session, an invalid session and the second firm.
+  const typed = async cookies => { const response = await request(g1.path(), cookies ? { cookies } : {});
+    return [response.status, (await response.json()).code]; };
+  assert.deepEqual(await typed(), [401, "UNAUTHENTICATED"]);
+  const invalid = await typed(`jg_session=${randomUUID()}`);
+  assert.ok(["UNAUTHENTICATED", "NOT_FOUND"].includes(invalid[1]) && invalid[0] >= 401 && invalid[0] <= 404, String(invalid));
+  assert.equal((await json(await request(g1.path(), { cookies: second.cookies }), 404)).code, "NOT_FOUND");
+});
+
 test("a variation revision photo on the V2 practice job is hidden from the second firm", async () => {
   // Extra photos are written only by main's pilot route (QW-1), never in practice mode, so the proof
   // row is placed directly with triggers off and removed afterwards. Only visibility is under test.
