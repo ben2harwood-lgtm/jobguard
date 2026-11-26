@@ -78,15 +78,18 @@ export function Walk({ jobId }: { jobId: string }) {
     try {
       const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify(command) });
-      if (response.status === 409 && (command.action === "record" || command.action === "file")) {
+      // Version conflicts come back 409; a refused filing comes back 400.
+      if ((response.status === 409 || response.status === 400) && (command.action === "record" || command.action === "file")) {
         const refused: { code?: string } = await response.json().catch(() => ({}));
-        if (refused.code === "WALK_VERSION_CONFLICT") {
+        // A refused filing (room order not in this walk) can never succeed on retry either.
+        if (refused.code === "WALK_VERSION_CONFLICT" || (command.action === "file" && refused.code === "WALK_PHOTO_REFUSED")) {
           // Another tab or phone got there first. Retrying can never succeed: reload the walk and drop the stale command.
           const refreshed = await fetch(endpoint, { cache: "no-store" });
           if (refreshed.ok) setSessions((await refreshed.json() as { sessions: SessionView[] }).sessions);
           setPending(null);
           if (command.action === "file") {
-            setProblem("Another device filed this photo first. Check its room, then file it again if it is wrong.");
+            setProblem(refused.code === "WALK_PHOTO_REFUSED" ? "That room is not in this walk. Choose a room again."
+              : "Another device filed this photo first. Check its room, then file it again if it is wrong.");
             return;
           }
           const restored = restoreEntry(command.entry);
@@ -132,7 +135,8 @@ export function Walk({ jobId }: { jobId: string }) {
   }
   const rooms = entries.filter(entry => entry.kind === "room");
   const tray = needsRoom(entries);
-  const picker = (entry: EntryView) => <PhotoRoomPicker entry={entry} rooms={rooms} blocked={blocked || unsent}
+  // Keyed by walk too, so a room choice never carries over to another walk's photo with the same order.
+  const picker = (entry: EntryView) => <PhotoRoomPicker key={`${session?.sessionId}:${entry.captureOrder}`} entry={entry} rooms={rooms} blocked={blocked || unsent}
     file={roomCaptureOrder => file(entry, roomCaptureOrder)}/>;
 
   const pendingEntry = pending?.action === "record" ? pending : null;
