@@ -24,3 +24,7 @@ For one variation version at a time, the builder makes a link; the customer open
 ## Done when
 - Approving an old version's link is refused; a changed price needs a fresh link; a declined or unapproved change adds nothing to the committed price; another firm's link opens nothing; an expired or cancelled link is refused; a replayed agree applies once; the agreed quote and issued invoices are untouched.
 - Playwright of the customer page at 360/1280 + phone-mode run. CI green apart from Vercel.
+
+
+## Legal research note (26 Nov 07:45 UK, `reviews/v2/V2-legal-research-followups.md`)
+AI research, not legal advice; practice build unchanged. Before real use: the approve button says the homeowner agrees to pay ("Accept and agree to pay £X", CCRs reg 14); an extra over £42 that is new work gets its own cancellation kit; and the builder's VAT checklist re-runs for any line added after the quote.

@@ -139,3 +139,6 @@ Ben, 17:38 UK: from now on, plan checks go to Astra on frm-management-layer#3, n
 
 ## Change, 25 Nov 19:53 UK: Opus builds, Codex checks
 Ben: "I want Opus 5.5 to do the coding and Codex to do the checking." This supersedes the 17:38 "keep Codex coding" note and the lane A/W split. Every piece is built and repaired by an Opus 5.5 thread, and Codex reviews it. Open Codex-built PRs get Opus repair threads, and rounds already used still count.
+
+## Change, 26 Nov 07:45 UK: legal research follow-ups
+The three AI legal papers (VAT invoicing, consumer cancellation, data protection and pilot terms) change no V2 practice build. Packet notes were added to Q11, Q12, Q41 and Q43. The bathroom template asks the disabled-adaptation and mobility-aid question. LATER items L1 to L7 cover real-customer use. Seven items need Ben's sign-off, including the ICO fee and the controller role. Full list: `reviews/v2/V2-legal-research-followups.md`.

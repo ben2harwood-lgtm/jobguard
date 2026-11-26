@@ -34,3 +34,7 @@ The builder sets a payment split on the accepted quote (for example 30/40/30, or
 ## Done when
 - 30/40/30 on the seed quote total adds up exactly. An approved extra moves only stages not yet due. A stage turns "due" when its trigger happens. `git diff` shows no change to any customer-invoice or final-account file.
 - Replay, stale version, second-firm and audit tests per the rules. Nothing reaches the catcher. CI green apart from Vercel.
+
+
+## Legal research note (26 Nov 07:45 UK, `reviews/v2/V2-legal-research-followups.md`)
+AI research, not tax advice; practice build unchanged. Before real use, a deposit or part-payment normally creates its own VAT tax point on receipt (Notice 700 14.2.3), so each deposit or stage invoice must be a separate builder-confirmed invoice with its own date.

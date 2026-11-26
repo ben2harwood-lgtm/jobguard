@@ -48,3 +48,7 @@
 ## Done when
 - On the practice job, the builder records "Blocked: no power" with a photo, and after reload sees the photo and its state next to the row.
 - CI1 is green, and the Claude check is clean or answered.
+
+
+## Legal research note (26 Nov 07:45 UK, `reviews/v2/V2-legal-research-followups.md`)
+Before real use, photo screens carry the builder rule: no people in photos (especially children), no key-safe or alarm codes, no dates the home will be empty. Practice build unchanged.

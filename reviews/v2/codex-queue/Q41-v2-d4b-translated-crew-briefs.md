@@ -61,3 +61,7 @@
 ## Not in this piece
 - The real provider adapter: account, key, cost cap and data-processing terms. It waits for Ben's pick.
 - Crew-chosen language: later, with F7 My brief.
+
+
+## Legal research note (26 Nov 07:45 UK, `reviews/v2/V2-legal-research-followups.md`)
+The real translation provider is a sub-processor: its data location and safeguard must be named in the processor schedule and homeowner notice before real use. Ben picks it. FakeTranslator in practice is unaffected.
