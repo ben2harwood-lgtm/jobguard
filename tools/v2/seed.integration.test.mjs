@@ -1336,7 +1336,9 @@ test("each trade's unpriced brief has only its own tasks and picked photos, and 
   const { rows: rates } = await admin.query("SELECT unit_rate_pence::text AS rate FROM app.quote_line WHERE quote_revision_id = $1",
     [quoteRevisionId]);
   for (const brief of [first, decorator]) {
-    const text = JSON.stringify(brief.content);
+    // Random ids can hold "fee" or a rate's digits (e.g. "…45bfeeed…"), so blank ids before the money checks.
+    const text = JSON.stringify(brief.content)
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu, "<id>");
     assert.doesNotMatch(text, /pence|price|rate|total|£|cost|fee/iu);
     for (const { rate } of rates) assert.ok(!text.includes(rate), rate);
   }
