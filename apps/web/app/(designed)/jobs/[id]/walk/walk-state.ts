@@ -26,3 +26,16 @@ export function newEntry(sessionId: string, entries: readonly EntryView[], entry
 export function validMeasurement(quantity: string) {
   return quantity.length <= 40 && /^(0|[1-9][0-9]*)(\.[0-9]{1,6})?$/u.test(quantity) && /[1-9]/u.test(quantity);
 }
+
+// Codex P2 4705257589: a refused slot is permanent, so the preserved content goes back into the form to resubmit.
+export function restoreEntry(entry: WalkEntryCommand["entry"]) {
+  return entry.kind === "room" ? { room: entry.room, note: "", quantity: "", unit: "" }
+    : entry.kind === "note" ? { room: "", note: entry.text, quantity: "", unit: "" }
+    : entry.kind === "measurement" ? { room: "", note: "", quantity: entry.quantity, unit: entry.unit }
+    : null;
+}
+
+// Codex P2 4705257574: in-app links and the job section buttons leave the walk without a beforeunload.
+export function leavesWalk(target: { closest(selector: string): unknown } | null) {
+  return Boolean(target?.closest("a[href], nav button"));
+}
