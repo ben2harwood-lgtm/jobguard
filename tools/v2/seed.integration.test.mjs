@@ -2010,8 +2010,8 @@ test("F7M a link shows only its trade's unpriced brief; presses record once, rep
   }
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_brief_progress WHERE job_id = $1", [jobId])).rows[0].n,
     f1Before, "a crew press is an observation, never a builder progress record");
-  const latest = (await page.open(made.token)).brief.tasks.find(row => row.taskKey === task.taskKey && row.scopeItemId === task.scopeItemId).latest;
-  assert.equal(latest.kind, "changed");
+  const reopened = (await page.open(made.token)).brief.tasks.find(row => row.taskKey === task.taskKey && row.scopeItemId === task.scopeItemId);
+  assert.deepEqual([reopened.reported.kind, reopened.reported.note], ["changed", "F7M fictional changed"], "a reopened link shows what the crew sent");
   const presses = (await app.crewLinks.read(jobId)).presses.filter(row => row.linkId === made.linkId);
   assert.deepEqual(presses.map(row => [row.kind, row.confirmed]), [["done", false], ["blocked", false], ["changed", false]]);
   // Confirm is an ordinary builder F1 press.

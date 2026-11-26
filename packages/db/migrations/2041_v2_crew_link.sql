@@ -226,9 +226,6 @@ BEGIN
     IF EXISTS (SELECT FROM control_plane.v2_crew_link_scope WHERE transaction_id = pg_current_xact_id_if_assigned()) THEN
       RAISE EXCEPTION 'CREW_LINK_REFUSED' USING ERRCODE = '42501';
     END IF;
-    IF (SELECT count(*) FROM control_plane.v2_crew_link_failure WHERE failed_at > clock_timestamp() - interval '10 minutes') >= 20 THEN
-      RETURN NULL;
-    END IF;
     INSERT INTO control_plane.v2_crew_link_scope (transaction_id, token_hash) VALUES (pg_current_xact_id(), h);
     SELECT * INTO l FROM app.v2_crew_link WHERE token_hash = h;
     IF FOUND THEN
@@ -247,8 +244,12 @@ BEGIN
         RETURN l;
       END IF;
     END IF;
+    -- Failed attempts are recorded for monitoring, capped per ten minutes so guessing cannot grow the table.
+    -- They never refuse a valid link: tokens are 256-bit, so guessing is not a practical attack.
     DELETE FROM control_plane.v2_crew_link_failure WHERE failed_at < clock_timestamp() - interval '1 day';
-    INSERT INTO control_plane.v2_crew_link_failure DEFAULT VALUES;
+    IF (SELECT count(*) FROM control_plane.v2_crew_link_failure WHERE failed_at > clock_timestamp() - interval '10 minutes') < 20 THEN
+      INSERT INTO control_plane.v2_crew_link_failure DEFAULT VALUES;
+    END IF;
     DELETE FROM control_plane.v2_crew_link_scope WHERE transaction_id = pg_current_xact_id_if_assigned();
     RETURN NULL;
   END $f$;
@@ -280,14 +281,21 @@ BEGIN
             'scope', t->'scope', 'durationMinutes', t->'durationMinutes', 'visit', t->'visit',
             'proofNeeded', coalesce(t->'proofNeeded', '[]'::jsonb),
             'version', coalesce(p.version, 0), 'latest', CASE WHEN p.kind IS NULL THEN NULL
-              ELSE jsonb_build_object('kind', p.kind, 'note', p.note, 'recordedAt', p.recorded_at) END)
+              ELSE jsonb_build_object('kind', p.kind, 'note', p.note, 'recordedAt', p.recorded_at) END,
+            'reported', CASE WHEN o.kind IS NULL THEN NULL
+              ELSE jsonb_build_object('kind', o.kind, 'note', o.note, 'recordedAt', o.recorded_at) END)
             ORDER BY (t->>'position')::int)
           FROM jsonb_array_elements(brief.content->'tasks') t
           LEFT JOIN LATERAL (SELECT r.expected_version + 1 AS version, r.kind, r.note, r.recorded_at
             FROM app.v2_brief_progress r
             WHERE (r.tenant_id, r.job_id, r.trade, r.scope_item_id, r.task_key)
               = (l.tenant_id, l.job_id, l.trade, (t->>'scopeItemId')::uuid, t->>'taskKey')
-            ORDER BY r.expected_version DESC LIMIT 1) p ON true), '[]'::jsonb))
+            ORDER BY r.expected_version DESC LIMIT 1) p ON true
+          -- This link's own latest observation on the task, so a reopened link shows what the crew sent.
+          LEFT JOIN LATERAL (SELECT o.kind, o.note, o.recorded_at FROM app.v2_crew_progress o
+            WHERE (o.tenant_id, o.job_id, o.crew_link_id, o.scope_item_id, o.task_key)
+              = (l.tenant_id, l.job_id, l.id, (t->>'scopeItemId')::uuid, t->>'taskKey')
+            ORDER BY o.recorded_at DESC, o.command_id DESC LIMIT 1) o ON true), '[]'::jsonb))
         FROM brief))
   $f$;
   REVOKE ALL ON FUNCTION app.v2_crew_link_view(app.v2_crew_link) FROM PUBLIC;

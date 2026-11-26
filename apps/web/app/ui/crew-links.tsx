@@ -49,8 +49,10 @@ export function CrewLinks({ jobId, briefs, progress, progressPath, onConfirmed }
   }
 
   async function confirm(press: Press) {
+    // Confirm against the brief the crew member pressed on: after a newer brief, F1 refuses it as stale.
     const brief = briefs.find(row => row.trade === press.trade);
     if (!brief) { setError("Make this trade's brief first."); return; }
+    if (brief.version !== press.briefVersion) { setError("The brief changed after this update. Check it with the crew member before confirming."); return; }
     const head = progress.filter(row => row.trade === press.trade && row.scopeItemId === press.scopeItemId && row.taskKey === press.taskKey)
       .reduce((max, row) => Math.max(max, row.version), 0);
     setBusy(true); setError("");
@@ -58,7 +60,7 @@ export function CrewLinks({ jobId, briefs, progress, progressPath, onConfirmed }
       // An ordinary F1 builder press, so the live-job and stage guards hold.
       const response = await fetch(progressPath, { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ version: "v2-brief-progress-command.v1", commandId: crypto.randomUUID(), trade: press.trade,
-          briefVersion: brief.version, scopeItemId: press.scopeItemId, taskKey: press.taskKey, expectedVersion: head,
+          briefVersion: press.briefVersion, scopeItemId: press.scopeItemId, taskKey: press.taskKey, expectedVersion: head,
           kind: press.kind, note: press.note }) });
       if (!response.ok) setError("Not confirmed. The task or brief changed; the page has reloaded, check and try again.");
       setLoads(count => count + 1); onConfirmed();

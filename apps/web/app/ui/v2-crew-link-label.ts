@@ -22,6 +22,7 @@ export const crewPageProblem = {
 
 export const crewProofNote = "The builder adds the proof photo.";
 export const crewChangedNote = "Recorded only. This does not change the scope, the price or any order. The builder decides what happens next.";
+export const crewReportedNote = (kind: CrewKind) => `You sent: ${crewKindLabel(kind)}`;
 export const crewSentNote = (kind: CrewKind) => `${crewKindLabel(kind)} sent to the builder. The builder confirms it on their screen.`;
 
 /** Blocked joins the chosen reason and the optional note, as the M2 mock does. */

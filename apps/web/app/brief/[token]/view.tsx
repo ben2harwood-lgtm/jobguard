@@ -3,7 +3,7 @@ import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { CrewLinkTask, CrewLinkView } from "@jobguard/api/workspace";
 import { Card, Empty, Head, Note, Tag } from "../../(designed)/designed-ui";
 import { crewBlockedNote, crewBlockedReasons, crewChangedNote, crewKindLabel, crewPageHead, crewPageProblem, crewProofNote,
-  crewSentNote, type CrewKind } from "../../ui/v2-crew-link-label";
+  crewReportedNote, crewSentNote, type CrewKind } from "../../ui/v2-crew-link-label";
 
 type Sent = { taskKey: string; scopeItemId: string; kind: CrewKind; note: string };
 
@@ -26,6 +26,7 @@ function TaskCard({ task, disabled, send }: { task: CrewLinkTask; disabled: bool
   return <Card title={task.title} {...(task.visit ? { sub: task.visit } : {})}
     {...(latest ? { action: <Tag tone={latest.kind === "done" ? "green" : latest.kind === "blocked" ? "amber" : "blue"}>{crewKindLabel(latest.kind)}</Tag> } : {})}>
     <div className="card-body form">
+      {task.reported && <p role="status">{crewReportedNote(task.reported.kind)}{task.reported.note ? ` · ${task.reported.note}` : ""}</p>}
       <p><strong>What to do</strong> · {task.scope.description}{task.scope.quantity ? ` · ${task.scope.quantity} ${task.scope.unit ?? ""}` : ""}</p>
       {task.proofNeeded.length > 0 && <p><strong>Proof needed</strong> · {task.proofNeeded.join(", ")}. {crewProofNote}</p>}
       {form === null && <div className="form-actions">

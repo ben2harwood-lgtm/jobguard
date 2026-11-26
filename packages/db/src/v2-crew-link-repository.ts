@@ -47,7 +47,9 @@ export type CrewPress = { commandId: string; linkId: string; crewName: string; t
 export type CrewLinkTask = { scopeItemId: string; taskKey: string; title: string;
   scope: { description: string; quantity: string | null; unit: string | null }; durationMinutes: number;
   visit: string | null; proofNeeded: string[]; version: number;
-  latest: { kind: "done" | "blocked" | "changed"; note: string; recordedAt: string } | null };
+  latest: { kind: "done" | "blocked" | "changed"; note: string; recordedAt: string } | null;
+  /** This link's own latest observation on the task: what the crew member sent, confirmed or not. */
+  reported: { kind: "done" | "blocked" | "changed"; note: string; recordedAt: string } | null };
 export type CrewLinkView = { status: "open"; trade: string; crewName: string; expiresAt: string;
   brief: { version: number; accessWindow: string; proofNeeded: string[]; changed: boolean; tasks: CrewLinkTask[] } | null };
 

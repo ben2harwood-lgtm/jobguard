@@ -1,13 +1,14 @@
 import React from "react";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { crewBlockedNote, crewKindLabel, crewLinkState, crewPageHead, crewPressLabel, crewPressState, crewSentNote } from "./v2-crew-link-label";
+import { crewBlockedNote, crewKindLabel, crewLinkState, crewPageHead, crewPressLabel, crewPressState, crewReportedNote, crewSentNote } from "./v2-crew-link-label";
 
 describe("V2-F7M crew link wording", () => {
   it("labels kinds, presses and confirmation", () => {
     expect(crewKindLabel("blocked")).toBe("Blocked");
     expect(crewPressLabel("done", "Fictional Tess Tile")).toBe("Done by Fictional Tess Tile, by link");
     expect(crewPressState(false)).toBe("Not confirmed yet");
+    expect(crewReportedNote("changed")).toBe("You sent: Changed");
     expect(crewPressState(true)).toBe("Confirmed");
     expect(crewSentNote("changed")).toBe("Changed sent to the builder. The builder confirms it on their screen.");
   });
