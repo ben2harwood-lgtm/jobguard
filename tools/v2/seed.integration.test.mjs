@@ -1929,6 +1929,16 @@ test("F2 proof holds the task open: missing, pending then verified with no new r
   await app.briefProgress.uploadPhoto(jobId, replacement);
   await done(replacement.commandId);
   assert.equal((await status()).status, "done");
+  // Codex P1 4710983805: a verified photo uploaded for another scope item does not prove this task.
+  const { rows: [otherScope] } = await admin.query("SELECT id FROM app.scope_identity WHERE job_id=$1 AND id<>$2 ORDER BY id LIMIT 1",
+    [jobId, task.scopeItemId]);
+  assert.ok(otherScope, "the seeded job has a second scope item");
+  const elsewhere = { ...photo(), scopeItemId: otherScope.id };
+  assert.equal((await app.briefProgress.uploadPhoto(jobId, elsewhere)).state, "verified");
+  await done(elsewhere.commandId);
+  assert.equal((await status()).status, "done_proof_missing");
+  await done(replacement.commandId);
+  assert.equal((await status()).status, "done");
   // Blocked keeps its kind even with a verified photo.
   await app.briefProgress.record(jobId, progressCommand(brief, task, { version: "v2-brief-progress-command.v2",
     photoId: replacement.commandId, kind: "blocked", note: "F2 fictional no power", expectedVersion: await next() }));

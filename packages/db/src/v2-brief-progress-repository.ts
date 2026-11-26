@@ -81,9 +81,19 @@ export class BriefProgressRepository {
       }
       const task = contents.get(briefKey)!.find(item => item.scopeItemId === row.scopeItemId && item.taskKey === row.taskKey);
       tasks.push({ trade: row.trade, scopeItemId: row.scopeItemId, taskKey: row.taskKey, version: row.version,
-        status: taskProofStatus(row, task?.proofNeeded ?? []) });
+        status: taskProofStatus(await this.provesTask(client, tenantId, jobId, row) ? row : { ...row, photoState: "not_uploaded" },
+          task?.proofNeeded ?? []) });
     }
     return tasks;
+  }
+
+  // Codex P1 4710983805: a photo proves a task only when its progress-photo upload was bound to that task's scope.
+  private async provesTask(client: import("pg").PoolClient, tenantId: string, jobId: string, row: BriefProgress) {
+    if (!row.photoReference) return true;
+    const { rowCount } = await client.query(`SELECT 1 FROM app.audit_event WHERE tenant_id=$1 AND subject_ref=$2
+      AND event_type='v2.progress_photo.attached' AND payload->'references'->>'commandId'=$3
+      AND payload->'references'->>'scopeItemId'=$4`, [tenantId, jobId, row.photoReference, row.scopeItemId]);
+    return Boolean(rowCount);
   }
 
   private async photo(client: import("pg").PoolClient, tenantId: string, jobId: string, row: BriefProgress): Promise<BriefProgress> {
