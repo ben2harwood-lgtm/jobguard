@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-flf": {
+      "branches": ["codex/sandbox/v2-flf"],
+      "note": "Q40 V2-FL-F RED report only. No migrations or production fixes. Expected-failure seed proofs keep this report held and draft.",
+      "allow": [
+        "docs/receipts/v2-flf.md",
+        "tools/v2-flf.test.mjs",
+        "tools/v2/firm-lock/FL-F.checks.mjs",
+        "tools/v2/firm-lock/FL-F.inventory.mjs"
+      ]
+    }
+  }
+}
