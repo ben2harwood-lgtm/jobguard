@@ -1,16 +1,4 @@
-// Pure command building for the Plan card, kept apart so it can be tested without a browser.
-export type TaskChanges = {
-  position?: number; durationMinutes?: number; trade?: string; scheduledDate?: string | null; assignee?: string | null;
-};
-export type PlanItem = { key: string; scopeItemId: string; variationRevisionId?: string };
-
-/** An approved extra's edit names the approved revision the screen was showing; a quote line names none. */
-export function workPlanEditCommand(plan: { quoteRevisionId: string; version: number }, task: PlanItem, changes: TaskChanges) {
-  return { version: "work-plan-edit.v1", quoteRevisionId: plan.quoteRevisionId, expectedVersion: plan.version,
-    taskKey: task.key, scopeItemId: task.scopeItemId,
-    ...(task.variationRevisionId && { variationRevisionId: task.variationRevisionId }), changes } as const;
-}
-
+// Pure helpers for the Plan card, kept apart so they can be tested without a browser.
 export type ExtraNotPlanned = {
   scopeItemId: string; title: string; reason: "omission" | "direction_unknown"; planningDropped: boolean;
 };

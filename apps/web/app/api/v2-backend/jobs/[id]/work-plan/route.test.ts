@@ -20,7 +20,7 @@ const extrasNotPlanned = [{ scopeItemId: omission, title: "Leave out the shelf",
 beforeEach(() => { vi.stubEnv("JOBGUARD_LOCAL_V2", "1"); });
 afterEach(() => { vi.unstubAllEnvs(); read.mockReset(); });
 
-it("gives each extra's task and unplanned item its approved revision and passes extrasNotPlanned through", async () => {
+it("passes extrasNotPlanned through beside the approved-revision map", async () => {
   read.mockResolvedValue({ jobId, quoteRevisionId: revision(0), state: "accepted", version: 2,
     agreement: { documentId: revision(9), netPence: 100, approvedVariations: [] }, activationId: null,
     tasks: [task(lineScope, "prepare"), task(extraScope, "custom-scope-item")],
@@ -32,14 +32,11 @@ it("gives each extra's task and unplanned item its approved revision and passes 
     { params: Promise.resolve({ id: jobId }) });
   expect(response.status).toBe(200);
   const body = await response.json();
-  expect(body.tasks[0]).not.toHaveProperty("variationRevisionId");
-  expect(body.tasks[1].variationRevisionId).toBe(revision(1));
-  expect(body.unplanned).toEqual([{ scopeItemId: unplannedExtra, title: "Add trim", status: "Unplanned",
-    key: "custom-scope-item", variationRevisionId: revision(2) }]);
+  expect(body.variationRevisions).toEqual({ [extraScope]: revision(1), [unplannedExtra]: revision(2) });
   expect(body.extrasNotPlanned).toEqual(extrasNotPlanned);
   // Nothing else from the plan read reaches the screen.
   expect(Object.keys(body).sort()).toEqual(["acceptanceCancelled", "changes", "extrasNotPlanned", "quoteRevisionId",
-    "state", "tasks", "unplanned", "version"]);
+    "state", "tasks", "unplanned", "variationRevisions", "version"]);
 });
 
 it("stays closed outside V2", async () => {

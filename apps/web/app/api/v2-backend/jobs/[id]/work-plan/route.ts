@@ -28,21 +28,17 @@ export async function GET(_request: Request, { params }: Route) {
     const { workPlan, quote } = await workspaceApplication();
     const { state, tasks, unplanned, quoteRevisionId, version, changes, scopeItems, extrasNotPlanned } =
       await workPlan.read(id, { version: "work-plan-query.v1" });
-    // An approved extra's edit must name the revision it was planned against (C3B-1).
-    const revisions = new Map(scopeItems.flatMap(item => item.variationRevisionId ? [[item.scopeItemId, item.variationRevisionId]] : []));
-    const withRevision = <T extends { scopeItemId: string }>(item: T) => {
-      const variationRevisionId = revisions.get(item.scopeItemId);
-      return variationRevisionId ? { ...item, variationRevisionId } : item;
-    };
+    // An edit to an approved extra must name the approved revision this plan was read from.
+    const variationRevisions = Object.fromEntries(scopeItems.flatMap(item =>
+      item.variationRevisionId ? [[item.scopeItemId, item.variationRevisionId]] : []));
     let acceptanceCancelled = false;
     if (state === "accepted") {
       const acceptance = await quote.acceptanceView(id);
       const lastAcceptance = acceptance.events.findLast(event => event.kind === "accepted" || event.kind === "acceptance_cancelled");
       acceptanceCancelled = !acceptance.activeAcceptance && lastAcceptance?.kind === "acceptance_cancelled";
     }
-    return NextResponse.json({ state, tasks: tasks.map(withRevision),
-      unplanned: unplanned.map(item => withRevision({ ...item, key: customWorkPlanTaskKey })),
-      quoteRevisionId, version, changes, acceptanceCancelled, extrasNotPlanned },
+    return NextResponse.json({ state, tasks, unplanned: unplanned.map(item => ({ ...item, key: customWorkPlanTaskKey })),
+      quoteRevisionId, version, changes, acceptanceCancelled, variationRevisions, extrasNotPlanned },
       { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return planFailure(error);

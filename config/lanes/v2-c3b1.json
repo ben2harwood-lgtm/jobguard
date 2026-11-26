@@ -5,7 +5,7 @@
       "branches": [
         "claude/project-thread-ff8k1c"
       ],
-      "note": "T1. The Work tab's plan edits send an approved extra's revision, and approved extras that are not on the plan are listed. Stacked on v2-c4 (#903) with v2/main merged in. C3B-1 mount, owned by c4 #903: route.ts GET adds variationRevisionId to extra tasks and unplanned items and passes extrasNotPlanned through; work-plan.tsx save() builds its command with workPlanEditCommand and shows the not-planned list; work-plan.test.tsx adds one list test; v2-c4.spec.mts adds one browser test for planning an extra and the stale refusal. The validator includes config/lanes/v2-c3b1.json implicitly.",
+      "note": "T1. c4 #903 (603c4472) now sends an approved extra's revision itself; C3B-1 adds what is left: approved extras that are not on the plan are listed. Stacked on v2-c4 (#903). C3B-1 mount, owned by c4 #903: route.ts GET passes extrasNotPlanned through beside c4's variationRevisions map; work-plan.tsx shows the not-planned list; work-plan.test.tsx adds one list test; v2-c4.spec.mts adds one browser test for planning an extra and the stale refusal. The validator includes config/lanes/v2-c3b1.json implicitly.",
       "allow": [
         "apps/web/app/(designed)/jobs/[id]/work/work-plan-command.test.ts",
         "apps/web/app/(designed)/jobs/[id]/work/work-plan-command.ts",
