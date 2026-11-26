@@ -308,6 +308,21 @@ it("Codex P1 (repair 1): a hold set by other local work is never cleared by sett
  expect(m.data().unsyncedWork).toBe("present");
 });
 
+it("Codex P2 (#979): a pending cleanup tombstone keeps the hold, so save() cannot clear it before logout", async () => {
+ const r = rig(); r.signIn();
+ const remove = r.vault.vault.remove; let failKey = true;
+ r.vault.vault.remove = async key => { if (failKey) throw new Error("fictional key store failure"); return remove(key); };
+ const d = await r.shoot(photo(10)); await r.media.confirmDiscard(d.mediaId, await r.media.requestDiscard(d.mediaId));
+ expect(r.data().media).toEqual([]); expect(r.data().captures).toEqual([]);
+ expect(r.data().mediaCleanup).toHaveLength(1); expect(r.data().unsyncedWork).toBe("present");
+ // The only durable pointer to the leftover key: the row may not be labelled empty while it exists.
+ expect(localData.safeParse({ ...r.data(), unsyncedWork: "none" }).success).toBe(false);
+ failKey = false;
+ await r.media.cleanup();
+ expect(r.data().mediaCleanup).toEqual([]); expect(r.data().unsyncedWork).toBe("none");
+ expect(localData.safeParse(r.data()).success).toBe(true);
+});
+
 it("Codex P2 (repair 3): a failed capture whose undo also fails leaves a cleanup reservation, not an orphan key", async () => {
  const real = webCryptoMediaCipher(crypto.subtle, a => crypto.getRandomValues(a));
  let seals = 0;

@@ -1,0 +1,6 @@
+{
+  "migration": "2027_v2_crew_contact.sql",
+  "lp0": [],
+  "upgrade": [],
+  "tenancy": []
+}
