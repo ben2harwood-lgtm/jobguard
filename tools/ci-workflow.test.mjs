@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
@@ -107,7 +108,7 @@ for (const [gate, dependencies] of Object.entries({
   assert.equal(execute({}).status, 1, "all results and scope absent");
 });
 
-const v2Scope = "github.event_name == 'pull_request' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-')) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main'";
+const v2Scope = "github.event_name == 'pull_request' && (github.base_ref == 'v2/main' || startsWith(github.base_ref, 'codex/sandbox/v2-') || (startsWith(github.base_ref, 'claude/project-thread-') && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'codex/sandbox/v2-'))) || github.event_name == 'push' && github.ref == 'refs/heads/v2/main'";
 
 test("v2-seed runs the V2 seed suite only for V2 pull requests and v2/main pushes", () => {
   const body = jobs["v2-seed"];
@@ -126,6 +127,43 @@ test("v2-seed runs the V2 seed suite only for V2 pull requests and v2/main pushe
   assert.ok(script.includes("JOBGUARD_ENV=synthetic_demo node --test tools/v2/seed.integration.test.mjs"));
   assert.ok(script.includes("clean=(env -i "));
   assert.doesNotMatch(script, /\$\{\{|DATABASE_URL|JOBGUARD_V2_BACKEND=docker|continue-on-error/);
+});
+
+test("V2 seed selection and the aggregate gate agree on cross-builder stacks", () => {
+  const target = "ben2harwood-lgtm/jobguard";
+  const fork = "contributor/jobguard";
+  const d3 = "claude/project-thread-8zze8p";
+  const e3 = "codex/sandbox/v2-e3";
+  const pr = (base, head, repository = target) => ({
+    repository: target, event_name: "pull_request", base_ref: base, head_ref: head,
+    event: { pull_request: { head: { repo: { full_name: repository } } } },
+  });
+  const push = branch => ({ event_name: "push", ref: "refs/heads/" + branch });
+  const cases = [
+    ["E3 #932 on D3 #912", pr(d3, e3), true],
+    ["V2 head from fork on opaque Claude base", pr(d3, e3, fork), false],
+    ["non-V2 head on opaque Claude base", pr(d3, "feature/editor"), false],
+    ["V2 head on main", pr("main", e3), false],
+    ["V2 head on unrelated release branch", pr("release/1", e3), false],
+    ["Claude head on a named V2 stack", pr(e3, d3), true],
+    ["fork targeting a named V2 base", pr("v2/main", "feature/editor", fork), true],
+    ["V2 push", push("v2/main"), true],
+    ["main push", push("main"), false],
+  ];
+  const gate = runScript(jobs.checks);
+  const passing = Object.fromEntries(Object.keys(resultEnv).map(name => [name, "success"]));
+  for (const [label, github, expected] of cases) {
+    // v2Scope is the fixed expression asserted at both workflow sites above.
+    // Its operators are also valid JS; these GitHub branch fixtures use lower case.
+    const required = runInNewContext(v2Scope, { github, startsWith: (s, prefix) => s.startsWith(prefix) });
+    assert.equal(required, expected, label);
+    for (const result of ["success", "skipped", "failure", "cancelled"]) {
+      const env = { ...passing, V2_SEED_REQUIRED: String(required), V2_SEED: result };
+      const run = spawnSync("bash", ["--noprofile", "--norc", "-eu", "-o", "pipefail", "-c", gate], { env });
+      assert.ifError(run.error);
+      assert.equal(run.status, result === (expected ? "success" : "skipped") ? 0 : 1, label + ": " + result);
+    }
+  }
 });
 
 test("the checks gate requires v2-seed success on V2 runs and a skip everywhere else", () => {
