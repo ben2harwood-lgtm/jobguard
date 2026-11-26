@@ -53,7 +53,16 @@ export async function uploadBriefProgressPhoto(pool: Pool, context: VerifiedTena
       (tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes)
       VALUES($1,$2,$3,$4,$5,$6,'synthetic_demo','image/png',$7) ON CONFLICT(tenant_id,upload_id) DO NOTHING`,
     [context.tenantId,upload.id,jobId,null,upload.objectKey,objectVersionId,bytes]);
-    if (inserted.rowCount) await appendAuditBatch(db, [audit("attached")]);
+    if (inserted.rowCount) { await appendAuditBatch(db, [audit("attached")]); return; }
+    // Codex P2 4707412001: an overlapping request with this commandId passed the unlocked check above.
+    // Under the begin lock the first request's attached event is visible: its scope and actor must match.
+    const { rows: [bound] } = await db.$client.query<{ scope_item_id: string | null; actor_ref: string }>(`
+      SELECT payload->'references'->>'scopeItemId' AS scope_item_id, actor_ref FROM app.audit_event
+      WHERE tenant_id=$1 AND subject_ref=$2 AND event_type='v2.progress_photo.attached'
+        AND payload->'references'->>'commandId'=$3`, [context.tenantId,jobId,command.commandId]);
+    if (!bound || bound.scope_item_id !== command.scopeItemId || bound.actor_ref !== `membership:${actorId}`) {
+      throw new BriefProgressError("BRIEF_PROGRESS_COMMAND_CONFLICT");
+    }
   });
   const finalization = { uploadId: command.commandId, objectVersionId, evidenceType: "progress_photo" };
   const finalizeId = commandIdFor("evidence.finalize", jobId, finalization);

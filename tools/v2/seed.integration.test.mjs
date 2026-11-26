@@ -1789,6 +1789,19 @@ test("F1-P photo upload and all progress kinds: audit, replay, live state, isola
   assert.deepEqual(await app.briefProgress.uploadPhoto(jobId, photo), uploaded);
   assert.deepEqual(await auditRows(photo.commandId), events);
   await assert.rejects(app.briefProgress.uploadPhoto(jobId, { ...photo, fixture: "j3-drainage-photo" }));
+  // Codex P2 4707412001: overlapping uploads reusing one commandId with different scopes: one wins, one conflicts.
+  // Upload binds scope only through its audit event, so any other scope id exercises the race.
+  const otherScope = randomUUID();
+  const raced = { ...photo, commandId: randomUUID() };
+  const outcomes = await Promise.allSettled([app.briefProgress.uploadPhoto(jobId, raced),
+    app.briefProgress.uploadPhoto(jobId, { ...raced, scopeItemId: otherScope })]);
+  assert.equal(outcomes.filter(outcome => outcome.status === "fulfilled").length, 1);
+  const [lost] = outcomes.filter(outcome => outcome.status === "rejected");
+  assert.equal(lost.reason.code, "BRIEF_PROGRESS_COMMAND_CONFLICT");
+  const racedEvents = await auditRows(raced.commandId);
+  assert.deepEqual(racedEvents.map(e => e.event_type).sort(), ["v2.progress_photo.attached", "v2.progress_photo.finalized"]);
+  const winner = outcomes.findIndex(outcome => outcome.status === "fulfilled") === 0 ? task.scopeItemId : otherScope;
+  for (const event of racedEvents) assert.equal(event.payload.references.scopeItemId, winner);
   for (const kind of ["done", "blocked", "changed"]) {
     const command = progressCommand(brief, task, { version: "v2-brief-progress-command.v2", photoId: uploaded.uploadId,
       kind, note: kind === "blocked" ? "no power" : "F1-P fictional observation", expectedVersion: await next() });
