@@ -380,3 +380,39 @@ it("retains the nested editor when showing Scope and restores its identity on re
  expect(editor(pricing).key).toBe(original.key);
  expect(editor(pricing).props.hidden).toBe(false);
 });
+
+// V2-SQ2: combine keeps the known sum, split never guesses, and the running total says when it is incomplete.
+it("combines two priced rows, splits the result blank, and saves the prices typed into each part", async () => {
+  const fetch = vi.fn(async (_url: string, options: RequestInit) => ({ ok: false, json: async () => ({ code: "TEST_RESPONSE" }), body: options.body }));
+  vi.stubGlobal("fetch", fetch);
+  const walls = { ...line, id: crypto.randomUUID(), scopeItemId: crypto.randomUUID(), description: "paint the walls", unitPricePence: 20000, disposition: "accepted" };
+  const door = { ...line, id: crypto.randomUUID(), scopeItemId: crypto.randomUUID(), description: "fit the door", unitPricePence: 6000, disposition: "accepted" };
+  const p = panel({ ...fixture, review: { ...fixture.review!, lines: [walls, door] } } as ReviewCaptureResult);
+  const byTestId = (tree: React.ReactNode, id: string) => all(tree, n => n.props["data-testid"] === id).map(text);
+  expect(byTestId(p.render(), "running-total")).toEqual(["Total so far £260.00 · complete"]);
+  expect(byTestId(p.render(), "line-total")).toEqual(["Line total: £200.00", "Line total: £60.00"]);
+  for (const name of ["paint the walls", "fit the door"]) all(p.render(), n => n.props["aria-label"] === `Select ${name} for merge`)[0]!.props.onChange({ target: { checked: true } });
+  p.button(p.render(), "Merge selected (2)").props.onClick();
+  expect(byTestId(p.render(), "row-origin")).toEqual(["Combined from 2 rows · £260.00"]);
+  expect(byTestId(p.render(), "running-total")).toEqual(["Total so far £260.00 · complete"]);
+  p.button(p.render(), "Split paint the walls + fit the door").props.onClick();
+  expect(byTestId(p.render(), "row-origin")).toEqual(["Combined from 2 rows · £260.00", "Before the split: £260.00 for the whole row", "Before the split: £260.00 for the whole row"]);
+  expect(byTestId(p.render(), "running-total")).toEqual(["Total so far £0.00 · incomplete: 2 rows need a price"]);
+  const prices = all(p.render(), n => n.type === "input" && /^Price paint the walls \+ fit the door — part [AB]$/u.test(n.props["aria-label"] ?? ""));
+  expect(prices.map(n => n.props.value)).toEqual(["", ""]);
+  prices[0]!.props.onChange({ target: { value: "160" } });
+  expect(byTestId(p.render(), "running-total")).toEqual(["Total so far £160.00 · incomplete: 1 row needs a price"]);
+  all(p.render(), n => n.props["aria-label"] === "Price paint the walls + fit the door — part B")[0]!.props.onChange({ target: { value: "100.00" } });
+  expect(byTestId(p.render(), "running-total")).toEqual(["Total so far £260.00 · complete"]);
+  await p.button(p.render(), "Save review").props.onClick(); await settle();
+  const saved = JSON.parse((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string).review.lines;
+  expect(saved.map((l: { disposition: string; unitPricePence: number | null }) => [l.disposition, l.unitPricePence]))
+    .toEqual([["merged", 20000], ["merged", 6000], ["split", 26000], ["proposed", 16000], ["proposed", 10000]]);
+});
+it("a price that is not plain pounds leaves the row unpriced and says why", () => {
+  const p = panel();
+  all(p.render(), n => n.props["aria-label"] === "Price Protect room")[0]!.props.onChange({ target: { value: "twelve" } });
+  const tree = p.render();
+  expect(all(tree, n => n.props["data-testid"] === "running-total").map(text)).toEqual(["Total so far £0.00 · incomplete: 1 row needs a price"]);
+  expect(text(all(tree, n => n.props.role === "alert"))).toContain("Check the price for Protect room");
+});
