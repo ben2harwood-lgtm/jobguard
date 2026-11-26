@@ -78,6 +78,9 @@ V2-C5 (don't-forget prompts) has a Claude builder (#921); not in this queue.
 | D18 | Q53 | V2-G1 snag register: crew owner, who fixed and who checked (a different person), agreed outstanding, Snags screen; main's QW-4 unchanged | **Opus** | SYNC-1 #980 `claude/project-thread-ctngmn` (screen: M3 #956) | 2042 | RED |
 | D19 | Q54 | V2-DV1 + K3-D the builder marks diary notes "Customer can see this", and the Friday update draft offers them (amount rule, builder still reviews) | **Opus** | K3 #935 `codex/sandbox/v2-k3` | 2036 | RED |
 | D20 | Q55 | V2-F3 change draft: one new quantity drafts price (builder-confirmed rate), extra time and materials together as an existing-scope variation; pending kept apart; F6 link per revision | **Opus** | F6 #923 `codex/sandbox/v2-f6` | 2031 | RED money |
+| D21 | Q56 | V2-G2 handover pack: builder ticks what goes in, previews, saves frozen numbered versions with source versions; no amounts | **Opus** | G1 #996 `claude/project-thread-trp08u-g1` | 2043 | RED |
+| D22 | Q57 | V2-G3 release a saved handover version by customer link after site completion; acknowledge receipt only; newer version shown | **Opus** | G2 (Q56) PR, once open | 2058 | RED |
+| D23 | Q58 | V2-K5B-1 draft deposit or stage invoice from the frozen stage (date stages frozen in the same transaction); nothing issued or sent | **Opus** | K5A-1 #992 `claude/project-thread-trp08u-k5a1` | 2034 | RED money |
 | C8 | Q33 | V2-SX-R refusal proof for the four existing v2-backend routes (rule 29) | **Opus** | `codex/sandbox/v2-d5b`, after SX merges | none | T1 |
 | C7 | Q28 | V2-C3C crew records (data and command half) | **Opus** | v2/main | 2027 | RED |
 

@@ -70,7 +70,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 | E2 | **F4** order already sent: show the difference, draft an amendment | ★★ | M | O | F3, d3 | 2032 | RED |
 | E3 | **F5** join with E: a price-changing choice becomes a pending change | ★★ | S | A | F3, e9 | none | RED |
 | E4 | **F7** daywork sheet (hours and materials, approve by link) | ★★★ | M | A | f6, M3 | 2033 | RED money |
-| E5 | **K5B** deposit and stage invoices drafted and issued (practice) | ★★★ | M | O | K5A-1, SYNC-1 | 2034 | RED money |
+| E5 | **K5B** deposit and stage invoices drafted and issued (practice). K5B-1 drafts only: packet Q58 on K5A-1 #992. K5B-2 issue waits on Ben's VAT and numbering choices | ★★★ | M | O | K5A-1, SYNC-1 | 2034 | RED money |
 | E6 | **K6B** merchant invoice real attached files | ★★ | M | O | K6A #927, PX | 2035 | RED |
 | E7 | **DV1** diary entries get a "customer can see this" flag (beside main's diary, no change to it). Packet Q54 with K3-D, on K3 #935; SYNC-1 not needed | ★★ | S | O | k3 | 2036 | RED |
 | E8 | **K3-D** Friday update includes flagged diary entries (in Q54 with DV1) | ★★ | S | A | DV1, k3 | none | RED |
@@ -91,7 +91,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 | # | Piece | Use | Size | Lane | Waits on | Mig | Tier |
 |---|---|---|---|---|---|---|---|
 | G1 | **G1** snag register (adopts QW-4 from main). Packet Q53, stacked on SYNC-1 #980 | ★★★ | M | A | SYNC-1, M3 | 2042 | RED |
-| G2 | **G2 and G3** handover pack, versions and release (adopts QW-5) | ★★★ | M | O | G1, G0, SYNC-1 | 2043 | RED |
+| G2 | **G2 and G3** handover pack, versions and release (QW-5 is not on main yet, so built in V2). Packets Q56 (G2, on G1 #996) and Q57 (G3, on G2) | ★★★ | M | O | G1, G0, SYNC-1 | 2043 | RED |
 | G3 | **G4** who can read the pack (other firm, cancelled recipient) | ★★ | S | O | G2 | none | RED |
 | G4 | **G5** hidden findings stay hidden (twin-job comparison) | ★★ | M | O | G2, E4 | none | RED |
 | G5 | **G6** close the account: final review, lock and Final Check on the existing invoice path | ★★★ | M | O | K5B, G2 | none | RED money |
@@ -117,7 +117,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 
 ## Migration numbers reserved
 **Build-time reservations only.** The final number is set at merge by `tools/migration-renumber.mjs --base=origin/v2/main --write` (see 00-QUEUE.md). D1 #904 became 2021 at aca51458.
-2025 PX (V2 bootstrap), 2026 G0, 2027 C3C, 2028 F2, 2029 B1C, 2030 E7, 2031 F3, 2032 F4, 2033 F7, 2034 K5B, 2035 K6B, 2036 DV1, 2037 C6, 2038 E4, 2039 E5, 2040 E6, 2041 My brief, 2042 G1, 2043 G2/G3, 2044 G8, 2045 G9. 2046 K5A-2 (Q34). 2047 to 2051 V2-FL-1 to FL-5 firm-lock slices (Q35 to Q39). 2052 D4B (Q41). 2053 F1-P (Q43). 2054 FL-6 (Q44). 2055 C3B-2 (reserved). 2056 SYNC-1 (Q45). **Next free: 2057.** A builder whose piece turns out not to need its number leaves it unused. A builder that needs a number not listed here stops and asks.
+2025 PX (V2 bootstrap), 2026 G0, 2027 C3C, 2028 F2, 2029 B1C, 2030 E7, 2031 F3, 2032 F4, 2033 F7, 2034 K5B, 2035 K6B, 2036 DV1, 2037 C6, 2038 E4, 2039 E5, 2040 E6, 2041 My brief, 2042 G1, 2043 G2/G3, 2044 G8, 2045 G9. 2046 K5A-2 (Q34). 2047 to 2051 V2-FL-1 to FL-5 firm-lock slices (Q35 to Q39). 2052 D4B (Q41). 2053 F1-P (Q43). 2054 FL-6 (Q44). 2055 C3B-2 (reserved). 2056 SYNC-1 (Q45). 2057 FL-FX (#981). 2058 G3 release records (Q57). **Next free: 2059.** A builder whose piece turns out not to need its number leaves it unused. A builder that needs a number not listed here stops and asks.
 
 ## Throughput check
 That's 46 pieces over 10 days, about 5 released a day. Lane A runs two at a time, W one or two, and O three or four threads at once. B tests every PR. Batches overlap: the next batch's packets are written while the current one builds. **The real limit is merging.** About 25 PRs are already waiting on Ben, and each stacked piece needs its base merged first. **Settled (Ben, 25 Nov 12:10 UK, "Merge everything to unlock everything"):** the "Merge all ready PRs" thread merges continuously once CI is green and the review is clean. Ben merges by hand only for releases and deploys. No daily merge slot is needed.
