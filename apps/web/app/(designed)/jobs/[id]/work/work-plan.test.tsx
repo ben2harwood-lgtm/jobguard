@@ -2,7 +2,7 @@ import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Empty } from "../../../designed-ui";
 import { jobPageFetch } from "../../../../ui/job-page-fetch";
-import { WorkPlan } from "./work-plan";
+import { editCommand, editFields, WorkPlan } from "./work-plan";
 
 // Exercise the Plan card's real read handlers with persistent hook slots.
 const hooks = vi.hoisted(() => ({ values: [] as unknown[], slot: 0, effects: [] as Array<() => void | (() => void)>, collecting: true }));
@@ -115,5 +115,31 @@ describe("Plan card after changes in the job workspace", () => {
     cleanups.forEach(cleanup => cleanup()); cleanups = [];
     window.dispatchEvent(new CustomEvent("job-saved", { detail: { jobId } }));
     expect(planReads()).toBe(1);
+  });
+});
+
+describe("Plan task edits", () => {
+  const crew = "00000000-0000-4000-8000-000000000020";
+  const approved = "00000000-0000-4000-8000-000000000030";
+  const form = (assignee: string) => {
+    const fields = new FormData();
+    for (const [name, value] of Object.entries({ position: "1", trade: "Joinery", duration: "60", day: "", assignee })) fields.set(name, value);
+    return fields;
+  };
+
+  it("names the approved extra's revision when editing its task", () => {
+    const extra = { ...view("rev-1", "accepted", []), tasks: [], variationRevisions: { [scopeItemId]: approved } };
+    expect(editCommand(extra, task("fit", "Fit doors"), { trade: "Joinery" }).variationRevisionId).toBe(approved);
+    const quoted = { ...view("rev-1", "accepted", []), tasks: [] };
+    expect("variationRevisionId" in editCommand(quoted, task("fit", "Fit doors"), { trade: "Joinery" })).toBe(false);
+  });
+
+  it("keeps a linked crew member unless the assignee is changed", () => {
+    const linked = { ...task("fit", "Fit doors"), assigneeRef: crew };
+    const untouched = editFields(form(""), linked);
+    expect("assignee" in untouched).toBe(false);
+    expect("assigneeRef" in untouched).toBe(false);
+    expect(editFields(form("Sam"), linked).assignee).toBe("Sam");
+    expect(editFields(form(""), { ...task("fit", "Fit doors"), assignee: "Sam" }).assignee).toBeNull();
   });
 });
