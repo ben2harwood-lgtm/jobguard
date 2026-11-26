@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   bundle:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_MAC_RUNNER != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_MAC_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
       CI: "true"
