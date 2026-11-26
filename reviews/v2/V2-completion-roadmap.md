@@ -51,7 +51,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 | # | Piece | Use | Size | Lane | Waits on | Mig | Tier |
 |---|---|---|---|---|---|---|---|
 | D1 | **K10-R** real crew and customer refusal tests for job profit | ★★ | S | W | SX | none | T1 |
-| D2 | **K5A-1** payment schedule counts every approved extra (same total as K10) | ★★ | S | W | #929, #931 | none | RED money |
+| D2 | **K5A-1** payment schedule counts every approved extra (same total as K10). Packet Q51, on K5A-2 #961 | ★★ | S | W | #929, #931 | none | RED money |
 | D3 | **F1-P** photos on Done, Blocked or Changed (Q43) | ★★ | S | A | F1, PX | 2053 | RED |
 | D4 | **F2** proof holds the stage open while its upload is pending | ★★ | S | A | F1, PX | 2028 | RED |
 | D5 | **B1C** check and correct the walk ("needs room" tray, corrections keep the original) | ★★ | M | A | B1B | 2029 | RED |

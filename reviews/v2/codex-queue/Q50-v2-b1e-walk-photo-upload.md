@@ -2,7 +2,7 @@
 
 **Tier:** RED (evidence uploads). **Builder:** Opus 5.5 thread. **Checker:** Codex, `@codex review` on the PR. **Base:** B1C #973 `codex/sandbox/v2-b1c` @ 461f15172 (stacked on B1B #957; PX #964 is merged into v2/main). **Branch:** the builder thread's own, listed in `config/lanes/v2-b1e.json`. **PR:** draft into `codex/sandbox/v2-b1c`. **Migration:** none. **Plan check:** Astra, frm-management-layer#3. Rules 1 to 30 apply. Planner: Fable thread, 26 Nov 16:20 UK.
 
-## Design choice for the coordinator (Ben's 20:07 UK rule: build decisions go to the coordinator)
+## Design choice (decided by the coordinator, 26 Nov 16:00 UK: option 1, no B1E-2 for now)
 The shared upload path (`packages/db/src/evidence.ts`: `beginUpload` line 85, `finalize` line 104) calls `requireLiveJob`, so a photo can only be uploaded on a **live** job. A real walk happens before the quote, when the job isn't live.
 - **Option 1 (planner recommends, this packet):** B1E uses the shared path **unchanged**. On the practice job, which is live in the seed, "Take photo" works. On a job that isn't live yet, the button stays disabled with the line "Photos can be added once the job is live (practice limit)". No shared rule changes.
 - **Option 2 (later piece B1E-2):** a V2-only pre-live upload for walk photos. That changes or bypasses the shared live-job rule, so it needs its own RED packet and plan check.
