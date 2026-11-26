@@ -99,7 +99,13 @@ export function mandatoryJoins(expression, table) {
   return joins;
 }
 
-const samePairs = (a, b) => a.length === b.length && a.every(([c, k]) => b.some(([c2, k2]) => c === c2 && k === k2));
+// Exact set equality: no pair may be missing or repeated in place of another.
+const pairKey = ([child, key]) => `${child}=${key}`;
+const samePairs = (a, b) => {
+  const left = new Set(a.map(pairKey));
+  const right = new Set(b.map(pairKey));
+  return left.size === a.length && right.size === b.length && left.size === right.size && [...left].every(pair => right.has(pair));
+};
 
 // app.job's own lock, exactly as 2001 writes it.
 const ROOT_LOCK = "((practice_session_digest IS NULL) OR (app.current_firm_profile_key() = ('practice:'::text || (practice_session_digest)::text)))";

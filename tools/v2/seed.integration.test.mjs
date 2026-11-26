@@ -1187,6 +1187,11 @@ test("FL guard: a lock must be mandatory joins on every job-bound parent's full 
   assert.ok(check("app.job_diary_entry", `(${diary} OR true)`).includes(optional));
   assert.ok(check("app.job_link", `(${binding("predecessor")} OR ${binding("successor")})`).includes(optional));
   assert.ok(check("app.job_diary_entry", diary.replace("(j.id = job_diary_entry.job_id)", "((j.id = job_diary_entry.job_id) OR true)")).includes(optional));
+  // Codex r5: a repeated equality in place of the job key must fail.
+  assert.ok(check("app.job_diary_entry", diary.replace("(j.id = job_diary_entry.job_id)", "(j.tenant_id = job_diary_entry.tenant_id)"))
+    .includes("v2_practice_firm does not join app.job on (tenant_id, job_id)"));
+  assert.ok(check("app.finding_suppression", "(EXISTS ( SELECT\n   FROM app.job_finding f\n  WHERE ((f.tenant_id = finding_suppression.tenant_id) AND (f.tenant_id = finding_suppression.tenant_id))))")
+    .join().includes("app.job_finding(tenant_id, finding_id)"));
   assert.notDeepEqual(lockProblems(catalog.find(entry => entry.relation === "app.finding_suppression"), new Set(), jobBound), [],
     "a parent without its own firm lock doesn't count");
 });
