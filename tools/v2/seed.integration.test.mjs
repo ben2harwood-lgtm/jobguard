@@ -1161,6 +1161,16 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
   const copy = changes => JSON.stringify({ ...stored, id: randomUUID(), token_hash: randomBytes(32).toString("hex"), ...changes });
   const insertCopy = (db, changes) => db.$client.query(`INSERT INTO app.v2_customer_extra_link
     SELECT * FROM jsonb_populate_record(NULL::app.v2_customer_extra_link,$1::jsonb)`, [copy(changes)]);
+  // A pending copy that also carries its creation audit, so a test reaches the later check it targets.
+  const { appendAuditBatch } = await import("../../packages/db/dist/index.js");
+  const insertAuditedCopy = async (db, changes) => {
+    const row = JSON.parse(copy(changes));
+    await db.$client.query(`INSERT INTO app.v2_customer_extra_link
+      SELECT * FROM jsonb_populate_record(NULL::app.v2_customer_extra_link,$1::jsonb)`, [JSON.stringify(row)]);
+    await appendAuditBatch(db, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${row.actor_membership_id}`,
+      eventType: "v2.customer_extra_link.created", subjectType: "customer_extra_link", subjectRef: row.id,
+      payload: { references: { commandId: row.id, jobId: row.job_id, revisionId: row.revision_id } } }]);
+  };
   for (const changes of [
     { agreed_at: new Date().toISOString(), agreed_by: "Fictional customer", agree_command_id: randomUUID(), agree_fingerprint: "f", link_version: 2 },
     { agreed_at: new Date().toISOString(), agreed_by: "Fictional customer" },
@@ -1188,18 +1198,22 @@ test("V2-F6 exact customer link claims, audit rollback, replay and firm isolatio
   // Codex P1 (29ded0c): calling the agree routine directly, without its audit event, cannot commit.
   await assert.rejects(withTenant(runtime, auth.context, async db => {
     const h = randomBytes(32).toString("hex");
-    await insertCopy(db, { token_hash: h });
+    await insertAuditedCopy(db, { token_hash: h });
     await db.$client.query("SELECT app.v2_f6_agree($1,$2,$3,$4,$5,1)",
       [stored.firm_digest, h, randomUUID(), "f", "Fictional customer"]);
   }), error => error.code === "23514" && error.message === "LINK_AGREEMENT_UNAUDITED");
   // Codex P2 (3b5de72): a direct runtime cancellation without its audit event cannot commit.
   await assert.rejects(withTenant(runtime, auth.context, async db => {
     const h = randomBytes(32).toString("hex");
-    await insertCopy(db, { token_hash: h });
+    await insertAuditedCopy(db, { token_hash: h });
     const updated = await db.$client.query(`UPDATE app.v2_customer_extra_link SET cancelled_at=clock_timestamp(),link_version=2,
       cancel_command_id=$2,cancel_fingerprint='f' WHERE token_hash=$1`, [h, randomUUID()]);
     assert.equal(updated.rowCount, 1, "the runtime cancel guard allows the shape; only the audit check refuses it");
   }), error => error.code === "23514" && error.message === "LINK_CANCELLATION_UNAUDITED");
+  // Codex P1 (e44eb6d): a direct runtime insert of a pristine pending link without its creation audit cannot commit.
+  await assert.rejects(withTenant(runtime, auth.context, async db => {
+    assert.equal((await insertCopy(db, { token_hash: randomBytes(32).toString("hex") })).rowCount, 1);
+  }), error => error.code === "23514" && error.message === "LINK_CREATION_UNAUDITED");
   assert.deepEqual(await events(), afterAgree);
   assert.deepEqual(await repository.open(first.capability), agreed);
   const savedAgreement = (await repository.list(auth.context, jobId)).find(link => link.id === first.linkId);

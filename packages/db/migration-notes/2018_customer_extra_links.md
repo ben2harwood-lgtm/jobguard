@@ -138,3 +138,8 @@ Cancellation audit (Codex P2 on 3b5de72): a deferred constraint trigger
 matching `v2.customer_extra_link.cancelled` audit event, keyed by `cancel_command_id`,
 exists in the same transaction (`LINK_CANCELLATION_UNAUDITED`, 23514). Runtime may still
 write the cancel columns; the audit is now required at commit, like agreement.
+
+Creation audit (Codex P1 on e44eb6d): `v2_f6_require_create_audit` is a deferred
+AFTER INSERT constraint trigger. A new link commits only with its
+`v2.customer_extra_link.created` event (subject and commandId both equal the link id,
+which is the create command id); otherwise `LINK_CREATION_UNAUDITED` (23514).
