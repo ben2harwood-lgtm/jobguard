@@ -69,6 +69,8 @@ try {
 
   // V2-F6: reserved local-only migration, independent of unmerged V2 tables.
   await client.query(readFileSync(new URL("./migrations/2018_customer_extra_links.sql", import.meta.url), "utf8"));
+  // V2-PX photo lock (2025): evidence and photo rows follow the firm's job visibility.
+  await client.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   const jobId = await seedV2(client, expectedSystemId);
   printSeedLinks(settings.AUTH_ALLOWED_ORIGIN, jobId);
   console.log(`V2 PostgreSQL ready (${migrations} schema migrations)`);
