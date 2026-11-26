@@ -68,6 +68,20 @@ export class SnagRegisterRepository {
     if (!row) throw new SnagRegisterError("V2_SNAG_NOT_FOUND");
   }
 
+  /** One command identity across all three register records: a reused id for another kind of change is a conflict. */
+  private async claim(client: PoolClient, tenantId: string, commandId: string, kind: "owner" | "event" | "agreed") {
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 2042))", [`snag_command:${tenantId}:${commandId}`]);
+    const { rows } = await client.query<{ kind: string }>(`SELECT 'owner' AS kind FROM app.v2_snag_owner WHERE (tenant_id, command_id) = ($1, $2)
+      UNION ALL SELECT 'event' FROM app.v2_snag_event_person WHERE (tenant_id, command_id) = ($1, $2)
+      UNION ALL SELECT 'agreed' FROM app.v2_snag_agreed WHERE (tenant_id, command_id) = ($1, $2)`, [tenantId, commandId]);
+    if (rows.some(row => row.kind !== kind)) throw new SnagRegisterError("V2_SNAG_COMMAND_CONFLICT");
+  }
+
+  /** Owner and agreed changes follow main's snag commands: live jobs only. */
+  private async live(client: PoolClient, jobId: string) {
+    await client.query("SELECT app.require_watchdog_live($1::uuid)", [jobId]);
+  }
+
   private audit(database: Parameters<typeof appendAuditBatch>[0], actor: string, eventType: string, jobId: string,
     references: Record<string, string>, request: string) {
     return appendAuditBatch(database, [{ id: randomUUID(), version: "audit.v1", actorRef: `membership:${actor}`, eventType,
@@ -80,6 +94,7 @@ export class SnagRegisterRepository {
     const command = parsed.data, digest = sha256(JSON.stringify(command));
     return withTenant(this.pool, context, async database => {
       const { $client } = database;
+      await this.claim($client, context.tenantId, command.commandId, "owner");
       await this.snag($client, context.tenantId, jobId, command.snagId);
       const { rows: [prior] } = await $client.query<{ snagId: string; crewId: string | null }>(`SELECT snag_id AS "snagId", crew_id AS "crewId"
         FROM app.v2_snag_owner WHERE (tenant_id, command_id) = ($1, $2)`, [context.tenantId, command.commandId]);
@@ -87,6 +102,7 @@ export class SnagRegisterRepository {
         if (prior.snagId !== command.snagId || prior.crewId !== command.crewId) throw new SnagRegisterError("V2_SNAG_COMMAND_CONFLICT");
         return;
       }
+      await this.live($client, jobId);
       const revision = command.crewId ? await this.crew($client, command.crewId) : null;
       await $client.query(`INSERT INTO app.v2_snag_owner (tenant_id, job_id, snag_id, sequence, crew_id, crew_revision, firm_key, command_id,
         actor_membership_id) SELECT $1, $2, $3, coalesce(max(sequence), 0) + 1, $4, $5, app.current_firm_profile_key(), $6, $7
@@ -104,6 +120,7 @@ export class SnagRegisterRepository {
     const command = parsed.data, digest = sha256(JSON.stringify(command));
     return withTenant(this.pool, context, async database => {
       const { $client } = database;
+      await this.claim($client, context.tenantId, command.commandId, "event");
       await this.snag($client, context.tenantId, jobId, command.snagId);
       const result = (await $client.query<{ result: { snagId: string; sequence: number; kind: string } }>(
         "SELECT app.snag_record_event($1, $2, $3, $4) result", [jobId, command.commandId, command.snagId, snagEventKind[command.action]])).rows[0]!.result;
@@ -132,10 +149,12 @@ export class SnagRegisterRepository {
     const command = { ...parsed.data, note: parsed.data.agreed ? parsed.data.note : null }, digest = sha256(JSON.stringify(command));
     return withTenant(this.pool, context, async database => {
       const { $client } = database;
+      await this.claim($client, context.tenantId, command.commandId, "agreed");
       await this.snag($client, context.tenantId, jobId, command.snagId);
       const { rows: [prior] } = await $client.query<{ digest: boolean }>(`SELECT (snag_id, agreed, note) IS NOT DISTINCT FROM ($3::uuid, $4::boolean, $5::text) AS digest
         FROM app.v2_snag_agreed WHERE (tenant_id, command_id) = ($1, $2)`, [context.tenantId, command.commandId, command.snagId, command.agreed, command.note]);
       if (prior) { if (!prior.digest) throw new SnagRegisterError("V2_SNAG_COMMAND_CONFLICT"); return; }
+      await this.live($client, jobId);
       const { rows: [last] } = await $client.query<{ kind: string }>(`SELECT kind FROM app.snag_event WHERE (tenant_id, snag_id) = ($1, $2)
         ORDER BY sequence DESC LIMIT 1`, [context.tenantId, command.snagId]);
       if (command.agreed && last?.kind === "checked") throw new SnagRegisterError("V2_SNAG_NOTHING_OUTSTANDING");

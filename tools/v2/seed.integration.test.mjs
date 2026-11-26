@@ -1181,6 +1181,13 @@ test("G1 replay and conflict; main's own route still works and shows person not 
   assert.deepEqual(await g1.post(owner, fixed), first);
   assert.equal((await g1.post(owner, { ...fixed, person: { kind: "crew", crewId: sam.crewId } }, 409)).code, "V2_SNAG_COMMAND_CONFLICT");
   assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_snag_event_person WHERE snag_id=$1", [snagId])).rows[0].n, 1);
+  // One command identity across owner, event and agreed records.
+  const ownerSet = { version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: sam.crewId };
+  await g1.post(owner, ownerSet);
+  assert.equal((await g1.post(owner, { version: "v2-snag-agreed-command.v1", commandId: ownerSet.commandId, snagId, agreed: true, note: "Customer agreed" }, 409)).code,
+    "V2_SNAG_COMMAND_CONFLICT");
+  assert.equal((await g1.post(owner, { ...ownerSet, commandId: fixed.commandId }, 409)).code, "V2_SNAG_COMMAND_CONFLICT");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_snag_agreed WHERE snag_id=$1", [snagId])).rows[0].n, 0);
   // Reopen and fix again through main's own route: no person row, and the register says so.
   await g1.post(owner, g1.event(snagId, "reopen", { kind: "builder" }));
   await json(await request(`/api/jobs/${jobId}/snags/${snagId}/events`, { cookies: owner.cookies, csrf: owner.csrfToken,
