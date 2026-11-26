@@ -78,7 +78,10 @@ export const localData = z.object({ version: z.literal("mobile-cache.v1"), metad
 .refine(data => new Set(data.media.map(m => `${m.captureOrder.sessionId}:${m.captureOrder.sequence}`)).size === data.media.length
  && data.media.every(m => (data.mediaSequences.find(s => s.sessionId === m.captureOrder.sessionId)?.last ?? 0) >= m.captureOrder.sequence)
  && new Set(data.mediaSequences.map(s => s.sessionId)).size === data.mediaSequences.length, "Capture order repeats or runs ahead of its counter")
-.refine(data => data.unsyncedWork !== "none" || nothingUnsynced(data), "Unresolved queue or capture requires cleanup hold");
+// Codex P2 (#979): a pending media cleanup tombstone is the only pointer to leftover encrypted chunks or a key,
+// so it keeps the hold too; otherwise save() could label the row empty and logout would erase that pointer.
+.refine(data => data.unsyncedWork !== "none" || (nothingUnsynced(data) && data.mediaCleanup.length === 0),
+ "Unresolved queue, capture or media cleanup requires cleanup hold");
 // Unresolved or malformed commands cannot be labelled empty to authorize erasure.
 export type LocalData = z.infer<typeof localData>;
 export function samePartition(a: Partition, b: Partition) {
