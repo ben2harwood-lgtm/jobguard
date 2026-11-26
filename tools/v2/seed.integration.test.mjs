@@ -1128,7 +1128,7 @@ test("Q06 RAMS: forced RLS, append-only grants, second firm and wrong-job FK; mi
   wrong[7] = JSON.stringify({ ...draft, jobId: otherJob.draftJob, revision: 2 });
   await assert.rejects(ownQuery(insert, wrong), { code: "23503" });
   const before = await ramsRows(f.draftJob);
-  await admin.query(readFileSync(new URL("../../packages/db/migrations/2021_v2_rams_draft.sql", import.meta.url), "utf8"));
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2028_v2_rams_draft.sql", import.meta.url), "utf8"));
   assert.deepEqual(await ramsRows(f.draftJob), before);
   await assert.rejects(new RamsApplication(runtime, outsider.sessionId).read(f.draftJob), { code: "NOT_FOUND" });
 });
