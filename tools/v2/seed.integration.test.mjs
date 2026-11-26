@@ -1638,3 +1638,153 @@ test("PX: the photo lock migration is safe to run twice", async () => {
   await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
   assert.equal(await policyCount(), before);
 });
+
+// V2-G2 (Q56, migration 2043): handover pack versions. The builder ticks what goes in, previews, and saves frozen versions.
+const g2 = {
+  async job() {
+    const { jobId: job, scopeItemId, sessionId } = await pxLiveJob();
+    const owner = await signIn("builder");
+    const { context } = await authenticatePracticeSession(runtime, sessionId);
+    const app = createWorkspaceApplication({ pool: runtime, sessionId });
+    const photo = await uploadPracticePhoto(runtime, context, { jobId: job, scopeItemId });
+    const variationId = randomUUID();
+    const proposed = await app.variation.command(job, { version: "variation-command.v1", action: "propose", proposalId: variationId,
+      scopeItemId: randomUUID(), existingScopeItemId: null, lineageParentScopeItemId: null,
+      description: "splashback extended to the end of the worktop", captureText: "Customer asks to extend the splashback",
+      price: { quantity: "1", unit: "item", unitRatePence: 9500, direction: "addition" } });
+    await app.variation.command(job, { version: "variation-command.v1", action: "approve", variationId,
+      revisionId: proposed.variations.find(item => item.id === variationId).currentRevisionId, approvalId: randomUUID(),
+      attestation: "Builder-recorded practice acceptance — not an authenticated customer signature" });
+    const jordan = await g1.crew(owner, "Jordan Handover", "joiner"), sam = await g1.crew(owner, "Sam Handover", "decorator");
+    const snagId = randomUUID();
+    await json(await request(`/api/jobs/${job}/snags`, { cookies: owner.cookies, csrf: owner.csrfToken,
+      body: { version: "snag.v1", action: "add", commandId: randomUUID(), snagId, title: "Refit the hall door stop", dueOn: "2026-12-04" } }));
+    const register = body => request(`/api/jobs/${job}/snag-register`, { cookies: owner.cookies, csrf: owner.csrfToken, body }).then(response => json(response));
+    await register({ version: "v2-snag-owner-command.v1", commandId: randomUUID(), snagId, crewId: jordan.crewId });
+    await register({ version: "v2-snag-agreed-command.v1", commandId: randomUUID(), snagId, agreed: true, note: "Visit agreed with Alex." });
+    return { job, owner, sessionId, context, photo, variationId, snagId, jordan, sam, register,
+      path: `/api/jobs/${job}/handover`,
+      post: (body, status = 200) => request(`/api/jobs/${job}/handover`, { cookies: owner.cookies, csrf: owner.csrfToken, body }).then(response => json(response, status)) };
+  },
+  save: (choice, expectedVersion = 0, commandId = randomUUID()) => ({ version: "v2-handover-save-command.v1", commandId, expectedVersion, choice }),
+  events: async commandId => (await admin.query(`SELECT payload FROM app.audit_event WHERE event_type='v2.handover.version_saved'
+    AND payload->'references'->>'commandId'=$1`, [commandId])).rows,
+};
+const g2Text = content => content.sections.flatMap(section => [section.title, ...section.lines]).join("\n");
+
+test("G2 done when: the builder ticks every section, previews, and saves version 1 with no amounts", async () => {
+  const f = await g2.job();
+  const view = await json(await request(f.path, { cookies: f.owner.cookies }));
+  assert.ok(view.sources.lines.length >= 3);
+  assert.deepEqual(view.versions, []);
+  assert.equal(JSON.stringify(view.sources).match(/pence|unitRate|netPence|signedDelta/iu), null, "the sources carry no money field");
+  const choice = { sections: ["done", "changes", "photos", "certificates", "snags", "contacts"],
+    lineIds: view.sources.lines.slice(0, 3).map(row => row.id), variationIds: [f.variationId], photoIds: [f.photo.evidenceId], snagIds: [f.snagId],
+    certificates: [{ text: "Tile adhesive and grout data sheets", status: "included" }, { text: "electrical certificate", status: "still_needed" }] };
+  const before = (await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_version WHERE job_id=$1", [f.job])).rows[0].n;
+  const { preview } = await f.post({ version: "v2-handover-preview.v1", choice });
+  assert.deepEqual(preview.refused, []);
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_version WHERE job_id=$1", [f.job])).rows[0].n, before, "a preview writes nothing");
+  const command = g2.save(choice);
+  const { saved } = await f.post(command);
+  assert.equal(saved.version, 1);
+  assert.deepEqual(saved.content, preview.content, "the saved version is the previewed text");
+  const text = g2Text(saved.content);
+  assert.match(text, /Agreed change · splashback extended to the end of the worktop/u);
+  assert.match(text, /Refit the hall door stop · Jordan Handover · due 4 Dec\. Visit agreed with Alex\./u);
+  assert.match(text, /Still needed: electrical certificate\. Your builder will supply it separately\./u);
+  assert.match(text, /Site photo 1 · /u);
+  assert.deepEqual(saved.content.sections.find(section => section.key === "photos").photos, [{ id: f.photo.evidenceId, sha256: f.photo.sha256 }]);
+  const { rows: money } = await admin.query(`SELECT unit_rate_pence::text AS v FROM app.quote_line WHERE job_id=$1
+    UNION SELECT signed_delta_pence::text FROM app.variation_revision WHERE job_id=$1 UNION SELECT unit_rate_pence::text FROM app.variation_revision WHERE job_id=$1`, [f.job]);
+  const stored = (await admin.query("SELECT content FROM app.v2_handover_version WHERE job_id=$1 AND version=1", [f.job])).rows[0].content;
+  const storedText = g2Text(stored);
+  assert.doesNotMatch(storedText, /£|pence|pounds|\d+[.,]\d{2}\b/u);
+  for (const { v } of money.filter(row => Number(row.v) > 0)) {
+    assert.doesNotMatch(storedText, new RegExp(`\\b${v}\\b`, "u"));
+    assert.doesNotMatch(storedText, new RegExp(`\\b${(Number(v) / 100).toFixed(2).replace(".", "\\.")}\\b`, "u"));
+  }
+  assert.deepEqual((await f.post(command)).saved, { ...saved, replayed: true });
+  assert.equal((await g2.events(command.commandId)).length, 1);
+  const [event] = await g2.events(command.commandId);
+  assert.equal(event.payload.hashes.content, saved.contentHash);
+  assert.doesNotMatch(JSON.stringify(event.payload), /door stop|splashback|electrical/u);
+  const reloaded = await json(await request(f.path, { cookies: f.owner.cookies }));
+  assert.deepEqual(reloaded.versions.map(row => [row.version, row.contentHash]), [[1, saved.contentHash]]);
+});
+
+test("G2 a checked snag leaves Outstanding in version 2, and version 1 reads back unchanged", async () => {
+  const f = await g2.job();
+  const choice = { sections: ["snags", "contacts"], lineIds: [], variationIds: [], photoIds: [], snagIds: [f.snagId], certificates: [] };
+  const first = (await f.post(g2.save(choice))).saved;
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_fixed", person: { kind: "crew", crewId: f.jordan.crewId } });
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_checked", person: { kind: "crew", crewId: f.sam.crewId } });
+  const view = await json(await request(f.path, { cookies: f.owner.cookies }));
+  assert.equal(view.sources.snags.some(row => row.id === f.snagId), false, "a checked snag is not outstanding");
+  // Naming it again is refused; dropping it saves version 2.
+  assert.equal((await f.post(g2.save(choice, 1), 409)).code, "HANDOVER_SOURCE_CHANGED");
+  const second = (await f.post(g2.save({ ...choice, sections: ["contacts"], snagIds: [] }, 1))).saved;
+  assert.equal(second.version, 2);
+  assert.equal(second.content.sections.some(section => section.key === "snags"), false);
+  const again = (await admin.query("SELECT content, content_hash FROM app.v2_handover_version WHERE job_id=$1 AND version=1", [f.job])).rows[0];
+  assert.equal(again.content_hash, first.contentHash);
+  assert.deepEqual(again.content, first.content);
+});
+
+test("G2 refusals: an amount, a stale version, a snag checked after preview, another job's photo, nothing ticked", async () => {
+  const f = await g2.job();
+  const base = { sections: ["certificates"], lineIds: [], variationIds: [], photoIds: [], snagIds: [], certificates: [{ text: "Spare tiles worth £40", status: "included" }] };
+  const amount = await f.post(g2.save(base), 409);
+  assert.deepEqual([amount.code, amount.refused], ["HANDOVER_LINE_REFUSED", [{ section: "certificates", line: "Spare tiles worth £40", reason: "amount" }]]);
+  assert.equal((await f.post(g2.save({ ...base, sections: [] }), 409)).code, "HANDOVER_NOTHING_CHOSEN");
+  const ok = { ...base, certificates: [{ text: "Spare tiles left in the loft", status: "included" }] };
+  await f.post(g2.save(ok));
+  assert.equal((await f.post(g2.save(ok, 0), 409)).code, "HANDOVER_VERSION_CONFLICT");
+  // Previewed with the snag, then the snag is checked before Save.
+  const withSnag = { ...ok, sections: ["snags"], certificates: [], snagIds: [f.snagId] };
+  assert.deepEqual((await f.post({ version: "v2-handover-preview.v1", choice: withSnag })).preview.refused, []);
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_fixed", person: { kind: "builder" } });
+  await f.register({ version: "v2-snag-event-command.v1", commandId: randomUUID(), snagId: f.snagId, action: "mark_checked", person: { kind: "crew", crewId: f.sam.crewId } });
+  assert.equal((await f.post(g2.save(withSnag, 1), 409)).code, "HANDOVER_SOURCE_CHANGED");
+  // Another job's photo is never offered, and naming it is refused.
+  const other = await g2.job();
+  assert.equal((await json(await request(f.path, { cookies: f.owner.cookies }))).sources.photos.some(row => row.id === other.photo.evidenceId), false);
+  assert.equal((await f.post(g2.save({ ...ok, sections: ["photos"], certificates: [], photoIds: [other.photo.evidenceId] }, 1), 409)).code, "HANDOVER_SOURCE_CHANGED");
+  assert.equal((await admin.query("SELECT count(*)::int AS n FROM app.v2_handover_version WHERE job_id=$1", [f.job])).rows[0].n, 1);
+});
+
+test("G2 replay and conflict, append-only, firm A/B read check and route refusals", async () => {
+  const f = await g2.job();
+  const choice = { sections: ["contacts"], lineIds: [], variationIds: [], photoIds: [], snagIds: [], certificates: [] };
+  const command = g2.save(choice);
+  await f.post(command);
+  assert.equal((await f.post({ ...command, choice: { ...choice, sections: ["contacts", "certificates"], certificates: [{ text: "Other", status: "included" }] } }, 409)).code,
+    "HANDOVER_COMMAND_CONFLICT");
+  for (const sql of ["UPDATE app.v2_handover_version SET content=content WHERE job_id=$1", "DELETE FROM app.v2_handover_version WHERE job_id=$1"])
+    await assert.rejects(withTenant(runtime, f.context, db => db.$client.query(sql, [f.job])), { code: "42501" });
+  const { rows: [catalog] } = await admin.query(`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid='app.v2_handover_version'::regclass`);
+  assert.deepEqual(catalog, { relrowsecurity: true, relforcerowsecurity: true });
+  // Rule 29 / rule 30: no session, a bad session and the second firm see nothing.
+  await json(await request(f.path), 401);
+  const invalid = await request(f.path, { cookies: "jg_session=" + "x".repeat(43) });
+  assert.ok([401, 404].includes(invalid.status), String(invalid.status));
+  const second = await signIn("second-builder");
+  await json(await request(f.path, { cookies: second.cookies }), 404);
+  await json(await request(f.path, { cookies: second.cookies, csrf: second.csrfToken, body: g2.save(choice, 1) }), 404);
+  const { context: secondContext } = await authenticatePracticeSession(runtime, second.sessionId);
+  for (const scope of [second.realContext, secondContext]) await withTenant(runtime, scope, async db => {
+    assert.equal((await db.$client.query("SELECT 1 FROM app.v2_handover_version WHERE job_id=$1", [f.job])).rowCount, 0);
+  });
+  await verifyTenantChain(f.context.tenantId);
+});
+
+test("G2 migration 2043 reruns without changing policies, triggers or rows", async () => {
+  const catalog = async () => (await admin.query(`SELECT
+    (SELECT string_agg(polname, ',' ORDER BY polname) FROM pg_policy WHERE polrelid='app.v2_handover_version'::regclass) AS policies,
+    (SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE tgrelid='app.v2_handover_version'::regclass AND NOT tgisinternal) AS triggers,
+    (SELECT relacl::text FROM pg_class WHERE oid='app.v2_handover_version'::regclass) AS acl,
+    (SELECT count(*)::int FROM app.v2_handover_version) AS rows`)).rows[0];
+  const before = await catalog();
+  await admin.query(readFileSync(new URL("../../packages/db/migrations/2043_v2_handover_version.sql", import.meta.url), "utf8"));
+  assert.deepEqual(await catalog(), before);
+});

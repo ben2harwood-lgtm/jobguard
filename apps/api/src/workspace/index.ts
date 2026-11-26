@@ -21,6 +21,7 @@ export * from "../proof/contracts.js";
 export * from "../proof/proof.application.js";
 export * from "../snag.application.js";
 export * from "./snag-register.application.js";
+export * from "./handover.application.js";
 export * from "./fee-illustration.contracts.js";
 export * from "./fee-illustration.application.js";
 
