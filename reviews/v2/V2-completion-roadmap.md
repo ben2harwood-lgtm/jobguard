@@ -66,7 +66,7 @@ All of this is **practice only on Ben's Mac** until hosting is decided (see "Ben
 ## Batch E: about 27 to 29 Nov, changes and money
 | # | Piece | Use | Size | Lane | Waits on | Mig | Tier |
 |---|---|---|---|---|---|---|---|
-| E1 | **F3** change draft: quantity, materials, duration and price together, through the existing variation process | ★★★ | M | O | f6 #923, e9 #948 | 2031 | RED money |
+| E1 | **F3** change draft: quantity, materials, duration and price together, through the existing variation process. Packet Q55 on F6 #923; E9 not needed (it drafts through the base path) | ★★★ | M | O | f6 #923 | 2031 | RED money |
 | E2 | **F4** order already sent: show the difference, draft an amendment | ★★ | M | O | F3, d3 | 2032 | RED |
 | E3 | **F5** join with E: a price-changing choice becomes a pending change | ★★ | S | A | F3, e9 | none | RED |
 | E4 | **F7** daywork sheet (hours and materials, approve by link) | ★★★ | M | A | f6, M3 | 2033 | RED money |
