@@ -22,6 +22,7 @@
         "apps/web/app/api/jobs/[id]/rams/route.ts",
         "apps/web/e2e/rams-print.spec.ts",
         "apps/web/next.config.mjs",
+        "packages/core/src/watchdog.ts",
         "packages/db/migration-notes/2021_v2_rams_draft.md",
         "packages/db/migrations/2021_v2_rams_draft.sql",
         "packages/db/src/index.ts",

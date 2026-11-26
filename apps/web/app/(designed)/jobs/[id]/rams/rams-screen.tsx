@@ -1,7 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RamsScreen as Screen } from "@jobguard/api/workspace";
-import type { RamsDraft } from "@jobguard/db";
 import { DesignedJob } from "../../../jobs-screens";
 import { Card, Empty, Note, Tag } from "../../../designed-ui";
 
@@ -14,6 +13,8 @@ const problem: Record<string, string> = {
   RAMS_VERSION_CONFLICT: "This draft changed in another window. Reload it before continuing.",
   RAMS_DRAFT_REQUIRED: "This version is signed and read-only. Make a new draft to change it.",
 };
+
+type RamsDraft = Screen["drafts"][number];
 
 export function RamsScreen({ jobId }: { jobId: string }) {
   const [screen, setScreen] = useState<Screen | null>(null);
