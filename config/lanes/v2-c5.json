@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-c5": {
+      "branches": [
+        "claude/project-thread-g02v99"
+      ],
+      "note": "V2 don't-forget prompts on the quote (T1, no table, no price). Stacked on v2-c1. The validator includes config/lanes/v2-c5.json implicitly.",
+      "allow": [
+        "apps/web/app/api/v2-backend/jobs/[id]/quote-prompts/route.test.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/quote-prompts/route.ts",
+        "apps/web/app/ui/quote-editor.tsx",
+        "apps/web/app/ui/review-proposal.tsx",
+        "apps/web/app/ui/v2-quote-prompts-panel.tsx",
+        "apps/web/app/ui/v2-quote-prompts.test.ts",
+        "apps/web/app/ui/v2-quote-prompts.ts",
+        "apps/web/e2e/artifacts/v2-c5/dismissed-1280.png",
+        "apps/web/e2e/artifacts/v2-c5/dismissed-360.png",
+        "apps/web/e2e/artifacts/v2-c5/prompts-1280.png",
+        "apps/web/e2e/artifacts/v2-c5/prompts-360.png",
+        "apps/web/e2e/artifacts/v2-c5/scope-review-1280.png",
+        "apps/web/e2e/artifacts/v2-c5/scope-review-360.png",
+        "apps/web/e2e/artifacts/v2-c5/scope-review-added-1280.png",
+        "apps/web/e2e/artifacts/v2-c5/scope-review-added-360.png",
+        "apps/web/e2e/v2-c5.spec.mts",
+        "apps/web/next.config.mjs",
+        "apps/web/playwright.v2-c5.config.ts"
+      ]
+    }
+  }
+}
