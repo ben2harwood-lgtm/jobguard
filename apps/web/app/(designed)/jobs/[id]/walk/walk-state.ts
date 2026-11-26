@@ -27,6 +27,23 @@ export function validMeasurement(quantity: string) {
   return quantity.length <= 40 && /^(0|[1-9][0-9]*)(\.[0-9]{1,6})?$/u.test(quantity) && /[1-9]/u.test(quantity);
 }
 
+// B1C: clock warnings remain visible even after an explicit filing.
+export function needsRoom(entries: readonly EntryView[]) {
+  return entries.filter(entry => entry.kind === "photo" &&
+    (entry.link === "no_room" || entry.link === "waiting" || entry.clock.flagged));
+}
+
+// B1C: a photo filed under a room belongs to that room's summary, like a linked one.
+export function roomSummaryEntries(entries: readonly EntryView[], roomName: string | null | undefined) {
+  return entries.filter(entry => (entry.link === "linked" || entry.link === "filed") && entry.linkedRoom === roomName);
+}
+
+export function filingLabel(entry: EntryView) {
+  return entry.link === "filed"
+    ? `Filed under ${entry.linkedRoom} (taken in ${entry.originalLinkedRoom ?? "no room"})`
+    : entry.link === "linked" ? entry.linkedRoom ?? "Room link needs checking" : "Room link needs checking";
+}
+
 // Codex P2 4705257589: a refused slot is permanent, so the preserved content goes back into the form to resubmit.
 // Codex P2 4711069734: only the rejected entry's own fields come back, so other unsent drafts stay.
 export function restoreEntry(entry: WalkEntryCommand["entry"]): { room?: string; note?: string; quantity?: string; unit?: string } | null {

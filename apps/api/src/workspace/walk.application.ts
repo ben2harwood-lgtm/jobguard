@@ -1,9 +1,10 @@
 import { PracticeAccessError, WalkError, WalkRepository, walkQueryV1,
-  type WalkEntryCommand, type WalkQuery, type WalkSessionCommand } from "@jobguard/db";
+  type WalkEntryCommand, type WalkPhotoFilingCommand, type WalkQuery, type WalkSessionCommand } from "@jobguard/db";
 import type { Pool } from "pg";
 import { PracticeAccess } from "../practice-access.js";
 
-export { WALK_CLOCK_TOLERANCE_SECONDS, WalkError, walkEntryCommandV1, walkQueryV1, walkSessionCommandV1,
+export { walkPhotoFilingCommandV1, type WalkPhotoFilingCommand,
+  WALK_CLOCK_TOLERANCE_SECONDS, WalkError, walkEntryCommandV1, walkQueryV1, walkSessionCommandV1,
   type WalkEntryCommand, type WalkEntryView, type WalkQuery, type WalkSession, type WalkSessionCommand } from "@jobguard/db";
 
 /** V2 walk session record: commands and queries for the later walk screens. No audio, no paid calls. */
@@ -35,6 +36,13 @@ export class WalkApplication {
     const { context } = await this.authorize(jobId);
     if (!this.sessionId) throw new PracticeAccessError("UNAUTHENTICATED");
     return this.walks.recordEntry(context, jobId, this.sessionId, command);
+  }
+
+  // B1C mount, owned by B1A #920: filing pass-through beside the entry command.
+  async fileWalkPhoto(jobId: string, command: WalkPhotoFilingCommand) {
+    const { context } = await this.authorize(jobId);
+    if (!this.sessionId) throw new PracticeAccessError("UNAUTHENTICATED");
+    return this.walks.fileWalkPhoto(context, jobId, this.sessionId, command);
   }
 
   private authorize(jobId: string) {

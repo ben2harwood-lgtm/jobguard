@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-b1c": {
+      "branches": [
+        "codex/sandbox/v2-b1c"
+      ],
+      "note": "RED Q42 V2-B1C. Base codex/sandbox/v2-b1b @ 2c20eb6db. B1C mount, owned by B1A #920: packages/db/src/v2-walk-repository.ts filing schema, fold overlay, latest read and fileWalkPhoto only. B1C mount, owned by B1A #920: apps/api/src/workspace/walk.application.ts filing pass-through/export. B1C mount, owned by B1A #920: tools/v2/bootstrap.mjs 2029 line before 2054 when integrated. B1C mount, owned by B1A #920: tools/v2/seed.integration.test.mjs own appended describe. B1C mount, owned by B1B #957: apps/web/app/(designed)/jobs/[id]/walk/walk.tsx, walk-state.ts and apps/web/app/api/v2-backend/jobs/[id]/walk/route.ts filing tray, move action and filing POST only (Q42 steps 4-5).",
+      "allow": [
+        "apps/api/src/workspace/walk.application.ts",
+        "apps/web/app/(designed)/jobs/[id]/walk/walk-state.test.ts",
+        "apps/web/app/(designed)/jobs/[id]/walk/walk-state.ts",
+        "apps/web/app/(designed)/jobs/[id]/walk/walk.tsx",
+        "apps/web/app/api/v2-backend/jobs/[id]/walk/route.test.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/walk/route.ts",
+        "packages/db/migration-notes/2029_v2_walk_photo_filing.md",
+        "packages/db/migrations/2029_v2_walk_photo_filing.sql",
+        "packages/db/src/v2-walk-repository.ts",
+        "packages/db/test/migration-proofs/2029_v2_walk_photo_filing.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "packages/db/test/v2-walk-photo-filing.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/walk.browser.test.mjs"
+      ]
+    }
+  }
+}

@@ -43,6 +43,20 @@ export const walkEntryCommandV1 = z.strictObject({
   entry: entryBody,
 });
 
+// B1C mount, owned by B1A #920: versioned photo filing command and receipt.
+export const walkPhotoFilingCommandV1 = z.strictObject({
+  version: z.literal("v2-walk-photo-filing-command.v1"),
+  sessionId: uuid, commandId: uuid,
+  captureOrder: z.number().int().min(1).max(100_000),
+  roomCaptureOrder: z.number().int().min(1).max(100_000),
+  expectedVersion,
+  reason: z.enum(["misfiled", "no_room", "waiting"]),
+});
+export type WalkPhotoFilingCommand = z.input<typeof walkPhotoFilingCommandV1>;
+export type WalkPhotoFiling = Omit<WalkPhotoFilingCommand, "version"> & {
+  version: number; actorMembershipId: string; serverReceivedAt: Date;
+};
+
 export type WalkQuery = z.input<typeof walkQueryV1>;
 export type WalkSessionCommand = z.input<typeof walkSessionCommandV1>;
 export type WalkEntryCommand = z.input<typeof walkEntryCommandV1>;
@@ -81,7 +95,10 @@ export type WalkEntryView = WalkEntryRevision & {
   linkedRoom: string | null;
   /** linked: filed under a room; no_room: nothing before it names one;
    * waiting: a number between it and the room entry before it has not arrived, so the room may still change. */
-  link: "room" | "linked" | "no_room" | "waiting";
+  link: "room" | "linked" | "no_room" | "waiting" | "filed";
+  originalRoomCaptureOrder?: number | null;
+  originalLinkedRoom?: string | null;
+  filingVersion?: number;
   clock: { differenceSeconds: number; flagged: boolean };
   /** Final verification of the photo's bytes, read live from the evidence upload with the same ID
    * on the same job. Never copied here. "not_uploaded" until such an upload exists. */
@@ -121,6 +138,7 @@ function fields(command: ParsedEntryCommand) {
 /** Files each entry under the room active when it was captured, using capture order alone. */
 export function foldWalkEntries(
   latest: (WalkEntryRevision & { photoState: string | null; photoVerifiedAt: Date | null })[],
+  filings: readonly WalkPhotoFiling[] = [],
 ): WalkEntryView[] {
   const ordered = [...latest].sort((a, b) => a.captureOrder - b.captureOrder);
   let room: WalkEntryRevision | null = null;
@@ -141,6 +159,17 @@ export function foldWalkEntries(
           verifiedAt: photoState === "verified" ? photoVerifiedAt : null }
         : null,
     };
+    // B1C mount, owned by B1A #920: overlay the latest filing; keep capture-order provenance.
+    const filing = filings.filter(item => entry.kind === "photo" && item.sessionId === entry.sessionId &&
+      item.captureOrder === entry.captureOrder).sort((a, b) => b.version - a.version)[0];
+    if (filing) {
+      view.originalRoomCaptureOrder = view.roomCaptureOrder;
+      view.originalLinkedRoom = view.linkedRoom;
+      view.roomCaptureOrder = filing.roomCaptureOrder;
+      view.linkedRoom = ordered.find(item => item.sessionId === entry.sessionId && item.captureOrder === filing.roomCaptureOrder)?.room ?? null;
+      view.link = "filed";
+      view.filingVersion = filing.version;
+    }
     // A room entry decides the room for everything after it, so a gap before it no longer matters.
     if (entry.kind === "room") { room = entry; gap = false; }
     return view;
@@ -167,9 +196,18 @@ export class WalkRepository {
         ) e
         LEFT JOIN app.evidence_upload u ON (u.tenant_id, u.id, u.job_id) = ($1, e."photoId", $2)
       `, [context.tenantId, jobId, sessionId ?? null]);
+      // B1C mount, owned by B1A #920: select latest filing per photo in this job/session.
+      const { rows: filings } = await $client.query<WalkPhotoFiling>(`
+        SELECT DISTINCT ON (session_id, capture_order) session_id AS "sessionId", capture_order AS "captureOrder",
+          room_capture_order AS "roomCaptureOrder", expected_version AS "expectedVersion", expected_version + 1 AS version,
+          command_id AS "commandId", reason, actor_membership_id AS "actorMembershipId", server_received_at AS "serverReceivedAt"
+        FROM app.v2_walk_photo_filing WHERE (tenant_id, job_id) = ($1, $2)
+          AND ($3::uuid IS NULL OR session_id = $3)
+        ORDER BY session_id, capture_order, expected_version DESC
+      `, [context.tenantId, jobId, sessionId ?? null]);
       return sessions.map(session => ({
         ...session,
-        entries: foldWalkEntries(entries.filter(entry => entry.sessionId === session.sessionId)),
+        entries: foldWalkEntries(entries.filter(entry => entry.sessionId === session.sessionId), filings),
       }));
     });
   }
@@ -286,6 +324,56 @@ export class WalkRepository {
         return this.recordEntry(context, jobId, credential, input, true);
       }
       throw error;
+    });
+  }
+
+  // B1C mount, owned by B1A #920: append-only photo filing; no walk entry is changed.
+  async fileWalkPhoto(context: VerifiedTenantContext, jobId: string, credential: string, input: WalkPhotoFilingCommand) {
+    const parsed = walkPhotoFilingCommandV1.safeParse(input);
+    if (!parsed.success) throw new WalkError("WALK_INVALID_COMMAND");
+    const command = parsed.data;
+    return withTenant(this.pool, context, async database => {
+      const { $client } = database;
+      const actor = await this.editor($client, credential);
+      // Serialize filings for this job without requiring UPDATE grants on immutable session rows.
+      // No business locks follow the audit append.
+      await $client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+        [`v2-walk-filing:${context.tenantId}:${jobId}`]);
+      const { rowCount } = await $client.query(`SELECT 1 FROM app.v2_walk_session
+        WHERE (tenant_id, job_id, id) = ($1, $2, $3)`, [context.tenantId, jobId, command.sessionId]);
+      if (!rowCount) throw new PracticeAccessError("NOT_FOUND");
+      const projection = `session_id AS "sessionId", capture_order AS "captureOrder", room_capture_order AS "roomCaptureOrder",
+        expected_version AS "expectedVersion", expected_version + 1 AS version, command_id AS "commandId", reason,
+        actor_membership_id AS "actorMembershipId", server_received_at AS "serverReceivedAt"`;
+      const { rows: [prior] } = await $client.query<WalkPhotoFiling>(`SELECT ${projection} FROM app.v2_walk_photo_filing
+        WHERE (tenant_id, job_id, command_id) = ($1, $2, $3)`, [context.tenantId, jobId, command.commandId]);
+      if (prior) {
+        if (prior.actorMembershipId !== actor || prior.sessionId !== command.sessionId ||
+          prior.captureOrder !== command.captureOrder || prior.roomCaptureOrder !== command.roomCaptureOrder ||
+          prior.expectedVersion !== command.expectedVersion || prior.reason !== command.reason) {
+          throw new WalkError("WALK_COMMAND_CONFLICT");
+        }
+        return prior;
+      }
+      const slot = [context.tenantId, jobId, command.sessionId, command.captureOrder];
+      const { rows: [current] } = await $client.query<{ version: number }>(`SELECT COALESCE(max(expected_version) + 1, 0) AS version
+        FROM app.v2_walk_photo_filing WHERE (tenant_id, job_id, session_id, capture_order) = ($1, $2, $3, $4)`, slot);
+      if (current!.version !== command.expectedVersion) throw new WalkError("WALK_VERSION_CONFLICT");
+      const { rows: [targets] } = await $client.query<{ photo: boolean; room: boolean }>(`SELECT
+        EXISTS (SELECT FROM app.v2_walk_entry WHERE (tenant_id, job_id, session_id, capture_order) = ($1,$2,$3,$4)
+          AND kind = 'photo') AS photo,
+        EXISTS (SELECT FROM app.v2_walk_entry WHERE (tenant_id, job_id, session_id, capture_order) = ($1,$2,$3,$5)
+          AND kind = 'room') AS room`, [...slot, command.roomCaptureOrder]);
+      if (!targets?.photo || !targets.room) throw new WalkError("WALK_PHOTO_REFUSED");
+      const { rows: [saved] } = await $client.query<WalkPhotoFiling>(`INSERT INTO app.v2_walk_photo_filing
+        (tenant_id, job_id, session_id, capture_order, expected_version, command_id, room_capture_order, reason, actor_membership_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING ${projection}`,
+      [...slot, command.expectedVersion, command.commandId, command.roomCaptureOrder, command.reason, actor]);
+      await this.audit(database, actor, jobId, "v2.walk.photo_filed", {
+        commandId: command.commandId, sessionId: command.sessionId, captureOrder: String(command.captureOrder),
+        roomCaptureOrder: String(command.roomCaptureOrder), filingVersion: String(saved!.version),
+      }, {});
+      return saved!;
     });
   }
 
