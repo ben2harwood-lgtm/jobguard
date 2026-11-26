@@ -87,6 +87,15 @@ describe("V2-K2A calendar feed", () => {
     expect(calendarFeedAddress({ ...site, unit: "Flat 3" })).toBe("Flat 3, 42 Make-Believe Mews, Sampleford, ZY1 0AA");
   });
 
+  it("shows a crew record's name for a task assigned by crew record, and nothing else from it", () => {
+    const crew = "66666666-6666-4666-8666-666666666666";
+    const snapshot = calendarFeedSnapshot({ quoteRevisionId: id, tasks: [
+      { key: "a", scopeItemId: id, title: "Crew task", trade: "Tiling", durationMinutes: 60, scheduledDate: "2026-12-01", assigneeRef: crew },
+      { key: "b", scopeItemId: id, title: "Unknown crew", trade: "Tiling", durationMinutes: 60, scheduledDate: "2026-12-02", assigneeRef: other },
+    ] }, null, new Map([[crew, "Fictional Tess Tile"]]));
+    expect(snapshot.tasks.map(task => task.assignee)).toEqual(["Fictional Tess Tile", null]);
+  });
+
   it("makes 256-bit URL-safe tokens and refuses commands that do not fit their action", () => {
     const token = newCalendarFeedToken();
     expect(token).toMatch(calendarFeedTokenPattern);

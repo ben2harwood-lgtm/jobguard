@@ -32,13 +32,16 @@ export const calendarFeedTokenPattern = /^[A-Za-z0-9_-]{43}$/u;
 export const calendarFeedTokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 
 /** Plan tasks with a date only. Text is copied as written; prices, notes and photos are never read. */
+// A task assigned to a crew record (V2-C3C) shows that record's display name only, never its phone or email.
 export function calendarFeedSnapshot(plan: { quoteRevisionId: string; tasks: readonly {
   key: string; scopeItemId: string; title: string; trade: string; durationMinutes: number;
-  scheduledDate?: string | null; assignee?: string | null; }[] }, address: string | null): CalendarFeedSnapshot {
+  scheduledDate?: string | null; assignee?: string | null; assigneeRef?: string | null; }[] }, address: string | null,
+  crewNames: ReadonlyMap<string, string> = new Map()): CalendarFeedSnapshot {
   return calendarFeedSnapshotV1.parse({ version: "calendar-feed-snapshot.v1", address,
     tasks: plan.tasks.filter(task => task.scheduledDate).map(task => ({ quoteRevisionId: plan.quoteRevisionId,
       scopeItemId: task.scopeItemId, templateTaskKey: task.key, title: task.title, trade: task.trade,
-      date: task.scheduledDate, durationMinutes: task.durationMinutes, assignee: task.assignee ?? null })) });
+      date: task.scheduledDate, durationMinutes: task.durationMinutes,
+      assignee: (task.assigneeRef ? crewNames.get(task.assigneeRef) : task.assignee) ?? null })) });
 }
 
 /** The job's site as one line, in the quote PDF's order, including a flat or unit number. */

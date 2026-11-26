@@ -3,6 +3,7 @@ import { CalendarFeedError, CalendarFeedRepository, PracticeAccessError, calenda
 import type { Pool } from "pg";
 import { JobPartiesApplication } from "../job-parties.application.js";
 import { PracticeAccess } from "../practice-access.js";
+import { CrewContactApplication } from "./crew-contact.application.js";
 import { WorkPlanApplication } from "./work-plan.application.js";
 export type { CalendarFeed } from "@jobguard/db";
 
@@ -25,7 +26,10 @@ export class CalendarFeedApplication {
   private async snapshot(jobId: string) {
     const plan = await new WorkPlanApplication(this.pool, this.sessionId).read(jobId, { version: "work-plan-query.v1" });
     const site = (await new JobPartiesApplication(this.pool).view({ sessionId: this.sessionId! }, jobId)).current?.site;
-    return calendarFeedSnapshot(plan, site ? calendarFeedAddress(site) : null);
+    const crewNames = new Map(plan.tasks.some(task => task.assigneeRef)
+      ? (await new CrewContactApplication(this.pool, this.sessionId).list({ version: "crew-contact-query.v1" }))
+        .map(contact => [contact.crewId, contact.displayName] as const) : []);
+    return calendarFeedSnapshot(plan, site ? calendarFeedAddress(site) : null, crewNames);
   }
   async list(jobId: string) {
     const { context } = await this.authorize(jobId);
