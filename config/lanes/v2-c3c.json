@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-c3c": {
+      "branches": ["claude/project-thread-x8p19i"],
+      "note": "RED. Q28 V2-C3C: firm-owned crew contacts (migration 2027) and assigneeRef on work-plan-edit.v1. Data and command half; the picker (C3C-UI) follows after #903.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/crew-contact.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "packages/db/migration-notes/2027_v2_crew_contact.md",
+        "packages/db/migrations/2027_v2_crew_contact.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-crew-contact-repository.ts",
+        "packages/db/src/v2-work-plan-edits.test.ts",
+        "packages/db/src/v2-work-plan-edits.ts",
+        "packages/db/src/v2-work-plan-repository.ts",
+        "packages/db/test/migration-proofs/2027_v2_crew_contact.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}
