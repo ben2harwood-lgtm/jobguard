@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "lanes": {
+    "ci-core-timeouts": {
+      "branches": [
+        "claude/project-thread-h334d4"
+      ],
+      "note": "CI-only: give two slow packages/core tests (small-builder-demo-scenarios r1 B parser, receipt-allocation working-size bound) a 20 s timeout instead of vitest's 5 s default; they time out on busy runners. Test-only, T1.",
+      "allow": [
+        "packages/core/src/receipt-allocation.test.ts",
+        "packages/core/src/small-builder-demo-scenarios.test.ts"
+      ]
+    }
+  }
+}
