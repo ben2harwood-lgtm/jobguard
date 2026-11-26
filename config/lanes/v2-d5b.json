@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-d5b": {
+      "branches": [
+        "codex/sandbox/v2-d5b"
+      ],
+      "note": "D5B-M only: product picker and Materials, no Briefs. page.tsx: mount only, owned by D5A. D3 and D4 paths arrive solely through the kept dependency merges; no source edits to those paths. Base is codex/sandbox/v2-d5a. Rework risk: high.",
+      "allow": [
+        "apps/api/src/workspace/application.ts",
+        "apps/api/src/workspace/crew-brief.application.ts",
+        "apps/api/src/workspace/index.ts",
+        "apps/api/src/workspace/materials.application.ts",
+        "apps/web/app/(designed)/jobs/[id]/work/materials.tsx",
+        "apps/web/app/(designed)/jobs/[id]/work/page.tsx",
+        "apps/web/app/api/v2-backend/jobs/[id]/materials/route.test.ts",
+        "apps/web/app/api/v2-backend/jobs/[id]/materials/route.ts",
+        "apps/web/e2e/v2-d5b.spec.mts",
+        "apps/web/playwright.v2-d5b.config.ts",
+        "packages/db/migration-notes/2028_v2_materials_enquiry.md",
+        "packages/db/migration-notes/2030_v2_crew_brief.md",
+        "packages/db/migrations/2028_v2_materials_enquiry.sql",
+        "packages/db/migrations/2030_v2_crew_brief.sql",
+        "packages/db/src/index.ts",
+        "packages/db/src/v2-crew-brief-repository.ts",
+        "packages/db/src/v2-materials-enquiry-repository.ts",
+        "packages/db/test/migration-proofs/2028_v2_materials_enquiry.proof.json",
+        "packages/db/test/migration-proofs/2030_v2_crew_brief.proof.json",
+        "packages/db/test/purchase-order-audit.integration.test.ts",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/seed.integration.test.mjs"
+      ]
+    }
+  }
+}

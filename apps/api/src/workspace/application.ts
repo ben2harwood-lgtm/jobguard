@@ -35,6 +35,8 @@ import { CaptureApplication } from "../capture/capture.application.js";
 import { QuoteApplication } from "../quote/quote.application.js";
 import { WorkPlanApplication } from "./work-plan.application.js";
 import { MeasurementApplication } from "./measurement.application.js";
+import { MaterialsApplication } from "./materials.application.js";
+import { CrewBriefApplication } from "./crew-brief.application.js";
 import { CrewContactApplication } from "./crew-contact.application.js";
 import { VariationApplication } from "../variation/variation.application.js";
 import { RecoveryApplication } from "./recovery.application.js";
@@ -111,7 +113,9 @@ export function createWorkspaceApplication(dependencies: { pool: Pool; sessionId
   const attribution = new RecoveryAttributionApplication(dependencies.pool,dependencies.sessionId);
   // V2-C3C crew records.
   const crewContacts = new CrewContactApplication(dependencies.pool, dependencies.sessionId);
-  return Object.freeze({ measurements: new MeasurementApplication(dependencies.pool, dependencies.sessionId), workPlan: new WorkPlanApplication(dependencies.pool, dependencies.sessionId), crewContacts, commercialIntegrityV3: Object.freeze({
+  return Object.freeze({ measurements: new MeasurementApplication(dependencies.pool, dependencies.sessionId),
+    materialsEnquiry: new MaterialsApplication(dependencies.pool, dependencies.sessionId),
+    crewBriefs: new CrewBriefApplication(dependencies.pool, dependencies.sessionId), workPlan: new WorkPlanApplication(dependencies.pool, dependencies.sessionId), crewContacts, commercialIntegrityV3: Object.freeze({
     family: (jobId:string) => commercialIntegrityV3.family(dependencies.sessionId,jobId),
     view: (jobId:string,query:unknown) => commercialIntegrityV3.view(dependencies.sessionId,jobId,query),
     review: (jobId:string,body:unknown) => commercialIntegrityV3.review(dependencies.sessionId,jobId,body),
