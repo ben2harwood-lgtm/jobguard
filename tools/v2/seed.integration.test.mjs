@@ -12,6 +12,9 @@ import { embeddedSystemId, storageData, verifyDatabaseTarget } from "./local-tar
 import { migrationUrl, validateSettings } from "./settings.mjs";
 
 import { joineryTemplate } from "./fixtures/joinery-template.mjs";
+// V2-PX
+import { createHash } from "node:crypto";
+import { uploadPracticePhoto } from "./test/practice-photo.mjs";
 
 const { settings } = validateSettings({});
 const origin = settings.AUTH_ALLOWED_ORIGIN;
@@ -1030,4 +1033,114 @@ test("opening the plan screen creates the plan with one audit event; a quote-sav
   assert.equal(saves.length, 1, "the quote save appended its own event for the refreshed revision");
   await read();
   assert.equal((await generatedEvents(nextId)).length, 0);
+});
+
+// V2-PX (Q27, migration 2025): Ben's photo lock, and the shared real-upload photo helper.
+const photoTables = ["app.evidence_upload", "app.evidence_object", "app.synthetic_evidence_original", "app.evidence_link",
+  "app.job_photo_purpose", "app.evidence_pack", "app.evidence_pack_revision", "app.evidence_pack_attachment_approval",
+  "app.extra_evidence_pack", "app.signed_evidence_export", "app.customer_invoice_evidence", "app.final_account_proof",
+  "app.proof_application_response"];
+const photoTablesByLink = { "app.evidence_invalidation": "evidence_id", "app.synthetic_evidence_chunk": "upload_id" };
+
+// A fresh live practice job of the builder's firm (the shared seeded job is closed by an earlier case).
+async function pxLiveJob() {
+  const { draftJob, lines, save } = await draftForPlan();
+  const { sessionId, cookies, csrfToken } = await signIn("builder");
+  const app = createWorkspaceApplication({ pool: runtime, sessionId });
+  await save(1, lines);
+  const party = await app.parties.view({ sessionId }, draftJob);
+  await app.parties.command({ sessionId }, draftJob, {
+    version: "job-parties-command.v1", action: "save_form", commandId: randomUUID(),
+    expectedJobRevision: party.jobRevision, expectedBindingId: null,
+    customer: { version: "customer.v1", type: "person", name: "Fictional Photo Customer",
+      email: "customer@jobguard-v2.invalid", phone: "+447700900044" }, customerRef: null,
+    site: { version: "site.v1", addressLines: ["14 Fictional Lane"], town: "Sampleford", postcode: "ZY1 0AA" },
+    savedSiteRevisionId: null, reuseSiteId: null, expectedReuseRevisionId: null, confirmSamePlace: false,
+    payingPartyRevisionId: null, expectedPayerRevisionId: null, correct: false,
+  });
+  const { view: { documentId, documentVersion, contentHash } } = await app.quote.preview(draftJob, {
+    version: "quote-preview-command.v1", recipient: "customer@jobguard-v2.invalid",
+  });
+  await app.quote.issue(draftJob, { version: "quote-send-command.v1", commandId: randomUUID(),
+    documentId, contentHash, recipient: "customer@jobguard-v2.invalid" });
+  await json(await request(`/api/jobs/${draftJob}/quotes/delivery/execute`, {
+    cookies, body: { version: "quote-execute-command.v1", documentId, mode: "success" },
+  }));
+  await app.quote.accept(draftJob, { version: "quote-acceptance-command.v1", commandId: randomUUID(),
+    documentId, documentVersion, documentHash: contentHash,
+    statedCustomerName: "Fictional Photo Customer", statedMethod: "verbal", acceptedAt: new Date().toISOString() });
+  await json(await request(`/api/jobs/${draftJob}/quotes/activation`, { cookies, csrf: csrfToken, body: switchLive() }));
+  const { rows: [scope] } = await admin.query("SELECT id FROM app.scope_identity WHERE job_id = $1 ORDER BY id LIMIT 1", [draftJob]);
+  return { jobId: draftJob, scopeItemId: scope.id, sessionId };
+}
+
+test("PX: a real practice photo is locked to its own firm on every evidence and photo table", async () => {
+  const { jobId: photoJob, scopeItemId, sessionId } = await pxLiveJob();
+  const { context } = await authenticatePracticeSession(runtime, sessionId);
+  const photo = await uploadPracticePhoto(runtime, context, { jobId: photoJob, scopeItemId });
+  const second = await uploadPracticePhoto(runtime, context, { jobId: photoJob, scopeItemId, fixture: "j3-drainage-photo" });
+  assert.notEqual(second.sha256, photo.sha256);
+
+  const { rows: policies } = await admin.query(`SELECT polrelid::regclass::text AS relation FROM pg_policy
+    WHERE polname = 'v2_practice_firm' AND NOT polpermissive AND polcmd = '*'
+      AND polroles = ARRAY['jobguard_runtime'::regrole::oid] AND polrelid = ANY($1::regclass[])`,
+  [[...photoTables, ...Object.keys(photoTablesByLink)]]);
+  assert.deepEqual(policies.map(row => row.relation).sort(), [...photoTables, ...Object.keys(photoTablesByLink)].sort());
+
+  // The builder still reads its own photo rows and the exact bytes.
+  const own = (sql, params) => withTenant(runtime, context, db => db.$client.query(sql, params));
+  const { rows: [object] } = await own(`SELECT o.sha256, o.content_type, s.bytes FROM app.evidence_object o
+    JOIN app.synthetic_evidence_original s ON (s.tenant_id, s.upload_id) = (o.tenant_id, o.upload_id)
+    WHERE o.job_id = $1 AND o.id = $2`, [photoJob, photo.evidenceId]);
+  assert.equal(object.sha256.trim(), photo.sha256);
+  assert.equal(object.content_type, "image/png");
+  assert.equal(createHash("sha256").update(object.bytes).digest("hex"), photo.sha256);
+  const { rows: [upload] } = await own("SELECT state FROM app.evidence_upload WHERE id = $1", [photo.uploadId]);
+  assert.equal(upload.state, "verified", "verified by the evidence service itself, not by a fixture");
+
+  const counts = async () => Object.fromEntries(await Promise.all([...photoTables, ...Object.keys(photoTablesByLink)]
+    .map(async table => [table, (await admin.query(`SELECT count(*)::int AS n FROM ${table}`)).rows[0].n])));
+  const before = await counts();
+  const outsider = await signIn("second-builder");
+  const { context: shared } = await authenticatePracticeSession(runtime, outsider.sessionId);
+  assert.equal(shared.tenantId, context.tenantId, "both firms' practice sessions share one backing tenant");
+  for (const scope of [shared, outsider.realContext]) {
+    const query = (sql, params) => withTenant(runtime, scope, db => db.$client.query(sql, params));
+    for (const table of photoTables) {
+      assert.equal((await query(`SELECT 1 FROM ${table} WHERE job_id = $1`, [photoJob])).rowCount, 0, `${table} hidden`);
+    }
+    assert.equal((await query("SELECT 1 FROM app.evidence_invalidation WHERE evidence_id = ANY($1::uuid[])",
+      [[photo.evidenceId, second.evidenceId]])).rowCount, 0);
+    assert.equal((await query("SELECT 1 FROM app.synthetic_evidence_chunk WHERE upload_id = ANY($1::uuid[])",
+      [[photo.uploadId, second.uploadId]])).rowCount, 0);
+    // Writes aimed at the builder's job are refused or touch nothing.
+    await assert.rejects(query(`INSERT INTO app.synthetic_evidence_original
+      (tenant_id, upload_id, job_id, scope_item_id, object_key, object_version_id, environment, content_type, bytes)
+      VALUES ($1, $2, $3, $4, $5, 'copy', 'synthetic_demo', 'image/png', $6)`,
+    [context.tenantId, photo.uploadId, photoJob, scopeItemId, `copy/${randomUUID()}`, photo.bytes]), { code: "42501" });
+    for (const table of ["app.evidence_upload", "app.evidence_object"]) {
+      for (const sql of [`UPDATE ${table} SET retention_class = retention_class WHERE job_id = $1`, `DELETE FROM ${table} WHERE job_id = $1`]) {
+        const result = await query(sql, [photoJob]).catch(error => error);
+        assert.ok(result.code === "42501" || result.rowCount === 0, `${sql} must not reach the builder's rows`);
+      }
+    }
+  }
+  assert.deepEqual(await counts(), before, "the second firm changed nothing");
+});
+
+test("PX: main's demo-only proof command still refuses on the V2 database (42501)", async () => {
+  const { jobId: photoJob, scopeItemId, sessionId } = await pxLiveJob();
+  const { proof } = createWorkspaceApplication({ pool: runtime, sessionId });
+  await assert.rejects(proof.command(photoJob, { version: "practice-proof-command.v1", action: "select_generated",
+    commandId: randomUUID(), scopeItemId, fixture: "completion-photo" }),
+  error => error.code === "42501" && /REQUEST_BINDING_REFUSED/u.test(error.message) &&
+    /app\.lp6_session_authority/u.test(error.where ?? ""));
+});
+
+test("PX: the photo lock migration is safe to run twice", async () => {
+  const policyCount = async () => (await admin.query(
+    "SELECT count(*)::int AS n FROM pg_policy WHERE polname = 'v2_practice_firm'")).rows[0].n;
+  const before = await policyCount();
+  await admin.query(readFileSync(new URL("./migrations/2025_v2_evidence_firm_lock.sql", import.meta.url), "utf8"));
+  assert.equal(await policyCount(), before);
 });
