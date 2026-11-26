@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { CrewBrief, CrewBriefCommand } from "@jobguard/db";
+import type { CrewBrief, CrewBriefCommand } from "./brief-types";
 import { Card, Empty, Note, Tag } from "../../../designed-ui";
 
 import { BriefLanguage } from "./brief-language";
