@@ -22,3 +22,10 @@ The shared migration runner leaves non-V2 databases untouched. V2 bootstrap
 explicitly applies 2015 after the brief schema and before seeding. Catalog,
 second-firm, audit, replay, rollback and regeneration tests are appended in the
 full V2 seed suite, not executed in the restricted builder sandbox.
+
+Repair (Codex P2 4705000559): progress command ids join the tenant-wide watchdog
+command namespace. The migration extends `watchdog_command_identity`'s command-type
+check with `v2.brief_progress.record`, the way 0734 added `proof.statement`, and only
+when it is missing, so a rerun changes nothing. `record()` claims the id there before
+its insert, so another watchdog command can't reuse a progress id, and back. This is
+the V2 database only; the live database's check is untouched.
