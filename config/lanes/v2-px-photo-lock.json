@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "lanes": {
+    "v2-px-photo-lock": {
+      "branches": ["claude/project-thread-x8p19i-photo-lock"],
+      "note": "RED. Q27 V2-PX outcome: Ben's 'lock photos' fix. V2 bootstrap migration 2025 puts 2001's restrictive firm policy on the evidence and photo tables, plus a shared test helper that uploads a real practice photo through EvidenceService.",
+      "allow": [
+        "packages/db/migration-notes/2025_v2_evidence_firm_lock.md",
+        "tools/v2/bootstrap.mjs",
+        "tools/v2/migrations/2025_v2_evidence_firm_lock.proof.json",
+        "tools/v2/migrations/2025_v2_evidence_firm_lock.sql",
+        "tools/v2/seed.integration.test.mjs",
+        "tools/v2/test/practice-photo.mjs"
+      ]
+    }
+  }
+}
