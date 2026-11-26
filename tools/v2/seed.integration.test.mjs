@@ -1333,7 +1333,11 @@ test("the builder logs each kind of open fact, answers and cancels them, and the
   assert.deepEqual(await rowContents(), contents);
   assert.deepEqual(await effectCounts(), before);
 
-  const cancelled = await openFacts.command(jobId, factCommand({ action: "cancel", factId: access.commandId, expectedVersion: 1 }));
+  // Identical concurrent retries share one receipt, even when one commits between the other's checks.
+  const cancel = factCommand({ action: "cancel", factId: access.commandId, expectedVersion: 1 });
+  const cancels = await Promise.all(Array.from({ length: 4 }, () => openFacts.command(jobId, cancel)));
+  for (const receipt of cancels) assert.deepEqual(receipt, cancels[0]);
+  const [cancelled] = cancels;
   assert.equal(cancelled.status, "cancelled");
   await assert.rejects(openFacts.command(jobId, factCommand({ action: "answer", factId: access.commandId, expectedVersion: 2,
     answer: { kind: "access", arrangement: "Customer is home" } })), { code: "OPEN_FACT_CLOSED" });

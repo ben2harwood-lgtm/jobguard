@@ -210,9 +210,19 @@ export class OpenFactRepository {
       const prior = await this.replay($client, context.tenantId, jobId, command.commandId, actor.id, digest);
       if (prior) return prior;
 
-      const saved = command.action === "log"
-        ? await this.log($client, context.tenantId, jobId, command, actor.id, digest)
-        : await this.change($client, context.tenantId, jobId, command, actor.id, digest);
+      let saved: ChangeRow | undefined;
+      try {
+        saved = command.action === "log"
+          ? await this.log($client, context.tenantId, jobId, command, actor.id, digest)
+          : await this.change($client, context.tenantId, jobId, command, actor.id, digest);
+      } catch (error) {
+        // An exact retry that committed after the first replay lookup moved the version or closed the fact.
+        if (error instanceof OpenFactError && (error.code === "OPEN_FACT_VERSION_CONFLICT" || error.code === "OPEN_FACT_CLOSED")) {
+          const raced = await this.replay($client, context.tenantId, jobId, command.commandId, actor.id, digest);
+          if (raced) return raced;
+        }
+        throw error;
+      }
       if (saved) {
         // Only a new change reaches the chain; replays return above or below without a second event.
         await this.audit(database, jobId, saved, command.action === "log" ? command.detail.kind : null);
