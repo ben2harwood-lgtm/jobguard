@@ -33,8 +33,8 @@ export async function uploadBriefProgressPhoto(pool: Pool, context: VerifiedTena
     payload: { references: { commandId, uploadCommandId: command.commandId, scopeItemId: command.scopeItemId, photoId: command.commandId } } });
   // A finalized upload is immutable. Do not replay beginUpload's upsert against it.
   const prior = await withTenant(pool, context, async db => (await db.$client.query<{
-    scope_item_id: string; expected_sha256: string; state: string; object_version_id: string | null; actor_ref: string;
-  }>(`SELECT u.scope_item_id,u.expected_sha256,u.state,u.object_version_id,a.actor_ref
+    scope_item_id: string | null; expected_sha256: string; state: string; object_version_id: string | null; actor_ref: string;
+  }>(`SELECT a.payload->'references'->>'scopeItemId' AS scope_item_id,u.expected_sha256,u.state,u.object_version_id,a.actor_ref
     FROM app.evidence_upload u LEFT JOIN app.audit_event a ON a.tenant_id=u.tenant_id
       AND a.subject_ref=u.job_id::text AND a.event_type='v2.progress_photo.attached'
       AND a.payload->'references'->>'commandId'=u.id::text
@@ -42,14 +42,17 @@ export async function uploadBriefProgressPhoto(pool: Pool, context: VerifiedTena
   if (prior && (prior.scope_item_id !== command.scopeItemId || prior.expected_sha256.trim() !== digest ||
     prior.actor_ref !== `membership:${actorId}`)) throw new BriefProgressError("BRIEF_PROGRESS_COMMAND_CONFLICT");
   let objectVersionId = prior?.object_version_id ?? "";
-  if (prior?.state !== "verified") await evidence.beginUpload(context, { id: command.commandId, jobId, scopeItemId: command.scopeItemId,
+  // No scope on the upload row: stage proof picks the newest upload for its scope and the proof
+  // statement locks once any scoped upload exists, so a progress photo must stay out of both.
+  // The task's scope is bound by the progress row and the attached audit event.
+  if (prior?.state !== "verified") await evidence.beginUpload(context, { id: command.commandId, jobId, scopeItemId: null,
     expectedSha256: digest, contentType: "image/png", maximumBytes: bytes.length,
     retentionClass: "standard_evidence", expiresAt: new Date(Date.now() + 3600000) }, async (db, upload) => {
     objectVersionId = filesystem ? await filesystem.put(upload.objectKey, "image/png", bytes) : `synthetic-${digest.slice(0,16)}`;
     const inserted = await db.$client.query(`INSERT INTO app.synthetic_evidence_original
       (tenant_id,upload_id,job_id,scope_item_id,object_key,object_version_id,environment,content_type,bytes)
       VALUES($1,$2,$3,$4,$5,$6,'synthetic_demo','image/png',$7) ON CONFLICT(tenant_id,upload_id) DO NOTHING`,
-    [context.tenantId,upload.id,jobId,command.scopeItemId,upload.objectKey,objectVersionId,bytes]);
+    [context.tenantId,upload.id,jobId,null,upload.objectKey,objectVersionId,bytes]);
     if (inserted.rowCount) await appendAuditBatch(db, [audit("attached")]);
   });
   const finalization = { uploadId: command.commandId, objectVersionId, evidenceType: "progress_photo" };

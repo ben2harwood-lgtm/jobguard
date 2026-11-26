@@ -1763,6 +1763,12 @@ test("F1-P photo upload and all progress kinds: audit, replay, live state, isola
     AND event_type LIKE 'v2.progress_photo.%' AND (payload->'references'->>'commandId'=$2 OR payload->'references'->>'uploadCommandId'=$2)`, [jobId,id]).then(r => r.rows);
   const uploaded = await app.briefProgress.uploadPhoto(jobId, photo);
   assert.deepEqual(uploaded, { uploadId: photo.commandId, evidenceId: photo.commandId, state: "verified" });
+  // Codex P2 4703616019: a progress photo is never a stage-proof upload for its scope.
+  assert.deepEqual((await admin.query(`SELECT u.scope_item_id AS upload, e.scope_item_id AS evidence, e.evidence_type
+    FROM app.evidence_upload u JOIN app.evidence_object e ON (e.tenant_id,e.upload_id)=(u.tenant_id,u.id) WHERE u.id=$1`,
+  [photo.commandId])).rows, [{ upload: null, evidence: null, evidence_type: "progress_photo" }]);
+  assert.equal((await admin.query(`SELECT count(*)::int AS n FROM app.evidence_upload WHERE job_id=$1 AND scope_item_id=$2`,
+    [jobId, task.scopeItemId])).rows[0].n, 0, "the proof card's newest-upload-for-scope query cannot see it");
   const events = await auditRows(photo.commandId);
   assert.deepEqual(events.map(e => e.event_type).sort(), ["v2.progress_photo.attached", "v2.progress_photo.finalized"]);
   assert.equal(new Set(events.map(event => event.payload.references.commandId)).size, 2,
