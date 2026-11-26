@@ -212,6 +212,30 @@ test("a mode or type change to a merged main file is the lane's own edit and sti
   const head = f.git("rev-parse", "HEAD");
   assert.throws(() => f.pr(head, f.v2), /cannot edit:\n"packages\/db\/protected\.txt"/u);
 });
+// V2-SYNC-0b: a fix merged into both main and the base after the sync leaves main and the head two best common
+// ancestors. The one the base already holds is ignored; the merged main side still decides.
+function crissCross(t) {
+  const f = syncFixture(t);
+  // Dated later so git's single merge-base picks this shared commit, as it did on the real v2/main.
+  const later = `@${Math.floor(Date.now() / 1000) + 86400} +0000`;
+  f.git("switch", "-c", "both", f.base); f.write("tools/shared-fix.txt"); f.git("add", "-A");
+  execFileSync("git", ["commit", "-q", "-m", "shared fix"], { cwd: f.cwd, env: { ...process.env, GIT_COMMITTER_DATE: later, GIT_AUTHOR_DATE: later } });
+  f.git("switch", "main"); f.git("merge", "--no-ff", "--no-edit", "both");
+  f.git("update-ref", "refs/remotes/origin/main", f.git("rev-parse", "HEAD").trim());
+  f.git("switch", "-c", "v2b", f.v2); f.git("merge", "--no-ff", "--no-edit", "both");
+  const v2b = f.git("rev-parse", "HEAD").trim();
+  f.git("switch", "codex/ci-repair"); f.git("merge", "--no-ff", "--no-edit", "v2b");
+  return { ...f, v2b };
+}
+test("a fix landed on both main and the base after the sync still passes main's files as merge-main", (t) => {
+  const f = crissCross(t), head = f.git("rev-parse", "HEAD").trim();
+  assert.equal(f.git("merge-base", "--all", "refs/remotes/origin/main", head).trim().split("\n").length, 2);
+  const result = f.pr(head, f.v2b);
+  assert.deepEqual(result.mergeMain.files, ["config/lanes/main-piece.json", "packages/db/migrations/0100_main_piece.sql", "packages/db/protected.txt"]);
+  assert.equal(result.mergeMain.mainSide, f.main);
+  const edited = f.commit("packages/db/protected.txt", "edited after the merge\n");
+  assert.throws(() => f.pr(edited, f.v2b), /cannot edit:\n"packages\/db\/protected\.txt"/u);
+});
 // Codex P2 on #984 (8cca1161): an imported main migration still counts for duplicate numbers.
 test("a lane migration sharing a number with an imported main migration still fails", (t) => {
   const f = fixture(t);
